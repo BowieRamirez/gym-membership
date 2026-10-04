@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.RevenuePage" x:DataType="vm:RevenueViewModel" Title="Revenue">
+
+    <ScrollView MaximumWidthRequest="720">
+        <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
+            <Label Text="Verified payments only, grouped by the day they were verified." Style="{StaticResource Muted}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+
+            <FlexLayout Wrap="Wrap" AlignItems="End">
+                <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
+                    <Label Text="From" Style="{StaticResource Caption}" />
+                    <Border Style="{StaticResource Field}"><DatePicker Date="{Binding From}" /></Border>
+                </VerticalStackLayout>
+                <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
+                    <Label Text="To" Style="{StaticResource Caption}" />
+                    <Border Style="{StaticResource Field}"><DatePicker Date="{Binding To}" /></Border>
+                </VerticalStackLayout>
+                <Button Text="Show revenue" Style="{StaticResource SmallButton}" Margin="0,0,0,8" Command="{Binding LoadCommand}" />
+            </FlexLayout>
+
+            <Border Style="{StaticResource Panel}" Padding="24,20">
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="Total in this period" Style="{StaticResource Caption}" />
+                    <Label Text="{Binding TotalText}" Style="{StaticResource Numeral}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Rows}" Spacing="8">
+                <BindableLayout.EmptyView><Label Text="No verified payments in this period." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="m:RevenueRow">
+                        <Border Style="{StaticResource Panel}" Padding="16,12">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                <Label Text="{Binding Day, StringFormat='{0:ddd d MMM}'}" VerticalOptions="Center" />
+                                <Label Grid.Column="1" Style="{StaticResource Heading}">
+                                    <Label.Text>
+                                        <MultiBinding StringFormat="{}{0:N2} {1}"><Binding Path="Total" /><Binding Path="Cur" /></MultiBinding>
+                                    </Label.Text>
+                                </Label>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</v:BasePage>

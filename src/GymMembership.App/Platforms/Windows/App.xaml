@@ -1,0 +1,39 @@
+<maui:MauiWinUIApplication
+    x:Class="GymMembership.App.WinUI.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:maui="using:Microsoft.Maui"
+    xmlns:local="using:GymMembership.App.WinUI">
+
+    <maui:MauiWinUIApplication.Resources>
+        <ResourceDictionary>
+            <!-- Inputs sit inside our own hairline "Field" border, so drop WinUI's inner box.
+                 Focused border brushes are kept: they are the visible keyboard-focus indicator. -->
+            <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+            <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+            <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent" />
+            <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ComboBoxBackground" Color="Transparent" />
+            <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="Transparent" />
+            <SolidColorBrush x:Key="ComboBoxBackgroundFocused" Color="Transparent" />
+            <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ComboBoxBorderBrushPressed" Color="Transparent" />
+            <SolidColorBrush x:Key="DatePickerButtonBackground" Color="Transparent" />
+            <SolidColorBrush x:Key="DatePickerButtonBackgroundPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="DatePickerButtonBackgroundPressed" Color="Transparent" />
+            <SolidColorBrush x:Key="DatePickerButtonBorderBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="DatePickerButtonBorderBrushPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="DatePickerButtonBorderBrushPressed" Color="Transparent" />
+            <SolidColorBrush x:Key="TimePickerButtonBackground" Color="Transparent" />
+            <SolidColorBrush x:Key="TimePickerButtonBackgroundPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="TimePickerButtonBackgroundPressed" Color="Transparent" />
+            <SolidColorBrush x:Key="TimePickerButtonBorderBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="TimePickerButtonBorderBrushPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="TimePickerButtonBorderBrushPressed" Color="Transparent" />
+        </ResourceDictionary>
+    </maui:MauiWinUIApplication.Resources>
+</maui:MauiWinUIApplication>

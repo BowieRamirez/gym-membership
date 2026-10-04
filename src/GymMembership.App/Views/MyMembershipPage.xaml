@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.MyMembershipPage" x:DataType="vm:MyMembershipViewModel" Title="My membership">
+
+    <ScrollView MaximumWidthRequest="920">
+        <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
+
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+            <!-- The one memorable moment: days left, shown as a lane that runs out -->
+            <Border Style="{StaticResource Panel}" Padding="24,22">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="{Binding HeroNumber}" Style="{StaticResource Numeral}" FontSize="84"
+                           SemanticProperties.Description="Days left on your membership" />
+                    <c:LaneView Fraction="{Binding LaneFraction}" Thickness="6" HeightRequest="14"
+                                DashColor="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}"
+                                TrackColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+                    <Label Text="{Binding HeroCaption}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Label Text="Your memberships" Style="{StaticResource Heading}" Margin="0,8,0,0" />
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Memberships}" Spacing="10">
+                <BindableLayout.EmptyView>
+                    <Label Text="You don't have a membership yet. Open Packages to start one." Style="{StaticResource Muted}" />
+                </BindableLayout.EmptyView>
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="svc:MembershipRow">
+                        <Border Style="{StaticResource Panel}">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                <VerticalStackLayout Spacing="6">
+                                    <Label Text="{Binding PackageName}" Style="{StaticResource Heading}" />
+                                    <c:StatusChip Status="{Binding Status}" />
+                                    <Label Text="{Binding EndsAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM yyyy', StringFormat='Ends {0}'}"
+                                           Style="{StaticResource Caption}" IsVisible="{Binding EndsAt, Converter={StaticResource IsNotNull}}" />
+                                </VerticalStackLayout>
+                                <Button Grid.Column="1" Text="Renew" Style="{StaticResource SmallButton}" VerticalOptions="Start"
+                                        IsVisible="{Binding CanRenew}"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MyMembershipViewModel}}, Path=RenewCommand}"
+                                        CommandParameter="{Binding .}" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
+            <Label Text="Payments" Style="{StaticResource Heading}" Margin="0,8,0,0" />
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Payments}" Spacing="10">
+                <BindableLayout.EmptyView>
+                    <Label Text="No payments yet." Style="{StaticResource Muted}" />
+                </BindableLayout.EmptyView>
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="svc:PaymentItem">
+                        <Border Style="{StaticResource Panel}">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                <VerticalStackLayout Spacing="6">
+                                    <Label Text="{Binding What}" Style="{StaticResource Heading}" />
+                                    <c:StatusChip Status="{Binding Status}" />
+                                    <Label Text="{Binding CreatedAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM yyyy, h:mm tt'}" Style="{StaticResource Caption}" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Column="1" Spacing="6" HorizontalOptions="End">
+                                    <Label Text="{Binding Amount, StringFormat='{0:N2}'}" Style="{StaticResource Heading}" HorizontalOptions="End" />
+                                    <Button Text="Attach proof" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding NeedsProof}"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MyMembershipViewModel}}, Path=AttachProofCommand}"
+                                            CommandParameter="{Binding .}" />
+                                </VerticalStackLayout>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</v:BasePage>

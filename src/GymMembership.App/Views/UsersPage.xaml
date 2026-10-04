@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.UsersPage" x:DataType="vm:UsersViewModel" Title="Users and roles">
+
+    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="980">
+        <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
+            <Label Text="Everyone who has signed up. Making someone a coach also creates their coach profile." Style="{StaticResource Muted}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+        </VerticalStackLayout>
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Users}">
+            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="svc:UserRow">
+                    <Border Style="{StaticResource Panel}">
+                        <VerticalStackLayout Spacing="10">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                <VerticalStackLayout Spacing="2">
+                                    <Label Text="{Binding Username}" Style="{StaticResource Heading}" />
+                                    <Label Text="{Binding RoleText}" Style="{StaticResource Caption}" />
+                                </VerticalStackLayout>
+                                <c:StatusChip Grid.Column="1" Status="{Binding ActiveStatus}" VerticalOptions="Start" />
+                            </Grid>
+                            <FlexLayout Wrap="Wrap">
+                                <Button Text="{Binding CoachActionText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:UsersViewModel}}, Path=ToggleRoleCommand}"
+                                        CommandParameter="{Binding UserId, StringFormat='{0}|coach'}" />
+                                <Button Text="{Binding EmployeeActionText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:UsersViewModel}}, Path=ToggleRoleCommand}"
+                                        CommandParameter="{Binding UserId, StringFormat='{0}|employee'}" />
+                                <Button Text="{Binding ActiveActionText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:UsersViewModel}}, Path=ToggleActiveCommand}"
+                                        CommandParameter="{Binding .}" />
+                            </FlexLayout>
+                        </VerticalStackLayout>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</v:BasePage>

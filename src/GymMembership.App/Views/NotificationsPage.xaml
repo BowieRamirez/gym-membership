@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.NotificationsPage" x:DataType="vm:NotificationsViewModel" Title="Alerts">
+
+    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
+        <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
+            <Label Text="{Binding UnreadCount, StringFormat='{0} unread. Tap an alert to mark it as read.'}" Style="{StaticResource Muted}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+        </VerticalStackLayout>
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Items}">
+            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
+            <CollectionView.EmptyView><Label Text="You're all caught up." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="m:UserNotification">
+                    <Border Style="{StaticResource Panel}">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:NotificationsViewModel}}, Path=MarkReadCommand}"
+                                                  CommandParameter="{Binding .}" />
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="10,*" ColumnSpacing="12">
+                            <Ellipse Style="{StaticResource DotScheduled}" VerticalOptions="Start" Margin="0,7,0,0"
+                                     IsVisible="{Binding IsRead, Converter={StaticResource Not}}" />
+                            <VerticalStackLayout Grid.Column="1" Spacing="2">
+                                <Label Text="{Binding Title}" FontFamily="BarlowSemiBold" />
+                                <Label Text="{Binding Body}" Style="{StaticResource Muted}" IsVisible="{Binding Body, Converter={StaticResource HasText}}" />
+                                <Label Text="{Binding CreatedAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM, h:mm tt'}" Style="{StaticResource Caption}" />
+                            </VerticalStackLayout>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</v:BasePage>

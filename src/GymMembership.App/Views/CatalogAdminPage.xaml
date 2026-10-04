@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.CatalogAdminPage" x:DataType="vm:CatalogAdminViewModel" Title="Packages and amenities">
+
+    <ScrollView MaximumWidthRequest="920">
+        <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
+            <c:Banner Message="{Binding ErrorMessage}" />
+
+            <Label Text="Membership packages" Style="{StaticResource Heading}" />
+            <Border Style="{StaticResource Panel}">
+                <FlexLayout Wrap="Wrap" AlignItems="End">
+                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="220">
+                        <Label Text="Name" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><Entry Text="{Binding NewPackageName}" /></Border>
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="110">
+                        <Label Text="Price" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><Entry Text="{Binding NewPrice}" Keyboard="Numeric" /></Border>
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="110">
+                        <Label Text="Days" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><Entry Text="{Binding NewDays}" Keyboard="Numeric" /></Border>
+                    </VerticalStackLayout>
+                    <Button Text="Add package" Style="{StaticResource SmallButton}" Margin="0,0,0,8" Command="{Binding AddPackageCommand}" />
+                </FlexLayout>
+            </Border>
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Packages}" Spacing="10">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="m:MembershipPackage">
+                        <Border Style="{StaticResource Panel}" Padding="16,12">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="14">
+                                <VerticalStackLayout Spacing="2">
+                                    <Label Text="{Binding Name}" Style="{StaticResource Heading}" />
+                                    <Label Style="{StaticResource Caption}">
+                                        <Label.Text>
+                                            <MultiBinding StringFormat="{}{0:0.##} {1}, {2} days">
+                                                <Binding Path="Price" /><Binding Path="Currency" /><Binding Path="DurationDays" />
+                                            </MultiBinding>
+                                        </Label.Text>
+                                    </Label>
+                                </VerticalStackLayout>
+                                <c:StatusChip Grid.Column="1" VerticalOptions="Center">
+                                    <c:StatusChip.Triggers>
+                                        <DataTrigger TargetType="c:StatusChip" Binding="{Binding IsActive}" Value="True"><Setter Property="Status" Value="active" /></DataTrigger>
+                                        <DataTrigger TargetType="c:StatusChip" Binding="{Binding IsActive}" Value="False"><Setter Property="Status" Value="inactive" /></DataTrigger>
+                                    </c:StatusChip.Triggers>
+                                </c:StatusChip>
+                                <Button Grid.Column="2" Text="Turn on or off" Style="{StaticResource SmallOutlineButton}"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:CatalogAdminViewModel}}, Path=TogglePackageCommand}" CommandParameter="{Binding .}" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
+            <Label Text="Amenities" Style="{StaticResource Heading}" Margin="0,12,0,0" />
+            <Border Style="{StaticResource Panel}">
+                <FlexLayout Wrap="Wrap" AlignItems="End">
+                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="260">
+                        <Label Text="Name" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><Entry Text="{Binding NewAmenityName}" /></Border>
+                    </VerticalStackLayout>
+                    <Button Text="Add amenity" Style="{StaticResource SmallButton}" Margin="0,0,0,8" Command="{Binding AddAmenityCommand}" />
+                </FlexLayout>
+            </Border>
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Amenities}" Spacing="10">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="m:Amenity">
+                        <Border Style="{StaticResource Panel}" Padding="16,12">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="14">
+                                <Label Text="{Binding Name}" Style="{StaticResource Heading}" VerticalOptions="Center" />
+                                <c:StatusChip Grid.Column="1" VerticalOptions="Center">
+                                    <c:StatusChip.Triggers>
+                                        <DataTrigger TargetType="c:StatusChip" Binding="{Binding IsActive}" Value="True"><Setter Property="Status" Value="active" /></DataTrigger>
+                                        <DataTrigger TargetType="c:StatusChip" Binding="{Binding IsActive}" Value="False"><Setter Property="Status" Value="inactive" /></DataTrigger>
+                                    </c:StatusChip.Triggers>
+                                </c:StatusChip>
+                                <Button Grid.Column="2" Text="Turn on or off" Style="{StaticResource SmallOutlineButton}"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:CatalogAdminViewModel}}, Path=ToggleAmenityCommand}" CommandParameter="{Binding .}" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</v:BasePage>

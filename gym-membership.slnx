@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/GymMembership.App/GymMembership.App.csproj" />
+    <Project Path="src/GymMembership.Core/GymMembership.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/GymMembership.Tests/GymMembership.Tests.csproj" />
+  </Folder>
+</Solution>

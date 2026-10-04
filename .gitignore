@@ -1,0 +1,6 @@
+bin/
+obj/
+.vs/
+*.user
+supabase/.temp/
+supabase/.branches/

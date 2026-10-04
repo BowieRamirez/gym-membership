@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.AuditPage" x:DataType="vm:AuditViewModel" Title="Audit log">
+
+    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
+        <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
+            <Label Text="Sensitive actions, newest first. Entries can't be edited." Style="{StaticResource Muted}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+        </VerticalStackLayout>
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Entries}">
+            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
+            <CollectionView.EmptyView><Label Text="Nothing has been logged yet." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="svc:AuditRow">
+                    <Border Style="{StaticResource Panel}" Padding="16,12">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <VerticalStackLayout Spacing="2">
+                                <Label Text="{Binding Entry.Action}" FontFamily="BarlowSemiBold" />
+                                <Label Style="{StaticResource Caption}">
+                                    <Label.Text>
+                                        <MultiBinding StringFormat="{}{0} on {1} {2}">
+                                            <Binding Path="Actor" /><Binding Path="Entry.Entity" /><Binding Path="Entry.EntityId" />
+                                        </MultiBinding>
+                                    </Label.Text>
+                                </Label>
+                            </VerticalStackLayout>
+                            <Label Grid.Column="1" Text="{Binding Entry.CreatedAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM, h:mm tt'}" Style="{StaticResource Caption}" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</v:BasePage>

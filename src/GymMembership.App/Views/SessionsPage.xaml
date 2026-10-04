@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.SessionsPage" x:DataType="vm:SessionsViewModel" Title="Sessions">
+
+    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
+        <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
+            <Label Text="Your booked training sessions, soonest first." Style="{StaticResource Muted}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+        </VerticalStackLayout>
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Sessions}">
+            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
+            <CollectionView.EmptyView><Label Text="No sessions yet. Send a time request to book one." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="svc:SessionRow">
+                    <Border Style="{StaticResource Panel}">
+                        <VerticalStackLayout Spacing="8">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                <VerticalStackLayout Spacing="2">
+                                    <Label Text="{Binding Session.Title}" Style="{StaticResource Heading}" />
+                                    <Label Text="{Binding With, StringFormat='With {0}'}" />
+                                    <Label Style="{StaticResource Caption}">
+                                        <Label.Text>
+                                            <MultiBinding StringFormat="{}{0} to {1}">
+                                                <Binding Path="Session.ScheduledStart" Converter="{StaticResource LocalDate}" ConverterParameter="dddd d MMM, h:mm tt" />
+                                                <Binding Path="Session.ScheduledEnd" Converter="{StaticResource LocalDate}" ConverterParameter="h:mm tt" />
+                                            </MultiBinding>
+                                        </Label.Text>
+                                    </Label>
+                                </VerticalStackLayout>
+                                <c:StatusChip Grid.Column="1" Status="{Binding Session.Status}" VerticalOptions="Start" />
+                            </Grid>
+                            <HorizontalStackLayout Spacing="8" IsVisible="{Binding CanManage}">
+                                <Button Text="Mark complete" Style="{StaticResource SmallButton}"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=CompleteCommand}" CommandParameter="{Binding .}" />
+                                <Button Text="No-show" Style="{StaticResource SmallOutlineButton}"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=NoShowCommand}" CommandParameter="{Binding .}" />
+                                <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=CancelCommand}" CommandParameter="{Binding .}" />
+                            </HorizontalStackLayout>
+                        </VerticalStackLayout>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</v:BasePage>

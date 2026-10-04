@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.AttendancePage" x:DataType="vm:AttendanceViewModel" Title="Attendance">
+
+    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
+        <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
+            <Label Text="Mark who showed up. You can change a mark at any time." Style="{StaticResource Muted}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+        </VerticalStackLayout>
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Sessions}">
+            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
+            <CollectionView.EmptyView><Label Text="No sessions to mark yet." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="svc:SessionRow">
+                    <Border Style="{StaticResource Panel}">
+                        <VerticalStackLayout Spacing="10">
+                            <Label Text="{Binding With}" Style="{StaticResource Heading}" />
+                            <Label Text="{Binding Session.ScheduledStart, Converter={StaticResource LocalDate}, ConverterParameter='dddd d MMM, h:mm tt'}" Style="{StaticResource Caption}" />
+                            <FlexLayout Wrap="Wrap">
+                                <Button Text="Present" Style="{StaticResource SmallButton}" Margin="0,0,8,8"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:AttendanceViewModel}}, Path=MarkCommand}"
+                                        CommandParameter="{Binding Session.Id, StringFormat='{0}|present'}" />
+                                <Button Text="Late" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:AttendanceViewModel}}, Path=MarkCommand}"
+                                        CommandParameter="{Binding Session.Id, StringFormat='{0}|late'}" />
+                                <Button Text="Absent" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:AttendanceViewModel}}, Path=MarkCommand}"
+                                        CommandParameter="{Binding Session.Id, StringFormat='{0}|absent'}" />
+                                <Button Text="Excused" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:AttendanceViewModel}}, Path=MarkCommand}"
+                                        CommandParameter="{Binding Session.Id, StringFormat='{0}|excused'}" />
+                            </FlexLayout>
+                        </VerticalStackLayout>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</v:BasePage>

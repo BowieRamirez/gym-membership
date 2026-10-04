@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.CoachProfilePage" x:DataType="vm:CoachProfileViewModel" Title="My coach profile">
+
+    <ScrollView MaximumWidthRequest="560">
+        <VerticalStackLayout Padding="20,16,20,24" Spacing="16">
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+            <VerticalStackLayout Spacing="6">
+                <Label Text="Specialty" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}"><Entry Text="{Binding Specialty}" /></Border>
+            </VerticalStackLayout>
+            <VerticalStackLayout Spacing="6">
+                <Label Text="Hourly rate" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}"><Entry Text="{Binding HourlyRate}" Keyboard="Numeric" /></Border>
+            </VerticalStackLayout>
+            <VerticalStackLayout Spacing="6">
+                <Label Text="About you" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}" Padding="14,6"><Editor Text="{Binding Bio}" HeightRequest="120" AutoSize="Disabled" /></Border>
+            </VerticalStackLayout>
+
+            <HorizontalStackLayout Spacing="12">
+                <Switch IsToggled="{Binding IsAvailable}" SemanticProperties.Description="Taking new members" VerticalOptions="Center" />
+                <Label Text="Taking new members" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+
+            <Button Text="Save profile" Command="{Binding SaveCommand}" HorizontalOptions="Start" />
+        </VerticalStackLayout>
+    </ScrollView>
+</v:BasePage>

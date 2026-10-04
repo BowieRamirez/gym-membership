@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell x:Class="GymMembership.App.CoachShell"
+       xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+       xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+       xmlns:c="clr-namespace:GymMembership.App.Controls"
+       xmlns:views="clr-namespace:GymMembership.App.Views"
+       FlyoutBehavior="{OnPlatform WinUI=Locked, Default=Flyout}"
+       Title="Gym Membership">
+
+    <Shell.FlyoutHeader>
+        <VerticalStackLayout Padding="20,28,20,16" Spacing="14">
+            <Label Text="Coach" Style="{StaticResource Heading}" />
+            <c:LaneView DashColor="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}"
+                        TrackColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+        </VerticalStackLayout>
+    </Shell.FlyoutHeader>
+
+    <FlyoutItem Title="Sessions"><ShellContent ContentTemplate="{DataTemplate views:SessionsPage}" /></FlyoutItem>
+    <FlyoutItem Title="Time requests"><ShellContent ContentTemplate="{DataTemplate views:RequestsPage}" /></FlyoutItem>
+    <FlyoutItem Title="Attendance"><ShellContent ContentTemplate="{DataTemplate views:AttendancePage}" /></FlyoutItem>
+    <FlyoutItem Title="My coach profile"><ShellContent ContentTemplate="{DataTemplate views:CoachProfilePage}" /></FlyoutItem>
+    <FlyoutItem Title="Alerts"><ShellContent ContentTemplate="{DataTemplate views:NotificationsPage}" /></FlyoutItem>
+    <FlyoutItem Title="Settings"><ShellContent ContentTemplate="{DataTemplate views:SettingsPage}" /></FlyoutItem>
+</Shell>

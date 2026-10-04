@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.LoginPage" x:DataType="vm:LoginViewModel"
+            Title="Sign in">
+
+    <!-- Desktop: a rubber-floor panel on the left, the form on the right. Phone: form only. -->
+    <Grid ColumnDefinitions="*,*">
+
+        <Grid Grid.Column="0" IsVisible="{OnIdiom Phone=False, Default=True}"
+              BackgroundColor="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}"
+              RowDefinitions="*,Auto,*" Padding="48">
+            <VerticalStackLayout Grid.Row="1" Spacing="28">
+                <c:LaneView DashColor="{StaticResource White}" TrackColor="#55FFFFFF" />
+                <Label Text="Front desk, coaches and members in one place."
+                       Style="{StaticResource Title}" TextColor="{StaticResource White}" MaximumWidthRequest="360" HorizontalOptions="Start" />
+                <c:LaneView DashColor="#66FFFFFF" TrackColor="#33FFFFFF" />
+            </VerticalStackLayout>
+        </Grid>
+
+        <ScrollView Grid.Column="{OnIdiom Phone=0, Default=1}" Grid.ColumnSpan="{OnIdiom Phone=2, Default=1}">
+            <VerticalStackLayout Padding="{OnIdiom Phone='24,48,24,24', Default='64,40'}"
+                                 Spacing="18" MaximumWidthRequest="480"
+                                 VerticalOptions="{OnIdiom Phone=Start, Default=Center}"
+                                 HorizontalOptions="Fill">
+
+                <c:LaneView IsVisible="{OnIdiom Phone=True, Default=False}"
+                            DashColor="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}"
+                            TrackColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="Gym Membership" Style="{StaticResource Display}" SemanticProperties.HeadingLevel="Level1" />
+                    <Label Text="Sign in to manage your membership, coaches and sessions." Style="{StaticResource Muted}" />
+                </VerticalStackLayout>
+
+                <c:Banner Message="{Binding ErrorMessage}" />
+
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="Email" Style="{StaticResource Caption}" />
+                    <Border Style="{StaticResource Field}">
+                        <Entry Text="{Binding Email}" Keyboard="Email" ReturnType="Next" SemanticProperties.Description="Email address" />
+                    </Border>
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="Password" Style="{StaticResource Caption}" />
+                    <Border Style="{StaticResource Field}">
+                        <Entry Text="{Binding Password}" IsPassword="True" ReturnType="Done"
+                               ReturnCommand="{Binding SignInCommand}" SemanticProperties.Description="Password" />
+                    </Border>
+                </VerticalStackLayout>
+
+                <Button Text="Sign in" Margin="0,6,0,0" Command="{Binding SignInCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}" />
+
+                <!-- Demo mode: remove once the real backend is connected -->
+                <Border Style="{StaticResource Panel}" Margin="0,16,0,0">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="Demo mode" Style="{StaticResource Heading}" />
+                        <Label Text="No database is connected yet, so everything here is sample data held in memory. Jump in as:" Style="{StaticResource Muted}" />
+                        <FlexLayout Wrap="Wrap" JustifyContent="Start" AlignItems="Start">
+                            <Button Text="Member" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                                    Command="{Binding DemoSignInCommand}" CommandParameter="member@demo.io" />
+                            <Button Text="Coach" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                                    Command="{Binding DemoSignInCommand}" CommandParameter="coach@demo.io" />
+                            <Button Text="Front desk" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                                    Command="{Binding DemoSignInCommand}" CommandParameter="employee@demo.io" />
+                            <Button Text="Admin" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                                    Command="{Binding DemoSignInCommand}" CommandParameter="admin@demo.io" />
+                        </FlexLayout>
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</v:BasePage>

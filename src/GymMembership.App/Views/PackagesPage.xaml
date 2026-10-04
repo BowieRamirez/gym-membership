@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.PackagesPage" x:DataType="vm:PackagesViewModel" Title="Packages">
+
+    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
+        <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
+            <Label Text="Choose a package. We create a payment you can settle at the front desk or by attaching proof." Style="{StaticResource Muted}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+        </VerticalStackLayout>
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Packages}">
+            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
+            <CollectionView.EmptyView>
+                <Label Text="No packages are on sale right now. Check back soon." Style="{StaticResource Muted}" />
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="m:MembershipPackage">
+                    <Border Style="{StaticResource Panel}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="{Binding Name}" Style="{StaticResource Heading}" />
+                                <Label Text="{Binding Description}" Style="{StaticResource Muted}" />
+                                <Label Text="{Binding DurationDays, StringFormat='{0} days of access'}" Style="{StaticResource Caption}" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Column="1" Spacing="6" HorizontalOptions="End">
+                                <Label Text="{Binding Price, StringFormat='{0:0.##}'}" Style="{StaticResource Numeral}" HorizontalOptions="End" />
+                                <Label Text="{Binding Currency}" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                <Button Text="Avail" Style="{StaticResource SmallButton}"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:PackagesViewModel}}, Path=AvailCommand}"
+                                        CommandParameter="{Binding .}" />
+                            </VerticalStackLayout>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</v:BasePage>

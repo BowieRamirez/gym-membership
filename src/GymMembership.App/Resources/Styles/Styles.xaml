@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<?xaml-comp compile="true" ?>
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+
+    <!-- ===== Type scale (ratio 1.25 from 16) ===== -->
+    <x:Double x:Key="TextCaption">13</x:Double>
+    <x:Double x:Key="TextBody">16</x:Double>
+    <x:Double x:Key="TextTitle3">20</x:Double>
+    <x:Double x:Key="TextTitle2">25</x:Double>
+    <x:Double x:Key="TextTitle1">31</x:Double>
+    <x:Double x:Key="TextDisplay">39</x:Double>
+    <x:Double x:Key="TextNumeral">52</x:Double>
+
+    <!-- ===== Page + shell ===== -->
+    <Style TargetType="Page" ApplyToDerivedTypes="True">
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChalkLight}, Dark={StaticResource ChalkDark}}" />
+    </Style>
+
+    <Style TargetType="Shell" ApplyToDerivedTypes="True">
+        <Setter Property="Shell.BackgroundColor" Value="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}" />
+        <Setter Property="Shell.ForegroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+        <Setter Property="Shell.TitleColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+        <Setter Property="Shell.TabBarBackgroundColor" Value="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}" />
+        <Setter Property="Shell.TabBarForegroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+        <Setter Property="Shell.TabBarTitleColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+        <Setter Property="Shell.TabBarUnselectedColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+    </Style>
+
+    <!-- ===== Text ===== -->
+    <Style x:Key="BaseLabel" TargetType="Label">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+        <Setter Property="FontFamily" Value="Barlow" />
+        <Setter Property="FontSize" Value="{StaticResource TextBody}" />
+        <Setter Property="LineHeight" Value="1.4" />
+    </Style>
+    <Style TargetType="Label" BasedOn="{StaticResource BaseLabel}" />
+    <Style x:Key="Display" TargetType="Label" BasedOn="{StaticResource BaseLabel}">
+        <Setter Property="FontFamily" Value="BarlowSemiBold" />
+        <Setter Property="FontSize" Value="{StaticResource TextDisplay}" />
+        <Setter Property="LineHeight" Value="1.05" />
+        <Setter Property="CharacterSpacing" Value="-0.4" />
+    </Style>
+    <Style x:Key="Title" TargetType="Label" BasedOn="{StaticResource BaseLabel}">
+        <Setter Property="FontFamily" Value="BarlowSemiBold" />
+        <Setter Property="FontSize" Value="{StaticResource TextTitle2}" />
+        <Setter Property="LineHeight" Value="1.15" />
+    </Style>
+    <Style x:Key="Heading" TargetType="Label" BasedOn="{StaticResource BaseLabel}">
+        <Setter Property="FontFamily" Value="BarlowSemiBold" />
+        <Setter Property="FontSize" Value="{StaticResource TextTitle3}" />
+        <Setter Property="LineHeight" Value="1.2" />
+    </Style>
+    <Style x:Key="Muted" TargetType="Label" BasedOn="{StaticResource BaseLabel}">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+    </Style>
+    <Style x:Key="Caption" TargetType="Label" BasedOn="{StaticResource Muted}">
+        <Setter Property="FontFamily" Value="BarlowMedium" />
+        <Setter Property="FontSize" Value="{StaticResource TextCaption}" />
+    </Style>
+    <!-- Prices, days left, counts: condensed numerals read like gym-floor signage -->
+    <Style x:Key="Numeral" TargetType="Label" BasedOn="{StaticResource BaseLabel}">
+        <Setter Property="FontFamily" Value="BarlowCondensedSemiBold" />
+        <Setter Property="FontSize" Value="{StaticResource TextNumeral}" />
+        <Setter Property="LineHeight" Value="1" />
+    </Style>
+
+    <!-- ===== Inputs ===== -->
+    <Style TargetType="Entry">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+        <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+        <Setter Property="FontFamily" Value="Barlow" />
+        <Setter Property="FontSize" Value="{StaticResource TextBody}" />
+        <Setter Property="MinimumHeightRequest" Value="48" />
+    </Style>
+    <Style TargetType="Editor">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+        <Setter Property="FontFamily" Value="Barlow" />
+        <Setter Property="FontSize" Value="{StaticResource TextBody}" />
+    </Style>
+
+    <!-- A field is an entry framed by a hairline; the frame turns Plate Blue while focused (see FieldFrame in pages) -->
+    <Style x:Key="Field" TargetType="Border">
+        <Setter Property="StrokeShape" Value="RoundRectangle 10" />
+        <Setter Property="StrokeThickness" Value="1.5" />
+        <Setter Property="Padding" Value="14,0" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}" />
+        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+    </Style>
+
+    <!-- ===== Buttons: Rubber is the primary action; outline is secondary ===== -->
+    <Style x:Key="BaseButton" TargetType="Button">
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" />
+        <Setter Property="FontFamily" Value="BarlowSemiBold" />
+        <Setter Property="FontSize" Value="{StaticResource TextBody}" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="MinimumHeightRequest" Value="48" />
+        <Setter Property="Padding" Value="20,0" />
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="Opacity" Value="0.45" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="Pressed">
+                        <VisualState.Setters>
+                            <Setter Property="Opacity" Value="0.85" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+    <Style TargetType="Button" BasedOn="{StaticResource BaseButton}" />
+    <Style x:Key="OutlineButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+        <Setter Property="BorderWidth" Value="1.5" />
+        <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+    </Style>
+
+    <!-- ===== Surfaces: flat panels with a hairline, no shadows ===== -->
+    <Style x:Key="Panel" TargetType="Border">
+        <Setter Property="StrokeShape" Value="RoundRectangle 6" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Padding" Value="16" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}" />
+        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+    </Style>
+
+
+    <!-- ===== Status chips: a coloured dot AND a word, so colour is never the only signal ===== -->
+    <Style x:Key="Chip" TargetType="Border">
+        <Setter Property="StrokeShape" Value="RoundRectangle 6" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Padding" Value="8,3" />
+        <Setter Property="HorizontalOptions" Value="Start" />
+        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+    </Style>
+    <Style x:Key="DotPending" TargetType="Ellipse">
+        <Setter Property="WidthRequest" Value="8" /><Setter Property="HeightRequest" Value="8" /><Setter Property="VerticalOptions" Value="Center" />
+        <Setter Property="Fill" Value="{AppThemeBinding Light={StaticResource PlateYellowLight}, Dark={StaticResource PlateYellowDark}}" />
+    </Style>
+    <Style x:Key="DotVerified" TargetType="Ellipse">
+        <Setter Property="WidthRequest" Value="8" /><Setter Property="HeightRequest" Value="8" /><Setter Property="VerticalOptions" Value="Center" />
+        <Setter Property="Fill" Value="{AppThemeBinding Light={StaticResource PlateGreenLight}, Dark={StaticResource PlateGreenDark}}" />
+    </Style>
+    <Style x:Key="DotRejected" TargetType="Ellipse">
+        <Setter Property="WidthRequest" Value="8" /><Setter Property="HeightRequest" Value="8" /><Setter Property="VerticalOptions" Value="Center" />
+        <Setter Property="Fill" Value="{AppThemeBinding Light={StaticResource PlateRedLight}, Dark={StaticResource PlateRedDark}}" />
+    </Style>
+    <Style x:Key="DotScheduled" TargetType="Ellipse">
+        <Setter Property="WidthRequest" Value="8" /><Setter Property="HeightRequest" Value="8" /><Setter Property="VerticalOptions" Value="Center" />
+        <Setter Property="Fill" Value="{AppThemeBinding Light={StaticResource PlateBlueLight}, Dark={StaticResource PlateBlueDark}}" />
+    </Style>
+
+    <!-- Inline error: Plate Red edge, plain words saying what happened and what to do -->
+    <Style x:Key="ErrorPanel" TargetType="Border" BasedOn="{StaticResource Panel}">
+        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource PlateRedLight}, Dark={StaticResource PlateRedDark}}" />
+        <Setter Property="StrokeThickness" Value="1.5" />
+    </Style>
+
+
+    <Style x:Key="NoticePanel" TargetType="Border" BasedOn="{StaticResource Panel}">
+        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource PlateGreenLight}, Dark={StaticResource PlateGreenDark}}" />
+        <Setter Property="StrokeThickness" Value="1.5" />
+    </Style>
+
+    <!-- Compact buttons for actions inside list rows -->
+    <Style x:Key="SmallButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+        <Setter Property="MinimumHeightRequest" Value="40" />
+        <Setter Property="HeightRequest" Value="40" />
+        <Setter Property="Padding" Value="14,0" />
+        <Setter Property="FontSize" Value="14" />
+    </Style>
+    <Style x:Key="SmallOutlineButton" TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+        <Setter Property="MinimumHeightRequest" Value="40" />
+        <Setter Property="HeightRequest" Value="40" />
+        <Setter Property="Padding" Value="14,0" />
+        <Setter Property="FontSize" Value="14" />
+    </Style>
+
+    <Style TargetType="Picker">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+        <Setter Property="TitleColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+        <Setter Property="FontFamily" Value="Barlow" />
+        <Setter Property="MinimumHeightRequest" Value="44" />
+    </Style>
+    <Style TargetType="DatePicker">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+        <Setter Property="FontFamily" Value="Barlow" />
+    </Style>
+    <Style TargetType="TimePicker">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+        <Setter Property="FontFamily" Value="Barlow" />
+    </Style>
+    <Style TargetType="SearchBar">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+        <Setter Property="FontFamily" Value="Barlow" />
+    </Style>
+</ResourceDictionary>

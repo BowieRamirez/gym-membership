@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.RequestsPage" x:DataType="vm:RequestsViewModel" Title="Time requests">
+
+    <ScrollView MaximumWidthRequest="920">
+        <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+            <!-- Compose -->
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding CanCompose}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Style="{StaticResource Heading}">
+                        <Label.Triggers>
+                            <DataTrigger TargetType="Label" Binding="{Binding IsCoach}" Value="True">
+                                <Setter Property="Text" Value="Offer an open slot" />
+                            </DataTrigger>
+                            <DataTrigger TargetType="Label" Binding="{Binding IsCoach}" Value="False">
+                                <Setter Property="Text" Value="Request a session" />
+                            </DataTrigger>
+                        </Label.Triggers>
+                    </Label>
+
+                    <VerticalStackLayout Spacing="4" IsVisible="{Binding IsCoach, Converter={StaticResource Not}}">
+                        <Label Text="Coach" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}">
+                            <Picker ItemsSource="{Binding Coaches}" ItemDisplayBinding="{Binding Name}" SelectedItem="{Binding SelectedCoach}"
+                                    SemanticProperties.Description="Coach" />
+                        </Border>
+                    </VerticalStackLayout>
+
+                    <FlexLayout Wrap="Wrap" AlignItems="End">
+                        <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
+                            <Label Text="Date" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><DatePicker Date="{Binding Date}" MinimumDate="{x:Static x:DateTime.Today}" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
+                            <Label Text="Start time" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><TimePicker Time="{Binding Time}" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,0,8">
+                            <Label Text="Minutes" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}">
+                                <Picker ItemsSource="{Binding Durations}" SelectedItem="{Binding DurationMinutes}" WidthRequest="90" />
+                            </Border>
+                        </VerticalStackLayout>
+                    </FlexLayout>
+
+                    <VerticalStackLayout Spacing="4" IsVisible="{Binding IsCoach, Converter={StaticResource Not}}">
+                        <Label Text="Message (optional)" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><Entry Text="{Binding Message}" /></Border>
+                    </VerticalStackLayout>
+
+                    <Button Style="{StaticResource SmallButton}" HorizontalOptions="Start" Command="{Binding SubmitCommand}">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button" Binding="{Binding IsCoach}" Value="True"><Setter Property="Text" Value="Post slot" /></DataTrigger>
+                            <DataTrigger TargetType="Button" Binding="{Binding IsCoach}" Value="False"><Setter Property="Text" Value="Send request" /></DataTrigger>
+                        </Button.Triggers>
+                    </Button>
+                </VerticalStackLayout>
+            </Border>
+            <Label Text="Hire a coach first, then you can request sessions here." Style="{StaticResource Muted}"
+                   IsVisible="{Binding CanCompose, Converter={StaticResource Not}}" />
+
+            <Label Text="Waiting for a reply" Style="{StaticResource Heading}" Margin="0,8,0,0" />
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Requests}" Spacing="10">
+                <BindableLayout.EmptyView><Label Text="Nothing pending." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="svc:RequestRow">
+                        <Border Style="{StaticResource Panel}">
+                            <VerticalStackLayout Spacing="8">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                    <VerticalStackLayout Spacing="2">
+                                        <Label Text="{Binding With}" Style="{StaticResource Heading}" />
+                                        <Label Text="{Binding Request.RequestedStart, Converter={StaticResource LocalDate}, ConverterParameter='dddd d MMM, h:mm tt'}" />
+                                        <Label Text="{Binding Kind}" Style="{StaticResource Caption}" />
+                                    </VerticalStackLayout>
+                                    <c:StatusChip Grid.Column="1" Status="{Binding Request.Status}" VerticalOptions="Start" />
+                                </Grid>
+                                <Label Text="{Binding Request.Message}" Style="{StaticResource Muted}" IsVisible="{Binding Request.Message, Converter={StaticResource HasText}}" />
+                                <HorizontalStackLayout Spacing="8">
+                                    <Button Text="Approve" Style="{StaticResource SmallButton}" IsVisible="{Binding CanRespond}"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RequestsViewModel}}, Path=ApproveCommand}" CommandParameter="{Binding .}" />
+                                    <Button Text="Reject" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanRespond}"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RequestsViewModel}}, Path=RejectCommand}" CommandParameter="{Binding .}" />
+                                    <Button Text="Cancel request" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanCancel}"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RequestsViewModel}}, Path=CancelCommand}" CommandParameter="{Binding .}" />
+                                </HorizontalStackLayout>
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</v:BasePage>

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.VerifyAmenityUsagesPage" x:DataType="vm:VerifyAmenityUsagesViewModel" Title="Amenity visits">
+
+    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
+        <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
+            <Label Text="Visits members have logged and are waiting for you to confirm." Style="{StaticResource Muted}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+        </VerticalStackLayout>
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Pending}">
+            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
+            <CollectionView.EmptyView><Label Text="No visits are waiting." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="svc:UsageRow">
+                    <Border Style="{StaticResource Panel}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="{Binding Member}" Style="{StaticResource Heading}" />
+                                <Label Text="{Binding Amenity}" />
+                                <Label Text="{Binding Usage.UsedAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM, h:mm tt'}" Style="{StaticResource Caption}" />
+                            </VerticalStackLayout>
+                            <HorizontalStackLayout Grid.Column="1" Spacing="8" VerticalOptions="Center">
+                                <Button Text="Verify" Style="{StaticResource SmallButton}"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:VerifyAmenityUsagesViewModel}}, Path=ApproveCommand}" CommandParameter="{Binding .}" />
+                                <Button Text="Reject" Style="{StaticResource SmallOutlineButton}"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:VerifyAmenityUsagesViewModel}}, Path=RejectCommand}" CommandParameter="{Binding .}" />
+                            </HorizontalStackLayout>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</v:BasePage>

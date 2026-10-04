@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.CoachesPage" x:DataType="vm:CoachesViewModel" Title="Coaches">
+
+    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
+        <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
+            <Label Text="Hire a coach to request one-to-one sessions. You need an active membership." Style="{StaticResource Muted}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+        </VerticalStackLayout>
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Cards}">
+            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
+            <CollectionView.EmptyView><Label Text="No coaches are taking new members right now." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="svc:CoachCard">
+                    <Border Style="{StaticResource Panel}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="{Binding Name}" Style="{StaticResource Heading}" />
+                                <Label Text="{Binding Coach.Specialty}" FontFamily="BarlowMedium" />
+                                <Label Text="{Binding Coach.Bio}" Style="{StaticResource Muted}" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Column="1" Spacing="6" HorizontalOptions="End">
+                                <Label Text="{Binding Coach.HourlyRate, StringFormat='{0:0.##}'}" Style="{StaticResource Numeral}" HorizontalOptions="End" />
+                                <Label Text="per hour" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                <Button Text="Hire" Style="{StaticResource SmallButton}" IsVisible="{Binding Hired, Converter={StaticResource Not}}"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:CoachesViewModel}}, Path=HireCommand}"
+                                        CommandParameter="{Binding .}" />
+                                <Button Text="End hire" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding Hired}"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:CoachesViewModel}}, Path=EndHireCommand}"
+                                        CommandParameter="{Binding .}" />
+                            </VerticalStackLayout>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</v:BasePage>

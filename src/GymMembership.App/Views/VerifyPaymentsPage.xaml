@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.VerifyPaymentsPage" x:DataType="vm:VerifyPaymentsViewModel" Title="Payments to verify">
+
+    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
+        <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
+            <Label Text="Oldest first. Check the proof, then verify or reject. Verifying activates the membership." Style="{StaticResource Muted}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+        </VerticalStackLayout>
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Pending}">
+            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
+            <CollectionView.EmptyView><Label Text="No payments are waiting." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="svc:PaymentRow">
+                    <Border Style="{StaticResource Panel}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="{Binding Payer}" Style="{StaticResource Heading}" />
+                                <Label Text="{Binding Item}" />
+                                <Label Text="{Binding Payment.CreatedAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM, h:mm tt'}" Style="{StaticResource Caption}" />
+                                <Label Style="{StaticResource Caption}" Text="Proof of payment attached" IsVisible="{Binding HasProof}" />
+                                <Label Style="{StaticResource Caption}" Text="No proof attached yet" IsVisible="{Binding HasProof, Converter={StaticResource Not}}" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Column="1" Spacing="8" HorizontalOptions="End">
+                                <Label Text="{Binding Payment.Amount, StringFormat='{0:N2}'}" Style="{StaticResource Numeral}" HorizontalOptions="End" />
+                                <HorizontalStackLayout Spacing="8">
+                                    <Button Text="Verify" Style="{StaticResource SmallButton}"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:VerifyPaymentsViewModel}}, Path=ApproveCommand}" CommandParameter="{Binding .}" />
+                                    <Button Text="Reject" Style="{StaticResource SmallOutlineButton}"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:VerifyPaymentsViewModel}}, Path=RejectCommand}" CommandParameter="{Binding .}" />
+                                </HorizontalStackLayout>
+                            </VerticalStackLayout>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</v:BasePage>

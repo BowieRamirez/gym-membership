@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.AmenitiesPage" x:DataType="vm:AmenitiesViewModel" Title="Amenities">
+
+    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
+        <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
+            <Label Text="Add an amenity to your access, then log each visit so staff can verify it. You need an active membership." Style="{StaticResource Muted}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+        </VerticalStackLayout>
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Items}">
+            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
+            <CollectionView.EmptyView><Label Text="No amenities are available." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="svc:AmenityRow">
+                    <Border Style="{StaticResource Panel}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="{Binding Amenity.Name}" Style="{StaticResource Heading}" />
+                                <Label Text="{Binding Amenity.Description}" Style="{StaticResource Muted}" />
+                            </VerticalStackLayout>
+                            <Button Grid.Column="1" Text="Add to my access" Style="{StaticResource SmallButton}" VerticalOptions="Center"
+                                    IsVisible="{Binding UserAmenityId, Converter={StaticResource IsNull}}"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:AmenitiesViewModel}}, Path=AvailCommand}"
+                                    CommandParameter="{Binding .}" />
+                            <Button Grid.Column="1" Text="Log a visit" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center"
+                                    IsVisible="{Binding UserAmenityId, Converter={StaticResource IsNotNull}}"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:AmenitiesViewModel}}, Path=LogUsageCommand}"
+                                    CommandParameter="{Binding .}" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</v:BasePage>
