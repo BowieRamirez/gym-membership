@@ -86,6 +86,49 @@ gym-membership/
 
 The app talks to the backend through a single interface, `ISupabaseGateway`. Moving to the real database means swapping one line in `MauiProgram.cs`.
 
+## Option under consideration: owner-only, manual cash payments
+
+> **Not implemented.** This is an alternative design kept for later. Nothing in the app or specs has changed yet.
+
+If the owner ends up being the only person using the system, payments can be recorded by hand at the counter instead of members paying through the app. No payment API is needed.
+
+### Process
+
+**Adding members and coaches**
+- The owner adds them as profiles (name, phone, optional notes; coaches also get specialty and rate), not login accounts.
+- Only the owner logs in (plus front-desk employees later, if hired).
+- A later "invite / enable login" step can give members or coaches app access if it's ever needed.
+
+**Monthly membership (cash)**
+1. The member pays at the counter.
+2. The owner opens the member, picks a package and taps **Record payment**. The payment is saved as `verified` straight away.
+3. The membership becomes active; the end date is the start date plus the package's `duration_days`.
+4. Renewals work the same way and extend from the current end date, not from today, when paid early.
+5. A receipt number is generated to write on a paper receipt.
+
+**Walk-ins**
+- Recorded as a day pass: optional name, amount and date. No member profile needed.
+- Counted in today's income and check-ins.
+
+**Keeping cash honest**
+- Payments are never deleted or edited. Mistakes are voided with a reason and recorded again; the audit log keeps the history.
+- An end-of-day cash summary shows expected cash (memberships + walk-ins) to compare with the drawer.
+- An optional payment method (Cash / GCash / Bank transfer) with a reference number covers transfers too.
+
+### What would change
+
+| Area | Change |
+|---|---|
+| `payments` table | Add `method`, `receipt_no`, `kind` (membership / renewal / walk-in), `recorded_by`, `voided_at` / `void_reason` |
+| `payments` CHECK rule | Allow walk-in payments that aren't linked to a membership or amenity |
+| `verify_payment` | Replace with `record_payment` (saved as verified right away) and `void_payment` |
+| "Verifier can't verify own payment" rule | Remove, or keep only for a future multi-staff setup |
+| Members and coaches | Profiles not tied to login accounts |
+| Proof upload and QR flow | Drop or defer |
+| Reports | Daily cash summary; revenue split by membership vs walk-in |
+
+**Open question:** should members and coaches keep the mobile app (to view their membership, sessions and messages), or is the system owner-only from end to end? This decides whether member and coach logins are removed entirely or just in-app payment.
+
 ## Roadmap
 
 - [x] Screens for every role on a demo backend
