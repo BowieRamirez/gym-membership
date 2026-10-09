@@ -23,7 +23,7 @@ public abstract partial class LoadableViewModel : ObservableObject
         {
             var result = await operation();
             if (result.Ok) { onOk(result.Value!); return true; }
-            ErrorMessage = ErrorText.For(result.Error);
+            ErrorMessage = ErrorText.For(result.Error, result.Message);
             return false;
         }
         finally { IsBusy = false; }
@@ -60,6 +60,7 @@ public partial class LoginViewModel(IAuthService auth, IAppNavigator nav) : Load
 public partial class PackagesViewModel(IMembershipService svc, IProofPicker picker) : LoadableViewModel
 {
     public ObservableCollection<MembershipPackage> Packages { get; } = new();
+    [ObservableProperty] private string? discountCode;
 
     public override Task OnAppearingAsync() => LoadAsync();
 
@@ -70,8 +71,10 @@ public partial class PackagesViewModel(IMembershipService svc, IProofPicker pick
     {
         Notice = null;
         var paymentId = 0;
-        if (!await RunAsync(() => svc.AvailAsync(package.Id), id => paymentId = id)) return;
-        Notice = "Payment created. Pay at the front desk, or attach your proof of payment now.";
+        if (!await RunAsync(() => svc.AvailAsync(package.Id, DiscountCode), id => paymentId = id)) return;
+        Notice = string.IsNullOrWhiteSpace(DiscountCode)
+            ? "Payment created. Pay at the front desk, or attach your proof of payment now."
+            : "Payment created with your discount. Pay at the front desk, or attach your proof of payment now.";
         if (await picker.PickAsync() is { } file && await RunAsync(() => svc.AttachProofAsync(paymentId, file.FileName, file.Data)))
             Notice = "Proof attached. Staff will verify it shortly.";
     }
@@ -84,6 +87,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
     [ObservableProperty] private string heroNumber = "–";
     [ObservableProperty] private string heroCaption = "Pick a package to get started.";
     [ObservableProperty] private double laneFraction;
+    [ObservableProperty] private string? discountCode;
 
     public override Task OnAppearingAsync() => LoadAsync();
 
@@ -117,7 +121,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
     {
         Notice = null;
         var paymentId = 0;
-        if (!await RunAsync(() => svc.RenewAsync(row.Id), id => paymentId = id)) return;
+        if (!await RunAsync(() => svc.RenewAsync(row.Id, DiscountCode), id => paymentId = id)) return;
         Notice = "Renewal payment created. Attach your proof of payment or pay at the front desk.";
         if (await picker.PickAsync() is { } file && await RunAsync(() => svc.AttachProofAsync(paymentId, file.FileName, file.Data)))
             Notice = "Proof attached. Staff will verify it shortly.";
@@ -156,7 +160,7 @@ public partial class AmenitiesViewModel(IAmenityService svc, IProofPicker picker
     }
 }
 
-public partial class CoachesViewModel(ICoachService svc) : LoadableViewModel
+public partial class CoachesViewModel(ICoachService svc, IMessageService messages, IAppNavigator nav) : LoadableViewModel
 {
     public ObservableCollection<CoachCard> Cards { get; } = new();
 
@@ -171,6 +175,54 @@ public partial class CoachesViewModel(ICoachService svc) : LoadableViewModel
     [RelayCommand]
     private async Task EndHireAsync(CoachCard card)
     { if (card.HireId is { } id && await RunAsync(() => svc.EndHireAsync(id))) await LoadAsync(); }
+
+    [RelayCommand]
+    private void Message(CoachCard card) { messages.Pending = (card.Coach.Id, null); nav.GoToMessages(); }
+}
+
+public partial class MessagesViewModel(IMessageService svc) : LoadableViewModel
+{
+    public ObservableCollection<ThreadRow> Threads { get; } = new();
+    public ObservableCollection<MessageRow> Messages { get; } = new();
+    [ObservableProperty] private ThreadRow? selected;
+    [ObservableProperty] private string draft = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ReadOnly))] private bool canSend;
+
+    /// <summary>A conversation is open but the hire has ended: history only.</summary>
+    public bool ReadOnly => Selected is not null && !CanSend;
+
+    public override Task OnAppearingAsync() => LoadAsync();
+
+    [RelayCommand]
+    private async Task LoadAsync()
+    {
+        var keep = Selected;
+        if (!await RunAsync(svc.ThreadsAsync, rows => Fill(Threads, rows))) return;
+        var want = svc.Pending; svc.Pending = null;
+        Selected = Threads.FirstOrDefault(t => want is { } w && t.CoachId == w.CoachId && (w.MemberId is null || t.MemberId == w.MemberId))
+            ?? Threads.FirstOrDefault(t => keep is not null && t.CoachId == keep.CoachId && t.MemberId == keep.MemberId)
+            ?? Threads.FirstOrDefault();
+    }
+
+    partial void OnSelectedChanged(ThreadRow? value)
+    {
+        CanSend = value?.CanSend ?? false;
+        OnPropertyChanged(nameof(ReadOnly));
+        _ = ShowAsync();
+    }
+
+    async Task ShowAsync()
+    {
+        if (Selected is { } t) await RunAsync(() => svc.MessagesAsync(t.CoachId, t.MemberId), rows => Fill(Messages, rows));
+        else Messages.Clear();
+    }
+
+    [RelayCommand]
+    private async Task SendAsync()
+    {
+        if (Selected is not { } t) return;
+        if (await RunAsync(() => svc.SendAsync(t.CoachId, t.MemberId, Draft))) { Draft = ""; await ShowAsync(); }
+    }
 }
 
 public partial class NotificationsViewModel(INotificationService svc) : LoadableViewModel

@@ -19,6 +19,7 @@
     <FlyoutItem Title="Packages"><ShellContent ContentTemplate="{DataTemplate views:PackagesPage}" /></FlyoutItem>
     <FlyoutItem Title="Amenities"><ShellContent ContentTemplate="{DataTemplate views:AmenitiesPage}" /></FlyoutItem>
     <FlyoutItem Title="Coaches"><ShellContent ContentTemplate="{DataTemplate views:CoachesPage}" /></FlyoutItem>
+    <FlyoutItem Title="Messages" Route="messages"><ShellContent ContentTemplate="{DataTemplate views:MessagesPage}" /></FlyoutItem>
     <FlyoutItem Title="Sessions"><ShellContent ContentTemplate="{DataTemplate views:SessionsPage}" /></FlyoutItem>
     <FlyoutItem Title="Time requests"><ShellContent ContentTemplate="{DataTemplate views:RequestsPage}" /></FlyoutItem>
     <FlyoutItem Title="Alerts"><ShellContent ContentTemplate="{DataTemplate views:NotificationsPage}" /></FlyoutItem>

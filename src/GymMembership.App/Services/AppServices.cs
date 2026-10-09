@@ -23,6 +23,8 @@ public sealed class AppNavigator(IServiceProvider sp) : IAppNavigator
         Show(sp.GetRequiredService<LoginPage>());
     }
 
+    public void GoToMessages() => MainThread.BeginInvokeOnMainThread(async () => await Shell.Current.GoToAsync("//messages"));
+
     public void ApplyTheme(string theme) => MainThread.BeginInvokeOnMainThread(() =>
         Application.Current!.UserAppTheme = theme switch { "dark" => AppTheme.Dark, "light" => AppTheme.Light, _ => AppTheme.Unspecified });
 

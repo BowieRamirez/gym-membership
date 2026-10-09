@@ -24,12 +24,17 @@
                                 <Label Text="{Binding Name}" Style="{StaticResource Heading}" />
                                 <Label Text="{Binding Coach.Specialty}" FontFamily="BarlowMedium" />
                                 <Label Text="{Binding Coach.Bio}" Style="{StaticResource Muted}" />
+                                <Label Text="On the floor" FontFamily="BarlowMedium" Margin="0,6,0,0" />
+                                <Label Text="{Binding ShiftsText}" Style="{StaticResource Caption}" />
                             </VerticalStackLayout>
                             <VerticalStackLayout Grid.Column="1" Spacing="6" HorizontalOptions="End">
                                 <Label Text="{Binding Coach.HourlyRate, StringFormat='{0:0.##}'}" Style="{StaticResource Numeral}" HorizontalOptions="End" />
                                 <Label Text="per hour" Style="{StaticResource Caption}" HorizontalOptions="End" />
                                 <Button Text="Hire" Style="{StaticResource SmallButton}" IsVisible="{Binding Hired, Converter={StaticResource Not}}"
                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:CoachesViewModel}}, Path=HireCommand}"
+                                        CommandParameter="{Binding .}" />
+                                <Button Text="Message" Style="{StaticResource SmallButton}" IsVisible="{Binding Hired}"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:CoachesViewModel}}, Path=MessageCommand}"
                                         CommandParameter="{Binding .}" />
                                 <Button Text="End hire" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding Hired}"
                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:CoachesViewModel}}, Path=EndHireCommand}"

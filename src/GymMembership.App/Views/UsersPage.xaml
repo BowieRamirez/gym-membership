@@ -7,40 +7,66 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.UsersPage" x:DataType="vm:UsersViewModel" Title="Users and roles">
 
-    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="980">
-        <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
-            <Label Text="Everyone who has signed up. Making someone a coach also creates their coach profile." Style="{StaticResource Muted}" />
+    <ScrollView MaximumWidthRequest="980">
+        <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
+            <Label Text="You create every account here. Share the email and temporary password with the person, and they can sign in." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
-        </VerticalStackLayout>
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-        <CollectionView Grid.Row="1" ItemsSource="{Binding Users}">
-            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
-            <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="svc:UserRow">
-                    <Border Style="{StaticResource Panel}">
-                        <VerticalStackLayout Spacing="10">
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                <VerticalStackLayout Spacing="2">
-                                    <Label Text="{Binding Username}" Style="{StaticResource Heading}" />
-                                    <Label Text="{Binding RoleText}" Style="{StaticResource Caption}" />
-                                </VerticalStackLayout>
-                                <c:StatusChip Grid.Column="1" Status="{Binding ActiveStatus}" VerticalOptions="Start" />
-                            </Grid>
-                            <FlexLayout Wrap="Wrap">
-                                <Button Text="{Binding CoachActionText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:UsersViewModel}}, Path=ToggleRoleCommand}"
-                                        CommandParameter="{Binding UserId, StringFormat='{0}|coach'}" />
-                                <Button Text="{Binding EmployeeActionText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:UsersViewModel}}, Path=ToggleRoleCommand}"
-                                        CommandParameter="{Binding UserId, StringFormat='{0}|employee'}" />
-                                <Button Text="{Binding ActiveActionText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:UsersViewModel}}, Path=ToggleActiveCommand}"
-                                        CommandParameter="{Binding .}" />
-                            </FlexLayout>
+            <Border Style="{StaticResource Panel}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Add a member or coach" Style="{StaticResource Heading}" />
+                    <FlexLayout Wrap="Wrap" AlignItems="End">
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="220">
+                            <Label Text="Full name" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding NewName}" SemanticProperties.Description="Full name" /></Border>
                         </VerticalStackLayout>
-                    </Border>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
-    </Grid>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="240">
+                            <Label Text="Email" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding NewEmail}" Keyboard="Email" SemanticProperties.Description="Email" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="180">
+                            <Label Text="Temporary password" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding NewPassword}" IsPassword="True" SemanticProperties.Description="Temporary password" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="130">
+                            <Label Text="Role" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Roles}" SelectedItem="{Binding NewRole}" SemanticProperties.Description="Role" /></Border>
+                        </VerticalStackLayout>
+                        <Button Text="Add user" Style="{StaticResource SmallButton}" Margin="0,0,0,8" Command="{Binding AddUserCommand}" />
+                    </FlexLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <Label Text="Everyone" Style="{StaticResource Heading}" Margin="0,8,0,0" />
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Users}" Spacing="10">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="svc:UserRow">
+                        <Border Style="{StaticResource Panel}">
+                            <VerticalStackLayout Spacing="10">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                    <VerticalStackLayout Spacing="2">
+                                        <Label Text="{Binding Username}" Style="{StaticResource Heading}" />
+                                        <Label Text="{Binding RoleText}" Style="{StaticResource Caption}" />
+                                    </VerticalStackLayout>
+                                    <c:StatusChip Grid.Column="1" Status="{Binding ActiveStatus}" VerticalOptions="Start" />
+                                </Grid>
+                                <FlexLayout Wrap="Wrap">
+                                    <Button Text="{Binding CoachActionText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:UsersViewModel}}, Path=ToggleRoleCommand}"
+                                            CommandParameter="{Binding UserId, StringFormat='{0}|coach'}" />
+                                    <Button Text="{Binding EmployeeActionText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:UsersViewModel}}, Path=ToggleRoleCommand}"
+                                            CommandParameter="{Binding UserId, StringFormat='{0}|employee'}" />
+                                    <Button Text="{Binding ActiveActionText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:UsersViewModel}}, Path=ToggleActiveCommand}"
+                                            CommandParameter="{Binding .}" />
+                                </FlexLayout>
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
 </v:BasePage>

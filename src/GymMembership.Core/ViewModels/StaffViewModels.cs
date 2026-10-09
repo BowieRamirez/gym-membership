@@ -75,6 +75,53 @@ public partial class CoachProfileViewModel(ICoachService svc) : LoadableViewMode
     { if (await RunAsync(() => svc.UpdateProfileAsync(Bio, Specialty, HourlyRate, IsAvailable))) Notice = "Profile saved."; }
 }
 
+public partial class TraineesViewModel(ICoachService svc, IMessageService messages, IAppNavigator nav) : LoadableViewModel
+{
+    public ObservableCollection<TraineeRow> Trainees { get; } = new();
+
+    public override Task OnAppearingAsync() => LoadAsync();
+
+    [RelayCommand] private Task LoadAsync() => RunAsync(svc.TraineesAsync, rows => Fill(Trainees, rows));
+
+    [RelayCommand]
+    private void Message(TraineeRow row) { messages.Pending = (row.CoachId, row.MemberId); nav.GoToMessages(); }
+
+    [RelayCommand]
+    private async Task RemoveAsync(TraineeRow row)
+    {
+        Notice = null;
+        if (await RunAsync(() => svc.EndHireAsync(row.HireId))) { Notice = $"{row.Name} is no longer your trainee."; await LoadAsync(); }
+    }
+}
+
+public partial class ShiftsViewModel(ICoachService svc) : LoadableViewModel
+{
+    public ObservableCollection<ShiftPost> Shifts { get; } = new();
+    public int[] HoursOptions { get; } = [2, 4, 6, 8, 10];
+
+    [ObservableProperty] private DateTime date = DateTime.Today.AddDays(1);
+    [ObservableProperty] private TimeSpan time = new(8, 0, 0);
+    [ObservableProperty] private int hours = 6;
+    [ObservableProperty] private string? note;
+
+    public override Task OnAppearingAsync() => LoadAsync();
+
+    [RelayCommand] private Task LoadAsync() => RunAsync(svc.MyShiftsAsync, rows => Fill(Shifts, rows));
+
+    [RelayCommand]
+    private async Task PostAsync()
+    {
+        Notice = null;
+        var start = (Date.Date + Time).ToUniversalTime();
+        if (await RunAsync(() => svc.PostShiftAsync(start, start.AddHours(Hours), Note)))
+        { Notice = "Shift posted. Your trainees can see it on the Coaches page."; Note = null; await LoadAsync(); }
+    }
+
+    [RelayCommand]
+    private async Task CancelAsync(ShiftPost shift)
+    { if (await RunAsync(() => svc.CancelShiftAsync(shift.Id))) await LoadAsync(); }
+}
+
 public partial class RequestsViewModel(ISessionService svc) : LoadableViewModel
 {
     public ObservableCollection<RequestRow> Requests { get; } = new();
@@ -131,13 +178,43 @@ public partial class RequestsViewModel(ISessionService svc) : LoadableViewModel
 public partial class SessionsViewModel(ISessionService svc) : LoadableViewModel
 {
     public ObservableCollection<SessionRow> Sessions { get; } = new();
+    [ObservableProperty] private SessionRow? rescheduling;
+    [ObservableProperty] private DateTime date = DateTime.Today.AddDays(1);
+    [ObservableProperty] private TimeSpan time = new(9, 0, 0);
 
     public override Task OnAppearingAsync() => LoadAsync();
 
     [RelayCommand] private Task LoadAsync() => RunAsync(svc.SessionsAsync, rows => Fill(Sessions, rows));
     [RelayCommand] private Task CompleteAsync(SessionRow row) => SetAsync(row, Status.Completed);
-    [RelayCommand] private Task CancelAsync(SessionRow row) => SetAsync(row, Status.Cancelled);
     [RelayCommand] private Task NoShowAsync(SessionRow row) => SetAsync(row, Status.NoShow);
+
+    [RelayCommand]
+    private async Task CancelAsync(SessionRow row)
+    {
+        Notice = null;
+        if (await RunAsync(() => svc.CancelSessionAsync(row.Session.Id))) { Notice = "Session cancelled. The other person has been told."; await LoadAsync(); }
+    }
+
+    [RelayCommand]
+    private void StartReschedule(SessionRow row)
+    {
+        Notice = null; Rescheduling = row;
+        var start = row.Session.ScheduledStart.ToLocalTime();
+        Date = start.Date; Time = start.TimeOfDay;
+    }
+
+    [RelayCommand] private void StopReschedule() => Rescheduling = null;
+
+    [RelayCommand]
+    private async Task SendRescheduleAsync()
+    {
+        if (Rescheduling is not { } row) return;
+        var start = (Date.Date + Time).ToUniversalTime();
+        var end = start + (row.Session.ScheduledEnd - row.Session.ScheduledStart); // keep the session length
+        Notice = null;
+        if (await RunAsync(() => svc.RescheduleAsync(row.Session.Id, start, end)))
+        { Notice = "Reschedule sent. It moves once the other person approves it in Time requests."; Rescheduling = null; }
+    }
 
     async Task SetAsync(SessionRow row, string status)
     { if (await RunAsync(() => svc.SetSessionStatusAsync(row.Session.Id, status))) await LoadAsync(); }
@@ -169,10 +246,25 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
 public partial class UsersViewModel(IAdminService svc) : LoadableViewModel
 {
     public ObservableCollection<UserRow> Users { get; } = new();
+    public string[] Roles { get; } = ["Member", "Coach"];
+    [ObservableProperty] private string newName = "";
+    [ObservableProperty] private string newEmail = "";
+    [ObservableProperty] private string newPassword = "";
+    [ObservableProperty] private string newRole = "Member";
 
     public override Task OnAppearingAsync() => LoadAsync();
 
     [RelayCommand] private Task LoadAsync() => RunAsync(svc.UsersAsync, rows => Fill(Users, rows));
+
+    [RelayCommand]
+    private async Task AddUserAsync()
+    {
+        Notice = null;
+        if (!await RunAsync(() => svc.CreateUserAsync(NewName, NewEmail, NewRole.ToLowerInvariant(), NewPassword))) return;
+        Notice = $"{NewName.Trim()} can sign in now with that email and password.";
+        NewName = NewEmail = NewPassword = "";
+        await LoadAsync();
+    }
 
     // argument is "<userId>|<role>"; assigns the role if missing, otherwise revokes it
     [RelayCommand]
@@ -196,9 +288,14 @@ public partial class CatalogAdminViewModel(IAdminService svc) : LoadableViewMode
     public ObservableCollection<MembershipPackage> Packages { get; } = new();
     public ObservableCollection<Amenity> Amenities { get; } = new();
     [ObservableProperty] private string newPackageName = "";
+    [ObservableProperty] private string newDescription = "";
     [ObservableProperty] private decimal newPrice = 30;
     [ObservableProperty] private int newDays = 30;
     [ObservableProperty] private string newAmenityName = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(SaveLabel), nameof(IsEditing))] private MembershipPackage? editing;
+
+    public string SaveLabel => Editing is null ? "Add package" : "Save changes";
+    public bool IsEditing => Editing is not null;
 
     public override Task OnAppearingAsync() => LoadAsync();
 
@@ -209,12 +306,32 @@ public partial class CatalogAdminViewModel(IAdminService svc) : LoadableViewMode
         await RunAsync(svc.AllAmenitiesAsync, r => Fill(Amenities, r));
     }
 
+    // one form serves both "add" and "edit": Editing holds the package being changed, or null for a new one
     [RelayCommand]
-    private async Task AddPackageAsync()
+    private async Task SavePackageAsync()
     {
         if (string.IsNullOrWhiteSpace(NewPackageName)) { ErrorMessage = "Give the package a name."; return; }
-        if (await RunAsync(() => svc.SavePackageAsync(new MembershipPackage { Name = NewPackageName.Trim(), Price = NewPrice, DurationDays = NewDays })))
-        { NewPackageName = ""; await LoadAsync(); }
+        if (NewPrice <= 0 || NewDays <= 0) { ErrorMessage = "Price and days must be more than zero."; return; }
+        var p = Editing ?? new MembershipPackage();
+        p.Name = NewPackageName.Trim(); p.Description = string.IsNullOrWhiteSpace(NewDescription) ? null : NewDescription.Trim();
+        p.Price = NewPrice; p.DurationDays = NewDays;
+        if (await RunAsync(() => svc.SavePackageAsync(p))) { CancelEdit(); await LoadAsync(); }
+    }
+
+    [RelayCommand]
+    private void EditPackage(MembershipPackage p)
+    { Editing = p; NewPackageName = p.Name; NewDescription = p.Description ?? ""; NewPrice = p.Price; NewDays = p.DurationDays; }
+
+    [RelayCommand]
+    private void CancelEdit()
+    { Editing = null; NewPackageName = ""; NewDescription = ""; NewPrice = 30; NewDays = 30; }
+
+    [RelayCommand]
+    private async Task DeletePackageAsync(MembershipPackage p)
+    {
+        if (!await RunAsync(() => svc.DeletePackageAsync(p))) return;
+        if (Editing?.Id == p.Id) CancelEdit();
+        await LoadAsync();
     }
 
     [RelayCommand]
@@ -231,6 +348,41 @@ public partial class CatalogAdminViewModel(IAdminService svc) : LoadableViewMode
     [RelayCommand]
     private async Task ToggleAmenityAsync(Amenity a)
     { a.IsActive = !a.IsActive; if (await RunAsync(() => svc.SaveAmenityAsync(a))) await LoadAsync(); else a.IsActive = !a.IsActive; }
+}
+
+public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
+{
+    public ObservableCollection<DiscountRow> Discounts { get; } = new();
+    [ObservableProperty] private string newCode = "";
+    [ObservableProperty] private int newPercent = 10;
+    [ObservableProperty] private DateTime validUntil = DateTime.Today.AddDays(30);
+
+    public override Task OnAppearingAsync() => LoadAsync();
+
+    [RelayCommand] private Task LoadAsync() => RunAsync(svc.DiscountsAsync, rows => Fill(Discounts, rows));
+
+    [RelayCommand]
+    private async Task AddAsync()
+    {
+        Notice = null;
+        // valid through the end of the chosen day, local time
+        var d = new Discount { Code = NewCode, Percent = NewPercent, ExpiresAt = ValidUntil.Date.AddDays(1).ToUniversalTime() };
+        if (!await RunAsync(() => svc.SaveDiscountAsync(d))) return;
+        Notice = $"Code {d.Code} is live.";
+        NewCode = "";
+        await LoadAsync();
+    }
+
+    [RelayCommand]
+    private async Task ToggleAsync(DiscountRow row)
+    {
+        var d = row.Discount; d.IsActive = !d.IsActive;
+        if (await RunAsync(() => svc.SaveDiscountAsync(d))) await LoadAsync(); else d.IsActive = !d.IsActive;
+    }
+
+    [RelayCommand]
+    private async Task DeleteAsync(DiscountRow row)
+    { if (await RunAsync(() => svc.DeleteDiscountAsync(row.Discount))) await LoadAsync(); }
 }
 
 public partial class RevenueViewModel(IAdminService svc) : LoadableViewModel

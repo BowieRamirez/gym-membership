@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.MessagesPage" x:DataType="vm:MessagesViewModel" Title="Messages">
+
+    <Grid RowDefinitions="Auto,*,Auto" Padding="20,16,20,16" RowSpacing="12" MaximumWidthRequest="720">
+        <VerticalStackLayout Spacing="10">
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <VerticalStackLayout Spacing="4">
+                <Label Text="Conversation with" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}">
+                    <Picker ItemsSource="{Binding Threads}" ItemDisplayBinding="{Binding With}" SelectedItem="{Binding Selected}"
+                            SemanticProperties.Description="Conversation with" />
+                </Border>
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+
+        <!-- Your messages sit right in Rubber (the primary ink); theirs sit left on a hairline panel -->
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Messages}" ItemsUpdatingScrollMode="KeepLastItemInView">
+            <CollectionView.EmptyView>
+                <Label Text="No messages yet. Say hello below, or hire a coach from the Coaches page to start a conversation." Style="{StaticResource Muted}" />
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="svc:MessageRow">
+                    <Border Style="{StaticResource Panel}" Padding="14,10" Margin="0,0,0,8" MaximumWidthRequest="460"
+                            HorizontalOptions="Start" StrokeShape="RoundRectangle 14,14,14,4">
+                        <Border.Triggers>
+                            <DataTrigger TargetType="Border" Binding="{Binding Mine}" Value="True">
+                                <Setter Property="HorizontalOptions" Value="End" />
+                                <Setter Property="StrokeShape" Value="RoundRectangle 14,14,4,14" />
+                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+                            </DataTrigger>
+                        </Border.Triggers>
+                        <VerticalStackLayout Spacing="3">
+                            <Label Text="{Binding Message.Body}">
+                                <Label.Triggers>
+                                    <DataTrigger TargetType="Label" Binding="{Binding Mine}" Value="True">
+                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" />
+                                    </DataTrigger>
+                                </Label.Triggers>
+                            </Label>
+                            <Label Text="{Binding Message.SentAt, Converter={StaticResource LocalDate}, ConverterParameter='ddd d MMM, h:mm tt'}"
+                                   Style="{StaticResource Caption}" FontSize="12" HorizontalOptions="End">
+                                <Label.Triggers>
+                                    <DataTrigger TargetType="Label" Binding="{Binding Mine}" Value="True">
+                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" />
+                                        <Setter Property="Opacity" Value="0.75" />
+                                    </DataTrigger>
+                                </Label.Triggers>
+                            </Label>
+                        </VerticalStackLayout>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="10" IsVisible="{Binding CanSend}">
+            <Border Style="{StaticResource Field}">
+                <Entry Text="{Binding Draft}" Placeholder="Write a message" ReturnCommand="{Binding SendCommand}" SemanticProperties.Description="Message" />
+            </Border>
+            <Button Grid.Column="1" Text="Send" Command="{Binding SendCommand}" />
+        </Grid>
+        <Label Grid.Row="2" Text="This hire has ended. You can read the history, but not reply." Style="{StaticResource Muted}"
+               IsVisible="{Binding ReadOnly}" />
+    </Grid>
+</v:BasePage>

@@ -22,6 +22,7 @@
     <!-- Admin only: ClassId="admin" items are removed for the front-desk role -->
     <FlyoutItem Title="Users and roles" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:UsersPage}" /></FlyoutItem>
     <FlyoutItem Title="Packages and amenities" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:CatalogAdminPage}" /></FlyoutItem>
+    <FlyoutItem Title="Discounts" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:DiscountsPage}" /></FlyoutItem>
     <FlyoutItem Title="Revenue" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:RevenuePage}" /></FlyoutItem>
     <FlyoutItem Title="Audit log" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:AuditPage}" /></FlyoutItem>
 

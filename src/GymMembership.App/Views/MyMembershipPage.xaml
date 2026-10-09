@@ -26,6 +26,10 @@
             </Border>
 
             <Label Text="Your memberships" Style="{StaticResource Heading}" Margin="0,8,0,0" />
+            <VerticalStackLayout Spacing="4" HorizontalOptions="Start" WidthRequest="260">
+                <Label Text="Discount code for renewing (optional)" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}"><Entry Text="{Binding DiscountCode}" SemanticProperties.Description="Discount code" /></Border>
+            </VerticalStackLayout>
             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Memberships}" Spacing="10">
                 <BindableLayout.EmptyView>
                     <Label Text="You don't have a membership yet. Open Packages to start one." Style="{StaticResource Muted}" />

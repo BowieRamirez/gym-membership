@@ -10,10 +10,12 @@ One app for the whole gym floor. Members manage their plan, coaches run their se
 
 | Role | Can do |
 |---|---|
-| **Member** | See days left on a membership, buy or renew a package, attach proof of payment, use amenities, hire a coach, request training sessions |
-| **Coach** | Offer open slots, approve requests, manage sessions, mark attendance, edit a public profile |
+| **Member** | See days left on a membership, buy or renew a package (with a discount code), attach proof of payment, use amenities, hire a coach, message that coach, see their posted shifts, request, reschedule or cancel training sessions |
+| **Coach** | Manage trainees, message them, post shifts, offer open slots, approve requests, schedule, reschedule or cancel sessions, mark attendance, edit a public profile |
 | **Front desk** | Verify or reject payments, check members in, confirm amenity visits |
-| **Admin** | Everything above, plus users and roles, packages and amenities, revenue, and an audit log |
+| **Admin** | Everything above, plus adding members and coaches, packages (add, edit, delete) and amenities, discount codes, revenue, and an audit log |
+
+There is no public sign-up. The owner (admin) creates every member and coach account on the Users page and hands over a temporary password.
 
 Colour is only ever used for status: yellow for pending, green for verified, red for rejected, blue for scheduled. The dashed lane on the membership screen is the one recurring motif, borrowed from court floor markings.
 
@@ -88,7 +90,8 @@ The app talks to the backend through a single interface, `ISupabaseGateway`. Mov
 
 - [x] Screens for every role on a demo backend
 - [ ] Supabase schema, row level security and server-side functions
-- [ ] Supabase-backed gateway and a sign-up page
+- [x] Admin-created accounts, discount codes, member and coach messaging, coach shifts and trainees, reschedule and cancel (demo backend)
+- [ ] Supabase-backed gateway
 - [ ] Phase 2: products and sales, employees, working hours, sales reports
 
 ## Docs

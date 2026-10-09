@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.DiscountsPage" x:DataType="vm:DiscountsViewModel" Title="Discounts">
+
+    <ScrollView MaximumWidthRequest="920">
+        <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
+            <Label Text="Percent-off codes. Members type a code when they buy or renew a package." Style="{StaticResource Muted}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+            <Border Style="{StaticResource Panel}">
+                <FlexLayout Wrap="Wrap" AlignItems="End">
+                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="200">
+                        <Label Text="Code" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><Entry Text="{Binding NewCode}" Placeholder="SUMMER15" /></Border>
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="110">
+                        <Label Text="Percent off" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><Entry Text="{Binding NewPercent}" Keyboard="Numeric" /></Border>
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                        <Label Text="Valid until" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><DatePicker Date="{Binding ValidUntil}" MinimumDate="{x:Static x:DateTime.Today}" /></Border>
+                    </VerticalStackLayout>
+                    <Button Text="Add code" Style="{StaticResource SmallButton}" Margin="0,0,0,8" Command="{Binding AddCommand}" />
+                </FlexLayout>
+            </Border>
+
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Discounts}" Spacing="10">
+                <BindableLayout.EmptyView><Label Text="No discount codes yet." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="svc:DiscountRow">
+                        <Border Style="{StaticResource Panel}">
+                            <VerticalStackLayout Spacing="10">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                    <VerticalStackLayout Spacing="2">
+                                        <Label Text="{Binding Discount.Code}" Style="{StaticResource Heading}" />
+                                        <Label Style="{StaticResource Caption}">
+                                            <Label.Text>
+                                                <MultiBinding StringFormat="{}{0}% off, valid until {1}">
+                                                    <Binding Path="Discount.Percent" />
+                                                    <Binding Path="Discount.ExpiresAt" Converter="{StaticResource LocalDate}" ConverterParameter="d MMM yyyy" />
+                                                </MultiBinding>
+                                            </Label.Text>
+                                        </Label>
+                                    </VerticalStackLayout>
+                                    <c:StatusChip Grid.Column="1" Status="{Binding State}" VerticalOptions="Start" />
+                                </Grid>
+                                <HorizontalStackLayout Spacing="8">
+                                    <Button Text="Turn on or off" Style="{StaticResource SmallOutlineButton}"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:DiscountsViewModel}}, Path=ToggleCommand}" CommandParameter="{Binding .}" />
+                                    <Button Text="Delete" Style="{StaticResource SmallOutlineButton}"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:DiscountsViewModel}}, Path=DeleteCommand}" CommandParameter="{Binding .}" />
+                                </HorizontalStackLayout>
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</v:BasePage>

@@ -14,9 +14,13 @@
             <Label Text="Membership packages" Style="{StaticResource Heading}" />
             <Border Style="{StaticResource Panel}">
                 <FlexLayout Wrap="Wrap" AlignItems="End">
-                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="220">
+                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="200">
                         <Label Text="Name" Style="{StaticResource Caption}" />
                         <Border Style="{StaticResource Field}"><Entry Text="{Binding NewPackageName}" /></Border>
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="260">
+                        <Label Text="Description" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><Entry Text="{Binding NewDescription}" /></Border>
                     </VerticalStackLayout>
                     <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="110">
                         <Label Text="Price" Style="{StaticResource Caption}" />
@@ -26,33 +30,42 @@
                         <Label Text="Days" Style="{StaticResource Caption}" />
                         <Border Style="{StaticResource Field}"><Entry Text="{Binding NewDays}" Keyboard="Numeric" /></Border>
                     </VerticalStackLayout>
-                    <Button Text="Add package" Style="{StaticResource SmallButton}" Margin="0,0,0,8" Command="{Binding AddPackageCommand}" />
+                    <Button Text="{Binding SaveLabel}" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Command="{Binding SavePackageCommand}" />
+                    <Button Text="Cancel edit" Style="{StaticResource SmallOutlineButton}" Margin="0,0,0,8" IsVisible="{Binding IsEditing}" Command="{Binding CancelEditCommand}" />
                 </FlexLayout>
             </Border>
             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Packages}" Spacing="10">
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="m:MembershipPackage">
                         <Border Style="{StaticResource Panel}" Padding="16,12">
-                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="14">
-                                <VerticalStackLayout Spacing="2">
-                                    <Label Text="{Binding Name}" Style="{StaticResource Heading}" />
-                                    <Label Style="{StaticResource Caption}">
-                                        <Label.Text>
-                                            <MultiBinding StringFormat="{}{0:0.##} {1}, {2} days">
-                                                <Binding Path="Price" /><Binding Path="Currency" /><Binding Path="DurationDays" />
-                                            </MultiBinding>
-                                        </Label.Text>
-                                    </Label>
-                                </VerticalStackLayout>
-                                <c:StatusChip Grid.Column="1" VerticalOptions="Center">
-                                    <c:StatusChip.Triggers>
-                                        <DataTrigger TargetType="c:StatusChip" Binding="{Binding IsActive}" Value="True"><Setter Property="Status" Value="active" /></DataTrigger>
-                                        <DataTrigger TargetType="c:StatusChip" Binding="{Binding IsActive}" Value="False"><Setter Property="Status" Value="inactive" /></DataTrigger>
-                                    </c:StatusChip.Triggers>
-                                </c:StatusChip>
-                                <Button Grid.Column="2" Text="Turn on or off" Style="{StaticResource SmallOutlineButton}"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:CatalogAdminViewModel}}, Path=TogglePackageCommand}" CommandParameter="{Binding .}" />
-                            </Grid>
+                            <VerticalStackLayout Spacing="10">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                                    <VerticalStackLayout Spacing="2">
+                                        <Label Text="{Binding Name}" Style="{StaticResource Heading}" />
+                                        <Label Style="{StaticResource Caption}">
+                                            <Label.Text>
+                                                <MultiBinding StringFormat="{}{0:0.##} {1}, {2} days">
+                                                    <Binding Path="Price" /><Binding Path="Currency" /><Binding Path="DurationDays" />
+                                                </MultiBinding>
+                                            </Label.Text>
+                                        </Label>
+                                    </VerticalStackLayout>
+                                    <c:StatusChip Grid.Column="1" VerticalOptions="Center">
+                                        <c:StatusChip.Triggers>
+                                            <DataTrigger TargetType="c:StatusChip" Binding="{Binding IsActive}" Value="True"><Setter Property="Status" Value="active" /></DataTrigger>
+                                            <DataTrigger TargetType="c:StatusChip" Binding="{Binding IsActive}" Value="False"><Setter Property="Status" Value="inactive" /></DataTrigger>
+                                        </c:StatusChip.Triggers>
+                                    </c:StatusChip>
+                                </Grid>
+                                <HorizontalStackLayout Spacing="8">
+                                    <Button Text="Edit" Style="{StaticResource SmallButton}"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:CatalogAdminViewModel}}, Path=EditPackageCommand}" CommandParameter="{Binding .}" />
+                                    <Button Text="Turn on or off" Style="{StaticResource SmallOutlineButton}"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:CatalogAdminViewModel}}, Path=TogglePackageCommand}" CommandParameter="{Binding .}" />
+                                    <Button Text="Delete" Style="{StaticResource SmallOutlineButton}"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:CatalogAdminViewModel}}, Path=DeletePackageCommand}" CommandParameter="{Binding .}" />
+                                </HorizontalStackLayout>
+                            </VerticalStackLayout>
                         </Border>
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>

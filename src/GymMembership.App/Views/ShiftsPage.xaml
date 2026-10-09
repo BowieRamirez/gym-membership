@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.ShiftsPage" x:DataType="vm:ShiftsViewModel" Title="My shifts">
+
+    <ScrollView MaximumWidthRequest="920">
+        <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
+            <Label Text="Post when you are on the gym floor. Your trainees are notified and members can see it on the Coaches page." Style="{StaticResource Muted}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+            <Border Style="{StaticResource Panel}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Post a shift" Style="{StaticResource Heading}" />
+                    <FlexLayout Wrap="Wrap" AlignItems="End">
+                        <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
+                            <Label Text="Date" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><DatePicker Date="{Binding Date}" MinimumDate="{x:Static x:DateTime.Today}" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
+                            <Label Text="Starts" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><TimePicker Time="{Binding Time}" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,0,8">
+                            <Label Text="Hours" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}">
+                                <Picker ItemsSource="{Binding HoursOptions}" SelectedItem="{Binding Hours}" WidthRequest="90" />
+                            </Border>
+                        </VerticalStackLayout>
+                    </FlexLayout>
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Note (optional)" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><Entry Text="{Binding Note}" Placeholder="What you will be running" /></Border>
+                    </VerticalStackLayout>
+                    <Button Text="Post shift" Style="{StaticResource SmallButton}" HorizontalOptions="Start" Command="{Binding PostCommand}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Label Text="Upcoming shifts" Style="{StaticResource Heading}" Margin="0,8,0,0" />
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Shifts}" Spacing="10">
+                <BindableLayout.EmptyView><Label Text="No shifts posted. Add one above." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="m:ShiftPost">
+                        <Border Style="{StaticResource Panel}">
+                            <VerticalStackLayout Spacing="8">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                    <VerticalStackLayout Spacing="2">
+                                        <Label Style="{StaticResource Heading}">
+                                            <Label.Text>
+                                                <MultiBinding StringFormat="{}{0} to {1}">
+                                                    <Binding Path="Start" Converter="{StaticResource LocalDate}" ConverterParameter="dddd d MMM, h:mm tt" />
+                                                    <Binding Path="End" Converter="{StaticResource LocalDate}" ConverterParameter="h:mm tt" />
+                                                </MultiBinding>
+                                            </Label.Text>
+                                        </Label>
+                                        <Label Text="{Binding Note}" Style="{StaticResource Muted}" IsVisible="{Binding Note, Converter={StaticResource HasText}}" />
+                                    </VerticalStackLayout>
+                                    <c:StatusChip Grid.Column="1" Status="{Binding Status}" VerticalOptions="Start" />
+                                </Grid>
+                                <Button Text="Cancel shift" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ShiftsViewModel}}, Path=CancelCommand}" CommandParameter="{Binding .}">
+                                    <Button.Triggers>
+                                        <DataTrigger TargetType="Button" Binding="{Binding Status}" Value="cancelled"><Setter Property="IsVisible" Value="False" /></DataTrigger>
+                                    </Button.Triggers>
+                                </Button>
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</v:BasePage>

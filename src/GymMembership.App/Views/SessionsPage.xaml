@@ -11,6 +11,28 @@
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
             <Label Text="Your booked training sessions, soonest first." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding Rescheduling, Converter={StaticResource IsNotNull}}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="{Binding Rescheduling.Session.Title, StringFormat='Move “{0}” to a new time'}" Style="{StaticResource Heading}" />
+                    <FlexLayout Wrap="Wrap" AlignItems="End">
+                        <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
+                            <Label Text="New date" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><DatePicker Date="{Binding Date}" MinimumDate="{x:Static x:DateTime.Today}" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
+                            <Label Text="New start time" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><TimePicker Time="{Binding Time}" /></Border>
+                        </VerticalStackLayout>
+                    </FlexLayout>
+                    <Label Text="The session keeps its length. The other person has to approve the new time before it moves." Style="{StaticResource Caption}" />
+                    <HorizontalStackLayout Spacing="8">
+                        <Button Text="Send new time" Style="{StaticResource SmallButton}" Command="{Binding SendRescheduleCommand}" />
+                        <Button Text="Keep current time" Style="{StaticResource SmallOutlineButton}" Command="{Binding StopRescheduleCommand}" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
         </VerticalStackLayout>
 
         <CollectionView Grid.Row="1" ItemsSource="{Binding Sessions}">
@@ -40,7 +62,12 @@
                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=CompleteCommand}" CommandParameter="{Binding .}" />
                                 <Button Text="No-show" Style="{StaticResource SmallOutlineButton}"
                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=NoShowCommand}" CommandParameter="{Binding .}" />
-                                <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}"
+                            </HorizontalStackLayout>
+                            <!-- both the member and the coach can move or cancel a booked session -->
+                            <HorizontalStackLayout Spacing="8" IsVisible="{Binding CanChange}">
+                                <Button Text="Reschedule" Style="{StaticResource SmallOutlineButton}"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=StartRescheduleCommand}" CommandParameter="{Binding .}" />
+                                <Button Text="Cancel session" Style="{StaticResource SmallOutlineButton}"
                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=CancelCommand}" CommandParameter="{Binding .}" />
                             </HorizontalStackLayout>
                         </VerticalStackLayout>

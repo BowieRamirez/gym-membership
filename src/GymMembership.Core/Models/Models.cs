@@ -34,7 +34,7 @@ public static class Status
 [Table("payments")] public class Payment : BaseModel
 { [PrimaryKey("payment_id")] public int Id { get; set; } [Column("qr")] public string Qr { get; set; } = ""; [Column("status")] public string Status { get; set; } = "pending";
   [Column("amount")] public decimal Amount { get; set; } [Column("currency")] public string Currency { get; set; } = "USD"; [Column("user_id")] public string UserId { get; set; } = "";
-  [Column("user_membership_package_id")] public int? UserMembershipPackageId { get; set; } [Column("proof_path")] public string? ProofPath { get; set; }
+  [Column("user_membership_package_id")] public int? UserMembershipPackageId { get; set; } [Column("proof_path")] public string? ProofPath { get; set; } [Column("discount_code")] public string? DiscountCode { get; set; }
   [Column("created_at")] public DateTime CreatedAt { get; set; } [Column("verified_at")] public DateTime? VerifiedAt { get; set; } }
 
 [Table("amenities")] public class Amenity : BaseModel
@@ -61,7 +61,8 @@ public static class Status
 [Table("time_requests")] public class TimeRequest : BaseModel
 { [PrimaryKey("time_request_id")] public int Id { get; set; } [Column("coach_id")] public int CoachId { get; set; } [Column("member_id")] public int? MemberId { get; set; }
   [Column("requested_by")] public string RequestedBy { get; set; } = ""; [Column("requested_start")] public DateTime RequestedStart { get; set; } [Column("requested_end")] public DateTime RequestedEnd { get; set; }
-  [Column("status")] public string Status { get; set; } = "pending"; [Column("message")] public string? Message { get; set; } }
+  [Column("status")] public string Status { get; set; } = "pending"; [Column("message")] public string? Message { get; set; }
+  [Column("training_session_id")] public int? SessionId { get; set; } } // set when the request moves an existing session
 
 [Table("training_sessions")] public class TrainingSession : BaseModel
 { [PrimaryKey("training_session_id")] public int Id { get; set; } [Column("coach_id")] public int CoachId { get; set; } [Column("member_id")] public int MemberId { get; set; }
@@ -75,5 +76,18 @@ public static class Status
 [Table("audit_log")] public class AuditEntry : BaseModel
 { [PrimaryKey("audit_id")] public int Id { get; set; } [Column("actor_id")] public string? ActorId { get; set; } [Column("action")] public string Action { get; set; } = "";
   [Column("entity")] public string Entity { get; set; } = ""; [Column("entity_id")] public string? EntityId { get; set; } [Column("created_at")] public DateTime CreatedAt { get; set; } }
+
+[Table("discounts")] public class Discount : BaseModel
+{ [PrimaryKey("discount_id")] public int Id { get; set; } [Column("code")] public string Code { get; set; } = ""; [Column("percent")] public int Percent { get; set; }
+  [Column("expires_at")] public DateTime ExpiresAt { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true; }
+
+// one conversation = one coach + one member
+[Table("messages")] public class ChatMessage : BaseModel
+{ [PrimaryKey("message_id")] public int Id { get; set; } [Column("coach_id")] public int CoachId { get; set; } [Column("member_id")] public int MemberId { get; set; }
+  [Column("sender_user_id")] public string SenderUserId { get; set; } = ""; [Column("body")] public string Body { get; set; } = ""; [Column("sent_at")] public DateTime SentAt { get; set; } }
+
+[Table("shift_posts")] public class ShiftPost : BaseModel
+{ [PrimaryKey("shift_post_id")] public int Id { get; set; } [Column("coach_id")] public int CoachId { get; set; } [Column("starts_at")] public DateTime Start { get; set; }
+  [Column("ends_at")] public DateTime End { get; set; } [Column("note")] public string? Note { get; set; } [Column("status")] public string Status { get; set; } = "scheduled"; }
 
 public record RevenueRow(DateTime Day, string Cur, decimal Total);

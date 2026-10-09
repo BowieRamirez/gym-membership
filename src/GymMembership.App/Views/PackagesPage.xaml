@@ -12,6 +12,10 @@
             <Label Text="Choose a package. We create a payment you can settle at the front desk or by attaching proof." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
+            <VerticalStackLayout Spacing="4" HorizontalOptions="Start" WidthRequest="260">
+                <Label Text="Discount code (optional)" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}"><Entry Text="{Binding DiscountCode}" Placeholder="Enter a code from the gym" SemanticProperties.Description="Discount code" /></Border>
+            </VerticalStackLayout>
         </VerticalStackLayout>
 
         <CollectionView Grid.Row="1" ItemsSource="{Binding Packages}">
