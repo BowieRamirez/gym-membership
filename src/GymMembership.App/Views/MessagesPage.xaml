@@ -10,13 +10,16 @@
     <Grid RowDefinitions="Auto,*,Auto" Padding="20,16,20,16" RowSpacing="12" MaximumWidthRequest="720">
         <VerticalStackLayout Spacing="10">
             <c:Banner Message="{Binding ErrorMessage}" />
-            <VerticalStackLayout Spacing="4">
-                <Label Text="Conversation with" Style="{StaticResource Caption}" />
-                <Border Style="{StaticResource Field}">
-                    <Picker ItemsSource="{Binding Threads}" ItemDisplayBinding="{Binding With}" SelectedItem="{Binding Selected}"
-                            SemanticProperties.Description="Conversation with" />
-                </Border>
-            </VerticalStackLayout>
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10" VerticalOptions="End">
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="Conversation with" Style="{StaticResource Caption}" />
+                    <Border Style="{StaticResource Field}">
+                        <Picker ItemsSource="{Binding Threads}" ItemDisplayBinding="{Binding With}" SelectedItem="{Binding Selected}"
+                                SemanticProperties.Description="Conversation with" />
+                    </Border>
+                </VerticalStackLayout>
+                <Button Grid.Column="1" Text="Refresh" Style="{StaticResource SmallOutlineButton}" VerticalOptions="End" Command="{Binding RefreshCommand}" />
+            </Grid>
         </VerticalStackLayout>
 
         <!-- Your messages sit right in Rubber (the primary ink); theirs sit left on a hairline panel -->

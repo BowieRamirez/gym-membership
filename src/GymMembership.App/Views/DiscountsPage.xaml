@@ -13,6 +13,16 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding Deleting, Converter={StaticResource IsNotNull}}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="{Binding Deleting.Discount.Code, StringFormat='Delete code {0}? This can’t be undone.'}" Style="{StaticResource Heading}" />
+                    <HorizontalStackLayout Spacing="8">
+                        <Button Text="Yes, delete" Style="{StaticResource SmallButton}" Command="{Binding ConfirmDeleteCommand}" />
+                        <Button Text="Keep it" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepCommand}" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
             <Border Style="{StaticResource Panel}">
                 <FlexLayout Wrap="Wrap" AlignItems="End">
                     <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="200">

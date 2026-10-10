@@ -25,6 +25,25 @@
                         DashColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}"
                         TrackColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
 
+            <Label Text="Change password" Style="{StaticResource Heading}" />
+            <VerticalStackLayout Spacing="4">
+                <Label Text="Current password" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}"><Entry Text="{Binding CurrentPassword}" IsPassword="True" SemanticProperties.Description="Current password" /></Border>
+            </VerticalStackLayout>
+            <VerticalStackLayout Spacing="4">
+                <Label Text="New password (at least 6 characters)" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}"><Entry Text="{Binding NewPassword}" IsPassword="True" SemanticProperties.Description="New password" /></Border>
+            </VerticalStackLayout>
+            <VerticalStackLayout Spacing="4">
+                <Label Text="Repeat new password" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}"><Entry Text="{Binding ConfirmPassword}" IsPassword="True" ReturnCommand="{Binding ChangePasswordCommand}" SemanticProperties.Description="Repeat new password" /></Border>
+            </VerticalStackLayout>
+            <Button Text="Change password" Command="{Binding ChangePasswordCommand}" HorizontalOptions="Start" />
+
+            <c:LaneView Margin="0,12"
+                        DashColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}"
+                        TrackColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+
             <Button Text="Sign out" Style="{StaticResource OutlineButton}" Command="{Binding SignOutCommand}" HorizontalOptions="Start" />
         </VerticalStackLayout>
     </ScrollView>

@@ -13,9 +13,23 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding Resetting, Converter={StaticResource IsNotNull}}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="{Binding Resetting.Username, StringFormat='Reset password for {0}'}" Style="{StaticResource Heading}" />
+                    <Label Text="Set a new temporary password and share it with them. The old one stops working." Style="{StaticResource Caption}" />
+                    <Border Style="{StaticResource Field}" WidthRequest="240" HorizontalOptions="Start">
+                        <Entry Text="{Binding ResetPassword}" IsPassword="True" Placeholder="At least 6 characters" SemanticProperties.Description="New temporary password" />
+                    </Border>
+                    <HorizontalStackLayout Spacing="8">
+                        <Button Text="Set password" Style="{StaticResource SmallButton}" Command="{Binding ConfirmResetCommand}" />
+                        <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding StopResetCommand}" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
             <Border Style="{StaticResource Panel}">
                 <VerticalStackLayout Spacing="12">
-                    <Label Text="Add a member or coach" Style="{StaticResource Heading}" />
+                    <Label Text="Add a member, coach or employee" Style="{StaticResource Heading}" />
                     <FlexLayout Wrap="Wrap" AlignItems="End">
                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="220">
                             <Label Text="Full name" Style="{StaticResource Caption}" />
@@ -58,6 +72,9 @@
                                     <Button Text="{Binding EmployeeActionText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
                                             Command="{Binding Source={RelativeSource AncestorType={x:Type vm:UsersViewModel}}, Path=ToggleRoleCommand}"
                                             CommandParameter="{Binding UserId, StringFormat='{0}|employee'}" />
+                                    <Button Text="Reset password" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:UsersViewModel}}, Path=StartResetCommand}"
+                                            CommandParameter="{Binding .}" />
                                     <Button Text="{Binding ActiveActionText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
                                             Command="{Binding Source={RelativeSource AncestorType={x:Type vm:UsersViewModel}}, Path=ToggleActiveCommand}"
                                             CommandParameter="{Binding .}" />

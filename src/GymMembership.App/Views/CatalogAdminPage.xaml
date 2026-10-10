@@ -11,6 +11,16 @@
         <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
             <c:Banner Message="{Binding ErrorMessage}" />
 
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding Deleting, Converter={StaticResource IsNotNull}}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="{Binding Deleting.Name, StringFormat='Delete “{0}”? This can’t be undone.'}" Style="{StaticResource Heading}" />
+                    <HorizontalStackLayout Spacing="8">
+                        <Button Text="Yes, delete" Style="{StaticResource SmallButton}" Command="{Binding ConfirmDeleteCommand}" />
+                        <Button Text="Keep it" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepPackageCommand}" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
             <Label Text="Membership packages" Style="{StaticResource Heading}" />
             <Border Style="{StaticResource Panel}">
                 <FlexLayout Wrap="Wrap" AlignItems="End">

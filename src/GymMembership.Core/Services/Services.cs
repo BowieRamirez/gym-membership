@@ -14,11 +14,27 @@ public interface IAuthService
     string? UserId { get; }
     Task<AppResult<AppRole>> SignInAsync(string email, string password);
     Task SignOutAsync();
+    Task<AppResult<bool>> ChangePasswordAsync(string current, string next);
+    /// <summary>Open sign-up: creates a member account and signs it in. It stays a guest until a payment is verified.</summary>
+    Task<AppResult<bool>> RegisterAsync(string name, string email, string password);
 }
 
 public sealed class AuthService(ISupabaseGateway gw) : IAuthService
 {
     public string? UserId => gw.CurrentUserId;
+
+    public async Task<AppResult<bool>> RegisterAsync(string name, string email, string password)
+    {
+        if (string.IsNullOrWhiteSpace(name) || !email.Contains('@') || password.Length < 6)
+            return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
+        return await Safe.RunAsync(async () => { await gw.SignUpAsync(email.Trim(), password, name.Trim()); return true; });
+    }
+
+    public async Task<AppResult<bool>> ChangePasswordAsync(string current, string next)
+    {
+        if (next.Length < 6) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
+        return await Safe.RunAsync(async () => { await gw.RpcAsync("change_password", new() { ["p_current"] = current, ["p_new"] = next }); return true; });
+    }
 
     public Task<AppResult<AppRole>> SignInAsync(string email, string password) => Safe.RunAsync(async () =>
     {
@@ -41,13 +57,27 @@ public interface IMembershipService
     Task<AppResult<IReadOnlyList<MembershipPackage>>> ListPackagesAsync();
     Task<AppResult<IReadOnlyList<MembershipRow>>> MyMembershipsAsync();
     Task<AppResult<IReadOnlyList<PaymentItem>>> MyPaymentsAsync();
+    Task<AppResult<Access>> AccessAsync();
     Task<AppResult<int>> AvailAsync(int packageId, string? discountCode = null);
     Task<AppResult<int>> RenewAsync(int membershipId, string? discountCode = null);
     Task<AppResult<bool>> AttachProofAsync(int paymentId, string fileName, byte[] data);
 }
 
+/// <summary>What a member may open: full pages need an active plan; a pending payment only changes the wording.</summary>
+public sealed record Access(bool Active, bool PaymentPending);
+
 public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
 {
+    public Task<AppResult<Access>> AccessAsync() => Safe.RunAsync(async () =>
+    {
+        var uid = gw.CurrentUserId;
+        var now = DateTime.UtcNow;
+        var plans = await gw.ListAsync<UserMembershipPackage>(m => m.UserId == uid);
+        var pays = await gw.ListAsync<Payment>(p => p.UserId == uid);
+        return new Access(plans.Any(m => m.Status == Status.Active && (m.EndsAt is null || m.EndsAt > now)),
+                          pays.Any(p => p.Status == Status.Pending));
+    });
+
     public Task<AppResult<IReadOnlyList<MembershipPackage>>> ListPackagesAsync() =>
         Safe.RunAsync(() => gw.ListAsync<MembershipPackage>(p => p.IsActive == true));
 
@@ -509,6 +539,7 @@ public interface IAdminService
     Task<AppResult<bool>> RevokeRoleAsync(string userId, string role);
     Task<AppResult<bool>> SetActiveAsync(string userId, bool active);
     Task<AppResult<bool>> CreateUserAsync(string name, string email, string role, string password);
+    Task<AppResult<bool>> ResetPasswordAsync(string userId, string password);
     Task<AppResult<bool>> DeletePackageAsync(MembershipPackage package);
     Task<AppResult<IReadOnlyList<DiscountRow>>> DiscountsAsync();
     Task<AppResult<bool>> SaveDiscountAsync(Discount discount);
@@ -538,10 +569,14 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
 
     public async Task<AppResult<bool>> CreateUserAsync(string name, string email, string role, string password)
     {
-        if (string.IsNullOrWhiteSpace(name) || !email.Contains('@') || password.Length < 6 || role is not ("member" or "coach"))
+        if (string.IsNullOrWhiteSpace(name) || !email.Contains('@') || password.Length < 6 || role is not ("member" or "coach" or "employee"))
             return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
         return await Rpc("create_user", new() { ["p_name"] = name.Trim(), ["p_email"] = email.Trim(), ["p_role"] = role, ["p_password"] = password });
     }
+
+    public async Task<AppResult<bool>> ResetPasswordAsync(string userId, string password) =>
+        password.Length < 6 ? AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input")
+                            : await Rpc("reset_password", new() { ["p_user"] = userId, ["p_password"] = password });
 
     public Task<AppResult<bool>> DeletePackageAsync(MembershipPackage p) => Safe.RunAsync(async () => { await gw.DeleteAsync(p); return true; });
 

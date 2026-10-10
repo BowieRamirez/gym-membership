@@ -7,15 +7,20 @@ public sealed class AppNavigator(IServiceProvider sp) : IAppNavigator
 {
     public void GoTo(AppRole role)
     {
-        Page shell = role switch
-        {
-            AppRole.Admin or AppRole.Employee => new StaffShell(role),
-            AppRole.Coach => new CoachShell(),
-            _ => new MemberShell()
-        };
-        Show(shell);
+        if (role == AppRole.Member) { _ = ShowMemberShellAsync(); return; }
+        Show(role == AppRole.Coach ? new CoachShell() : new StaffShell(role));
         _ = ApplyStoredThemeAsync();
     }
+
+    // a member's menu depends on whether they have an active plan, so ask before building it
+    async Task ShowMemberShellAsync()
+    {
+        var access = await sp.GetRequiredService<IMembershipService>().AccessAsync();
+        Show(new MemberShell(sp, access.Value ?? new Access(false, false)));
+        _ = ApplyStoredThemeAsync();
+    }
+
+    public void GoToRegister() => Show(sp.GetRequiredService<RegisterPage>());
 
     public void GoToLogin()
     {

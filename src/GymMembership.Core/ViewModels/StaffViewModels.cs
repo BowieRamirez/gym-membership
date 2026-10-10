@@ -246,7 +246,9 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
 public partial class UsersViewModel(IAdminService svc) : LoadableViewModel
 {
     public ObservableCollection<UserRow> Users { get; } = new();
-    public string[] Roles { get; } = ["Member", "Coach"];
+    public string[] Roles { get; } = ["Member", "Coach", "Employee"];
+    [ObservableProperty] private UserRow? resetting;
+    [ObservableProperty] private string resetPassword = "";
     [ObservableProperty] private string newName = "";
     [ObservableProperty] private string newEmail = "";
     [ObservableProperty] private string newPassword = "";
@@ -264,6 +266,18 @@ public partial class UsersViewModel(IAdminService svc) : LoadableViewModel
         Notice = $"{NewName.Trim()} can sign in now with that email and password.";
         NewName = NewEmail = NewPassword = "";
         await LoadAsync();
+    }
+
+    [RelayCommand] private void StartReset(UserRow user) { Resetting = user; ResetPassword = ""; Notice = null; }
+    [RelayCommand] private void StopReset() => Resetting = null;
+
+    [RelayCommand]
+    private async Task ConfirmResetAsync()
+    {
+        if (Resetting is not { } user) return;
+        if (!await RunAsync(() => svc.ResetPasswordAsync(user.UserId, ResetPassword))) return;
+        Notice = $"{user.Username} can sign in with the new temporary password.";
+        Resetting = null;
     }
 
     // argument is "<userId>|<role>"; assigns the role if missing, otherwise revokes it
@@ -326,9 +340,17 @@ public partial class CatalogAdminViewModel(IAdminService svc) : LoadableViewMode
     private void CancelEdit()
     { Editing = null; NewPackageName = ""; NewDescription = ""; NewPrice = 30; NewDays = 30; }
 
+    // delete asks first: DeletePackage picks the row, ConfirmDelete does it
+    [ObservableProperty] private MembershipPackage? deleting;
+
+    [RelayCommand] private void DeletePackage(MembershipPackage p) => Deleting = p;
+    [RelayCommand] private void KeepPackage() => Deleting = null;
+
     [RelayCommand]
-    private async Task DeletePackageAsync(MembershipPackage p)
+    private async Task ConfirmDeleteAsync()
     {
+        if (Deleting is not { } p) return;
+        Deleting = null;
         if (!await RunAsync(() => svc.DeletePackageAsync(p))) return;
         if (Editing?.Id == p.Id) CancelEdit();
         await LoadAsync();
@@ -380,9 +402,18 @@ public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
         if (await RunAsync(() => svc.SaveDiscountAsync(d))) await LoadAsync(); else d.IsActive = !d.IsActive;
     }
 
+    [ObservableProperty] private DiscountRow? deleting;
+
+    [RelayCommand] private void Delete(DiscountRow row) => Deleting = row;
+    [RelayCommand] private void Keep() => Deleting = null;
+
     [RelayCommand]
-    private async Task DeleteAsync(DiscountRow row)
-    { if (await RunAsync(() => svc.DeleteDiscountAsync(row.Discount))) await LoadAsync(); }
+    private async Task ConfirmDeleteAsync()
+    {
+        if (Deleting is not { } row) return;
+        Deleting = null;
+        if (await RunAsync(() => svc.DeleteDiscountAsync(row.Discount))) await LoadAsync();
+    }
 }
 
 public partial class RevenueViewModel(IAdminService svc) : LoadableViewModel

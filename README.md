@@ -15,7 +15,7 @@ One app for the whole gym floor. Members manage their plan, coaches run their se
 | **Front desk** | Verify or reject payments, check members in, confirm amenity visits |
 | **Admin** | Everything above, plus adding members and coaches, packages (add, edit, delete) and amenities, discount codes, revenue, and an audit log |
 
-There is no public sign-up. The owner (admin) creates every member and coach account on the Users page and hands over a temporary password.
+Anyone can create a member account from the sign-in screen. A new account is a **guest**: it can see Packages, My membership, Coaches, Alerts and Settings. Amenities, Messages, Sessions and Time requests show a "get a membership" notice until a package payment is verified by the owner or front desk. When the plan expires, the account goes back to guest. The owner adds coaches and front-desk staff on the Users page with a temporary password. People change their password under Settings, and the owner can reset a forgotten one.
 
 Colour is only ever used for status: yellow for pending, green for verified, red for rejected, blue for scheduled. The dashed lane on the membership screen is the one recurring motif, borrowed from court floor markings.
 
@@ -118,7 +118,7 @@ If the owner ends up being the only person using the system, payments can be rec
 ### What would change
 
 | Area | Change |
-|---|---|
+|--|---|
 | `payments` table | Add `method`, `receipt_no`, `kind` (membership / renewal / walk-in), `recorded_by`, `voided_at` / `void_reason` |
 | `payments` CHECK rule | Allow walk-in payments that aren't linked to a membership or amenity |
 | `verify_payment` | Replace with `record_payment` (saved as verified right away) and `void_payment` |

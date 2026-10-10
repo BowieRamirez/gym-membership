@@ -48,6 +48,8 @@ public partial class LoginViewModel(IAuthService auth, IAppNavigator nav) : Load
         return GoAsync(Email.Trim(), Password);
     }
 
+    [RelayCommand] private void CreateAccount() => nav.GoToRegister();
+
     [RelayCommand] private Task DemoSignInAsync(string demoEmail) => GoAsync(demoEmail, DemoGateway.DemoPassword);
 
     async Task GoAsync(string e, string p)
@@ -55,6 +57,23 @@ public partial class LoginViewModel(IAuthService auth, IAppNavigator nav) : Load
         var role = AppRole.Member;
         if (await RunAsync(() => auth.SignInAsync(e, p), r => role = r)) nav.GoTo(role);
     }
+}
+
+public partial class RegisterViewModel(IAuthService auth, IAppNavigator nav) : LoadableViewModel
+{
+    [ObservableProperty] private string fullName = "";
+    [ObservableProperty] private string email = "";
+    [ObservableProperty] private string password = "";
+    [ObservableProperty] private string confirmPassword = "";
+
+    [RelayCommand]
+    private async Task RegisterAsync()
+    {
+        if (Password != ConfirmPassword) { ErrorMessage = "The passwords don't match."; return; }
+        if (await RunAsync(() => auth.RegisterAsync(FullName, Email, Password))) nav.GoTo(AppRole.Member);
+    }
+
+    [RelayCommand] private void BackToSignIn() => nav.GoToLogin();
 }
 
 public partial class PackagesViewModel(IMembershipService svc, IProofPicker picker) : LoadableViewModel
@@ -217,6 +236,10 @@ public partial class MessagesViewModel(IMessageService svc) : LoadableViewModel
         else Messages.Clear();
     }
 
+    // no live updates without a database: this reloads the threads and the open conversation
+    [RelayCommand]
+    private async Task RefreshAsync() { await LoadAsync(); await ShowAsync(); }
+
     [RelayCommand]
     private async Task SendAsync()
     {
@@ -252,6 +275,20 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
     private async Task SaveAsync()
     {
         if (await RunAsync(() => settings.SaveThemeAsync(Theme))) { nav.ApplyTheme(Theme); Notice = "Theme saved."; }
+    }
+
+    [ObservableProperty] private string currentPassword = "";
+    [ObservableProperty] private string newPassword = "";
+    [ObservableProperty] private string confirmPassword = "";
+
+    [RelayCommand]
+    private async Task ChangePasswordAsync()
+    {
+        Notice = null;
+        if (NewPassword != ConfirmPassword) { ErrorMessage = "The new passwords don't match."; return; }
+        if (!await RunAsync(() => auth.ChangePasswordAsync(CurrentPassword, NewPassword))) return;
+        CurrentPassword = NewPassword = ConfirmPassword = "";
+        Notice = "Password changed.";
     }
 
     [RelayCommand] private async Task SignOutAsync() { await auth.SignOutAsync(); nav.GoToLogin(); }

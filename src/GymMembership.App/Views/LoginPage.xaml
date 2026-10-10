@@ -55,6 +55,8 @@
 
                 <Button Text="Sign in" Margin="0,6,0,0" Command="{Binding SignInCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}" />
 
+                <Button Text="Create an account" Style="{StaticResource OutlineButton}" Command="{Binding CreateAccountCommand}" />
+
                 <!-- Demo mode: remove once the real backend is connected -->
                 <Border Style="{StaticResource Panel}" Margin="0,16,0,0">
                     <VerticalStackLayout Spacing="10">

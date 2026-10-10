@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.RegisterPage" x:DataType="vm:RegisterViewModel"
+            Title="Create an account">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="{OnIdiom Phone='24,48,24,24', Default='64,40'}" Spacing="18" MaximumWidthRequest="480"
+                             VerticalOptions="{OnIdiom Phone=Start, Default=Center}" HorizontalOptions="Fill">
+            <c:LaneView DashColor="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}"
+                        TrackColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+
+            <VerticalStackLayout Spacing="6">
+                <Label Text="Create an account" Style="{StaticResource Display}" SemanticProperties.HeadingLevel="Level1" />
+                <Label Text="You can look around right away. Pick a package and get your payment verified to unlock amenities, coaches, messages and sessions." Style="{StaticResource Muted}" />
+            </VerticalStackLayout>
+
+            <c:Banner Message="{Binding ErrorMessage}" />
+
+            <VerticalStackLayout Spacing="6">
+                <Label Text="Full name" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}"><Entry Text="{Binding FullName}" ReturnType="Next" SemanticProperties.Description="Full name" /></Border>
+            </VerticalStackLayout>
+            <VerticalStackLayout Spacing="6">
+                <Label Text="Email" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}"><Entry Text="{Binding Email}" Keyboard="Email" ReturnType="Next" SemanticProperties.Description="Email address" /></Border>
+            </VerticalStackLayout>
+            <VerticalStackLayout Spacing="6">
+                <Label Text="Password (at least 6 characters)" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}"><Entry Text="{Binding Password}" IsPassword="True" ReturnType="Next" SemanticProperties.Description="Password" /></Border>
+            </VerticalStackLayout>
+            <VerticalStackLayout Spacing="6">
+                <Label Text="Repeat password" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}">
+                    <Entry Text="{Binding ConfirmPassword}" IsPassword="True" ReturnType="Done" ReturnCommand="{Binding RegisterCommand}" SemanticProperties.Description="Repeat password" />
+                </Border>
+            </VerticalStackLayout>
+
+            <Button Text="Create account" Margin="0,6,0,0" Command="{Binding RegisterCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}" />
+            <Button Text="I already have an account" Style="{StaticResource OutlineButton}" Command="{Binding BackToSignInCommand}" />
+        </VerticalStackLayout>
+    </ScrollView>
+</v:BasePage>

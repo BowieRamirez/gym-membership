@@ -82,8 +82,12 @@ public sealed class DemoGateway : ISupabaseGateway
 
     public Task SignUpAsync(string email, string password, string username)
     {
-        if (_accounts.ContainsKey(email)) return Task.FromException(new Exception("duplicate key value"));
-        CurrentUserId = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], username, email, "member");
+        email = email.Trim();
+        if (string.IsNullOrWhiteSpace(username) || !email.Contains('@') || password.Length < 6) return Task.FromException(new Exception("bad_input"));
+        if (_accounts.ContainsKey(email)) return Task.FromException(new Exception("email_taken"));
+        var id = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], username.Trim(), email, "member");
+        _passwords[id] = password;
+        CurrentUserId = id;
         return Task.CompletedTask;
     }
 
@@ -428,12 +432,31 @@ public sealed class DemoGateway : ISupabaseGateway
             {
                 Require("users:manage");
                 var email = S("p_email").Trim(); var role = S("p_role");
-                if (role is not ("member" or "coach") || string.IsNullOrWhiteSpace(S("p_name")) || S("p_password").Length < 6) throw new Exception("bad_input");
+                if (role is not ("member" or "coach" or "employee") || string.IsNullOrWhiteSpace(S("p_name")) || S("p_password").Length < 6) throw new Exception("bad_input");
                 if (_accounts.ContainsKey(email)) throw new Exception("email_taken");
-                var id = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], S("p_name").Trim(), email, role == "coach" ? new[] { "coach" } : Array.Empty<string>());
+                var id = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], S("p_name").Trim(), email, role == "member" ? Array.Empty<string>() : new[] { role });
                 _passwords[id] = S("p_password");
                 if (role == "coach") Add(new Coach { UserId = id });
                 Audit("user.create", "profiles", id);
+                return null;
+            }
+            case "change_password":
+            {
+                var me = Uid ?? throw new Exception("not authenticated");
+                if (S("p_current") != _passwords.GetValueOrDefault(me, DemoPassword)) throw new Exception("wrong_password");
+                if (S("p_new").Length < 6) throw new Exception("bad_input");
+                _passwords[me] = S("p_new");
+                return null;
+            }
+            case "reset_password":
+            {
+                Require("users:manage");
+                var id = S("p_user");
+                if (S("p_password").Length < 6) throw new Exception("bad_input");
+                if (All<Profile>().All(p => p.Id != id)) throw new Exception("not_found");
+                _passwords[id] = S("p_password");
+                Notify(id, "account", "Your password was reset. Sign in with the new one.");
+                Audit("user.reset_password", "profiles", id);
                 return null;
             }
             default: throw new Exception("not_found");

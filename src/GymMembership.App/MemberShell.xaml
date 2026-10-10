@@ -15,13 +15,13 @@
         </VerticalStackLayout>
     </Shell.FlyoutHeader>
 
-    <FlyoutItem Title="My membership"><ShellContent ContentTemplate="{DataTemplate views:MyMembershipPage}" /></FlyoutItem>
-    <FlyoutItem Title="Packages"><ShellContent ContentTemplate="{DataTemplate views:PackagesPage}" /></FlyoutItem>
-    <FlyoutItem Title="Amenities"><ShellContent ContentTemplate="{DataTemplate views:AmenitiesPage}" /></FlyoutItem>
+    <FlyoutItem Title="My membership" Route="memberships"><ShellContent ContentTemplate="{DataTemplate views:MyMembershipPage}" /></FlyoutItem>
+    <FlyoutItem Title="Packages" Route="packages"><ShellContent ContentTemplate="{DataTemplate views:PackagesPage}" /></FlyoutItem>
+    <FlyoutItem Title="Amenities" ClassId="members-only"><ShellContent ContentTemplate="{DataTemplate views:AmenitiesPage}" /></FlyoutItem>
     <FlyoutItem Title="Coaches"><ShellContent ContentTemplate="{DataTemplate views:CoachesPage}" /></FlyoutItem>
-    <FlyoutItem Title="Messages" Route="messages"><ShellContent ContentTemplate="{DataTemplate views:MessagesPage}" /></FlyoutItem>
-    <FlyoutItem Title="Sessions"><ShellContent ContentTemplate="{DataTemplate views:SessionsPage}" /></FlyoutItem>
-    <FlyoutItem Title="Time requests"><ShellContent ContentTemplate="{DataTemplate views:RequestsPage}" /></FlyoutItem>
+    <FlyoutItem Title="Messages" Route="messages" ClassId="members-only"><ShellContent ContentTemplate="{DataTemplate views:MessagesPage}" /></FlyoutItem>
+    <FlyoutItem Title="Sessions" ClassId="members-only"><ShellContent ContentTemplate="{DataTemplate views:SessionsPage}" /></FlyoutItem>
+    <FlyoutItem Title="Time requests" ClassId="members-only"><ShellContent ContentTemplate="{DataTemplate views:RequestsPage}" /></FlyoutItem>
     <FlyoutItem Title="Alerts"><ShellContent ContentTemplate="{DataTemplate views:NotificationsPage}" /></FlyoutItem>
     <FlyoutItem Title="Settings"><ShellContent ContentTemplate="{DataTemplate views:SettingsPage}" /></FlyoutItem>
 </Shell>
