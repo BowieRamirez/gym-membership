@@ -330,6 +330,27 @@ await test('the app role cannot call the internal helpers or cron jobs', async (
   assert.match(await code(run(alex, `select next_receipt_no()`)), /42501/);
 });
 
+console.log('\nhow Supabase Auth really creates accounts');
+// Supabase Auth inserts the user first and writes app_metadata afterwards, so this is how an Admin-API account really arrives
+async function userTwoStep(email, role, name) {
+  const id = (await db.query(`insert into auth.users (email, raw_user_meta_data, raw_app_meta_data) values ($1, $2, '{"provider":"email"}') returning id`, [email, JSON.stringify({ full_name: name })])).rows[0].id;
+  await db.query(`update auth.users set raw_app_meta_data = raw_app_meta_data || $2::jsonb where id = $1`, [id, JSON.stringify({ role })]);
+  return id;
+}
+await test('an account made through the Admin API gets the role written after it was inserted', async () => {
+  const boss = await userTwoStep('boss@t.io', 'admin', 'Boss');
+  const rows = async (id) => (await db.query(`select (select string_agg(r.name, ',') from user_roles ur join roles r using(role_id) where ur.user_id=$1) roles, (select count(*) from members where user_id=$1)::int m, (select count(*) from coaches where user_id=$1)::int c`, [id])).rows[0];
+  assert.deepEqual(await rows(boss), { roles: 'admin', m: 0, c: 0 });
+  const c2 = await userTwoStep('c2@t.io', 'coach', 'Coach Two');
+  assert.deepEqual(await rows(c2), { roles: 'coach', m: 0, c: 1 });
+  const e2 = await userTwoStep('e2@t.io', 'employee', 'Desk Two');
+  assert.deepEqual(await rows(e2), { roles: 'employee', m: 0, c: 0 });
+  // a later change to app_metadata does not flip the role again
+  await db.query(`update auth.users set raw_app_meta_data = raw_app_meta_data || '{"role":"admin"}'::jsonb where id=$1`, [c2]);
+  assert.deepEqual(await rows(c2), { roles: 'coach', m: 0, c: 1 });
+  assert.equal((await run(boss, `select is_staff() s`)).rows[0].s, true);
+});
+
 console.log(`\n${pass} passed, ${failed} failed`);
 await db.end(); await server.stop();
 process.exit(failed ? 1 : 0);
