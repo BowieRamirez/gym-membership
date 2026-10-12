@@ -4,3 +4,5 @@ obj/
 *.user
 supabase/.temp/
 supabase/.branches/
+# your Supabase project details (copy supabase.sample.json to this name)
+src/GymMembership.App/Resources/Raw/supabase.json

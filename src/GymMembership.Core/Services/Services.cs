@@ -14,6 +14,8 @@ public interface IAuthService
 {
     string? UserId { get; }
     Task<AppResult<AppRole>> SignInAsync(string email, string password);
+    /// <summary>Picks up the session saved from the last run. Null means nobody was signed in.</summary>
+    Task<AppResult<AppRole?>> RestoreAsync();
     Task SignOutAsync();
     Task<AppResult<bool>> ChangePasswordAsync(string current, string next);
     /// <summary>True while the person still has the temporary password the owner gave them.</summary>
@@ -53,6 +55,14 @@ public sealed class AuthService(ISupabaseGateway gw) : IAuthService
     public Task<AppResult<AppRole>> SignInAsync(string email, string password) => Safe.RunAsync(async () =>
     {
         await gw.SignInAsync(email, password);
+        return await ResolveRoleAsync();
+    });
+
+    public Task<AppResult<AppRole?>> RestoreAsync() => Safe.RunAsync<AppRole?>(async () =>
+        await gw.RestoreSessionAsync() ? await ResolveRoleAsync() : null);
+
+    async Task<AppRole> ResolveRoleAsync()
+    {
         var uid = gw.CurrentUserId ?? throw new Exception("not authenticated");
         // Auth itself still lets a deactivated person sign in, so the app turns them away here
         if ((await gw.ListAsync<Profile>(p => p.Id == uid)).FirstOrDefault() is { IsActive: false })
@@ -63,7 +73,7 @@ public sealed class AuthService(ISupabaseGateway gw) : IAuthService
         var mine = await gw.ListAsync<UserRole>(u => u.UserId == uid);
         var roles = await gw.ListAsync<Role>();
         return RoleResolver.Pick(mine.Select(m => roles.FirstOrDefault(r => r.RoleId == m.RoleId)?.Name).OfType<string>());
-    });
+    }
 
     public Task SignOutAsync() => gw.SignOutAsync();
 }

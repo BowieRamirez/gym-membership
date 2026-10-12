@@ -1,6 +1,7 @@
 using CommunityToolkit.Maui;
 using GymMembership.App.Services;
 using GymMembership.App.Views;
+using GymMembership.Core.Backend;
 using GymMembership.Core.Demo;
 using GymMembership.Core.Services;
 using GymMembership.Core.ViewModels;
@@ -26,8 +27,11 @@ public static class MauiProgram
 
 		var s = builder.Services;
 
-		// Backend seam: the in-memory demo today; swap this one line for the Supabase gateway later.
-		s.AddSingleton<ISupabaseGateway, DemoGateway>();
+		// Backend seam: the real Supabase project when Resources/Raw/supabase.json is filled in, otherwise the in-memory demo.
+		s.AddSingleton<ISessionStore, SecureSessionStore>();
+		s.AddSingleton<ISupabaseGateway>(sp => SupabaseConfig.Load() is { } settings
+			? new SupabaseGateway(settings, sp.GetRequiredService<ISessionStore>())
+			: new DemoGateway());
 
 		s.AddSingleton<IAppNavigator, AppNavigator>();
 		s.AddSingleton<IProofPicker, MauiProofPicker>();

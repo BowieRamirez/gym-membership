@@ -35,10 +35,23 @@ public abstract partial class LoadableViewModel : ObservableObject
     { target.Clear(); foreach (var r in rows) target.Add(r); }
 }
 
-public partial class LoginViewModel(IAuthService auth, IAppNavigator nav) : LoadableViewModel
+public partial class LoginViewModel(IAuthService auth, IAppNavigator nav, ISupabaseGateway gateway) : LoadableViewModel
 {
+    /// <summary>True while running on the in-memory demo, which offers one-tap sign-in as each role.</summary>
+    public bool IsDemo => gateway is DemoGateway;
+
     [ObservableProperty] private string email = "";
     [ObservableProperty] private string password = "";
+
+    // someone who signed in last time and never signed out goes straight in
+    public override async Task OnAppearingAsync()
+    {
+        AppRole? role = null;
+        if (!await RunAsync(auth.RestoreAsync, r => role = r) || role is not { } found) { ErrorMessage = null; return; }
+        var mustChange = false;
+        await RunAsync(auth.MustChangePasswordAsync, m => mustChange = m);
+        nav.GoTo(found, mustChange);
+    }
 
     [RelayCommand]
     private Task SignInAsync()
@@ -288,11 +301,11 @@ public partial class NotificationsViewModel(INotificationService svc) : Loadable
 
     public override Task OnAppearingAsync() => LoadAsync();
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.ListAsync, rows => { Fill(Items, rows); UnreadCount = rows.Count(n => !n.IsRead); });
+    [RelayCommand] private Task LoadAsync() => RunAsync(svc.ListAsync, rows => { Fill(Items, rows); UnreadCount = rows.Count(n => n.ReadAt is null); });
 
     [RelayCommand]
     private async Task MarkReadAsync(UserNotification n)
-    { if (!n.IsRead && await RunAsync(() => svc.MarkReadAsync(n.Id))) await LoadAsync(); }
+    { if (n.ReadAt is null && await RunAsync(() => svc.MarkReadAsync(n.Id))) await LoadAsync(); }
 }
 
 public partial class SettingsViewModel(ISettingsService settings, IAuthService auth, IAppNavigator nav) : LoadableViewModel

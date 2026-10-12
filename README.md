@@ -64,6 +64,16 @@ The login screen has one-click buttons for each role. To type them in, the passw
 
 All data is seeded in memory and resets every time the app starts.
 
+### Use a real Supabase project
+
+The app runs on the demo backend until it finds your project details.
+
+1. Create the project, then from this folder run `npx supabase login`, `npx supabase link --project-ref <ref>` and `npx supabase db push --include-seed`. Deploy the two functions with `npx supabase functions deploy create-user` and `npx supabase functions deploy reset-password`.
+2. Copy `src/GymMembership.App/Resources/Raw/supabase.sample.json` to `supabase.json` in the same folder and fill in the project URL and the **anon** key (Project settings, API). That file is git-ignored. Never put the service-role key in the app.
+3. Run the app again. The sign-in screen no longer shows the demo buttons. To get demo logins on a development project, run `supabase/scripts/seed-demo-users.mjs` (see the comment at the top for the variables it needs).
+
+Delete `supabase.json` to go back to the demo.
+
 ### Run the tests
 
 ```bash
@@ -108,7 +118,7 @@ The app talks to the backend through a single interface, `ISupabaseGateway`. Mov
 
 ## Database plan (Supabase)
 
-> **Written and tested locally, not applied to a Supabase project yet.** This is a summary. The full build spec is [`docs/specs/database-plan.md`](docs/specs/database-plan.md). The migrations are in [`supabase/migrations/`](supabase/migrations) and pass `supabase/tests/local`. The app's models, services and demo backend already follow the new schema. The Supabase-backed gateway is the remaining piece.
+> **Written and tested locally, not applied to a Supabase project yet.** This is a summary. The full build spec is [`docs/specs/database-plan.md`](docs/specs/database-plan.md). The migrations are in [`supabase/migrations/`](supabase/migrations) and pass `supabase/tests/local`. The app's models, services and demo backend already follow the new schema. The Supabase-backed gateway is written; it has not run against a real project yet.
 
 ### Decisions
 
@@ -191,7 +201,7 @@ Verified payments are never edited. Only an admin can void one, with a reason. V
 - [x] Supabase migrations: tables, row level security, functions, storage, scheduled jobs (checked on a local Postgres, not yet pushed to a project)
 - [x] `create-user` and `reset-password` Edge Functions (written, not yet deployed or run)
 - [x] App models, services, demo backend and pages follow the new schema: QR payments with codes and reference numbers, counter and walk-in payments, voids, gym settings
-- [ ] Supabase-backed gateway
+- [x] Supabase-backed gateway (`SupabaseGateway`, tested against a fake Supabase server, not yet against a real project)
 - [ ] Phase 2: products and sales, employees, working hours, sales reports
 
 ## Docs

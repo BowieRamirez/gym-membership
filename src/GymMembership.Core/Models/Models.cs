@@ -4,6 +4,7 @@ using Supabase.Postgrest.Models;
 namespace GymMembership.Core.Models;
 
 // Mirrors supabase/migrations/0002_tables.sql. People (profiles, members, coaches) are keyed by their Auth uuid, held as a string.
+// Primary keys are never sent in a write body (the app filters on them instead), because the key column is not one a user may change.
 // Columns the database fills in itself (ids, timestamps, status) are marked ignoreOnInsert, and columns a user may not change
 // are marked ignoreOnUpdate, so the app only ever sends what the table privileges in 0006_rls.sql allow.
 
@@ -18,7 +19,7 @@ public static class PayKind { public const string Membership = "membership", Ren
 public static class PayMethod { public const string Qr = "qr", Cash = "cash", Gcash = "gcash", BankTransfer = "bank_transfer"; }
 
 [Table("profiles")] public class Profile : BaseModel
-{ [PrimaryKey("id", true)] public string Id { get; set; } = ""; [Column("username")] public string Username { get; set; } = ""; [Column("full_name")] public string FullName { get; set; } = "";
+{ [PrimaryKey("id")] public string Id { get; set; } = ""; [Column("username")] public string Username { get; set; } = ""; [Column("full_name")] public string FullName { get; set; } = "";
   [Column("phone")] public string? Phone { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true; [Column("must_change_password")] public bool MustChangePassword { get; set; } }
 
 [Table("roles")] public class Role : BaseModel
@@ -26,14 +27,14 @@ public static class PayMethod { public const string Qr = "qr", Cash = "cash", Gc
 
 // composite key (user_id, role_id): the app only reads this table, roles change through assign_role / revoke_role
 [Table("user_roles")] public class UserRole : BaseModel
-{ [PrimaryKey("user_id", true)] public string UserId { get; set; } = ""; [Column("role_id")] public int RoleId { get; set; } }
+{ [PrimaryKey("user_id")] public string UserId { get; set; } = ""; [Column("role_id")] public int RoleId { get; set; } }
 
 [Table("user_settings")] public class UserSettings : BaseModel
-{ [PrimaryKey("user_id", true)] public string UserId { get; set; } = ""; [Column("theme")] public string Theme { get; set; } = "system";
+{ [PrimaryKey("user_id")] public string UserId { get; set; } = ""; [Column("theme")] public string Theme { get; set; } = "system";
   [Column("language")] public string Language { get; set; } = "en"; [Column("timezone")] public string Timezone { get; set; } = "Asia/Manila"; }
 
 [Table("gym_settings")] public class GymSettings : BaseModel
-{ [PrimaryKey("id", true)] public int Id { get; set; } = 1; [Column("gym_name")] public string GymName { get; set; } = ""; [Column("qr_image_path")] public string? QrImagePath { get; set; }
+{ [PrimaryKey("id")] public int Id { get; set; } = 1; [Column("gym_name")] public string GymName { get; set; } = ""; [Column("qr_image_path")] public string? QrImagePath { get; set; }
   [Column("qr_account_name")] public string? QrAccountName { get; set; } [Column("walk_in_price")] public decimal WalkInPrice { get; set; }
   [Column("payment_expiry_hours")] public int PaymentExpiryHours { get; set; } = 48; [Column("receipt_prefix")] public string ReceiptPrefix { get; set; } = "OR"; }
 
@@ -77,11 +78,11 @@ public static class PayMethod { public const string Qr = "qr", Cash = "cash", Gc
 
 // keyed by the coach's Auth uuid. A coach edits bio, specialty, rate and availability only
 [Table("coaches")] public class Coach : BaseModel
-{ [PrimaryKey("user_id", true)] public string UserId { get; set; } = ""; [Column("bio")] public string? Bio { get; set; }
+{ [PrimaryKey("user_id")] public string UserId { get; set; } = ""; [Column("bio")] public string? Bio { get; set; }
   [Column("specialty")] public string? Specialty { get; set; } [Column("hourly_rate")] public decimal? HourlyRate { get; set; } [Column("is_available")] public bool IsAvailable { get; set; } = true; }
 
 [Table("members")] public class Member : BaseModel
-{ [PrimaryKey("user_id", true)] public string UserId { get; set; } = ""; [Column("goals")] public string? Goals { get; set; } }
+{ [PrimaryKey("user_id")] public string UserId { get; set; } = ""; [Column("goals")] public string? Goals { get; set; } }
 
 [Table("coach_hires")] public class CoachHire : BaseModel
 { [PrimaryKey("coach_hire_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("coach_id")] public string CoachId { get; set; } = "";
@@ -99,19 +100,18 @@ public static class PayMethod { public const string Qr = "qr", Cash = "cash", Gc
   [Column("status")] public string Status { get; set; } = "scheduled"; }
 
 [Table("session_attendance")] public class SessionAttendance : BaseModel
-{ [PrimaryKey("training_session_id", true)] public int SessionId { get; set; } [Column("status")] public string Status { get; set; } = "present";
+{ [PrimaryKey("training_session_id")] public int SessionId { get; set; } [Column("status")] public string Status { get; set; } = "present";
   [Column("checked_in_at")] public DateTime? CheckedInAt { get; set; } [Column("notes")] public string? Notes { get; set; } }
 
 [Table("gym_check_ins")] public class GymCheckIn : BaseModel
 { [PrimaryKey("check_in_id")] public int Id { get; set; } [Column("member_id")] public string? MemberId { get; set; } [Column("payment_id")] public int? PaymentId { get; set; }
   [Column("checked_in_at")] public DateTime CheckedInAt { get; set; } }
 
-// unread while ReadAt is null; the app may only set read_at
+// unread while ReadAt is null; the app may only set read_at. (No computed IsRead property: every public property is sent in a write.)
 [Table("user_notifications")] public class UserNotification : BaseModel
 { [PrimaryKey("notification_id")] public int Id { get; set; } [Column("user_id", ignoreOnUpdate: true)] public string UserId { get; set; } = ""; [Column("type", ignoreOnUpdate: true)] public string Type { get; set; } = "";
   [Column("title", ignoreOnUpdate: true)] public string Title { get; set; } = ""; [Column("body", ignoreOnUpdate: true)] public string? Body { get; set; } [Column("read_at")] public DateTime? ReadAt { get; set; }
-  [Column("created_at", ignoreOnUpdate: true)] public DateTime CreatedAt { get; set; }
-  public bool IsRead => ReadAt is not null; }
+  [Column("created_at", ignoreOnUpdate: true)] public DateTime CreatedAt { get; set; } }
 
 [Table("audit_log")] public class AuditEntry : BaseModel
 { [PrimaryKey("audit_id")] public int Id { get; set; } [Column("actor_id")] public string? ActorId { get; set; } [Column("action")] public string Action { get; set; } = "";

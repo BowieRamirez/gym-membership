@@ -25,7 +25,7 @@
                         </Border.GestureRecognizers>
                         <Grid ColumnDefinitions="10,*" ColumnSpacing="12">
                             <Ellipse Style="{StaticResource DotScheduled}" VerticalOptions="Start" Margin="0,7,0,0"
-                                     IsVisible="{Binding IsRead, Converter={StaticResource Not}}" />
+                                     IsVisible="{Binding ReadAt, Converter={StaticResource IsNull}}" />
                             <VerticalStackLayout Grid.Column="1" Spacing="2">
                                 <Label Text="{Binding Title}" FontFamily="BarlowSemiBold" />
                                 <Label Text="{Binding Body}" Style="{StaticResource Muted}" IsVisible="{Binding Body, Converter={StaticResource HasText}}" />

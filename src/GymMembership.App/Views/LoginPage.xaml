@@ -57,8 +57,8 @@
 
                 <Button Text="Create an account" Style="{StaticResource OutlineButton}" Command="{Binding CreateAccountCommand}" />
 
-                <!-- Demo mode: remove once the real backend is connected -->
-                <Border Style="{StaticResource Panel}" Margin="0,16,0,0">
+                <!-- Demo mode: shown only when no Supabase project is configured -->
+                <Border Style="{StaticResource Panel}" Margin="0,16,0,0" IsVisible="{Binding IsDemo}">
                     <VerticalStackLayout Spacing="10">
                         <Label Text="Demo mode" Style="{StaticResource Heading}" />
                         <Label Text="No database is connected yet, so everything here is sample data held in memory. Jump in as:" Style="{StaticResource Muted}" />

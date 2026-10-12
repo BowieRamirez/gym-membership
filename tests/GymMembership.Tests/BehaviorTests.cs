@@ -218,10 +218,10 @@ public class BehaviorTests
     {
         var gw = await As("member@demo.io");
         var svc = new NotificationService(gw);
-        var unread = (await svc.ListAsync()).Value!.First(n => !n.IsRead);
+        var unread = (await svc.ListAsync()).Value!.First(n => n.ReadAt is null);
         Assert.True((await svc.MarkReadAsync(unread.Id)).Ok);
         var after = (await svc.ListAsync()).Value!.First(n => n.Id == unread.Id);
-        Assert.True(after.IsRead);
+        Assert.NotNull(after.ReadAt);
         Assert.Equal(unread.Title, after.Title);
     }
 }
