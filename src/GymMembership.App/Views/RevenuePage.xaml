@@ -9,7 +9,7 @@
 
     <ScrollView MaximumWidthRequest="720">
         <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
-            <Label Text="Verified payments only, grouped by the day they were verified." Style="{StaticResource Muted}" />
+            <Label Text="Verified payments only, grouped by the day they were verified, then by what was bought and how it was paid. Voided payments are left out." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
 
             <FlexLayout Wrap="Wrap" AlignItems="End">
@@ -37,12 +37,17 @@
                     <DataTemplate x:DataType="m:RevenueRow">
                         <Border Style="{StaticResource Panel}" Padding="16,12">
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                <Label Text="{Binding Day, StringFormat='{0:ddd d MMM}'}" VerticalOptions="Center" />
-                                <Label Grid.Column="1" Style="{StaticResource Heading}">
-                                    <Label.Text>
-                                        <MultiBinding StringFormat="{}{0:N2} {1}"><Binding Path="Total" /><Binding Path="Cur" /></MultiBinding>
-                                    </Label.Text>
-                                </Label>
+                                <VerticalStackLayout Spacing="2">
+                                    <Label Text="{Binding Day, StringFormat='{0:ddd d MMM}'}" />
+                                    <Label Style="{StaticResource Caption}">
+                                        <Label.Text>
+                                            <MultiBinding StringFormat="{}{0} · {1} · {2} payment(s)">
+                                                <Binding Path="Kind" /><Binding Path="Method" /><Binding Path="Payments" />
+                                            </MultiBinding>
+                                        </Label.Text>
+                                    </Label>
+                                </VerticalStackLayout>
+                                <Label Grid.Column="1" Text="{Binding Total, StringFormat='₱{0:N2}'}" Style="{StaticResource Heading}" VerticalOptions="Center" />
                             </Grid>
                         </Border>
                     </DataTemplate>

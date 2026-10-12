@@ -14,16 +14,19 @@ public class NewFeatureTests
 
     // ---------- admin adds users ----------
     [Fact]
-    public async Task Admin_adds_a_coach_who_can_sign_in_with_the_temporary_password()
+    public async Task Admin_adds_a_coach_who_signs_in_with_the_temporary_password_and_must_change_it()
     {
         var gw = await As("admin@demo.io");
         Assert.True((await new AdminService(gw).CreateUserAsync("Rey Santos", "rey@demo.io", "coach", "temp1234")).Ok);
 
-        var wrong = await new AuthService(gw).SignInAsync("rey@demo.io", DemoGateway.DemoPassword);
-        Assert.Equal(AppErrorKind.Unauthorized, wrong.Error);
-        var ok = await new AuthService(gw).SignInAsync("rey@demo.io", "temp1234");
-        Assert.Equal(AppRole.Coach, ok.Value);
+        var auth = new AuthService(gw);
+        Assert.Equal(AppErrorKind.Unauthorized, (await auth.SignInAsync("rey@demo.io", DemoGateway.DemoPassword)).Error);
+        Assert.Equal(AppRole.Coach, (await auth.SignInAsync("rey@demo.io", "temp1234")).Value);
         Assert.Contains(await gw.ListAsync<Coach>(), c => c.UserId == gw.CurrentUserId);
+        Assert.True((await auth.MustChangePasswordAsync()).Value);
+
+        Assert.True((await auth.ChangePasswordAsync("temp1234", "my-own-pass")).Ok);
+        Assert.False((await auth.MustChangePasswordAsync()).Value);
     }
 
     [Fact]
@@ -45,17 +48,35 @@ public class NewFeatureTests
     [Fact]
     public async Task A_valid_code_cuts_the_payment_and_a_bad_or_expired_code_is_refused()
     {
-        var gw = await As("bea@demo.io");
+        var gw = await As("carlo@demo.io");   // expired, so free to buy again
         var svc = new MembershipService(gw);
         var annual = (await svc.ListPackagesAsync()).Value!.First(p => p.Name == "Annual");
 
         Assert.Equal(AppErrorKind.Validation, (await svc.AvailAsync(annual.Id, "NOPE")).Error);
         Assert.Equal(AppErrorKind.Validation, (await svc.AvailAsync(annual.Id, "NEWYEAR20")).Error); // seeded as expired
 
-        var paymentId = (await svc.AvailAsync(annual.Id, " welcome10 ")).Value;
-        var item = (await svc.MyPaymentsAsync()).Value!.First(p => p.Id == paymentId);
-        Assert.Equal(252m, item.Amount); // 280 less 10%
-        Assert.Contains("WELCOME10", item.What);
+        var pay = (await svc.AvailAsync(annual.Id, " welcome10 ")).Value!;
+        Assert.Equal(12600m, pay.Amount);          // ₱14,000 less 10%
+        Assert.Equal(1400m, pay.DiscountAmount);
+        var item = (await svc.MyPaymentsAsync()).Value!.First(p => p.Id == pay.Id);
+        Assert.Contains("discount", item.What);
+    }
+
+    [Fact]
+    public async Task A_discount_code_works_once_per_member()
+    {
+        var gw = await As("carlo@demo.io");
+        var svc = new MembershipService(gw);
+        var monthly = (await svc.ListPackagesAsync()).Value!.First(p => p.Name == "Monthly");
+        var first = (await svc.AvailAsync(monthly.Id, "WELCOME10")).Value!;
+
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        await new PaymentStaffService(gw).VerifyAsync(first.Id, true);
+
+        await gw.SignInAsync("carlo@demo.io", DemoGateway.DemoPassword);
+        var ump = (await svc.MyMembershipsAsync()).Value!.First(m => m.Status == "active");
+        Assert.Equal(AppErrorKind.Validation, (await svc.RenewAsync(ump.Id, "WELCOME10")).Error);   // already used
+        Assert.True((await svc.RenewAsync(ump.Id)).Ok);
     }
 
     [Fact]
@@ -88,9 +109,9 @@ public class NewFeatureTests
         Assert.True((await admin.DeletePackageAsync(plans.First(p => p.Name == "Annual"))).Ok);
 
         var quarterly = plans.First(p => p.Name == "Quarterly");
-        quarterly.Price = 75;
+        quarterly.Price = 3750;
         Assert.True((await admin.SavePackageAsync(quarterly)).Ok);
-        Assert.Equal(75m, (await admin.AllPackagesAsync()).Value!.First(p => p.Name == "Quarterly").Price);
+        Assert.Equal(3750m, (await admin.AllPackagesAsync()).Value!.First(p => p.Name == "Quarterly").Price);
     }
 
     // ---------- messaging ----------
@@ -120,13 +141,14 @@ public class NewFeatureTests
 
         await gw.SignInAsync("carlo@demo.io", DemoGateway.DemoPassword); // never hired Lena
         Assert.Empty((await svc.MessagesAsync(thread.CoachId, thread.MemberId)).Value!);
-        Assert.Equal(AppErrorKind.Validation, (await svc.SendAsync(thread.CoachId, thread.MemberId, "hi")).Error);
+        Assert.Equal(AppErrorKind.Validation, (await svc.SendAsync(thread.CoachId, thread.MemberId, "hi")).Error);   // not one of the two people in it
 
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         var hire = (await gw.ListAsync<CoachHire>()).First(h => h.Status == "active");
         Assert.True((await new CoachService(gw).EndHireAsync(hire.Id)).Ok);
         Assert.False((await svc.ThreadsAsync()).Value!.Single().CanSend); // history stays, sending stops
-        Assert.Equal(AppErrorKind.Validation, (await svc.SendAsync(thread.CoachId, thread.MemberId, "still there?")).Error);
+        Assert.Equal(AppErrorKind.Unauthorized, (await svc.SendAsync(thread.CoachId, thread.MemberId, "still there?")).Error);
+        Assert.NotEmpty((await svc.MessagesAsync(thread.CoachId, thread.MemberId)).Value!);
     }
 
     // ---------- shifts and trainees ----------
@@ -138,13 +160,14 @@ public class NewFeatureTests
         var start = DateTime.UtcNow.AddDays(5);
         Assert.Equal(AppErrorKind.Validation, (await coaches.PostShiftAsync(start, start.AddHours(-1), null)).Error);
         Assert.True((await coaches.PostShiftAsync(start, start.AddHours(4), "Late shift")).Ok);
+        Assert.Equal(AppErrorKind.Conflict, (await coaches.PostShiftAsync(start.AddHours(1), start.AddHours(3), null)).Error);   // no overlapping shifts
 
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         var card = (await coaches.ListCoachesAsync()).Value!.First(c => c.Name == "Lena Cruz");
         Assert.Contains(card.Shifts!, s => s.Note == "Late shift");
         Assert.Contains("Late shift", card.ShiftsText);
 
-        Assert.Equal(AppErrorKind.Validation, (await coaches.PostShiftAsync(start, start.AddHours(2), null)).Error); // a member has no coach profile
+        Assert.Equal(AppErrorKind.Unauthorized, (await coaches.PostShiftAsync(start.AddDays(1), start.AddDays(1).AddHours(2), null)).Error); // a member has no coach profile
 
         await gw.SignInAsync("coach@demo.io", DemoGateway.DemoPassword);
         var mine = (await coaches.MyShiftsAsync()).Value!.First(s => s.Note == "Late shift");
@@ -162,6 +185,22 @@ public class NewFeatureTests
 
         await gw.SignInAsync("kai@demo.io", DemoGateway.DemoPassword);
         Assert.Empty((await new CoachService(gw).TraineesAsync()).Value!);
+    }
+
+    [Fact]
+    public async Task A_coach_edits_their_own_profile_only()
+    {
+        var gw = await As("coach@demo.io");
+        var coaches = new CoachService(gw);
+        Assert.True((await coaches.UpdateProfileAsync("New bio", "Mobility", 900m, false)).Ok);
+        var me = (await coaches.MyCoachAsync()).Value!;
+        Assert.Equal(("New bio", "Mobility", 900m, false), (me.Bio, me.Specialty, me.HourlyRate, me.IsAvailable));
+        Assert.Equal("Boxing and mobility", (await gw.ListAsync<Coach>(c => c.UserId == "u-coach2")).Single().Specialty);
+
+        // writing someone else's row is refused
+        var other = (await gw.ListAsync<Coach>(c => c.UserId == "u-coach2")).Single();
+        other.Bio = "hijacked";
+        await Assert.ThrowsAsync<Exception>(() => gw.UpdateAsync(other));
     }
 
     // ---------- reschedule and cancel ----------
@@ -217,9 +256,20 @@ public class NewFeatureTests
 
         await gw.SignInAsync("coach@demo.io", DemoGateway.DemoPassword);
         Assert.DoesNotContain((await sessions.RequestsAsync()).Value!.Rows, r => r.Request.SessionId == booked.Id);
-        Assert.Contains(await gw.ListAsync<UserNotification>(), n => n.Type == "session");
+        Assert.Contains(await gw.ListAsync<UserNotification>(), n => n.Title.Contains("cancelled"));
 
         await gw.SignInAsync("carlo@demo.io", DemoGateway.DemoPassword);
-        Assert.Equal(AppErrorKind.Unauthorized, (await sessions.CancelSessionAsync(booked.Id)).Error); // not their session
+        Assert.Equal(AppErrorKind.Validation, (await sessions.CancelSessionAsync(booked.Id)).Error); // not their session, so not found for them
+    }
+
+    [Fact]
+    public async Task An_open_slot_can_be_claimed_by_a_trainee_with_a_plan()
+    {
+        var gw = await As("member@demo.io");
+        var sessions = new SessionService(gw);
+        var slot = (await sessions.RequestsAsync()).Value!.Rows.First(r => r.Kind == "Open availability");
+        Assert.True(slot.CanRespond);
+        Assert.True((await sessions.RespondAsync(slot.Request.Id, true)).Ok);
+        Assert.Contains((await sessions.SessionsAsync()).Value!, r => r.Session.ScheduledStart == slot.Request.RequestedStart && r.Session.MemberId == "u-alex");
     }
 }

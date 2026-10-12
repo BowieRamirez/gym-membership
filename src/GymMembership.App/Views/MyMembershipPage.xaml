@@ -25,6 +25,36 @@
                 </VerticalStackLayout>
             </Border>
 
+            <!-- Pay by QR: the code is what the front desk matches your transfer against, so it is the biggest thing here -->
+            <Border Style="{StaticResource Panel}" Padding="24,22" IsVisible="{Binding PayNow, Converter={StaticResource IsNotNull}}">
+                <VerticalStackLayout Spacing="14">
+                    <Label Text="{Binding PayNow.Amount, StringFormat='Pay ₱{0:N2} by QR'}" Style="{StaticResource Heading}" />
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="20">
+                        <Image Source="{Binding QrUrl}" IsVisible="{Binding HasQr}" WidthRequest="168" HeightRequest="168" VerticalOptions="Start"
+                               SemanticProperties.Description="The gym's payment QR code" />
+                        <VerticalStackLayout Grid.Column="1" Spacing="10">
+                            <Label Text="{Binding AccountName, StringFormat='Pay to {0}'}" IsVisible="{Binding AccountName, Converter={StaticResource IsNotNull}}" />
+                            <Label Text="Ask the gym for its QR if none shows here." Style="{StaticResource Caption}" IsVisible="{Binding HasQr, Converter={StaticResource Not}}" />
+                            <VerticalStackLayout Spacing="2">
+                                <Label Text="Type this code in the payment message" Style="{StaticResource Caption}" />
+                                <Label Text="{Binding PayNow.PaymentCode}" Style="{StaticResource Numeral}" SemanticProperties.Description="Payment code" />
+                            </VerticalStackLayout>
+                            <Label Text="{Binding PayNow.ExpiresAt, Converter={StaticResource LocalDate}, ConverterParameter='ddd d MMM, h:mm tt', StringFormat='Pay before {0}, or this payment expires.'}"
+                                   Style="{StaticResource Caption}" IsVisible="{Binding PayNow.ExpiresAt, Converter={StaticResource IsNotNull}}" />
+                        </VerticalStackLayout>
+                    </Grid>
+
+                    <Label Text="After you pay, enter the reference number from your receipt and send a screenshot of it." Style="{StaticResource Muted}" />
+                    <FlexLayout Wrap="Wrap" AlignItems="End">
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="240">
+                            <Label Text="Reference number" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding ReferenceNo}" SemanticProperties.Description="Reference number from your receipt" /></Border>
+                        </VerticalStackLayout>
+                        <Button Text="Choose screenshot and send" Style="{StaticResource SmallButton}" Margin="0,0,0,8" Command="{Binding SendProofCommand}" />
+                    </FlexLayout>
+                </VerticalStackLayout>
+            </Border>
+
             <Label Text="Your memberships" Style="{StaticResource Heading}" Margin="0,8,0,0" />
             <VerticalStackLayout Spacing="4" HorizontalOptions="Start" WidthRequest="260">
                 <Label Text="Discount code for renewing (optional)" Style="{StaticResource Caption}" />
@@ -66,12 +96,20 @@
                                 <VerticalStackLayout Spacing="6">
                                     <Label Text="{Binding What}" Style="{StaticResource Heading}" />
                                     <c:StatusChip Status="{Binding Status}" />
-                                    <Label Text="{Binding CreatedAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM yyyy, h:mm tt'}" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding Detail}" IsVisible="{Binding Detail, Converter={StaticResource IsNotNull}}" />
+                                    <Label Style="{StaticResource Caption}">
+                                        <Label.Text>
+                                            <MultiBinding StringFormat="{}{0} · {1}">
+                                                <Binding Path="PaymentCode" />
+                                                <Binding Path="CreatedAt" Converter="{StaticResource LocalDate}" ConverterParameter="d MMM yyyy, h:mm tt" />
+                                            </MultiBinding>
+                                        </Label.Text>
+                                    </Label>
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Grid.Column="1" Spacing="6" HorizontalOptions="End">
-                                    <Label Text="{Binding Amount, StringFormat='{0:N2}'}" Style="{StaticResource Heading}" HorizontalOptions="End" />
-                                    <Button Text="Attach proof" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding NeedsProof}"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MyMembershipViewModel}}, Path=AttachProofCommand}"
+                                    <Label Text="{Binding Amount, StringFormat='₱{0:N2}'}" Style="{StaticResource Heading}" HorizontalOptions="End" />
+                                    <Button Text="Pay again" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanPayAgain}"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MyMembershipViewModel}}, Path=PayAgainCommand}"
                                             CommandParameter="{Binding .}" />
                                 </VerticalStackLayout>
                             </Grid>

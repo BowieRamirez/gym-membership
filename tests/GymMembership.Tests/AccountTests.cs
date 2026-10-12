@@ -1,4 +1,5 @@
 using GymMembership.Core.Demo;
+using GymMembership.Core.Models;
 using GymMembership.Core.Services;
 using Xunit;
 
@@ -33,7 +34,7 @@ public class AccountTests
     }
 
     [Fact]
-    public async Task Admin_resets_a_password_and_nobody_else_can()
+    public async Task Admin_resets_a_password_and_the_person_must_pick_a_new_one()
     {
         var gw = await As("admin@demo.io");
         var admin = new AdminService(gw);
@@ -41,10 +42,12 @@ public class AccountTests
         Assert.Equal(AppErrorKind.Validation, (await admin.ResetPasswordAsync(member.UserId, "123")).Error);
         Assert.True((await admin.ResetPasswordAsync(member.UserId, "reset1234")).Ok);
 
+        var auth = new AuthService(gw);
         await gw.SignOutAsync();
-        Assert.Equal(AppErrorKind.Unauthorized, (await new AuthService(gw).SignInAsync("member@demo.io", DemoGateway.DemoPassword)).Error);
-        Assert.True((await new AuthService(gw).SignInAsync("member@demo.io", "reset1234")).Ok);
-        Assert.Equal(AppErrorKind.Unauthorized, (await admin.ResetPasswordAsync(member.UserId, "hijack1234")).Error);
+        Assert.Equal(AppErrorKind.Unauthorized, (await auth.SignInAsync("member@demo.io", DemoGateway.DemoPassword)).Error);
+        Assert.True((await auth.SignInAsync("member@demo.io", "reset1234")).Ok);
+        Assert.True((await auth.MustChangePasswordAsync()).Value);
+        Assert.Equal(AppErrorKind.Unauthorized, (await admin.ResetPasswordAsync(member.UserId, "hijack1234")).Error);   // a member is not the admin
     }
 
     [Fact]
@@ -56,15 +59,16 @@ public class AccountTests
         Assert.Equal(AppErrorKind.Validation, (await auth.RegisterAsync("New Person", "new@demo.io", "123")).Error);
         Assert.Equal(AppErrorKind.Validation, (await auth.RegisterAsync("Dupe", "member@demo.io", "secret12")).Error);
         Assert.True((await auth.RegisterAsync("New Person", "new@demo.io", "secret12")).Ok);
+        Assert.False((await auth.MustChangePasswordAsync()).Value);   // they chose their own password
 
         var plans = new MembershipService(gw);
         Assert.Equal(new Access(false, false), (await plans.AccessAsync()).Value);   // guest
 
-        var pay = (await plans.AvailAsync((await plans.ListPackagesAsync()).Value![0].Id)).Value;
+        var pay = (await plans.AvailAsync((await plans.ListPackagesAsync()).Value![0].Id)).Value!;
         Assert.Equal(new Access(false, true), (await plans.AccessAsync()).Value);    // paid for, not verified
 
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
-        Assert.True((await new PaymentStaffService(gw).VerifyAsync(pay, true)).Ok);
+        Assert.True((await new PaymentStaffService(gw).VerifyAsync(pay.Id, true)).Ok);
         await gw.SignInAsync("new@demo.io", "secret12");                              // own password, not the demo one
         Assert.Equal(new Access(true, false), (await plans.AccessAsync()).Value);    // full member
     }

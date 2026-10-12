@@ -10,18 +10,125 @@ namespace GymMembership.Core.ViewModels;
 public partial class VerifyPaymentsViewModel(IPaymentStaffService svc) : LoadableViewModel
 {
     public ObservableCollection<PaymentRow> Pending { get; } = new();
+    [ObservableProperty] private PaymentRow? rejecting;
+    [ObservableProperty] private string rejectReason = "";
+    [ObservableProperty] private PaymentRow? viewing;
+    [ObservableProperty] private string? proofUrl;
 
     public override Task OnAppearingAsync() => LoadAsync();
 
     [RelayCommand] private Task LoadAsync() => RunAsync(svc.PendingAsync, rows => Fill(Pending, rows));
-    [RelayCommand] private Task ApproveAsync(PaymentRow row) => DecideAsync(row, true);
-    [RelayCommand] private Task RejectAsync(PaymentRow row) => DecideAsync(row, false);
 
-    async Task DecideAsync(PaymentRow row, bool approve)
+    [RelayCommand]
+    private async Task ApproveAsync(PaymentRow row)
     {
         Notice = null;
-        if (await RunAsync(() => svc.VerifyAsync(row.Payment.Id, approve)))
-        { Pending.Remove(row); Notice = approve ? $"Verified {row.Payer}'s payment." : $"Rejected {row.Payer}'s payment."; }
+        if (await RunAsync(() => svc.VerifyAsync(row.Payment.Id, true)))
+        { Pending.Remove(row); Notice = $"Verified {row.Payer}'s payment. Receipt number assigned."; if (Viewing == row) Viewing = null; }
+    }
+
+    // a rejection needs a reason, and it is final: the member pays again with a new payment
+    [RelayCommand] private void Reject(PaymentRow row) { Rejecting = row; RejectReason = ""; Notice = null; }
+    [RelayCommand] private void KeepPending() => Rejecting = null;
+
+    [RelayCommand]
+    private async Task ConfirmRejectAsync()
+    {
+        if (Rejecting is not { } row) return;
+        if (!await RunAsync(() => svc.VerifyAsync(row.Payment.Id, false, RejectReason))) return;
+        Pending.Remove(row); Rejecting = null;
+        Notice = $"Rejected {row.Payer}'s payment. They can pay again.";
+    }
+
+    // the screenshot the member sent, to check against the gym's e-wallet
+    [RelayCommand]
+    private async Task ViewProofAsync(PaymentRow row)
+    {
+        Viewing = row; ProofUrl = null;
+        if (row.Payment.ProofPath is { } path) await RunAsync(() => svc.ProofUrlAsync(path), url => ProofUrl = url);
+    }
+
+    [RelayCommand] private void CloseProof() { Viewing = null; ProofUrl = null; }
+}
+
+// front desk: cash and GCash at the counter, and walk-ins. Verified straight away with a receipt number
+public partial class CounterViewModel(IPaymentStaffService svc, IAttendanceService members) : LoadableViewModel
+{
+    public string[] Kinds { get; } = ["Membership", "Renewal", "Amenity", "Walk-in"];
+    public string[] Methods { get; } = ["Cash", "GCash", "Bank transfer"];
+    public ObservableCollection<MemberHit> Hits { get; } = new();
+    public ObservableCollection<CounterItem> Items { get; } = new();
+    public ObservableCollection<CashRow> CashToday { get; } = new();
+
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWalkIn), nameof(NeedsMember), nameof(NeedsReference))] private string kind = "Membership";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(NeedsReference))] private string method = "Cash";
+    [ObservableProperty] private string search = "";
+    [ObservableProperty] private MemberHit? member;
+    [ObservableProperty] private CounterItem? item;
+    [ObservableProperty] private string walkInName = "";
+    [ObservableProperty] private string referenceNo = "";
+    [ObservableProperty] private string discountCode = "";
+    [ObservableProperty] private string cashTotal = "₱0.00";
+
+    public bool IsWalkIn => Kind == "Walk-in";
+    public bool NeedsMember => !IsWalkIn;
+    public bool NeedsReference => Method != "Cash";
+
+    static string KindKey(string k) => k switch { "Renewal" => PayKind.Renewal, "Amenity" => PayKind.Amenity, "Walk-in" => PayKind.WalkIn, _ => PayKind.Membership };
+    static string MethodKey(string m) => m switch { "GCash" => PayMethod.Gcash, "Bank transfer" => PayMethod.BankTransfer, _ => PayMethod.Cash };
+
+    public override async Task OnAppearingAsync() { await RefreshItemsAsync(); await LoadCashAsync(); }
+
+    partial void OnKindChanged(string value) { Item = null; _ = RefreshItemsAsync(); }
+    partial void OnMemberChanged(MemberHit? value) { Item = null; if (Kind == "Renewal") _ = RefreshItemsAsync(); }
+
+    async Task RefreshItemsAsync()
+    {
+        if (IsWalkIn) { Items.Clear(); return; }
+        await RunAsync(() => svc.ItemsAsync(KindKey(Kind), Member?.MemberId), rows => Fill(Items, rows));
+    }
+
+    async Task LoadCashAsync() =>
+        await RunAsync(() => svc.CashSummaryAsync(DateOnly.FromDateTime(DateTime.Today)), rows =>
+        { Fill(CashToday, rows); CashTotal = $"₱{rows.Sum(r => r.Total):N2}"; });
+
+    [RelayCommand] private Task FindAsync() => RunAsync(() => members.FindMembersAsync(Search), rows => Fill(Hits, rows));
+
+    [RelayCommand]
+    private async Task RecordAsync()
+    {
+        Notice = null;
+        if (!IsWalkIn && (Member is null || Item is null)) { ErrorMessage = "Choose the member and what they are paying for."; return; }
+        Payment? paid = null;
+        if (!await RunAsync(() => svc.RecordCounterAsync(KindKey(Kind), MethodKey(Method), IsWalkIn ? null : Member!.MemberId, Item?.Id,
+                IsWalkIn ? WalkInName : null, NeedsReference ? ReferenceNo : null, IsWalkIn ? null : DiscountCode), p => paid = p)) return;
+        Notice = $"Recorded ₱{paid!.Amount:N2}. Receipt {paid.ReceiptNo}.";
+        Item = null; ReferenceNo = ""; DiscountCode = ""; WalkInName = "";
+        await LoadCashAsync();
+    }
+}
+
+// admin: verified payments, newest first, so a mistake can be voided with a reason and then recorded again
+public partial class VoidPaymentsViewModel(IPaymentStaffService svc) : LoadableViewModel
+{
+    public ObservableCollection<PaymentRow> Recent { get; } = new();
+    [ObservableProperty] private PaymentRow? voiding;
+    [ObservableProperty] private string reason = "";
+
+    public override Task OnAppearingAsync() => LoadAsync();
+
+    [RelayCommand] private Task LoadAsync() => RunAsync(svc.RecentAsync, rows => Fill(Recent, rows));
+    [RelayCommand] private void Start(PaymentRow row) { Voiding = row; Reason = ""; Notice = null; }
+    [RelayCommand] private void Keep() => Voiding = null;
+
+    [RelayCommand]
+    private async Task ConfirmAsync()
+    {
+        if (Voiding is not { } row) return;
+        if (!await RunAsync(() => svc.VoidAsync(row.Payment.Id, Reason))) return;
+        Voiding = null;
+        Notice = $"Voided {row.Payer}'s payment. What it switched on is reversed.";
+        await LoadAsync();
     }
 }
 
@@ -156,7 +263,7 @@ public partial class RequestsViewModel(ISessionService svc) : LoadableViewModel
         if (!IsCoach && SelectedCoach is null) { ErrorMessage = "Choose a coach first."; return; }
         var ok = IsCoach
             ? await RunAsync(() => svc.PostAvailabilityAsync(start, end))
-            : await RunAsync(() => svc.RequestAsync(SelectedCoach!.Coach.Id, start, end, Message));
+            : await RunAsync(() => svc.RequestAsync(SelectedCoach!.Coach.UserId, start, end, Message));
         if (ok) { Notice = IsCoach ? "Availability posted." : "Request sent."; Message = null; await LoadAsync(); }
     }
 
@@ -237,7 +344,7 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
         var parts = arg.Split('|');
         var row = Sessions.First(s => s.Session.Id == int.Parse(parts[0]));
         Notice = null;
-        if (await RunAsync(() => attendance.RecordAsync(row.Session.Id, row.Session.MemberId, parts[1])))
+        if (await RunAsync(() => attendance.RecordAsync(row.Session.Id, parts[1])))
             Notice = $"Marked {row.With} as {parts[1]}.";
     }
 }
@@ -306,6 +413,8 @@ public partial class CatalogAdminViewModel(IAdminService svc) : LoadableViewMode
     [ObservableProperty] private decimal newPrice = 30;
     [ObservableProperty] private int newDays = 30;
     [ObservableProperty] private string newAmenityName = "";
+    [ObservableProperty] private decimal newAmenityPrice = 200;
+    [ObservableProperty] private int newAmenityDays = 30;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(SaveLabel), nameof(IsEditing))] private MembershipPackage? editing;
 
     public string SaveLabel => Editing is null ? "Add package" : "Save changes";
@@ -364,7 +473,9 @@ public partial class CatalogAdminViewModel(IAdminService svc) : LoadableViewMode
     private async Task AddAmenityAsync()
     {
         if (string.IsNullOrWhiteSpace(NewAmenityName)) { ErrorMessage = "Give the amenity a name."; return; }
-        if (await RunAsync(() => svc.SaveAmenityAsync(new Amenity { Name = NewAmenityName.Trim() }))) { NewAmenityName = ""; await LoadAsync(); }
+        if (NewAmenityPrice < 0 || NewAmenityDays <= 0) { ErrorMessage = "Price can't be negative and days must be more than zero."; return; }
+        if (await RunAsync(() => svc.SaveAmenityAsync(new Amenity { Name = NewAmenityName.Trim(), Price = NewAmenityPrice, DurationDays = NewAmenityDays })))
+        { NewAmenityName = ""; await LoadAsync(); }
     }
 
     [RelayCommand]
@@ -421,7 +532,7 @@ public partial class RevenueViewModel(IAdminService svc) : LoadableViewModel
     public ObservableCollection<RevenueRow> Rows { get; } = new();
     [ObservableProperty] private DateTime from = DateTime.Today.AddDays(-30);
     [ObservableProperty] private DateTime to = DateTime.Today;
-    [ObservableProperty] private string totalText = "0.00";
+    [ObservableProperty] private string totalText = "₱0.00";
 
     public override Task OnAppearingAsync() => LoadAsync();
 
@@ -429,8 +540,48 @@ public partial class RevenueViewModel(IAdminService svc) : LoadableViewModel
     private Task LoadAsync() => RunAsync(() => svc.RevenueAsync(DateOnly.FromDateTime(From), DateOnly.FromDateTime(To)), rows =>
     {
         Fill(Rows, rows);
-        TotalText = $"{rows.Sum(r => r.Total):N2} {rows.FirstOrDefault()?.Cur ?? "USD"}";
+        TotalText = $"₱{rows.Sum(r => r.Total):N2}";
     });
+}
+
+// admin: the gym's name, the payment QR members scan, and the walk-in price
+public partial class GymSettingsViewModel(IAdminService svc, IProofPicker picker) : LoadableViewModel
+{
+    [ObservableProperty] private string gymName = "";
+    [ObservableProperty] private string? qrAccountName;
+    [ObservableProperty] private decimal walkInPrice;
+    [ObservableProperty] private string qrStatus = "No QR uploaded yet. Members can't pay until you add one.";
+    GymSettings? _loaded;
+    (string FileName, byte[] Data)? _newQr;
+
+    public override Task OnAppearingAsync() => LoadAsync();
+
+    [RelayCommand]
+    private Task LoadAsync() => RunAsync(svc.GymSettingsAsync, g =>
+    {
+        _loaded = g; GymName = g.GymName; QrAccountName = g.QrAccountName; WalkInPrice = g.WalkInPrice;
+        QrStatus = string.IsNullOrWhiteSpace(g.QrImagePath) ? "No QR uploaded yet. Members can't pay until you add one." : "A payment QR is set. Choose a new image to replace it.";
+    });
+
+    [RelayCommand]
+    private async Task ChooseQrAsync()
+    {
+        if (await picker.PickAsync() is not { } file) return;
+        _newQr = file;
+        QrStatus = $"Ready to upload {file.FileName}. Save to apply it.";
+    }
+
+    [RelayCommand]
+    private async Task SaveAsync()
+    {
+        Notice = null;
+        if (_loaded is null) return;
+        _loaded.GymName = GymName.Trim(); _loaded.QrAccountName = string.IsNullOrWhiteSpace(QrAccountName) ? null : QrAccountName.Trim(); _loaded.WalkInPrice = WalkInPrice;
+        if (!await RunAsync(() => svc.SaveGymSettingsAsync(_loaded, _newQr))) return;
+        _newQr = null;
+        Notice = "Saved.";
+        await LoadAsync();
+    }
 }
 
 public partial class AuditViewModel(IAdminService svc) : LoadableViewModel

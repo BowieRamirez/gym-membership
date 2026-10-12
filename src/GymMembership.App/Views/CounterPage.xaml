@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.CounterPage" x:DataType="vm:CounterViewModel" Title="Counter payment">
+
+    <ScrollView MaximumWidthRequest="920">
+        <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
+            <Label Text="Take cash or GCash at the desk. It is verified at once and gets a receipt number to write on the paper receipt." Style="{StaticResource Muted}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+            <Border Style="{StaticResource Panel}">
+                <VerticalStackLayout Spacing="12">
+                    <FlexLayout Wrap="Wrap" AlignItems="End">
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="170">
+                            <Label Text="What is being paid for" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Kinds}" SelectedItem="{Binding Kind}" SemanticProperties.Description="What is being paid for" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="150">
+                            <Label Text="Paid with" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Methods}" SelectedItem="{Binding Method}" SemanticProperties.Description="Payment method" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="220" IsVisible="{Binding NeedsReference}">
+                            <Label Text="Reference number" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding ReferenceNo}" SemanticProperties.Description="Reference number" /></Border>
+                        </VerticalStackLayout>
+                    </FlexLayout>
+
+                    <!-- walk-ins have no member: just a name -->
+                    <VerticalStackLayout Spacing="4" WidthRequest="300" HorizontalOptions="Start" IsVisible="{Binding IsWalkIn}">
+                        <Label Text="Name" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><Entry Text="{Binding WalkInName}" SemanticProperties.Description="Walk-in name" /></Border>
+                        <Label Text="The day pass price is set in Gym settings. A check-in is recorded with it." Style="{StaticResource Caption}" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="12" IsVisible="{Binding NeedsMember}">
+                        <FlexLayout Wrap="Wrap" AlignItems="End">
+                            <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="240">
+                                <Label Text="Find the member" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><Entry Text="{Binding Search}" Placeholder="Start of their name" ReturnCommand="{Binding FindCommand}" SemanticProperties.Description="Search members" /></Border>
+                            </VerticalStackLayout>
+                            <Button Text="Find" Style="{StaticResource SmallOutlineButton}" Margin="0,0,0,8" Command="{Binding FindCommand}" />
+                        </FlexLayout>
+                        <FlexLayout Wrap="Wrap" AlignItems="End">
+                            <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="260">
+                                <Label Text="Member" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Hits}" ItemDisplayBinding="{Binding Username}" SelectedItem="{Binding Member}" SemanticProperties.Description="Member" /></Border>
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="320">
+                                <Label Text="Item" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Items}" ItemDisplayBinding="{Binding Label}" SelectedItem="{Binding Item}" SemanticProperties.Description="Item" /></Border>
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="170">
+                                <Label Text="Discount code (optional)" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><Entry Text="{Binding DiscountCode}" SemanticProperties.Description="Discount code" /></Border>
+                            </VerticalStackLayout>
+                        </FlexLayout>
+                    </VerticalStackLayout>
+
+                    <Button Text="Record payment" Style="{StaticResource SmallButton}" HorizontalOptions="Start" Command="{Binding RecordCommand}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Label Text="Cash taken today" Style="{StaticResource Heading}" Margin="0,8,0,0" />
+            <Border Style="{StaticResource Panel}" Padding="24,18">
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="Compare this with the drawer at closing." Style="{StaticResource Caption}" />
+                    <Label Text="{Binding CashTotal}" Style="{StaticResource Numeral}" />
+                </VerticalStackLayout>
+            </Border>
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding CashToday}" Spacing="8">
+                <BindableLayout.EmptyView><Label Text="No cash payments recorded today." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="svc:CashRow">
+                        <Border Style="{StaticResource Panel}" Padding="16,12">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                <Label Style="{StaticResource BaseLabel}" VerticalOptions="Center">
+                                    <Label.Text>
+                                        <MultiBinding StringFormat="{}{0}  ({1})"><Binding Path="Kind" /><Binding Path="Payments" /></MultiBinding>
+                                    </Label.Text>
+                                </Label>
+                                <Label Grid.Column="1" Text="{Binding Total, StringFormat='₱{0:N2}'}" Style="{StaticResource Heading}" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</v:BasePage>

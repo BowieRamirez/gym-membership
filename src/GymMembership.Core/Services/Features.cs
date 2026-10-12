@@ -11,56 +11,51 @@ static class Fmt
 }
 
 // ===================== Messages (member and coach) =====================
-public sealed record ThreadRow(int CoachId, int MemberId, string With, bool CanSend);
+// A conversation is one coach and one member, so it is named by their two Auth ids.
+public sealed record ThreadRow(string CoachId, string MemberId, string With, bool CanSend);
 public sealed record MessageRow(ChatMessage Message, bool Mine);
 
 public interface IMessageService
 {
     /// <summary>Set before navigating to Messages so that conversation opens first. MemberId null means "me, as the member".</summary>
-    (int CoachId, int? MemberId)? Pending { get; set; }
+    (string CoachId, string? MemberId)? Pending { get; set; }
     Task<AppResult<IReadOnlyList<ThreadRow>>> ThreadsAsync();
-    Task<AppResult<IReadOnlyList<MessageRow>>> MessagesAsync(int coachId, int memberId);
-    Task<AppResult<bool>> SendAsync(int coachId, int memberId, string body);
+    Task<AppResult<IReadOnlyList<MessageRow>>> MessagesAsync(string coachId, string memberId);
+    Task<AppResult<bool>> SendAsync(string coachId, string memberId, string body);
 }
 
 public sealed class MessageService(ISupabaseGateway gw) : IMessageService
 {
-    public (int CoachId, int? MemberId)? Pending { get; set; }
+    public (string CoachId, string? MemberId)? Pending { get; set; }
 
     public Task<AppResult<IReadOnlyList<ThreadRow>>> ThreadsAsync() => Safe.RunAsync<IReadOnlyList<ThreadRow>>(async () =>
     {
         var uid = gw.CurrentUserId;
-        var myCoachId = (await gw.ListAsync<Coach>(c => c.UserId == uid)).FirstOrDefault()?.Id;
-        var coaches = await gw.ListAsync<Coach>();
-        var members = await gw.ListAsync<Member>();
         var names = await Directory_.UserNamesAsync(gw);
         var hires = await gw.ListAsync<CoachHire>();
         var past = await gw.ListAsync<ChatMessage>();
+        var active = hires.Where(h => h.Status == Status.Active).Select(h => (h.CoachId, h.MemberId)).ToHashSet();
 
         // a conversation exists for every hire (current or ended) and for anyone already written to
         var pairs = hires.Select(h => (h.CoachId, h.MemberId)).Union(past.Select(m => (m.CoachId, m.MemberId)));
-        string Other(int coachId, int memberId) => names.GetValueOrDefault(coachId == myCoachId
-            ? members.FirstOrDefault(m => m.Id == memberId)?.UserId ?? ""
-            : coaches.FirstOrDefault(c => c.Id == coachId)?.UserId ?? "", "Unknown");
-        return pairs.Select(p => new ThreadRow(p.CoachId, p.MemberId, Other(p.CoachId, p.MemberId),
-                hires.Any(h => h.CoachId == p.CoachId && h.MemberId == p.MemberId && h.Status == Status.Active)))
+        return pairs.Select(p => new ThreadRow(p.CoachId, p.MemberId, names.GetValueOrDefault(p.CoachId == uid ? p.MemberId : p.CoachId, "Unknown"), active.Contains(p)))
             .OrderBy(t => t.With).ToList();
     });
 
-    public Task<AppResult<IReadOnlyList<MessageRow>>> MessagesAsync(int coachId, int memberId) => Safe.RunAsync<IReadOnlyList<MessageRow>>(async () =>
+    public Task<AppResult<IReadOnlyList<MessageRow>>> MessagesAsync(string coachId, string memberId) => Safe.RunAsync<IReadOnlyList<MessageRow>>(async () =>
     {
         var uid = gw.CurrentUserId;
         return (await gw.ListAsync<ChatMessage>(m => m.CoachId == coachId && m.MemberId == memberId))
-            .OrderBy(m => m.SentAt).Select(m => new MessageRow(m, m.SenderUserId == uid)).ToList();
+            .OrderBy(m => m.SentAt).Select(m => new MessageRow(m, m.SenderId == uid)).ToList();
     });
 
-    public async Task<AppResult<bool>> SendAsync(int coachId, int memberId, string body)
+    public async Task<AppResult<bool>> SendAsync(string coachId, string memberId, string body)
     {
         if (string.IsNullOrWhiteSpace(body)) return AppResult<bool>.Fail(AppErrorKind.Validation, "empty_message");
         return await Safe.RunAsync(async () =>
         {
             var uid = gw.CurrentUserId ?? throw new Exception("not authenticated");
-            await gw.InsertAsync(new ChatMessage { CoachId = coachId, MemberId = memberId, SenderUserId = uid, Body = body.Trim() });
+            await gw.InsertAsync(new ChatMessage { CoachId = coachId, MemberId = memberId, SenderId = uid, Body = body.Trim() });
             return true;
         });
     }

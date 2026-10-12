@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.GymSettingsPage" x:DataType="vm:GymSettingsViewModel" Title="Gym settings">
+
+    <ScrollView MaximumWidthRequest="620">
+        <VerticalStackLayout Padding="20,16,20,24" Spacing="16">
+            <Label Text="What members see when they pay, and the price of a day pass at the desk." Style="{StaticResource Muted}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+            <VerticalStackLayout Spacing="6">
+                <Label Text="Gym name" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}"><Entry Text="{Binding GymName}" SemanticProperties.Description="Gym name" /></Border>
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Spacing="6">
+                <Label Text="Walk-in price (₱)" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}" WidthRequest="160" HorizontalOptions="Start"><Entry Text="{Binding WalkInPrice}" Keyboard="Numeric" SemanticProperties.Description="Walk-in price" /></Border>
+            </VerticalStackLayout>
+
+            <Border Style="{StaticResource Panel}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Payment QR" Style="{StaticResource Heading}" />
+                    <Label Text="The GCash, Maya or QR Ph code members scan. Upload a clear image of it." Style="{StaticResource Caption}" />
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="Name shown on the QR" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><Entry Text="{Binding QrAccountName}" SemanticProperties.Description="Account name on the QR" /></Border>
+                    </VerticalStackLayout>
+                    <Label Text="{Binding QrStatus}" />
+                    <Button Text="Choose QR image" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" Command="{Binding ChooseQrCommand}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Button Text="Save settings" HorizontalOptions="Start" Command="{Binding SaveCommand}" />
+        </VerticalStackLayout>
+    </ScrollView>
+</v:BasePage>

@@ -55,7 +55,10 @@ public partial class LoginViewModel(IAuthService auth, IAppNavigator nav) : Load
     async Task GoAsync(string e, string p)
     {
         var role = AppRole.Member;
-        if (await RunAsync(() => auth.SignInAsync(e, p), r => role = r)) nav.GoTo(role);
+        if (!await RunAsync(() => auth.SignInAsync(e, p), r => role = r)) return;
+        var mustChange = false;
+        await RunAsync(auth.MustChangePasswordAsync, m => mustChange = m);   // a temporary password goes straight to Settings
+        nav.GoTo(role, mustChange);
     }
 }
 
@@ -76,7 +79,7 @@ public partial class RegisterViewModel(IAuthService auth, IAppNavigator nav) : L
     [RelayCommand] private void BackToSignIn() => nav.GoToLogin();
 }
 
-public partial class PackagesViewModel(IMembershipService svc, IProofPicker picker) : LoadableViewModel
+public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav) : LoadableViewModel
 {
     public ObservableCollection<MembershipPackage> Packages { get; } = new();
     [ObservableProperty] private string? discountCode;
@@ -85,17 +88,14 @@ public partial class PackagesViewModel(IMembershipService svc, IProofPicker pick
 
     [RelayCommand] private Task LoadAsync() => RunAsync(svc.ListPackagesAsync, rows => Fill(Packages, rows));
 
+    // avail creates a pending QR payment; paying it and sending the proof happens on My membership
     [RelayCommand]
     private async Task AvailAsync(MembershipPackage package)
     {
         Notice = null;
-        var paymentId = 0;
-        if (!await RunAsync(() => svc.AvailAsync(package.Id, DiscountCode), id => paymentId = id)) return;
-        Notice = string.IsNullOrWhiteSpace(DiscountCode)
-            ? "Payment created. Pay at the front desk, or attach your proof of payment now."
-            : "Payment created with your discount. Pay at the front desk, or attach your proof of payment now.";
-        if (await picker.PickAsync() is { } file && await RunAsync(() => svc.AttachProofAsync(paymentId, file.FileName, file.Data)))
-            Notice = "Proof attached. Staff will verify it shortly.";
+        if (!await RunAsync(() => svc.AvailAsync(package.Id, DiscountCode), _ => { })) return;
+        DiscountCode = null;
+        nav.GoToMembership();
     }
 }
 
@@ -108,16 +108,34 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
     [ObservableProperty] private double laneFraction;
     [ObservableProperty] private string? discountCode;
 
+    /// <summary>The QR payment the member still has to pay and send proof for, if any.</summary>
+    [ObservableProperty] private PaymentItem? payNow;
+    [ObservableProperty] private string referenceNo = "";
+    [ObservableProperty] private string? accountName;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasQr))] private string? qrUrl;
+    public bool HasQr => QrUrl is not null;
+
     public override Task OnAppearingAsync() => LoadAsync();
 
     [RelayCommand]
     private async Task LoadAsync()
     {
-        await RunAsync(svc.MyMembershipsAsync, rows => { Fill(Memberships, rows); UpdateHero(rows); });
-        await RunAsync(svc.MyPaymentsAsync, rows => Fill(Payments, rows));
+        var waiting = false;
+        await RunAsync(svc.MyPaymentsAsync, rows =>
+        {
+            Fill(Payments, rows);
+            PayNow = rows.FirstOrDefault(p => p.NeedsProof);
+            waiting = PayNow is not null || rows.Any(p => p.AwaitingReview);
+        });
+        await RunAsync(svc.MyMembershipsAsync, rows => { Fill(Memberships, rows); UpdateHero(rows, waiting); });
+        if (PayNow is not null)
+        {
+            await RunAsync(svc.GymAsync, g => AccountName = g.QrAccountName);
+            await RunAsync(svc.QrUrlAsync, url => QrUrl = url);
+        }
     }
 
-    void UpdateHero(IReadOnlyList<MembershipRow> rows)
+    void UpdateHero(IReadOnlyList<MembershipRow> rows, bool waitingOnPayment)
     {
         var active = rows.FirstOrDefault(r => r.Status == Status.Active);
         var expired = rows.FirstOrDefault(r => r.Status == Status.Expired);
@@ -127,10 +145,10 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
             HeroCaption = left == 1 ? $"day left on {active.PackageName}" : $"days left on {active.PackageName}";
             LaneFraction = Math.Clamp((double)left / Math.Max(1, active.DurationDays), 0, 1);
         }
+        else if (waitingOnPayment)
+        { HeroNumber = "–"; HeroCaption = PayNow is not null ? "Pay by QR and send your proof to start your membership." : "Waiting for staff to verify your payment."; LaneFraction = 0; }
         else if (expired is not null)
         { HeroNumber = "0"; HeroCaption = $"{expired.PackageName} has expired. Renew to get back in."; LaneFraction = 0; }
-        else if (rows.Any(r => r.Status == Status.Pending))
-        { HeroNumber = "–"; HeroCaption = "Waiting for staff to verify your payment."; LaneFraction = 0; }
         else
         { HeroNumber = "–"; HeroCaption = "Pick a package to get started."; LaneFraction = 0; }
     }
@@ -139,23 +157,37 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
     private async Task RenewAsync(MembershipRow row)
     {
         Notice = null;
-        var paymentId = 0;
-        if (!await RunAsync(() => svc.RenewAsync(row.Id, DiscountCode), id => paymentId = id)) return;
-        Notice = "Renewal payment created. Attach your proof of payment or pay at the front desk.";
-        if (await picker.PickAsync() is { } file && await RunAsync(() => svc.AttachProofAsync(paymentId, file.FileName, file.Data)))
-            Notice = "Proof attached. Staff will verify it shortly.";
+        if (!await RunAsync(() => svc.RenewAsync(row.Id, DiscountCode), _ => { })) return;
+        DiscountCode = null;
+        Notice = "Renewal payment created. Pay by QR below, then send your proof.";
+        await LoadAsync();
+    }
+
+    // the reference number from the e-wallet receipt, plus a screenshot of it
+    [RelayCommand]
+    private async Task SendProofAsync()
+    {
+        Notice = null;
+        if (PayNow is not { } pay) return;
+        if (string.IsNullOrWhiteSpace(ReferenceNo)) { ErrorMessage = "Enter the reference number from your e-wallet receipt."; return; }
+        if (await picker.PickAsync() is not { } file) { ErrorMessage = "Choose a screenshot of your payment to send."; return; }
+        if (!await RunAsync(() => svc.SubmitProofAsync(pay.Id, ReferenceNo, file.FileName, file.Data))) return;
+        ReferenceNo = "";
+        Notice = "Sent. The front desk will check it against the gym's account.";
         await LoadAsync();
     }
 
     [RelayCommand]
-    private async Task AttachProofAsync(PaymentItem item)
+    private async Task PayAgainAsync(PaymentItem item)
     {
-        if (await picker.PickAsync() is { } file && await RunAsync(() => svc.AttachProofAsync(item.Id, file.FileName, file.Data)))
-        { Notice = "Proof attached. Staff will verify it shortly."; await LoadAsync(); }
+        Notice = null;
+        if (!await RunAsync(() => svc.PayAgainAsync(item), _ => { })) return;
+        Notice = "New payment created. Pay by QR below, then send your proof.";
+        await LoadAsync();
     }
 }
 
-public partial class AmenitiesViewModel(IAmenityService svc, IProofPicker picker) : LoadableViewModel
+public partial class AmenitiesViewModel(IAmenityService svc, IProofPicker picker, IAppNavigator nav) : LoadableViewModel
 {
     public ObservableCollection<AmenityRow> Items { get; } = new();
 
@@ -163,11 +195,12 @@ public partial class AmenitiesViewModel(IAmenityService svc, IProofPicker picker
 
     [RelayCommand] private Task LoadAsync() => RunAsync(svc.CatalogAsync, rows => Fill(Items, rows));
 
+    // buying creates a pending QR payment, paid and proven on My membership like a package
     [RelayCommand]
     private async Task AvailAsync(AmenityRow row)
     {
         Notice = null;
-        if (await RunAsync(() => svc.AvailAsync(row.Amenity.Id), _ => { })) await LoadAsync();
+        if (await RunAsync(() => svc.AvailAsync(row.Amenity.Id), _ => { })) nav.GoToMembership();
     }
 
     [RelayCommand]
@@ -189,14 +222,14 @@ public partial class CoachesViewModel(ICoachService svc, IMessageService message
 
     [RelayCommand]
     private async Task HireAsync(CoachCard card)
-    { if (await RunAsync(() => svc.HireAsync(card.Coach.Id))) await LoadAsync(); }
+    { if (await RunAsync(() => svc.HireAsync(card.Coach.UserId))) await LoadAsync(); }
 
     [RelayCommand]
     private async Task EndHireAsync(CoachCard card)
     { if (card.HireId is { } id && await RunAsync(() => svc.EndHireAsync(id))) await LoadAsync(); }
 
     [RelayCommand]
-    private void Message(CoachCard card) { messages.Pending = (card.Coach.Id, null); nav.GoToMessages(); }
+    private void Message(CoachCard card) { messages.Pending = (card.Coach.UserId, null); nav.GoToMessages(); }
 }
 
 public partial class MessagesViewModel(IMessageService svc) : LoadableViewModel
@@ -266,8 +299,13 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
 {
     public string[] Themes { get; } = ["system", "light", "dark"];
     [ObservableProperty] private string theme = "system";
+    [ObservableProperty] private bool mustChange;
 
-    public override Task OnAppearingAsync() => LoadAsync();
+    public override async Task OnAppearingAsync()
+    {
+        await LoadAsync();
+        await RunAsync(auth.MustChangePasswordAsync, m => MustChange = m);
+    }
 
     [RelayCommand] private Task LoadAsync() => RunAsync(settings.LoadAsync, s => Theme = s.Theme);
 
@@ -288,6 +326,7 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
         if (NewPassword != ConfirmPassword) { ErrorMessage = "The new passwords don't match."; return; }
         if (!await RunAsync(() => auth.ChangePasswordAsync(CurrentPassword, NewPassword))) return;
         CurrentPassword = NewPassword = ConfirmPassword = "";
+        MustChange = false;
         Notice = "Password changed.";
     }
 

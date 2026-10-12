@@ -9,7 +9,7 @@
 
     <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
-            <Label Text="Add an amenity to your access, then log each visit so staff can verify it. You need an active membership." Style="{StaticResource Muted}" />
+            <Label Text="Buy an amenity with the same QR payment as a package. Once it is verified, log each visit so staff can confirm it." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
         </VerticalStackLayout>
@@ -24,13 +24,17 @@
                             <VerticalStackLayout Spacing="4">
                                 <Label Text="{Binding Amenity.Name}" Style="{StaticResource Heading}" />
                                 <Label Text="{Binding Amenity.Description}" Style="{StaticResource Muted}" />
+                                <Label Text="{Binding Amenity.Price, StringFormat='₱{0:N2}'}" Style="{StaticResource Caption}" />
+                                <Label Style="{StaticResource Caption}" IsVisible="{Binding IsActive}"
+                                       Text="{Binding ExpiresAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM yyyy', StringFormat='Yours until {0}'}" />
+                                <Label Style="{StaticResource Caption}" IsVisible="{Binding IsPending}" Text="Payment started. Finish it on My membership." />
                             </VerticalStackLayout>
-                            <Button Grid.Column="1" Text="Add to my access" Style="{StaticResource SmallButton}" VerticalOptions="Center"
-                                    IsVisible="{Binding UserAmenityId, Converter={StaticResource IsNull}}"
+                            <Button Grid.Column="1" Text="Buy" Style="{StaticResource SmallButton}" VerticalOptions="Center"
+                                    IsVisible="{Binding CanBuy}"
                                     Command="{Binding Source={RelativeSource AncestorType={x:Type vm:AmenitiesViewModel}}, Path=AvailCommand}"
                                     CommandParameter="{Binding .}" />
                             <Button Grid.Column="1" Text="Log a visit" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center"
-                                    IsVisible="{Binding UserAmenityId, Converter={StaticResource IsNotNull}}"
+                                    IsVisible="{Binding IsActive}"
                                     Command="{Binding Source={RelativeSource AncestorType={x:Type vm:AmenitiesViewModel}}, Path=LogUsageCommand}"
                                     CommandParameter="{Binding .}" />
                         </Grid>

@@ -9,9 +9,35 @@
 
     <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
-            <Label Text="Oldest first. Check the proof, then verify or reject. Verifying activates the membership." Style="{StaticResource Muted}" />
+            <Label Text="Oldest first. Find the transfer in the gym's e-wallet by its payment code and amount, then verify or reject. Verifying switches the membership on and gives a receipt number." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+            <!-- the screenshot the member sent -->
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding Viewing, Converter={StaticResource IsNotNull}}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="{Binding Viewing.Payer, StringFormat='Screenshot from {0}'}" Style="{StaticResource Heading}" />
+                    <Image Source="{Binding ProofUrl}" MaximumHeightRequest="360" Aspect="AspectFit" HorizontalOptions="Start"
+                           IsVisible="{Binding ProofUrl, Converter={StaticResource IsNotNull}}" SemanticProperties.Description="Payment screenshot" />
+                    <Label Text="No screenshot to show." Style="{StaticResource Caption}" IsVisible="{Binding ProofUrl, Converter={StaticResource IsNull}}" />
+                    <Button Text="Close" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" Command="{Binding CloseProofCommand}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- a rejection is final, so it needs a reason the member will read -->
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding Rejecting, Converter={StaticResource IsNotNull}}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="{Binding Rejecting.Payer, StringFormat='Reject {0}’s payment'}" Style="{StaticResource Heading}" />
+                    <Label Text="Say why, so they know what to fix. They can pay again with a new payment." Style="{StaticResource Caption}" />
+                    <Border Style="{StaticResource Field}" WidthRequest="360" HorizontalOptions="Start">
+                        <Entry Text="{Binding RejectReason}" Placeholder="Amount does not match" SemanticProperties.Description="Reason for rejecting" />
+                    </Border>
+                    <HorizontalStackLayout Spacing="8">
+                        <Button Text="Reject payment" Style="{StaticResource SmallButton}" Command="{Binding ConfirmRejectCommand}" />
+                        <Button Text="Keep it pending" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepPendingCommand}" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
         </VerticalStackLayout>
 
         <CollectionView Grid.Row="1" ItemsSource="{Binding Pending}">
@@ -24,12 +50,15 @@
                             <VerticalStackLayout Spacing="4">
                                 <Label Text="{Binding Payer}" Style="{StaticResource Heading}" />
                                 <Label Text="{Binding Item}" />
+                                <Label Text="{Binding Payment.PaymentCode}" FontFamily="BarlowSemiBold" />
+                                <Label Text="{Binding Payment.ReferenceNo, StringFormat='Reference {0}'}" Style="{StaticResource Caption}" IsVisible="{Binding HasProof}" />
                                 <Label Text="{Binding Payment.CreatedAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM, h:mm tt'}" Style="{StaticResource Caption}" />
-                                <Label Style="{StaticResource Caption}" Text="Proof of payment attached" IsVisible="{Binding HasProof}" />
-                                <Label Style="{StaticResource Caption}" Text="No proof attached yet" IsVisible="{Binding HasProof, Converter={StaticResource Not}}" />
+                                <Label Style="{StaticResource Caption}" Text="Waiting for the member to pay and send proof" IsVisible="{Binding HasProof, Converter={StaticResource Not}}" />
                             </VerticalStackLayout>
                             <VerticalStackLayout Grid.Column="1" Spacing="8" HorizontalOptions="End">
-                                <Label Text="{Binding Payment.Amount, StringFormat='{0:N2}'}" Style="{StaticResource Numeral}" HorizontalOptions="End" />
+                                <Label Text="{Binding Payment.Amount, StringFormat='₱{0:N2}'}" Style="{StaticResource Numeral}" HorizontalOptions="End" />
+                                <Button Text="View screenshot" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding HasProof}"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:VerifyPaymentsViewModel}}, Path=ViewProofCommand}" CommandParameter="{Binding .}" />
                                 <HorizontalStackLayout Spacing="8">
                                     <Button Text="Verify" Style="{StaticResource SmallButton}"
                                             Command="{Binding Source={RelativeSource AncestorType={x:Type vm:VerifyPaymentsViewModel}}, Path=ApproveCommand}" CommandParameter="{Binding .}" />

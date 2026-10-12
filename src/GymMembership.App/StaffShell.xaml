@@ -16,6 +16,7 @@
     </Shell.FlyoutHeader>
 
     <FlyoutItem Title="Payments to verify"><ShellContent ContentTemplate="{DataTemplate views:VerifyPaymentsPage}" /></FlyoutItem>
+    <FlyoutItem Title="Counter payment"><ShellContent ContentTemplate="{DataTemplate views:CounterPage}" /></FlyoutItem>
     <FlyoutItem Title="Check-in"><ShellContent ContentTemplate="{DataTemplate views:CheckInPage}" /></FlyoutItem>
     <FlyoutItem Title="Amenity visits"><ShellContent ContentTemplate="{DataTemplate views:VerifyAmenityUsagesPage}" /></FlyoutItem>
 
@@ -23,9 +24,11 @@
     <FlyoutItem Title="Users and roles" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:UsersPage}" /></FlyoutItem>
     <FlyoutItem Title="Packages and amenities" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:CatalogAdminPage}" /></FlyoutItem>
     <FlyoutItem Title="Discounts" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:DiscountsPage}" /></FlyoutItem>
+    <FlyoutItem Title="Void a payment" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:VoidPaymentsPage}" /></FlyoutItem>
+    <FlyoutItem Title="Gym settings" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:GymSettingsPage}" /></FlyoutItem>
     <FlyoutItem Title="Revenue" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:RevenuePage}" /></FlyoutItem>
     <FlyoutItem Title="Audit log" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:AuditPage}" /></FlyoutItem>
 
     <FlyoutItem Title="Alerts"><ShellContent ContentTemplate="{DataTemplate views:NotificationsPage}" /></FlyoutItem>
-    <FlyoutItem Title="Settings"><ShellContent ContentTemplate="{DataTemplate views:SettingsPage}" /></FlyoutItem>
+    <FlyoutItem Title="Settings" Route="settings"><ShellContent ContentTemplate="{DataTemplate views:SettingsPage}" /></FlyoutItem>
 </Shell>

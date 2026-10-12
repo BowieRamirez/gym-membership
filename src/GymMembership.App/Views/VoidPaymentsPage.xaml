@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.VoidPaymentsPage" x:DataType="vm:VoidPaymentsViewModel" Title="Void a payment">
+
+    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
+        <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
+            <Label Text="A payment that was entered wrongly is never edited. Void it with a reason, which switches off what it paid for, then record it again correctly. Every void is kept in the audit log." Style="{StaticResource Muted}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding Voiding, Converter={StaticResource IsNotNull}}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="{Binding Voiding.Payment.ReceiptNo, StringFormat='Void receipt {0}?'}" Style="{StaticResource Heading}" />
+                    <Label Text="This can't be undone." Style="{StaticResource Caption}" />
+                    <Border Style="{StaticResource Field}" WidthRequest="360" HorizontalOptions="Start">
+                        <Entry Text="{Binding Reason}" Placeholder="Why is it being voided?" SemanticProperties.Description="Reason for voiding" />
+                    </Border>
+                    <HorizontalStackLayout Spacing="8">
+                        <Button Text="Void payment" Style="{StaticResource SmallButton}" Command="{Binding ConfirmCommand}" />
+                        <Button Text="Keep it" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepCommand}" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+        </VerticalStackLayout>
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Recent}">
+            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
+            <CollectionView.EmptyView><Label Text="No verified payments yet." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="svc:PaymentRow">
+                    <Border Style="{StaticResource Panel}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="{Binding Payer}" Style="{StaticResource Heading}" />
+                                <Label Text="{Binding Item}" />
+                                <Label Style="{StaticResource Caption}">
+                                    <Label.Text>
+                                        <MultiBinding StringFormat="{}{0} · {1} · {2}">
+                                            <Binding Path="Payment.ReceiptNo" />
+                                            <Binding Path="Payment.Method" />
+                                            <Binding Path="Payment.VerifiedAt" Converter="{StaticResource LocalDate}" ConverterParameter="d MMM, h:mm tt" />
+                                        </MultiBinding>
+                                    </Label.Text>
+                                </Label>
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Column="1" Spacing="8" HorizontalOptions="End">
+                                <Label Text="{Binding Payment.Amount, StringFormat='₱{0:N2}'}" Style="{StaticResource Numeral}" HorizontalOptions="End" />
+                                <Button Text="Void" Style="{StaticResource SmallOutlineButton}"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:VoidPaymentsViewModel}}, Path=StartCommand}" CommandParameter="{Binding .}" />
+                            </VerticalStackLayout>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</v:BasePage>

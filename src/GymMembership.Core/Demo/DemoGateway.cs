@@ -8,34 +8,32 @@ using Supabase.Postgrest.Models;
 namespace GymMembership.Core.Demo;
 
 /// <summary>
-/// In-memory stand-in for Supabase so the app can be explored without a database.
-/// It mirrors the planned RLS visibility rules and RPC rules (see docs/specs/technical-spec.md §4–5).
+/// In-memory stand-in for Supabase so the app can be explored, and tested, without a database.
+/// It follows the same rules as supabase/migrations: which rows each role can see (0006_rls.sql), which columns can be written
+/// directly, and the server-side functions (0005_functions.sql). Error messages are the same tokens the SQL raises.
 /// Demo logins: admin@ / employee@ / coach@ / kai@ / member@ / bea@ / carlo@ demo.io, password "demo1234".
 /// </summary>
 public sealed class DemoGateway : ISupabaseGateway
 {
     public const string DemoPassword = "demo1234";
 
+    // plan 5.2
     static readonly Dictionary<string, string[]> RolePermissions = new()
     {
-        ["admin"] = ["users:manage", "packages:manage", "amenities:manage", "amenities:verify", "coaches:manage",
-                     "payments:verify", "revenue:read", "audit:read", "checkins:record", "attendance:record"],
-        ["employee"] = ["payments:verify", "amenities:verify", "checkins:record", "attendance:record"],
-        ["coach"] = ["attendance:record"],
+        ["admin"] = ["payments:verify", "payments:record", "payments:void", "check_ins:record", "amenity_usages:verify", "users:manage", "roles:manage",
+                     "catalog:manage", "discounts:manage", "gym_settings:manage", "reports:revenue", "reports:cash", "audit:read"],
+        ["employee"] = ["payments:verify", "payments:record", "check_ins:record", "amenity_usages:verify", "reports:cash"],
+        ["coach"] = ["sessions:manage", "shifts:manage", "attendance:record"],
         ["member"] = []
     };
 
     readonly Dictionary<Type, List<object>> _tables = new();
-    readonly Dictionary<string, string> _accounts = new(StringComparer.OrdinalIgnoreCase);
-    readonly Dictionary<string, string> _passwords = new(); // only for accounts the admin created; everyone else uses DemoPassword
-    readonly Dictionary<int, int> _renewalPayments = new();
-    readonly Dictionary<(int Session, int Member), string> _attendance = new();
-    readonly List<(int MemberId, DateTime At)> _checkIns = new();
+    readonly Dictionary<string, string> _accounts = new(StringComparer.OrdinalIgnoreCase);   // email -> user id
+    readonly Dictionary<string, string> _passwords = new();                                  // only accounts whose password changed; the rest use DemoPassword
+    int _receiptSeq;
 
     public string? CurrentUserId { get; private set; }
     public Exception? FailWith { get; set; }
-    public IReadOnlyList<(int MemberId, DateTime At)> CheckIns => _checkIns;
-    public IReadOnlyDictionary<(int Session, int Member), string> Attendance => _attendance;
 
     public DemoGateway(bool seed = true) { if (seed) Seed(); }
 
@@ -54,17 +52,26 @@ public sealed class DemoGateway : ISupabaseGateway
         return row;
     }
 
-    string Uid => CurrentUserId ?? throw new Exception("not authenticated");
-    string[] MyRoles() => All<UserRole>().Where(u => u.UserId == CurrentUserId)
+    static Exception Err(string message) => new(message);
+
+    // ---------- who is calling ----------
+    string Uid => CurrentUserId ?? throw Err("not authenticated");
+    string[] RolesOf(string? user) => All<UserRole>().Where(u => u.UserId == user)
         .Select(u => All<Role>().First(r => r.RoleId == u.RoleId).Name).ToArray();
-    bool Has(string permission) => MyRoles().Any(r => RolePermissions[r].Contains(permission));
-    void Require(string permission) { if (!Has(permission)) throw new Exception("forbidden"); }
-    int? MyMemberId => All<Member>().FirstOrDefault(m => m.UserId == CurrentUserId)?.Id;
-    int? MyCoachId => All<Coach>().FirstOrDefault(c => c.UserId == CurrentUserId)?.Id;
-    bool ActiveMembership(string userId) => All<UserMembershipPackage>()
-        .Any(m => m.UserId == userId && m.Status == Status.Active && (m.EndsAt is null || m.EndsAt > DateTime.UtcNow));
-    void Notify(string userId, string type, string title) =>
-        Add(new UserNotification { UserId = userId, Type = type, Title = title, CreatedAt = DateTime.UtcNow });
+    bool Has(string permission) => RolesOf(CurrentUserId).Any(r => RolePermissions[r].Contains(permission));
+    bool IsStaff => RolesOf(CurrentUserId).Any(r => r is "admin" or "employee");
+    bool IsActiveUser => All<Profile>().FirstOrDefault(p => p.Id == CurrentUserId)?.IsActive ?? false;
+    void RequireActive() { if (!IsActiveUser) throw Err("forbidden"); }
+    void Require(string permission) { RequireActive(); if (!Has(permission)) throw Err("forbidden"); }
+
+    static bool Running(UserMembershipPackage m) => m.Status == Status.Active && m.EndsAt > DateTime.UtcNow;
+    bool ActiveMember(string? userId) => All<UserMembershipPackage>().Any(m => m.MemberId == userId && Running(m));
+    bool CoachesMember(string coach, string? member) => All<CoachHire>().Any(h => h.CoachId == coach && h.MemberId == member && h.Status == Status.Active);
+    bool IsCoach(string? userId) => All<Coach>().Any(c => c.UserId == userId);
+
+    void Notify(string? userId, string type, string title, string? body = null)
+    { if (userId is not null) Add(new UserNotification { UserId = userId, Type = type, Title = title, Body = body, CreatedAt = DateTime.UtcNow }); }
+    void NotifyStaff(string type, string title) { foreach (var id in All<UserRole>().Where(u => RolesOf(u.UserId).Any(r => r is "admin" or "employee")).Select(u => u.UserId).Distinct().ToList()) Notify(id, type, title); }
     void Audit(string action, string entity, string entityId) =>
         Add(new AuditEntry { ActorId = CurrentUserId, Action = action, Entity = entity, EntityId = entityId, CreatedAt = DateTime.UtcNow });
 
@@ -73,51 +80,102 @@ public sealed class DemoGateway : ISupabaseGateway
     {
         if (FailWith is not null) return Task.FromException(FailWith);
         if (!_accounts.TryGetValue(email.Trim(), out var uid) || password != _passwords.GetValueOrDefault(uid, DemoPassword))
-            return Task.FromException(new Exception("Invalid login credentials"));
-        if (!All<Profile>().First(p => p.Id == uid).IsActive)
-            return Task.FromException(new Exception("forbidden"));
-        CurrentUserId = uid;
+            return Task.FromException(Err("Invalid login credentials"));
+        CurrentUserId = uid;   // like Supabase Auth, a deactivated user still signs in: the app checks profiles.is_active afterwards
         return Task.CompletedTask;
     }
 
-    public Task SignUpAsync(string email, string password, string username)
+    public Task SignUpAsync(string email, string password, string fullName)
     {
         email = email.Trim();
-        if (string.IsNullOrWhiteSpace(username) || !email.Contains('@') || password.Length < 6) return Task.FromException(new Exception("bad_input"));
-        if (_accounts.ContainsKey(email)) return Task.FromException(new Exception("email_taken"));
-        var id = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], username.Trim(), email, "member");
+        if (string.IsNullOrWhiteSpace(fullName) || !email.Contains('@') || password.Length < 6) return Task.FromException(Err("bad_input"));
+        if (_accounts.ContainsKey(email)) return Task.FromException(Err("email_taken"));
+        var id = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], fullName.Trim(), email, "member");
         _passwords[id] = password;
         CurrentUserId = id;
+        return Task.CompletedTask;
+    }
+
+    public Task ChangePasswordAsync(string currentPassword, string newPassword)
+    {
+        var uid = Uid;
+        if (currentPassword != _passwords.GetValueOrDefault(uid, DemoPassword)) return Task.FromException(Err("wrong_password"));
+        if (newPassword.Length < 6) return Task.FromException(Err("bad_input"));
+        _passwords[uid] = newPassword;
         return Task.CompletedTask;
     }
 
     public Task SignOutAsync() { CurrentUserId = null; return Task.CompletedTask; }
     public Task<bool> RestoreSessionAsync() => Task.FromResult(false);
 
-    // ---------- table access (RLS-shaped) ----------
+    // ---------- Edge Functions: create-user and reset-password (plan 4.3, 4.4) ----------
+    public Task InvokeFunctionAsync(string name, Dictionary<string, object> body)
+    {
+        try
+        {
+            if (FailWith is not null) throw FailWith;
+            if (!RolesOf(Uid).Contains("admin") || !IsActiveUser) throw Err("forbidden");
+            string S(string k) => Convert.ToString(body.GetValueOrDefault(k)) ?? "";
+            switch (name)
+            {
+                case "create-user":
+                {
+                    var email = S("email").Trim().ToLowerInvariant(); var role = S("role");
+                    if (role is not ("member" or "coach" or "employee") || string.IsNullOrWhiteSpace(S("name")) || !email.Contains('@') || S("password").Length < 6) throw Err("bad_input");
+                    if (_accounts.ContainsKey(email)) throw Err("email_taken");
+                    var id = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], S("name").Trim(), email, role);
+                    _passwords[id] = S("password");
+                    All<Profile>().First(p => p.Id == id).MustChangePassword = true;
+                    Audit("user.create", "profiles", id);
+                    break;
+                }
+                case "reset-password":
+                {
+                    var p = All<Profile>().FirstOrDefault(x => x.Id == S("user_id")) ?? throw Err("not_found");
+                    if (S("password").Length < 6) throw Err("bad_input");
+                    _passwords[p.Id] = S("password"); p.MustChangePassword = true;
+                    Notify(p.Id, "system", "Your password was reset. Sign in with the new one.");
+                    Audit("user.reset_password", "profiles", p.Id);
+                    break;
+                }
+                default: throw Err("not_found");
+            }
+            return Task.CompletedTask;
+        }
+        catch (Exception ex) { return Task.FromException(ex); }
+    }
+
+    // ---------- table access (RLS-shaped, plan 6) ----------
     bool Allowed(object row)
     {
         var uid = CurrentUserId;
-        var admin = Has("users:manage");
-        var staff = Has("payments:verify");
+        if (uid is null) return false;
+        if (!IsActiveUser) return row is Profile self && self.Id == uid;   // a deactivated user can only see their own profile
+        var staff = IsStaff;
         return row switch
         {
-            Payment p => p.UserId == uid || staff || Has("revenue:read"),
-            UserMembershipPackage m => m.UserId == uid || staff || admin,
-            UserAmenity a => a.UserId == uid || Has("amenities:verify") || admin,
-            AmenityUsage u => Has("amenities:verify") || All<UserAmenity>().Any(a => a.Id == u.UserAmenityId && a.UserId == uid),
+            Profile p => p.Id == uid || staff || IsCoach(p.Id)
+                || All<CoachHire>().Any(h => (h.CoachId == uid && h.MemberId == p.Id) || (h.MemberId == uid && h.CoachId == p.Id)),
+            Member m => m.UserId == uid || staff || All<CoachHire>().Any(h => h.CoachId == uid && h.MemberId == m.UserId),
+            Payment p => p.MemberId == uid || staff,
+            UserMembershipPackage m => m.MemberId == uid || staff,
+            MembershipRenewal r => staff || All<UserMembershipPackage>().Any(m => m.Id == r.UserMembershipPackageId && m.MemberId == uid),
+            UserAmenity a => a.MemberId == uid || staff,
+            AmenityUsage u => staff || All<UserAmenity>().Any(a => a.Id == u.UserAmenityId && a.MemberId == uid),
             UserNotification n => n.UserId == uid,
-            UserSettings s => s.UserId == uid || admin,
-            UserRole r => r.UserId == uid || admin,
+            UserSettings s => s.UserId == uid,
+            UserRole r => r.UserId == uid || RolesOf(uid).Contains("admin"),
             AuditEntry => Has("audit:read"),
-            CoachHire h => h.MemberId == MyMemberId || h.CoachId == MyCoachId || Has("coaches:manage"),
-            TrainingSession s => s.MemberId == MyMemberId || s.CoachId == MyCoachId || Has("coaches:manage"),
-            TimeRequest r => (r.MemberId is not null && r.MemberId == MyMemberId) || r.CoachId == MyCoachId || Has("coaches:manage")
-                || (r.MemberId is null && All<CoachHire>().Any(h => h.CoachId == r.CoachId && h.MemberId == MyMemberId && h.Status == Status.Active)),
-            ChatMessage c => c.MemberId == MyMemberId || c.CoachId == MyCoachId, // private: not even admins read chats
-            Discount => Has("packages:manage"), // members only learn a code is valid by using it
-            MembershipPackage k => k.IsActive || Has("packages:manage"),
-            Amenity a => a.IsActive || Has("amenities:manage"),
+            CoachHire h => h.MemberId == uid || h.CoachId == uid || staff,
+            TrainingSession s => s.MemberId == uid || s.CoachId == uid || staff,
+            SessionAttendance a => staff || All<TrainingSession>().Any(s => s.Id == a.SessionId && (s.CoachId == uid || s.MemberId == uid)),
+            TimeRequest r => r.CoachId == uid || r.MemberId == uid || (r.MemberId is null && CoachesMember(r.CoachId, uid)),
+            ChatMessage c => c.MemberId == uid || c.CoachId == uid,   // private: not even admins read chats
+            ShiftPost s => s.CoachId == uid || staff || CoachesMember(s.CoachId, uid),
+            GymCheckIn c => c.MemberId == uid || staff,
+            Discount => Has("discounts:manage"),   // members only learn a code is valid by using it
+            MembershipPackage k => k.IsActive || Has("catalog:manage"),
+            Amenity a => a.IsActive || Has("catalog:manage"),
             _ => true
         };
     }
@@ -130,27 +188,33 @@ public sealed class DemoGateway : ISupabaseGateway
         return Task.FromResult<IReadOnlyList<T>>(rows.Select(Clone).ToList());
     }
 
+    // Direct writes are limited to what the table privileges and policies allow (0006). Everything else is a function.
+    const string Rls = "new row violates row-level security policy";
+
     public Task<T> InsertAsync<T>(T row) where T : BaseModel, new()
     {
         if (FailWith is not null) return Task.FromException<T>(FailWith);
-        const string rls = "new row violates row-level security policy";
         try
         {
+            RequireActive();
             switch (row)
             {
-                case CoachHire h when h.MemberId != MyMemberId || !ActiveMembership(Uid): throw new Exception(rls);
-                case TimeRequest r when (r.RequestedBy == "member" && r.MemberId != MyMemberId)
-                                      || (r.RequestedBy == "coach" && r.CoachId != MyCoachId): throw new Exception(rls);
-                case AmenityUsage u when !All<UserAmenity>().Any(a => a.Id == u.UserAmenityId && a.UserId == Uid): throw new Exception(rls);
-                case UserNotification or AuditEntry or Payment or TrainingSession: throw new Exception(rls);
-                case Profile or Role or UserRole: if (!Has("users:manage")) throw new Exception(rls); break;
-                case MembershipPackage: Require("packages:manage"); break;
-                case Discount: Require("packages:manage"); break;
-                case Amenity: Require("amenities:manage"); break;
-                case ShiftPost s when s.CoachId != MyCoachId: throw new Exception(rls);
-                case ChatMessage c when c.SenderUserId != Uid || !(c.MemberId == MyMemberId || c.CoachId == MyCoachId)
-                                      || !All<CoachHire>().Any(h => h.CoachId == c.CoachId && h.MemberId == c.MemberId && h.Status == Status.Active):
-                    throw new Exception("no_active_hire");
+                case MembershipPackage or Amenity: if (!Has("catalog:manage")) throw Err(Rls); break;
+                case Discount: if (!Has("discounts:manage")) throw Err(Rls); break;
+                case ShiftPost s:
+                    if (s.CoachId != Uid || !IsCoach(Uid)) throw Err(Rls);
+                    if (All<ShiftPost>().Any(x => x.CoachId == s.CoachId && x.Status == Status.Scheduled && x.Start < s.End && s.Start < x.End)) throw Err("overlap");
+                    break;
+                case ChatMessage c:
+                    if (c.SenderId != Uid || !CoachesMember(c.CoachId, c.MemberId) || !ActiveMember(c.MemberId)) throw Err(Rls);
+                    // the table's own checks: the sender is one of the two people, and the text is not blank
+                    if (c.SenderId != c.CoachId && c.SenderId != c.MemberId || string.IsNullOrWhiteSpace(c.Body)) throw Err("new row for relation \"messages\" violates check constraint (23514)");
+                    break;
+                case AmenityUsage u:
+                    if (!ActiveMember(Uid) || !All<UserAmenity>().Any(a => a.Id == u.UserAmenityId && a.MemberId == Uid && a.Status == Status.Active && (a.ExpiresAt is null || a.ExpiresAt > DateTime.UtcNow)))
+                        throw Err(Rls);
+                    break;
+                default: throw Err(Rls);
             }
         }
         catch (Exception ex) { return Task.FromException<T>(ex); }
@@ -158,22 +222,15 @@ public sealed class DemoGateway : ISupabaseGateway
         var added = Add(row);
         switch (added)
         {
-            case AmenityUsage u: u.UsedAt = DateTime.UtcNow; break;
-            case ChatMessage c:
-                c.SentAt = DateTime.UtcNow;
-                var coachUser = All<Coach>().First(x => x.Id == c.CoachId).UserId;
-                Notify(c.SenderUserId == coachUser ? All<Member>().First(x => x.Id == c.MemberId).UserId : coachUser, "message", "New message");
-                break;
             case ShiftPost s:
-                foreach (var h in All<CoachHire>().Where(h => h.CoachId == s.CoachId && h.Status == Status.Active))
-                    Notify(All<Member>().First(m => m.Id == h.MemberId).UserId, "shift", "Your coach posted a shift");
+                s.Status = Status.Scheduled;
+                foreach (var h in All<CoachHire>().Where(h => h.CoachId == s.CoachId && h.Status == Status.Active)) Notify(h.MemberId, "system", "Your coach posted a shift");
                 break;
-            case TimeRequest r:
-                var target = r.RequestedBy == "member"
-                    ? All<Coach>().First(c => c.Id == r.CoachId).UserId
-                    : All<Member>().FirstOrDefault(m => m.Id == r.MemberId)?.UserId;
-                if (target is not null) Notify(target, "time_request", "New time request");
+            case ChatMessage c:
+                c.SentAt = DateTime.UtcNow; c.ReadAt = null;
+                Notify(c.SenderId == c.CoachId ? c.MemberId : c.CoachId, "message", "New message");
                 break;
+            case AmenityUsage u: u.UsedAt = DateTime.UtcNow; u.Status = Status.Pending; break;
         }
         return Task.FromResult(Clone(added));
     }
@@ -181,25 +238,49 @@ public sealed class DemoGateway : ISupabaseGateway
     public Task UpdateAsync<T>(T row) where T : BaseModel, new()
     {
         if (FailWith is not null) return Task.FromException(FailWith);
-        var pk = Pk(typeof(T));
-        var key = pk.GetValue(row);
-        var list = Table(typeof(T));
-        var index = list.FindIndex(r => Equals(pk.GetValue(r), key));
-        if (index < 0) return Task.FromException(new Exception("not_found"));
-
-        switch (row)
+        try
         {
-            case Payment p: // members may only attach proof
-                ((Payment)list[index]).ProofPath = p.ProofPath;
-                return Task.CompletedTask;
-            case MembershipPackage: Require("packages:manage"); break;
-            case Discount: Require("packages:manage"); break;
-            case ShiftPost when ((ShiftPost)list[index]).CoachId != MyCoachId: throw new Exception("forbidden");
-            case Amenity: Require("amenities:manage"); break;
-            case Profile prof when ((Profile)list[index]).IsActive != prof.IsActive: Require("users:manage"); break;
+            RequireActive();
+            var pk = Pk(typeof(T));
+            var key = pk.GetValue(row);
+            var list = Table(typeof(T));
+            var index = list.FindIndex(r => Equals(pk.GetValue(r), key));
+            if (index < 0 || !Allowed(list[index])) throw Err("not_found");
+
+            switch (row, list[index])
+            {
+                case (MembershipPackage or Amenity, _): if (!Has("catalog:manage")) throw Err(Rls); list[index] = Clone(row); break;
+                case (Discount, _): if (!Has("discounts:manage")) throw Err(Rls); list[index] = Clone(row); break;
+                case (GymSettings, _): if (!Has("gym_settings:manage")) throw Err(Rls); list[index] = Clone(row); break;
+                case (ShiftPost s, ShiftPost old):   // a coach changes times, note and status, never the owner
+                    if (old.CoachId != Uid) throw Err(Rls);
+                    old.Start = s.Start; old.End = s.End; old.Note = s.Note; old.Status = s.Status;
+                    break;
+                case (Coach c, Coach old):           // bio, specialty, rate, availability
+                    if (old.UserId != Uid && !RolesOf(Uid).Contains("admin")) throw Err(Rls);
+                    old.Bio = c.Bio; old.Specialty = c.Specialty; old.HourlyRate = c.HourlyRate; old.IsAvailable = c.IsAvailable;
+                    break;
+                case (UserSettings s, UserSettings old):
+                    if (old.UserId != Uid) throw Err(Rls);
+                    old.Theme = s.Theme; old.Language = s.Language; old.Timezone = s.Timezone;
+                    break;
+                case (UserNotification, UserNotification old):   // only read_at
+                    if (old.UserId != Uid) throw Err(Rls);
+                    old.ReadAt = ((UserNotification)(object)row).ReadAt;
+                    break;
+                case (Profile p, Profile old):
+                    if (old.Id != Uid) throw Err(Rls);
+                    old.FullName = p.FullName; old.Phone = p.Phone;
+                    break;
+                case (Member m, Member old):
+                    if (old.UserId != Uid) throw Err(Rls);
+                    old.Goals = m.Goals;
+                    break;
+                default: throw Err(Rls);
+            }
+            return Task.CompletedTask;
         }
-        list[index] = Clone(row);
-        return Task.CompletedTask;
+        catch (Exception ex) { return Task.FromException(ex); }
     }
 
     public Task DeleteAsync<T>(T row) where T : BaseModel, new()
@@ -207,18 +288,29 @@ public sealed class DemoGateway : ISupabaseGateway
         if (FailWith is not null) return Task.FromException(FailWith);
         try
         {
+            RequireActive();
+            const string fk = "violates foreign key constraint";   // what the database says when something still points at the row
             switch (row)
             {
                 case MembershipPackage p:
-                    Require("packages:manage");
-                    if (All<UserMembershipPackage>().Any(m => m.MembershipPackageId == p.Id)) throw new Exception("in_use"); // same as a foreign-key block
-                    Audit("package.delete", "membership_packages", p.Id.ToString());
+                    if (!Has("catalog:manage")) throw Err(Rls);
+                    if (All<UserMembershipPackage>().Any(m => m.MembershipPackageId == p.Id)) throw Err($"update or delete on membership_packages {fk}");
                     break;
-                case Discount: Require("packages:manage"); break;
-                default: throw new Exception("forbidden");
+                case Amenity a:
+                    if (!Has("catalog:manage")) throw Err(Rls);
+                    if (All<UserAmenity>().Any(x => x.AmenityId == a.Id)) throw Err($"update or delete on amenities {fk}");
+                    break;
+                case Discount d:
+                    if (!Has("discounts:manage")) throw Err(Rls);
+                    if (All<Payment>().Any(x => x.DiscountId == d.Id)) throw Err($"update or delete on discounts {fk}");
+                    break;
+                case ShiftPost s when s.CoachId == Uid: break;
+                case UserNotification n when n.UserId == Uid: break;
+                default: throw Err(Rls);
             }
-            var key = Pk(typeof(T)).GetValue(row);
-            Table(typeof(T)).RemoveAll(r => Equals(Pk(typeof(T)).GetValue(r), key));
+            var pk = Pk(typeof(T));
+            var key = pk.GetValue(row);
+            Table(typeof(T)).RemoveAll(r => Equals(pk.GetValue(r), key));
             return Task.CompletedTask;
         }
         catch (Exception ex) { return Task.FromException(ex); }
@@ -226,6 +318,9 @@ public sealed class DemoGateway : ISupabaseGateway
 
     public Task<string> UploadAsync(string bucket, string path, byte[] data) =>
         FailWith is null ? Task.FromResult(path) : Task.FromException<string>(FailWith);
+
+    public Task<string?> SignedUrlAsync(string bucket, string path) =>
+        FailWith is null ? Task.FromResult<string?>(null) : Task.FromException<string?>(FailWith);   // the demo keeps no files
 
     public Task RpcAsync(string function, Dictionary<string, object>? args = null)
     {
@@ -239,148 +334,417 @@ public sealed class DemoGateway : ISupabaseGateway
         catch (Exception ex) { return Task.FromException<TResult>(ex); }
     }
 
-    // ---------- RPCs (mirror supabase/migrations once the DB exists) ----------
+    // ---------- payments: helpers shared by the functions below (0005_functions.sql) ----------
+    static string PaymentCode()
+    {
+        const string chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+        return "GYM-" + new string(Enumerable.Range(0, 5).Select(_ => chars[Random.Shared.Next(chars.Length)]).ToArray());
+    }
+
+    string ReceiptNo()
+    {
+        var prefix = All<GymSettings>().First().ReceiptPrefix;
+        return $"{prefix}-{DateTime.UtcNow.AddHours(8).Year}-{++_receiptSeq:D6}";
+    }
+
+    /// <summary>No code: full price. A bad, expired or already-used code is an error, never a silent full price.</summary>
+    (int? Id, decimal Cut, decimal Amount) Discounted(string member, Dictionary<string, object> a, decimal price)
+    {
+        if (!a.TryGetValue("p_discount_code", out var raw) || string.IsNullOrWhiteSpace(raw as string)) return (null, 0, price);
+        var code = ((string)raw).Trim();
+        var now = DateTime.UtcNow;
+        var d = All<Discount>().FirstOrDefault(x => x.IsActive && x.StartsAt <= now && x.ExpiresAt > now && string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase));
+        if (d is null || All<Payment>().Any(p => p.MemberId == member && p.DiscountId == d.Id && p.Status is Status.Pending or Status.Verified)) throw Err("invalid_code");
+        var cut = Math.Round(price * d.Percent / 100m, 2);
+        return (d.Id, cut, price - cut);
+    }
+
+    Payment NewQrPayment(string kind, string member, (int? Id, decimal Cut, decimal Amount) d, int? ump = null, int? renewal = null, int? amenity = null)
+    {
+        var hours = All<GymSettings>().First().PaymentExpiryHours;
+        return Add(new Payment
+        {
+            PaymentCode = PaymentCode(), Kind = kind, Method = PayMethod.Qr, Status = Status.Pending, Amount = d.Amount, DiscountId = d.Id, DiscountAmount = d.Cut,
+            MemberId = member, UserMembershipPackageId = ump, RenewalId = renewal, UserAmenityId = amenity,
+            ExpiresAt = DateTime.UtcNow.AddHours(hours), CreatedAt = DateTime.UtcNow
+        });
+    }
+
+    // plan 8.4: switch on whatever the payment paid for
+    void ActivateTarget(Payment pay)
+    {
+        var now = DateTime.UtcNow;
+        if (pay.UserMembershipPackageId is { } umpId)
+        {
+            var ump = All<UserMembershipPackage>().First(m => m.Id == umpId);
+            if (All<UserMembershipPackage>().Any(m => m.MemberId == ump.MemberId && m.Id != ump.Id && m.Status == Status.Active)) throw Err("duplicate key value violates unique constraint");
+            var days = All<MembershipPackage>().First(p => p.Id == ump.MembershipPackageId).DurationDays;
+            ump.Status = Status.Active; ump.StartsAt = now; ump.EndsAt = now.AddDays(days);
+        }
+        else if (pay.RenewalId is { } renId)
+        {
+            var ren = All<MembershipRenewal>().First(r => r.Id == renId);
+            var ump = All<UserMembershipPackage>().First(m => m.Id == ren.UserMembershipPackageId);
+            ump.Status = Status.Active; ump.EndsAt = ren.NewEndsAt;
+            ren.Status = Status.Completed; ren.CompletedAt = now;
+        }
+        else if (pay.UserAmenityId is { } uaId)
+        {
+            var ua = All<UserAmenity>().First(a => a.Id == uaId);
+            var days = All<Amenity>().First(a => a.Id == ua.AmenityId).DurationDays;
+            ua.Status = Status.Active; ua.ExpiresAt = days is null ? null : now.AddDays(days.Value);
+        }
+    }
+
+    // rejected or unpaid: the pending thing the payment was for is cancelled
+    void CancelTarget(Payment pay)
+    {
+        foreach (var m in All<UserMembershipPackage>().Where(m => m.Id == pay.UserMembershipPackageId && m.Status == Status.Pending)) m.Status = Status.Cancelled;
+        foreach (var r in All<MembershipRenewal>().Where(r => r.Id == pay.RenewalId && r.Status == Status.Pending)) r.Status = Status.Cancelled;
+        foreach (var a in All<UserAmenity>().Where(a => a.Id == pay.UserAmenityId && a.Status == Status.Pending)) a.Status = Status.Cancelled;
+    }
+
+    bool Overlap(string who, bool coach, DateTime start, DateTime end, int ignore = 0) =>
+        All<TrainingSession>().Any(s => s.Id != ignore && s.Status == Status.Scheduled && (coach ? s.CoachId : s.MemberId) == who && s.ScheduledStart < end && start < s.ScheduledEnd);
+
+    // ---------- functions (mirror 0005_functions.sql) ----------
     object? Call(string fn, Dictionary<string, object> a)
     {
         var now = DateTime.UtcNow;
         int I(string k) => Convert.ToInt32(a[k]);
         bool B(string k) => Convert.ToBoolean(a[k]);
         string S(string k) => (string)a[k];
-        _ = Uid;
+        string? Opt(string k) => a.TryGetValue(k, out var v) && v is string s && !string.IsNullOrWhiteSpace(s) ? s.Trim() : null;
+        DateTime T(string k) => DateTime.Parse(S(k), null, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime();
+        var uid = Uid;
 
         switch (fn)
         {
             case "avail_membership":
             {
-                var pkg = All<MembershipPackage>().FirstOrDefault(p => p.Id == I("p_package_id") && p.IsActive) ?? throw new Exception("not_found");
-                if (All<UserMembershipPackage>().Any(m => m.UserId == Uid && m.MembershipPackageId == pkg.Id && (m.Status == "pending" || m.Status == "active")))
-                    throw new Exception("already_availed");
-                var (amount, code) = Discounted(pkg.Price, a);
-                var ump = Add(new UserMembershipPackage { UserId = Uid, MembershipPackageId = pkg.Id, Status = "pending" });
-                return Add(new Payment { Qr = Guid.NewGuid().ToString("N"), Amount = amount, DiscountCode = code, Currency = pkg.Currency, UserId = Uid, UserMembershipPackageId = ump.Id, CreatedAt = now }).Id;
+                RequireActive();
+                if (All<Member>().All(m => m.UserId != uid)) throw Err("forbidden");
+                var pkg = All<MembershipPackage>().FirstOrDefault(p => p.Id == I("p_package_id") && p.IsActive) ?? throw Err("not_found");
+                if (All<UserMembershipPackage>().Any(m => m.MemberId == uid && m.Status is Status.Pending or Status.Active)) throw Err("already_availed");
+                var d = Discounted(uid, a, pkg.Price);
+                var ump = Add(new UserMembershipPackage { MemberId = uid, MembershipPackageId = pkg.Id, Status = Status.Pending });
+                return Clone(NewQrPayment(PayKind.Membership, uid, d, ump: ump.Id));
+            }
+            case "avail_amenity":
+            {
+                RequireActive();
+                if (!ActiveMember(uid)) throw Err("no_active_membership");
+                var am = All<Amenity>().FirstOrDefault(x => x.Id == I("p_amenity_id") && x.IsActive) ?? throw Err("not_found");
+                if (All<UserAmenity>().Any(x => x.MemberId == uid && x.AmenityId == am.Id && x.Status is Status.Pending or Status.Active)) throw Err("already_availed");
+                var d = Discounted(uid, a, am.Price);
+                var ua = Add(new UserAmenity { MemberId = uid, AmenityId = am.Id, Status = Status.Pending, AvailedAt = now });
+                return Clone(NewQrPayment(PayKind.Amenity, uid, d, amenity: ua.Id));
             }
             case "renew_membership":
             {
-                var ump = All<UserMembershipPackage>().FirstOrDefault(m => m.Id == I("p_ump_id") && m.UserId == Uid) ?? throw new Exception("not_found");
-                if (ump.Status is "pending" or "cancelled") throw new Exception("not_renewable");
-                if (_renewalPayments.Any(r => r.Value == ump.Id && All<Payment>().First(p => p.Id == r.Key).Status == "pending")) throw new Exception("renewal_pending");
+                RequireActive();
+                var ump = All<UserMembershipPackage>().FirstOrDefault(m => m.Id == I("p_ump_id") && m.MemberId == uid) ?? throw Err("not_found");
+                if (ump.Status is not (Status.Active or Status.Expired)) throw Err("not_renewable");
+                if (All<MembershipRenewal>().Any(r => r.UserMembershipPackageId == ump.Id && r.Status == Status.Pending)) throw Err("renewal_pending");
                 var pkg = All<MembershipPackage>().First(p => p.Id == ump.MembershipPackageId);
-                var (amount, code) = Discounted(pkg.Price, a);
-                var pay = Add(new Payment { Qr = Guid.NewGuid().ToString("N"), Amount = amount, DiscountCode = code, Currency = pkg.Currency, UserId = Uid, UserMembershipPackageId = ump.Id, CreatedAt = now });
-                _renewalPayments[pay.Id] = ump.Id;
-                return pay.Id;
+                var d = Discounted(uid, a, pkg.Price);
+                var start = ump.EndsAt is { } e && e > now ? e : now;   // an expired term renews from today, not from the past end date
+                var ren = Add(new MembershipRenewal { UserMembershipPackageId = ump.Id, PreviousEndsAt = ump.EndsAt ?? now, NewStartsAt = start, NewEndsAt = start.AddDays(pkg.DurationDays) });
+                return Clone(NewQrPayment(PayKind.Renewal, uid, d, renewal: ren.Id));
+            }
+            case "submit_payment_proof":
+            {
+                RequireActive();
+                var pay = All<Payment>().FirstOrDefault(p => p.Id == I("p_payment_id") && p.MemberId == uid) ?? throw Err("not_found");
+                var reference = Opt("p_reference_no"); var proof = Opt("p_proof_path");
+                if (reference is null || proof is null) throw Err("bad_input");
+                if (pay.Status != Status.Pending || pay.Method != PayMethod.Qr || pay.ExpiresAt <= now) throw Err("already_processed");
+                if (All<Payment>().Any(p => p.Id != pay.Id && p.ReferenceNo == reference && p.Status is Status.Pending or Status.Verified))
+                    throw Err("duplicate key value violates unique constraint \"payments_reference_no_key\"");
+                pay.ReferenceNo = reference; pay.ProofPath = proof;
+                NotifyStaff("payment", "Payment waiting for review");
+                return null;
             }
             case "verify_payment":
             {
                 Require("payments:verify");
-                var approve = B("p_approve");
-                var pay = All<Payment>().FirstOrDefault(p => p.Id == I("p_payment_id")) ?? throw new Exception("not_found");
-                if (pay.Status != "pending") throw new Exception("already_processed");
-                if (pay.UserId == Uid) throw new Exception("self_verify");
-                pay.Status = approve ? Status.Verified : Status.Rejected;
-                pay.VerifiedAt = now;
-                if (pay.UserMembershipPackageId is { } umpId)
+                var pay = All<Payment>().FirstOrDefault(p => p.Id == I("p_payment_id")) ?? throw Err("not_found");
+                if (pay.Status != Status.Pending) throw Err("already_processed");
+                if (pay.MemberId == uid) throw Err("self_verify");
+                if (B("p_approve"))
                 {
-                    var ump = All<UserMembershipPackage>().First(m => m.Id == umpId);
-                    var pkg = All<MembershipPackage>().First(p => p.Id == ump.MembershipPackageId);
-                    var renewal = _renewalPayments.ContainsKey(pay.Id);
-                    if (approve && renewal)
-                    {
-                        var from = ump.EndsAt is { } e && e > now ? e : now; // an expired term renews from today, not from the past end date
-                        ump.EndsAt = from.AddDays(pkg.DurationDays); ump.Status = Status.Active;
-                    }
-                    else if (approve) { ump.StartsAt = now; ump.EndsAt = now.AddDays(pkg.DurationDays); ump.Status = Status.Active; }
-                    else if (!renewal) ump.Status = Status.Cancelled;
-                }
-                Notify(pay.UserId, "payment", approve ? "Payment verified" : "Payment rejected");
-                Audit(approve ? "payment.verify" : "payment.reject", "payments", pay.Id.ToString());
-                return null;
-            }
-            case "avail_amenity":
-            {
-                if (!ActiveMembership(Uid)) throw new Exception("no_active_membership");
-                var id = I("p_amenity_id");
-                if (!All<Amenity>().Any(x => x.Id == id && x.IsActive)) throw new Exception("not_found");
-                return (All<UserAmenity>().FirstOrDefault(x => x.UserId == Uid && x.AmenityId == id) ?? Add(new UserAmenity { UserId = Uid, AmenityId = id })).Id;
-            }
-            case "verify_amenity_usage":
-            {
-                Require("amenities:verify");
-                var u = All<AmenityUsage>().FirstOrDefault(x => x.Id == I("p_id")) ?? throw new Exception("not_found");
-                if (u.Status != "pending") throw new Exception("already_processed");
-                u.Status = B("p_approve") ? Status.Verified : Status.Rejected;
-                Notify(All<UserAmenity>().First(x => x.Id == u.UserAmenityId).UserId, "attendance", B("p_approve") ? "Amenity usage verified" : "Amenity usage rejected");
-                Audit(B("p_approve") ? "amenity_usage.verify" : "amenity_usage.reject", "amenity_usages", u.Id.ToString());
-                return null;
-            }
-            case "respond_time_request":
-            {
-                var r = All<TimeRequest>().FirstOrDefault(x => x.Id == I("p_id")) ?? throw new Exception("not_found");
-                if (r.Status != "pending") throw new Exception("already_processed");
-                var coach = All<Coach>().First(c => c.Id == r.CoachId);
-                string requester;
-                if (r.RequestedBy == "member")
-                {
-                    if (coach.UserId != Uid) throw new Exception("forbidden");
-                    requester = All<Member>().First(m => m.Id == r.MemberId).UserId;
+                    pay.Status = Status.Verified; pay.VerifiedBy = uid; pay.VerifiedAt = now; pay.ReceiptNo = ReceiptNo();
+                    ActivateTarget(pay);
+                    Notify(pay.MemberId, "payment", "Payment approved", pay.PaymentCode);
+                    Audit("payment.verify", "payments", pay.Id.ToString());
                 }
                 else
                 {
-                    if (r.MemberId is null)
-                    {
-                        if (MyMemberId is not { } me || !All<CoachHire>().Any(h => h.CoachId == r.CoachId && h.MemberId == me && h.Status == "active")) throw new Exception("forbidden");
-                        r.MemberId = me;
-                    }
-                    else if (r.MemberId != MyMemberId) throw new Exception("forbidden");
-                    requester = coach.UserId;
+                    var reason = Opt("p_reason") ?? throw Err("bad_input");
+                    pay.Status = Status.Rejected; pay.RejectedReason = reason;
+                    CancelTarget(pay);
+                    Notify(pay.MemberId, "payment", "Payment rejected", reason);
+                    Audit("payment.reject", "payments", pay.Id.ToString());
                 }
-                if (B("p_approve"))
+                return null;
+            }
+            case "record_counter_payment":
+            {
+                Require("payments:record");
+                var kind = S("p_kind"); var method = S("p_method"); var memberId = Opt("p_member_id");
+                if (method == PayMethod.Qr) throw Err("bad_input");
+                if (memberId == uid) throw Err("self_verify");
+                var reference = Opt("p_reference_no");
+                if (method is PayMethod.Gcash or PayMethod.BankTransfer && reference is null) throw Err("bad_input");
+                var itemId = a.ContainsKey("p_item_id") ? I("p_item_id") : 0;
+                var d = (Id: (int?)null, Cut: 0m, Amount: 0m);
+                int? ump = null, ren = null, ua = null;
+                string? walkIn = null;
+
+                if (kind == PayKind.WalkIn)
                 {
-                    if (All<TrainingSession>().Any(s => s.Id != r.SessionId && s.CoachId == r.CoachId && s.Status != "cancelled" && s.ScheduledStart < r.RequestedEnd && r.RequestedStart < s.ScheduledEnd))
-                        throw new Exception("overlap");
+                    walkIn = Opt("p_walk_in_name") ?? throw Err("bad_input");
+                    memberId = null;
+                    d = (null, 0, All<GymSettings>().First().WalkInPrice);
+                }
+                else
+                {
+                    if (memberId is null || All<Member>().All(m => m.UserId != memberId)) throw Err("not_found");
+                    if (kind == PayKind.Membership)
+                    {
+                        var pkg = All<MembershipPackage>().FirstOrDefault(p => p.Id == itemId && p.IsActive) ?? throw Err("not_found");
+                        if (All<UserMembershipPackage>().Any(m => m.MemberId == memberId && m.Status is Status.Pending or Status.Active)) throw Err("already_availed");
+                        d = Discounted(memberId, a, pkg.Price);
+                        ump = Add(new UserMembershipPackage { MemberId = memberId, MembershipPackageId = pkg.Id, Status = Status.Pending }).Id;
+                    }
+                    else if (kind == PayKind.Renewal)
+                    {
+                        var cur = All<UserMembershipPackage>().FirstOrDefault(m => m.Id == itemId && m.MemberId == memberId) ?? throw Err("not_found");
+                        if (cur.Status is not (Status.Active or Status.Expired)) throw Err("not_renewable");
+                        if (All<MembershipRenewal>().Any(r => r.UserMembershipPackageId == cur.Id && r.Status == Status.Pending)) throw Err("renewal_pending");
+                        var pkg = All<MembershipPackage>().First(p => p.Id == cur.MembershipPackageId);
+                        d = Discounted(memberId, a, pkg.Price);
+                        var start = cur.EndsAt is { } e && e > now ? e : now;
+                        ren = Add(new MembershipRenewal { UserMembershipPackageId = cur.Id, PreviousEndsAt = cur.EndsAt ?? now, NewStartsAt = start, NewEndsAt = start.AddDays(pkg.DurationDays) }).Id;
+                    }
+                    else
+                    {
+                        if (!ActiveMember(memberId)) throw Err("no_active_membership");
+                        var am = All<Amenity>().FirstOrDefault(x => x.Id == itemId && x.IsActive) ?? throw Err("not_found");
+                        if (All<UserAmenity>().Any(x => x.MemberId == memberId && x.AmenityId == am.Id && x.Status is Status.Pending or Status.Active)) throw Err("already_availed");
+                        d = Discounted(memberId, a, am.Price);
+                        ua = Add(new UserAmenity { MemberId = memberId, AmenityId = am.Id, Status = Status.Pending, AvailedAt = now }).Id;
+                    }
+                }
+
+                var pay = Add(new Payment
+                {
+                    PaymentCode = PaymentCode(), Kind = kind, Method = method, Status = Status.Verified, Amount = d.Amount, DiscountId = d.Id, DiscountAmount = d.Cut,
+                    MemberId = memberId, WalkInName = walkIn, UserMembershipPackageId = ump, RenewalId = ren, UserAmenityId = ua, ReferenceNo = reference,
+                    RecordedBy = uid, VerifiedBy = uid, VerifiedAt = now, ReceiptNo = ReceiptNo(), CreatedAt = now
+                });
+                if (kind == PayKind.WalkIn) Add(new GymCheckIn { PaymentId = pay.Id, CheckedInAt = now });
+                else { ActivateTarget(pay); Notify(memberId, "payment", "Payment received", pay.PaymentCode); }
+                Audit("payment.record", "payments", pay.Id.ToString());
+                return Clone(pay);
+            }
+            case "void_payment":
+            {
+                Require("payments:void");
+                var reason = Opt("p_reason") ?? throw Err("bad_input");
+                var pay = All<Payment>().FirstOrDefault(p => p.Id == I("p_payment_id")) ?? throw Err("not_found");
+                if (pay.Status != Status.Verified) throw Err("already_processed");
+                pay.Status = Status.Voided; pay.VoidedBy = uid; pay.VoidedAt = now; pay.VoidReason = reason;
+                if (pay.UserMembershipPackageId is { } umpId) All<UserMembershipPackage>().First(m => m.Id == umpId).Status = Status.Cancelled;
+                else if (pay.RenewalId is { } renId)
+                {
+                    var ren = All<MembershipRenewal>().First(r => r.Id == renId);
+                    var ump = All<UserMembershipPackage>().First(m => m.Id == ren.UserMembershipPackageId);
+                    ump.EndsAt = ren.PreviousEndsAt; ump.Status = ren.PreviousEndsAt > now ? Status.Active : Status.Expired;
+                    ren.Status = Status.Cancelled;
+                }
+                else if (pay.UserAmenityId is { } uaId) All<UserAmenity>().First(x => x.Id == uaId).Status = Status.Cancelled;
+                else Table(typeof(GymCheckIn)).RemoveAll(c => ((GymCheckIn)c).PaymentId == pay.Id);
+                Notify(pay.MemberId, "payment", "Payment voided", reason);
+                Audit("payment.void", "payments", pay.Id.ToString());
+                return null;
+            }
+            case "revenue_summary":
+            {
+                Require("reports:revenue");
+                var from = DateTime.Parse(S("p_from")).Date; var to = DateTime.Parse(S("p_to")).Date;
+                DateTime Day(Payment p) => p.VerifiedAt!.Value.AddHours(8).Date;   // Manila
+                return All<Payment>().Where(p => p.Status == Status.Verified && Day(p) >= from && Day(p) <= to)
+                    .GroupBy(p => (Day: Day(p), p.Kind, p.Method)).OrderBy(g => g.Key.Day).ThenBy(g => g.Key.Kind).ThenBy(g => g.Key.Method)
+                    .Select(g => new RevenueRow(g.Key.Day, g.Key.Kind, g.Key.Method, g.Count(), g.Sum(p => p.Amount))).ToList();
+            }
+            case "daily_cash_summary":
+            {
+                Require("reports:cash");
+                var day = DateTime.Parse(S("p_day")).Date;
+                return All<Payment>().Where(p => p.Status == Status.Verified && p.Method == PayMethod.Cash && p.VerifiedAt!.Value.AddHours(8).Date == day)
+                    .GroupBy(p => p.Kind).OrderBy(g => g.Key).Select(g => new CashRow(g.Key, g.Count(), g.Sum(p => p.Amount))).ToList();
+            }
+
+            // ----- coaching -----
+            case "hire_coach":
+            {
+                RequireActive();
+                if (!ActiveMember(uid)) throw Err("no_active_membership");
+                var coachId = S("p_coach_id");
+                if (!All<Coach>().Any(c => c.UserId == coachId && c.IsAvailable) || !(All<Profile>().FirstOrDefault(p => p.Id == coachId)?.IsActive ?? false)) throw Err("not_found");
+                if (CoachesMember(coachId, uid)) throw Err("duplicate key value violates unique constraint");
+                var hire = Add(new CoachHire { MemberId = uid, CoachId = coachId, Status = Status.Active, HiredAt = now });
+                Notify(coachId, "system", "New trainee", All<Profile>().First(p => p.Id == uid).FullName);
+                return hire.Id;
+            }
+            case "end_hire":
+            {
+                RequireActive();
+                var h = All<CoachHire>().FirstOrDefault(x => x.Id == I("p_hire_id") && (x.MemberId == uid || x.CoachId == uid)) ?? throw Err("not_found");
+                if (h.Status != Status.Active) throw Err("already_processed");
+                h.Status = Status.Ended; h.EndedAt = now;
+                foreach (var s in All<TrainingSession>().Where(s => s.CoachId == h.CoachId && s.MemberId == h.MemberId && s.Status == Status.Scheduled && s.ScheduledStart > now)) s.Status = Status.Cancelled;
+                foreach (var r in All<TimeRequest>().Where(r => r.CoachId == h.CoachId && r.MemberId == h.MemberId && r.Status == Status.Pending)) r.Status = Status.Cancelled;
+                Notify(uid == h.CoachId ? h.MemberId : h.CoachId, "system", "Coaching ended");
+                return null;
+            }
+            case "request_time":
+            {
+                RequireActive();
+                var coachId = S("p_coach_id"); var start = T("p_start"); var end = T("p_end");
+                if (end <= start) throw Err("end must be after start");
+                TimeRequest req;
+                if (uid == coachId)
+                {
+                    if (!IsCoach(uid)) throw Err("forbidden");
+                    req = Add(new TimeRequest { CoachId = uid, MemberId = null, RequestedBy = "coach", RequestedStart = start, RequestedEnd = end, Message = Opt("p_message") });
+                    foreach (var h in All<CoachHire>().Where(h => h.CoachId == uid && h.Status == Status.Active)) Notify(h.MemberId, "time_request", "Your coach offered an open slot");
+                }
+                else
+                {
+                    if (!ActiveMember(uid)) throw Err("no_active_membership");
+                    if (!CoachesMember(coachId, uid)) throw Err("no_active_hire");
+                    req = Add(new TimeRequest { CoachId = coachId, MemberId = uid, RequestedBy = "member", RequestedStart = start, RequestedEnd = end, Message = Opt("p_message") });
+                    Notify(coachId, "time_request", "New time request");
+                }
+                return req.Id;
+            }
+            case "request_reschedule":
+            {
+                RequireActive();
+                var start = T("p_start"); var end = T("p_end");
+                if (end <= start) throw Err("end must be after start");
+                var s = All<TrainingSession>().FirstOrDefault(x => x.Id == I("p_session_id") && (x.CoachId == uid || x.MemberId == uid)) ?? throw Err("not_found");
+                if (s.Status != Status.Scheduled || s.ScheduledStart <= now || All<TimeRequest>().Any(r => r.SessionId == s.Id && r.Status == Status.Pending)) throw Err("already_processed");
+                var byCoach = uid == s.CoachId;
+                var req = Add(new TimeRequest { CoachId = s.CoachId, MemberId = s.MemberId, SessionId = s.Id, RequestedBy = byCoach ? "coach" : "member",
+                                                RequestedStart = start, RequestedEnd = end, Message = Opt("p_message") });
+                Notify(byCoach ? s.MemberId : s.CoachId, "time_request", "Reschedule requested");
+                return req.Id;
+            }
+            case "respond_time_request":
+            {
+                RequireActive();
+                var r = All<TimeRequest>().FirstOrDefault(x => x.Id == I("p_request_id")) ?? throw Err("not_found");
+                if (r.Status != Status.Pending) throw Err("already_processed");
+                var approve = B("p_approve");
+                string member;
+                if (r.MemberId is null)
+                {   // an open slot: a trainee of that coach claims it, which counts as approving
+                    if (!(ActiveMember(uid) && CoachesMember(r.CoachId, uid))) throw Err("forbidden");
+                    if (!approve) throw Err("bad_input");
+                    member = uid;
+                }
+                else if (r.RequestedBy == "member") { if (uid != r.CoachId) throw Err("forbidden"); member = r.MemberId; }
+                else { if (uid != r.MemberId) throw Err("forbidden"); member = r.MemberId; }
+
+                if (approve)
+                {
+                    if (r.SessionId is null && !ActiveMember(member)) throw Err("no_active_membership");
+                    var ignore = r.SessionId ?? 0;
+                    if (Overlap(r.CoachId, true, r.RequestedStart, r.RequestedEnd, ignore) || Overlap(member, false, r.RequestedStart, r.RequestedEnd, ignore)) throw Err("overlap");
                     if (r.SessionId is { } sid)
                     {   // a reschedule moves the booked session instead of creating a second one
                         var moved = All<TrainingSession>().First(s => s.Id == sid);
-                        if (moved.Status != Status.Scheduled) throw new Exception("already_processed");
+                        if (moved.Status != Status.Scheduled) throw Err("already_processed");
                         moved.ScheduledStart = r.RequestedStart; moved.ScheduledEnd = r.RequestedEnd;
                     }
-                    else Add(new TrainingSession { CoachId = r.CoachId, MemberId = r.MemberId!.Value, Title = "Training session", ScheduledStart = r.RequestedStart, ScheduledEnd = r.RequestedEnd });
-                    r.Status = Status.Approved;
+                    else Add(new TrainingSession { CoachId = r.CoachId, MemberId = member, Title = "Training session", ScheduledStart = r.RequestedStart, ScheduledEnd = r.RequestedEnd });
+                    r.Status = Status.Approved; r.MemberId = member;
                 }
                 else r.Status = Status.Rejected;
-                Notify(requester, "time_request", B("p_approve") ? "Time request approved" : "Time request rejected");
+                Notify(uid == r.CoachId ? member : r.CoachId, "time_request", approve ? "Time request approved" : "Time request declined");
+                return null;
+            }
+            case "cancel_time_request":
+            {
+                RequireActive();
+                var r = All<TimeRequest>().FirstOrDefault(x => x.Id == I("p_request_id")) ?? throw Err("not_found");
+                var mine = (r.RequestedBy == "member" && r.MemberId == uid) || (r.RequestedBy == "coach" && r.CoachId == uid);
+                if (!mine) throw Err("forbidden");
+                if (r.Status != Status.Pending) throw Err("already_processed");
+                r.Status = Status.Cancelled;
+                return null;
+            }
+            case "cancel_session":
+            {
+                RequireActive();
+                var s = All<TrainingSession>().FirstOrDefault(x => x.Id == I("p_session_id") && (x.CoachId == uid || x.MemberId == uid)) ?? throw Err("not_found");
+                if (s.Status != Status.Scheduled) throw Err("already_processed");
+                s.Status = Status.Cancelled;
+                foreach (var req in All<TimeRequest>().Where(x => x.SessionId == s.Id && x.Status == Status.Pending)) req.Status = Status.Cancelled;
+                Notify(uid == s.CoachId ? s.MemberId : s.CoachId, "system", "A training session was cancelled", Opt("p_reason"));
                 return null;
             }
             case "record_session_attendance":
             {
-                var s = All<TrainingSession>().FirstOrDefault(x => x.Id == I("p_session_id")) ?? throw new Exception("not_found");
-                if (!(Has("attendance:record") || s.CoachId == MyCoachId)) throw new Exception("forbidden");
-                if (s.MemberId != I("p_member_id")) throw new Exception("wrong_member");
-                _attendance[(s.Id, s.MemberId)] = S("p_status");
+                RequireActive();
+                var s = All<TrainingSession>().FirstOrDefault(x => x.Id == I("p_session_id") && x.CoachId == uid) ?? throw Err("forbidden");
+                if (s.Status == Status.Cancelled) throw Err("already_processed");
+                var status = S("p_status");
+                if (status is not ("present" or "late" or "absent" or "excused")) throw Err("bad_input");
+                var existing = All<SessionAttendance>().FirstOrDefault(x => x.SessionId == s.Id);
+                if (existing is null) Add(new SessionAttendance { SessionId = s.Id, Status = status, CheckedInAt = status is "present" or "late" ? now : null, Notes = Opt("p_notes") });
+                else { existing.Status = status; existing.CheckedInAt = status is "present" or "late" ? now : null; existing.Notes = Opt("p_notes"); }
+                s.Status = status == "absent" ? Status.NoShow : Status.Completed;
+                Notify(s.MemberId, "attendance", "Attendance recorded", status);
                 return null;
             }
+
+            // ----- front desk and accounts -----
             case "record_check_in":
             {
-                Require("checkins:record");
-                var m = All<Member>().FirstOrDefault(x => x.Id == I("p_member_id")) ?? throw new Exception("not_found");
-                if (!ActiveMembership(m.UserId)) throw new Exception("no_active_membership");
-                _checkIns.Add((m.Id, now));
+                Require("check_ins:record");
+                var memberId = S("p_member_id");
+                if (All<Member>().All(m => m.UserId != memberId)) throw Err("not_found");
+                if (!ActiveMember(memberId)) throw Err("no_active_membership");
+                return Add(new GymCheckIn { MemberId = memberId, CheckedInAt = now }).Id;
+            }
+            case "verify_amenity_usage":
+            {
+                Require("amenity_usages:verify");
+                var u = All<AmenityUsage>().FirstOrDefault(x => x.Id == I("p_usage_id")) ?? throw Err("not_found");
+                if (u.Status != Status.Pending) throw Err("already_processed");
+                u.Status = B("p_approve") ? Status.Verified : Status.Rejected;
+                Notify(All<UserAmenity>().First(x => x.Id == u.UserAmenityId).MemberId, "system", B("p_approve") ? "Amenity visit confirmed" : "Amenity visit rejected");
                 return null;
             }
             case "assign_role":
             {
-                Require("users:manage");
-                var role = All<Role>().FirstOrDefault(r => r.Name == S("p_role")) ?? throw new Exception("not_found");
-                if (!All<UserRole>().Any(u => u.UserId == S("p_user") && u.RoleId == role.RoleId))
-                    Add(new UserRole { UserId = S("p_user"), RoleId = role.RoleId });
+                Require("roles:manage");
+                var role = All<Role>().FirstOrDefault(r => r.Name == S("p_role")) ?? throw Err("bad_input");
+                if (All<Profile>().All(p => p.Id != S("p_user"))) throw Err("not_found");
+                if (!All<UserRole>().Any(u => u.UserId == S("p_user") && u.RoleId == role.RoleId)) Add(new UserRole { UserId = S("p_user"), RoleId = role.RoleId });
                 if (role.Name == "coach" && All<Coach>().All(c => c.UserId != S("p_user"))) Add(new Coach { UserId = S("p_user") });
+                if (role.Name == "member" && All<Member>().All(m => m.UserId != S("p_user"))) Add(new Member { UserId = S("p_user") });
                 Audit("role.assign", "user_roles", S("p_user"));
                 return null;
             }
             case "revoke_role":
             {
-                Require("users:manage");
-                if (S("p_user") == Uid && S("p_role") == "admin") throw new Exception("forbidden");
+                Require("roles:manage");
+                if (S("p_user") == uid && S("p_role") == "admin") throw Err("forbidden");
                 var role = All<Role>().First(r => r.Name == S("p_role"));
                 Table(typeof(UserRole)).RemoveAll(u => ((UserRole)u).UserId == S("p_user") && ((UserRole)u).RoleId == role.RoleId);
                 Audit("role.revoke", "user_roles", S("p_user"));
@@ -389,99 +753,30 @@ public sealed class DemoGateway : ISupabaseGateway
             case "set_user_active":
             {
                 Require("users:manage");
-                All<Profile>().First(p => p.Id == S("p_user")).IsActive = B("p_active");
-                Audit("user.active", "profiles", S("p_user"));
+                if (S("p_user") == uid) throw Err("forbidden");
+                (All<Profile>().FirstOrDefault(p => p.Id == S("p_user")) ?? throw Err("not_found")).IsActive = B("p_active");
+                Audit(B("p_active") ? "user.activate" : "user.deactivate", "profiles", S("p_user"));
                 return null;
             }
-            case "revenue_summary":
+            case "mark_password_changed":
             {
-                Require("revenue:read");
-                var from = DateTime.Parse(S("p_from")).Date; var to = DateTime.Parse(S("p_to")).Date;
-                return All<Payment>().Where(p => p.Status == "verified" && p.VerifiedAt!.Value.Date >= from && p.VerifiedAt.Value.Date <= to)
-                    .GroupBy(p => (p.VerifiedAt!.Value.Date, p.Currency)).OrderBy(g => g.Key.Date)
-                    .Select(g => new RevenueRow(g.Key.Date, g.Key.Currency, g.Sum(p => p.Amount))).ToList();
-            }
-            case "request_reschedule":
-            {
-                var s = All<TrainingSession>().FirstOrDefault(x => x.Id == I("p_session_id")) ?? throw new Exception("not_found");
-                var byCoach = s.CoachId == MyCoachId;
-                if (!byCoach && s.MemberId != MyMemberId) throw new Exception("forbidden");
-                if (s.Status != Status.Scheduled || All<TimeRequest>().Any(r => r.SessionId == s.Id && r.Status == "pending")) throw new Exception("already_processed");
-                var start = DateTime.Parse(S("p_start"), null, System.Globalization.DateTimeStyles.RoundtripKind);
-                var end = DateTime.Parse(S("p_end"), null, System.Globalization.DateTimeStyles.RoundtripKind);
-                if (end <= start) throw new Exception("end must be after start");
-                Add(new TimeRequest { CoachId = s.CoachId, MemberId = s.MemberId, SessionId = s.Id, RequestedBy = byCoach ? "coach" : "member",
-                                      RequestedStart = start, RequestedEnd = end, Message = "Move this session" });
-                Notify(byCoach ? All<Member>().First(m => m.Id == s.MemberId).UserId : All<Coach>().First(c => c.Id == s.CoachId).UserId,
-                       "time_request", "Reschedule requested");
+                var p = All<Profile>().FirstOrDefault(x => x.Id == uid);
+                if (p is not null) p.MustChangePassword = false;
                 return null;
             }
-            case "cancel_session":
-            {
-                var s = All<TrainingSession>().FirstOrDefault(x => x.Id == I("p_session_id")) ?? throw new Exception("not_found");
-                var byCoach = s.CoachId == MyCoachId;
-                if (!byCoach && s.MemberId != MyMemberId) throw new Exception("forbidden");
-                if (s.Status != Status.Scheduled) throw new Exception("already_processed");
-                s.Status = Status.Cancelled;
-                foreach (var req in All<TimeRequest>().Where(x => x.SessionId == s.Id && x.Status == "pending")) req.Status = Status.Cancelled;
-                Notify(byCoach ? All<Member>().First(m => m.Id == s.MemberId).UserId : All<Coach>().First(c => c.Id == s.CoachId).UserId,
-                       "session", "A training session was cancelled");
-                return null;
-            }
-            case "create_user":
-            {
-                Require("users:manage");
-                var email = S("p_email").Trim(); var role = S("p_role");
-                if (role is not ("member" or "coach" or "employee") || string.IsNullOrWhiteSpace(S("p_name")) || S("p_password").Length < 6) throw new Exception("bad_input");
-                if (_accounts.ContainsKey(email)) throw new Exception("email_taken");
-                var id = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], S("p_name").Trim(), email, role == "member" ? Array.Empty<string>() : new[] { role });
-                _passwords[id] = S("p_password");
-                if (role == "coach") Add(new Coach { UserId = id });
-                Audit("user.create", "profiles", id);
-                return null;
-            }
-            case "change_password":
-            {
-                var me = Uid ?? throw new Exception("not authenticated");
-                if (S("p_current") != _passwords.GetValueOrDefault(me, DemoPassword)) throw new Exception("wrong_password");
-                if (S("p_new").Length < 6) throw new Exception("bad_input");
-                _passwords[me] = S("p_new");
-                return null;
-            }
-            case "reset_password":
-            {
-                Require("users:manage");
-                var id = S("p_user");
-                if (S("p_password").Length < 6) throw new Exception("bad_input");
-                if (All<Profile>().All(p => p.Id != id)) throw new Exception("not_found");
-                _passwords[id] = S("p_password");
-                Notify(id, "account", "Your password was reset. Sign in with the new one.");
-                Audit("user.reset_password", "profiles", id);
-                return null;
-            }
-            default: throw new Exception("not_found");
+            default: throw Err("not_found");
         }
     }
 
-    /// <summary>Price after an optional percent-off code. A wrong or expired code is an error, never a silent full price.</summary>
-    (decimal Amount, string? Code) Discounted(decimal price, Dictionary<string, object> args)
-    {
-        if (!args.TryGetValue("p_code", out var raw) || string.IsNullOrWhiteSpace(raw as string)) return (price, null);
-        var code = ((string)raw).Trim();
-        var d = All<Discount>().FirstOrDefault(x => x.IsActive && x.ExpiresAt > DateTime.UtcNow && string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase))
-            ?? throw new Exception("invalid_code");
-        return (Math.Round(price * (100 - d.Percent) / 100m, 2), d.Code);
-    }
-
     // ---------- seed ----------
-    string AddUser(string id, string name, string email, params string[] roles)
+    string AddUser(string id, string name, string email, string role)
     {
         _accounts[email] = id;
-        Add(new Profile { Id = id, Username = name });
+        Add(new Profile { Id = id, Username = email.ToLowerInvariant(), FullName = name });
         Add(new UserSettings { UserId = id });
-        Add(new Member { UserId = id });
-        foreach (var r in roles.Append("member").Distinct())
-            Add(new UserRole { UserId = id, RoleId = All<Role>().First(x => x.Name == r).RoleId });
+        Add(new UserRole { UserId = id, RoleId = All<Role>().First(x => x.Name == role).RoleId });
+        if (role == "member") Add(new Member { UserId = id });
+        if (role == "coach") Add(new Coach { UserId = id });
         return id;
     }
 
@@ -490,72 +785,79 @@ public sealed class DemoGateway : ISupabaseGateway
         var now = DateTime.UtcNow;
         DateTime At(int days, double hour) => DateTime.Today.AddDays(days).AddHours(hour).ToUniversalTime(); // seed in the viewer's local time
         foreach (var r in new[] { "admin", "employee", "coach", "member" }) Add(new Role { Name = r });
+        Add(new GymSettings { GymName = "Gym Membership", QrAccountName = "Demo Gym (GCash)", WalkInPrice = 150, PaymentExpiryHours = 48 });
 
         AddUser("u-admin", "Dana Reyes", "admin@demo.io", "admin");
         AddUser("u-emp", "Marco Santos", "employee@demo.io", "employee");
         AddUser("u-coach1", "Lena Cruz", "coach@demo.io", "coach");
         AddUser("u-coach2", "Kai Mendoza", "kai@demo.io", "coach");
-        AddUser("u-alex", "Alex Tan", "member@demo.io");
-        AddUser("u-bea", "Bea Lim", "bea@demo.io");
-        AddUser("u-carlo", "Carlo Diaz", "carlo@demo.io");
+        AddUser("u-alex", "Alex Tan", "member@demo.io", "member");
+        AddUser("u-bea", "Bea Lim", "bea@demo.io", "member");
+        AddUser("u-carlo", "Carlo Diaz", "carlo@demo.io", "member");
 
-        Add(new Coach { UserId = "u-coach1", Specialty = "Strength and conditioning", HourlyRate = 25, Bio = "Ten years coaching powerlifting and general strength. Works with beginners and returning lifters." });
-        Add(new Coach { UserId = "u-coach2", Specialty = "Boxing and mobility", HourlyRate = 22, Bio = "Former amateur boxer. Sessions focus on footwork, conditioning and joint mobility." });
+        var lena = All<Coach>().First(c => c.UserId == "u-coach1"); lena.Specialty = "Strength and conditioning"; lena.HourlyRate = 800;
+        lena.Bio = "Ten years coaching powerlifting and general strength. Works with beginners and returning lifters.";
+        var kai = All<Coach>().First(c => c.UserId == "u-coach2"); kai.Specialty = "Boxing and mobility"; kai.HourlyRate = 700;
+        kai.Bio = "Former amateur boxer. Sessions focus on footwork, conditioning and joint mobility.";
 
-        var monthly = Add(new MembershipPackage { Name = "Monthly", Description = "Full gym floor access for 30 days.", Price = 30, DurationDays = 30 });
-        var quarterly = Add(new MembershipPackage { Name = "Quarterly", Description = "90 days of access at a lower monthly rate.", Price = 80, DurationDays = 90 });
-        Add(new MembershipPackage { Name = "Annual", Description = "A full year, best value for regulars.", Price = 280, DurationDays = 365 });
+        var monthly = Add(new MembershipPackage { Name = "Monthly", Description = "Full gym floor access for 30 days.", Price = 1500, DurationDays = 30 });
+        var quarterly = Add(new MembershipPackage { Name = "Quarterly", Description = "90 days of access at a lower monthly rate.", Price = 4000, DurationDays = 90 });
+        Add(new MembershipPackage { Name = "Annual", Description = "A full year, best value for regulars.", Price = 14000, DurationDays = 365 });
 
-        var pool = Add(new Amenity { Name = "Pool", Description = "25 m lap pool, open 6:00 to 21:00." });
-        Add(new Amenity { Name = "Sauna", Description = "Dry sauna next to the locker rooms." });
-        Add(new Amenity { Name = "Group classes", Description = "Spin, yoga and circuit classes on the studio floor." });
-        Add(new Amenity { Name = "Boxing ring", Description = "Closed for maintenance.", IsActive = false });
+        var pool = Add(new Amenity { Name = "Pool", Description = "25 m lap pool, open 6:00 to 21:00.", Price = 300, DurationDays = 30 });
+        Add(new Amenity { Name = "Sauna", Description = "Dry sauna next to the locker rooms.", Price = 200, DurationDays = 30 });
+        Add(new Amenity { Name = "Group classes", Description = "Spin, yoga and circuit classes on the studio floor.", Price = 500, DurationDays = 30 });
+        Add(new Amenity { Name = "Boxing ring", Description = "Closed for maintenance.", Price = 400, DurationDays = 30, IsActive = false });
 
         // Alex: active, 5 days left so the renew prompt shows
-        var alexMembership = Add(new UserMembershipPackage { UserId = "u-alex", MembershipPackageId = monthly.Id, Status = "active", StartsAt = now.AddDays(-25), EndsAt = now.AddDays(5) });
-        // Bea: waiting for payment verification
-        var beaMembership = Add(new UserMembershipPackage { UserId = "u-bea", MembershipPackageId = quarterly.Id, Status = "pending" });
-        Add(new Payment { Qr = "demo-qr-bea", Amount = quarterly.Price, UserId = "u-bea", UserMembershipPackageId = beaMembership.Id, CreatedAt = now.AddHours(-3), ProofPath = "u-bea/slip.jpg" });
+        var alexMembership = Add(new UserMembershipPackage { MemberId = "u-alex", MembershipPackageId = monthly.Id, Status = Status.Active, StartsAt = now.AddDays(-25), EndsAt = now.AddDays(5) });
+        // Bea: paid by QR and sent the screenshot, waiting for the front desk
+        var beaMembership = Add(new UserMembershipPackage { MemberId = "u-bea", MembershipPackageId = quarterly.Id, Status = Status.Pending });
+        Add(new Payment { PaymentCode = "GYM-7F3K2", Kind = PayKind.Membership, Method = PayMethod.Qr, Amount = quarterly.Price, MemberId = "u-bea", UserMembershipPackageId = beaMembership.Id,
+                          ReferenceNo = "GC-20260412-889", ProofPath = "u-bea/slip.jpg", ExpiresAt = now.AddHours(45), CreatedAt = now.AddHours(-3) });
         // Carlo: expired
-        var carloMembership = Add(new UserMembershipPackage { UserId = "u-carlo", MembershipPackageId = monthly.Id, Status = "expired", StartsAt = now.AddDays(-42), EndsAt = now.AddDays(-12) });
+        var carloMembership = Add(new UserMembershipPackage { MemberId = "u-carlo", MembershipPackageId = monthly.Id, Status = Status.Expired, StartsAt = now.AddDays(-42), EndsAt = now.AddDays(-12) });
 
-        // verified history for the revenue screen
-        void Paid(string user, int umpId, decimal amount, int daysAgo, string qr) =>
-            Add(new Payment { Qr = qr, Amount = amount, UserId = user, UserMembershipPackageId = umpId, Status = "verified", CreatedAt = now.AddDays(-daysAgo), VerifiedAt = now.AddDays(-daysAgo) });
-        Paid("u-alex", alexMembership.Id, 30, 25, "demo-h1"); Paid("u-carlo", carloMembership.Id, 30, 42, "demo-h2");
-        Paid("u-alex", alexMembership.Id, 80, 9, "demo-h3"); Paid("u-carlo", carloMembership.Id, 280, 6, "demo-h4");
-        Paid("u-alex", alexMembership.Id, 30, 3, "demo-h5"); Paid("u-carlo", carloMembership.Id, 80, 1, "demo-h6");
+        // verified history for the revenue screen: some by QR, some cash at the counter
+        void Paid(string member, int umpId, decimal amount, int daysAgo, string method)
+        {
+            var when = now.AddDays(-daysAgo);
+            Add(new Payment { PaymentCode = PaymentCode(), Kind = PayKind.Membership, Method = method, Status = Status.Verified, Amount = amount, MemberId = member, UserMembershipPackageId = umpId,
+                              ExpiresAt = method == PayMethod.Qr ? when.AddHours(48) : null, RecordedBy = method == PayMethod.Qr ? null : "u-emp", VerifiedBy = "u-emp", VerifiedAt = when, ReceiptNo = ReceiptNo(), CreatedAt = when });
+        }
+        Paid("u-alex", alexMembership.Id, 1500, 25, PayMethod.Qr); Paid("u-carlo", carloMembership.Id, 1500, 42, PayMethod.Cash);
+        Paid("u-alex", alexMembership.Id, 4000, 9, PayMethod.Qr); Paid("u-carlo", carloMembership.Id, 14000, 6, PayMethod.Cash);
+        Paid("u-alex", alexMembership.Id, 1500, 3, PayMethod.Qr); Paid("u-carlo", carloMembership.Id, 4000, 1, PayMethod.Cash);
+        Add(new Payment { PaymentCode = PaymentCode(), Kind = PayKind.WalkIn, Method = PayMethod.Cash, Status = Status.Verified, Amount = 150, WalkInName = "Juan Dela Cruz",
+                          RecordedBy = "u-emp", VerifiedBy = "u-emp", VerifiedAt = now.AddDays(-2), ReceiptNo = ReceiptNo(), CreatedAt = now.AddDays(-2) });
 
-        var alexPool = Add(new UserAmenity { UserId = "u-alex", AmenityId = pool.Id });
-        Add(new AmenityUsage { UserAmenityId = alexPool.Id, UsedAt = now.AddHours(-2), Proof = "u-alex/pool.jpg" });
+        var alexPool = Add(new UserAmenity { MemberId = "u-alex", AmenityId = pool.Id, Status = Status.Active, AvailedAt = now.AddDays(-4), ExpiresAt = now.AddDays(26) });
+        Add(new AmenityUsage { UserAmenityId = alexPool.Id, UsedAt = now.AddHours(-2), ProofPath = "u-alex/pool.jpg" });
 
-        var alexMember = All<Member>().First(m => m.UserId == "u-alex");
-        Add(new CoachHire { MemberId = alexMember.Id, CoachId = 1 });
+        Add(new CoachHire { MemberId = "u-alex", CoachId = "u-coach1", HiredAt = now.AddDays(-20) });
+        Add(new CoachHire { MemberId = "u-bea", CoachId = "u-coach1", HiredAt = now.AddDays(-2) });
 
-        Add(new TimeRequest { CoachId = 1, MemberId = null, RequestedBy = "coach", RequestedStart = At(1, 10), RequestedEnd = At(1, 11), Message = "Open slot, strength session" });
-        Add(new TimeRequest { CoachId = 1, MemberId = alexMember.Id, RequestedBy = "member", RequestedStart = At(2, 17), RequestedEnd = At(2, 18), Message = "Evening session after work?" });
+        Add(new TimeRequest { CoachId = "u-coach1", MemberId = null, RequestedBy = "coach", RequestedStart = At(1, 10), RequestedEnd = At(1, 11), Message = "Open slot, strength session" });
+        Add(new TimeRequest { CoachId = "u-coach1", MemberId = "u-alex", RequestedBy = "member", RequestedStart = At(2, 17), RequestedEnd = At(2, 18), Message = "Evening session after work?" });
 
-        Add(new TrainingSession { CoachId = 1, MemberId = alexMember.Id, Title = "Squat technique", ScheduledStart = At(2, 9), ScheduledEnd = At(2, 10) });
-        Add(new TrainingSession { CoachId = 1, MemberId = alexMember.Id, Title = "Upper body", ScheduledStart = At(-3, 9), ScheduledEnd = At(-3, 10), Status = "completed" });
+        Add(new TrainingSession { CoachId = "u-coach1", MemberId = "u-alex", Title = "Squat technique", ScheduledStart = At(2, 9), ScheduledEnd = At(2, 10) });
+        Add(new TrainingSession { CoachId = "u-coach1", MemberId = "u-alex", Title = "Upper body", ScheduledStart = At(-3, 9), ScheduledEnd = At(-3, 10), Status = Status.Completed });
 
-        Add(new UserNotification { UserId = "u-alex", Type = "payment", Title = "Payment verified", CreatedAt = now.AddDays(-25), IsRead = true });
+        Add(new UserNotification { UserId = "u-alex", Type = "payment", Title = "Payment approved", CreatedAt = now.AddDays(-25), ReadAt = now.AddDays(-25) });
         Add(new UserNotification { UserId = "u-alex", Type = "membership", Title = "Membership expires in 5 days", Body = "Renew to keep your access.", CreatedAt = now.AddHours(-6) });
         Add(new UserNotification { UserId = "u-coach1", Type = "time_request", Title = "New time request", CreatedAt = now.AddHours(-1) });
-        Add(new UserNotification { UserId = "u-emp", Type = "payment", Title = "New payment waiting for verification", CreatedAt = now.AddHours(-3) });
+        Add(new UserNotification { UserId = "u-emp", Type = "payment", Title = "Payment waiting for review", Body = "GYM-7F3K2", CreatedAt = now.AddHours(-3) });
 
-        Add(new Discount { Code = "WELCOME10", Percent = 10, ExpiresAt = now.AddDays(60) });
-        Add(new Discount { Code = "NEWYEAR20", Percent = 20, ExpiresAt = now.AddDays(-5) });
+        Add(new Discount { Code = "WELCOME10", Percent = 10, StartsAt = now.AddDays(-1), ExpiresAt = now.AddDays(60) });
+        Add(new Discount { Code = "NEWYEAR20", Percent = 20, StartsAt = now.AddDays(-40), ExpiresAt = now.AddDays(-5) });
 
-        var beaMember = All<Member>().First(m => m.UserId == "u-bea");
-        Add(new CoachHire { MemberId = beaMember.Id, CoachId = 1 });
+        Add(new ShiftPost { CoachId = "u-coach1", Start = At(1, 6), End = At(1, 14), Note = "Strength floor, squat rack priority" });
+        Add(new ShiftPost { CoachId = "u-coach1", Start = At(3, 14), End = At(3, 20) });
+        Add(new ShiftPost { CoachId = "u-coach2", Start = At(1, 14), End = At(1, 22), Note = "Heavy bags and pad work" });
 
-        Add(new ShiftPost { CoachId = 1, Start = At(1, 6), End = At(1, 14), Note = "Strength floor, squat rack priority" });
-        Add(new ShiftPost { CoachId = 1, Start = At(3, 14), End = At(3, 20) });
-        Add(new ShiftPost { CoachId = 2, Start = At(1, 14), End = At(1, 22), Note = "Heavy bags and pad work" });
-
-        Add(new ChatMessage { CoachId = 1, MemberId = alexMember.Id, SenderUserId = "u-alex", Body = "Hi Lena, can we work on my squat depth this week?", SentAt = now.AddHours(-26) });
-        Add(new ChatMessage { CoachId = 1, MemberId = alexMember.Id, SenderUserId = "u-coach1", Body = "Sure. Bring a flat-soled pair of shoes and we'll film it from the side.", SentAt = now.AddHours(-25) });
-        Add(new ChatMessage { CoachId = 1, MemberId = alexMember.Id, SenderUserId = "u-alex", Body = "Perfect, see you on the session.", SentAt = now.AddHours(-24) });
+        Add(new ChatMessage { CoachId = "u-coach1", MemberId = "u-alex", SenderId = "u-alex", Body = "Hi Lena, can we work on my squat depth this week?", SentAt = now.AddHours(-26) });
+        Add(new ChatMessage { CoachId = "u-coach1", MemberId = "u-alex", SenderId = "u-coach1", Body = "Sure. Bring a flat-soled pair of shoes and we'll film it from the side.", SentAt = now.AddHours(-25) });
+        Add(new ChatMessage { CoachId = "u-coach1", MemberId = "u-alex", SenderId = "u-alex", Body = "Perfect, see you on the session.", SentAt = now.AddHours(-24) });
 
         Add(new AuditEntry { ActorId = "u-emp", Action = "payment.verify", Entity = "payments", EntityId = "5", CreatedAt = now.AddDays(-3) });
         Add(new AuditEntry { ActorId = "u-admin", Action = "role.assign", Entity = "user_roles", EntityId = "u-coach2", CreatedAt = now.AddDays(-8) });

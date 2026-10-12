@@ -33,9 +33,9 @@ public static class ErrorMapper
     {
         var m = message.ToLowerInvariant();
         if (Has(m, "forbidden", "42501", "jwt", "row-level security", "invalid login", "not authenticated")) return AppErrorKind.Unauthorized;
-        if (Has(m, "already_processed", "already_availed", "renewal_pending", "overlap", "in_use", "23505", "23p01", "duplicate key")) return AppErrorKind.Conflict;
+        if (Has(m, "already_processed", "already_availed", "renewal_pending", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
         if (Has(m, "no_active_membership", "self_verify", "not_renewable", "wrong_member", "not_found", "23514",
-                   "invalid_code", "bad_input", "bad_discount", "email_taken", "no_active_hire", "empty_message", "wrong_password", "end must be after start")) return AppErrorKind.Validation;
+                   "invalid_code", "22023", "bad_input", "bad_discount", "email_taken", "no_active_hire", "empty_message", "wrong_password", "end must be after start")) return AppErrorKind.Validation;
         return AppErrorKind.Unknown;
     }
 
@@ -63,9 +63,18 @@ public static class ErrorText
         "wrong_password" => "Your current password isn't right.",
         "email_taken" =>"Someone already uses that email.",
         "in_use" => "Existing records use this, so it can't be deleted. Turn it off instead.",
+        "already_availed" => "You already have this, or a payment for it is waiting. Renew it, or wait for the payment to be reviewed.",
+        "renewal_pending" => "A renewal payment is already waiting for this membership.",
+        "not_renewable" => "This membership can't be renewed right now.",
+        "self_verify" => "You can't approve a payment you made yourself.",
+        "no_active_membership" => "You need an active membership for that. Buy a package and wait for the payment to be verified.",
+        "already_processed" => "That was already handled. Refresh the page and try again.",
         "no_active_hire" => "You can only message a coach you have hired, or a trainee who is hired to you.",
         "empty_message" => "Type a message first.",
         "end must be after start" => "The end time must be after the start time.",
+        _ when raw?.Contains("foreign key", StringComparison.OrdinalIgnoreCase) == true => "Existing records use this, so it can't be deleted. Turn it off instead.",
+        _ when raw?.Contains("payments_reference_no_key", StringComparison.OrdinalIgnoreCase) == true => "That reference number was already used on another payment.",
+        _ when raw?.Contains("23P01", StringComparison.OrdinalIgnoreCase) == true || raw?.Contains("conflicting key", StringComparison.OrdinalIgnoreCase) == true => "That time overlaps something already booked.",
         _ => For(kind)
     };
 }
@@ -86,21 +95,25 @@ public static class RoleResolver
 
 public interface IAppNavigator
 {
-    void GoTo(AppRole role);
+    /// <summary>Opens the area for a role. changePassword sends them to Settings first, because they are still on a temporary password.</summary>
+    void GoTo(AppRole role, bool changePassword = false);
     void GoToLogin();
     void GoToRegister();
     void GoToMessages();
+    void GoToMembership();
     void ApplyTheme(string theme);
 }
 
 public interface IProofPicker { Task<(string FileName, byte[] Data)?> PickAsync(); }
 
-/// <summary>The only seam to the backend. DemoGateway implements it in memory; a Supabase-backed one comes later.</summary>
+/// <summary>The only seam to the backend. DemoGateway implements it in memory; SupabaseGateway talks to the real project.</summary>
 public interface ISupabaseGateway
 {
     string? CurrentUserId { get; }
     Task SignInAsync(string email, string password);
-    Task SignUpAsync(string email, string password, string username);
+    Task SignUpAsync(string email, string password, string fullName);
+    /// <summary>Checks the current password, then sets the new one. The caller then runs the mark_password_changed function.</summary>
+    Task ChangePasswordAsync(string currentPassword, string newPassword);
     Task SignOutAsync();
     Task<bool> RestoreSessionAsync();
 
@@ -111,4 +124,8 @@ public interface ISupabaseGateway
     Task<TResult> RpcAsync<TResult>(string function, Dictionary<string, object>? args = null);
     Task RpcAsync(string function, Dictionary<string, object>? args = null);
     Task<string> UploadAsync(string bucket, string path, byte[] data);
+    /// <summary>A short-lived link to a private file (a payment screenshot, the gym's QR), or null if it does not exist.</summary>
+    Task<string?> SignedUrlAsync(string bucket, string path);
+    /// <summary>Calls an Edge Function (create-user, reset-password), which holds the service-role key the app never has.</summary>
+    Task InvokeFunctionAsync(string name, Dictionary<string, object> body);
 }
