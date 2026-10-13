@@ -66,6 +66,11 @@
         <Setter Property="LineHeight" Value="1" />
     </Style>
 
+    <!-- Card prices: smaller on phones, where the price sits above a full-width button -->
+    <Style x:Key="PriceNumeral" TargetType="Label" BasedOn="{StaticResource Numeral}">
+        <Setter Property="FontSize" Value="{OnIdiom Phone=34, Default=52}" />
+    </Style>
+
     <!-- ===== Inputs ===== -->
     <Style TargetType="Entry">
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
