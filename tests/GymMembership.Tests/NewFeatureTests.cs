@@ -272,4 +272,44 @@ public class NewFeatureTests
         Assert.True((await sessions.RespondAsync(slot.Request.Id, true)).Ok);
         Assert.Contains((await sessions.SessionsAsync()).Value!, r => r.Session.ScheduledStart == slot.Request.RequestedStart && r.Session.MemberId == "u-alex");
     }
+
+    // ---------- coaches can pause hiring ----------
+    [Fact]
+    public async Task A_paused_coach_stays_listed_but_closed_and_cannot_be_hired()
+    {
+        var gw = await As("kai@demo.io");
+        var coaches = new CoachService(gw);
+        var vm = new GymMembership.Core.ViewModels.ShiftsViewModel(coaches);
+        await vm.OnAppearingAsync();
+        Assert.True(vm.IsOpen);
+        Assert.Equal("Pause hiring", vm.HiringButtonText);
+
+        await vm.ToggleHiringCommand.ExecuteAsync(null);
+        Assert.False(vm.IsOpen);
+        Assert.Equal("Resume hiring", vm.HiringButtonText);
+
+        await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
+        var card = (await coaches.ListCoachesAsync()).Value!.First(c => c.Name == "Kai Mendoza");
+        Assert.True(card.Closed);
+        Assert.False((await coaches.HireAsync(card.Coach.UserId)).Ok);
+
+        await gw.SignInAsync("kai@demo.io", DemoGateway.DemoPassword);
+        await vm.ToggleHiringCommand.ExecuteAsync(null);
+        await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
+        Assert.False((await coaches.ListCoachesAsync()).Value!.First(c => c.Name == "Kai Mendoza").Closed);
+    }
+
+    [Fact]
+    public async Task A_member_who_already_hired_a_paused_coach_keeps_them()
+    {
+        var gw = await As("coach@demo.io");
+        var coaches = new CoachService(gw);
+        var me = (await coaches.MyCoachAsync()).Value!;
+        Assert.True((await coaches.UpdateProfileAsync(me.Bio, me.Specialty, me.HourlyRate, false)).Ok);
+
+        await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
+        var card = (await coaches.ListCoachesAsync()).Value!.First(c => c.Name == "Lena Cruz");
+        Assert.True(card.Hired);
+        Assert.False(card.Closed);   // Alex hired Lena before she paused, so her card stays usable for Alex
+    }
 }

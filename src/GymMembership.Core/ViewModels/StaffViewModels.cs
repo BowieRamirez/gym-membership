@@ -210,10 +210,32 @@ public partial class ShiftsViewModel(ICoachService svc) : LoadableViewModel
     [ObservableProperty] private TimeSpan time = new(8, 0, 0);
     [ObservableProperty] private int hours = 6;
     [ObservableProperty] private string? note;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HiringButtonText))] private bool isOpen = true;
 
-    public override Task OnAppearingAsync() => LoadAsync();
+    public string HiringButtonText => IsOpen ? "Pause hiring" : "Resume hiring";
+
+    public override async Task OnAppearingAsync()
+    {
+        await LoadAsync();
+        await RunAsync(svc.MyCoachAsync, c => { if (c is not null) IsOpen = c.IsAvailable; });
+    }
 
     [RelayCommand] private Task LoadAsync() => RunAsync(svc.MyShiftsAsync, rows => Fill(Shifts, rows));
+
+    /// <summary>Flips the coach's availability: while paused, members see the coach grayed out and cannot hire.</summary>
+    [RelayCommand]
+    private async Task ToggleHiringAsync()
+    {
+        Notice = null;
+        var c = (await svc.MyCoachAsync()).Value;
+        if (c is null) return;
+        var open = !c.IsAvailable;
+        if (await RunAsync(() => svc.UpdateProfileAsync(c.Bio, c.Specialty, c.HourlyRate, open)))
+        {
+            IsOpen = open;
+            Notice = open ? "Hiring is open. Members can hire you again." : "Hiring is paused. Members still see you, but they cannot hire you until you resume.";
+        }
+    }
 
     [RelayCommand]
     private async Task PostAsync()

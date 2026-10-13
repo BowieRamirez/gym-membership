@@ -19,6 +19,9 @@
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="svc:CoachCard">
                     <Border Style="{StaticResource Panel}">
+                        <Border.Triggers>
+                            <DataTrigger TargetType="Border" Binding="{Binding Closed}" Value="True"><Setter Property="Opacity" Value="0.55" /></DataTrigger>
+                        </Border.Triggers>
                         <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="16">
                             <VerticalStackLayout Spacing="4">
                                 <Label Text="{Binding Name}" Style="{StaticResource Heading}" />
@@ -26,11 +29,14 @@
                                 <Label Text="{Binding Coach.Bio}" Style="{StaticResource Muted}" />
                                 <Label Text="On the floor" FontFamily="BarlowMedium" Margin="0,6,0,0" />
                                 <Label Text="{Binding ShiftsText}" Style="{StaticResource Caption}" />
+                                <Label Text="Not taking new members right now." Style="{StaticResource Caption}" FontFamily="BarlowSemiBold"
+                                       IsVisible="{Binding Closed}" />
                             </VerticalStackLayout>
                             <VerticalStackLayout Style="{StaticResource CardActions}" Spacing="6">
                                 <Label Text="{Binding Coach.HourlyRate, StringFormat='₱{0:N0}'}" Style="{StaticResource PriceNumeral}" HorizontalOptions="{OnIdiom Phone=Start, Default=End}" />
                                 <Label Text="per hour" Style="{StaticResource Caption}" HorizontalOptions="{OnIdiom Phone=Start, Default=End}" />
                                 <Button Text="Hire" Style="{StaticResource SmallButton}" IsVisible="{Binding Hired, Converter={StaticResource Not}}"
+                                        IsEnabled="{Binding Closed, Converter={StaticResource Not}}"
                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:CoachesViewModel}}, Path=HireCommand}"
                                         CommandParameter="{Binding .}" />
                                 <Button Text="Message" Style="{StaticResource SmallButton}" IsVisible="{Binding Hired}"

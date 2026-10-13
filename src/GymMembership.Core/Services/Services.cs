@@ -403,6 +403,9 @@ public sealed class AmenityService(ISupabaseGateway gw) : IAmenityService
 // ===================== Coaches =====================
 public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId, IReadOnlyList<ShiftPost>? Shifts = null)
 {
+    /// <summary>The coach paused hiring and this member has no hire to keep: shown grayed out, Hire disabled.</summary>
+    public bool Closed => !Coach.IsAvailable && !Hired;
+
     public string ShiftsText => Shifts is { Count: > 0 }
         ? string.Join("\n", Shifts.Take(3).Select(s => $"{Fmt.Range(s.Start, s.End)}{(string.IsNullOrWhiteSpace(s.Note) ? "" : "  " + s.Note)}"))
         : "No shifts posted yet.";
@@ -428,7 +431,7 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
     public Task<AppResult<IReadOnlyList<CoachCard>>> ListCoachesAsync() => Safe.RunAsync<IReadOnlyList<CoachCard>>(async () =>
     {
         var uid = gw.CurrentUserId;
-        var coaches = await gw.ListAsync<Coach>(c => c.IsAvailable == true);
+        var coaches = await gw.ListAsync<Coach>();   // paused coaches stay listed, shown as closed
         var names = await Directory_.UserNamesAsync(gw);
         var hires = await gw.ListAsync<CoachHire>(h => h.MemberId == uid && h.Status == "active");
         var now = DateTime.UtcNow;

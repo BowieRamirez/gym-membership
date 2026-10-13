@@ -12,6 +12,9 @@
             <Label Text="Post when you are on the gym floor. Your trainees are notified and members can see it on the Coaches page." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
+            <Button Text="{Binding HiringButtonText}" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start"
+                    Command="{Binding ToggleHiringCommand}"
+                    SemanticProperties.Hint="Pausing keeps you listed but members cannot hire you until you resume" />
 
             <Border Style="{StaticResource Panel}">
                 <VerticalStackLayout Spacing="12">
