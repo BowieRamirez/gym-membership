@@ -759,6 +759,7 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
     {
         if (string.IsNullOrWhiteSpace(name) || !email.Contains('@') || password.Length < 6 || role is not ("member" or "coach" or "employee"))
             return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
+        if (!AccountRules.IsName(name.Trim())) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_name");   // the database refuses it too (0012)
         return await Safe.RunAsync(async () =>
         {
             await gw.InvokeFunctionAsync("create-user", new() { ["name"] = name.Trim(), ["email"] = email.Trim(), ["role"] = role, ["password"] = password });

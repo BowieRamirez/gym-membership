@@ -50,7 +50,7 @@ await test('coach gets a coaches row and no member row', async () => {
   assert.deepEqual(r.rows[0], { c: 1, m: 0 });
 });
 await test('an unknown role in metadata becomes member', async () => {
-  const id = await user('x@t.io', 'superuser', 'X');
+  const id = await user('x@t.io', 'superuser', 'Xavier');
   assert.equal((await db.query(`select r.name from user_roles ur join roles r using(role_id) where user_id=$1`, [id])).rows[0].name, 'member');
 });
 
@@ -136,12 +136,12 @@ await test('a code cuts the amount; case does not matter', async () => {
   assert.equal(Number(p.amount), 900); assert.equal(Number(p.discount_amount), 100);
 });
 await test('an expired or unknown code is refused, never full price', async () => {
-  const c = await user('c@t.io', 'member', 'C');
+  const c = await user('c@t.io', 'member', 'Cara');
   assert.match(await code(run(c, `select * from avail_membership($1, 'OLD20')`, [monthly])), /invalid_code/);
   assert.match(await code(run(c, `select * from avail_membership($1, 'NOPE')`, [monthly])), /invalid_code/);
 });
 await test('a code works once per member', async () => {
-  const d = await user('d@t.io', 'member', 'D');
+  const d = await user('d@t.io', 'member', 'Dana');
   const dp = (await run(d, `select * from avail_membership($1, 'WELCOME10')`, [monthly])).rows[0];
   await run(desk, `select verify_payment($1, false, 'no')`, [dp.payment_id]);              // rejected: code is free again
   await run(d, `select * from avail_membership($1, 'WELCOME10')`, [monthly]);               // can reuse after a rejection
@@ -305,7 +305,7 @@ await test('delete rules: a used package cannot be deleted, an unused one can', 
 
 console.log('\nexpiry jobs');
 await test('unpaid QR payments expire and cancel their pending membership', async () => {
-  const f = await user('f@t.io', 'member', 'F');
+  const f = await user('f@t.io', 'member', 'Finn');
   const fp = (await run(f, `select * from avail_membership($1)`, [monthly])).rows[0];
   await db.query(`update payments set expires_at = now() - interval '1 minute' where payment_id=$1`, [fp.payment_id]);
   assert.equal((await db.query(`select expire_payments() n`)).rows[0].n, 1);
@@ -313,7 +313,7 @@ await test('unpaid QR payments expire and cancel their pending membership', asyn
   assert.deepEqual(r.rows[0], { status: 'expired', ustatus: 'cancelled' });
 });
 await test('memberships past their end become expired, and reminders go out once', async () => {
-  const g = await user('g@t.io', 'member', 'G');
+  const g = await user('g@t.io', 'member', 'Gina');
   await db.query(`select record_counter_payment_test()`).catch(() => {});
   const gp = (await run(g, `select * from avail_membership($1)`, [monthly])).rows[0];
   await run(desk, `select verify_payment($1,true)`, [gp.payment_id]);
@@ -349,6 +349,26 @@ await test('an account made through the Admin API gets the role written after it
   await db.query(`update auth.users set raw_app_meta_data = raw_app_meta_data || '{"role":"admin"}'::jsonb where id=$1`, [c2]);
   assert.deepEqual(await rows(c2), { roles: 'coach', m: 0, c: 1 });
   assert.equal((await run(boss, `select is_staff() s`)).rows[0].s, true);
+});
+
+console.log('\nnames are letters only (0012)');
+const setName = (uid, name) => run(uid, `update profiles set full_name = $2 where id = $1`, [uid, name]);
+await test('a member can rename themselves to a real name', async () => {
+  for (const ok of ["Mary-Ann O'Brien", 'Juan dela Cruz', 'José Peña', 'Al'])
+    assert.equal(await code(setName(alex, ok)), 'ok', ok);
+  await setName(alex, 'Alex');
+});
+await test('digits, symbols, doubled or edge separators and bad lengths are refused', async () => {
+  for (const bad of ['R2D2', 'Rey!', 'Rey_Santos', 'Rey  Santos', '-Rey', "Rey'", 'A', '', 'a'.repeat(61)])
+    assert.match(await code(setName(alex, bad)), /23514/, JSON.stringify(bad));
+});
+await test('sign-up with a bad name fails, with no name it falls back to the letters in the email', async () => {
+  const signUp = (email, name) => db.query(`insert into auth.users (email, raw_user_meta_data) values ($1, $2) returning id`, [email, JSON.stringify(name === undefined ? {} : { full_name: name })]);
+  assert.match(await code(signUp('bad@t.io', 'R2D2')), /23514/);
+  const nameOf = async (email, name) => (await db.query(`select full_name from profiles where id = $1`, [(await signUp(email, name)).rows[0].id])).rows[0].full_name;
+  assert.equal(await nameOf('jane.doe99@t.io'), 'jane doe');
+  assert.equal(await nameOf('99@t.io'), 'Member');
+  assert.equal(await nameOf('x1@t.io', '   '), 'Member');   // one letter is too short for a name
 });
 
 console.log(`\n${pass} passed, ${failed} failed`);

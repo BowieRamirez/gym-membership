@@ -89,6 +89,15 @@ public class AccountTests
     }
 
     [Fact]
+    public async Task The_owner_cannot_create_an_account_with_a_name_that_is_not_letters()
+    {
+        var gw = new DemoGateway();
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var r = await new AdminService(gw).CreateUserAsync("Rey 99", "rey@demo.io", "coach", "temp1234");
+        Assert.Equal("bad_name", r.Message);
+    }
+
+    [Fact]
     public async Task Register_refuses_a_name_over_60_characters()
     {
         var auth = new AuthService(new DemoGateway());

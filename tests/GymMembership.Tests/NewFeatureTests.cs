@@ -35,13 +35,13 @@ public class NewFeatureTests
         var gw = await As("admin@demo.io");
         var svc = new AdminService(gw);
         Assert.Equal(AppErrorKind.Validation, (await svc.CreateUserAsync("", "x@demo.io", "member", "temp1234")).Error);
-        Assert.Equal(AppErrorKind.Validation, (await svc.CreateUserAsync("X", "no-at-sign", "member", "temp1234")).Error);
-        Assert.Equal(AppErrorKind.Validation, (await svc.CreateUserAsync("X", "x@demo.io", "member", "123")).Error);
-        Assert.Equal(AppErrorKind.Validation, (await svc.CreateUserAsync("X", "x@demo.io", "admin", "temp1234")).Error);
+        Assert.Equal(AppErrorKind.Validation, (await svc.CreateUserAsync("Xena", "no-at-sign", "member", "temp1234")).Error);
+        Assert.Equal(AppErrorKind.Validation, (await svc.CreateUserAsync("Xena", "x@demo.io", "member", "123")).Error);
+        Assert.Equal(AppErrorKind.Validation, (await svc.CreateUserAsync("Xena", "x@demo.io", "admin", "temp1234")).Error);
         Assert.Equal(AppErrorKind.Validation, (await svc.CreateUserAsync("Dupe", "member@demo.io", "member", "temp1234")).Error);
 
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
-        Assert.Equal(AppErrorKind.Unauthorized, (await svc.CreateUserAsync("Y", "y@demo.io", "member", "temp1234")).Error);
+        Assert.Equal(AppErrorKind.Unauthorized, (await svc.CreateUserAsync("Yara", "y@demo.io", "member", "temp1234")).Error);
     }
 
     // ---------- discounts ----------
