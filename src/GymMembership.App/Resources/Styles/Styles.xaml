@@ -173,16 +173,35 @@
 
     <!-- Compact buttons for actions inside list rows -->
     <Style x:Key="SmallButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
-        <Setter Property="MinimumHeightRequest" Value="40" />
-        <Setter Property="HeightRequest" Value="40" />
+        <Setter Property="MinimumHeightRequest" Value="{OnPlatform Android=48, iOS=48, Default=40}" />
         <Setter Property="Padding" Value="14,0" />
         <Setter Property="FontSize" Value="14" />
     </Style>
     <Style x:Key="SmallOutlineButton" TargetType="Button" BasedOn="{StaticResource OutlineButton}">
-        <Setter Property="MinimumHeightRequest" Value="40" />
-        <Setter Property="HeightRequest" Value="40" />
+        <Setter Property="MinimumHeightRequest" Value="{OnPlatform Android=48, iOS=48, Default=40}" />
         <Setter Property="Padding" Value="14,0" />
         <Setter Property="FontSize" Value="14" />
+    </Style>
+
+    <!-- Card action cells: beside the text on wide screens, under it (full width) on phones. Parent Grid needs RowDefinitions="Auto,Auto". -->
+    <Style x:Key="CardActions" TargetType="VerticalStackLayout">
+        <Setter Property="Margin" Value="{OnIdiom Phone='0,10,0,0', Default=0}" />
+        <Setter Property="Grid.Row" Value="{OnIdiom Phone=1, Default=0}" />
+        <Setter Property="Grid.Column" Value="{OnIdiom Phone=0, Default=1}" />
+        <Setter Property="Grid.ColumnSpan" Value="{OnIdiom Phone=2, Default=1}" />
+        <Setter Property="HorizontalOptions" Value="{OnIdiom Phone=Fill, Default=End}" />
+    </Style>
+    <Style x:Key="CardButton" TargetType="Button" BasedOn="{StaticResource SmallButton}">
+        <Setter Property="Margin" Value="{OnIdiom Phone='0,10,0,0', Default=0}" />
+        <Setter Property="Grid.Row" Value="{OnIdiom Phone=1, Default=0}" />
+        <Setter Property="Grid.Column" Value="{OnIdiom Phone=0, Default=1}" />
+        <Setter Property="Grid.ColumnSpan" Value="{OnIdiom Phone=2, Default=1}" />
+    </Style>
+    <Style x:Key="CardOutlineButton" TargetType="Button" BasedOn="{StaticResource SmallOutlineButton}">
+        <Setter Property="Margin" Value="{OnIdiom Phone='0,10,0,0', Default=0}" />
+        <Setter Property="Grid.Row" Value="{OnIdiom Phone=1, Default=0}" />
+        <Setter Property="Grid.Column" Value="{OnIdiom Phone=0, Default=1}" />
+        <Setter Property="Grid.ColumnSpan" Value="{OnIdiom Phone=2, Default=1}" />
     </Style>
 
     <Style TargetType="Picker">

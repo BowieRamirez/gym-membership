@@ -8,7 +8,7 @@
             x:Class="GymMembership.App.Views.RequestsPage" x:DataType="vm:RequestsViewModel" Title="Time requests">
 
     <ScrollView MaximumWidthRequest="920">
-        <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
+        <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='20,16,20,24'}" Spacing="14">
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
@@ -83,14 +83,14 @@
                                     <c:StatusChip Grid.Column="1" Status="{Binding Request.Status}" VerticalOptions="Start" />
                                 </Grid>
                                 <Label Text="{Binding Request.Message}" Style="{StaticResource Muted}" IsVisible="{Binding Request.Message, Converter={StaticResource HasText}}" />
-                                <HorizontalStackLayout Spacing="8">
-                                    <Button Text="Approve" Style="{StaticResource SmallButton}" IsVisible="{Binding CanRespond}"
+                                <FlexLayout Wrap="Wrap">
+                                    <Button Text="Approve" Style="{StaticResource SmallButton}" Margin="0,0,8,8" IsVisible="{Binding CanRespond}"
                                             Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RequestsViewModel}}, Path=ApproveCommand}" CommandParameter="{Binding .}" />
-                                    <Button Text="Reject" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanRespond}"
+                                    <Button Text="Reject" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanRespond}"
                                             Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RequestsViewModel}}, Path=RejectCommand}" CommandParameter="{Binding .}" />
-                                    <Button Text="Cancel request" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanCancel}"
+                                    <Button Text="Cancel request" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanCancel}"
                                             Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RequestsViewModel}}, Path=CancelCommand}" CommandParameter="{Binding .}" />
-                                </HorizontalStackLayout>
+                                </FlexLayout>
                             </VerticalStackLayout>
                         </Border>
                     </DataTemplate>

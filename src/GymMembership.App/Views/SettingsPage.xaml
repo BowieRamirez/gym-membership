@@ -7,7 +7,7 @@
             x:Class="GymMembership.App.Views.SettingsPage" x:DataType="vm:SettingsViewModel" Title="Settings">
 
     <ScrollView MaximumWidthRequest="520">
-        <VerticalStackLayout Padding="20,16,20,24" Spacing="16">
+        <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='20,16,20,24'}" Spacing="16">
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 

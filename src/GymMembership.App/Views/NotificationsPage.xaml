@@ -7,7 +7,7 @@
             xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.NotificationsPage" x:DataType="vm:NotificationsViewModel" Title="Alerts">
 
-    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
+    <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='20,16,20,0'}" MaximumWidthRequest="920">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
             <Label Text="{Binding UnreadCount, StringFormat='{0} unread. Tap an alert to mark it as read.'}" Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />

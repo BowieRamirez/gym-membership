@@ -8,13 +8,13 @@
             x:Class="GymMembership.App.Views.MyMembershipPage" x:DataType="vm:MyMembershipViewModel" Title="My membership">
 
     <ScrollView MaximumWidthRequest="920">
-        <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
+        <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='20,16,20,24'}" Spacing="14">
 
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
             <!-- The one memorable moment: days left, shown as a lane that runs out -->
-            <Border Style="{StaticResource Panel}" Padding="24,22">
+            <Border Style="{StaticResource Panel}" Padding="{OnIdiom Phone='16,16', Default='24,22'}">
                 <VerticalStackLayout Spacing="12">
                     <Label Text="{Binding HeroNumber}" Style="{StaticResource Numeral}" FontSize="84"
                            SemanticProperties.Description="Days left on your membership" />
@@ -26,13 +26,15 @@
             </Border>
 
             <!-- Pay by QR: the code is what the front desk matches your transfer against, so it is the biggest thing here -->
-            <Border Style="{StaticResource Panel}" Padding="24,22" IsVisible="{Binding PayNow, Converter={StaticResource IsNotNull}}">
+            <Border Style="{StaticResource Panel}" Padding="{OnIdiom Phone='16,16', Default='24,22'}" IsVisible="{Binding PayNow, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="14">
                     <Label Text="{Binding PayNow.Amount, StringFormat='Pay ₱{0:N2} by QR'}" Style="{StaticResource Heading}" />
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="20">
+                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="20">
                         <Image Source="{Binding QrUrl}" IsVisible="{Binding HasQr}" WidthRequest="168" HeightRequest="168" VerticalOptions="Start"
+                               Grid.ColumnSpan="{OnIdiom Phone=2, Default=1}" HorizontalOptions="{OnIdiom Phone=Center, Default=Start}"
                                SemanticProperties.Description="The gym's payment QR code" />
-                        <VerticalStackLayout Grid.Column="1" Spacing="10">
+                        <VerticalStackLayout Grid.Row="{OnIdiom Phone=1, Default=0}" Grid.Column="{OnIdiom Phone=0, Default=1}" Grid.ColumnSpan="{OnIdiom Phone=2, Default=1}"
+                                             Margin="{OnIdiom Phone='0,14,0,0', Default=0}" Spacing="10">
                             <Label Text="{Binding AccountName, StringFormat='Pay to {0}'}" IsVisible="{Binding AccountName, Converter={StaticResource IsNotNull}}" />
                             <Label Text="Ask the gym for its QR if none shows here." Style="{StaticResource Caption}" IsVisible="{Binding HasQr, Converter={StaticResource Not}}" />
                             <VerticalStackLayout Spacing="2">
@@ -45,18 +47,18 @@
                     </Grid>
 
                     <Label Text="After you pay, enter the reference number from your receipt and send a screenshot of it." Style="{StaticResource Muted}" />
-                    <FlexLayout Wrap="Wrap" AlignItems="End">
-                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="240">
+                    <VerticalStackLayout Spacing="10">
+                        <VerticalStackLayout Spacing="4" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" WidthRequest="{OnIdiom Phone=-1, Default=240}">
                             <Label Text="Reference number" Style="{StaticResource Caption}" />
                             <Border Style="{StaticResource Field}"><Entry Text="{Binding ReferenceNo}" SemanticProperties.Description="Reference number from your receipt" /></Border>
                         </VerticalStackLayout>
-                        <Button Text="Choose screenshot and send" Style="{StaticResource SmallButton}" Margin="0,0,0,8" Command="{Binding SendProofCommand}" />
-                    </FlexLayout>
+                        <Button Text="Choose screenshot and send" Style="{StaticResource SmallButton}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" Command="{Binding SendProofCommand}" />
+                    </VerticalStackLayout>
                 </VerticalStackLayout>
             </Border>
 
             <Label Text="Your memberships" Style="{StaticResource Heading}" Margin="0,8,0,0" />
-            <VerticalStackLayout Spacing="4" HorizontalOptions="Start" WidthRequest="260">
+            <VerticalStackLayout Spacing="4" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" WidthRequest="{OnIdiom Phone=-1, Default=260}">
                 <Label Text="Discount code for renewing (optional)" Style="{StaticResource Caption}" />
                 <Border Style="{StaticResource Field}"><Entry Text="{Binding DiscountCode}" SemanticProperties.Description="Discount code" /></Border>
             </VerticalStackLayout>
@@ -67,14 +69,14 @@
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="svc:MembershipRow">
                         <Border Style="{StaticResource Panel}">
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12">
                                 <VerticalStackLayout Spacing="6">
                                     <Label Text="{Binding PackageName}" Style="{StaticResource Heading}" />
                                     <c:StatusChip Status="{Binding Status}" />
                                     <Label Text="{Binding EndsAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM yyyy', StringFormat='Ends {0}'}"
                                            Style="{StaticResource Caption}" IsVisible="{Binding EndsAt, Converter={StaticResource IsNotNull}}" />
                                 </VerticalStackLayout>
-                                <Button Grid.Column="1" Text="Renew" Style="{StaticResource SmallButton}" VerticalOptions="Start"
+                                <Button Text="Renew" Style="{StaticResource CardButton}" VerticalOptions="Start"
                                         IsVisible="{Binding CanRenew}"
                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MyMembershipViewModel}}, Path=RenewCommand}"
                                         CommandParameter="{Binding .}" />
@@ -92,7 +94,7 @@
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="svc:PaymentItem">
                         <Border Style="{StaticResource Panel}">
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12">
                                 <VerticalStackLayout Spacing="6">
                                     <Label Text="{Binding What}" Style="{StaticResource Heading}" />
                                     <c:StatusChip Status="{Binding Status}" />
@@ -106,8 +108,8 @@
                                         </Label.Text>
                                     </Label>
                                 </VerticalStackLayout>
-                                <VerticalStackLayout Grid.Column="1" Spacing="6" HorizontalOptions="End">
-                                    <Label Text="{Binding Amount, StringFormat='₱{0:N2}'}" Style="{StaticResource Heading}" HorizontalOptions="End" />
+                                <VerticalStackLayout Style="{StaticResource CardActions}" Spacing="6">
+                                    <Label Text="{Binding Amount, StringFormat='₱{0:N2}'}" Style="{StaticResource Heading}" HorizontalOptions="{OnIdiom Phone=Start, Default=End}" />
                                     <Button Text="Pay again" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanPayAgain}"
                                             Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MyMembershipViewModel}}, Path=PayAgainCommand}"
                                             CommandParameter="{Binding .}" />

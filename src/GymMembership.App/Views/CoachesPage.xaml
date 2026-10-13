@@ -7,7 +7,7 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.CoachesPage" x:DataType="vm:CoachesViewModel" Title="Coaches">
 
-    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
+    <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='20,16,20,0'}" MaximumWidthRequest="920">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
             <Label Text="Hire a coach to request one-to-one sessions. You need an active membership." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
@@ -19,7 +19,7 @@
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="svc:CoachCard">
                     <Border Style="{StaticResource Panel}">
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="16">
                             <VerticalStackLayout Spacing="4">
                                 <Label Text="{Binding Name}" Style="{StaticResource Heading}" />
                                 <Label Text="{Binding Coach.Specialty}" FontFamily="BarlowMedium" />
@@ -27,9 +27,9 @@
                                 <Label Text="On the floor" FontFamily="BarlowMedium" Margin="0,6,0,0" />
                                 <Label Text="{Binding ShiftsText}" Style="{StaticResource Caption}" />
                             </VerticalStackLayout>
-                            <VerticalStackLayout Grid.Column="1" Spacing="6" HorizontalOptions="End">
-                                <Label Text="{Binding Coach.HourlyRate, StringFormat='₱{0:N0}'}" Style="{StaticResource Numeral}" HorizontalOptions="End" />
-                                <Label Text="per hour" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                            <VerticalStackLayout Style="{StaticResource CardActions}" Spacing="6">
+                                <Label Text="{Binding Coach.HourlyRate, StringFormat='₱{0:N0}'}" Style="{StaticResource Numeral}" HorizontalOptions="{OnIdiom Phone=Start, Default=End}" />
+                                <Label Text="per hour" Style="{StaticResource Caption}" HorizontalOptions="{OnIdiom Phone=Start, Default=End}" />
                                 <Button Text="Hire" Style="{StaticResource SmallButton}" IsVisible="{Binding Hired, Converter={StaticResource Not}}"
                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:CoachesViewModel}}, Path=HireCommand}"
                                         CommandParameter="{Binding .}" />

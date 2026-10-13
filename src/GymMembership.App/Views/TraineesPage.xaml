@@ -7,7 +7,7 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.TraineesPage" x:DataType="vm:TraineesViewModel" Title="Trainees">
 
-    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
+    <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='20,16,20,0'}" MaximumWidthRequest="920">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
             <Label Text="Members who have hired you. Message them, or remove them when you stop training together." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
@@ -20,13 +20,13 @@
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="svc:TraineeRow">
                     <Border Style="{StaticResource Panel}">
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="16">
                             <VerticalStackLayout Spacing="3">
                                 <Label Text="{Binding Name}" Style="{StaticResource Heading}" />
                                 <Label Text="{Binding NextText}" />
                                 <Label Text="{Binding Completed, StringFormat='{0} sessions completed'}" Style="{StaticResource Caption}" />
                             </VerticalStackLayout>
-                            <VerticalStackLayout Grid.Column="1" Spacing="8" HorizontalOptions="End">
+                            <VerticalStackLayout Style="{StaticResource CardActions}" Spacing="8">
                                 <Button Text="Message" Style="{StaticResource SmallButton}"
                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TraineesViewModel}}, Path=MessageCommand}" CommandParameter="{Binding .}" />
                                 <Button Text="Remove" Style="{StaticResource SmallOutlineButton}"
