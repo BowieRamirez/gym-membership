@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
 using GymMembership.Core.Models;
 
 namespace GymMembership.Core.Services;
@@ -24,15 +26,39 @@ public interface IAuthService
     Task<AppResult<bool>> RegisterAsync(string name, string email, string password);
 }
 
+/// <summary>What a new account may use. The entry caps on the register page read the same numbers.</summary>
+public static partial class AccountRules
+{
+    public const int MinName = 2, MaxName = 60, MaxEmailLocal = 64, MaxEmail = 100, MinPassword = 6, MaxPassword = 64;
+
+    // letters (any script), joined by single spaces, hyphens or apostrophes: "Mary-Ann O'Brien", "Juan dela Cruz"
+    [GeneratedRegex(@"^[\p{L}\p{M}]+(?:[ '\-][\p{L}\p{M}]+)*$")] private static partial Regex NameShape();
+    [GeneratedRegex(@"^[^@\s]+@[^@\s]+\.[^@\s]+$")] private static partial Regex EmailShape();
+
+    public static bool IsName(string name) => name.Length is >= MinName and <= MaxName && NameShape().IsMatch(name);
+
+    public static bool IsEmail(string email) =>
+        email.Length <= MaxEmail && EmailShape().IsMatch(email) && email.IndexOf('@') <= MaxEmailLocal;
+
+    public static bool IsPassword(string password) => password.Length is >= MinPassword and <= MaxPassword;
+
+    /// <summary>What the name field keeps as you type: letters (and their accents), spaces, hyphens and apostrophes.</summary>
+    public static string KeepNameChars(string typed) => new(typed.Where(c =>
+        char.IsLetter(c) || c is ' ' or '\'' or '-' ||
+        CharUnicodeInfo.GetUnicodeCategory(c) is UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark).ToArray());
+}
+
 public sealed class AuthService(ISupabaseGateway gw) : IAuthService
 {
     public string? UserId => gw.CurrentUserId;
 
     public async Task<AppResult<bool>> RegisterAsync(string name, string email, string password)
     {
-        if (string.IsNullOrWhiteSpace(name) || !email.Contains('@') || password.Length < 6)
-            return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
-        return await Safe.RunAsync(async () => { await gw.SignUpAsync(email.Trim(), password, name.Trim()); return true; });
+        name = name.Trim(); email = email.Trim();
+        if (!AccountRules.IsName(name)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_name");
+        if (!AccountRules.IsEmail(email)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_email");
+        if (!AccountRules.IsPassword(password)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_password");
+        return await Safe.RunAsync(async () => { await gw.SignUpAsync(email, password, name); return true; });
     }
 
     public async Task<AppResult<bool>> ChangePasswordAsync(string current, string next)

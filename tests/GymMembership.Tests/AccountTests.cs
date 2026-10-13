@@ -72,4 +72,70 @@ public class AccountTests
         await gw.SignInAsync("new@demo.io", "secret12");                              // own password, not the demo one
         Assert.Equal(new Access(true, false), (await plans.AccessAsync()).Value);    // full member
     }
+
+    [Theory]
+    [InlineData("R2D2 Droid")]                  // digits
+    [InlineData("Rey!")]                        // symbols
+    [InlineData("A")]                           // too short
+    [InlineData("Rey  Santos")]                 // double space
+    [InlineData("-Rey")]                        // leading separator
+    [InlineData("Rey_Santos")]
+    public async Task Register_refuses_names_that_are_not_letters(string name)
+    {
+        var auth = new AuthService(new DemoGateway());
+        var r = await auth.RegisterAsync(name, "new@demo.io", "secret12");
+        Assert.Equal(AppErrorKind.Validation, r.Error);
+        Assert.Equal("bad_name", r.Message);
+    }
+
+    [Fact]
+    public async Task Register_refuses_a_name_over_60_characters()
+    {
+        var auth = new AuthService(new DemoGateway());
+        Assert.Equal("bad_name", (await auth.RegisterAsync(new string('a', 61), "new@demo.io", "secret12")).Message);
+        Assert.True((await auth.RegisterAsync(new string('a', 60), "new@demo.io", "secret12")).Ok);
+    }
+
+    [Theory]
+    [InlineData("Mary-Ann O'Brien")]
+    [InlineData("Juan dela Cruz")]
+    [InlineData("José Peña")]
+    public async Task Register_accepts_real_names(string name) =>
+        Assert.True((await new AuthService(new DemoGateway()).RegisterAsync(name, "new@demo.io", "secret12")).Ok);
+
+    [Theory]
+    [InlineData("nobody")]
+    [InlineData("a@b")]
+    [InlineData("a b@c.com")]
+    [InlineData("a@@c.com")]
+    public async Task Register_refuses_malformed_emails(string email) =>
+        Assert.Equal("bad_email", (await new AuthService(new DemoGateway()).RegisterAsync("New Person", email, "secret12")).Message);
+
+    [Fact]
+    public async Task Register_caps_the_email_at_100_characters_and_the_part_before_the_at_at_64()
+    {
+        var auth = new AuthService(new DemoGateway());
+        Assert.Equal("bad_email", (await auth.RegisterAsync("New Person", new string('a', 65) + "@demo.io", "secret12")).Message);
+        Assert.Equal("bad_email", (await auth.RegisterAsync("New Person", "a@" + new string('b', 95) + ".com", "secret12")).Message);   // 101 characters
+        Assert.True((await auth.RegisterAsync("New Person", "a@" + new string('b', 94) + ".com", "secret12")).Ok);                    // 100 characters
+        Assert.True((await auth.RegisterAsync("Other Person", new string('a', 64) + "@demo.io", "secret12")).Ok);
+    }
+
+    [Fact]
+    public async Task Register_keeps_the_password_between_6_and_64_characters()
+    {
+        var auth = new AuthService(new DemoGateway());
+        Assert.Equal("bad_password", (await auth.RegisterAsync("New Person", "new@demo.io", "12345")).Message);
+        Assert.Equal("bad_password", (await auth.RegisterAsync("New Person", "new@demo.io", new string('x', 65))).Message);
+        Assert.True((await auth.RegisterAsync("New Person", "new@demo.io", new string('x', 64))).Ok);
+    }
+
+    [Theory]
+    [InlineData("R2D2 Droid", "RD Droid")]
+    [InlineData("Rey!_Santos", "ReySantos")]
+    [InlineData("Mary-Ann O'Brien", "Mary-Ann O'Brien")]
+    [InlineData("José Peña", "José Peña")]
+    [InlineData("12345", "")]
+    public void The_name_field_drops_anything_that_is_not_a_letter_as_you_type(string typed, string kept) =>
+        Assert.Equal(kept, AccountRules.KeepNameChars(typed));
 }

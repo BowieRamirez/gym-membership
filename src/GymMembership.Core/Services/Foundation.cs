@@ -59,6 +59,9 @@ public static class ErrorText
     {
         "invalid_code" => "That discount code isn't valid, or it has expired.",
         "bad_input" => "Fill in every field. The password needs at least 6 characters.",
+        "bad_name" => "Use letters only in your name. Spaces, hyphens and apostrophes are fine. 2 to 60 characters.",
+        "bad_email" => "Enter a valid email address, for example name@example.com. Up to 100 characters.",
+        "bad_password" => "Use 6 to 64 characters for your password.",
         "bad_discount" => "Enter a code and a percent between 1 and 100.",
         "email_confirmation_required" => "Check your email and confirm your address, then sign in.",
         "wrong_password" => "Your current password isn't right.",

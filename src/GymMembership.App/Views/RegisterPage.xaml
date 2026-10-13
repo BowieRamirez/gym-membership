@@ -3,6 +3,7 @@
             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
             xmlns:v="clr-namespace:GymMembership.App.Views"
             xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.RegisterPage" x:DataType="vm:RegisterViewModel"
             Title="Create an account">
@@ -22,20 +23,20 @@
 
             <VerticalStackLayout Spacing="6">
                 <Label Text="Full name" Style="{StaticResource Caption}" />
-                <Border Style="{StaticResource Field}"><Entry Text="{Binding FullName}" ReturnType="Next" SemanticProperties.Description="Full name" /></Border>
+                <Border Style="{StaticResource Field}"><Entry Text="{Binding FullName}" TextChanged="OnNameChanged" MaxLength="{x:Static svc:AccountRules.MaxName}" ReturnType="Next" SemanticProperties.Description="Full name" /></Border>
             </VerticalStackLayout>
             <VerticalStackLayout Spacing="6">
                 <Label Text="Email" Style="{StaticResource Caption}" />
-                <Border Style="{StaticResource Field}"><Entry Text="{Binding Email}" Keyboard="Email" ReturnType="Next" SemanticProperties.Description="Email address" /></Border>
+                <Border Style="{StaticResource Field}"><Entry Text="{Binding Email}" MaxLength="{x:Static svc:AccountRules.MaxEmail}" Keyboard="Email" ReturnType="Next" SemanticProperties.Description="Email address" /></Border>
             </VerticalStackLayout>
             <VerticalStackLayout Spacing="6">
-                <Label Text="Password (at least 6 characters)" Style="{StaticResource Caption}" />
-                <Border Style="{StaticResource Field}"><Entry Text="{Binding Password}" IsPassword="True" ReturnType="Next" SemanticProperties.Description="Password" /></Border>
+                <Label Text="Password (6 to 64 characters)" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}"><Entry Text="{Binding Password}" MaxLength="{x:Static svc:AccountRules.MaxPassword}" IsPassword="True" ReturnType="Next" SemanticProperties.Description="Password" /></Border>
             </VerticalStackLayout>
             <VerticalStackLayout Spacing="6">
                 <Label Text="Repeat password" Style="{StaticResource Caption}" />
                 <Border Style="{StaticResource Field}">
-                    <Entry Text="{Binding ConfirmPassword}" IsPassword="True" ReturnType="Done" ReturnCommand="{Binding RegisterCommand}" SemanticProperties.Description="Repeat password" />
+                    <Entry Text="{Binding ConfirmPassword}" MaxLength="{x:Static svc:AccountRules.MaxPassword}" IsPassword="True" ReturnType="Done" ReturnCommand="{Binding RegisterCommand}" SemanticProperties.Description="Repeat password" />
                 </Border>
             </VerticalStackLayout>
 
