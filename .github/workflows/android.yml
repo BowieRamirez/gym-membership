@@ -51,11 +51,6 @@ jobs:
           distribution: microsoft
           java-version: '21'
 
-      - uses: actions/cache@v6
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-android-${{ hashFiles('**/*.csproj', 'global.json') }}
-          restore-keys: nuget-${{ runner.os }}-android-
 
       - name: Install the Android workload
         run: dotnet workload install maui-android --version "$WORKLOAD_VERSION" --ignore-failed-sources
@@ -90,6 +85,11 @@ jobs:
           SUPABASE_SMOKE_EMAIL: ${{ secrets.SUPABASE_SMOKE_EMAIL }}
           SUPABASE_SMOKE_PASSWORD: ${{ secrets.SUPABASE_SMOKE_PASSWORD }}
         run: node scripts/check-supabase.mjs
+
+      # Restore on its own so a NuGet problem shows its real message instead of "RestoreTask returned false".
+      # No NuGet cache on purpose: a restored cache made restore fail silently on the first tag build.
+      - name: Restore
+        run: dotnet restore src/GymMembership.App -p:PlatformOnly=android -p:Configuration=Release -v:normal
 
       - name: Build (no signing key available)
         if: ${{ env.ANDROID_KEYSTORE_BASE64 == '' }}

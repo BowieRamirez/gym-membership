@@ -51,11 +51,6 @@ jobs:
         with:
           global-json-file: global.json
 
-      - uses: actions/cache@v6
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-windows-${{ hashFiles('**/*.csproj', 'global.json') }}
-          restore-keys: nuget-${{ runner.os }}-windows-
 
       - name: Install the Windows workload
         run: dotnet workload install maui-windows --version $env:WORKLOAD_VERSION --ignore-failed-sources
@@ -180,11 +175,6 @@ jobs:
         with:
           global-json-file: global.json
 
-      - uses: actions/cache@v6
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-windows-msi-${{ hashFiles('**/*.csproj', 'global.json') }}
-          restore-keys: nuget-${{ runner.os }}-windows-msi-
 
       - name: Install the Windows workload
         run: dotnet workload install maui-windows --version $env:WORKLOAD_VERSION --ignore-failed-sources
