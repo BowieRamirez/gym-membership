@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| **Status** | Phases 1 to 3b are implemented in the repository (workflows, installer definition, project switches). Phase 4 (secrets and the first `v0.1.0a` release) needs the owner. |
+| **Status** | Phases 1 to 3b are implemented and the first release, **`v0.1.0a`**, is published (pre-release) with the signed APK, MSIX, sideload zip, MSI, certificate and checksums. What remains is installing the files on a clean phone and a clean PC (Phase 4 acceptance) and the optional Phase 5 items. |
 | **Date** | 2026-10-14 |
 | **Scope** | Build, test, sign and publish the .NET MAUI app for **Windows** and **Android** using GitHub Actions hosted runners. Testers and users install from the repository's **Releases** page. |
 | **Out of scope** | iOS / Mac Catalyst, Google Play and Microsoft Store submission, auto-update inside the app, deploying Supabase migrations and Edge Functions. |
