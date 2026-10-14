@@ -1,0 +1,70 @@
+name: Tests
+
+# Unit tests and the local database tests. Needs no MAUI workload, so it is fast and runs on Linux.
+# Both jobs are meant to be required checks on main (see docs/specs/ci-cd-pipelines.md).
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  unit:
+    name: unit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-tests-${{ hashFiles('**/*.csproj', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-tests-
+
+      - name: Run unit tests
+        run: dotnet test tests/GymMembership.Tests -c Release --logger "trx;LogFileName=results.trx"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: unit-test-results
+          path: tests/GymMembership.Tests/TestResults/results.trx
+          if-no-files-found: ignore
+
+  database:
+    name: database
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: supabase/tests/local
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: supabase/tests/local/package-lock.json
+
+      - run: npm ci
+
+      - name: Run database tests (embedded Postgres)
+        run: npm test

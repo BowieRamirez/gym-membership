@@ -10,7 +10,7 @@
 ## 1. Goals
 
 1. Every pull request and every push to `main` proves the code builds for both platforms and the tests pass.
-2. A version tag (`v1.2.3`) produces a signed **Android APK** and signed **Windows installers (MSIX and MSI)**, attached to a GitHub Release that anyone with the link can download.
+2. A version tag (the first one is `v0.1.0a`) produces a signed **Android APK** and signed **Windows installers (MSIX and MSI)**, attached to a GitHub Release that anyone with the link can download.
 3. The Android and Windows pipelines are **independent**: separate workflow files, separate runners, separate workloads, separate secrets. A failure, a slow runner or a flaky workload install on one platform never blocks, cancels or corrupts the other.
 4. Builds are reproducible: pinned .NET SDK, pinned MAUI workload set, pinned runner images, no secrets in logs.
 
@@ -200,7 +200,7 @@ Runner `ubuntu-24.04`, timeout 30 minutes. Job permissions: `contents: write` (n
 | 3 | JDK | `actions/setup-java@v6`, `distribution: microsoft`, `java-version: 21` (MAUI 10 builds with JDK 21; the runner default is 17) |
 | 4 | NuGet cache | `actions/cache@v6` |
 | 5 | Workload | `dotnet workload install maui-android --version $WORKLOAD_VERSION` |
-| 6 | Version | Tag `v1.2.3` gives `1.2.3`; otherwise `0.0.0-ci.<run number>`. Written to `$GITHUB_ENV`. |
+| 6 | Version | The tag is the version: `v0.1.0a` gives `0.1.0a` (Android `versionName`). A tag that is not `vMAJOR.MINOR.PATCH` with an optional letter or `-suffix` fails the job. A trailing letter or `-suffix` marks a pre-release. Other runs use `0.0.0-ci.<run number>`. Written to `$GITHUB_ENV`. |
 | 7 | Backend settings | Non-PR only, only if both secrets exist: write `supabase.json` with `jq`, then run `node scripts/check-supabase.mjs` (section 4.7). A failed check stops the job before anything is built. |
 | 8 | Keystore | If `ANDROID_KEYSTORE_BASE64` exists, decode to `$RUNNER_TEMP`. |
 | 9a | Build (PR) | No keystore: `dotnet build -c Release -p:PlatformOnly=android` to prove it compiles. |
@@ -218,7 +218,7 @@ Runner `windows-2025`, shell `pwsh`, timeout 40 minutes. Same permissions model 
 | --- | --- | --- |
 | 1-4 | Checkout, .NET SDK, NuGet cache | as Android |
 | 5 | Workload | `dotnet workload install maui-windows --version $env:WORKLOAD_VERSION` (no Android pack is downloaded, thanks to `PlatformOnly`) |
-| 6 | Version | Tag `v1.2.3` (or `v1.2.3-rc.1`) gives the numeric `1.2.3` for the MSIX manifest. Non-tag builds use `0.0.<run number>`. |
+| 6 | Version | Same tag rules as Android. The MSIX manifest needs numbers, so `v0.1.0a` gives MSIX version `0.1.0.<run number>`; the letter stays in the release title and file names (`GymMembership-0.1.0a-win-x64.msix`). |
 | 7 | Backend settings | as Android, including the smoke check |
 | 8 | Certificate | If `WINDOWS_PFX_BASE64` exists: write the `.pfx`, `Import-PfxCertificate` into `Cert:\CurrentUser\My`, keep the thumbprint. (The build itself writes the public `.cer` next to the MSIX.) |
 | 9a | Build (PR / no certificate) | `dotnet publish ... -p:WindowsPackageType=MSIX -p:AppxPackageSigningEnabled=false` to prove packaging works (unsigned, not uploaded as a release asset). |
@@ -242,13 +242,17 @@ The solution is **never** published: `dotnet publish` on the whole solution trie
 
 ## 6. Versioning
 
-| Value | Source | Android | Windows (MSIX) |
-| --- | --- | --- | --- |
-| Display version | tag `v1.2.3` | `ApplicationDisplayVersion=1.2.3` (versionName) | `ApplicationDisplayVersion=1.2.3` (numeric only; a `-rc.1` suffix is dropped) |
-| Build number | `github.run_number` | `ApplicationVersion` (versionCode), must only increase | `ApplicationVersion`, becomes the 4th part: `1.2.3.15` (verified, section 10) |
-| Non-tag builds | `main` / manual | `0.0.0-ci.<n>` | `0.0.0.<n>` |
+**The git tag is the version.** The first release is **`0.1.0a`**, published by pushing the tag `v0.1.0a`. Accepted tag shapes: `v0.1.0a`, `v0.1.0b`, `v1.2.3`, `v1.2.3-rc.1` (anything else fails the build with a clear message, so a typo cannot produce a release).
 
-Pre-release tags (`v1.2.3-rc.1`, anything containing `-`) are published as **pre-releases** on the Releases page.
+| Value | Source | Android | Windows (MSIX / MSI) |
+| --- | --- | --- | --- |
+| Release name, file names | tag `v0.1.0a` | `GymMembership-0.1.0a-android.apk` | `GymMembership-0.1.0a-win-x64.msix`, `.msi`, `-sideload.zip` |
+| Display version | tag | `ApplicationDisplayVersion=0.1.0a` (versionName, free text) | `ApplicationDisplayVersion=0.1.0`: numbers only, the letter is dropped (a `-rc.1` suffix is dropped too) |
+| Build number | `github.run_number` | `ApplicationVersion` (versionCode), must only increase | `ApplicationVersion`, becomes the 4th part: `0.1.0.15` (verified, section 10) |
+| Non-tag builds | `main` / manual | `0.0.0-ci.<n>` | `0.0.0.<n>` |
+| Day-to-day builds | csproj | `ApplicationDisplayVersion` is `0.1.0` (numeric on purpose) | same |
+
+A trailing letter (`0.1.0a`, `0.1.0b`) or a `-suffix` marks the release as a **pre-release** on the Releases page, which is right for an alpha. It is still downloadable by everyone; the Releases page just labels it "Pre-release". Untick that box on the release page, or drop the letter from the tag, when the app is ready for a plain release.
 
 ## 7. Releases page
 
@@ -267,7 +271,7 @@ The Releases page is where testers and users get the apps. A tag `v*` is the onl
 
 **How a release is created**
 
-1. Maintainer pushes a tag: `git tag v1.0.0 && git push origin v1.0.0` (or runs the workflow manually on a tag).
+1. Maintainer pushes a tag: `git tag v0.1.0a && git push origin v0.1.0a` (or runs the workflow manually on a tag).
 2. Android and Windows workflows start independently.
 3. Whichever finishes its build first runs, using the preinstalled GitHub CLI and the job's `GITHUB_TOKEN`:
    ```
@@ -378,7 +382,7 @@ Supabase probe results are in section 4.7. Not verified here: signed-in access t
 | 2. Tests + Android | `tests.yml` and `android.yml`. | A pull request shows `unit`, `database`, Android `build` green; the `main` push uploads a signed APK artifact that installs on a phone. |
 | 3a. Windows MSIX | `windows.yml` with the MSIX job. | A pull request shows Windows `build` green; the `main` push uploads a signed MSIX that installs through the sideload zip's `Install.ps1` on a clean Windows PC, signs in, and still is signed in after closing and reopening the app. |
 | 3b. Windows MSI | Add `installer/windows/Product.wxs` and the `msi` job. | The `.msi` installs and uninstalls on a clean PC, and a second, higher version upgrades it in place. The MSIX result is unaffected by the MSI job failing. |
-| 4. Release dry run | Tag `v0.1.0-rc.1`. | A pre-release appears with both installers, hashes, certificate and notes; testers install both, sign in and load the package list against the real Supabase project; then delete the dry-run release and tag. |
+| 4. Release dry run | Tag `v0.1.0a` (the first real alpha; delete the release and tag if the dry run finds a problem and tag again). | A pre-release appears with both installers, hashes, certificate and notes; testers install both, sign in and load the package list against the real Supabase project; then delete the dry-run release and tag. |
 | 5. Optional | `nightly` pre-release; a weekly `keepalive.yml` that calls the Supabase API so a free project does not pause; Azure Trusted Signing or a purchased certificate; attestation of artifacts. | Only if asked for. |
 
 Branch protection is switched on at the end of Phase 3a, once the check names exist.
@@ -392,6 +396,7 @@ Branch protection is switched on at the end of Phase 3a, once the check names ex
 | Final `ApplicationId` and publisher | Company **Slim & Shape**. Application id `com.slimshape.gymmembership`; MSIX publisher `CN=SlimShape`, display name "Slim & Shape". |
 | Signing | Self-signed certificate for Windows (standard for test distribution), release keystore for Android. |
 | Windows installer | Ship **both MSIX and MSI** (section 4.4). MSIX first; MSI follows in Phase 3b. |
+| First release version | **`0.1.0a`**, published by the tag `v0.1.0a`; a pre-release on the Releases page (section 6). |
 | Android ABIs | One universal APK containing **arm64-v8a and x86_64** so phones and Android Studio emulators both work. |
 
 **Still open**
@@ -537,8 +542,18 @@ jobs:
 
       - name: Work out the version
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="0.0.0-ci.${GITHUB_RUN_NUMBER}"; fi
+          pre=false
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            v="${GITHUB_REF_NAME#v}"
+            if [[ ! "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+([a-z]|-[0-9A-Za-z.-]+)?$ ]]; then
+              echo "::error::The tag '$GITHUB_REF_NAME' is not a version such as v0.1.0a, v1.2.3 or v1.2.3-rc.1"; exit 1
+            fi
+            if [[ "$v" =~ [a-z]$ || "$v" == *-* ]]; then pre=true; fi
+          else
+            v="0.0.0-ci.${GITHUB_RUN_NUMBER}"
+          fi
           echo "VERSION=$v" >> "$GITHUB_ENV"
+          echo "PRERELEASE=$pre" >> "$GITHUB_ENV"
 
       - name: Add Supabase settings
         if: ${{ github.event_name != 'pull_request' && env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' }}
@@ -597,7 +612,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          pre=""; [[ "$GITHUB_REF_NAME" == *-* ]] && pre="--prerelease"
+          pre=""; [[ "$PRERELEASE" == "true" ]] && pre="--prerelease"
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
             || gh release create "$GITHUB_REF_NAME" --title "Gym Membership ${VERSION}" --generate-notes $pre \
             || gh release view "$GITHUB_REF_NAME" >/dev/null
@@ -663,8 +678,16 @@ jobs:
 
       - name: Work out the version
         run: |
-          if ($env:GITHUB_REF -like 'refs/tags/v*') { $v = ($env:GITHUB_REF_NAME.Substring(1) -split '-')[0] } else { $v = "0.0.0" }
-          "VERSION=$v" >> $env:GITHUB_ENV
+          $pre = 'false'
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $v = $env:GITHUB_REF_NAME.Substring(1)
+            if ($v -cnotmatch '^\d+\.\d+\.\d+([a-z]|-[0-9A-Za-z.-]+)?$') { Write-Error "The tag '$env:GITHUB_REF_NAME' is not a version such as v0.1.0a, v1.2.3 or v1.2.3-rc.1"; exit 1 }
+            if ($v -cmatch '[a-z]$' -or $v -like '*-*') { $pre = 'true' }
+            $num = [regex]::Match($v, '^\d+\.\d+\.\d+').Value
+          } else { $v = "0.0.0-ci.$env:GITHUB_RUN_NUMBER"; $num = '0.0.0' }
+          "VERSION=$v" >> $env:GITHUB_ENV          # names and release title, may carry a letter
+          "MSIX_VERSION=$num" >> $env:GITHUB_ENV   # numbers only, for the package manifest
+          "PRERELEASE=$pre" >> $env:GITHUB_ENV
 
       - name: Add Supabase settings
         if: ${{ github.event_name != 'pull_request' && env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' }}
@@ -702,7 +725,7 @@ jobs:
           -p:PlatformOnly=windows -p:RuntimeIdentifierOverride=win-x64 -p:WindowsPackageType=MSIX
           -p:WindowsAppSDKSelfContained=true -p:AppxPackageSigningEnabled=true
           -p:PackageCertificateThumbprint=$env:THUMBPRINT
-          -p:ApplicationDisplayVersion=$env:VERSION -p:ApplicationVersion=$env:GITHUB_RUN_NUMBER
+          -p:ApplicationDisplayVersion=$env:MSIX_VERSION -p:ApplicationVersion=$env:GITHUB_RUN_NUMBER
 
       - name: Collect release files
         if: ${{ env.WINDOWS_PFX_BASE64 != '' }}
@@ -729,7 +752,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $pre = @(); if ($env:GITHUB_REF_NAME -like '*-*') { $pre = @('--prerelease') }
+          $pre = @(); if ($env:PRERELEASE -eq 'true') { $pre = @('--prerelease') }
           gh release view $env:GITHUB_REF_NAME *> $null
           if ($LASTEXITCODE -ne 0) {
             gh release create $env:GITHUB_REF_NAME --title "Gym Membership $env:VERSION" --generate-notes @pre
@@ -826,14 +849,14 @@ GymMembership.App_<version>_Test/
           dotnet publish src/GymMembership.App -f net10.0-windows10.0.19041.0 -c Release
           -p:PlatformOnly=windows -p:RuntimeIdentifierOverride=win-x64 -p:WindowsPackageType=None
           -p:WindowsAppSDKSelfContained=true -p:SelfContained=true
-          -p:ApplicationDisplayVersion=$env:VERSION -o publish\win-x64
+          -p:ApplicationDisplayVersion=$env:MSIX_VERSION -o publish\win-x64
 
       - name: Build the MSI
         run: |
           dotnet tool install --global wix --version 5.*
           New-Item -ItemType Directory -Force artifacts | Out-Null
           wix build installer\windows\Product.wxs `
-            -d PublishDir="$PWD\publish\win-x64" -d Version="$env:VERSION.$env:GITHUB_RUN_NUMBER" -arch x64 `
+            -d PublishDir="$PWD\publish\win-x64" -d Version="$env:MSIX_VERSION.$env:GITHUB_RUN_NUMBER" -arch x64 `
             -o "artifacts\GymMembership-$($env:VERSION)-win-x64.msi"
 
       - name: Sign the MSI

@@ -44,7 +44,8 @@
 		<ApplicationId>com.slimshape.gymmembership</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+		<!-- Day-to-day builds. Release builds take the version from the git tag (v0.1.0a), see docs/specs/ci-cd-pipelines.md. Keep it numeric: the MSIX manifest needs numbers. -->
+		<ApplicationDisplayVersion>0.1.0</ApplicationDisplayVersion>
 		<ApplicationVersion>1</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
