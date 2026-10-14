@@ -124,7 +124,7 @@ Recommendation to testers: **MSIX first** (cleanest, updates itself in place); u
 ### 4.5 Android: sideload APK
 
 - Format: `-p:AndroidPackageFormats=apk` (the Release default is `aab;apk`; an AAB cannot be sideloaded and the `env:` password prefix is not supported for AAB).
-- ABI: **one universal APK with `arm64-v8a` and `x86_64`**, built with `-p:RuntimeIdentifiers="android-arm64;android-x64"`. Phones use arm64; testers on PC emulators (Android Studio) use x86_64; nobody has to choose a file. Cost is a larger APK (measured in section 10). 32-bit ARM (`armeabi-v7a`) is not included; add `android-arm` if an old phone ever needs it.
+- ABI: **one universal APK with `arm64-v8a` and `x86_64`**. Phones use arm64; testers on PC emulators (Android Studio) use x86_64; nobody has to choose a file. The ABI list is set in the csproj for Release builds only (`<RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>`); Debug builds stay single-ABI and fast. Passing the list on the command line does not work (`MSB1006` / `NETSDK1083`, see section 10). Measured size: **32.8 MB**. 32-bit ARM (`armeabi-v7a`) is not included; add `android-arm` if an old phone ever needs it.
 - Signing: a release keystore stored as a base64 secret. **The same keystore must sign every release.** Android refuses to update an app signed with a different key; users would have to uninstall and lose local data. The keystore needs an offline backup (section 9).
 - `ApplicationVersion` (Android `versionCode`) is the workflow run number, which only ever increases, so every build installs over the previous one. `ApplicationDisplayVersion` is the tag version.
 
@@ -203,7 +203,7 @@ Runner `ubuntu-24.04`, timeout 30 minutes. Job permissions: `contents: write` (n
 | 6 | Version | Tag `v1.2.3` gives `1.2.3`; otherwise `0.0.0-ci.<run number>`. Written to `$GITHUB_ENV`. |
 | 7 | Backend settings | Non-PR only, only if both secrets exist: write `supabase.json` with `jq`, then run `node scripts/check-supabase.mjs` (section 4.7). A failed check stops the job before anything is built. |
 | 8 | Keystore | If `ANDROID_KEYSTORE_BASE64` exists, decode to `$RUNNER_TEMP`. |
-| 9a | Build (PR) | No keystore: `dotnet build -c Release -p:PlatformOnly=android -p:RuntimeIdentifiers="android-arm64;android-x64"` to prove it compiles. |
+| 9a | Build (PR) | No keystore: `dotnet build -c Release -p:PlatformOnly=android` to prove it compiles. |
 | 9b | Publish (signed) | With keystore: `dotnet publish ... -p:AndroidKeyStore=true` and the signing properties (reference YAML, appendix A). Passwords go through `env:` so they never reach the log. |
 | 10 | Name and hash | Rename to `GymMembership-<version>-android.apk`, write `.sha256`. |
 | 11 | Artifact | `actions/upload-artifact@v7`, 14 days. |
@@ -294,7 +294,7 @@ An optional rolling pre-release tagged `nightly` (rebuilt from every push to `ma
 | File | Change |
 | --- | --- |
 | `global.json` | New: SDK pin (4.3). |
-| `src/GymMembership.App/GymMembership.App.csproj` | Add the `PlatformOnly` lines (4.1) and change `ApplicationId` to `com.slimshape.gymmembership`. |
+| `src/GymMembership.App/GymMembership.App.csproj` | Add the `PlatformOnly` lines (4.1), the Release-only Android `RuntimeIdentifiers` (4.5), and change `ApplicationId` to `com.slimshape.gymmembership`. |
 | `src/GymMembership.App/Platforms/Windows/Package.appxmanifest` | `Publisher="CN=SlimShape"`, `PublisherDisplayName="Slim &amp; Shape"`. Must match the certificate subject. |
 | `.github/workflows/tests.yml`, `android.yml`, `windows.yml` | New (appendix A has reference versions). |
 | `scripts/check-supabase.mjs` | New: the Supabase smoke check (section 4.7). Plain Node, no dependencies. |
@@ -357,6 +357,16 @@ Commands were run on a Windows 11 developer machine with SDK 10.0.401 against a 
 | Output location | **Not** under `bin\Release`. The package lands in `src/GymMembership.App/AppPackages/GymMembership.App_<version>_Test/`, which holds the `.msix`, the public `.cer`, and Microsoft's generated sideload helpers `Install.ps1`, `Add-AppDevPackage.ps1` and `Add-AppDevPackage.resources`. `AppPackages/` must be git-ignored. |
 | Real repository | Untouched by these runs. The temporary certificate was created in the current user's personal store for the test and removed afterwards. |
 
+**Phase 1 re-check** (2026-10-14, on the Phase 1 branch with the real changes applied):
+
+| Check | Result |
+| --- | --- |
+| Default developer builds (`dotnet build -f net10.0-windows...` and `-f net10.0-android`, no `PlatformOnly`) | **Passed** (23 s and 42 s). Visual Studio and local builds behave as before. |
+| `-p:RuntimeIdentifiers=android-arm64;android-x64` on the command line | **Failed**: `MSB1006` with a plain `;`, and `NETSDK1083` with `%3B`. The ABI list therefore lives in the csproj (Release only). |
+| `dotnet publish -p:PlatformOnly=android` with the csproj ABI list | **Passed**, 176 s. `com.slimshape.gymmembership-Signed.apk` is **32.8 MB** and contains `arm64-v8a` and `x86_64`. |
+| `dotnet publish -p:PlatformOnly=windows -p:WindowsPackageType=MSIX` signed with a throwaway `CN=SlimShape` certificate | **Passed**, 52 s, **66.5 MB**. `Identity Name="com.slimshape.gymmembership" Publisher="CN=SlimShape" Version="0.0.12.12"`, `PublisherDisplayName` "Slim & Shape", signer `CN=SlimShape`. |
+| `scripts/check-supabase.mjs` against the real project | **Passed** (3 checks, the signed-in check is skipped without a smoke account). It also **fails correctly** (exit 1) with a corrupted key and with a non-existent project URL, and exits 2 when the variables are missing. |
+
 Supabase probe results are in section 4.7. Not verified here: signed-in access to the database (needs an account), installing the MSIX on a clean PC, installing the APK on a phone, and anything that only exists on GitHub-hosted runners (workload install time, image contents). Those are the acceptance checks in Phases 2 to 4.
 
 ## 11. Rollout plan
@@ -364,7 +374,7 @@ Supabase probe results are in section 4.7. Not verified here: signed-in access t
 | Phase | Work | Done when |
 | --- | --- | --- |
 | 0. Decisions and secrets | Decisions are made (section 12). Create keystore and certificate (`CN=SlimShape`), add the secrets, back both up offline. Work through the Supabase checklist (section 4.7). | Secrets exist; backups stored outside the repository. |
-| 1. Repository prep | `global.json`, `PlatformOnly` lines, manifest Publisher, `.gitattributes`, `.gitignore` additions, `release.yml`, `dependabot.yml`. | Local `dotnet build` of the App and `dotnet test` unchanged and green; both `-p:PlatformOnly=` publishes work locally. |
+| 1. Repository prep (done on branch `ci-cd-phase1`) | `global.json`, `PlatformOnly` lines, manifest Publisher, `.gitattributes`, `.gitignore` additions, `release.yml`, `dependabot.yml`. | Local `dotnet build` of the App and `dotnet test` unchanged and green; both `-p:PlatformOnly=` publishes work locally. |
 | 2. Tests + Android | `tests.yml` and `android.yml`. | A pull request shows `unit`, `database`, Android `build` green; the `main` push uploads a signed APK artifact that installs on a phone. |
 | 3a. Windows MSIX | `windows.yml` with the MSIX job. | A pull request shows Windows `build` green; the `main` push uploads a signed MSIX that installs through the sideload zip's `Install.ps1` on a clean Windows PC, signs in, and still is signed in after closing and reopening the app. |
 | 3b. Windows MSI | Add `installer/windows/Product.wxs` and the `msi` job. | The `.msi` installs and uninstalls on a clean PC, and a second, higher version upgrades it in place. The MSIX result is unaffected by the MSI job failing. |
@@ -547,7 +557,7 @@ jobs:
         if: ${{ env.ANDROID_KEYSTORE_BASE64 == '' }}
         run: >
           dotnet build src/GymMembership.App -c Release
-          -p:PlatformOnly=android -p:RuntimeIdentifiers="android-arm64;android-x64"
+          -p:PlatformOnly=android
 
       - name: Decode keystore
         if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
@@ -559,7 +569,7 @@ jobs:
           AndroidSigningPassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: >
           dotnet publish src/GymMembership.App -f net10.0-android -c Release
-          -p:PlatformOnly=android -p:RuntimeIdentifiers="android-arm64;android-x64" -p:AndroidPackageFormats=apk
+          -p:PlatformOnly=android -p:AndroidPackageFormats=apk
           -p:AndroidKeyStore=true
           -p:AndroidSigningKeyStore="$RUNNER_TEMP/release.keystore"
           -p:AndroidSigningKeyAlias="$ANDROID_KEY_ALIAS"

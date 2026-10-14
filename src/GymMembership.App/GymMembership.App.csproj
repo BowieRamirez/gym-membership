@@ -5,6 +5,15 @@
 		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx'))">$(TargetFrameworks);net10.0-ios</TargetFrameworks>
 		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
 
+		<!-- CI builds one platform at a time: -p:PlatformOnly=android or -p:PlatformOnly=windows. A custom property is used
+		     because a global TargetFrameworks would also reach the Core project reference and break it.
+		     See docs/specs/ci-cd-pipelines.md. -->
+		<TargetFrameworks Condition="'$(PlatformOnly)' == 'android'">net10.0-android</TargetFrameworks>
+		<TargetFrameworks Condition="'$(PlatformOnly)' == 'windows'">net10.0-windows10.0.19041.0</TargetFrameworks>
+
+		<!-- Release APKs carry both ABIs: arm64 phones and x86_64 emulators (Android Studio). Debug builds stay single-ABI and fast. -->
+		<RuntimeIdentifiers Condition="$(TargetFramework.Contains('-android')) and '$(Configuration)' == 'Release'">android-arm64;android-x64</RuntimeIdentifiers>
+
 		<!-- Note for MacCatalyst:
 		The default runtime is maccatalyst-x64, except in Release config, in which case the default is maccatalyst-x64;maccatalyst-arm64.
 		When specifying both architectures, use the plural <RuntimeIdentifiers> instead of the singular <RuntimeIdentifier>.
@@ -32,7 +41,7 @@
 		<ApplicationTitle>GymMembership.App</ApplicationTitle>
 
 		<!-- App Identifier -->
-		<ApplicationId>com.companyname.gymmembership.app</ApplicationId>
+		<ApplicationId>com.slimshape.gymmembership</ApplicationId>
 
 		<!-- Versions -->
 		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>

@@ -1,0 +1,2 @@
+# Let git normalise text files so Windows and CI checkouts agree on line endings.
+* text=auto

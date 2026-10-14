@@ -6,3 +6,11 @@ supabase/.temp/
 supabase/.branches/
 # your Supabase project details (copy supabase.sample.json to this name)
 src/GymMembership.App/Resources/Raw/supabase.json
+
+# MSIX output lands in the project folder
+AppPackages/
+
+# signing material never goes in the repository
+*.pfx
+*.keystore
+*.jks

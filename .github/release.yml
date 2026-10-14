@@ -1,0 +1,11 @@
+# Groups the merged pull requests in auto-generated release notes.
+changelog:
+  categories:
+    - title: Features
+      labels: [enhancement, feature]
+    - title: Fixes
+      labels: [bug, fix]
+    - title: Database
+      labels: [database, supabase]
+    - title: Other changes
+      labels: ['*']
