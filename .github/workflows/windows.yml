@@ -66,7 +66,7 @@ jobs:
             if ($v -cmatch '[a-z]$' -or $v -like '*-*') { $pre = 'true' }
             $num = [regex]::Match($v, '^\d+\.\d+\.\d+').Value
           } else { $v = "0.0.0-ci.$env:GITHUB_RUN_NUMBER"; $num = '0.0.0' }
-          "VERSION=$v" >> $env:GITHUB_ENV
+          "RELEASE_VERSION=$v" >> $env:GITHUB_ENV
           "MSIX_VERSION=$num" >> $env:GITHUB_ENV
           "PRERELEASE=$pre" >> $env:GITHUB_ENV
           "Building version $v (manifest $num.$env:GITHUB_RUN_NUMBER), pre-release: $pre"
@@ -116,7 +116,7 @@ jobs:
         if: ${{ env.WINDOWS_PFX_BASE64 != '' }}
         run: |
           $pkg = Get-ChildItem src\GymMembership.App\AppPackages -Directory | Select-Object -First 1
-          $base = "GymMembership-$($env:VERSION)-win-x64"
+          $base = "GymMembership-$($env:RELEASE_VERSION)-win-x64"
           New-Item -ItemType Directory -Force artifacts | Out-Null
           Compress-Archive -Path "$($pkg.FullName)\*" -DestinationPath "artifacts\$base-sideload.zip"
           Copy-Item (Get-ChildItem $pkg.FullName -Filter *.msix | Select-Object -First 1).FullName "artifacts\$base.msix"
@@ -142,7 +142,7 @@ jobs:
           $pre = @(); if ($env:PRERELEASE -eq 'true') { $pre = @('--prerelease') }
           gh release view $env:GITHUB_REF_NAME *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $env:GITHUB_REF_NAME --title "Gym Membership $env:VERSION" --generate-notes @pre
+            gh release create $env:GITHUB_REF_NAME --title "Gym Membership $env:RELEASE_VERSION" --generate-notes @pre
             if ($LASTEXITCODE -ne 0) { gh release view $env:GITHUB_REF_NAME *> $null; if ($LASTEXITCODE -ne 0) { exit 1 } }
           }
           gh release upload $env:GITHUB_REF_NAME (Get-ChildItem artifacts -File | ForEach-Object FullName) --clobber
@@ -191,7 +191,7 @@ jobs:
             $num = [regex]::Match($v, '^\d+\.\d+\.\d+').Value
           } else { $v = "0.0.0-ci.$env:GITHUB_RUN_NUMBER"; $num = '0.0.0' }
           $parts = $num.Split('.')
-          "VERSION=$v" >> $env:GITHUB_ENV
+          "RELEASE_VERSION=$v" >> $env:GITHUB_ENV
           "MSIX_VERSION=$num" >> $env:GITHUB_ENV
           "MSI_VERSION=$($parts[0]).$($parts[1]).$env:GITHUB_RUN_NUMBER" >> $env:GITHUB_ENV
           "PRERELEASE=$pre" >> $env:GITHUB_ENV
@@ -222,7 +222,7 @@ jobs:
           New-Item -ItemType Directory -Force artifacts | Out-Null
           wix build installer\windows\Product.wxs `
             -d PublishDir="$PWD\publish\win-x64" -d Version="$env:MSI_VERSION" -arch x64 `
-            -o "artifacts\GymMembership-$($env:VERSION)-win-x64.msi"
+            -o "artifacts\GymMembership-$($env:RELEASE_VERSION)-win-x64.msi"
 
       - name: Sign the MSI
         if: ${{ env.WINDOWS_PFX_BASE64 != '' }}
@@ -232,12 +232,12 @@ jobs:
           $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
             Where-Object FullName -like '*\x64\*' | Sort-Object FullName | Select-Object -Last 1
           & $signtool.FullName sign /f $pfx /p $env:WINDOWS_PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
-            "artifacts\GymMembership-$($env:VERSION)-win-x64.msi"
+            "artifacts\GymMembership-$($env:RELEASE_VERSION)-win-x64.msi"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Hash the MSI
         run: |
-          $f = Get-Item "artifacts\GymMembership-$($env:VERSION)-win-x64.msi"
+          $f = Get-Item "artifacts\GymMembership-$($env:RELEASE_VERSION)-win-x64.msi"
           "$((Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower())  $($f.Name)" | Set-Content "$($f.FullName).sha256"
           Get-ChildItem artifacts | Format-Table Name, Length
 
@@ -257,7 +257,7 @@ jobs:
           $pre = @(); if ($env:PRERELEASE -eq 'true') { $pre = @('--prerelease') }
           gh release view $env:GITHUB_REF_NAME *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $env:GITHUB_REF_NAME --title "Gym Membership $env:VERSION" --generate-notes @pre
+            gh release create $env:GITHUB_REF_NAME --title "Gym Membership $env:RELEASE_VERSION" --generate-notes @pre
             if ($LASTEXITCODE -ne 0) { gh release view $env:GITHUB_REF_NAME *> $null; if ($LASTEXITCODE -ne 0) { exit 1 } }
           }
           gh release upload $env:GITHUB_REF_NAME (Get-ChildItem artifacts -File | ForEach-Object FullName) --clobber

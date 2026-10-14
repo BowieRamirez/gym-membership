@@ -89,7 +89,8 @@ Without the property nothing changes, so Visual Studio and local builds behave a
 - **SDK:** add `global.json` with `"version": "10.0.401"`, `"rollForward": "latestPatch"`. CI uses `actions/setup-dotnet` with `global-json-file`.
 - **Workloads:** .NET 10 uses workload sets by default. CI pins the set explicitly: `dotnet workload install maui-android --version 10.0.401` (Android job) and `dotnet workload install maui-windows --version 10.0.401` (Windows job). The version lives in one place, an `env` value at the top of each workflow. Do **not** put `workloadVersion` in `global.json`: it would force workload-set mode on every developer machine. A past MAUI manifest was briefly missing from NuGet and broke every unpinned CI run (dotnet/maui#33987); pinning is the recommended protection.
 - **Runner images:** pinned labels (section 3).
-- **NuGet:** `actions/cache` on `~/.nuget/packages` (Linux) / `%USERPROFILE%\.nuget\packages` (Windows), keyed on the csproj files and `global.json`.
+- **NuGet:** the unit-test job caches `~/.nuget/packages`; the Android and Windows jobs do not cache, which keeps each platform build self-contained.
+- **Environment variable names:** MSBuild turns every environment variable into a property, so a workflow variable named `VERSION` becomes the project's `Version` and NuGet silently rejects `0.1.0a` ("RestoreTask returned false but did not log an error"). The workflows therefore call it `RELEASE_VERSION`. This was the cause of the first failed `v0.1.0a` builds on both platforms and was reproduced locally (section 10).
 - **Actions:** only first-party `actions/*` actions, pinned to the current major (`checkout@v7`, `setup-dotnet@v6`, `setup-java@v6`, `setup-node@v7`, `cache@v6`, `upload-artifact@v7`). Dependabot keeps them current (section 8).
 
 ### 4.4 Windows installers: MSIX and MSI, both shipped
@@ -379,6 +380,8 @@ Commands were run on a Windows 11 developer machine with SDK 10.0.401 against a 
 | Unpackaged self-contained publish (`WindowsPackageType=None`, `SelfContained=true`, `WindowsAppSDKSelfContained=true`) | **Passed**, 53 s: 930 files, 381 MB, `GymMembership.App.exe`. The app **starts and keeps running** (checked after 12 s) with no runtime installed separately. |
 | WiX 5.0.2 `wix build installer/windows/Product.wxs` over that folder | **Passed**, 81 s; **`.msi` is 120 MB**. WiX's `Files` element harvests the folder without a `heat` step. |
 | Administrative extract of the MSI (`msiexec /a`, installs nothing) | **Passed**: 931 files, `GymMembership.App.exe` present, install folder `Program Files\Gym Membership`. |
+
+**First tag build failure** (2026-10-14): `dotnet restore` failed in about 40 ms with `RestoreTask returned false but did not log an error` on both platforms. Reproduced locally: with the environment variable `VERSION=0.1.0a` restore fails exactly like that; with `VERSION=0.0.0-ci.10` (the value normal builds had) or with the variable renamed to `RELEASE_VERSION=0.1.0a` it passes. Fix: the variable is `RELEASE_VERSION` in both workflows.
 
 Not verified locally: a real per-machine install and upgrade of the MSI (Phase 4 acceptance on a clean PC), and the workflows themselves, which only run on GitHub.
 

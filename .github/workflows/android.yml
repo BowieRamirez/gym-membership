@@ -68,7 +68,7 @@ jobs:
           else
             v="0.0.0-ci.${GITHUB_RUN_NUMBER}"
           fi
-          echo "VERSION=$v" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION=$v" >> "$GITHUB_ENV"
           echo "PRERELEASE=$pre" >> "$GITHUB_ENV"
           echo "Building version $v (build $GITHUB_RUN_NUMBER), pre-release: $pre"
 
@@ -87,7 +87,8 @@ jobs:
         run: node scripts/check-supabase.mjs
 
       # Restore on its own so a NuGet problem shows its real message instead of "RestoreTask returned false".
-      # No NuGet cache on purpose: a restored cache made restore fail silently on the first tag build.
+      # Careful with environment variable names: MSBuild reads every one as a property, so a variable called VERSION
+      # becomes the project's Version, and NuGet silently refuses "0.1.0a". The release version lives in RELEASE_VERSION.
       - name: Restore
         run: dotnet restore src/GymMembership.App -p:PlatformOnly=android -p:Configuration=Release -v:normal
 
@@ -112,15 +113,15 @@ jobs:
           -p:AndroidSigningKeyAlias="$ANDROID_KEY_ALIAS"
           -p:AndroidSigningKeyPass=env:AndroidSigningPassword
           -p:AndroidSigningStorePass=env:AndroidSigningPassword
-          -p:ApplicationDisplayVersion="$VERSION" -p:ApplicationVersion="$GITHUB_RUN_NUMBER"
+          -p:ApplicationDisplayVersion="$RELEASE_VERSION" -p:ApplicationVersion="$GITHUB_RUN_NUMBER"
           -o artifacts
 
       - name: Name and hash the APK
         if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
         run: |
           cd artifacts
-          mv ./*-Signed.apk "GymMembership-${VERSION}-android.apk"
-          sha256sum "GymMembership-${VERSION}-android.apk" > "GymMembership-${VERSION}-android.apk.sha256"
+          mv ./*-Signed.apk "GymMembership-${RELEASE_VERSION}-android.apk"
+          sha256sum "GymMembership-${RELEASE_VERSION}-android.apk" > "GymMembership-${RELEASE_VERSION}-android.apk.sha256"
           ls -l GymMembership-*
 
       - uses: actions/upload-artifact@v7
@@ -138,7 +139,7 @@ jobs:
         run: |
           pre=""; [[ "$PRERELEASE" == "true" ]] && pre="--prerelease"
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
-            || gh release create "$GITHUB_REF_NAME" --title "Gym Membership ${VERSION}" --generate-notes $pre \
+            || gh release create "$GITHUB_REF_NAME" --title "Gym Membership ${RELEASE_VERSION}" --generate-notes $pre \
             || gh release view "$GITHUB_REF_NAME" >/dev/null
           gh release upload "$GITHUB_REF_NAME" artifacts/GymMembership-* --clobber
 
