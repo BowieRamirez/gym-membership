@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| **Status** | Proposed. Nothing in this spec has been added to the repository yet. |
+| **Status** | Phases 1 to 3b are implemented in the repository (workflows, installer definition, project switches). Phase 4 (secrets and the first `v0.1.0a` release) needs the owner. |
 | **Date** | 2026-10-14 |
 | **Scope** | Build, test, sign and publish the .NET MAUI app for **Windows** and **Android** using GitHub Actions hosted runners. Testers and users install from the repository's **Releases** page. |
 | **Out of scope** | iOS / Mac Catalyst, Google Play and Microsoft Store submission, auto-update inside the app, deploying Supabase migrations and Edge Functions. |
@@ -115,11 +115,11 @@ Recommendation to testers: **MSIX first** (cleanest, updates itself in place); u
 - **Self-contained.** `-p:WindowsAppSDKSelfContained=true` bundles the Windows App SDK runtime, so the PC needs nothing pre-installed.
 - **Upgrade path.** If the project later buys a trusted certificate (or uses Azure Trusted Signing), only the secret and the manifest `Publisher` change; the workflow is unchanged and the "trust this certificate" step disappears.
 
-**MSI details (Phase 3b, after the MSIX job is green)**
+**MSI details**
 
 - A separate `msi` job in `windows.yml` (`continue-on-error: true`, no `needs`), so an MSI problem can never block the MSIX, the APK or the Release.
-- Steps: `dotnet publish` unpackaged and self-contained (`WindowsPackageType=None`, `SelfContained=true`) to a folder; `dotnet tool install --global wix --version 5.*`; `wix build installer/windows/Product.wxs` (WiX v5's `Files` element harvests the folder, so no `heat` step); sign the `.msi` with `signtool` and the same `.pfx`. Reference job in appendix A.7, `.wxs` sketch in A.8.
-- A stable **UpgradeCode** GUID is created once and never changed; the MSI version is `major.minor.build` with the run number as the build part (MSI ignores the 4th part).
+- Steps: `dotnet publish` unpackaged and self-contained (`WindowsPackageType=None`, `SelfContained=true`) to a folder; `dotnet tool install --global wix --version 5.*`; `wix build installer/windows/Product.wxs` (WiX v5's `Files` element harvests the folder, so no `heat` step); sign the `.msi` with `signtool` and the same `.pfx`. The job is in `.github/workflows/windows.yml`, the definition in `installer/windows/Product.wxs`.
+- A stable **UpgradeCode** GUID (`0D54EA34-C1B2-43CB-BEB8-58A34D7FD682`) is created once and never changed. The MSI product version is `major.minor.<run number>`: Windows Installer compares only the first three parts, so the run number goes in the third and every build upgrades the one before.
 
 ### 4.5 Android: sideload APK
 
@@ -204,7 +204,7 @@ Runner `ubuntu-24.04`, timeout 30 minutes. Job permissions: `contents: write` (n
 | 7 | Backend settings | Non-PR only, only if both secrets exist: write `supabase.json` with `jq`, then run `node scripts/check-supabase.mjs` (section 4.7). A failed check stops the job before anything is built. |
 | 8 | Keystore | If `ANDROID_KEYSTORE_BASE64` exists, decode to `$RUNNER_TEMP`. |
 | 9a | Build (PR) | No keystore: `dotnet build -c Release -p:PlatformOnly=android` to prove it compiles. |
-| 9b | Publish (signed) | With keystore: `dotnet publish ... -p:AndroidKeyStore=true` and the signing properties (reference YAML, appendix A). Passwords go through `env:` so they never reach the log. |
+| 9b | Publish (signed) | With keystore: `dotnet publish ... -p:AndroidKeyStore=true` and the signing properties (see `.github/workflows/android.yml`). Passwords go through `env:` so they never reach the log. |
 | 10 | Name and hash | Rename to `GymMembership-<version>-android.apk`, write `.sha256`. |
 | 11 | Artifact | `actions/upload-artifact@v7`, 14 days. |
 | 12 | Release | Tag runs only: create the Release if missing, upload the APK and `.sha256` with `--clobber` (section 7). |
@@ -300,7 +300,7 @@ An optional rolling pre-release tagged `nightly` (rebuilt from every push to `ma
 | `global.json` | New: SDK pin (4.3). |
 | `src/GymMembership.App/GymMembership.App.csproj` | Add the `PlatformOnly` lines (4.1), the Release-only Android `RuntimeIdentifiers` (4.5), and change `ApplicationId` to `com.slimshape.gymmembership`. |
 | `src/GymMembership.App/Platforms/Windows/Package.appxmanifest` | `Publisher="CN=SlimShape"`, `PublisherDisplayName="Slim &amp; Shape"`. Must match the certificate subject. |
-| `.github/workflows/tests.yml`, `android.yml`, `windows.yml` | New (appendix A has reference versions). |
+| `.github/workflows/tests.yml`, `android.yml`, `windows.yml` | New. |
 | `scripts/check-supabase.mjs` | New: the Supabase smoke check (section 4.7). Plain Node, no dependencies. |
 | `.github/release.yml` | New: release-note categories. |
 | `.github/dependabot.yml` | New: weekly updates for `github-actions` and `nuget`. |
@@ -371,6 +371,17 @@ Commands were run on a Windows 11 developer machine with SDK 10.0.401 against a 
 | `dotnet publish -p:PlatformOnly=windows -p:WindowsPackageType=MSIX` signed with a throwaway `CN=SlimShape` certificate | **Passed**, 52 s, **66.5 MB**. `Identity Name="com.slimshape.gymmembership" Publisher="CN=SlimShape" Version="0.0.12.12"`, `PublisherDisplayName` "Slim & Shape", signer `CN=SlimShape`. |
 | `scripts/check-supabase.mjs` against the real project | **Passed** (3 checks, the signed-in check is skipped without a smoke account). It also **fails correctly** (exit 1) with a corrupted key and with a non-existent project URL, and exits 2 when the variables are missing. |
 
+**Phase 3 re-check** (2026-10-14):
+
+| Check | Result |
+| --- | --- |
+| Unsigned MSIX build (`AppxPackageSigningEnabled=false`), the pull-request path | **Passed**; the package is unsigned (`NotSigned`) as intended. |
+| Unpackaged self-contained publish (`WindowsPackageType=None`, `SelfContained=true`, `WindowsAppSDKSelfContained=true`) | **Passed**, 53 s: 930 files, 381 MB, `GymMembership.App.exe`. The app **starts and keeps running** (checked after 12 s) with no runtime installed separately. |
+| WiX 5.0.2 `wix build installer/windows/Product.wxs` over that folder | **Passed**, 81 s; **`.msi` is 120 MB**. WiX's `Files` element harvests the folder without a `heat` step. |
+| Administrative extract of the MSI (`msiexec /a`, installs nothing) | **Passed**: 931 files, `GymMembership.App.exe` present, install folder `Program Files\Gym Membership`. |
+
+Not verified locally: a real per-machine install and upgrade of the MSI (Phase 4 acceptance on a clean PC), and the workflows themselves, which only run on GitHub.
+
 Supabase probe results are in section 4.7. Not verified here: signed-in access to the database (needs an account), installing the MSIX on a clean PC, installing the APK on a phone, and anything that only exists on GitHub-hosted runners (workload install time, image contents). Those are the acceptance checks in Phases 2 to 4.
 
 ## 11. Rollout plan
@@ -379,9 +390,9 @@ Supabase probe results are in section 4.7. Not verified here: signed-in access t
 | --- | --- | --- |
 | 0. Decisions and secrets | Decisions are made (section 12). Create keystore and certificate (`CN=SlimShape`), add the secrets, back both up offline. Work through the Supabase checklist (section 4.7). | Secrets exist; backups stored outside the repository. |
 | 1. Repository prep (done on branch `ci-cd-phase1`) | `global.json`, `PlatformOnly` lines, manifest Publisher, `.gitattributes`, `.gitignore` additions, `release.yml`, `dependabot.yml`. | Local `dotnet build` of the App and `dotnet test` unchanged and green; both `-p:PlatformOnly=` publishes work locally. |
-| 2. Tests + Android | `tests.yml` and `android.yml`. | A pull request shows `unit`, `database`, Android `build` green; the `main` push uploads a signed APK artifact that installs on a phone. |
-| 3a. Windows MSIX | `windows.yml` with the MSIX job. | A pull request shows Windows `build` green; the `main` push uploads a signed MSIX that installs through the sideload zip's `Install.ps1` on a clean Windows PC, signs in, and still is signed in after closing and reopening the app. |
-| 3b. Windows MSI | Add `installer/windows/Product.wxs` and the `msi` job. | The `.msi` installs and uninstalls on a clean PC, and a second, higher version upgrades it in place. The MSIX result is unaffected by the MSI job failing. |
+| 2. Tests + Android (workflow files in the repository) | `tests.yml` and `android.yml`. | A pull request shows `unit`, `database`, Android `build` green; the `main` push uploads a signed APK artifact that installs on a phone (needs the Phase 0 secrets). |
+| 3a. Windows MSIX (workflow file in the repository) | `windows.yml` with the `build` job. | A pull request shows Windows `build` green; the `main` push uploads a signed MSIX that installs through the sideload zip's `Install.ps1` on a clean Windows PC, signs in, and still is signed in after closing and reopening the app. |
+| 3b. Windows MSI (in the repository) | `installer/windows/Product.wxs` and the `msi` job. | The `.msi` installs and uninstalls on a clean PC, and a second, higher version upgrades it in place. The MSIX result is unaffected by the MSI job failing. |
 | 4. Release dry run | Tag `v0.1.0a` (the first real alpha; delete the release and tag if the dry run finds a problem and tag again). | A pre-release appears with both installers, hashes, certificate and notes; testers install both, sign in and load the package list against the real Supabase project; then delete the dry-run release and tag. |
 | 5. Optional | `nightly` pre-release; a weekly `keepalive.yml` that calls the Supabase API so a free project does not pause; Azure Trusted Signing or a purchased certificate; attestation of artifacts. | Only if asked for. |
 
@@ -419,397 +430,21 @@ Branch protection is switched on at the end of Phase 3a, once the check names ex
 | The first MSIX build fails on identity or version formatting. | Phase 3 acceptance covers it; the Identity name and 4-part version are checked against the verification notes in section 10. |
 | APK/MSIX size. | The APK carries two ABIs (size measured in section 10); the Windows packages are self-contained by design, so they are larger. |
 
-## Appendix A: reference workflows
+## Appendix A: where the pieces live
 
-These are starting points. Phase 2 and 3 adjust them against real runs.
+The workflow and installer files are the source of truth; they are not copied into this spec.
 
-### A.1 `.github/workflows/tests.yml`
+| Piece | File |
+| --- | --- |
+| Unit and database tests | `.github/workflows/tests.yml` |
+| Android build and release upload | `.github/workflows/android.yml` |
+| Windows MSIX build (`build` job) and MSI build (`msi` job) | `.github/workflows/windows.yml` |
+| MSI definition (WiX v5, fixed UpgradeCode) | `installer/windows/Product.wxs` |
+| Supabase smoke check | `scripts/check-supabase.mjs` |
+| SDK pin | `global.json` |
+| Release-note groups, dependency updates | `.github/release.yml`, `.github/dependabot.yml` |
 
-```yaml
-name: Tests
-
-on:
-  pull_request:
-  push:
-    branches: [main]
-  workflow_dispatch:
-
-permissions:
-  contents: read
-
-concurrency:
-  group: tests-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-env:
-  DOTNET_NOLOGO: true
-  DOTNET_CLI_TELEMETRY_OPTOUT: true
-
-jobs:
-  unit:
-    name: unit
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
-        with:
-          global-json-file: global.json
-      - uses: actions/cache@v6
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json') }}
-          restore-keys: nuget-${{ runner.os }}-
-      - run: dotnet test tests/GymMembership.Tests -c Release --logger "trx;LogFileName=results.trx"
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: unit-test-results
-          path: tests/GymMembership.Tests/TestResults/results.trx
-
-  database:
-    name: database
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: supabase/tests/local
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: supabase/tests/local/package-lock.json
-      - run: npm ci
-      - run: npm test
-```
-
-### A.2 `.github/workflows/android.yml`
-
-```yaml
-name: Android
-
-on:
-  pull_request:
-  push:
-    branches: [main]
-    tags: ['v*']
-  workflow_dispatch:
-
-permissions:
-  contents: read
-
-concurrency:
-  group: android-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
-
-env:
-  DOTNET_NOLOGO: true
-  DOTNET_CLI_TELEMETRY_OPTOUT: true
-  WORKLOAD_VERSION: 10.0.401
-
-jobs:
-  build:
-    name: build
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    permissions:
-      contents: write
-    env:
-      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
-        with:
-          global-json-file: global.json
-      - uses: actions/setup-java@v6
-        with:
-          distribution: microsoft
-          java-version: '21'
-      - uses: actions/cache@v6
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-android-${{ hashFiles('**/*.csproj', 'global.json') }}
-          restore-keys: nuget-${{ runner.os }}-android-
-
-      - name: Install Android workload
-        run: dotnet workload install maui-android --version "$WORKLOAD_VERSION" --ignore-failed-sources
-
-      - name: Work out the version
-        run: |
-          pre=false
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            v="${GITHUB_REF_NAME#v}"
-            if [[ ! "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+([a-z]|-[0-9A-Za-z.-]+)?$ ]]; then
-              echo "::error::The tag '$GITHUB_REF_NAME' is not a version such as v0.1.0a, v1.2.3 or v1.2.3-rc.1"; exit 1
-            fi
-            if [[ "$v" =~ [a-z]$ || "$v" == *-* ]]; then pre=true; fi
-          else
-            v="0.0.0-ci.${GITHUB_RUN_NUMBER}"
-          fi
-          echo "VERSION=$v" >> "$GITHUB_ENV"
-          echo "PRERELEASE=$pre" >> "$GITHUB_ENV"
-
-      - name: Add Supabase settings
-        if: ${{ github.event_name != 'pull_request' && env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' }}
-        run: |
-          jq -n --arg u "$SUPABASE_URL" --arg k "$SUPABASE_ANON_KEY" '{url:$u, anonKey:$k}' \
-            > src/GymMembership.App/Resources/Raw/supabase.json
-
-      - name: Check that Supabase answers
-        if: ${{ github.event_name != 'pull_request' && env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' }}
-        env:
-          SUPABASE_SMOKE_EMAIL: ${{ secrets.SUPABASE_SMOKE_EMAIL }}
-          SUPABASE_SMOKE_PASSWORD: ${{ secrets.SUPABASE_SMOKE_PASSWORD }}
-        run: node scripts/check-supabase.mjs
-
-      - name: Build (no signing key available)
-        if: ${{ env.ANDROID_KEYSTORE_BASE64 == '' }}
-        run: >
-          dotnet build src/GymMembership.App -c Release
-          -p:PlatformOnly=android
-
-      - name: Decode keystore
-        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
-        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
-
-      - name: Publish signed APK
-        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
-        env:
-          AndroidSigningPassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-        run: >
-          dotnet publish src/GymMembership.App -f net10.0-android -c Release
-          -p:PlatformOnly=android -p:AndroidPackageFormats=apk
-          -p:AndroidKeyStore=true
-          -p:AndroidSigningKeyStore="$RUNNER_TEMP/release.keystore"
-          -p:AndroidSigningKeyAlias="$ANDROID_KEY_ALIAS"
-          -p:AndroidSigningKeyPass=env:AndroidSigningPassword
-          -p:AndroidSigningStorePass=env:AndroidSigningPassword
-          -p:ApplicationDisplayVersion="$VERSION" -p:ApplicationVersion="$GITHUB_RUN_NUMBER"
-          -o artifacts
-
-      - name: Name and hash the APK
-        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
-        run: |
-          cd artifacts
-          mv ./*-Signed.apk "GymMembership-${VERSION}-android.apk"
-          sha256sum "GymMembership-${VERSION}-android.apk" > "GymMembership-${VERSION}-android.apk.sha256"
-
-      - uses: actions/upload-artifact@v7
-        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
-        with:
-          name: android-apk
-          path: artifacts/GymMembership-*
-          retention-days: 14
-
-      - name: Attach to the GitHub Release
-        if: ${{ startsWith(github.ref, 'refs/tags/v') && env.ANDROID_KEYSTORE_BASE64 != '' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          pre=""; [[ "$PRERELEASE" == "true" ]] && pre="--prerelease"
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
-            || gh release create "$GITHUB_REF_NAME" --title "Gym Membership ${VERSION}" --generate-notes $pre \
-            || gh release view "$GITHUB_REF_NAME" >/dev/null
-          gh release upload "$GITHUB_REF_NAME" artifacts/GymMembership-* --clobber
-
-      - name: Remove the keystore
-        if: always()
-        run: rm -f "$RUNNER_TEMP/release.keystore"
-```
-
-### A.3 `.github/workflows/windows.yml`
-
-```yaml
-name: Windows
-
-on:
-  pull_request:
-  push:
-    branches: [main]
-    tags: ['v*']
-  workflow_dispatch:
-
-permissions:
-  contents: read
-
-concurrency:
-  group: windows-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
-
-env:
-  DOTNET_NOLOGO: true
-  DOTNET_CLI_TELEMETRY_OPTOUT: true
-  WORKLOAD_VERSION: 10.0.401
-
-jobs:
-  build:
-    name: build
-    runs-on: windows-2025
-    timeout-minutes: 40
-    permissions:
-      contents: write
-    defaults:
-      run:
-        shell: pwsh
-    env:
-      WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
-      WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
-        with:
-          global-json-file: global.json
-      - uses: actions/cache@v6
-        with:
-          path: ~\.nuget\packages
-          key: nuget-${{ runner.os }}-windows-${{ hashFiles('**/*.csproj', 'global.json') }}
-          restore-keys: nuget-${{ runner.os }}-windows-
-
-      - name: Install Windows workload
-        run: dotnet workload install maui-windows --version $env:WORKLOAD_VERSION --ignore-failed-sources
-
-      - name: Work out the version
-        run: |
-          $pre = 'false'
-          if ($env:GITHUB_REF -like 'refs/tags/v*') {
-            $v = $env:GITHUB_REF_NAME.Substring(1)
-            if ($v -cnotmatch '^\d+\.\d+\.\d+([a-z]|-[0-9A-Za-z.-]+)?$') { Write-Error "The tag '$env:GITHUB_REF_NAME' is not a version such as v0.1.0a, v1.2.3 or v1.2.3-rc.1"; exit 1 }
-            if ($v -cmatch '[a-z]$' -or $v -like '*-*') { $pre = 'true' }
-            $num = [regex]::Match($v, '^\d+\.\d+\.\d+').Value
-          } else { $v = "0.0.0-ci.$env:GITHUB_RUN_NUMBER"; $num = '0.0.0' }
-          "VERSION=$v" >> $env:GITHUB_ENV          # names and release title, may carry a letter
-          "MSIX_VERSION=$num" >> $env:GITHUB_ENV   # numbers only, for the package manifest
-          "PRERELEASE=$pre" >> $env:GITHUB_ENV
-
-      - name: Add Supabase settings
-        if: ${{ github.event_name != 'pull_request' && env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' }}
-        run: |
-          @{ url = $env:SUPABASE_URL; anonKey = $env:SUPABASE_ANON_KEY } | ConvertTo-Json -Compress |
-            Set-Content src/GymMembership.App/Resources/Raw/supabase.json -Encoding utf8
-
-      - name: Check that Supabase answers
-        if: ${{ github.event_name != 'pull_request' && env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' }}
-        env:
-          SUPABASE_SMOKE_EMAIL: ${{ secrets.SUPABASE_SMOKE_EMAIL }}
-          SUPABASE_SMOKE_PASSWORD: ${{ secrets.SUPABASE_SMOKE_PASSWORD }}
-        run: node scripts/check-supabase.mjs
-
-      - name: Import signing certificate
-        if: ${{ env.WINDOWS_PFX_BASE64 != '' }}
-        run: |
-          $pfx = Join-Path $env:RUNNER_TEMP 'signing.pfx'
-          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_PFX_BASE64))
-          $secure = ConvertTo-SecureString $env:WINDOWS_PFX_PASSWORD -AsPlainText -Force
-          $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $secure
-          "THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
-
-      - name: Package (unsigned, proves it builds)
-        if: ${{ env.WINDOWS_PFX_BASE64 == '' }}
-        run: >
-          dotnet publish src/GymMembership.App -f net10.0-windows10.0.19041.0 -c Release
-          -p:PlatformOnly=windows -p:RuntimeIdentifierOverride=win-x64 -p:WindowsPackageType=MSIX
-          -p:WindowsAppSDKSelfContained=true -p:AppxPackageSigningEnabled=false
-
-      - name: Package and sign the MSIX
-        if: ${{ env.WINDOWS_PFX_BASE64 != '' }}
-        run: >
-          dotnet publish src/GymMembership.App -f net10.0-windows10.0.19041.0 -c Release
-          -p:PlatformOnly=windows -p:RuntimeIdentifierOverride=win-x64 -p:WindowsPackageType=MSIX
-          -p:WindowsAppSDKSelfContained=true -p:AppxPackageSigningEnabled=true
-          -p:PackageCertificateThumbprint=$env:THUMBPRINT
-          -p:ApplicationDisplayVersion=$env:MSIX_VERSION -p:ApplicationVersion=$env:GITHUB_RUN_NUMBER
-
-      - name: Collect release files
-        if: ${{ env.WINDOWS_PFX_BASE64 != '' }}
-        run: |
-          $pkg = Get-ChildItem src\GymMembership.App\AppPackages -Directory | Select-Object -First 1
-          $base = "GymMembership-$($env:VERSION)-win-x64"
-          New-Item -ItemType Directory -Force artifacts | Out-Null
-          Compress-Archive -Path "$($pkg.FullName)\*" -DestinationPath "artifacts\$base-sideload.zip"
-          Copy-Item (Get-ChildItem $pkg.FullName -Filter *.msix | Select-Object -First 1).FullName "artifacts\$base.msix"
-          Copy-Item (Get-ChildItem $pkg.FullName -Filter *.cer | Select-Object -First 1).FullName "artifacts\GymMembership-signing.cer"
-          foreach ($f in Get-ChildItem artifacts -File | Where-Object { $_.Extension -ne '.sha256' }) {
-            "$((Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower())  $($f.Name)" | Set-Content "$($f.FullName).sha256"
-          }
-
-      - uses: actions/upload-artifact@v7
-        if: ${{ env.WINDOWS_PFX_BASE64 != '' }}
-        with:
-          name: windows-msix
-          path: artifacts/*
-          retention-days: 14
-
-      - name: Attach to the GitHub Release
-        if: ${{ startsWith(github.ref, 'refs/tags/v') && env.WINDOWS_PFX_BASE64 != '' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $pre = @(); if ($env:PRERELEASE -eq 'true') { $pre = @('--prerelease') }
-          gh release view $env:GITHUB_REF_NAME *> $null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create $env:GITHUB_REF_NAME --title "Gym Membership $env:VERSION" --generate-notes @pre
-            if ($LASTEXITCODE -ne 0) { gh release view $env:GITHUB_REF_NAME *> $null; if ($LASTEXITCODE -ne 0) { exit 1 } }
-          }
-          gh release upload $env:GITHUB_REF_NAME (Get-ChildItem artifacts | ForEach-Object FullName) --clobber
-
-      - name: Remove signing material
-        if: always()
-        run: |
-          Remove-Item (Join-Path $env:RUNNER_TEMP 'signing.pfx') -ErrorAction SilentlyContinue
-          if ($env:THUMBPRINT) { Remove-Item "Cert:\CurrentUser\My\$env:THUMBPRINT" -ErrorAction SilentlyContinue }
-```
-
-### A.4 `global.json`
-
-```json
-{
-  "sdk": {
-    "version": "10.0.401",
-    "rollForward": "latestPatch"
-  }
-}
-```
-
-### A.5 `.github/release.yml` and `.github/dependabot.yml`
-
-```yaml
-# .github/release.yml
-changelog:
-  categories:
-    - title: Features
-      labels: [enhancement, feature]
-    - title: Fixes
-      labels: [bug, fix]
-    - title: Database
-      labels: [database, supabase]
-    - title: Other changes
-      labels: ['*']
-```
-
-```yaml
-# .github/dependabot.yml
-version: 2
-updates:
-  - package-ecosystem: github-actions
-    directory: /
-    schedule: { interval: weekly }
-  - package-ecosystem: nuget
-    directory: /
-    schedule: { interval: weekly }
-    groups:
-      maui:
-        patterns: ['Microsoft.Maui.*', 'CommunityToolkit.*']
-```
-
-### A.6 What the sideload zip contains
+### A.1 What the sideload zip contains
 
 Nothing custom. MSBuild generates the folder as part of `dotnet publish` with `WindowsPackageType=MSIX` (verified, section 10):
 
@@ -820,75 +455,6 @@ GymMembership.App_<version>_Test/
   Install.ps1                              runs Add-AppDevPackage.ps1
   Add-AppDevPackage.ps1                    trusts the certificate, installs the package
   Add-AppDevPackage.resources/             localized messages
-```
-
-### A.7 The `msi` job (add to `windows.yml` in Phase 3b)
-
-```yaml
-  msi:
-    name: msi
-    runs-on: windows-2025
-    timeout-minutes: 40
-    continue-on-error: true
-    permissions:
-      contents: write
-    defaults:
-      run:
-        shell: pwsh
-    env:
-      WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
-      WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-    steps:
-      # checkout, setup-dotnet, NuGet cache, "Install Windows workload", "Work out the version" and
-      # "Add Supabase settings" are the same as in the MSIX job
-
-      - name: Publish unpackaged, self-contained
-        run: >
-          dotnet publish src/GymMembership.App -f net10.0-windows10.0.19041.0 -c Release
-          -p:PlatformOnly=windows -p:RuntimeIdentifierOverride=win-x64 -p:WindowsPackageType=None
-          -p:WindowsAppSDKSelfContained=true -p:SelfContained=true
-          -p:ApplicationDisplayVersion=$env:MSIX_VERSION -o publish\win-x64
-
-      - name: Build the MSI
-        run: |
-          dotnet tool install --global wix --version 5.*
-          New-Item -ItemType Directory -Force artifacts | Out-Null
-          wix build installer\windows\Product.wxs `
-            -d PublishDir="$PWD\publish\win-x64" -d Version="$env:MSIX_VERSION.$env:GITHUB_RUN_NUMBER" -arch x64 `
-            -o "artifacts\GymMembership-$($env:VERSION)-win-x64.msi"
-
-      - name: Sign the MSI
-        if: ${{ env.WINDOWS_PFX_BASE64 != '' }}
-        run: |
-          $pfx = Join-Path $env:RUNNER_TEMP 'signing.pfx'
-          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_PFX_BASE64))
-          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
-            Where-Object FullName -like '*\x64\*' | Sort-Object FullName | Select-Object -Last 1
-          & $signtool.FullName sign /f $pfx /p $env:WINDOWS_PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
-            "artifacts\GymMembership-$($env:VERSION)-win-x64.msi"
-
-      # then: sha256 files, upload-artifact, and the same idempotent "gh release create / upload --clobber" step
-      # as the MSIX job, and a final always() step that deletes the .pfx
-```
-
-### A.8 `installer/windows/Product.wxs` (sketch, finished in Phase 3b)
-
-```xml
-<Wix xmlns="http://wixtoolset.org/schemas/wix">
-  <Package Name="Gym Membership" Manufacturer="Slim &amp; Shape" Version="$(Version)"
-           UpgradeCode="PUT-A-FIXED-GUID-HERE" Scope="perMachine">
-    <MajorUpgrade DowngradeErrorMessage="A newer version of Gym Membership is already installed." />
-    <MediaTemplate EmbedCab="yes" />
-    <StandardDirectory Id="ProgramFiles64Folder">
-      <Directory Id="INSTALLFOLDER" Name="Gym Membership">
-        <Files Include="$(PublishDir)\**" />
-      </Directory>
-    </StandardDirectory>
-    <!-- Phase 3b adds: Start Menu shortcut to GymMembership.App.exe, the app icon, and the install-folder feature wiring -->
-  </Package>
-</Wix>
 ```
 
 ## Sources

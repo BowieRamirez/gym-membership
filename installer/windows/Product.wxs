@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Gym Membership MSI (WiX Toolset v5). Built by the "msi" job in .github/workflows/windows.yml from an unpackaged,
+  self-contained publish folder. See docs/specs/ci-cd-pipelines.md, section 4.4.
+
+  Variables passed on the command line:  -d PublishDir=<publish folder>   -d Version=<major.minor.build>
+  The UpgradeCode below identifies this product across versions. It is created once and must never change.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Gym Membership" Manufacturer="Slim &amp; Shape" Version="$(Version)"
+           UpgradeCode="0D54EA34-C1B2-43CB-BEB8-58A34D7FD682" Scope="perMachine">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Gym Membership is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- the whole publish folder goes to C:\Program Files\Gym Membership -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Gym Membership">
+        <Files Include="$(PublishDir)\**" />
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Start Menu shortcut -->
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Component Id="StartMenuShortcut" Guid="*">
+        <Shortcut Id="AppShortcut" Name="Gym Membership" Description="Gym Membership"
+                  Target="[INSTALLFOLDER]GymMembership.App.exe" WorkingDirectory="INSTALLFOLDER" />
+        <RegistryValue Root="HKCU" Key="Software\SlimShape\GymMembership" Name="shortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+  </Package>
+</Wix>

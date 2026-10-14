@@ -8,6 +8,7 @@ One app for the whole gym floor. Members manage their plan, coaches run their se
 
 - [What it does](#what-it-does)
 - [Accounts and access](#accounts-and-access)
+- [Download and install (testers)](#download-and-install-testers)
 - [Getting started](#getting-started)
 - [Tech stack](#tech-stack)
 - [Project structure](#project-structure)
@@ -33,6 +34,21 @@ One app for the whole gym floor. Members manage their plan, coaches run their se
 - **A guest becomes a full member** once a package payment is verified by the owner or front desk, and goes back to guest when the plan expires.
 - **The owner adds coaches and front-desk staff** (and can add members) on the Users page with a temporary password.
 - **Passwords:** anyone can change theirs under Settings, and the owner can reset a forgotten one.
+
+## Download and install (testers)
+
+Builds are published on the [Releases page](https://github.com/BowieRamirez/gym-membership/releases). Pick the latest one (the first is `0.1.0a`, an alpha) and download the file for your device.
+
+**Android phone or emulator.** Download `GymMembership-<version>-android.apk`. The one file works on phones (arm64) and on Android Studio emulators (x86_64). Open it and allow "Install unknown apps" for your browser or Files app when asked. If Play Protect warns about an unknown developer, choose "Install anyway". To update, install the newer APK over the old one.
+
+**Windows PC.** Two installers; install one, not both.
+
+- *MSIX (recommended).* Download `GymMembership-<version>-win-x64-sideload.zip`, unzip it, right-click `Install.ps1`, choose "Run with PowerShell" and accept the administrator prompt. It trusts the app's test certificate and installs the app. Later versions install over it. Uninstall from Settings, Apps.
+- *MSI.* Download `GymMembership-<version>-win-x64.msi` and run it (SmartScreen: More info, Run anyway). No certificate step; installs for all users under Program Files.
+
+The apps are signed with a self-signed test certificate, so Windows and Android show a warning the first time. Each file has a `.sha256` next to it if you want to check the download.
+
+How the builds are made, signed and published: [`docs/specs/ci-cd-pipelines.md`](docs/specs/ci-cd-pipelines.md).
 
 ## Getting started
 
