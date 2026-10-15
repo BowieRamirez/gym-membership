@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using GymMembership.Core.Demo;
 using GymMembership.Core.Services;
 using GymMembership.Core.ViewModels;
@@ -136,5 +137,57 @@ public class AmenityViewModelTests
 
         Assert.False(vm.IsEditing);
         Assert.Equal("available", vm.Cards.First(c => c.Amenity.Name == "Pool").Availability);
+    }
+
+    [Fact]
+    public async Task A_stale_card_still_gets_the_true_answer_from_the_server()
+    {
+        var (gw, vm) = await Desk();
+        var stale = vm.Cards.First(c => c.Amenity.Name == "Pool");   // this screen thinks the pool is available
+        await new AmenityService(gw).SetStatusAsync(stale.Amenity.Id, "unavailable", "Repairs", null);   // another screen changed it meanwhile
+
+        vm.SelectCommand.Execute(stale);
+        vm.Choice = vm.Choices.First(c => c.Value == "available");
+        await vm.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal("Pool is now available. Alerted 1 member: Alex Tan.", vm.Notice);   // not "Nothing changed"
+    }
+
+    [Fact]
+    public async Task The_automatic_refresh_keeps_the_error_line_and_replaces_only_the_cards_that_changed()
+    {
+        var (gw, vm) = await Desk();
+        var pool = vm.Cards.First(c => c.Amenity.Name == "Pool");
+        vm.SelectCommand.Execute(pool);
+        vm.Choice = vm.Choices.First(c => c.Value == "unavailable");
+        vm.HasBackAt = true; vm.BackDate = DateTime.Today.AddDays(-1);
+        await vm.SaveCommand.ExecuteAsync(null);
+        Assert.Equal("Pick a return time that is still ahead.", vm.ErrorMessage);   // the line being read
+
+        var actions = new List<NotifyCollectionChangedAction>();
+        vm.Cards.CollectionChanged += (_, e) => actions.Add(e.Action);
+        await new AmenityService(gw).SetStatusAsync(pool.Amenity.Id, "in_use", null, null);   // another screen changes the pool
+        await vm.AutoRefreshAsync();
+
+        Assert.Equal("Pick a return time that is still ahead.", vm.ErrorMessage);   // the tick did not wipe it
+        Assert.Equal([NotifyCollectionChangedAction.Replace], actions);              // one card swapped; no clear and re-add, so the list keeps its place
+        Assert.Equal("in_use", vm.Cards.First(c => c.Amenity.Name == "Pool").Availability);
+        Assert.True(vm.IsEditing);
+    }
+
+    [Fact]
+    public async Task The_automatic_refresh_stays_quiet_when_offline_on_both_screens()
+    {
+        var (gw, desk) = await Desk();
+        var board = new AmenityBoardViewModel(new AmenityService(gw));
+        await board.OnAppearingAsync();
+        var deskCards = desk.Cards.Count; var boardCards = board.Cards.Count;
+        gw.FailWith = new HttpRequestException("offline");
+
+        await desk.AutoRefreshAsync();
+        await board.AutoRefreshAsync();
+
+        Assert.Null(desk.ErrorMessage); Assert.Null(board.ErrorMessage);
+        Assert.Equal(deskCards, desk.Cards.Count); Assert.Equal(boardCards, board.Cards.Count);
     }
 }

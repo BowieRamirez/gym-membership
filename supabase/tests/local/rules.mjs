@@ -464,8 +464,8 @@ await test('"in use" alerts nobody; "available" alerts the follower and clears t
   assert.equal(a.length, before + 1); assert.match(a.at(-1).title, /Boxing is available/);
 });
 await test('a 201-character reason and a return time in the past are refused', async () => {
-  assert.match(await code(setStatus(desk, 'unavailable', 'x'.repeat(201))), /22023/);
-  assert.match(await code(setStatus(desk, 'unavailable', 'Cleaning', hours(-1))), /22023/);
+  assert.match(await code(setStatus(desk, 'unavailable', 'x'.repeat(201))), /22023:bad_reason/);
+  assert.match(await code(setStatus(desk, 'unavailable', 'Cleaning', hours(-1))), /22023:bad_back_at/);   // each has its own message so the screen can say what to fix
   assert.equal((await statusOf()).status, 'available');
 });
 await test('a deactivated follower and one who un-saved are not alerted and not listed', async () => {

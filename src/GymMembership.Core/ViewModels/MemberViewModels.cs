@@ -33,6 +33,25 @@ public abstract partial class LoadableViewModel : ObservableObject
 
     protected static void Fill<T>(ObservableCollection<T> target, IEnumerable<T> rows)
     { target.Clear(); foreach (var r in rows) target.Add(r); }
+
+    /// <summary>
+    /// Brings a list up to date without rebuilding it. Same rows in the same order: only the rows that changed are swapped, so an open list
+    /// keeps its scroll position. A different set of rows rebuilds the list.
+    /// </summary>
+    protected static void Sync<T>(ObservableCollection<T> target, IReadOnlyList<T> rows, Func<T, object> key, Func<T, T, bool> same)
+    {
+        if (target.Count == rows.Count && target.Select(key).SequenceEqual(rows.Select(key)))
+        {
+            for (var i = 0; i < rows.Count; i++) if (!same(target[i], rows[i])) target[i] = rows[i];
+        }
+        else Fill(target, rows);
+    }
+
+    /// <summary>
+    /// What a page that refreshes itself every few seconds calls. By default it is the same load as opening the page; a page with an error line
+    /// or a form open overrides it with a quiet version that never clears them and never shows a new error.
+    /// </summary>
+    public virtual Task AutoRefreshAsync() => OnAppearingAsync();
 }
 
 public partial class LoginViewModel(IAuthService auth, IAppNavigator nav, ISupabaseGateway gateway) : LoadableViewModel
@@ -210,6 +229,15 @@ public partial class AmenityBoardViewModel(IAmenityService svc) : LoadableViewMo
 
     [RelayCommand] private Task LoadAsync() => RunAsync(svc.BoardAsync, board => { Fill(Cards, board.Cards); CanFollow = board.CanFollow; });
 
+    public override async Task AutoRefreshAsync()
+    {
+        if (IsBusy) return;   // a load or a tap is already running
+        var board = await svc.BoardAsync();
+        if (!board.Ok) return;   // stay quiet: the next tick tries again
+        Sync(Cards, board.Value!.Cards, c => c.Amenity.Id, (a, b) => a.SameAs(b));
+        CanFollow = board.Value.CanFollow;
+    }
+
     [RelayCommand]
     private async Task ToggleFollowAsync(AmenityCard card)
     { if (await RunAsync(() => svc.SetFollowedAsync(card.Amenity.Id, !card.Followed))) await LoadAsync(); }
@@ -317,20 +345,9 @@ public partial class NotificationsViewModel : LoadableViewModel, IDisposable
         return RunAsync(svc.ListAsync, rows =>
         {
             if (ticket != loadTicket) return;
-            Merge(rows);
+            Sync(Items, rows, n => n.Id, (a, b) => a.ReadAt == b.ReadAt);
             UnreadCount = rows.Count(n => n.ReadAt is null);
         });
-    }
-
-    // Same alerts as before: swap only the rows whose read time changed, so an open list keeps its scroll position.
-    // A different set (a new alert arrived) rebuilds the list.
-    void Merge(IReadOnlyList<UserNotification> rows)
-    {
-        if (Items.Count == rows.Count && Items.Select(i => i.Id).SequenceEqual(rows.Select(r => r.Id)))
-        {
-            for (var i = 0; i < rows.Count; i++) if (Items[i].ReadAt != rows[i].ReadAt) Items[i] = rows[i];
-        }
-        else Fill(Items, rows);
     }
 
     // the service raises Changed on success, which reloads the list

@@ -81,8 +81,8 @@ begin
 	if not found then perform public.fail('not_found', '22023'); end if;
 
 	if p_status <> 'unavailable' then v_reason := null; p_back_at := null; end if;   -- these only belong to "unavailable"
-	if char_length(coalesce(v_reason, '')) > 200 then perform public.fail('bad_input', '22023'); end if;
-	if p_back_at is not null and p_back_at <= now() then perform public.fail('bad_input', '22023'); end if;
+	if char_length(coalesce(v_reason, '')) > 200 then perform public.fail('bad_reason', '22023'); end if;
+	if p_back_at is not null and p_back_at <= now() then perform public.fail('bad_back_at', '22023'); end if;   -- own messages, so the screen can say what to fix
 
 	-- nothing changed: change nothing, tell nobody
 	if v.status = p_status and v.status_reason is not distinct from v_reason and v.back_at is not distinct from p_back_at then return; end if;

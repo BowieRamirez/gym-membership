@@ -637,6 +637,15 @@ public partial class AmenityStatusViewModel(IAmenityService svc) : LoadableViewM
 
     [RelayCommand] private Task LoadAsync() => RunAsync(svc.BoardAsync, board => Fill(Cards, board.Cards));
 
+    // Quiet and in place: the error line, the notice and the open form stay as they are, and only cards that changed are swapped.
+    public override async Task AutoRefreshAsync()
+    {
+        if (IsBusy) return;
+        var board = await svc.BoardAsync();
+        if (!board.Ok) return;
+        Sync(Cards, board.Value!.Cards, c => c.Amenity.Id, (a, b) => a.SameAs(b));
+    }
+
     [RelayCommand]
     private void Select(AmenityCard card)
     {
@@ -665,13 +674,13 @@ public partial class AmenityStatusViewModel(IAmenityService svc) : LoadableViewM
             if (back <= DateTime.UtcNow) { ErrorMessage = "Pick a return time that is still ahead."; return; }
         }
         var reason = ShowDetail ? Reason.Trim() : "";
-        var unchanged = card.Availability == Choice.Value && (card.Reason ?? "") == reason && (!ShowDetail || card.BackAt?.ToUniversalTime().ToString("s") == back?.ToString("s"));
 
         Notice = null;
-        IReadOnlyList<NotifiedMember>? told = null;
-        if (!await RunAsync(() => svc.SetStatusAsync(card.Amenity.Id, Choice.Value, reason, back), r => told = r)) return;   // the editor stays open with what was typed
+        AmenityChange? result = null;
+        if (!await RunAsync(() => svc.SetStatusAsync(card.Amenity.Id, Choice.Value, reason, back), r => result = r)) return;   // the editor stays open with what was typed
 
-        Notice = unchanged ? $"Nothing changed for {card.Amenity.Name}." : Summary(card.Amenity.Name, Choice, told!);
+        // the service judged "changed" against the amenity as it is now, not against this possibly older card
+        Notice = result!.Changed ? Summary(card.Amenity.Name, Choice, result.Told) : $"Nothing changed for {card.Amenity.Name}.";
         Editing = null;
         await LoadAsync();
     }

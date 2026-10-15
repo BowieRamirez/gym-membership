@@ -60,8 +60,9 @@ public class AmenityStatusTests
         var (_, desk) = await As("employee@demo.io");
         var pool = (await desk.BoardAsync()).Value!.Cards.First(c => c.Amenity.Name == "Pool");
 
-        var told = (await desk.SetStatusAsync(pool.Amenity.Id, "unavailable", "  Maintenance ", DateTime.UtcNow.AddHours(2))).Value!;
+        var told = (await desk.SetStatusAsync(pool.Amenity.Id, "unavailable", "  Maintenance ", DateTime.UtcNow.AddHours(2))).Value!.Told;
 
+        Assert.True((await desk.SetStatusAsync(pool.Amenity.Id, "unavailable", "Maintenance", DateTime.UtcNow.AddHours(3))).Value!.Changed);   // a new return time is a change
         Assert.Equal(["Alex Tan"], told.Select(t => t.Name));   // the demo member who saved the pool
         var after = (await desk.BoardAsync()).Value!.Cards.First(c => c.Amenity.Id == pool.Amenity.Id);
         Assert.Equal("unavailable", after.Availability);
@@ -92,8 +93,10 @@ public class AmenityStatusTests
         var (_, desk) = await As("employee@demo.io");
         var pool = (await desk.BoardAsync()).Value!.Cards.First(c => c.Amenity.Name == "Pool");
 
-        Assert.Empty((await desk.SetStatusAsync(pool.Amenity.Id, "available", null, null)).Value!);   // already available
-        Assert.Empty((await desk.SetStatusAsync(pool.Amenity.Id, "in_use", "ignored", null)).Value!);
+        var again = (await desk.SetStatusAsync(pool.Amenity.Id, "available", null, null)).Value!;   // already available
+        Assert.False(again.Changed);
+        Assert.Empty(again.Told);
+        Assert.Empty((await desk.SetStatusAsync(pool.Amenity.Id, "in_use", "ignored", null)).Value!.Told);
         Assert.Null((await desk.BoardAsync()).Value!.Cards.First(c => c.Amenity.Id == pool.Amenity.Id).Reason);   // a reason belongs to "unavailable" only
     }
 
@@ -104,9 +107,33 @@ public class AmenityStatusTests
         Assert.Equal(AppErrorKind.Unauthorized, (await member.SetStatusAsync(1, "unavailable", null, null)).Error);
 
         var (_, desk) = await As("employee@demo.io");
-        Assert.Equal(AppErrorKind.Validation, (await desk.SetStatusAsync(1, "broken", null, null)).Error);
-        Assert.Equal(AppErrorKind.Validation, (await desk.SetStatusAsync(1, "unavailable", new string('x', 201), null)).Error);
-        Assert.Equal(AppErrorKind.Validation, (await desk.SetStatusAsync(1, "unavailable", "Cleaning", DateTime.UtcNow.AddMinutes(-5))).Error);
+        var broken = await desk.SetStatusAsync(1, "broken", null, null);
+        var longReason = await desk.SetStatusAsync(1, "unavailable", new string('x', 201), null);
+        var past = await desk.SetStatusAsync(1, "unavailable", "Cleaning", DateTime.UtcNow.AddMinutes(-5));
+        Assert.Equal(AppErrorKind.Validation, broken.Error); Assert.Equal("bad_status", broken.Message);
+        Assert.Equal(AppErrorKind.Validation, longReason.Error); Assert.Equal("bad_reason", longReason.Message);
+        Assert.Equal(AppErrorKind.Validation, past.Error); Assert.Equal("bad_back_at", past.Message);   // each says what to fix, not "fill in every field"
+    }
+
+    [Fact]
+    public void Bad_return_times_reasons_and_statuses_get_their_own_plain_messages()
+    {
+        Assert.Equal("Pick a return time that is still ahead.", ErrorText.For(AppErrorKind.Validation, "bad_back_at"));
+        Assert.Equal("Keep the reason under 200 characters.", ErrorText.For(AppErrorKind.Validation, "bad_reason"));
+        Assert.Equal("Choose Available, In use or Unavailable.", ErrorText.For(AppErrorKind.Validation, "bad_status"));
+        Assert.Equal(AppErrorKind.Validation, ErrorMapper.Map(new Exception("bad_back_at")));
+        Assert.Equal(AppErrorKind.Validation, ErrorMapper.Map(new Exception("bad_reason")));
+    }
+
+    [Fact]
+    public async Task The_demo_function_gives_the_same_specific_messages_as_the_database()
+    {
+        var gw = new DemoGateway();
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        var pool = (await new AmenityService(gw).BoardAsync()).Value!.Cards.First(c => c.Amenity.Name == "Pool").Amenity.Id;
+        var ex = await Assert.ThrowsAnyAsync<Exception>(() => gw.RpcAsync<List<NotifiedMember>>("set_amenity_status",
+            new() { ["p_amenity_id"] = pool, ["p_status"] = "unavailable", ["p_reason"] = new string('x', 201) }));
+        Assert.Contains("bad_reason", ex.Message);
     }
 
     [Fact]
@@ -119,7 +146,7 @@ public class AmenityStatusTests
         await member.SetFollowedAsync(pool.Amenity.Id, false);
 
         await gw.SignOutAsync(); await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
-        var told = (await new AmenityService(gw).SetStatusAsync(pool.Amenity.Id, "unavailable", "Repairs", null)).Value!;
+        var told = (await new AmenityService(gw).SetStatusAsync(pool.Amenity.Id, "unavailable", "Repairs", null)).Value!.Told;
         Assert.Empty(told);
     }
 
@@ -133,6 +160,6 @@ public class AmenityStatusTests
         await gw.SignOutAsync(); await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         var svc = new AmenityService(gw);
         var pool = (await svc.BoardAsync()).Value!.Cards.First(c => c.Amenity.Name == "Pool");
-        Assert.Empty((await svc.SetStatusAsync(pool.Amenity.Id, "unavailable", "Repairs", null)).Value!);
+        Assert.Empty((await svc.SetStatusAsync(pool.Amenity.Id, "unavailable", "Repairs", null)).Value!.Told);
     }
 }

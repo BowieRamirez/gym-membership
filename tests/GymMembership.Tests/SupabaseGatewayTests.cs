@@ -218,7 +218,7 @@ public sealed class SupabaseGatewayTests : IDisposable
     {
         var gw = await SignedInAsync();
         _reply = _ => (200, """[{"member_id":"u-9","full_name":"Alex Tan"}]""");
-        var told = (await new AmenityService(gw).SetStatusAsync(4, "unavailable", "Cleaning", new DateTime(2026, 10, 20, 2, 0, 0, DateTimeKind.Utc))).Value!;
+        var told = (await new AmenityService(gw).SetStatusAsync(4, "unavailable", "Cleaning", new DateTime(2026, 10, 20, 2, 0, 0, DateTimeKind.Utc))).Value!.Told;
 
         Assert.Equal("/rest/v1/rpc/set_amenity_status", Last.Path);
         var body = Last.Body;

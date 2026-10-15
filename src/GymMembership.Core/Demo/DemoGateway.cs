@@ -798,7 +798,9 @@ public sealed class DemoGateway : ISupabaseGateway
                 var unavailable = status == "unavailable";
                 var reason = unavailable ? Opt("p_reason") : null;
                 DateTime? backAt = unavailable && Opt("p_back_at") is { } raw ? DateTime.Parse(raw, null, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime() : null;
-                if (status is not ("available" or "in_use" or "unavailable") || reason?.Length > 200 || backAt <= DateTime.UtcNow) throw Err("bad_input");
+                if (status is not ("available" or "in_use" or "unavailable")) throw Err("bad_status");
+                if (reason?.Length > 200) throw Err("bad_reason");
+                if (backAt <= DateTime.UtcNow) throw Err("bad_back_at");
 
                 var told = new List<NotifiedMember>();
                 if (amenity.Availability == status && amenity.StatusReason == reason && amenity.BackAt == backAt) return told;   // nothing changed: nobody is told

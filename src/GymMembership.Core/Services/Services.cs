@@ -371,7 +371,14 @@ public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow)
     public bool HasBackAt => IsUnavailable && Amenity.BackAt is not null;
     // empty hides the button: coaches and staff can look but not save
     public string FollowText => !CanFollow ? "" : Followed ? "Following" : "Notify me";
+
+    /// <summary>Everything the card shows is the same, so a refresh can leave it alone.</summary>
+    public bool SameAs(AmenityCard o) => Followed == o.Followed && CanFollow == o.CanFollow && Amenity.Name == o.Amenity.Name && Amenity.Description == o.Amenity.Description
+        && Availability == o.Availability && Reason == o.Reason && BackAt == o.BackAt;
 }
+
+/// <summary>What a status change did: whether the amenity really changed, and the members who were alerted.</summary>
+public sealed record AmenityChange(bool Changed, IReadOnlyList<NotifiedMember> Told);
 
 public sealed record AmenityBoard(IReadOnlyList<AmenityCard> Cards, bool CanFollow);
 
@@ -380,8 +387,8 @@ public interface IAmenityService
     /// <summary>Every amenity that is switched on, with its live status and whether this member saved it. CanFollow is false for coaches and staff.</summary>
     Task<AppResult<AmenityBoard>> BoardAsync();
     Task<AppResult<bool>> SetFollowedAsync(int amenityId, bool follow);
-    /// <summary>Front desk and admin only. Returns the members who were alerted (empty when nothing changed or nobody saved it).</summary>
-    Task<AppResult<IReadOnlyList<NotifiedMember>>> SetStatusAsync(int amenityId, string status, string? reason, DateTime? backAtUtc);
+    /// <summary>Front desk and admin only. Says whether anything really changed (judged against the amenity as it is now, not an older card) and who was alerted.</summary>
+    Task<AppResult<AmenityChange>> SetStatusAsync(int amenityId, string status, string? reason, DateTime? backAtUtc);
 
     Task<AppResult<IReadOnlyList<AmenityRow>>> CatalogAsync();
     Task<AppResult<Payment>> AvailAsync(int amenityId, string? discountCode = null);
@@ -406,15 +413,30 @@ public sealed class AmenityService(ISupabaseGateway gw) : IAmenityService
     public Task<AppResult<bool>> SetFollowedAsync(int amenityId, bool follow) => Safe.RunAsync(async () =>
     { await gw.RpcAsync("set_amenity_followed", new() { ["p_amenity_id"] = amenityId, ["p_follow"] = follow }); return true; });
 
-    public async Task<AppResult<IReadOnlyList<NotifiedMember>>> SetStatusAsync(int amenityId, string status, string? reason, DateTime? backAtUtc)
+    public async Task<AppResult<AmenityChange>> SetStatusAsync(int amenityId, string status, string? reason, DateTime? backAtUtc)
     {
-        if (!Statuses.Contains(status) || reason?.Trim().Length > 200 || backAtUtc <= DateTime.UtcNow)
-            return AppResult<IReadOnlyList<NotifiedMember>>.Fail(AppErrorKind.Validation, "bad_input");
+        var trimmed = reason?.Trim();
+        var problem = !Statuses.Contains(status) ? "bad_status" : trimmed?.Length > 200 ? "bad_reason" : backAtUtc <= DateTime.UtcNow ? "bad_back_at" : null;
+        if (problem is not null) return AppResult<AmenityChange>.Fail(AppErrorKind.Validation, problem);
+
         var args = new Dictionary<string, object> { ["p_amenity_id"] = amenityId, ["p_status"] = status };
-        if (!string.IsNullOrWhiteSpace(reason)) args["p_reason"] = reason.Trim();
+        if (!string.IsNullOrWhiteSpace(trimmed)) args["p_reason"] = trimmed;
         if (backAtUtc is { } back) args["p_back_at"] = back.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
-        return await Safe.RunAsync(async () => (IReadOnlyList<NotifiedMember>)(await gw.RpcAsync<List<NotifiedMember>>("set_amenity_status", args) ?? []));
+        return await Safe.RunAsync(async () =>
+        {
+            // The card on a front desk screen can be half a minute old, so ask what the amenity is right now. The same rule as the database
+            // (a reason and a return time only count while unavailable) decides whether this save really changes anything.
+            var current = (await gw.ListAsync<Amenity>(a => a.Id == amenityId)).FirstOrDefault();
+            var unavailable = status == "unavailable";
+            var wantReason = unavailable && !string.IsNullOrWhiteSpace(trimmed) ? trimmed : null;
+            var wantBack = unavailable ? backAtUtc : null;
+            var changed = current is null || current.Availability != status || current.StatusReason != wantReason || !SameMoment(current.BackAt, wantBack);
+            var told = await gw.RpcAsync<List<NotifiedMember>>("set_amenity_status", args) ?? [];
+            return new AmenityChange(changed, told);
+        });
     }
+
+    static bool SameMoment(DateTime? a, DateTime? b) => a is null ? b is null : b is not null && Math.Abs((a.Value.ToUniversalTime() - b.Value.ToUniversalTime()).TotalSeconds) < 1;
 
     public Task<AppResult<IReadOnlyList<AmenityRow>>> CatalogAsync() => Safe.RunAsync<IReadOnlyList<AmenityRow>>(async () =>
     {
