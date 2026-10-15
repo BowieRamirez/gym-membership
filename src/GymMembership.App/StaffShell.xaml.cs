@@ -18,7 +18,7 @@ public partial class StaffShell : Shell
 	// short names fit under a bottom-bar slot; the pages themselves keep their full titles
 	static readonly Dictionary<string, string> ShortNames = new()
 	{
-		["Payments to verify"] = "Verify", ["Counter payment"] = "Counter", ["Check-in"] = "Check-in", ["Amenity visits"] = "Amenities",
+		["Payments to verify"] = "Verify", ["Counter payment"] = "Counter", ["Check-in"] = "Check-in", ["Amenity Status"] = "Amenities",
 	};
 
 	// On a phone the four daily screens stay one tap away along the bottom; admin pages, Alerts and Settings stay in the menu.

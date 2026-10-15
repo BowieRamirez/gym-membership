@@ -10,7 +10,29 @@ public class BasePage : ContentPage
     {
         base.OnAppearing();
         if (BindingContext is LoadableViewModel vm) await vm.OnAppearingAsync();
+        if (AutoRefresh is { } every)
+        {
+            _refresh ??= Dispatcher.CreateTimer();
+            _refresh.Interval = every;
+            _refresh.Tick -= OnRefreshTick;
+            _refresh.Tick += OnRefreshTick;
+            _refresh.Start();
+        }
     }
+
+    protected override void OnDisappearing()
+    {
+        _refresh?.Stop();
+        base.OnDisappearing();
+    }
+
+    /// <summary>A page that shows live data returns how often to reload while it is open; null means only when it opens.</summary>
+    protected virtual TimeSpan? AutoRefresh => null;
+
+    IDispatcherTimer? _refresh;
+
+    async void OnRefreshTick(object? sender, EventArgs e)
+    { if (BindingContext is LoadableViewModel live) await live.OnAppearingAsync(); }
 
     /// <summary>
     /// Runs a view-model command for the list row a button (or tap) belongs to. Used instead of binding the command through

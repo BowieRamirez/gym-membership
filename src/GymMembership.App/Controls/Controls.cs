@@ -60,9 +60,9 @@ public class StatusChip : ContentView
     readonly Ellipse _dot = new();
     readonly Label _label = new() { VerticalOptions = LayoutOptions.Center, FontSize = 13 };
 
-    static readonly HashSet<string> Good = ["verified", "active", "completed", "approved", "present"];
-    static readonly HashSet<string> Bad = ["rejected", "expired", "cancelled", "absent", "no_show", "inactive"];
-    static readonly HashSet<string> Wait = ["pending", "late"];
+    static readonly HashSet<string> Good = ["verified", "active", "completed", "approved", "present", "available"];
+    static readonly HashSet<string> Bad = ["rejected", "expired", "cancelled", "absent", "no_show", "inactive", "unavailable"];
+    static readonly HashSet<string> Wait = ["pending", "late", "in_use"];
 
     public StatusChip()
     {

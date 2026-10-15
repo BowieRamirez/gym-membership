@@ -20,7 +20,7 @@
     <FlyoutItem Title="Payments to verify" ClassId="desk"><ShellContent ContentTemplate="{DataTemplate views:VerifyPaymentsPage}" /></FlyoutItem>
     <FlyoutItem Title="Counter payment" ClassId="desk"><ShellContent ContentTemplate="{DataTemplate views:CounterPage}" /></FlyoutItem>
     <FlyoutItem Title="Check-in" ClassId="desk"><ShellContent ContentTemplate="{DataTemplate views:CheckInPage}" /></FlyoutItem>
-    <FlyoutItem Title="Amenity visits" ClassId="desk"><ShellContent ContentTemplate="{DataTemplate views:VerifyAmenityUsagesPage}" /></FlyoutItem>
+    <FlyoutItem Title="Amenity Status" ClassId="desk"><ShellContent ContentTemplate="{DataTemplate views:AmenityStatusPage}" /></FlyoutItem>
 
     <!-- Admin only: ClassId="admin" items are removed for the front-desk role -->
     <FlyoutItem Title="Users and roles" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:UsersPage}" /></FlyoutItem>
