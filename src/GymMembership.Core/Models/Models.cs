@@ -146,7 +146,8 @@ public class NotifiedMember : BaseModel
 { [PrimaryKey("message_id")] public int Id { get; set; } [Column("coach_id")] public string CoachId { get; set; } = ""; [Column("member_id")] public string MemberId { get; set; } = "";
   [Column("sender_id")] public string SenderId { get; set; } = ""; [Column("body")] public string Body { get; set; } = "";
   [Column("sent_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime SentAt { get; set; } [Column("read_at", ignoreOnInsert: true)] public DateTime? ReadAt { get; set; }
-  [Column("delivered_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? DeliveredAt { get; set; } }
+  [Column("delivered_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? DeliveredAt { get; set; }
+  [Column("attachment_path", ignoreOnUpdate: true)] public string? AttachmentPath { get; set; } }
 
 // the front desk conversation: one thread per member. The app never reads these tables; it uses chat_threads, chat_messages and send_support_message.
 // The demo keeps its data here.
@@ -157,7 +158,8 @@ public class NotifiedMember : BaseModel
 [Table("support_messages")] public class SupportMessage : BaseModel
 { [PrimaryKey("message_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("sender_id")] public string SenderId { get; set; } = "";
   [Column("body")] public string Body { get; set; } = ""; [Column("sent_at")] public DateTime SentAt { get; set; } [Column("delivered_at")] public DateTime? DeliveredAt { get; set; }
-  [Column("read_at")] public DateTime? ReadAt { get; set; } }
+  [Column("read_at")] public DateTime? ReadAt { get; set; }
+  [Column("attachment_path")] public string? AttachmentPath { get; set; } }
 
 // one row of chat_threads(): a coach chat ("coach") or a front desk thread ("support"). A function result, never written.
 public class ChatThread : BaseModel
@@ -194,6 +196,7 @@ public class ChatLine : BaseModel
   [Column("delivered_at")] public DateTime? DeliveredAt { get; set; }
   [Column("read_at")] public DateTime? ReadAt { get; set; }
   [Column("sender_name")] public string? SenderName { get; set; }
+  [Column("attachment_path")] public string? AttachmentPath { get; set; }
 }
 
 // one row of chat_search()

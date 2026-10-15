@@ -113,6 +113,16 @@ public interface IAppNavigator
     void ApplyTheme(string theme);
 }
 
+public static class StoragePath
+{
+    /// <summary>The folder stays; the file name keeps letters, digits, dot, dash and underscore (a camera file can hold spaces and accents the bucket refuses).</summary>
+    public static string Safe(string path)
+    {
+        var slash = path.LastIndexOf('/');
+        return path[..(slash + 1)] + System.Text.RegularExpressions.Regex.Replace(path[(slash + 1)..], @"[^A-Za-z0-9._-]", "_");
+    }
+}
+
 public interface IProofPicker { Task<(string FileName, byte[] Data)?> PickAsync(); }
 
 /// <summary>The only seam to the backend. DemoGateway implements it in memory; SupabaseGateway talks to the real project.</summary>

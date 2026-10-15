@@ -181,8 +181,7 @@ public sealed class SupabaseGateway : ISupabaseGateway
     public async Task<string> UploadAsync(string bucket, string path, byte[] data)
     {
         var c = await ReadyAsync();
-        var slash = path.LastIndexOf('/');
-        var safe = path[..(slash + 1)] + Regex.Replace(path[(slash + 1)..], @"[^A-Za-z0-9._-]", "_");   // spaces and accents in a camera file name
+        var safe = StoragePath.Safe(path);   // spaces and accents in a camera file name
         var mime = MimeByExtension.GetValueOrDefault(Path.GetExtension(safe), "image/jpeg");
         await c.Storage.From(bucket).Upload(data, safe, new FileOptions { ContentType = mime, Upsert = false });
         return safe;

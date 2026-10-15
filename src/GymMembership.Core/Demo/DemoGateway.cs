@@ -218,8 +218,10 @@ public sealed class DemoGateway : ISupabaseGateway
                     break;
                 case ChatMessage c:
                     if (c.SenderId != Uid || !CoachesMember(c.CoachId, c.MemberId) || !ActiveMember(c.MemberId)) throw Err(Rls);
-                    // the table's own checks: the sender is one of the two people, and the text is not blank
-                    if (c.SenderId != c.CoachId && c.SenderId != c.MemberId || string.IsNullOrWhiteSpace(c.Body)) throw Err("new row for relation \"messages\" violates check constraint (23514)");
+                    // the table's own checks: the sender is one of the two people, there is text or a photo, and the photo is in this conversation's folder
+                    var photoOk = c.AttachmentPath is null || System.Text.RegularExpressions.Regex.IsMatch(c.AttachmentPath, $"^{c.CoachId}/{c.MemberId}/{FilePart}$");
+                    if (c.SenderId != c.CoachId && c.SenderId != c.MemberId || (string.IsNullOrWhiteSpace(c.Body) && c.AttachmentPath is null) || !photoOk)
+                        throw Err("new row for relation \"messages\" violates check constraint (23514)");
                     break;
                 case AmenityUsage u:
                     if (!ActiveMember(Uid) || !All<UserAmenity>().Any(a => a.Id == u.UserAmenityId && a.MemberId == Uid && a.Status == Status.Active && (a.ExpiresAt is null || a.ExpiresAt > DateTime.UtcNow)))
@@ -344,11 +346,48 @@ public sealed class DemoGateway : ISupabaseGateway
         catch (Exception ex) { return Task.FromException(ex); }
     }
 
-    public Task<string> UploadAsync(string bucket, string path, byte[] data) =>
-        FailWith is null ? Task.FromResult(path) : Task.FromException<string>(FailWith);
+    // ---------- chat photos (mirrors 0016: can_use_chat_file) ----------
+    readonly Dictionary<string, byte[]> _files = new();
+    const string FilePart = @"[A-Za-z0-9_-][A-Za-z0-9._-]{0,119}";
+    static readonly System.Text.RegularExpressions.Regex SupportFile = new(@$"^support/(?<m>[A-Za-z0-9_-]+)/{FilePart}$");
+    static readonly System.Text.RegularExpressions.Regex CoachFile = new(@$"^(?<c>[A-Za-z0-9_-]+)/(?<m>[A-Za-z0-9_-]+)/{FilePart}$");
 
-    public Task<string?> SignedUrlAsync(string bucket, string path) =>
-        FailWith is null ? Task.FromResult<string?>(null) : Task.FromException<string?>(FailWith);   // the demo keeps no files
+    bool CanUseChatFile(string path, bool write)
+    {
+        var uid = CurrentUserId;
+        if (uid is null || !IsActiveUser) return false;
+        if (SupportFile.Match(path) is { Success: true } s) return s.Groups["m"].Value == uid || Has("support:reply");
+        if (CoachFile.Match(path) is { Success: true } c)
+        {
+            var coach = c.Groups["c"].Value; var member = c.Groups["m"].Value;
+            if (uid != coach && uid != member) return false;
+            return !write || (CoachesMember(coach, member) && ActiveMember(member));
+        }
+        return false;
+    }
+
+    public Task<string> UploadAsync(string bucket, string path, byte[] data)
+    {
+        if (FailWith is not null) return Task.FromException<string>(FailWith);
+        if (bucket != "chat-attachments") return Task.FromResult(path);
+        path = StoragePath.Safe(path);
+        if (!CanUseChatFile(path, write: true)) return Task.FromException<string>(Err(Rls));
+        _files[path] = data;
+        return Task.FromResult(path);
+    }
+
+    public Task<string?> SignedUrlAsync(string bucket, string path)
+    {
+        if (FailWith is not null) return Task.FromException<string?>(FailWith);
+        if (bucket != "chat-attachments" || !CanUseChatFile(path, write: false) || !_files.TryGetValue(path, out var bytes)) return Task.FromResult<string?>(null);   // the demo keeps no other files
+        // a plain file in the temp folder stands in for the signed link, so the picture shows without a server
+        var file = Path.Combine(Path.GetTempPath(), $"gym-demo-{Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(path)))[..16]}{Path.GetExtension(path)}");
+        if (!File.Exists(file)) File.WriteAllBytes(file, bytes);
+        return Task.FromResult<string?>(file);
+    }
+
+    /// <summary>What the list shows for a message: its text, or the word Photo when it has none.</summary>
+    static string? Preview(string? body, string? photo) => !string.IsNullOrWhiteSpace(body) ? body : photo is not null ? "Photo" : body;
 
     public Task RpcAsync(string function, Dictionary<string, object>? args = null)
     {
@@ -847,7 +886,7 @@ public sealed class DemoGateway : ISupabaseGateway
                     {
                         Kind = "coach", CoachId = coachId, MemberId = memberId, WithId = withId, WithName = NameOf(withId),
                         WithAvatar = All<Profile>().FirstOrDefault(p => p.Id == withId)?.AvatarPath,
-                        LastBody = last?.Body, LastAt = last?.SentAt, LastFromMe = last?.SenderId == uid,
+                        LastBody = last is null ? null : Preview(last.Body, last.AttachmentPath), LastAt = last?.SentAt, LastFromMe = last?.SenderId == uid,
                         Unread = msgs.Count(m => m.SenderId != uid && m.ReadAt is null),
                         CanSend = CoachesMember(coachId, memberId) && ActiveMember(memberId)
                     });
@@ -860,7 +899,7 @@ public sealed class DemoGateway : ISupabaseGateway
                     var last = msgs.LastOrDefault();
                     rows.Add(new ChatThread
                     {
-                        Kind = "support", MemberId = uid, WithName = "Front desk", LastBody = last?.Body, LastAt = last?.SentAt, LastFromMe = last?.SenderId == uid,
+                        Kind = "support", MemberId = uid, WithName = "Front desk", LastBody = last is null ? null : Preview(last.Body, last.AttachmentPath), LastAt = last?.SentAt, LastFromMe = last?.SenderId == uid,
                         Unread = msgs.Count(m => m.SenderId != uid && m.ReadAt is null), CanSend = true,
                         Status = All<SupportThread>().FirstOrDefault(t => t.MemberId == uid)?.Status ?? "open"
                     });
@@ -876,7 +915,7 @@ public sealed class DemoGateway : ISupabaseGateway
                         {
                             Kind = "support", MemberId = t.MemberId, WithId = t.MemberId, WithName = NameOf(t.MemberId),
                             WithAvatar = All<Profile>().FirstOrDefault(p => p.Id == t.MemberId)?.AvatarPath,
-                            LastBody = last?.Body, LastAt = last?.SentAt, LastFromMe = last is not null && last.SenderId != t.MemberId,
+                            LastBody = last is null ? null : Preview(last.Body, last.AttachmentPath), LastAt = last?.SentAt, LastFromMe = last is not null && last.SenderId != t.MemberId,
                             Unread = msgs.Count(m => m.SenderId == t.MemberId && m.ReadAt is null), CanSend = true,
                             Status = t.Status, ClaimedBy = t.ClaimedBy, ClaimedByName = t.ClaimedBy is null ? null : NameOf(t.ClaimedBy)
                         });
@@ -893,7 +932,7 @@ public sealed class DemoGateway : ISupabaseGateway
                 {
                     if (uid != coach && uid != member) throw Err("forbidden");
                     return All<ChatMessage>().Where(m => m.CoachId == coach && m.MemberId == member && (before is null || m.Id < before)).OrderByDescending(m => m.Id).Take(limit)
-                        .Select(m => new ChatLine { MessageId = m.Id, SenderId = m.SenderId, Body = m.Body, SentAt = m.SentAt, DeliveredAt = m.DeliveredAt, ReadAt = m.ReadAt }).ToList();
+                        .Select(m => new ChatLine { MessageId = m.Id, SenderId = m.SenderId, Body = m.Body, SentAt = m.SentAt, DeliveredAt = m.DeliveredAt, ReadAt = m.ReadAt, AttachmentPath = m.AttachmentPath }).ToList();
                 }
                 if (kind == "support")
                 {
@@ -901,7 +940,7 @@ public sealed class DemoGateway : ISupabaseGateway
                     return All<SupportMessage>().Where(m => m.MemberId == member && (before is null || m.Id < before)).OrderByDescending(m => m.Id).Take(limit)
                         .Select(m => new ChatLine
                         {
-                            MessageId = m.Id, SenderId = m.SenderId, Body = m.Body, SentAt = m.SentAt, DeliveredAt = m.DeliveredAt, ReadAt = m.ReadAt,
+                            MessageId = m.Id, SenderId = m.SenderId, Body = m.Body, SentAt = m.SentAt, DeliveredAt = m.DeliveredAt, ReadAt = m.ReadAt, AttachmentPath = m.AttachmentPath,
                             // a member never learns which staff member answered; staff do
                             SenderName = uid == member || m.SenderId == member ? null : All<Profile>().FirstOrDefault(p => p.Id == m.SenderId)?.FullName
                         }).ToList();
@@ -938,17 +977,21 @@ public sealed class DemoGateway : ISupabaseGateway
             {
                 RequireActive();
                 var member = S("p_member");
-                var body = (a["p_body"] as string)?.Trim();
-                if (string.IsNullOrEmpty(body)) throw Err("empty_message");
+                var body = (a["p_body"] as string)?.Trim() ?? "";
+                var att = Opt("p_attachment");
+                if (body == "" && att is null) throw Err("empty_message");
                 if (body.Length > 2000) throw Err("message_too_long");
                 if (uid == member) { if (!All<Member>().Any(m => m.UserId == uid)) throw Err("forbidden"); }
                 else if (Has("support:reply")) { if (!All<Member>().Any(m => m.UserId == member)) throw Err("not_found"); }
                 else throw Err("forbidden");
+                // the photo has to be in this member's front desk folder
+                if (att is not null && !System.Text.RegularExpressions.Regex.IsMatch(att, $"^support/{member}/{FilePart}$")) throw Err("forbidden");
 
                 var thread = All<SupportThread>().FirstOrDefault(t => t.MemberId == member) ?? Add(new SupportThread { MemberId = member });
-                var msg = Add(new SupportMessage { MemberId = member, SenderId = uid, Body = body, SentAt = now });
+                var msg = Add(new SupportMessage { MemberId = member, SenderId = uid, Body = body, SentAt = now, AttachmentPath = att });
                 thread.LastMessageAt = now;
-                var key = $"s|{member}"; var preview = body.Length > 80 ? body[..80] : body;
+                var shown = Preview(body, att) ?? "";
+                var key = $"s|{member}"; var preview = shown.Length > 80 ? shown[..80] : shown;
                 if (uid == member)
                 {
                     thread.Status = "open";   // writing again reopens it

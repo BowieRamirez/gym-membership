@@ -161,12 +161,12 @@ public sealed class SupabaseGatewayTests : IDisposable
     }
 
     [Fact]
-    public async Task Sending_a_message_never_sets_the_time_or_read_flag()
+    public async Task Sending_a_message_never_sets_the_time_or_read_flag_and_sends_only_columns_the_insert_grant_allows()
     {
         var gw = await SignedInAsync();
         _reply = _ => (201, """[{"message_id":1,"coach_id":"c","member_id":"m","sender_id":"m","body":"hi","sent_at":"2026-10-12T01:00:00+00:00"}]""");
         await gw.InsertAsync(new ChatMessage { CoachId = "c", MemberId = "m", SenderId = "m", Body = "hi" });
-        Assert.Equal(new[] { "body", "coach_id", "member_id", "sender_id" }, Columns(Last.Body).Order());
+        Assert.Equal(new[] { "attachment_path", "body", "coach_id", "member_id", "sender_id" }, Columns(Last.Body).Order());
     }
 
     [Fact]
@@ -283,6 +283,47 @@ public sealed class SupabaseGatewayTests : IDisposable
         await svc.MarkReadAsync(thread);
         Assert.Equal("/rest/v1/rpc/mark_chat_read", Last.Path);
         Assert.DoesNotContain("p_coach", Last.Body);
+    }
+
+    [Fact]
+    public async Task Sending_a_photo_uploads_it_to_the_conversation_folder_then_sends_the_message_with_its_path()
+    {
+        var gw = await SignedInAsync();
+        var svc = new ChatService(gw, new NotificationService(gw));
+        _reply = s => s.Path.StartsWith("/storage/") ? (200, """{"Key":"x"}""") : (201, "[]");
+
+        await svc.SendPhotoAsync(new ChatThread { Kind = "coach", CoachId = "c-1", MemberId = "u-1" }, "My Pic.png", [1, 2, 3], "look");
+        var upload = _seen.First(s => s.Path.StartsWith("/storage/v1/object/chat-attachments/c-1/u-1/"));
+        Assert.EndsWith("-My_Pic.png", upload.Path);
+        Assert.Equal("/rest/v1/messages", Last.Path);
+        Assert.Contains("\"attachment_path\":\"c-1/u-1/", Last.Body);
+        Assert.Contains("\"body\":\"look\"", Last.Body);
+
+        await svc.SendPhotoAsync(new ChatThread { Kind = "support", MemberId = "u-1" }, "a.jpg", [1], "");
+        Assert.Contains("/storage/v1/object/chat-attachments/support/u-1/", _seen.Last(s => s.Path.StartsWith("/storage/")).Path);
+        Assert.Equal("/rest/v1/rpc/send_support_message", Last.Path);
+        Assert.Contains("\"p_attachment\":\"support/u-1/", Last.Body);
+        Assert.Contains("\"p_body\":\"\"", Last.Body);
+    }
+
+    [Fact]
+    public async Task A_page_with_a_photo_asks_for_a_signed_link_and_a_failed_link_does_not_fail_the_page()
+    {
+        var gw = await SignedInAsync();
+        var svc = new ChatService(gw, new NotificationService(gw));
+        const string rows = """[{"message_id":7,"sender_id":"c-1","body":"","sent_at":"2026-10-15T01:00:00+00:00","delivered_at":null,"read_at":null,"sender_name":null,"attachment_path":"c-1/u-1/p.png"}]""";
+        var thread = new ChatThread { Kind = "coach", CoachId = "c-1", MemberId = "u-1" };
+
+        _reply = s => s.Path.Contains("/object/sign/") ? (200, """{"signedURL":"/object/sign/chat-attachments/c-1/u-1/p.png?token=t"}""") : (200, rows);
+        var bubble = (await svc.MessagesAsync(thread)).Value!.Bubbles.Single();
+        Assert.Contains("token=t", bubble.PhotoUrl);
+        Assert.Contains(_seen, s => s.Path == "/storage/v1/object/sign/chat-attachments/c-1/u-1/p.png");
+
+        var svc2 = new ChatService(gw, new NotificationService(gw));   // no cached link
+        _reply = s => s.Path.Contains("/object/sign/") ? (500, """{"error":"boom"}""") : (200, rows);
+        var page = await svc2.MessagesAsync(thread);
+        Assert.True(page.Ok);
+        Assert.True(page.Value!.Bubbles.Single().PhotoMissing);
     }
 
     [Fact]

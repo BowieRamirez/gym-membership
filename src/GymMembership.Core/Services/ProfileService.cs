@@ -32,9 +32,11 @@ public sealed class ProfileService(ISupabaseGateway gw) : IProfileService
 {
     public const int MaxBytes = 5 * 1024 * 1024;
     static readonly string[] Extensions = [".jpg", ".jpeg", ".png", ".webp"];
-    // signed links last an hour; reuse one for 50 minutes instead of asking the server on every redraw
-    static readonly TimeSpan LinkLife = TimeSpan.FromMinutes(50);
-    readonly ConcurrentDictionary<string, (string Url, DateTime Until)> _links = new();
+    readonly LinkCache _avatars = new(gw, "avatars");
+
+    /// <summary>A JPG, PNG or WebP of 1 byte to 5 MB: the rule for profile pictures and chat photos alike.</summary>
+    public static bool IsAcceptableImage(string fileName, byte[] data) =>
+        Extensions.Contains(Path.GetExtension(fileName).ToLowerInvariant()) && data.Length is > 0 and <= MaxBytes;
 
     public event Action? AvatarChanged;
 
@@ -48,8 +50,7 @@ public sealed class ProfileService(ISupabaseGateway gw) : IProfileService
     public async Task<AppResult<string>> SetAvatarAsync(string fileName, byte[] data)
     {
         var ext = Path.GetExtension(fileName).ToLowerInvariant();
-        if (!Extensions.Contains(ext) || data.Length == 0 || data.Length > MaxBytes)
-            return AppResult<string>.Fail(AppErrorKind.Validation, "bad_image");
+        if (!IsAcceptableImage(fileName, data)) return AppResult<string>.Fail(AppErrorKind.Validation, "bad_image");
 
         // ponytail: a new file name per upload so the link is never stale; the old file stays in the bucket. Add cleanup when storage use matters.
         var result = await Safe.RunAsync(async () =>
@@ -62,12 +63,21 @@ public sealed class ProfileService(ISupabaseGateway gw) : IProfileService
         return result;
     }
 
-    public Task<AppResult<string?>> AvatarUrlAsync(string? path) => Safe.RunAsync<string?>(async () =>
+    public Task<AppResult<string?>> AvatarUrlAsync(string? path) => Safe.RunAsync<string?>(() => _avatars.UrlAsync(path));
+}
+
+/// <summary>Signed links last an hour; one is reused for 50 minutes instead of asking the server on every redraw.</summary>
+public sealed class LinkCache(ISupabaseGateway gw, string bucket)
+{
+    static readonly TimeSpan Life = TimeSpan.FromMinutes(50);
+    readonly ConcurrentDictionary<string, (string Url, DateTime Until)> _links = new();
+
+    public async Task<string?> UrlAsync(string? path)
     {
         if (string.IsNullOrEmpty(path)) return null;
         if (_links.TryGetValue(path, out var hit) && hit.Until > DateTime.UtcNow) return hit.Url;
-        var url = await gw.SignedUrlAsync("avatars", path);
-        if (url is not null) _links[path] = (url, DateTime.UtcNow + LinkLife);
+        var url = await gw.SignedUrlAsync(bucket, path);
+        if (url is not null) _links[path] = (url, DateTime.UtcNow + Life);
         return url;
-    });
+    }
 }

@@ -11,10 +11,14 @@ static class Fmt
 }
 
 // ===================== Messenger =====================
-public sealed record ChatBubble(ChatLine Line, bool Mine)
+public sealed record ChatBubble(ChatLine Line, bool Mine, string? PhotoUrl = null)
 {
     /// <summary>Shown under what you sent: Sent, Delivered or Read. Empty for what you received.</summary>
     public string Status => !Mine ? "" : Line.ReadAt is not null ? "Read" : Line.DeliveredAt is not null ? "Delivered" : "Sent";
+    public bool HasText => !string.IsNullOrWhiteSpace(Line.Body);
+    public bool ShowPhoto => !string.IsNullOrEmpty(PhotoUrl);
+    /// <summary>A photo was sent but no link could be made for it: the bubble says so instead of leaving a blank.</summary>
+    public bool PhotoMissing => Line.AttachmentPath is not null && !ShowPhoto;
 }
 
 /// <summary>One page of a conversation, oldest first. HasMore says an earlier page exists.</summary>
@@ -28,6 +32,8 @@ public interface IChatService
     /// <summary>A page of at most 99 messages. beforeId is the id of the oldest message already on screen.</summary>
     Task<AppResult<ChatPage>> MessagesAsync(ChatThread thread, long? beforeId = null, int limit = 50);
     Task<AppResult<bool>> SendAsync(ChatThread thread, string body);
+    /// <summary>Uploads the photo to this conversation's folder, then sends it as a message. The caption may be empty.</summary>
+    Task<AppResult<bool>> SendPhotoAsync(ChatThread thread, string fileName, byte[] data, string caption);
     Task<AppResult<bool>> MarkReadAsync(ChatThread thread);
     Task<AppResult<bool>> MarkDeliveredAsync();
     Task<AppResult<bool>> ClaimAsync(ChatThread thread, bool claim);
@@ -38,6 +44,7 @@ public interface IChatService
 public sealed class ChatService(ISupabaseGateway gw, INotificationService notifications) : IChatService
 {
     public (string CoachId, string? MemberId)? Pending { get; set; }
+    readonly LinkCache photos = new(gw, "chat-attachments");
 
     public Task<AppResult<IReadOnlyList<ChatThread>>> ThreadsAsync() => Safe.RunAsync<IReadOnlyList<ChatThread>>(async () =>
         await gw.RpcAsync<List<ChatThread>>("chat_threads") ?? []);
@@ -50,9 +57,16 @@ public sealed class ChatService(ISupabaseGateway gw, INotificationService notifi
         if (thread.CoachId is not null) args["p_coach"] = thread.CoachId;
         if (beforeId is { } before) args["p_before"] = before;
         var rows = await gw.RpcAsync<List<ChatLine>>("chat_messages", args) ?? [];
-        var bubbles = rows.Take(take).Reverse().Select(l => new ChatBubble(l, l.SenderId == uid)).ToList();
+        var shown = rows.Take(take).Reverse().ToList();
+        var urls = await Task.WhenAll(shown.Select(l => LinkOrNull(l.AttachmentPath)));   // one failed link must not fail the page
+        var bubbles = shown.Select((l, i) => new ChatBubble(l, l.SenderId == uid, urls[i])).ToList();
         return new ChatPage(bubbles, rows.Count > take);
     });
+
+    async Task<string?> LinkOrNull(string? path)
+    {
+        try { return await photos.UrlAsync(path); } catch { return null; }
+    }
 
     public async Task<AppResult<bool>> SendAsync(ChatThread thread, string body)
     {
@@ -64,6 +78,24 @@ public sealed class ChatService(ISupabaseGateway gw, INotificationService notifi
             var uid = gw.CurrentUserId ?? throw new Exception("not authenticated");
             if (thread.IsSupport) await gw.RpcAsync("send_support_message", new() { ["p_member"] = thread.MemberId, ["p_body"] = text });
             else await gw.InsertAsync(new ChatMessage { CoachId = thread.CoachId!, MemberId = thread.MemberId, SenderId = uid, Body = text });
+            return true;
+        });
+    }
+
+    public async Task<AppResult<bool>> SendPhotoAsync(ChatThread thread, string fileName, byte[] data, string caption)
+    {
+        if (!ProfileService.IsAcceptableImage(fileName, data)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_image");
+        var text = caption?.Trim() ?? "";
+        if (text.Length > 2000) return AppResult<bool>.Fail(AppErrorKind.Validation, "message_too_long");
+        return await Safe.RunAsync(async () =>
+        {
+            var uid = gw.CurrentUserId ?? throw new Exception("not authenticated");
+            var folder = thread.IsSupport ? $"support/{thread.MemberId}" : $"{thread.CoachId}/{thread.MemberId}";
+            var name = Path.GetFileName(fileName); if (name.Length > 80) name = name[^80..];
+            // ponytail: if the message fails after the upload, the file stays in the bucket unseen. Add cleanup when storage use matters.
+            var path = await gw.UploadAsync("chat-attachments", $"{folder}/{DateTime.UtcNow:yyyyMMddHHmmssfff}-{name}", data);
+            if (thread.IsSupport) await gw.RpcAsync("send_support_message", new() { ["p_member"] = thread.MemberId, ["p_body"] = text, ["p_attachment"] = path });
+            else await gw.InsertAsync(new ChatMessage { CoachId = thread.CoachId!, MemberId = thread.MemberId, SenderId = uid, Body = text, AttachmentPath = path });
             return true;
         });
     }

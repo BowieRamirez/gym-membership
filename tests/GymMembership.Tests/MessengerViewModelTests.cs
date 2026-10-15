@@ -84,6 +84,7 @@ public class MessengerViewModelTests
         public Task<AppResult<ChatPage>> MessagesAsync(ChatThread t, long? beforeId = null, int limit = 50)
         { var tcs = new TaskCompletionSource<AppResult<ChatPage>>(); Waiting.Enqueue((t, tcs)); return tcs.Task; }
         public Task<AppResult<bool>> SendAsync(ChatThread t, string body) => Task.FromResult(AppResult<bool>.Success(true));
+        public Task<AppResult<bool>> SendPhotoAsync(ChatThread t, string fileName, byte[] data, string caption) => Task.FromResult(AppResult<bool>.Success(true));
         public Task<AppResult<bool>> MarkReadAsync(ChatThread t) => Task.FromResult(AppResult<bool>.Success(true));
         public Task<AppResult<bool>> MarkDeliveredAsync() => Task.FromResult(AppResult<bool>.Success(true));
         public Task<AppResult<bool>> ClaimAsync(ChatThread t, bool claim) => Task.FromResult(AppResult<bool>.Success(true));
