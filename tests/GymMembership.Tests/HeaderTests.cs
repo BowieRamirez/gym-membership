@@ -100,4 +100,33 @@ public class HeaderTests
         Assert.Null(gw.CurrentUserId);
         Assert.True(nav.AtLogin);
     }
+
+    [Fact]
+    public async Task A_disposed_header_no_longer_reacts_to_picture_changes()
+    {
+        var (gw, _, _) = await Build("member@demo.io");
+        var profile = new ProfileService(gw);
+        var vm = new HeaderViewModel(profile, new NotificationService(gw), new AuthService(gw), new Nav());
+        vm.Dispose();
+
+        await profile.SetAvatarAsync("a.jpg", [1]);
+        await Task.Delay(100);
+
+        Assert.Equal("?", vm.Letters);   // a live header would have reloaded and shown "AT"
+    }
+
+    [Fact]
+    public async Task Signing_out_also_stops_the_header_listening()
+    {
+        var (gw, _, _) = await Build("member@demo.io");
+        var profile = new ProfileService(gw);
+        var vm = new HeaderViewModel(profile, new NotificationService(gw), new AuthService(gw), new Nav());
+        await vm.SignOutCommand.ExecuteAsync(null);
+
+        await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);   // the next person's header is a different object
+        await profile.SetAvatarAsync("a.jpg", [1]);
+        await Task.Delay(100);
+
+        Assert.Equal("?", vm.Letters);
+    }
 }

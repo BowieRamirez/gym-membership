@@ -404,6 +404,15 @@ await test('storage: add only to your own folder; any signed-in user reads', asy
   assert.match(await code(add(alex, bea)), /42501/);
   assert.equal((await run(bea, `select name from storage.objects where bucket_id = 'avatars'`)).rowCount, 1);
 });
+await test('traversal, bare ids, other-case ids and odd file names are refused', async () => {
+  for (const bad of [`${alex}/../${bea}/a.jpg`, `${alex}/..`, alex, `${alex}/`, `${alex.toUpperCase()}/a.jpg`, `${alex}/.hidden.jpg`, `${alex}/a/b.jpg`, `${alex}/${'a'.repeat(121)}`, `${alex}/a b.jpg`])
+    assert.match(await code(run(alex, `select set_my_avatar($1)`, [bad])), /42501/, bad);
+  assert.equal(await code(run(alex, `select set_my_avatar($1)`, [`${alex}/avatar-20261015120000.jpg`])), 'ok');
+});
+await test('storage: traversal and nested names are refused too', async () => {
+  const add = name => run(alex, `insert into storage.objects (bucket_id, name) values ('avatars', $1)`, [name]);
+  for (const bad of [`${alex}/../${bea}/a.jpg`, `${alex}/.x`, `${alex}/a/b.jpg`]) assert.match(await code(add(bad)), /42501/, bad);
+});
 await test('amenities and packages have an image_path, empty by default', async () => {
   assert.equal((await run(admin, `select image_path from amenities limit 1`)).rows[0].image_path, null);
   assert.equal((await run(admin, `select image_path from membership_packages limit 1`)).rows[0].image_path, null);

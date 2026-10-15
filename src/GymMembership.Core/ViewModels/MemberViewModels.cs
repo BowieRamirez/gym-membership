@@ -367,19 +367,23 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
 }
 
 /// <summary>Feeds the bar at the top of every signed-in screen: your picture, the unread badge and Sign out.</summary>
-public partial class HeaderViewModel : LoadableViewModel
+public partial class HeaderViewModel : LoadableViewModel, IDisposable
 {
     readonly IProfileService profile;
     readonly INotificationService notes;
     readonly IAuthService auth;
     readonly IAppNavigator nav;
+    readonly Action onAvatarChanged;
 
     public HeaderViewModel(IProfileService profile, INotificationService notes, IAuthService auth, IAppNavigator nav)
     {
         (this.profile, this.notes, this.auth, this.nav) = (profile, notes, auth, nav);
-        // ponytail: the service lives for the whole run and this object for one sign-in, so the handler is never removed
-        profile.AvatarChanged += () => _ = RefreshAsync();
+        onAvatarChanged = () => _ = RefreshAsync();
+        profile.AvatarChanged += onAvatarChanged;   // the service outlives every header, so each header must let go (Dispose)
     }
+
+    /// <summary>Stops listening for picture changes. Called on sign-out and when the shell is torn down.</summary>
+    public void Dispose() => profile.AvatarChanged -= onAvatarChanged;
 
     [ObservableProperty] private string letters = "?";
     [ObservableProperty] private string? avatarUrl;
@@ -403,5 +407,5 @@ public partial class HeaderViewModel : LoadableViewModel
         if ((await notes.ListAsync()).Value is { } list) UnreadCount = list.Count(n => n.ReadAt is null);
     }
 
-    [RelayCommand] private async Task SignOutAsync() { await auth.SignOutAsync(); nav.GoToLogin(); }
+    [RelayCommand] private async Task SignOutAsync() { await auth.SignOutAsync(); Dispose(); nav.GoToLogin(); }
 }

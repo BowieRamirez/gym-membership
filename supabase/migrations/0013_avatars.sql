@@ -17,8 +17,10 @@ values ('avatars', 'avatars', false, 5242880, array['image/png', 'image/jpeg', '
 on conflict (id) do update
 set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
+-- exactly {own uuid}/{file name}: one level, a name that cannot start with a dot, so no "..", no nesting, no other folder
 create policy "avatars: add to own folder" on storage.objects for insert to authenticated
-	with check (bucket_id = 'avatars' and public.is_active_user() and (storage.foldername(name))[1] = auth.uid()::text);
+	with check (bucket_id = 'avatars' and public.is_active_user()
+	            and name ~ ('^' || auth.uid()::text || '/[A-Za-z0-9_-][A-Za-z0-9._-]{0,119}$'));
 create policy "avatars: signed-in read" on storage.objects for select to authenticated
 	using (bucket_id = 'avatars' and public.is_active_user());
 
@@ -28,10 +30,12 @@ set search_path = ''
 as $$
 begin
 	perform public.require_active_user();
-	if nullif(btrim(p_path), '') is not null and split_part(btrim(p_path), '/', 1) <> auth.uid()::text then
+	p_path := nullif(btrim(p_path), '');
+	-- the same shape the storage policy allows: {own uuid}/{file name}; null clears the picture
+	if p_path is not null and p_path !~ ('^' || auth.uid()::text || '/[A-Za-z0-9_-][A-Za-z0-9._-]{0,119}$') then
 		perform public.fail('forbidden', '42501');
 	end if;
-	update public.profiles set avatar_path = nullif(btrim(p_path), '') where id = auth.uid();
+	update public.profiles set avatar_path = p_path where id = auth.uid();
 end;
 $$;
 
