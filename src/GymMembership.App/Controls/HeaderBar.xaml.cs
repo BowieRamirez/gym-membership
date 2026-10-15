@@ -54,15 +54,17 @@ public partial class HeaderBar : ContentView
 
 	async void OnBellClicked(object? sender, EventArgs e)
 	{
-		if (_panelOpen || _sp is null) return;   // a second tap while it is open (or opening) does nothing
+		if (_panelOpen || _sp is null || Shell.Current is not { } shell) return;   // a second tap while it is open (or opening) does nothing
 		_panelOpen = true;
-		var vm = _sp.GetRequiredService<NotificationsViewModel>();
+		NotificationsViewModel? vm = null;
 		try
 		{
+			vm = _sp.GetRequiredService<NotificationsViewModel>();
 			var panel = new NotificationPanel(vm);
 			_ = vm.OnAppearingAsync();   // load while it opens
-			await Shell.Current.ShowPopupAsync(panel, new PopupOptions { Shadow = null, Shape = HairlineBox() });   // returns when it closes (outside tap or Close)
+			await shell.ShowPopupAsync(panel, new PopupOptions { Shadow = null, Shape = HairlineBox() });   // returns when it closes (outside tap or Close)
 		}
-		finally { vm.Dispose(); _panelOpen = false; }
+		catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }   // an async void handler: an escaped error here would end the app, and a bell that does nothing is better
+		finally { vm?.Dispose(); _panelOpen = false; }
 	}
 }

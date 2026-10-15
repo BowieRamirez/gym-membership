@@ -79,4 +79,56 @@ public class NotificationPanelTests
         await Task.Delay(100);
         Assert.Equal(before, vm2.UnreadCount);   // closed panel: it no longer redraws
     }
+
+    // a notification service whose list answers the test releases by hand
+    sealed class SlowList : INotificationService
+    {
+        public readonly Queue<TaskCompletionSource<AppResult<IReadOnlyList<GymMembership.Core.Models.UserNotification>>>> Pending = new();
+        public event Action? Changed;
+        public void Raise() => Changed?.Invoke();
+        public Task<AppResult<IReadOnlyList<GymMembership.Core.Models.UserNotification>>> ListAsync()
+        { var t = new TaskCompletionSource<AppResult<IReadOnlyList<GymMembership.Core.Models.UserNotification>>>(); Pending.Enqueue(t); return t.Task; }
+        public Task<AppResult<int>> UnreadCountAsync() => throw new NotSupportedException();
+        public Task<AppResult<bool>> MarkReadAsync(int id) => throw new NotSupportedException();
+        public Task<AppResult<bool>> MarkAllReadAsync() => throw new NotSupportedException();
+    }
+
+    static AppResult<IReadOnlyList<GymMembership.Core.Models.UserNotification>> Rows(params bool[] unread) =>
+        AppResult<IReadOnlyList<GymMembership.Core.Models.UserNotification>>.Success(unread.Select((u, i) =>
+            new GymMembership.Core.Models.UserNotification { Id = i + 1, Title = $"n{i}", CreatedAt = DateTime.UtcNow.AddMinutes(-i), ReadAt = u ? null : DateTime.UtcNow }).ToList());
+
+    [Fact]
+    public async Task A_slow_older_reload_cannot_bring_back_an_alert_that_was_just_read()
+    {
+        var svc = new SlowList();
+        var vm = new NotificationsViewModel(svc);
+        svc.Raise();   // reload 1 starts
+        svc.Raise();   // reload 2 starts (a tap happened in between)
+        var first = svc.Pending.Dequeue();
+        var second = svc.Pending.Dequeue();
+
+        second.SetResult(Rows(false, false));   // newer answer: everything read
+        await Task.Delay(50);
+        first.SetResult(Rows(true, false));     // older answer arrives last: one still unread
+        await Task.Delay(50);
+
+        Assert.Equal(0, vm.UnreadCount);
+        Assert.All(vm.Items, n => Assert.NotNull(n.ReadAt));
+    }
+
+    [Fact]
+    public async Task Reading_alerts_replaces_only_the_rows_that_changed_so_the_list_does_not_jump_to_the_top()
+    {
+        var (_, _, vm) = await Open();
+        var actions = new List<System.Collections.Specialized.NotifyCollectionChangedAction>();
+        vm.Items.CollectionChanged += (_, e) => actions.Add(e.Action);
+        var unread = vm.Items.Count(n => n.ReadAt is null);
+        Assert.True(unread > 0);
+
+        await vm.MarkAllReadCommand.ExecuteAsync(null);
+        await Task.Delay(100);
+
+        Assert.Equal(unread, actions.Count);
+        Assert.All(actions, a => Assert.Equal(System.Collections.Specialized.NotifyCollectionChangedAction.Replace, a));   // no Reset, no Clear and re-add
+    }
 }

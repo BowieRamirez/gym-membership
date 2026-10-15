@@ -22,15 +22,19 @@
 
         <CollectionView Grid.Row="2" ItemsSource="{Binding Items}" Margin="12,0,12,12">
             <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="8" /></CollectionView.ItemsLayout>
-            <CollectionView.EmptyView><Label Text="You're all caught up." Style="{StaticResource Muted}" Margin="4,8" /></CollectionView.EmptyView>
+            <CollectionView.EmptyView>
+                <!-- hidden while an error line is showing: a failed load is not "all caught up" -->
+                <Label Text="You're all caught up." Style="{StaticResource Muted}" Margin="4,8" IsVisible="{Binding ErrorMessage, Converter={StaticResource IsNull}}" />
+            </CollectionView.EmptyView>
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="m:UserNotification">
-                    <Border Style="{StaticResource Panel}" Padding="12,10">
+                    <Border Style="{StaticResource Panel}" Padding="12,10" SemanticProperties.Description="{Binding Title}">
                         <Border.GestureRecognizers><TapGestureRecognizer Tapped="OnTapped" /></Border.GestureRecognizers>
                         <!-- unread: a blue dot and a darker row; read: neither -->
                         <Border.Triggers>
                             <DataTrigger TargetType="Border" Binding="{Binding ReadAt, Converter={StaticResource IsNull}}" Value="True">
                                 <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChalkLight}, Dark={StaticResource ChalkDark}}" />
+                                <Setter Property="SemanticProperties.Hint" Value="Unread. Double tap to mark as read." />
                             </DataTrigger>
                         </Border.Triggers>
                         <Grid ColumnDefinitions="10,*" ColumnSpacing="10">

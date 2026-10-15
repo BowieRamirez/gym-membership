@@ -317,7 +317,31 @@ public partial class NotificationsViewModel : LoadableViewModel, IDisposable
 
     public override Task OnAppearingAsync() => LoadAsync();
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.ListAsync, rows => { Fill(Items, rows); UnreadCount = rows.Count(n => n.ReadAt is null); });
+    int loadTicket;
+
+    // The newest reload wins: a slow older answer must not bring back a dot for an alert that was just read.
+    [RelayCommand]
+    private Task LoadAsync()
+    {
+        var ticket = ++loadTicket;
+        return RunAsync(svc.ListAsync, rows =>
+        {
+            if (ticket != loadTicket) return;
+            Merge(rows);
+            UnreadCount = rows.Count(n => n.ReadAt is null);
+        });
+    }
+
+    // Same alerts as before: swap only the rows whose read time changed, so an open list keeps its scroll position.
+    // A different set (a new alert arrived) rebuilds the list.
+    void Merge(IReadOnlyList<UserNotification> rows)
+    {
+        if (Items.Count == rows.Count && Items.Select(i => i.Id).SequenceEqual(rows.Select(r => r.Id)))
+        {
+            for (var i = 0; i < rows.Count; i++) if (Items[i].ReadAt != rows[i].ReadAt) Items[i] = rows[i];
+        }
+        else Fill(Items, rows);
+    }
 
     // the service raises Changed on success, which reloads the list
     [RelayCommand]
