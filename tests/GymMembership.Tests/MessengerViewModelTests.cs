@@ -13,7 +13,7 @@ public class MessengerViewModelTests
         if (gw.CurrentUserId is not null) await gw.SignOutAsync();
         await gw.SignInAsync(email, DemoGateway.DemoPassword);
         var chat = new ChatService(gw, new NotificationService(gw));
-        var vm = new MessengerViewModel(chat, new ProfileService(gw), new AuthService(gw)) { IsCompact = compact };
+        var vm = new MessengerViewModel(chat, new ProfileService(gw), new AuthService(gw), new DemoPhotoPicker()) { IsCompact = compact };
         await vm.OnAppearingAsync();
         return (gw, chat, vm);
     }
@@ -101,7 +101,7 @@ public class MessengerViewModelTests
         chat.Threads = [new ChatThread { Kind = "coach", CoachId = "c-1", MemberId = "m-1", WithName = "Anna", CanSend = true },
                         new ChatThread { Kind = "coach", CoachId = "c-2", MemberId = "m-1", WithName = "Ben", CanSend = true }];
         var gw = new DemoGateway(); await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
-        var vm = new MessengerViewModel(chat, new ProfileService(gw), new AuthService(gw));
+        var vm = new MessengerViewModel(chat, new ProfileService(gw), new AuthService(gw), new DemoPhotoPicker());
         var loading = vm.OnAppearingAsync();
         await Task.Delay(50);
         var first = chat.Waiting.Dequeue();          // Anna's messages are being fetched
@@ -196,7 +196,7 @@ public class MessengerViewModelTests
     {
         var gw = new DemoGateway(); await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         var chat = new ChatService(gw, new NotificationService(gw)) { Pending = ("u-coach1", null) };
-        var vm = new MessengerViewModel(chat, new ProfileService(gw), new AuthService(gw));
+        var vm = new MessengerViewModel(chat, new ProfileService(gw), new AuthService(gw), new DemoPhotoPicker());
         await vm.OnAppearingAsync();
         Assert.Equal("Lena Cruz", vm.Selected!.Thread.WithName);
         Assert.Null(chat.Pending);   // used once
@@ -286,7 +286,7 @@ public class MessengerViewModelTests
     {
         var chat = new SlowChat { Threads = [new ChatThread { Kind = "coach", CoachId = "c-1", MemberId = "m-1", WithName = "Anna", CanSend = true }] };
         var gw = new DemoGateway(); await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
-        var vm = new MessengerViewModel(chat, new ProfileService(gw), new AuthService(gw));
+        var vm = new MessengerViewModel(chat, new ProfileService(gw), new AuthService(gw), new DemoPhotoPicker());
         var loading = vm.OnAppearingAsync();
         await Task.Delay(50);
         var stale = chat.Waiting.Dequeue();                      // the first person's messages are still on their way

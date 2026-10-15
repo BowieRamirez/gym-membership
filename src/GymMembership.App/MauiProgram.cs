@@ -34,7 +34,8 @@ public static class MauiProgram
 			: new DemoGateway());
 
 		s.AddSingleton<IAppNavigator, AppNavigator>();
-		s.AddSingleton<IProofPicker, MauiProofPicker>();
+		// the real photo library on a device; in demo mode a generated picture, so the screens can be tried without choosing a file
+		s.AddSingleton<IProofPicker>(sp => sp.GetRequiredService<ISupabaseGateway>() is DemoGateway ? new DemoPhotoPicker() : new MauiProofPicker());
 		s.AddSingleton<IAuthService, AuthService>();
 		s.AddSingleton<IMembershipService, MembershipService>();
 		s.AddSingleton<IPaymentStaffService, PaymentStaffService>();

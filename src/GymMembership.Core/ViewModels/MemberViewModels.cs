@@ -276,7 +276,7 @@ public partial class ThreadItem(ChatThread thread) : ObservableObject
         : (Thread.ClaimedByName is { } n ? $"Taken by {n}" : "Not taken yet") + (Thread.Status == "closed" ? ", closed" : "");
 }
 
-public partial class MessengerViewModel(IChatService chat, IProfileService profile, IAuthService auth) : LoadableViewModel
+public partial class MessengerViewModel(IChatService chat, IProfileService profile, IAuthService auth, IProofPicker picker) : LoadableViewModel
 {
     List<ChatThread> all = [];
     string? myId;
@@ -291,6 +291,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowChat), nameof(ShowList))] private bool showingChat;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasChat), nameof(CanSend), nameof(ReadOnly), nameof(CanTake), nameof(CanRelease), nameof(CanClose), nameof(CanReopen))] private ThreadItem? selected;
     [ObservableProperty] private string draft = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPhoto), nameof(PhotoName))] private (string Name, byte[] Data)? pendingPhoto;   // chosen, not sent yet
     [ObservableProperty] private bool hasMore;
     [ObservableProperty] private string tab = "coach";
     [ObservableProperty] private string filter = "open";
@@ -309,6 +310,8 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     /// <summary>A conversation is open but nobody can add to it now (the hire ended, or no active plan): history only.</summary>
     public bool ReadOnly => Selected is not null && !CanSend;
     public bool HasHits => Hits.Count > 0;
+    public bool HasPhoto => PendingPhoto is not null;
+    public string PhotoName => PendingPhoto?.Name ?? "";
     public string CoachTabText => CoachTabBadge > 0 ? $"Coach ({CoachTabBadge})" : "Coach";   // the count is in words, not only a coloured dot
     public string StaffTabText => StaffTabBadge > 0 ? $"Staff ({StaffTabBadge})" : "Staff";
     public bool CanTake => HasFilters && Selected?.Thread is { IsSupport: true, ClaimedBy: null };
@@ -330,7 +333,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         myId = auth.UserId; all = [];
         openTicket++; listTicket++; searchTicket++;   // an answer still on its way for the last person is dropped when it lands
         Threads.Clear(); Bubbles.Clear(); SetHits([]);
-        Selected = null; drafts.Clear(); Draft = ""; SearchText = ""; HasMore = false; ShowingChat = false;
+        Selected = null; drafts.Clear(); Draft = ""; PendingPhoto = null; SearchText = ""; HasMore = false; ShowingChat = false;
         Tab = "coach"; Filter = "open"; HasTabs = false; HasFilters = false; CoachTabBadge = 0; StaffTabBadge = 0;
         ErrorMessage = null;
     }
@@ -456,14 +459,32 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     [RelayCommand]
     private async Task SendAsync()
     {
-        if (Selected is not { } item || string.IsNullOrWhiteSpace(Draft)) return;
-        var sent = Draft;
-        if (!await RunAsync(() => chat.SendAsync(item.Thread, sent))) return;   // the draft stays, with the error line
+        if (Selected is not { } item || (string.IsNullOrWhiteSpace(Draft) && PendingPhoto is null)) return;
+        var sent = Draft; var photo = PendingPhoto;
+        var ok = photo is { } p
+            ? await RunAsync(() => chat.SendPhotoAsync(item.Thread, p.Name, p.Data, sent))
+            : await RunAsync(() => chat.SendAsync(item.Thread, sent));
+        if (!ok) return;   // the caption and the photo stay, with the error line
         drafts.Remove(item.Thread.Key);
-        if (Selected?.Thread.Key == item.Thread.Key && Draft == sent) Draft = "";   // not if more was typed, or you moved on, while it was sending
+        if (Selected?.Thread.Key == item.Thread.Key)   // not if more was typed, or you moved on, while it was sending
+        {
+            if (Draft == sent) Draft = "";
+            if (PendingPhoto == photo) PendingPhoto = null;
+        }
         await MergeLatestAsync(item);
         await LoadThreadsAsync(first: false);
     }
+
+    [RelayCommand]
+    private async Task AttachAsync()
+    {
+        ErrorMessage = null;
+        if (await picker.PickAsync() is not { } file) return;   // cancelled
+        if (!ProfileService.IsAcceptableImage(file.FileName, file.Data)) { ErrorMessage = ErrorText.For(AppErrorKind.Validation, "bad_image"); return; }
+        PendingPhoto = file;
+    }
+
+    [RelayCommand] private void RemovePhoto() => PendingPhoto = null;
 
     // ---- tabs, filters, search
     [RelayCommand]
@@ -503,6 +524,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         if (oldValue?.Thread.Key == newValue?.Thread.Key) return;   // the same conversation, just refreshed
         if (oldValue is not null) drafts[oldValue.Thread.Key] = Draft;
         Draft = newValue is null ? "" : drafts.GetValueOrDefault(newValue.Thread.Key, "");
+        PendingPhoto = null;   // a half-chosen photo is dropped when you move to another conversation
     }
 
     // ---- front desk
@@ -542,7 +564,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         foreach (var b in page.Value!.Bubbles)
         {
             if (!known.TryGetValue(b.Line.MessageId, out var old)) Bubbles.Add(b);
-            else if (old.Status != b.Status) Bubbles[Bubbles.IndexOf(old)] = b;
+            else if (old.Status != b.Status || old.PhotoUrl != b.PhotoUrl) Bubbles[Bubbles.IndexOf(old)] = b;   // Sent became Read, or a photo link was renewed
         }
     }
 }
