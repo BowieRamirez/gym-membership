@@ -497,6 +497,133 @@ await test('the amenity alert type and permission exist', async () => {
   assert.deepEqual(p.rows.map(r => r.name), ['admin', 'employee']);
 });
 
+console.log('\nmessenger (0015)');
+const say = (who, kind, coachId, memberId, body) => kind === 'support'
+  ? run(who, `select send_support_message($1, $2)`, [memberId, body])
+  : db.query(`insert into messages (coach_id, member_id, sender_id, body) values ($1, $2, $3, $4)`, [coachId, memberId, who, body]);
+const threads = async uid => (await run(uid, `select * from chat_threads()`)).rows;
+const page = (uid, kind, c, m, before = null, limit = 50) => run(uid, `select * from chat_messages($1, $2, $3, $4, $5)`, [kind, c, m, before, limit]);
+
+// a coach chat between the coach and Bea, with a hire so it is open
+await db.query(`insert into coach_hires (coach_id, member_id) values ($1, $2) on conflict do nothing`, [coach, bea]);
+for (let i = 1; i <= 3; i++) await say(i % 2 ? bea : coach, 'coach', coach, bea, `coach chat ${i}`);
+
+await test('the conversation list shows the last message, who sent it and the unread count, and nothing the person is not part of', async () => {
+  const t = (await threads(bea)).find(r => r.kind === 'coach' && r.coach_id === coach);
+  assert.equal(t.last_body, 'coach chat 3'); assert.equal(t.last_from_me, true); assert.equal(t.unread, 1);   // the coach's message 2 is waiting
+  assert.equal(t.with_id, coach);
+  const c = (await threads(coach)).find(r => r.kind === 'coach' && r.member_id === bea);
+  assert.equal(c.unread, 2); assert.equal(c.with_id, bea);
+  assert.equal((await threads(alex)).filter(r => r.kind === 'coach' && (r.member_id === bea)).length, 0);   // Alex is not in that chat
+});
+await test('staff and admin cannot read a coach chat, and a member cannot read someone else\'s', async () => {
+  assert.equal((await threads(desk)).filter(r => r.kind === 'coach').length, 0);
+  assert.match(await code(page(desk, 'coach', coach, bea)), /42501/);
+  assert.match(await code(page(admin, 'coach', coach, bea)), /42501/);
+  assert.match(await code(page(alex, 'coach', coach, bea)), /42501/);
+  assert.equal((await page(bea, 'coach', coach, bea)).rowCount, 3);
+});
+await test('a page is newest first, bounded, and the next page starts after the last id (150 messages, no duplicates)', async () => {
+  for (let i = 4; i <= 150; i++) await say(i % 2 ? bea : coach, 'coach', coach, bea, `coach chat ${i}`);
+  const first = (await page(bea, 'coach', coach, bea)).rows;
+  assert.equal(first.length, 50); assert.equal(first[0].body, 'coach chat 150');
+  const second = (await page(bea, 'coach', coach, bea, first.at(-1).message_id)).rows;
+  assert.equal(second.length, 50); assert.equal(second[0].body, 'coach chat 100');
+  const rest = (await page(bea, 'coach', coach, bea, second.at(-1).message_id, 500)).rows;   // 500 is clamped to 100
+  assert.equal(rest.length, 50);
+  assert.equal(new Set([...first, ...second, ...rest].map(r => r.message_id)).size, 150);
+});
+await test('opening a conversation marks what you received delivered and read, and clears its alert; the sender sees it', async () => {
+  await db.query(`delete from user_notifications where user_id = $1`, [bea]);
+  await db.query(`insert into user_notifications (user_id, type, title, reference) values ($1, 'message', 'New message', jsonb_build_object('coach_id', $2::text, 'member_id', $3::text))`, [bea, coach, bea]);
+  await run(bea, `select mark_chat_read('coach', $1, $2)`, [coach, bea]);
+  assert.equal((await threads(bea)).find(r => r.kind === 'coach').unread, 0);
+  const mine = (await page(coach, 'coach', coach, bea, null, 2)).rows;   // the coach's view of Bea's newest messages
+  assert.ok(mine.every(r => r.read_at === null || r.sender_id === coach));   // the coach's own messages were read by Bea
+  const fromCoach = (await page(coach, 'coach', coach, bea)).rows.filter(r => r.sender_id === coach);
+  assert.ok(fromCoach.every(r => r.delivered_at && r.read_at));
+  assert.equal((await db.query(`select 1 from user_notifications where user_id = $1 and read_at is null`, [bea])).rowCount, 0);
+  assert.match(await code(run(alex, `select mark_chat_read('coach', $1, $2)`, [coach, bea])), /42501/);
+});
+await test('delivered is set when the list is loaded, read only when the chat is opened', async () => {
+  await say(coach, 'coach', coach, bea, 'one more');
+  await run(bea, `select mark_chats_delivered()`);
+  const m = (await page(coach, 'coach', coach, bea, null, 1)).rows[0];
+  assert.equal(m.body, 'one more'); assert.ok(m.delivered_at); assert.equal(m.read_at, null);
+});
+
+// front desk
+await test('any member, even a guest, can write to the front desk; staff are alerted; the thread appears in both lists', async () => {
+  await db.query(`delete from user_notifications where user_id = $1`, [desk]);
+  const id = (await run(alex, `select send_support_message($1, $2)`, [alex, '  my payment is stuck  '])).rows[0].send_support_message;
+  assert.ok(id);
+  const mine = (await threads(alex)).find(r => r.kind === 'support');
+  assert.equal(mine.with_name, 'Front desk'); assert.equal(mine.last_body, 'my payment is stuck'); assert.equal(mine.last_from_me, true); assert.equal(mine.can_send, true);
+  const inbox = (await threads(desk)).find(r => r.kind === 'support' && r.member_id === alex);
+  assert.equal(inbox.with_name, 'Alex'); assert.equal(inbox.unread, 1); assert.equal(inbox.status, 'open'); assert.equal(inbox.claimed_by, null);
+  assert.equal((await db.query(`select 1 from user_notifications where user_id = $1 and type = 'message'`, [desk])).rowCount, 1);
+});
+await test('a member sees one front-desk thread even with no messages; coaches and members cannot read or write other threads', async () => {
+  assert.equal((await threads(bea)).filter(r => r.kind === 'support').length, 1);
+  assert.equal((await threads(coach)).filter(r => r.kind === 'support').length, 0);
+  assert.match(await code(run(bea, `select send_support_message($1, 'hi')`, [alex])), /42501/);
+  assert.match(await code(run(coach, `select send_support_message($1, 'hi')`, [alex])), /42501/);
+  assert.match(await code(page(bea, 'support', null, alex)), /42501/);
+  assert.equal((await page(alex, 'support', null, alex)).rowCount, 1);
+});
+await test('empty and over-long messages are refused', async () => {
+  assert.match(await code(run(alex, `select send_support_message($1, '   ')`, [alex])), /22023:empty_message/);
+  assert.match(await code(run(alex, `select send_support_message($1, $2)`, [alex, 'x'.repeat(2001)])), /22023:message_too_long/);
+});
+await test('staff reply: the member is alerted and sees "Front desk"; staff see who answered; reading marks it read', async () => {
+  await db.query(`delete from user_notifications where user_id = $1`, [alex]);
+  await run(desk, `select send_support_message($1, 'looking into it')`, [alex]);
+  assert.equal((await db.query(`select 1 from user_notifications where user_id = $1 and type = 'message'`, [alex])).rowCount, 1);
+  const asMember = (await page(alex, 'support', null, alex)).rows;
+  assert.equal(asMember[0].body, 'looking into it'); assert.equal(asMember[0].sender_name, null);
+  const asStaff = (await page(desk, 'support', null, alex)).rows;
+  const deskName = (await db.query(`select full_name from profiles where id = $1`, [desk])).rows[0].full_name;
+  assert.equal(asStaff[0].sender_name, deskName);
+  assert.equal((await threads(alex)).find(r => r.kind === 'support').unread, 1);
+  await run(alex, `select mark_chat_read('support', null, $1)`, [alex]);
+  assert.equal((await threads(alex)).find(r => r.kind === 'support').unread, 0);
+  const seen = (await page(desk, 'support', null, alex)).rows.find(r => r.body === 'looking into it');
+  assert.ok(seen.read_at);
+});
+await test('taking a conversation: one person at a time, release by that person or an admin; only the one who took it is alerted', async () => {
+  await run(desk, `select claim_support_thread($1, true)`, [alex]);
+  assert.equal((await threads(desk)).find(r => r.kind === 'support' && r.member_id === alex).claimed_by, desk);
+  assert.match(await code(run(admin, `select claim_support_thread($1, true)`, [alex])), /P0002/);   // already taken
+  assert.match(await code(run(alex, `select claim_support_thread($1, true)`, [alex])), /42501/);
+  await db.query(`delete from user_notifications where user_id in ($1, $2)`, [desk, admin]);
+  await run(alex, `select send_support_message($1, 'any news?')`, [alex]);
+  assert.equal((await db.query(`select 1 from user_notifications where user_id = $1 and type = 'message'`, [desk])).rowCount, 1);
+  assert.equal((await db.query(`select 1 from user_notifications where user_id = $1 and type = 'message'`, [admin])).rowCount, 0);
+  await run(admin, `select claim_support_thread($1, false)`, [alex]);   // an admin may release
+  assert.equal((await threads(desk)).find(r => r.kind === 'support' && r.member_id === alex).claimed_by, null);
+});
+await test('closing and reopening: staff can; a new message from the member reopens it', async () => {
+  await run(desk, `select set_support_status($1, false)`, [alex]);
+  assert.equal((await threads(desk)).find(r => r.kind === 'support' && r.member_id === alex).status, 'closed');
+  assert.match(await code(run(alex, `select set_support_status($1, true)`, [alex])), /42501/);
+  await run(alex, `select send_support_message($1, 'sorry, one more thing')`, [alex]);
+  assert.equal((await threads(desk)).find(r => r.kind === 'support' && r.member_id === alex).status, 'open');
+});
+await test('search finds a person by name and a conversation by message text, only among your own, and treats % and _ as plain characters', async () => {
+  const byName = (await run(coach, `select * from chat_search('bea')`)).rows;
+  assert.ok(byName.some(r => r.kind === 'coach' && r.member_id === bea && r.with_name === 'Bea'));
+  const byText = (await run(bea, `select * from chat_search('chat 77')`)).rows;
+  assert.equal(byText.length, 1); assert.match(byText[0].snippet, /coach chat 77/);
+  assert.equal((await run(alex, `select * from chat_search('chat 77')`)).rowCount, 0);   // not Alex's conversation
+  assert.equal((await run(bea, `select * from chat_search('c')`)).rowCount, 0);          // under two characters
+  assert.equal((await run(bea, `select * from chat_search('%')`)).rowCount, 0);
+  assert.equal((await run(desk, `select * from chat_search('payment is stuck')`)).rowCount, 1);   // staff find front-desk text
+});
+await test('support permission exists for admin and front desk only', async () => {
+  const p = await db.query(`select r.name from role_permissions rp join roles r using (role_id) join permissions p using (permission_id) where p.resource = 'support' and p.action = 'reply' order by r.name`);
+  assert.deepEqual(p.rows.map(r => r.name), ['admin', 'employee']);
+});
+
 console.log(`\n${pass} passed, ${failed} failed`);
 await db.end(); await server.stop();
 process.exit(failed ? 1 : 0);
