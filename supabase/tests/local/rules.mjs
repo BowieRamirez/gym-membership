@@ -650,6 +650,88 @@ await test('the inbox is bounded: staff get the 500 most recently active member 
   assert.equal(inbox.length, 500);
 });
 
+console.log('\nchat photos (0016)');
+const fay = await user('fay@t.io', 'member', 'Fay');
+await db.query(`insert into user_membership_packages (member_id, membership_package_id, status, starts_at, ends_at) values ($1, $2, 'active', now(), now() + interval '30 days')`, [fay, monthly]);
+await db.query(`insert into coach_hires (coach_id, member_id) values ($1, $2)`, [coach, fay]);
+const okFile = async (uid, name, write) => (await run(uid, `select can_use_chat_file($1, $2) as ok`, [name, write])).rows[0].ok;
+const pic = (a, b) => `${a}/${b}/photo-1.jpg`;
+
+await test('the chat-attachments bucket is private, images only, 5 MB', async () => {
+  const b = (await db.query(`select public, file_size_limit, allowed_mime_types from storage.buckets where id = 'chat-attachments'`)).rows[0];
+  assert.equal(b.public, false); assert.equal(Number(b.file_size_limit), 5242880);
+  assert.deepEqual([...b.allowed_mime_types].sort(), ['image/jpeg', 'image/png', 'image/webp']);
+});
+await test('coach chat photos: only the two people read them; both can add while the hire and plan are active', async () => {
+  const f = pic(coach, fay);
+  for (const who of [coach, fay]) { assert.equal(await okFile(who, f, false), true); assert.equal(await okFile(who, f, true), true); }
+  for (const who of [bea, alex, desk, admin]) assert.equal(await okFile(who, f, false), false);   // other members, front desk and even the admin
+  assert.equal(await okFile(desk, f, true), false);
+});
+await test('a guest can read a coach chat photo but not add one; an ended hire is the same', async () => {
+  const g = pic(coach, bea);   // Bea has a hire but no active plan
+  assert.equal(await okFile(bea, g, false), true); assert.equal(await okFile(bea, g, true), false);
+  await db.query(`update coach_hires set status = 'ended', ended_at = now() where member_id = $1 and status = 'active'`, [fay]);
+  assert.equal(await okFile(fay, pic(coach, fay), false), true); assert.equal(await okFile(fay, pic(coach, fay), true), false);
+  await db.query(`insert into coach_hires (coach_id, member_id) values ($1, $2)`, [coach, fay]);   // hired again for the tests below
+});
+await test('front desk photos: the member and staff with support:reply, nobody else', async () => {
+  const f = `support/${fay}/photo-1.png`;
+  for (const w of [true, false]) { assert.equal(await okFile(fay, f, w), true); assert.equal(await okFile(desk, f, w), true); }
+  assert.equal(await okFile(admin, f, false), true);
+  for (const who of [bea, alex, coach]) { assert.equal(await okFile(who, f, false), false); assert.equal(await okFile(who, f, true), false); }
+});
+await test('a name that is not exactly one of the two shapes is refused', async () => {
+  for (const name of [`support/${fay}/../x.jpg`, `support/${fay}/.hidden.jpg`, `support/${fay}/a/b.jpg`, `${fay}/photo.jpg`, `support/not-a-uuid/x.jpg`,
+                      `${coach}/${fay}/${'x'.repeat(121)}`, `${coach}/${fay}/x.jpg/`, `SUPPORT/${fay}/x.jpg`, ''])
+    assert.equal(await okFile(fay, name, false), false, name);
+});
+await test('the storage policies apply the same rule to real uploads and reads', async () => {
+  await db.query(`grant select, insert on storage.objects to authenticated`);   // the real project grants this; the local stub does not
+  const add = (uid, name) => run(uid, `insert into storage.objects (bucket_id, name) values ('chat-attachments', $1)`, [name]);
+  assert.equal(await code(add(fay, pic(coach, fay))), 'ok');
+  assert.match(await code(add(bea, pic(coach, fay))), /42501/);
+  assert.match(await code(add(fay, pic(coach, alex))), /42501/);
+  assert.equal(await code(add(fay, `support/${fay}/p.png`)), 'ok');
+  assert.equal((await run(coach, `select name from storage.objects where bucket_id = 'chat-attachments'`)).rowCount, 1);   // only the coach chat photo
+  assert.equal((await run(desk, `select name from storage.objects where bucket_id = 'chat-attachments'`)).rowCount, 1);    // only the front desk photo
+  assert.equal((await run(alex, `select name from storage.objects where bucket_id = 'chat-attachments'`)).rowCount, 0);
+});
+await test('a photo can be the whole message; a blank message with no photo is still refused', async () => {
+  assert.equal(await code(run(fay, `insert into messages (coach_id, member_id, sender_id, body, attachment_path) values ($1, $2, $2, '', $3)`, [coach, fay, pic(coach, fay)])), 'ok');
+  assert.match(await code(run(fay, `insert into messages (coach_id, member_id, sender_id, body) values ($1, $2, $2, '  ')`, [coach, fay])), /23514/);
+});
+await test('a photo from another conversation or a made-up path cannot be attached', async () => {
+  const send = path => run(fay, `insert into messages (coach_id, member_id, sender_id, body, attachment_path) values ($1, $2, $2, 'x', $3)`, [coach, fay, path]);
+  assert.match(await code(send(pic(coach, alex))), /23514/);
+  assert.match(await code(send('../x.jpg')), /23514/);
+  assert.match(await code(send(`support/${fay}/p.png`)), /23514/);
+});
+await test('front desk: a photo alone or with a caption, only into the right thread', async () => {
+  const send = (uid, member, body, att) => run(uid, `select send_support_message(p_member => $1, p_body => $2, p_attachment => $3) as id`, [member, body, att]);
+  assert.ok((await send(fay, fay, '', `support/${fay}/photo-2.png`)).rows[0].id);
+  assert.match(await code(send(fay, fay, '', null)), /22023:empty_message/);
+  assert.match(await code(send(fay, fay, 'hi', `support/${alex}/p.png`)), /42501/);
+  assert.match(await code(send(fay, fay, 'hi', pic(coach, fay))), /42501/);
+  assert.equal(await code(send(desk, fay, 'here you go', `support/${fay}/photo-3.png`)), 'ok');
+  assert.match(await code(send(desk, fay, 'x', `support/${alex}/p.png`)), /42501/);
+  assert.equal(await code(run(fay, `select send_support_message($1, 'text only still works')`, [fay])), 'ok');   // the two-argument call is unchanged
+});
+await test('pages carry the photo path, and the list says "Photo" when the last message has no text', async () => {
+  const rows = (await page(fay, 'support', null, fay)).rows;
+  assert.equal(rows.find(r => r.body === '').attachment_path, `support/${fay}/photo-2.png`);
+  assert.equal(rows.find(r => r.body === 'here you go').attachment_path, `support/${fay}/photo-3.png`);
+  assert.equal(rows.find(r => r.body === 'text only still works').attachment_path, null);
+
+  await db.query(`delete from user_notifications where user_id = $1`, [desk]);
+  await run(fay, `select send_support_message(p_member => $1, p_body => '', p_attachment => $2)`, [fay, `support/${fay}/photo-4.png`]);
+  assert.equal((await threads(fay)).find(r => r.kind === 'support').last_body, 'Photo');
+  assert.equal((await threads(desk)).find(r => r.kind === 'support' && r.member_id === fay).last_body, 'Photo');
+  assert.equal((await threads(fay)).find(r => r.kind === 'coach').last_body, 'Photo');   // the coach chat's last message was the photo-only one above
+  assert.equal((await db.query(`select body from user_notifications where user_id = $1 and type = 'message'`, [desk])).rows[0].body, 'Photo');
+});
+
+
 console.log(`\n${pass} passed, ${failed} failed`);
 await db.end(); await server.stop();
 process.exit(failed ? 1 : 0);
