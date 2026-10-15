@@ -35,7 +35,7 @@ public static class ErrorMapper
         if (Has(m, "forbidden", "42501", "jwt", "row-level security", "invalid login", "not authenticated")) return AppErrorKind.Unauthorized;
         if (Has(m, "already_processed", "already_availed", "renewal_pending", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
         if (Has(m, "no_active_membership", "self_verify", "not_renewable", "wrong_member", "not_found", "23514",
-                   "invalid_code", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "wrong_password", "email_confirmation_required", "end must be after start")) return AppErrorKind.Validation;
+                   "invalid_code", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "end must be after start")) return AppErrorKind.Validation;
         return AppErrorKind.Unknown;
     }
 
@@ -63,6 +63,7 @@ public static class ErrorText
         "bad_email" => "Enter a valid email address, for example name@example.com. Up to 100 characters.",
         "bad_password" => "Use 6 to 64 characters for your password.",
         "bad_image" => "Choose a JPG, PNG or WebP picture under 5 MB.",
+        "message_too_long" => "Keep a message under 2000 characters.",
         "bad_back_at" => "Pick a return time that is still ahead.",
         "bad_reason" => "Keep the reason under 200 characters.",
         "bad_status" => "Choose Available, In use or Unavailable.",

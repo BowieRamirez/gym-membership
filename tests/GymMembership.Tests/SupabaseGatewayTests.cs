@@ -231,6 +231,42 @@ public sealed class SupabaseGatewayTests : IDisposable
     }
 
     [Fact]
+    public async Task The_conversation_list_and_a_page_of_messages_are_read_through_functions_and_parse()
+    {
+        var gw = await SignedInAsync();
+        var svc = new ChatService(gw, new NotificationService(gw));
+
+        _reply = _ => (200, """[{"kind":"coach","coach_id":"c-1","member_id":"u-1","with_id":"c-1","with_name":"Lena Cruz","with_avatar":null,"last_body":"hi","last_at":"2026-10-15T01:00:00+00:00","last_from_me":false,"unread":2,"can_send":true,"status":null,"claimed_by":null,"claimed_by_name":null}]""");
+        var thread = (await svc.ThreadsAsync()).Value!.Single();
+        Assert.Equal("/rest/v1/rpc/chat_threads", Last.Path);
+        Assert.Equal(("Lena Cruz", 2, "coach|c-1|u-1"), (thread.WithName, thread.Unread, thread.Key));
+
+        _reply = _ => (200, """[{"message_id":7,"sender_id":"c-1","body":"hello","sent_at":"2026-10-15T01:00:00+00:00","delivered_at":null,"read_at":null,"sender_name":null}]""");
+        var page = (await svc.MessagesAsync(thread, 99, 20)).Value!;
+        Assert.Equal("/rest/v1/rpc/chat_messages", Last.Path);
+        Assert.Contains("\"p_kind\":\"coach\"", Last.Body);
+        Assert.Contains("\"p_before\":99", Last.Body);
+        Assert.Contains("\"p_limit\":21", Last.Body);
+        Assert.Equal("hello", page.Bubbles.Single().Line.Body);
+    }
+
+    [Fact]
+    public async Task Sending_to_a_coach_inserts_a_message_and_sending_to_the_front_desk_calls_the_function()
+    {
+        var gw = await SignedInAsync();
+        var svc = new ChatService(gw, new NotificationService(gw));
+        _reply = _ => (201, "[]");
+        await svc.SendAsync(new ChatThread { Kind = "coach", CoachId = "c-1", MemberId = "u-1" }, "  hello ");
+        Assert.Equal("/rest/v1/messages", Last.Path);
+        Assert.Contains("\"body\":\"hello\"", Last.Body);
+
+        _reply = _ => (200, "42");
+        await svc.SendAsync(new ChatThread { Kind = "support", MemberId = "u-1" }, "help");
+        Assert.Equal("/rest/v1/rpc/send_support_message", Last.Path);
+        Assert.Contains("\"p_member\":\"u-1\"", Last.Body);
+    }
+
+    [Fact]
     public async Task Marking_every_unread_notification_read_is_one_request_that_leaves_read_ones_alone()
     {
         var gw = await SignedInAsync();
@@ -418,7 +454,7 @@ public sealed class SupabaseGatewayTests : IDisposable
         Note("access", await new MembershipService(gw).AccessAsync());
         Note("my payments", await new MembershipService(gw).MyPaymentsAsync());
         Note("my memberships", await new MembershipService(gw).MyMembershipsAsync());
-        Note("messages", await new MessageService(gw).MessagesAsync("c-1", "m-1"));
+        Note("chat threads", await new ChatService(gw, new NotificationService(gw)).ThreadsAsync());
         Note("find members", await new AttendanceService(gw).FindMembersAsync("a"));
         Note("requests", await new SessionService(gw).RequestsAsync());
         Note("sessions", await new SessionService(gw).SessionsAsync());

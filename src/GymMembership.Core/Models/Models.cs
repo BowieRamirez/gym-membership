@@ -145,7 +145,68 @@ public class NotifiedMember : BaseModel
 [Table("messages")] public class ChatMessage : BaseModel
 { [PrimaryKey("message_id")] public int Id { get; set; } [Column("coach_id")] public string CoachId { get; set; } = ""; [Column("member_id")] public string MemberId { get; set; } = "";
   [Column("sender_id")] public string SenderId { get; set; } = ""; [Column("body")] public string Body { get; set; } = "";
-  [Column("sent_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime SentAt { get; set; } [Column("read_at", ignoreOnInsert: true)] public DateTime? ReadAt { get; set; } }
+  [Column("sent_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime SentAt { get; set; } [Column("read_at", ignoreOnInsert: true)] public DateTime? ReadAt { get; set; }
+  [Column("delivered_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? DeliveredAt { get; set; } }
+
+// the front desk conversation: one thread per member. The app never reads these tables; it uses chat_threads, chat_messages and send_support_message.
+// The demo keeps its data here.
+[Table("support_threads")] public class SupportThread : BaseModel
+{ [PrimaryKey("member_id")] public string MemberId { get; set; } = ""; [Column("claimed_by")] public string? ClaimedBy { get; set; } [Column("status")] public string Status { get; set; } = "open";
+  [Column("last_message_at")] public DateTime LastMessageAt { get; set; } = DateTime.UtcNow; }
+
+[Table("support_messages")] public class SupportMessage : BaseModel
+{ [PrimaryKey("message_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("sender_id")] public string SenderId { get; set; } = "";
+  [Column("body")] public string Body { get; set; } = ""; [Column("sent_at")] public DateTime SentAt { get; set; } [Column("delivered_at")] public DateTime? DeliveredAt { get; set; }
+  [Column("read_at")] public DateTime? ReadAt { get; set; } }
+
+// one row of chat_threads(): a coach chat ("coach") or a front desk thread ("support"). A function result, never written.
+public class ChatThread : BaseModel
+{
+  [Column("kind")] public string Kind { get; set; } = "coach";
+  [Column("coach_id")] public string? CoachId { get; set; }
+  [Column("member_id")] public string MemberId { get; set; } = "";
+  [Column("with_id")] public string? WithId { get; set; }
+  [Column("with_name")] public string WithName { get; set; } = "";
+  [Column("with_avatar")] public string? WithAvatar { get; set; }
+  [Column("last_body")] public string? LastBody { get; set; }
+  [Column("last_at")] public DateTime? LastAt { get; set; }
+  [Column("last_from_me")] public bool LastFromMe { get; set; }
+  [Column("unread")] public int Unread { get; set; }
+  [Column("can_send")] public bool CanSend { get; set; }
+  [Column("status")] public string? Status { get; set; }
+  [Column("claimed_by")] public string? ClaimedBy { get; set; }
+  [Column("claimed_by_name")] public string? ClaimedByName { get; set; }
+
+  public string Key => $"{Kind}|{CoachId}|{MemberId}";
+  public bool IsSupport => Kind == "support";
+  public bool HasUnread => Unread > 0;
+  public string UnreadText => Unread > 99 ? "99+" : Unread.ToString();
+  public string Preview => LastBody is null ? "No messages yet" : LastFromMe ? "You: " + LastBody : LastBody;
+}
+
+// one row of chat_messages(): a message with its delivery times and, in the front desk thread for staff only, who sent it
+public class ChatLine : BaseModel
+{
+  [Column("message_id")] public long MessageId { get; set; }
+  [Column("sender_id")] public string SenderId { get; set; } = "";
+  [Column("body")] public string Body { get; set; } = "";
+  [Column("sent_at")] public DateTime SentAt { get; set; }
+  [Column("delivered_at")] public DateTime? DeliveredAt { get; set; }
+  [Column("read_at")] public DateTime? ReadAt { get; set; }
+  [Column("sender_name")] public string? SenderName { get; set; }
+}
+
+// one row of chat_search()
+public class ChatSearchHit : BaseModel
+{
+  [Column("kind")] public string Kind { get; set; } = "coach";
+  [Column("coach_id")] public string? CoachId { get; set; }
+  [Column("member_id")] public string MemberId { get; set; } = "";
+  [Column("with_id")] public string? WithId { get; set; }
+  [Column("with_name")] public string WithName { get; set; } = "";
+  [Column("snippet")] public string? Snippet { get; set; }
+  [Column("sent_at")] public DateTime? SentAt { get; set; }
+}
 
 [Table("shift_posts")] public class ShiftPost : BaseModel
 { [PrimaryKey("shift_post_id")] public int Id { get; set; } [Column("coach_id", ignoreOnUpdate: true)] public string CoachId { get; set; } = ""; [Column("starts_at")] public DateTime Start { get; set; }

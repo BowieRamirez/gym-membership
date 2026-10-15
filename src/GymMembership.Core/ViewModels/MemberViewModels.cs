@@ -243,7 +243,7 @@ public partial class AmenityBoardViewModel(IAmenityService svc) : LoadableViewMo
     { if (await RunAsync(() => svc.SetFollowedAsync(card.Amenity.Id, !card.Followed))) await LoadAsync(); }
 }
 
-public partial class CoachesViewModel(ICoachService svc, IMessageService messages, IAppNavigator nav) : LoadableViewModel
+public partial class CoachesViewModel(ICoachService svc, IChatService messages, IAppNavigator nav) : LoadableViewModel
 {
     public ObservableCollection<CoachCard> Cards { get; } = new();
 
@@ -261,55 +261,6 @@ public partial class CoachesViewModel(ICoachService svc, IMessageService message
 
     [RelayCommand]
     private void Message(CoachCard card) { messages.Pending = (card.Coach.UserId, null); nav.GoToMessages(); }
-}
-
-public partial class MessagesViewModel(IMessageService svc) : LoadableViewModel
-{
-    public ObservableCollection<ThreadRow> Threads { get; } = new();
-    public ObservableCollection<MessageRow> Messages { get; } = new();
-    [ObservableProperty] private ThreadRow? selected;
-    [ObservableProperty] private string draft = "";
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(ReadOnly))] private bool canSend;
-
-    /// <summary>A conversation is open but the hire has ended: history only.</summary>
-    public bool ReadOnly => Selected is not null && !CanSend;
-
-    public override Task OnAppearingAsync() => LoadAsync();
-
-    [RelayCommand]
-    private async Task LoadAsync()
-    {
-        var keep = Selected;
-        if (!await RunAsync(svc.ThreadsAsync, rows => Fill(Threads, rows))) return;
-        var want = svc.Pending; svc.Pending = null;
-        Selected = Threads.FirstOrDefault(t => want is { } w && t.CoachId == w.CoachId && (w.MemberId is null || t.MemberId == w.MemberId))
-            ?? Threads.FirstOrDefault(t => keep is not null && t.CoachId == keep.CoachId && t.MemberId == keep.MemberId)
-            ?? Threads.FirstOrDefault();
-    }
-
-    partial void OnSelectedChanged(ThreadRow? value)
-    {
-        CanSend = value?.CanSend ?? false;
-        OnPropertyChanged(nameof(ReadOnly));
-        _ = ShowAsync();
-    }
-
-    async Task ShowAsync()
-    {
-        if (Selected is { } t) await RunAsync(() => svc.MessagesAsync(t.CoachId, t.MemberId), rows => Fill(Messages, rows));
-        else Messages.Clear();
-    }
-
-    // no live updates without a database: this reloads the threads and the open conversation
-    [RelayCommand]
-    private async Task RefreshAsync() { await LoadAsync(); await ShowAsync(); }
-
-    [RelayCommand]
-    private async Task SendAsync()
-    {
-        if (Selected is not { } t) return;
-        if (await RunAsync(() => svc.SendAsync(t.CoachId, t.MemberId, Draft))) { Draft = ""; await ShowAsync(); }
-    }
 }
 
 public partial class NotificationsViewModel : LoadableViewModel, IDisposable

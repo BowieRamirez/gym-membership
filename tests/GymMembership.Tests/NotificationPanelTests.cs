@@ -91,6 +91,7 @@ public class NotificationPanelTests
         public Task<AppResult<int>> UnreadCountAsync() => throw new NotSupportedException();
         public Task<AppResult<bool>> MarkReadAsync(int id) => throw new NotSupportedException();
         public Task<AppResult<bool>> MarkAllReadAsync() => throw new NotSupportedException();
+        public void Refresh() { }
     }
 
     static AppResult<IReadOnlyList<GymMembership.Core.Models.UserNotification>> Rows(params bool[] unread) =>

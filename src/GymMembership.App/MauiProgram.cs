@@ -43,7 +43,7 @@ public static class MauiProgram
 		s.AddSingleton<ISessionService, SessionService>();
 		s.AddSingleton<IAttendanceService, AttendanceService>();
 		s.AddSingleton<INotificationService, NotificationService>();
-		s.AddSingleton<IMessageService, MessageService>();
+		s.AddSingleton<IChatService, ChatService>();
 		s.AddSingleton<IAdminService, AdminService>();
 		s.AddSingleton<IProfileService, ProfileService>();
 		s.AddSingleton<ISettingsService, SettingsService>();

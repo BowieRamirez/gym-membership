@@ -182,7 +182,7 @@ public partial class CoachProfileViewModel(ICoachService svc) : LoadableViewMode
     { if (await RunAsync(() => svc.UpdateProfileAsync(Bio, Specialty, HourlyRate, IsAvailable))) Notice = "Profile saved."; }
 }
 
-public partial class TraineesViewModel(ICoachService svc, IMessageService messages, IAppNavigator nav) : LoadableViewModel
+public partial class TraineesViewModel(ICoachService svc, IChatService messages, IAppNavigator nav) : LoadableViewModel
 {
     public ObservableCollection<TraineeRow> Trainees { get; } = new();
 

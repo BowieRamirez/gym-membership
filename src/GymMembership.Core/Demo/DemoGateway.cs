@@ -20,9 +20,9 @@ public sealed class DemoGateway : ISupabaseGateway
     // plan 5.2
     static readonly Dictionary<string, string[]> RolePermissions = new()
     {
-        ["admin"] = ["payments:verify", "payments:record", "payments:void", "check_ins:record", "amenity_usages:verify", "amenities:set_status", "users:manage", "roles:manage",
+        ["admin"] = ["payments:verify", "payments:record", "payments:void", "check_ins:record", "amenity_usages:verify", "amenities:set_status", "support:reply", "users:manage", "roles:manage",
                      "catalog:manage", "discounts:manage", "gym_settings:manage", "reports:revenue", "reports:cash", "audit:read"],
-        ["employee"] = ["payments:verify", "payments:record", "check_ins:record", "amenity_usages:verify", "amenities:set_status", "reports:cash"],
+        ["employee"] = ["payments:verify", "payments:record", "check_ins:record", "amenity_usages:verify", "amenities:set_status", "support:reply", "reports:cash"],
         ["coach"] = ["sessions:manage", "shifts:manage", "attendance:record"],
         ["member"] = []
     };
@@ -72,6 +72,13 @@ public sealed class DemoGateway : ISupabaseGateway
     /// <summary>The demo's stand-in for the server sending someone an alert (a client cannot insert one itself, here or on the real table).</summary>
     public void Notify(string? userId, string type, string title, string? body = null)
     { if (userId is not null) Add(new UserNotification { UserId = userId, Type = type, Title = title, Body = body, CreatedAt = DateTime.UtcNow }); }
+    // which chat an alert is about, so opening that chat clears only its alerts (the database keeps this in the alert's reference)
+    readonly Dictionary<int, string> _chatAlerts = new();
+    void NotifyChat(string userId, string title, string? body, string key)
+    { var n = Add(new UserNotification { UserId = userId, Type = "message", Title = title, Body = body, CreatedAt = DateTime.UtcNow }); _chatAlerts[n.Id] = key; }
+    void ClearChatAlerts(string userId, string key)
+    { foreach (var n in All<UserNotification>().Where(n => n.UserId == userId && n.Type == "message" && n.ReadAt is null && _chatAlerts.GetValueOrDefault(n.Id) == key)) n.ReadAt = DateTime.UtcNow; }
+
     void NotifyStaff(string type, string title) { foreach (var id in All<UserRole>().Where(u => RolesOf(u.UserId).Any(r => r is "admin" or "employee")).Select(u => u.UserId).Distinct().ToList()) Notify(id, type, title); }
     void Audit(string action, string entity, string entityId) =>
         Add(new AuditEntry { ActorId = CurrentUserId, Action = action, Entity = entity, EntityId = entityId, CreatedAt = DateTime.UtcNow });
@@ -178,6 +185,8 @@ public sealed class DemoGateway : ISupabaseGateway
             MembershipPackage k => k.IsActive || Has("catalog:manage"),
             Amenity a => a.IsActive || Has("catalog:manage"),
             AmenityFollow f => f.MemberId == uid,
+            SupportThread t => t.MemberId == uid || Has("support:reply"),
+            SupportMessage m => m.MemberId == uid || Has("support:reply"),
             _ => true
         };
     }
@@ -229,8 +238,8 @@ public sealed class DemoGateway : ISupabaseGateway
                 foreach (var h in All<CoachHire>().Where(h => h.CoachId == s.CoachId && h.Status == Status.Active)) Notify(h.MemberId, "system", "Your coach posted a shift");
                 break;
             case ChatMessage c:
-                c.SentAt = DateTime.UtcNow; c.ReadAt = null;
-                Notify(c.SenderId == c.CoachId ? c.MemberId : c.CoachId, "message", "New message");
+                c.SentAt = DateTime.UtcNow; c.ReadAt = null; c.DeliveredAt = null;
+                NotifyChat(c.SenderId == c.CoachId ? c.MemberId : c.CoachId, "New message", null, $"c|{c.CoachId}|{c.MemberId}");
                 break;
             case AmenityUsage u: u.UsedAt = DateTime.UtcNow; u.Status = Status.Pending; break;
         }
@@ -819,6 +828,181 @@ public sealed class DemoGateway : ISupabaseGateway
                 }
                 return told.OrderBy(t => t.Name).ToList();
             }
+            // ---- messenger (mirrors 0015_messenger.sql)
+            case "chat_threads":
+            {
+                RequireActive();
+                string NameOf(string id) => All<Profile>().FirstOrDefault(p => p.Id == id)?.FullName ?? "Unknown";
+                var rows = new List<ChatThread>();
+
+                // coach chats: every hire (current or ended) and every pair already written to
+                var pairs = All<CoachHire>().Select(h => (h.CoachId, h.MemberId)).Union(All<ChatMessage>().Select(m => (m.CoachId, m.MemberId)))
+                    .Where(p => p.CoachId == uid || p.MemberId == uid).ToList();
+                foreach (var (coachId, memberId) in pairs)
+                {
+                    var withId = coachId == uid ? memberId : coachId;
+                    var msgs = All<ChatMessage>().Where(m => m.CoachId == coachId && m.MemberId == memberId).OrderBy(m => m.Id).ToList();
+                    var last = msgs.LastOrDefault();
+                    rows.Add(new ChatThread
+                    {
+                        Kind = "coach", CoachId = coachId, MemberId = memberId, WithId = withId, WithName = NameOf(withId),
+                        WithAvatar = All<Profile>().FirstOrDefault(p => p.Id == withId)?.AvatarPath,
+                        LastBody = last?.Body, LastAt = last?.SentAt, LastFromMe = last?.SenderId == uid,
+                        Unread = msgs.Count(m => m.SenderId != uid && m.ReadAt is null),
+                        CanSend = CoachesMember(coachId, memberId) && ActiveMember(memberId)
+                    });
+                }
+
+                // a member's own front desk thread is always there
+                if (All<Member>().Any(m => m.UserId == uid))
+                {
+                    var msgs = All<SupportMessage>().Where(m => m.MemberId == uid).OrderBy(m => m.Id).ToList();
+                    var last = msgs.LastOrDefault();
+                    rows.Add(new ChatThread
+                    {
+                        Kind = "support", MemberId = uid, WithName = "Front desk", LastBody = last?.Body, LastAt = last?.SentAt, LastFromMe = last?.SenderId == uid,
+                        Unread = msgs.Count(m => m.SenderId != uid && m.ReadAt is null), CanSend = true,
+                        Status = All<SupportThread>().FirstOrDefault(t => t.MemberId == uid)?.Status ?? "open"
+                    });
+                }
+
+                // the inbox, for staff who may answer
+                if (Has("support:reply"))
+                    foreach (var t in All<SupportThread>().Where(t => t.MemberId != uid))
+                    {
+                        var msgs = All<SupportMessage>().Where(m => m.MemberId == t.MemberId).OrderBy(m => m.Id).ToList();
+                        var last = msgs.LastOrDefault();
+                        rows.Add(new ChatThread
+                        {
+                            Kind = "support", MemberId = t.MemberId, WithId = t.MemberId, WithName = NameOf(t.MemberId),
+                            WithAvatar = All<Profile>().FirstOrDefault(p => p.Id == t.MemberId)?.AvatarPath,
+                            LastBody = last?.Body, LastAt = last?.SentAt, LastFromMe = last is not null && last.SenderId != t.MemberId,
+                            Unread = msgs.Count(m => m.SenderId == t.MemberId && m.ReadAt is null), CanSend = true,
+                            Status = t.Status, ClaimedBy = t.ClaimedBy, ClaimedByName = t.ClaimedBy is null ? null : NameOf(t.ClaimedBy)
+                        });
+                    }
+                return rows.OrderByDescending(r => r.LastAt ?? DateTime.MinValue).ToList();
+            }
+            case "chat_messages":
+            {
+                RequireActive();
+                var kind = S("p_kind"); var member = Opt("p_member"); var coach = Opt("p_coach");
+                long? before = a.TryGetValue("p_before", out var bv) && bv is not null ? Convert.ToInt64(bv) : null;
+                var limit = Math.Clamp(a.TryGetValue("p_limit", out var lv) && lv is not null ? Convert.ToInt32(lv) : 50, 1, 100);
+                if (kind == "coach")
+                {
+                    if (uid != coach && uid != member) throw Err("forbidden");
+                    return All<ChatMessage>().Where(m => m.CoachId == coach && m.MemberId == member && (before is null || m.Id < before)).OrderByDescending(m => m.Id).Take(limit)
+                        .Select(m => new ChatLine { MessageId = m.Id, SenderId = m.SenderId, Body = m.Body, SentAt = m.SentAt, DeliveredAt = m.DeliveredAt, ReadAt = m.ReadAt }).ToList();
+                }
+                if (kind == "support")
+                {
+                    if (uid != member && !Has("support:reply")) throw Err("forbidden");
+                    return All<SupportMessage>().Where(m => m.MemberId == member && (before is null || m.Id < before)).OrderByDescending(m => m.Id).Take(limit)
+                        .Select(m => new ChatLine
+                        {
+                            MessageId = m.Id, SenderId = m.SenderId, Body = m.Body, SentAt = m.SentAt, DeliveredAt = m.DeliveredAt, ReadAt = m.ReadAt,
+                            // a member never learns which staff member answered; staff do
+                            SenderName = uid == member || m.SenderId == member ? null : All<Profile>().FirstOrDefault(p => p.Id == m.SenderId)?.FullName
+                        }).ToList();
+                }
+                throw Err("bad_input");
+            }
+            case "mark_chat_read":
+            {
+                RequireActive();
+                var kind = S("p_kind"); var member = Opt("p_member"); var coach = Opt("p_coach");
+                if (kind == "coach")
+                {
+                    if (uid != coach && uid != member) throw Err("forbidden");
+                    foreach (var m in All<ChatMessage>().Where(m => m.CoachId == coach && m.MemberId == member && m.SenderId != uid && m.ReadAt is null)) { m.DeliveredAt ??= now; m.ReadAt = now; }
+                    ClearChatAlerts(uid, $"c|{coach}|{member}");
+                }
+                else if (kind == "support")
+                {
+                    if (uid != member && !Has("support:reply")) throw Err("forbidden");
+                    foreach (var m in All<SupportMessage>().Where(m => m.MemberId == member && m.ReadAt is null && (uid == member ? m.SenderId != member : m.SenderId == member))) { m.DeliveredAt ??= now; m.ReadAt = now; }
+                    ClearChatAlerts(uid, $"s|{member}");
+                }
+                else throw Err("bad_input");
+                return null;
+            }
+            case "mark_chats_delivered":
+            {
+                RequireActive();
+                foreach (var m in All<ChatMessage>().Where(m => (m.CoachId == uid || m.MemberId == uid) && m.SenderId != uid && m.DeliveredAt is null)) m.DeliveredAt = now;
+                foreach (var m in All<SupportMessage>().Where(m => m.DeliveredAt is null && m.SenderId != uid && (m.MemberId == uid || (Has("support:reply") && m.SenderId == m.MemberId)))) m.DeliveredAt = now;
+                return null;
+            }
+            case "send_support_message":
+            {
+                RequireActive();
+                var member = S("p_member");
+                var body = (a["p_body"] as string)?.Trim();
+                if (string.IsNullOrEmpty(body)) throw Err("empty_message");
+                if (body.Length > 2000) throw Err("message_too_long");
+                if (uid == member) { if (!All<Member>().Any(m => m.UserId == uid)) throw Err("forbidden"); }
+                else if (Has("support:reply")) { if (!All<Member>().Any(m => m.UserId == member)) throw Err("not_found"); }
+                else throw Err("forbidden");
+
+                var thread = All<SupportThread>().FirstOrDefault(t => t.MemberId == member) ?? Add(new SupportThread { MemberId = member });
+                var msg = Add(new SupportMessage { MemberId = member, SenderId = uid, Body = body, SentAt = now });
+                thread.LastMessageAt = now;
+                var key = $"s|{member}"; var preview = body.Length > 80 ? body[..80] : body;
+                if (uid == member)
+                {
+                    thread.Status = "open";   // writing again reopens it
+                    var title = $"New message from {All<Profile>().First(p => p.Id == uid).FullName}";
+                    if (thread.ClaimedBy is { } taker && All<Profile>().Any(p => p.Id == taker && p.IsActive)) NotifyChat(taker, title, preview, key);
+                    else foreach (var id in All<UserRole>().Where(u => RolesOf(u.UserId).Any(r => r is "admin" or "employee")).Select(u => u.UserId).Distinct().ToList())
+                        if (All<Profile>().Any(p => p.Id == id && p.IsActive)) NotifyChat(id, title, preview, key);
+                }
+                else NotifyChat(member, "Message from the front desk", preview, key);
+                return (long)msg.Id;
+            }
+            case "claim_support_thread":
+            {
+                Require("support:reply");
+                var thread = All<SupportThread>().FirstOrDefault(t => t.MemberId == S("p_member")) ?? throw Err("not_found");
+                if (B("p_claim"))
+                {
+                    if (thread.ClaimedBy is not null && thread.ClaimedBy != uid) throw Err("already_processed");
+                    thread.ClaimedBy = uid;
+                }
+                else
+                {
+                    if (thread.ClaimedBy is not null && thread.ClaimedBy != uid && !RolesOf(uid).Contains("admin")) throw Err("forbidden");
+                    thread.ClaimedBy = null;
+                }
+                return null;
+            }
+            case "set_support_status":
+            {
+                Require("support:reply");
+                (All<SupportThread>().FirstOrDefault(t => t.MemberId == S("p_member")) ?? throw Err("not_found")).Status = B("p_open") ? "open" : "closed";
+                return null;
+            }
+            case "chat_search":
+            {
+                RequireActive();
+                var q = ((a.TryGetValue("p_query", out var qv) ? qv as string : null) ?? "").Trim();
+                var hits = new List<ChatSearchHit>();
+                if (q.Length < 2) return hits;
+                bool Has_(string? s) => s?.Contains(q, StringComparison.OrdinalIgnoreCase) == true;   // % and _ are plain characters here, like in the database
+                foreach (var t in (List<ChatThread>)Call("chat_threads", new())!)
+                {
+                    var found = t.IsSupport
+                        ? All<SupportMessage>().Where(m => m.MemberId == t.MemberId && Has_(m.Body)).OrderByDescending(m => m.SentAt).Select(m => (m.Body, m.SentAt)).FirstOrDefault()
+                        : All<ChatMessage>().Where(m => m.CoachId == t.CoachId && m.MemberId == t.MemberId && Has_(m.Body)).OrderByDescending(m => m.SentAt).Select(m => (m.Body, m.SentAt)).FirstOrDefault();
+                    if (found.Body is null && !Has_(t.WithName)) continue;
+                    hits.Add(new ChatSearchHit
+                    {
+                        Kind = t.Kind, CoachId = t.CoachId, MemberId = t.MemberId, WithId = t.WithId, WithName = t.WithName,
+                        Snippet = found.Body ?? t.LastBody, SentAt = found.Body is null ? t.LastAt : found.SentAt
+                    });
+                }
+                return hits.OrderByDescending(h => h.SentAt ?? DateTime.MinValue).Take(30).ToList();
+            }
             case "set_my_avatar":
             {
                 var path = Opt("p_path");
@@ -926,9 +1110,9 @@ public sealed class DemoGateway : ISupabaseGateway
         Add(new ShiftPost { CoachId = "u-coach1", Start = At(3, 14), End = At(3, 20) });
         Add(new ShiftPost { CoachId = "u-coach2", Start = At(1, 14), End = At(1, 22), Note = "Heavy bags and pad work" });
 
-        Add(new ChatMessage { CoachId = "u-coach1", MemberId = "u-alex", SenderId = "u-alex", Body = "Hi Lena, can we work on my squat depth this week?", SentAt = now.AddHours(-26) });
+        Add(new ChatMessage { CoachId = "u-coach1", MemberId = "u-alex", SenderId = "u-alex", Body = "Hi Lena, can we work on my squat depth this week?", SentAt = now.AddHours(-26), DeliveredAt = now.AddHours(-25.5), ReadAt = now.AddHours(-25.5) });
         Add(new ChatMessage { CoachId = "u-coach1", MemberId = "u-alex", SenderId = "u-coach1", Body = "Sure. Bring a flat-soled pair of shoes and we'll film it from the side.", SentAt = now.AddHours(-25) });
-        Add(new ChatMessage { CoachId = "u-coach1", MemberId = "u-alex", SenderId = "u-alex", Body = "Perfect, see you on the session.", SentAt = now.AddHours(-24) });
+        Add(new ChatMessage { CoachId = "u-coach1", MemberId = "u-alex", SenderId = "u-alex", Body = "Perfect, see you on the session.", SentAt = now.AddHours(-24), DeliveredAt = now.AddHours(-23), ReadAt = now.AddHours(-23) });
 
         Add(new AuditEntry { ActorId = "u-emp", Action = "payment.verify", Entity = "payments", EntityId = "5", CreatedAt = now.AddDays(-3) });
         Add(new AuditEntry { ActorId = "u-admin", Action = "role.assign", Entity = "user_roles", EntityId = "u-coach2", CreatedAt = now.AddDays(-8) });

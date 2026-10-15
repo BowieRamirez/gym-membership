@@ -140,6 +140,7 @@ public class HeaderTests
         public Task<AppResult<IReadOnlyList<GymMembership.Core.Models.UserNotification>>> ListAsync() => throw new NotSupportedException();
         public Task<AppResult<bool>> MarkReadAsync(int id) => throw new NotSupportedException();
         public Task<AppResult<bool>> MarkAllReadAsync() => throw new NotSupportedException();
+        public void Refresh() { }
     }
 
     [Fact]

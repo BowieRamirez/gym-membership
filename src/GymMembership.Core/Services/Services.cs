@@ -754,11 +754,15 @@ public interface INotificationService
     Task<AppResult<int>> UnreadCountAsync();
     Task<AppResult<bool>> MarkReadAsync(int id);
     Task<AppResult<bool>> MarkAllReadAsync();
+    /// <summary>Something outside this service cleared alerts (a chat was opened): redraw the bell.</summary>
+    void Refresh();
 }
 
 public sealed class NotificationService(ISupabaseGateway gw) : INotificationService
 {
     public event Action? Changed;
+
+    public void Refresh() => Changed?.Invoke();
 
     public Task<AppResult<IReadOnlyList<UserNotification>>> ListAsync() => Safe.RunAsync(async () =>
     {
