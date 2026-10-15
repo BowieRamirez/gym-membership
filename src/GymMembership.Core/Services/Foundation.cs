@@ -81,6 +81,8 @@ public static class ErrorText
         "no_active_hire" => "You can only message a coach you have hired, or a trainee who is hired to you.",
         "empty_message" => "Type a message first.",
         "end must be after start" => "The end time must be after the start time.",
+        // the app is newer than the database: a migration was not pushed, so the server cannot find a function, table or column it asks for
+        _ when raw?.Contains("schema cache", StringComparison.OrdinalIgnoreCase) == true => "This part of the app needs a server update that hasn't been installed yet. Tell the gym owner.",
         _ when raw?.Contains("foreign key", StringComparison.OrdinalIgnoreCase) == true => "Existing records use this, so it can't be deleted. Turn it off instead.",
         _ when raw?.Contains("payments_reference_no_key", StringComparison.OrdinalIgnoreCase) == true => "That reference number was already used on another payment.",
         _ when raw?.Contains("23P01", StringComparison.OrdinalIgnoreCase) == true || raw?.Contains("conflicting key", StringComparison.OrdinalIgnoreCase) == true => "That time overlaps something already booked.",

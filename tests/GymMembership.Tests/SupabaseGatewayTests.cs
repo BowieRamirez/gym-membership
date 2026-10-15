@@ -327,6 +327,19 @@ public sealed class SupabaseGatewayTests : IDisposable
     }
 
     [Fact]
+    public async Task A_database_that_lacks_a_function_the_app_calls_gives_the_server_update_message()
+    {
+        var gw = await SignedInAsync();
+        var svc = new ChatService(gw, new NotificationService(gw));
+        _reply = _ => (404, """{"code":"PGRST202","details":"Searched for the function public.chat_threads without parameters","hint":null,"message":"Could not find the function public.chat_threads without parameters in the schema cache"}""");
+
+        var result = await svc.ThreadsAsync();
+
+        Assert.False(result.Ok);
+        Assert.Equal("This part of the app needs a server update that hasn't been installed yet. Tell the gym owner.", ErrorText.For(result.Error, result.Message));
+    }
+
+    [Fact]
     public async Task Marking_every_unread_notification_read_is_one_request_that_leaves_read_ones_alone()
     {
         var gw = await SignedInAsync();
