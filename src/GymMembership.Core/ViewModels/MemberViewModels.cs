@@ -263,6 +263,262 @@ public partial class CoachesViewModel(ICoachService svc, IChatService messages, 
     private void Message(CoachCard card) { messages.Pending = (card.Coach.UserId, null); nav.GoToMessages(); }
 }
 
+/// <summary>A conversation row: the thread plus its picture, which is looked up after the list is shown.</summary>
+public partial class ThreadItem(ChatThread thread) : ObservableObject
+{
+    public ChatThread Thread { get; } = thread;
+    [ObservableProperty] private string? avatarUrl;
+    public string Letters => Initials.From(Thread.WithName);
+}
+
+public partial class MessengerViewModel(IChatService chat, IProfileService profile, IAuthService auth) : LoadableViewModel
+{
+    List<ChatThread> all = [];
+    string? myId;
+    int openTicket, listTicket, searchTicket;
+
+    public ObservableCollection<ThreadItem> Threads { get; } = new();
+    public ObservableCollection<ChatBubble> Bubbles { get; } = new();
+    public ObservableCollection<ChatSearchHit> Hits { get; } = new();
+
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowChat), nameof(ShowList))] private bool isCompact;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowChat), nameof(ShowList))] private bool showingChat;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasChat), nameof(CanSend), nameof(CanTake), nameof(CanRelease), nameof(CanClose), nameof(CanReopen))] private ThreadItem? selected;
+    [ObservableProperty] private string draft = "";
+    [ObservableProperty] private bool hasMore;
+    [ObservableProperty] private string tab = "coach";
+    [ObservableProperty] private string filter = "open";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsSearching))] private string searchText = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanTake), nameof(CanRelease), nameof(CanClose), nameof(CanReopen))] private bool hasFilters;
+    [ObservableProperty] private bool hasTabs;
+    [ObservableProperty] private int coachTabBadge;
+    [ObservableProperty] private int staffTabBadge;
+
+    /// <summary>On a phone the list and the chat take turns; on a desktop they sit side by side.</summary>
+    public bool ShowList => !IsCompact || !ShowingChat;
+    public bool ShowChat => !IsCompact || ShowingChat;
+    public bool HasChat => Selected is not null;
+    public bool IsSearching => SearchText.Trim().Length >= 1;
+    public bool CanSend => Selected?.Thread.CanSend == true;
+    public bool CanTake => HasFilters && Selected?.Thread is { IsSupport: true, ClaimedBy: null };
+    public bool CanRelease => HasFilters && Selected?.Thread is { IsSupport: true, ClaimedBy: not null } t && t.ClaimedBy == myId;
+    public bool CanClose => HasFilters && Selected?.Thread is { IsSupport: true, Status: "open" };
+    public bool CanReopen => HasFilters && Selected?.Thread is { IsSupport: true, Status: "closed" };
+    public string EmptyListText => HasFilters ? "No conversations here." : Tab == "coach" && HasTabs ? "You have no coach yet. Hire one from the Coaches page to start a conversation." : "";
+
+    // ---- loading
+    public override async Task OnAppearingAsync()
+    {
+        if (auth.UserId != myId) Reset();   // somebody else signed in: nothing of the last person stays on screen
+        await LoadThreadsAsync(first: true);
+        if (Selected is { } item) await ShowAsync(item, markRead: ShowChat);
+    }
+
+    void Reset()
+    {
+        myId = auth.UserId; all = [];
+        Threads.Clear(); Bubbles.Clear(); Hits.Clear();
+        Selected = null; Draft = ""; SearchText = ""; HasMore = false; ShowingChat = false;
+        Tab = "coach"; Filter = "open"; HasTabs = false; HasFilters = false; CoachTabBadge = 0; StaffTabBadge = 0;
+        ErrorMessage = null;
+    }
+
+    async Task LoadThreadsAsync(bool first)
+    {
+        var ticket = ++listTicket;
+        var result = await chat.ThreadsAsync();
+        if (!result.Ok) { if (first) ErrorMessage = ErrorText.For(result.Error, result.Message); return; }
+        if (ticket != listTicket) return;   // a newer load is on its way
+        all = result.Value!.ToList();
+        // a member has their own "Front desk" thread and gets the Coach and Staff tabs; staff see member threads and get the Open, Mine and Closed filters; a coach gets neither
+        var member = all.Any(t => t.IsSupport && t.WithName == "Front desk");
+        HasTabs = member;
+        HasFilters |= !member && all.Any(t => t.IsSupport);   // once on, stays on, so an emptied inbox keeps its filters
+        CoachTabBadge = all.Where(t => !t.IsSupport).Sum(t => t.Unread);
+        StaffTabBadge = all.Where(t => t.IsSupport).Sum(t => t.Unread);
+        _ = chat.MarkDeliveredAsync();   // what was sent to you is at least delivered once your list has loaded
+        Rebuild();
+        if (first) PickInitial();
+        _ = ResolveAvatarsAsync();
+    }
+
+    // what the list shows now, from what the server said and the tab, filter and search box. Only changed rows are swapped.
+    void Rebuild()
+    {
+        IEnumerable<ChatThread> shown = HasFilters
+            ? all.Where(t => t.IsSupport && Filter switch { "mine" => t.ClaimedBy == myId && t.Status == "open", "closed" => t.Status == "closed", _ => t.Status == "open" })
+            : HasTabs ? all.Where(t => t.IsSupport == (Tab == "support")) : all;
+        if (IsSearching) shown = shown.Where(t => t.WithName.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        ThreadItem Item(ChatThread t)
+        {
+            var old = Threads.FirstOrDefault(x => x.Thread.Key == t.Key);
+            return old is not null && Same(old.Thread, t) ? old : new ThreadItem(t) { AvatarUrl = old?.AvatarUrl };
+        }
+        Sync(Threads, shown.Select(Item).ToList(), x => x.Thread.Key, ReferenceEquals);
+
+        // the open conversation follows the server's latest word about it (unread count, who took it, closed)
+        if (Selected is { } open && all.FirstOrDefault(t => t.Key == open.Thread.Key) is { } fresh && !Same(open.Thread, fresh))
+            Selected = Threads.FirstOrDefault(x => x.Thread.Key == fresh.Key) ?? new ThreadItem(fresh) { AvatarUrl = open.AvatarUrl };
+        OnPropertyChanged(nameof(EmptyListText));
+    }
+
+    static bool Same(ChatThread a, ChatThread b) => a.LastBody == b.LastBody && a.LastAt == b.LastAt && a.Unread == b.Unread && a.Status == b.Status
+        && a.ClaimedBy == b.ClaimedBy && a.CanSend == b.CanSend && a.WithName == b.WithName && a.WithAvatar == b.WithAvatar;
+
+    void PickInitial()
+    {
+        var want = chat.Pending; chat.Pending = null;
+        if (want is { } w && all.FirstOrDefault(t => !t.IsSupport && t.CoachId == w.CoachId && (w.MemberId is null || t.MemberId == w.MemberId)) is { } hit)
+        {
+            Tab = "coach"; Rebuild();
+            Selected = Threads.FirstOrDefault(x => x.Thread.Key == hit.Key);
+            ShowingChat = true;   // on a phone, straight into that chat
+            return;
+        }
+        if (Selected is null || all.All(t => t.Key != Selected.Thread.Key)) Selected = IsCompact ? null : Threads.FirstOrDefault();
+    }
+
+    async Task ResolveAvatarsAsync()
+    {
+        foreach (var item in Threads.Where(t => t.AvatarUrl is null && t.Thread.WithAvatar is not null).ToList())
+            item.AvatarUrl = (await profile.AvatarUrlAsync(item.Thread.WithAvatar)).Value;
+    }
+
+    // ---- one conversation. The newest request wins: a slow answer for a conversation you have left is dropped.
+    async Task ShowAsync(ThreadItem item, bool markRead)
+    {
+        var ticket = ++openTicket;
+        var page = await chat.MessagesAsync(item.Thread);
+        if (ticket != openTicket) return;
+        if (!page.Ok) { ErrorMessage = ErrorText.For(page.Error, page.Message); return; }
+        Bubbles.Clear();
+        foreach (var b in page.Value!.Bubbles) Bubbles.Add(b);
+        HasMore = page.Value.HasMore;
+        if (markRead) await MarkOpenReadAsync(item);
+    }
+
+    async Task MarkOpenReadAsync(ThreadItem item)
+    {
+        var hadUnread = item.Thread.Unread > 0;
+        await chat.MarkReadAsync(item.Thread);
+        if (hadUnread) await LoadThreadsAsync(first: false);   // the badge in the list goes away
+    }
+
+    [RelayCommand]
+    private async Task OpenAsync(ThreadItem item)
+    {
+        ErrorMessage = null;
+        Selected = item;
+        ShowingChat = true;
+        Bubbles.Clear(); HasMore = false;
+        await ShowAsync(item, markRead: true);
+    }
+
+    [RelayCommand]
+    private async Task OpenHitAsync(ChatSearchHit hit)
+    {
+        SearchText = "";
+        var thread = all.FirstOrDefault(t => t.Kind == hit.Kind && t.CoachId == hit.CoachId && t.MemberId == hit.MemberId);
+        if (thread is null) return;
+        if (HasTabs) Tab = thread.IsSupport ? "support" : "coach";
+        Rebuild();
+        if (Threads.FirstOrDefault(x => x.Thread.Key == thread.Key) is { } item) await OpenAsync(item);
+    }
+
+    [RelayCommand] private void Back() => ShowingChat = false;
+
+    [RelayCommand]
+    private async Task LoadEarlierAsync()
+    {
+        if (Selected is not { } item || Bubbles.Count == 0) return;
+        var page = await chat.MessagesAsync(item.Thread, Bubbles[0].Line.MessageId);
+        if (!page.Ok || Selected?.Thread.Key != item.Thread.Key) return;
+        var have = Bubbles.Select(b => b.Line.MessageId).ToHashSet();
+        var add = page.Value!.Bubbles.Where(b => !have.Contains(b.Line.MessageId)).ToList();
+        for (var i = add.Count - 1; i >= 0; i--) Bubbles.Insert(0, add[i]);
+        HasMore = page.Value.HasMore;
+    }
+
+    [RelayCommand]
+    private async Task SendAsync()
+    {
+        if (Selected is not { } item || string.IsNullOrWhiteSpace(Draft)) return;
+        if (!await RunAsync(() => chat.SendAsync(item.Thread, Draft))) return;   // the draft stays, with the error line
+        Draft = "";
+        await MergeLatestAsync(item);
+        await LoadThreadsAsync(first: false);
+    }
+
+    // ---- tabs, filters, search
+    [RelayCommand]
+    private async Task ShowTabAsync(string tab)
+    {
+        Tab = tab; Selected = null; Bubbles.Clear(); HasMore = false;
+        Rebuild();
+        if (!IsCompact && Threads.FirstOrDefault() is { } first) await OpenAsync(first);
+    }
+
+    [RelayCommand] private Task ShowFilterAsync(string filter) { Filter = filter; Rebuild(); return Task.CompletedTask; }
+
+    partial void OnSearchTextChanged(string value)
+    {
+        Rebuild();
+        var ticket = ++searchTicket;
+        if (value.Trim().Length < 2) { Hits.Clear(); return; }
+        _ = SearchLaterAsync(value, ticket);
+    }
+
+    async Task SearchLaterAsync(string text, int ticket)
+    {
+        await Task.Delay(350);   // wait for a pause in typing
+        if (ticket != searchTicket) return;
+        var result = await chat.SearchAsync(text);
+        if (ticket == searchTicket && result.Ok) Fill(Hits, result.Value!);
+    }
+
+    // ---- front desk
+    [RelayCommand] private Task TakeAsync() => ClaimAsync(true);
+    [RelayCommand] private Task ReleaseAsync() => ClaimAsync(false);
+    [RelayCommand] private Task CloseChatAsync() => SetOpenAsync(false);
+    [RelayCommand] private Task ReopenAsync() => SetOpenAsync(true);
+
+    async Task ClaimAsync(bool claim)
+    {
+        if (Selected is { } item && await RunAsync(() => chat.ClaimAsync(item.Thread, claim))) await LoadThreadsAsync(first: false);
+    }
+
+    async Task SetOpenAsync(bool open)
+    {
+        if (Selected is { } item && await RunAsync(() => chat.SetOpenAsync(item.Thread, open))) await LoadThreadsAsync(first: false);
+    }
+
+    // ---- quiet refresh: new messages arrive and the list updates; a draft, an error line and the scroll position are left alone
+    public override async Task AutoRefreshAsync()
+    {
+        if (IsBusy) return;
+        await LoadThreadsAsync(first: false);
+        if (Selected is not { } item) return;
+        await MergeLatestAsync(item);
+        if (ShowChat && Selected is { } open && open.Thread.Unread > 0) await MarkOpenReadAsync(open);
+    }
+
+    // adds what is new at the bottom and swaps a message whose status moved on (Sent, Delivered, Read); nothing is rebuilt
+    async Task MergeLatestAsync(ThreadItem item)
+    {
+        var ticket = openTicket;
+        var page = await chat.MessagesAsync(item.Thread);
+        if (!page.Ok || ticket != openTicket || Selected?.Thread.Key != item.Thread.Key) return;
+        if (Bubbles.Count == 0) HasMore = page.Value!.HasMore;
+        var known = Bubbles.ToDictionary(b => b.Line.MessageId);
+        foreach (var b in page.Value!.Bubbles)
+        {
+            if (!known.TryGetValue(b.Line.MessageId, out var old)) Bubbles.Add(b);
+            else if (old.Status != b.Status) Bubbles[Bubbles.IndexOf(old)] = b;
+        }
+    }
+}
+
 public partial class NotificationsViewModel : LoadableViewModel, IDisposable
 {
     readonly INotificationService svc;
