@@ -9,4 +9,6 @@ public partial class PackagesPage : BasePage
 		InitializeComponent();
 		BindingContext = vm;
 	}
+
+	void OnAvail(object? sender, EventArgs e) => Row<PackagesViewModel>(sender, v => v.AvailCommand);
 }

@@ -9,4 +9,9 @@ public partial class CatalogAdminPage : BasePage
 		InitializeComponent();
 		BindingContext = vm;
 	}
+
+	void OnEditPackage(object? sender, EventArgs e) => Row<CatalogAdminViewModel>(sender, v => v.EditPackageCommand);
+	void OnTogglePackage(object? sender, EventArgs e) => Row<CatalogAdminViewModel>(sender, v => v.TogglePackageCommand);
+	void OnDeletePackage(object? sender, EventArgs e) => Row<CatalogAdminViewModel>(sender, v => v.DeletePackageCommand);
+	void OnToggleAmenity(object? sender, EventArgs e) => Row<CatalogAdminViewModel>(sender, v => v.ToggleAmenityCommand);
 }

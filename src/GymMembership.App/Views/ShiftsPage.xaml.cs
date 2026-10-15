@@ -9,4 +9,6 @@ public partial class ShiftsPage : BasePage
 		InitializeComponent();
 		BindingContext = vm;
 	}
+
+	void OnCancel(object? sender, EventArgs e) => Row<ShiftsViewModel>(sender, v => v.CancelCommand);
 }

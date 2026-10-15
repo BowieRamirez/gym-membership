@@ -85,11 +85,11 @@
                                 <Label Text="{Binding Request.Message}" Style="{StaticResource Muted}" IsVisible="{Binding Request.Message, Converter={StaticResource HasText}}" />
                                 <FlexLayout Wrap="Wrap">
                                     <Button Text="Approve" Style="{StaticResource SmallButton}" Margin="0,0,8,8" IsVisible="{Binding CanRespond}"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RequestsViewModel}}, Path=ApproveCommand}" CommandParameter="{Binding .}" />
+                                            Clicked="OnApprove" />
                                     <Button Text="Reject" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanRespond}"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RequestsViewModel}}, Path=RejectCommand}" CommandParameter="{Binding .}" />
+                                            Clicked="OnReject" />
                                     <Button Text="Cancel request" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanCancel}"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RequestsViewModel}}, Path=CancelCommand}" CommandParameter="{Binding .}" />
+                                            Clicked="OnCancel" />
                                 </FlexLayout>
                             </VerticalStackLayout>
                         </Border>

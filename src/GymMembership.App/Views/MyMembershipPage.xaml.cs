@@ -9,4 +9,7 @@ public partial class MyMembershipPage : BasePage
 		InitializeComponent();
 		BindingContext = vm;
 	}
+
+	void OnRenew(object? sender, EventArgs e) => Row<MyMembershipViewModel>(sender, v => v.RenewCommand);
+	void OnPayAgain(object? sender, EventArgs e) => Row<MyMembershipViewModel>(sender, v => v.PayAgainCommand);
 }

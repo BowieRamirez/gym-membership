@@ -9,4 +9,6 @@ public partial class VoidPaymentsPage : BasePage
 		InitializeComponent();
 		BindingContext = vm;
 	}
+
+	void OnStart(object? sender, EventArgs e) => Row<VoidPaymentsViewModel>(sender, v => v.StartCommand);
 }

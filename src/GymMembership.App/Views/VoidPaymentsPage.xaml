@@ -51,7 +51,7 @@
                             <VerticalStackLayout Grid.Column="1" Spacing="8" HorizontalOptions="End">
                                 <Label Text="{Binding Payment.Amount, StringFormat='₱{0:N2}'}" Style="{StaticResource Numeral}" HorizontalOptions="End" />
                                 <Button Text="Void" Style="{StaticResource SmallOutlineButton}"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:VoidPaymentsViewModel}}, Path=StartCommand}" CommandParameter="{Binding .}" />
+                                        Clicked="OnStart" />
                             </VerticalStackLayout>
                         </Grid>
                     </Border>

@@ -9,4 +9,7 @@ public partial class AmenitiesPage : BasePage
 		InitializeComponent();
 		BindingContext = vm;
 	}
+
+	void OnAvail(object? sender, EventArgs e) => Row<AmenitiesViewModel>(sender, v => v.AvailCommand);
+	void OnLogUsage(object? sender, EventArgs e) => Row<AmenitiesViewModel>(sender, v => v.LogUsageCommand);
 }

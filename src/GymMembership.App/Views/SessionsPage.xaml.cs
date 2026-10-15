@@ -9,4 +9,9 @@ public partial class SessionsPage : BasePage
 		InitializeComponent();
 		BindingContext = vm;
 	}
+
+	void OnComplete(object? sender, EventArgs e) => Row<SessionsViewModel>(sender, v => v.CompleteCommand);
+	void OnNoShow(object? sender, EventArgs e) => Row<SessionsViewModel>(sender, v => v.NoShowCommand);
+	void OnStartReschedule(object? sender, EventArgs e) => Row<SessionsViewModel>(sender, v => v.StartRescheduleCommand);
+	void OnCancel(object? sender, EventArgs e) => Row<SessionsViewModel>(sender, v => v.CancelCommand);
 }

@@ -35,8 +35,7 @@
                             <VerticalStackLayout Style="{StaticResource CardActions}" Spacing="6">
                                 <Label Text="{Binding Price, StringFormat='₱{0:N0}'}" Style="{StaticResource PriceNumeral}" HorizontalOptions="{OnIdiom Phone=Start, Default=End}" />
                                 <Button Text="Buy" Style="{StaticResource SmallButton}"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:PackagesViewModel}}, Path=AvailCommand}"
-                                        CommandParameter="{Binding .}" />
+                                        Clicked="OnAvail" />
                             </VerticalStackLayout>
                         </Grid>
                     </Border>

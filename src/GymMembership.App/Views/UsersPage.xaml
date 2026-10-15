@@ -67,17 +67,13 @@
                                 </Grid>
                                 <FlexLayout Wrap="Wrap">
                                     <Button Text="{Binding CoachActionText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:UsersViewModel}}, Path=ToggleRoleCommand}"
-                                            CommandParameter="{Binding UserId, StringFormat='{0}|coach'}" />
+                                            Clicked="OnToggleRoleCoach" />
                                     <Button Text="{Binding EmployeeActionText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:UsersViewModel}}, Path=ToggleRoleCommand}"
-                                            CommandParameter="{Binding UserId, StringFormat='{0}|employee'}" />
+                                            Clicked="OnToggleRoleEmployee" />
                                     <Button Text="Reset password" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:UsersViewModel}}, Path=StartResetCommand}"
-                                            CommandParameter="{Binding .}" />
+                                            Clicked="OnStartReset" />
                                     <Button Text="{Binding ActiveActionText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:UsersViewModel}}, Path=ToggleActiveCommand}"
-                                            CommandParameter="{Binding .}" />
+                                            Clicked="OnToggleActive" />
                                 </FlexLayout>
                             </VerticalStackLayout>
                         </Border>

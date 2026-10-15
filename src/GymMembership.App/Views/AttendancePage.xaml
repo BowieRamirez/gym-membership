@@ -25,17 +25,13 @@
                             <Label Text="{Binding Session.ScheduledStart, Converter={StaticResource LocalDate}, ConverterParameter='dddd d MMM, h:mm tt'}" Style="{StaticResource Caption}" />
                             <FlexLayout Wrap="Wrap">
                                 <Button Text="Present" Style="{StaticResource SmallButton}" Margin="0,0,8,8"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:AttendanceViewModel}}, Path=MarkCommand}"
-                                        CommandParameter="{Binding Session.Id, StringFormat='{0}|present'}" />
+                                        Clicked="OnMarkPresent" />
                                 <Button Text="Late" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:AttendanceViewModel}}, Path=MarkCommand}"
-                                        CommandParameter="{Binding Session.Id, StringFormat='{0}|late'}" />
+                                        Clicked="OnMarkLate" />
                                 <Button Text="Absent" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:AttendanceViewModel}}, Path=MarkCommand}"
-                                        CommandParameter="{Binding Session.Id, StringFormat='{0}|absent'}" />
+                                        Clicked="OnMarkAbsent" />
                                 <Button Text="Excused" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:AttendanceViewModel}}, Path=MarkCommand}"
-                                        CommandParameter="{Binding Session.Id, StringFormat='{0}|excused'}" />
+                                        Clicked="OnMarkExcused" />
                             </FlexLayout>
                         </VerticalStackLayout>
                     </Border>

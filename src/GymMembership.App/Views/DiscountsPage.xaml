@@ -63,9 +63,9 @@
                                 </Grid>
                                 <HorizontalStackLayout Spacing="8">
                                     <Button Text="Turn on or off" Style="{StaticResource SmallOutlineButton}"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:DiscountsViewModel}}, Path=ToggleCommand}" CommandParameter="{Binding .}" />
+                                            Clicked="OnToggle" />
                                     <Button Text="Delete" Style="{StaticResource SmallOutlineButton}"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:DiscountsViewModel}}, Path=DeleteCommand}" CommandParameter="{Binding .}" />
+                                            Clicked="OnDelete" />
                                 </HorizontalStackLayout>
                             </VerticalStackLayout>
                         </Border>

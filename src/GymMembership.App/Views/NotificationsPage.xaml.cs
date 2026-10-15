@@ -9,4 +9,6 @@ public partial class NotificationsPage : BasePage
 		InitializeComponent();
 		BindingContext = vm;
 	}
+
+	void OnMarkRead(object? sender, TappedEventArgs e) => Row<NotificationsViewModel>(sender, v => v.MarkReadCommand);
 }

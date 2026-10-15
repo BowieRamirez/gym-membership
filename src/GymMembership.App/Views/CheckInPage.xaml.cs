@@ -9,4 +9,6 @@ public partial class CheckInPage : BasePage
 		InitializeComponent();
 		BindingContext = vm;
 	}
+
+	void OnCheckIn(object? sender, EventArgs e) => Row<CheckInViewModel>(sender, v => v.CheckInCommand);
 }

@@ -65,7 +65,7 @@
                                     <c:StatusChip Grid.Column="1" Status="{Binding Status}" VerticalOptions="Start" />
                                 </Grid>
                                 <Button Text="Cancel shift" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ShiftsViewModel}}, Path=CancelCommand}" CommandParameter="{Binding .}">
+                                        Clicked="OnCancel">
                                     <Button.Triggers>
                                         <DataTrigger TargetType="Button" Binding="{Binding Status}" Value="cancelled"><Setter Property="IsVisible" Value="False" /></DataTrigger>
                                     </Button.Triggers>

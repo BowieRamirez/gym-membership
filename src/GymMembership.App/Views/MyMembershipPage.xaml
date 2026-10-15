@@ -78,8 +78,7 @@
                                 </VerticalStackLayout>
                                 <Button Text="Renew" Style="{StaticResource CardButton}" VerticalOptions="Start"
                                         IsVisible="{Binding CanRenew}"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MyMembershipViewModel}}, Path=RenewCommand}"
-                                        CommandParameter="{Binding .}" />
+                                        Clicked="OnRenew" />
                             </Grid>
                         </Border>
                     </DataTemplate>
@@ -111,8 +110,7 @@
                                 <VerticalStackLayout Style="{StaticResource CardActions}" Spacing="6">
                                     <Label Text="{Binding Amount, StringFormat='₱{0:N2}'}" Style="{StaticResource Heading}" HorizontalOptions="{OnIdiom Phone=Start, Default=End}" />
                                     <Button Text="Pay again" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanPayAgain}"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MyMembershipViewModel}}, Path=PayAgainCommand}"
-                                            CommandParameter="{Binding .}" />
+                                            Clicked="OnPayAgain" />
                                 </VerticalStackLayout>
                             </Grid>
                         </Border>

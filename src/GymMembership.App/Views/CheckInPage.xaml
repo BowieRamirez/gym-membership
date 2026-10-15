@@ -24,7 +24,7 @@
                             <Label Text="{Binding Username}" Style="{StaticResource Heading}" VerticalOptions="Center" />
                             <c:StatusChip Grid.Column="1" Status="{Binding PlanStatus}" VerticalOptions="Center" />
                             <Button Grid.Column="2" Text="Check in" Style="{StaticResource SmallButton}"
-                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:CheckInViewModel}}, Path=CheckInCommand}" CommandParameter="{Binding .}" />
+                                    Clicked="OnCheckIn" />
                         </Grid>
                     </Border>
                 </DataTemplate>

@@ -59,16 +59,16 @@
                             </Grid>
                             <FlexLayout Wrap="Wrap" IsVisible="{Binding CanManage}">
                                 <Button Text="Mark complete" Style="{StaticResource SmallButton}" Margin="0,0,8,8"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=CompleteCommand}" CommandParameter="{Binding .}" />
+                                        Clicked="OnComplete" />
                                 <Button Text="No-show" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=NoShowCommand}" CommandParameter="{Binding .}" />
+                                        Clicked="OnNoShow" />
                             </FlexLayout>
                             <!-- both the member and the coach can move or cancel a booked session -->
                             <FlexLayout Wrap="Wrap" IsVisible="{Binding CanChange}">
                                 <Button Text="Reschedule" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=StartRescheduleCommand}" CommandParameter="{Binding .}" />
+                                        Clicked="OnStartReschedule" />
                                 <Button Text="Cancel session" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=CancelCommand}" CommandParameter="{Binding .}" />
+                                        Clicked="OnCancel" />
                             </FlexLayout>
                         </VerticalStackLayout>
                     </Border>

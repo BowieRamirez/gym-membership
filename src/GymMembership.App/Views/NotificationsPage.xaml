@@ -20,8 +20,7 @@
                 <DataTemplate x:DataType="m:UserNotification">
                     <Border Style="{StaticResource Panel}">
                         <Border.GestureRecognizers>
-                            <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:NotificationsViewModel}}, Path=MarkReadCommand}"
-                                                  CommandParameter="{Binding .}" />
+                            <TapGestureRecognizer Tapped="OnMarkRead" />
                         </Border.GestureRecognizers>
                         <Grid ColumnDefinitions="10,*" ColumnSpacing="12">
                             <Ellipse Style="{StaticResource DotScheduled}" VerticalOptions="Start" Margin="0,7,0,0"

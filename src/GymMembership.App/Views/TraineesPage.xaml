@@ -28,9 +28,9 @@
                             </VerticalStackLayout>
                             <VerticalStackLayout Style="{StaticResource CardActions}" Spacing="8">
                                 <Button Text="Message" Style="{StaticResource SmallButton}"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TraineesViewModel}}, Path=MessageCommand}" CommandParameter="{Binding .}" />
+                                        Clicked="OnMessage" />
                                 <Button Text="Remove" Style="{StaticResource SmallOutlineButton}"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TraineesViewModel}}, Path=RemoveCommand}" CommandParameter="{Binding .}" />
+                                        Clicked="OnRemove" />
                             </VerticalStackLayout>
                         </Grid>
                     </Border>

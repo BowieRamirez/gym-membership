@@ -9,4 +9,7 @@ public partial class DiscountsPage : BasePage
 		InitializeComponent();
 		BindingContext = vm;
 	}
+
+	void OnToggle(object? sender, EventArgs e) => Row<DiscountsViewModel>(sender, v => v.ToggleCommand);
+	void OnDelete(object? sender, EventArgs e) => Row<DiscountsViewModel>(sender, v => v.DeleteCommand);
 }
