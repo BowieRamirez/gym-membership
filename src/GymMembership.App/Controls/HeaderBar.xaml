@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:c="clr-namespace:GymMembership.App.Controls"
+             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+             x:Class="GymMembership.App.Controls.HeaderBar" x:DataType="vm:HeaderViewModel">
+
+    <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8" HeightRequest="56"
+          Padding="{OnIdiom Phone='4,0,8,0', Default='8,0,16,0'}">
+
+        <c:Avatar Letters="{Binding Letters}" Url="{Binding AvatarUrl}" Diameter="36" VerticalOptions="Center"
+                  SemanticProperties.Description="Your profile picture. Opens Settings.">
+            <c:Avatar.GestureRecognizers><TapGestureRecognizer Tapped="OnAvatarTapped" /></c:Avatar.GestureRecognizers>
+        </c:Avatar>
+
+        <Label x:Name="TitleLabel" Grid.Column="1" Style="{StaticResource Heading}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+
+        <!-- the bell: 48 x 48 touch target, unread count as a small red badge -->
+        <Grid Grid.Column="2" WidthRequest="48" HeightRequest="48" VerticalOptions="Center">
+            <!-- two pre-coloured icons, chosen by theme: a tint would not follow a theme change made while the app is open -->
+            <ImageButton Source="{AppThemeBinding Light=bell_light.svg, Dark=bell_dark.svg}" Padding="12" Aspect="AspectFit" BackgroundColor="Transparent"
+                         Clicked="OnBellClicked" SemanticProperties.Description="{Binding AlertsLabel}" />
+            <Border IsVisible="{Binding HasUnread}" InputTransparent="True" HorizontalOptions="End" VerticalOptions="Start" Margin="0,4,2,0"
+                    MinimumWidthRequest="18" HeightRequest="18" Padding="4,0" StrokeThickness="0" StrokeShape="RoundRectangle 9"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource PlateRedLight}, Dark={StaticResource PlateRedDark}}">
+                <Label Text="{Binding UnreadText}" FontSize="11" FontFamily="BarlowSemiBold" HorizontalOptions="Center" VerticalOptions="Center"
+                       TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" />
+            </Border>
+        </Grid>
+
+        <Button Grid.Column="3" Text="Sign out" Style="{StaticResource SmallOutlineButton}" Command="{Binding SignOutCommand}" VerticalOptions="Center" />
+    </Grid>
+</ContentView>

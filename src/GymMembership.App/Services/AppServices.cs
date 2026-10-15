@@ -9,7 +9,7 @@ public sealed class AppNavigator(IServiceProvider sp) : IAppNavigator
     public void GoTo(AppRole role, bool changePassword = false)
     {
         if (role == AppRole.Member) { _ = ShowMemberShellAsync(changePassword); return; }
-        Show(role == AppRole.Coach ? new CoachShell() : new StaffShell(role));
+        Show(role == AppRole.Coach ? new CoachShell(sp) : new StaffShell(role, sp));
         if (changePassword) GoToSettings();
         _ = ApplyStoredThemeAsync();
     }

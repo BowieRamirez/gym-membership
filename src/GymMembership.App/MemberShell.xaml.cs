@@ -13,6 +13,7 @@ public partial class MemberShell : Shell
 	{
 		InitializeComponent();
 		_sp = sp; _access = access;
+		((Controls.HeaderBar)GetTitleView(this)).Attach(this, sp);
 		if (!access.Active)
 			foreach (var item in Items.Where(i => i.ClassId == "members-only"))
 			{

@@ -13,20 +13,17 @@ public class XamlBindingTests
     static readonly XNamespace X = "http://schemas.microsoft.com/winfx/2009/xaml";
     static readonly Assembly Core = typeof(Payment).Assembly;
 
-    static string ViewsFolder()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "gym-membership.slnx"))) dir = dir.Parent;
-        return Path.Combine(dir?.FullName ?? throw new InvalidOperationException("solution folder not found"), "src", "GymMembership.App", "Views");
-    }
-
-    public static IEnumerable<object[]> Pages() => Directory.GetFiles(ViewsFolder(), "*.xaml").Select(f => new object[] { Path.GetFileName(f) });
+    // every page and every control: a path under src/GymMembership.App
+    public static IEnumerable<object[]> Pages() =>
+        new[] { "Views", "Controls" }
+            .SelectMany(d => Directory.GetFiles(Path.Combine(TestPaths.AppFolder(), d), "*.xaml"))
+            .Select(f => new object[] { Path.GetRelativePath(TestPaths.AppFolder(), f) });
 
     [Theory]
     [MemberData(nameof(Pages))]
     public void Every_binding_on_the_page_points_at_a_real_property(string file)
     {
-        var doc = XDocument.Load(Path.Combine(ViewsFolder(), file));
+        var doc = XDocument.Load(Path.Combine(TestPaths.AppFolder(), file));
         var problems = new List<string>();
         Walk(doc.Root!, null, problems, file);
         Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));

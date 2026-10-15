@@ -7,6 +7,8 @@
        FlyoutBehavior="{OnPlatform WinUI=Locked, Default=Flyout}"
        Title="Gym Membership">
 
+    <Shell.TitleView><c:HeaderBar /></Shell.TitleView>
+
     <Shell.FlyoutHeader>
         <VerticalStackLayout Padding="20,28,20,16" Spacing="14">
             <Label x:Name="RoleLabel" Text="Front desk" Style="{StaticResource Heading}" />
@@ -29,6 +31,6 @@
     <FlyoutItem Title="Revenue" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:RevenuePage}" /></FlyoutItem>
     <FlyoutItem Title="Audit log" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:AuditPage}" /></FlyoutItem>
 
-    <FlyoutItem Title="Alerts"><ShellContent ContentTemplate="{DataTemplate views:NotificationsPage}" /></FlyoutItem>
+    <FlyoutItem Title="Alerts" Route="alerts"><ShellContent ContentTemplate="{DataTemplate views:NotificationsPage}" /></FlyoutItem>
     <FlyoutItem Title="Settings" Route="settings"><ShellContent ContentTemplate="{DataTemplate views:SettingsPage}" /></FlyoutItem>
 </Shell>
