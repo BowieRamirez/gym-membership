@@ -1,24 +1,27 @@
+using CommunityToolkit.Maui;
+using CommunityToolkit.Maui.Extensions;
 using GymMembership.App.Views;
 using GymMembership.Core.ViewModels;
+using Microsoft.Maui.Controls.Shapes;
 
 namespace GymMembership.App.Controls;
 
 /// <summary>The bar at the top of every signed-in screen: your picture, the page title, the alerts bell and Sign out.</summary>
 public partial class HeaderBar : ContentView
 {
-	// The bell and the picture open Alerts and Settings as pages on top of whatever you are on, with a back arrow. Switching
-	// shell items instead would leave the front desk's bottom bar behind with no way back to it.
-	static HeaderBar()
-	{
-		Routing.RegisterRoute("header-alerts", typeof(NotificationsPage));
-		Routing.RegisterRoute("header-settings", typeof(SettingsPage));
-	}
+	// The picture opens Settings as a page on top of whatever you are on, with a back arrow. Switching shell items instead would
+	// leave the front desk's bottom bar behind with no way back to it. The bell opens the alerts panel (below).
+	static HeaderBar() => Routing.RegisterRoute("header-settings", typeof(SettingsPage));
+
+	IServiceProvider? _sp;
+	bool _panelOpen;
 
 	public HeaderBar() => InitializeComponent();
 
 	/// <summary>Called once by each shell. Follows the shell's current page for the title and refreshes the badge after every navigation.</summary>
 	public void Attach(Shell shell, IServiceProvider sp)
 	{
+		_sp = sp;
 		var vm = sp.GetRequiredService<HeaderViewModel>();
 		BindingContext = vm;
 		void Update() { TitleLabel.Text = shell.CurrentPage?.Title; _ = vm.RefreshAsync(); }
@@ -39,6 +42,27 @@ public partial class HeaderBar : ContentView
 	{
 		if (Shell.Current.CurrentPage is not TPage) await Shell.Current.GoToAsync(route);
 	});
+	// the same flat, hairline-edged box as the app's other panels, in the colors of the theme that is showing
+	static RoundRectangle HairlineBox()
+	{
+		var key = Application.Current!.RequestedTheme == AppTheme.Dark ? "LineDark" : "LineLight";
+		var line = Application.Current.Resources.TryGetValue(key, out var v) && v is Color c ? c : Colors.Gray;
+		return new RoundRectangle { CornerRadius = 6, StrokeThickness = 1, Stroke = line };
+	}
+
 	void OnAvatarTapped(object? sender, TappedEventArgs e) => Open<SettingsPage>("header-settings");
-	void OnBellClicked(object? sender, EventArgs e) => Open<NotificationsPage>("header-alerts");
+
+	async void OnBellClicked(object? sender, EventArgs e)
+	{
+		if (_panelOpen || _sp is null) return;   // a second tap while it is open (or opening) does nothing
+		_panelOpen = true;
+		var vm = _sp.GetRequiredService<NotificationsViewModel>();
+		try
+		{
+			var panel = new NotificationPanel(vm);
+			_ = vm.OnAppearingAsync();   // load while it opens
+			await Shell.Current.ShowPopupAsync(panel, new PopupOptions { Shadow = null, Shape = HairlineBox() });   // returns when it closes (outside tap or Close)
+		}
+		finally { vm.Dispose(); _panelOpen = false; }
+	}
 }

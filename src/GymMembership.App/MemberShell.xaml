@@ -24,6 +24,5 @@
     <FlyoutItem Title="Messages" Route="messages" ClassId="members-only"><ShellContent ContentTemplate="{DataTemplate views:MessagesPage}" /></FlyoutItem>
     <FlyoutItem Title="Sessions" ClassId="members-only"><ShellContent ContentTemplate="{DataTemplate views:SessionsPage}" /></FlyoutItem>
     <FlyoutItem Title="Time requests" ClassId="members-only"><ShellContent ContentTemplate="{DataTemplate views:RequestsPage}" /></FlyoutItem>
-    <FlyoutItem Title="Alerts" Route="alerts"><ShellContent ContentTemplate="{DataTemplate views:NotificationsPage}" /></FlyoutItem>
     <FlyoutItem Title="Settings" Route="settings"><ShellContent ContentTemplate="{DataTemplate views:SettingsPage}" /></FlyoutItem>
 </Shell>

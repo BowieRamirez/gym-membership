@@ -24,6 +24,5 @@
     <FlyoutItem Title="My shifts"><ShellContent ContentTemplate="{DataTemplate views:ShiftsPage}" /></FlyoutItem>
     <FlyoutItem Title="Attendance"><ShellContent ContentTemplate="{DataTemplate views:AttendancePage}" /></FlyoutItem>
     <FlyoutItem Title="My coach profile"><ShellContent ContentTemplate="{DataTemplate views:CoachProfilePage}" /></FlyoutItem>
-    <FlyoutItem Title="Alerts" Route="alerts"><ShellContent ContentTemplate="{DataTemplate views:NotificationsPage}" /></FlyoutItem>
     <FlyoutItem Title="Settings" Route="settings"><ShellContent ContentTemplate="{DataTemplate views:SettingsPage}" /></FlyoutItem>
 </Shell>

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<toolkit:Popup xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+               xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+               xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+               xmlns:c="clr-namespace:GymMembership.App.Controls"
+               xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+               xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
+               x:Class="GymMembership.App.Controls.NotificationPanel" x:DataType="vm:NotificationsViewModel"
+               HorizontalOptions="{OnIdiom Phone=Fill, Default=End}" VerticalOptions="Start"
+               Margin="{OnIdiom Phone='8,60,8,0', Default='0,60,16,0'}" Padding="0"
+               BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}">
+
+    <Grid RowDefinitions="Auto,Auto,*" WidthRequest="{OnIdiom Phone=-1, Default=380}" MaximumHeightRequest="480">
+        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Padding="16,12">
+            <Label Text="Alerts" Style="{StaticResource Heading}" VerticalOptions="Center" />
+            <Button Grid.Column="1" Text="Mark all as read" Style="{StaticResource SmallOutlineButton}" Command="{Binding MarkAllReadCommand}"
+                    SemanticProperties.Description="Mark all alerts as read" />
+            <Button Grid.Column="2" Text="Close" Style="{StaticResource SmallOutlineButton}" Clicked="OnClose" />
+        </Grid>
+
+        <c:Banner Grid.Row="1" Message="{Binding ErrorMessage}" Margin="16,0,16,8" />
+
+        <CollectionView Grid.Row="2" ItemsSource="{Binding Items}" Margin="12,0,12,12">
+            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="8" /></CollectionView.ItemsLayout>
+            <CollectionView.EmptyView><Label Text="You're all caught up." Style="{StaticResource Muted}" Margin="4,8" /></CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="m:UserNotification">
+                    <Border Style="{StaticResource Panel}" Padding="12,10">
+                        <Border.GestureRecognizers><TapGestureRecognizer Tapped="OnTapped" /></Border.GestureRecognizers>
+                        <!-- unread: a blue dot and a darker row; read: neither -->
+                        <Border.Triggers>
+                            <DataTrigger TargetType="Border" Binding="{Binding ReadAt, Converter={StaticResource IsNull}}" Value="True">
+                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChalkLight}, Dark={StaticResource ChalkDark}}" />
+                            </DataTrigger>
+                        </Border.Triggers>
+                        <Grid ColumnDefinitions="10,*" ColumnSpacing="10">
+                            <Ellipse Style="{StaticResource DotScheduled}" VerticalOptions="Start" Margin="0,7,0,0"
+                                     IsVisible="{Binding ReadAt, Converter={StaticResource IsNull}}" />
+                            <VerticalStackLayout Grid.Column="1" Spacing="2">
+                                <Label Text="{Binding Title}" FontFamily="BarlowSemiBold" />
+                                <Label Text="{Binding Body}" Style="{StaticResource Muted}" IsVisible="{Binding Body, Converter={StaticResource HasText}}" />
+                                <Label Text="{Binding CreatedAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM, h:mm tt'}" Style="{StaticResource Caption}" />
+                            </VerticalStackLayout>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</toolkit:Popup>
