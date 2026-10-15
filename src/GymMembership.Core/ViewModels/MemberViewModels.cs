@@ -294,18 +294,38 @@ public partial class MessagesViewModel(IMessageService svc) : LoadableViewModel
     }
 }
 
-public partial class NotificationsViewModel(INotificationService svc) : LoadableViewModel
+public partial class NotificationsViewModel : LoadableViewModel, IDisposable
 {
+    readonly INotificationService svc;
+    readonly Action onChanged;
+
+    public NotificationsViewModel(INotificationService svc)
+    {
+        this.svc = svc;
+        onChanged = () => _ = LoadAsync();   // a change from anywhere (the bell, another page) redraws the open panel
+        svc.Changed += onChanged;
+    }
+
+    public void Dispose() => svc.Changed -= onChanged;
+
     public ObservableCollection<UserNotification> Items { get; } = new();
-    [ObservableProperty] private int unreadCount;
+
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasUnread)), NotifyCanExecuteChangedFor(nameof(MarkAllReadCommand))]
+    private int unreadCount;
+
+    public bool HasUnread => UnreadCount > 0;
 
     public override Task OnAppearingAsync() => LoadAsync();
 
     [RelayCommand] private Task LoadAsync() => RunAsync(svc.ListAsync, rows => { Fill(Items, rows); UnreadCount = rows.Count(n => n.ReadAt is null); });
 
+    // the service raises Changed on success, which reloads the list
     [RelayCommand]
     private async Task MarkReadAsync(UserNotification n)
-    { if (n.ReadAt is null && await RunAsync(() => svc.MarkReadAsync(n.Id))) await LoadAsync(); }
+    { if (n.ReadAt is null) await RunAsync(() => svc.MarkReadAsync(n.Id)); }
+
+    [RelayCommand(CanExecute = nameof(HasUnread))]
+    private Task MarkAllReadAsync() => RunAsync(svc.MarkAllReadAsync);
 }
 
 public partial class SettingsViewModel(ISettingsService settings, IAuthService auth, IAppNavigator nav, IProfileService profile, IProofPicker picker) : LoadableViewModel
