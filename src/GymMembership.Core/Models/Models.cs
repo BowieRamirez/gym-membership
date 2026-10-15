@@ -67,7 +67,24 @@ public static class PayMethod { public const string Qr = "qr", Cash = "cash", Gc
 
 [Table("amenities")] public class Amenity : BaseModel
 { [PrimaryKey("amenity_id")] public int Id { get; set; } [Column("name")] public string Name { get; set; } = ""; [Column("description")] public string? Description { get; set; }
-  [Column("price")] public decimal Price { get; set; } [Column("duration_days")] public int? DurationDays { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true; }
+  [Column("price")] public decimal Price { get; set; } [Column("duration_days")] public int? DurationDays { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true;
+  // live status: written only by set_amenity_status, so a catalog edit never sends these
+  [Column("status", ignoreOnInsert: true, ignoreOnUpdate: true)] public string Availability { get; set; } = "available";
+  [Column("status_reason", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? StatusReason { get; set; }
+  [Column("back_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? BackAt { get; set; } }
+
+// read only: a member's saved amenities change through set_amenity_followed
+[Table("amenity_follows")] public class AmenityFollow : BaseModel
+{ [PrimaryKey("amenity_id")] public int AmenityId { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; }
+
+// what set_amenity_status returns for each member it alerted (a function result, not a table)
+public class NotifiedMember : BaseModel
+{
+  [Column("member_id")] public string MemberId { get; set; } = "";
+  [Column("full_name")] public string Name { get; set; } = "";
+  public NotifiedMember() { }
+  public NotifiedMember(string memberId, string name) { MemberId = memberId; Name = name; }
+}
 
 [Table("user_amenities")] public class UserAmenity : BaseModel
 { [PrimaryKey("user_amenity_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("amenity_id")] public int AmenityId { get; set; }

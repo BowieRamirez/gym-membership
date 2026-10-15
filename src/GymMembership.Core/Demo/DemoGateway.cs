@@ -20,9 +20,9 @@ public sealed class DemoGateway : ISupabaseGateway
     // plan 5.2
     static readonly Dictionary<string, string[]> RolePermissions = new()
     {
-        ["admin"] = ["payments:verify", "payments:record", "payments:void", "check_ins:record", "amenity_usages:verify", "users:manage", "roles:manage",
+        ["admin"] = ["payments:verify", "payments:record", "payments:void", "check_ins:record", "amenity_usages:verify", "amenities:set_status", "users:manage", "roles:manage",
                      "catalog:manage", "discounts:manage", "gym_settings:manage", "reports:revenue", "reports:cash", "audit:read"],
-        ["employee"] = ["payments:verify", "payments:record", "check_ins:record", "amenity_usages:verify", "reports:cash"],
+        ["employee"] = ["payments:verify", "payments:record", "check_ins:record", "amenity_usages:verify", "amenities:set_status", "reports:cash"],
         ["coach"] = ["sessions:manage", "shifts:manage", "attendance:record"],
         ["member"] = []
     };
@@ -177,6 +177,7 @@ public sealed class DemoGateway : ISupabaseGateway
             Discount => Has("discounts:manage"),   // members only learn a code is valid by using it
             MembershipPackage k => k.IsActive || Has("catalog:manage"),
             Amenity a => a.IsActive || Has("catalog:manage"),
+            AmenityFollow f => f.MemberId == uid,
             _ => true
         };
     }
@@ -250,7 +251,12 @@ public sealed class DemoGateway : ISupabaseGateway
 
             switch (row, list[index])
             {
-                case (MembershipPackage or Amenity, _): if (!Has("catalog:manage")) throw Err(Rls); list[index] = Clone(row); break;
+                case (MembershipPackage, _): if (!Has("catalog:manage")) throw Err(Rls); list[index] = Clone(row); break;
+                case (Amenity a, Amenity old):       // a catalog edit never changes the live status, like the column rights in the database
+                    if (!Has("catalog:manage")) throw Err(Rls);
+                    var edited = Clone(a); edited.Availability = old.Availability; edited.StatusReason = old.StatusReason; edited.BackAt = old.BackAt;
+                    list[index] = edited;
+                    break;
                 case (Discount, _): if (!Has("discounts:manage")) throw Err(Rls); list[index] = Clone(row); break;
                 case (GymSettings, _): if (!Has("gym_settings:manage")) throw Err(Rls); list[index] = Clone(row); break;
                 case (ShiftPost s, ShiftPost old):   // a coach changes times, note and status, never the owner
@@ -771,6 +777,46 @@ public sealed class DemoGateway : ISupabaseGateway
                 Audit(B("p_active") ? "user.activate" : "user.deactivate", "profiles", S("p_user"));
                 return null;
             }
+            case "set_amenity_followed":
+            {
+                if (!All<Member>().Any(m => m.UserId == uid)) throw Err(Rls);
+                var id = I("p_amenity_id");
+                var saved = All<AmenityFollow>().FirstOrDefault(f => f.MemberId == uid && f.AmenityId == id);
+                if (B("p_follow"))
+                {
+                    if (All<Amenity>().All(x => x.Id != id || !x.IsActive)) throw Err("not_found");
+                    if (saved is null) Add(new AmenityFollow { MemberId = uid, AmenityId = id });
+                }
+                else if (saved is not null) Table(typeof(AmenityFollow)).Remove(saved);
+                return null;
+            }
+            case "set_amenity_status":
+            {
+                Require("amenities:set_status");
+                var amenity = All<Amenity>().FirstOrDefault(x => x.Id == I("p_amenity_id")) ?? throw Err("not_found");
+                var status = S("p_status");
+                var unavailable = status == "unavailable";
+                var reason = unavailable ? Opt("p_reason") : null;
+                DateTime? backAt = unavailable && Opt("p_back_at") is { } raw ? DateTime.Parse(raw, null, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime() : null;
+                if (status is not ("available" or "in_use" or "unavailable") || reason?.Length > 200 || backAt <= DateTime.UtcNow) throw Err("bad_input");
+
+                var told = new List<NotifiedMember>();
+                if (amenity.Availability == status && amenity.StatusReason == reason && amenity.BackAt == backAt) return told;   // nothing changed: nobody is told
+                amenity.Availability = status; amenity.StatusReason = reason; amenity.BackAt = backAt;
+                Audit("amenity.status", "amenities", amenity.Id.ToString());
+                if (status == "in_use") return told;
+
+                var title = status == "available" ? $"{amenity.Name} is available" : $"{amenity.Name} is unavailable";
+                var body = status == "available" ? null : string.Join(". ", new[] { reason, backAt is { } b ? $"Back about {b.AddHours(8):ddd dd MMM, h:mm tt}" : null }.Where(x => x is not null));
+                foreach (var f in All<AmenityFollow>().Where(f => f.AmenityId == amenity.Id).ToList())
+                {
+                    var person = All<Profile>().FirstOrDefault(p => p.Id == f.MemberId);
+                    if (person is not { IsActive: true }) continue;
+                    Notify(f.MemberId, "amenity", title, body);
+                    told.Add(new NotifiedMember(f.MemberId, person.FullName));
+                }
+                return told.OrderBy(t => t.Name).ToList();
+            }
             case "set_my_avatar":
             {
                 var path = Opt("p_path");
@@ -825,9 +871,12 @@ public sealed class DemoGateway : ISupabaseGateway
         Add(new MembershipPackage { Name = "Annual", Description = "A full year, best value for regulars.", Price = 14000, DurationDays = 365 });
 
         var pool = Add(new Amenity { Name = "Pool", Description = "25 m lap pool, open 6:00 to 21:00.", Price = 300, DurationDays = 30 });
-        Add(new Amenity { Name = "Sauna", Description = "Dry sauna next to the locker rooms.", Price = 200, DurationDays = 30 });
+        var sauna = Add(new Amenity { Name = "Sauna", Description = "Dry sauna next to the locker rooms.", Price = 200, DurationDays = 30,
+                                      Availability = "unavailable", StatusReason = "Cleaning", BackAt = DateTime.UtcNow.AddMinutes(90) });
         Add(new Amenity { Name = "Group classes", Description = "Spin, yoga and circuit classes on the studio floor.", Price = 500, DurationDays = 30 });
         Add(new Amenity { Name = "Boxing ring", Description = "Closed for maintenance.", Price = 400, DurationDays = 30, IsActive = false });
+        Add(new AmenityFollow { MemberId = "u-alex", AmenityId = pool.Id });     // Alex saved the pool and the sauna
+        Add(new AmenityFollow { MemberId = "u-alex", AmenityId = sauna.Id });
 
         // Alex: active, 5 days left so the renew prompt shows
         var alexMembership = Add(new UserMembershipPackage { MemberId = "u-alex", MembershipPackageId = monthly.Id, Status = Status.Active, StartsAt = now.AddDays(-25), EndsAt = now.AddDays(5) });

@@ -361,8 +361,28 @@ public sealed record AmenityRow(Amenity Amenity, int? UserAmenityId, string? Sta
 }
 public sealed record UsageRow(AmenityUsage Usage, string Member, string Amenity);
 
+public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow)
+{
+    public string Availability => Amenity.Availability;
+    public bool IsUnavailable => Amenity.Availability == "unavailable";
+    public string? Reason => Amenity.StatusReason;
+    public DateTime? BackAt => Amenity.BackAt;
+    public bool HasReason => !string.IsNullOrWhiteSpace(Amenity.StatusReason);
+    public bool HasBackAt => IsUnavailable && Amenity.BackAt is not null;
+    // empty hides the button: coaches and staff can look but not save
+    public string FollowText => !CanFollow ? "" : Followed ? "Following" : "Notify me";
+}
+
+public sealed record AmenityBoard(IReadOnlyList<AmenityCard> Cards, bool CanFollow);
+
 public interface IAmenityService
 {
+    /// <summary>Every amenity that is switched on, with its live status and whether this member saved it. CanFollow is false for coaches and staff.</summary>
+    Task<AppResult<AmenityBoard>> BoardAsync();
+    Task<AppResult<bool>> SetFollowedAsync(int amenityId, bool follow);
+    /// <summary>Front desk and admin only. Returns the members who were alerted (empty when nothing changed or nobody saved it).</summary>
+    Task<AppResult<IReadOnlyList<NotifiedMember>>> SetStatusAsync(int amenityId, string status, string? reason, DateTime? backAtUtc);
+
     Task<AppResult<IReadOnlyList<AmenityRow>>> CatalogAsync();
     Task<AppResult<Payment>> AvailAsync(int amenityId, string? discountCode = null);
     Task<AppResult<bool>> LogUsageAsync(int userAmenityId, (string FileName, byte[] Data)? proof);
@@ -372,6 +392,30 @@ public interface IAmenityService
 
 public sealed class AmenityService(ISupabaseGateway gw) : IAmenityService
 {
+    static readonly string[] Statuses = ["available", "in_use", "unavailable"];
+
+    public Task<AppResult<AmenityBoard>> BoardAsync() => Safe.RunAsync(async () =>
+    {
+        var uid = gw.CurrentUserId;
+        var amenities = (await gw.ListAsync<Amenity>(a => a.IsActive == true)).OrderBy(a => a.Name).ToList();
+        var saved = (await gw.ListAsync<AmenityFollow>(f => f.MemberId == uid)).Select(f => f.AmenityId).ToHashSet();
+        var isMember = (await gw.ListAsync<Member>(m => m.UserId == uid)).Count > 0;
+        return new AmenityBoard(amenities.Select(a => new AmenityCard(a, saved.Contains(a.Id), isMember)).ToList(), isMember);
+    });
+
+    public Task<AppResult<bool>> SetFollowedAsync(int amenityId, bool follow) => Safe.RunAsync(async () =>
+    { await gw.RpcAsync("set_amenity_followed", new() { ["p_amenity_id"] = amenityId, ["p_follow"] = follow }); return true; });
+
+    public async Task<AppResult<IReadOnlyList<NotifiedMember>>> SetStatusAsync(int amenityId, string status, string? reason, DateTime? backAtUtc)
+    {
+        if (!Statuses.Contains(status) || reason?.Trim().Length > 200 || backAtUtc <= DateTime.UtcNow)
+            return AppResult<IReadOnlyList<NotifiedMember>>.Fail(AppErrorKind.Validation, "bad_input");
+        var args = new Dictionary<string, object> { ["p_amenity_id"] = amenityId, ["p_status"] = status };
+        if (!string.IsNullOrWhiteSpace(reason)) args["p_reason"] = reason.Trim();
+        if (backAtUtc is { } back) args["p_back_at"] = back.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
+        return await Safe.RunAsync(async () => (IReadOnlyList<NotifiedMember>)(await gw.RpcAsync<List<NotifiedMember>>("set_amenity_status", args) ?? []));
+    }
+
     public Task<AppResult<IReadOnlyList<AmenityRow>>> CatalogAsync() => Safe.RunAsync<IReadOnlyList<AmenityRow>>(async () =>
     {
         var uid = gw.CurrentUserId;

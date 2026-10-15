@@ -201,6 +201,36 @@ public sealed class SupabaseGatewayTests : IDisposable
     }
 
     [Fact]
+    public async Task Editing_an_amenity_in_the_catalog_never_sends_the_status_columns()
+    {
+        var gw = await SignedInAsync();
+        _reply = _ => (200, "[]");
+        await gw.UpdateAsync(new Amenity { Id = 4, Name = "Pool", Price = 300, IsActive = true, Availability = "unavailable", StatusReason = "x", BackAt = DateTime.UtcNow });
+        var columns = Columns(Last.Body);
+        Assert.DoesNotContain("status", columns);
+        Assert.DoesNotContain("status_reason", columns);
+        Assert.DoesNotContain("back_at", columns);
+        Assert.Contains("amenity_id=eq.4", Last.Query);
+    }
+
+    [Fact]
+    public async Task Setting_a_status_calls_the_function_and_reads_back_who_was_alerted()
+    {
+        var gw = await SignedInAsync();
+        _reply = _ => (200, """[{"member_id":"u-9","full_name":"Alex Tan"}]""");
+        var told = (await new AmenityService(gw).SetStatusAsync(4, "unavailable", "Cleaning", new DateTime(2026, 10, 20, 2, 0, 0, DateTimeKind.Utc))).Value!;
+
+        Assert.Equal("/rest/v1/rpc/set_amenity_status", Last.Path);
+        var body = Last.Body;
+        Assert.Contains("\"p_amenity_id\":4", body);
+        Assert.Contains("\"p_status\":\"unavailable\"", body);
+        Assert.Contains("\"p_reason\":\"Cleaning\"", body);
+        Assert.Contains("2026-10-20T02:00:00", body);
+        Assert.Equal("u-9", told[0].MemberId);
+        Assert.Equal("Alex Tan", told[0].Name);
+    }
+
+    [Fact]
     public async Task Marking_every_unread_notification_read_is_one_request_that_leaves_read_ones_alone()
     {
         var gw = await SignedInAsync();
