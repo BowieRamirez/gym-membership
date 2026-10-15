@@ -40,7 +40,7 @@ New migrations `0013` onward. Everything is additive; nothing is dropped. **`001
 
 | Table | New columns |
 | --- | --- |
-| `profiles` | `avatar_path`; optional `last_seen_at` (for "last active"). Extend the column grant (today only `full_name`, `phone`). |
+| `profiles` | `avatar_path` (set only through the function `set_my_avatar`, not a widened column grant, so a path outside the user's own folder is refused); optional `last_seen_at` (for "last active"). |
 | `amenities` | `status` (new enum `available`, `in_use`, `unavailable`; default `available`), `status_reason`, `back_at`, `status_changed_by`, `status_changed_at`, `image_path` |
 | `membership_packages` | `image_path` |
 | `messages` | `delivered_at`, `attachment_path`. Relax the "body not empty" check to "body or attachment". Extend the insert and update column grants. |
@@ -53,6 +53,7 @@ New migrations `0013` onward. Everything is additive; nothing is dropped. **`001
 | `set_amenity_status(amenity, status, reason, back_at)` | Checks permission, updates the amenity, writes `audit_log`, notifies followers, returns the list of notified members (count and names) for the staff confirmation. |
 | `upgrade_membership(new_package)` | Creates the price-difference payment and the upgraded membership. Rules for credit on remaining days are fixed in the phase 7 plan. |
 | `cancel_membership(ump)` and `request_refund`, `decide_refund` | Cancel a membership; file and decide a refund. `decide_refund` requires `refunds:decide`. |
+| `set_my_avatar(path)` | Sets or clears the caller's picture; refuses a path outside their own folder and inactive users. Built in phase 1 (migration `0013`). |
 | `mark_delivered(...)` | Marks a conversation's messages as delivered when the recipient's app receives them. |
 | Triggers | Notify staff on a new support message, a rejected or expired payment, and an amenity set to unavailable. Notify followers on amenity status change. |
 | Enum | `notification_type` gains `amenity` (and `support` if needed). |
@@ -74,7 +75,7 @@ Notification bell and "mark all as read" (one filtered update on `read_at`), the
 
 Each phase is its own branch; it merges to `main` only when the owner says so. UI phases invoke the frontend-design skill. Every phase mirrors new tables and functions in `DemoGateway` and adds xUnit and local database tests.
 
-1. **Design system and shell.** One primary color, one accent, semantic success, warning and error colors, a type scale, WCAG AA contrast in light and dark. Shared controls: avatar (picture or initials), status chip, person and service card, header bar with the bell and an always-visible sign-out. Front desk gets a persistent bottom bar or sidebar. Profile picture upload for all roles. *Migration: avatars and image columns.*
+1. **Design system and shell.** One primary color, one accent, semantic success, warning and error colors, a type scale, WCAG AA contrast in light and dark. Shared controls: avatar (picture or initials), status chip, person and service card, header bar with the bell and an always-visible sign-out. Front desk gets a persistent bottom bar (phones) or the locked side menu (Windows). Profile picture upload for all roles. *Migration: avatars and image columns.* **Built in phase 1:** the existing design tokens were kept and guarded by a contrast test (one color darkened); the status chip already existed, so its new statuses (available, in use, unavailable) and the person and service cards arrive with phases 3 and 6; the bell opens the existing Alerts page until the phase 2 panel; the header bell is a vector drawing, not an image file.
 2. **Notification bell.** Header icon with unread badge; a panel listing newest first, unread highlighted, "mark all as read". Replaces the Alerts page.
 3. **Amenity Status.** Member view: cards with image or icon and a live status chip (Available, In use, Unavailable), reason and estimated return, a save (follow) toggle. Front desk: "Amenity Status" page (renamed from "Amenity visits") with a status toggle and reason, and a confirmation of who was notified. Coach: the same cards, read-only. Removes the "Buy" flow from view. *Migration: amenity status, follows, `set_amenity_status`, triggers.*
 4. **Messenger.** One chat UI for all roles: conversation list, bubbles, avatars, timestamps, unread badges, online status, typing indicator, sticky input with photo and send, message ticks (sent, delivered, read). Members get Coach and Staff tabs; front desk can pick up member conversations; coaches get a search bar over trainees and conversations. First task: reproduce and fix the coach conversation that does not load reliably (systematic debugging before any rewrite). *Migration: message columns, support tables, chat bucket, Realtime.*
