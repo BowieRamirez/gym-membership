@@ -69,7 +69,8 @@ public sealed class DemoGateway : ISupabaseGateway
     bool CoachesMember(string coach, string? member) => All<CoachHire>().Any(h => h.CoachId == coach && h.MemberId == member && h.Status == Status.Active);
     bool IsCoach(string? userId) => All<Coach>().Any(c => c.UserId == userId);
 
-    void Notify(string? userId, string type, string title, string? body = null)
+    /// <summary>The demo's stand-in for the server sending someone an alert (a client cannot insert one itself, here or on the real table).</summary>
+    public void Notify(string? userId, string type, string title, string? body = null)
     { if (userId is not null) Add(new UserNotification { UserId = userId, Type = type, Title = title, Body = body, CreatedAt = DateTime.UtcNow }); }
     void NotifyStaff(string type, string title) { foreach (var id in All<UserRole>().Where(u => RolesOf(u.UserId).Any(r => r is "admin" or "employee")).Select(u => u.UserId).Distinct().ToList()) Notify(id, type, title); }
     void Audit(string action, string entity, string entityId) =>

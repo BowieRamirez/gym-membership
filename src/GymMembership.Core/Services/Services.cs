@@ -681,16 +681,30 @@ public sealed class AttendanceService(ISupabaseGateway gw) : IAttendanceService
 // ===================== Notifications =====================
 public interface INotificationService
 {
+    /// <summary>Raised after an alert is read or all are, so the bell and an open panel redraw together.</summary>
+    event Action? Changed;
+    /// <summary>Newest first.</summary>
     Task<AppResult<IReadOnlyList<UserNotification>>> ListAsync();
+    Task<AppResult<int>> UnreadCountAsync();
     Task<AppResult<bool>> MarkReadAsync(int id);
+    Task<AppResult<bool>> MarkAllReadAsync();
 }
 
 public sealed class NotificationService(ISupabaseGateway gw) : INotificationService
 {
+    public event Action? Changed;
+
     public Task<AppResult<IReadOnlyList<UserNotification>>> ListAsync() => Safe.RunAsync(async () =>
     {
         var uid = gw.CurrentUserId;
         return (IReadOnlyList<UserNotification>)(await gw.ListAsync<UserNotification>(n => n.UserId == uid)).OrderByDescending(n => n.CreatedAt).ToList();
+    });
+
+    // fetches only the unread rows, so the bell does not download every alert you ever had
+    public Task<AppResult<int>> UnreadCountAsync() => Safe.RunAsync(async () =>
+    {
+        var uid = gw.CurrentUserId;
+        return (await gw.ListAsync<UserNotification>(n => n.UserId == uid && n.ReadAt == null)).Count;
     });
 
     public Task<AppResult<bool>> MarkReadAsync(int id) => Safe.RunAsync(async () =>
@@ -698,6 +712,15 @@ public sealed class NotificationService(ISupabaseGateway gw) : INotificationServ
         var row = (await gw.ListAsync<UserNotification>(n => n.Id == id)).First();
         row.ReadAt = DateTime.UtcNow;
         await gw.UpdateAsync(row);
+        Changed?.Invoke();
+        return true;
+    });
+
+    public Task<AppResult<bool>> MarkAllReadAsync() => Safe.RunAsync(async () =>
+    {
+        var uid = gw.CurrentUserId;
+        await gw.UpdateWhereAsync<UserNotification, DateTime?>(n => n.UserId == uid && n.ReadAt == null, n => n.ReadAt, DateTime.UtcNow);
+        Changed?.Invoke();
         return true;
     });
 }
