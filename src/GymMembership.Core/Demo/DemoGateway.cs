@@ -758,6 +758,13 @@ public sealed class DemoGateway : ISupabaseGateway
                 Audit(B("p_active") ? "user.activate" : "user.deactivate", "profiles", S("p_user"));
                 return null;
             }
+            case "set_my_avatar":
+            {
+                var path = Opt("p_path");
+                if (path is not null && !path.StartsWith(uid + "/")) throw Err("forbidden");
+                (All<Profile>().FirstOrDefault(x => x.Id == uid) ?? throw Err("not_found")).AvatarPath = path;
+                return null;
+            }
             case "mark_password_changed":
             {
                 var p = All<Profile>().FirstOrDefault(x => x.Id == uid);

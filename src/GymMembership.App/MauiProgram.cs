@@ -45,6 +45,7 @@ public static class MauiProgram
 		s.AddSingleton<INotificationService, NotificationService>();
 		s.AddSingleton<IMessageService, MessageService>();
 		s.AddSingleton<IAdminService, AdminService>();
+		s.AddSingleton<IProfileService, ProfileService>();
 		s.AddSingleton<ISettingsService, SettingsService>();
 
 		// every ViewModel and every page, by convention

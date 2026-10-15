@@ -35,7 +35,7 @@ public static class ErrorMapper
         if (Has(m, "forbidden", "42501", "jwt", "row-level security", "invalid login", "not authenticated")) return AppErrorKind.Unauthorized;
         if (Has(m, "already_processed", "already_availed", "renewal_pending", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
         if (Has(m, "no_active_membership", "self_verify", "not_renewable", "wrong_member", "not_found", "23514",
-                   "invalid_code", "22023", "bad_input", "bad_discount", "email_taken", "no_active_hire", "empty_message", "wrong_password", "email_confirmation_required", "end must be after start")) return AppErrorKind.Validation;
+                   "invalid_code", "22023", "bad_input", "bad_image", "bad_discount", "email_taken", "no_active_hire", "empty_message", "wrong_password", "email_confirmation_required", "end must be after start")) return AppErrorKind.Validation;
         return AppErrorKind.Unknown;
     }
 
@@ -62,6 +62,7 @@ public static class ErrorText
         "bad_name" => "Use letters only in your name. Spaces, hyphens and apostrophes are fine. 2 to 60 characters.",
         "bad_email" => "Enter a valid email address, for example name@example.com. Up to 100 characters.",
         "bad_password" => "Use 6 to 64 characters for your password.",
+        "bad_image" => "Choose a JPG, PNG or WebP picture under 5 MB.",
         "bad_discount" => "Enter a code and a percent between 1 and 100.",
         "email_confirmation_required" => "Check your email and confirm your address, then sign in.",
         "wrong_password" => "Your current password isn't right.",
