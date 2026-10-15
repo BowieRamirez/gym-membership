@@ -614,3 +614,74 @@ public partial class AuditViewModel(IAdminService svc) : LoadableViewModel
 
     [RelayCommand] private Task LoadAsync() => RunAsync(svc.AuditAsync, rows => Fill(Entries, rows));
 }
+
+public sealed record StatusChoice(string Value, string Label);
+
+/// <summary>Front desk and admin: mark an amenity available, in use or unavailable, and see who was alerted.</summary>
+public partial class AmenityStatusViewModel(IAmenityService svc) : LoadableViewModel
+{
+    public ObservableCollection<AmenityCard> Cards { get; } = new();
+    public StatusChoice[] Choices { get; } = [new("available", "Available"), new("in_use", "In use"), new("unavailable", "Unavailable")];
+
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsEditing))] private AmenityCard? editing;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowDetail))] private StatusChoice choice = new("available", "Available");
+    [ObservableProperty] private string reason = "";
+    [ObservableProperty] private bool hasBackAt;
+    [ObservableProperty] private DateTime backDate = DateTime.Today;
+    [ObservableProperty] private TimeSpan backTime = TimeSpan.FromHours(12);
+
+    public bool IsEditing => Editing is not null;
+    public bool ShowDetail => Choice.Value == "unavailable";   // a reason and a return time only belong to "unavailable"
+
+    public override Task OnAppearingAsync() => LoadAsync();
+
+    [RelayCommand] private Task LoadAsync() => RunAsync(svc.BoardAsync, board => Fill(Cards, board.Cards));
+
+    [RelayCommand]
+    private void Select(AmenityCard card)
+    {
+        Editing = card;
+        ErrorMessage = null; Notice = null;
+        Choice = Choices.First(c => c.Value == card.Availability);
+        Reason = card.Reason ?? "";
+        HasBackAt = card.BackAt is not null;
+        var back = (card.BackAt ?? DateTime.UtcNow.AddHours(2)).ToLocalTime();
+        BackDate = back.Date; BackTime = back.TimeOfDay;
+    }
+
+    [RelayCommand] private void QuickReason(string text) => Reason = text;
+
+    [RelayCommand]
+    private void Cancel() { Editing = null; ErrorMessage = null; }
+
+    [RelayCommand]
+    private async Task SaveAsync()
+    {
+        if (Editing is not { } card) return;
+        DateTime? back = null;
+        if (ShowDetail && HasBackAt)
+        {
+            back = DateTime.SpecifyKind(BackDate.Date + BackTime, DateTimeKind.Local).ToUniversalTime();
+            if (back <= DateTime.UtcNow) { ErrorMessage = "Pick a return time that is still ahead."; return; }
+        }
+        var reason = ShowDetail ? Reason.Trim() : "";
+        var unchanged = card.Availability == Choice.Value && (card.Reason ?? "") == reason && (!ShowDetail || card.BackAt?.ToUniversalTime().ToString("s") == back?.ToString("s"));
+
+        Notice = null;
+        IReadOnlyList<NotifiedMember>? told = null;
+        if (!await RunAsync(() => svc.SetStatusAsync(card.Amenity.Id, Choice.Value, reason, back), r => told = r)) return;   // the editor stays open with what was typed
+
+        Notice = unchanged ? $"Nothing changed for {card.Amenity.Name}." : Summary(card.Amenity.Name, Choice, told!);
+        Editing = null;
+        await LoadAsync();
+    }
+
+    static string Summary(string name, StatusChoice choice, IReadOnlyList<NotifiedMember> told)
+    {
+        if (choice.Value == "in_use") return $"{name} is now in use. Members are not alerted for this.";
+        var now = $"{name} is now {choice.Label.ToLowerInvariant()}.";
+        if (told.Count == 0) return $"{now} Nobody had saved it, so no alerts were sent.";
+        var names = string.Join(", ", told.Take(5).Select(t => t.Name)) + (told.Count > 5 ? $" and {told.Count - 5} more" : "");
+        return $"{now} Alerted {told.Count} {(told.Count == 1 ? "member" : "members")}: {names}.";
+    }
+}

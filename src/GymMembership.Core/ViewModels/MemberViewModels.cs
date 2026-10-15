@@ -200,29 +200,19 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
     }
 }
 
-public partial class AmenitiesViewModel(IAmenityService svc, IProofPicker picker, IAppNavigator nav) : LoadableViewModel
+/// <summary>Every amenity with its live status, for members and coaches. Members can save an amenity to be alerted when it changes.</summary>
+public partial class AmenityBoardViewModel(IAmenityService svc) : LoadableViewModel
 {
-    public ObservableCollection<AmenityRow> Items { get; } = new();
+    public ObservableCollection<AmenityCard> Cards { get; } = new();
+    [ObservableProperty] private bool canFollow;
 
     public override Task OnAppearingAsync() => LoadAsync();
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.CatalogAsync, rows => Fill(Items, rows));
-
-    // buying creates a pending QR payment, paid and proven on My membership like a package
-    [RelayCommand]
-    private async Task AvailAsync(AmenityRow row)
-    {
-        Notice = null;
-        if (await RunAsync(() => svc.AvailAsync(row.Amenity.Id), _ => { })) nav.GoToMembership();
-    }
+    [RelayCommand] private Task LoadAsync() => RunAsync(svc.BoardAsync, board => { Fill(Cards, board.Cards); CanFollow = board.CanFollow; });
 
     [RelayCommand]
-    private async Task LogUsageAsync(AmenityRow row)
-    {
-        if (row.UserAmenityId is not { } id) return;
-        var proof = await picker.PickAsync();
-        if (await RunAsync(() => svc.LogUsageAsync(id, proof))) Notice = "Usage sent. Staff will verify it.";
-    }
+    private async Task ToggleFollowAsync(AmenityCard card)
+    { if (await RunAsync(() => svc.SetFollowedAsync(card.Amenity.Id, !card.Followed))) await LoadAsync(); }
 }
 
 public partial class CoachesViewModel(ICoachService svc, IMessageService messages, IAppNavigator nav) : LoadableViewModel
