@@ -17,9 +17,13 @@
 
         <!-- the bell: 48 x 48 touch target, unread count as a small red badge -->
         <Grid Grid.Column="2" WidthRequest="48" HeightRequest="48" VerticalOptions="Center">
-            <!-- two pre-coloured icons, chosen by theme: a tint would not follow a theme change made while the app is open -->
-            <ImageButton Source="{AppThemeBinding Light=bell_light.svg, Dark=bell_dark.svg}" Padding="12" Aspect="AspectFit" BackgroundColor="Transparent"
-                         Clicked="OnBellClicked" SemanticProperties.Description="{Binding AlertsLabel}" />
+            <!-- the button gives touch, keyboard and screen-reader behaviour; the bell is drawn on top as a vector so it needs no image
+                 file and follows the theme at once (an image tint did not, and a bitmap did not draw on Windows) -->
+            <Button BackgroundColor="Transparent" BorderWidth="0" Padding="0" Clicked="OnBellClicked" SemanticProperties.Description="{Binding AlertsLabel}" />
+            <Path InputTransparent="True" Aspect="Uniform" WidthRequest="22" HeightRequest="22" HorizontalOptions="Center" VerticalOptions="Center"
+                  Data="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9 M13.73 21a2 2 0 0 1-3.46 0"
+                  StrokeThickness="2" StrokeLineCap="Round" StrokeLineJoin="Round"
+                  Stroke="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
             <Border IsVisible="{Binding HasUnread}" InputTransparent="True" HorizontalOptions="End" VerticalOptions="Start" Margin="0,4,2,0"
                     MinimumWidthRequest="18" HeightRequest="18" Padding="4,0" StrokeThickness="0" StrokeShape="RoundRectangle 9"
                     BackgroundColor="{AppThemeBinding Light={StaticResource PlateRedLight}, Dark={StaticResource PlateRedDark}}">
