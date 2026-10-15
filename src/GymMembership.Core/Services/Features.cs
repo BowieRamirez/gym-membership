@@ -44,7 +44,7 @@ public interface IChatService
 public sealed class ChatService(ISupabaseGateway gw, INotificationService notifications) : IChatService
 {
     public (string CoachId, string? MemberId)? Pending { get; set; }
-    readonly LinkCache photos = new(gw, "chat-attachments");
+    readonly LinkCache photos = new(gw, "chat-attachments", rememberMisses: true);
 
     public Task<AppResult<IReadOnlyList<ChatThread>>> ThreadsAsync() => Safe.RunAsync<IReadOnlyList<ChatThread>>(async () =>
         await gw.RpcAsync<List<ChatThread>>("chat_threads") ?? []);

@@ -732,6 +732,12 @@ await test('pages carry the photo path, and the list says "Photo" when the last 
 });
 
 
+await test('a photo whose text is only blanks still reads "Photo" in the list', async () => {
+  await db.query(`insert into messages (coach_id, member_id, sender_id, body, attachment_path) values ($1, $2, $2, '   ', $3)`, [coach, fay, pic(coach, fay)]);
+  assert.equal((await threads(fay)).find(r => r.kind === 'coach').last_body, 'Photo');
+  assert.equal((await threads(coach)).find(r => r.kind === 'coach' && r.member_id === fay).last_body, 'Photo');
+});
+
 console.log(`\n${pass} passed, ${failed} failed`);
 await db.end(); await server.stop();
 process.exit(failed ? 1 : 0);

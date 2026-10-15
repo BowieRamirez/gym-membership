@@ -93,7 +93,7 @@ begin
 		select 'coach'::text as kind, p.coach_id as coach_id, p.member_id as member_id,
 		       case when p.coach_id = v_uid then p.member_id else p.coach_id end as with_id,
 		       pr.full_name as with_name, pr.avatar_path as with_avatar,
-		       coalesce(nullif(lm.body, ''), case when lm.attachment_path is not null then 'Photo' end) as last_body,
+		       coalesce(nullif(btrim(lm.body), ''), case when lm.attachment_path is not null then 'Photo' end) as last_body,
 		       lm.sent_at as last_at, coalesce(lm.sender_id = v_uid, false) as last_from_me,
 		       (select count(*)::integer from public.messages x
 		         where x.coach_id = p.coach_id and x.member_id = p.member_id and x.sender_id <> v_uid and x.read_at is null) as unread,
@@ -112,7 +112,7 @@ begin
 
 		-- a member's own front-desk thread (always there, even with no messages yet)
 		select 'support'::text, null::uuid, mb.user_id, null::uuid, 'Front desk'::text, null::text,
-		       coalesce(nullif(lm.body, ''), case when lm.attachment_path is not null then 'Photo' end), lm.sent_at, coalesce(lm.sender_id = v_uid, false),
+		       coalesce(nullif(btrim(lm.body), ''), case when lm.attachment_path is not null then 'Photo' end), lm.sent_at, coalesce(lm.sender_id = v_uid, false),
 		       (select count(*)::integer from public.support_messages s where s.member_id = mb.user_id and s.sender_id <> v_uid and s.read_at is null),
 		       true, coalesce(t.status, 'open'), null::uuid, null::text
 		from public.members mb
@@ -124,7 +124,7 @@ begin
 
 		-- the inbox, for staff who may answer
 		select 'support'::text, null::uuid, t.member_id, t.member_id, pr.full_name, pr.avatar_path,
-		       coalesce(nullif(lm.body, ''), case when lm.attachment_path is not null then 'Photo' end), lm.sent_at, coalesce(lm.sender_id <> t.member_id, false),
+		       coalesce(nullif(btrim(lm.body), ''), case when lm.attachment_path is not null then 'Photo' end), lm.sent_at, coalesce(lm.sender_id <> t.member_id, false),
 		       (select count(*)::integer from public.support_messages s where s.member_id = t.member_id and s.sender_id = t.member_id and s.read_at is null),
 		       true, t.status, t.claimed_by, cb.full_name
 		-- the 500 most recently active threads, so the list stays small however many members have written

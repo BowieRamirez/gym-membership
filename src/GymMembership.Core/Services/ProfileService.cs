@@ -66,18 +66,30 @@ public sealed class ProfileService(ISupabaseGateway gw) : IProfileService
     public Task<AppResult<string?>> AvatarUrlAsync(string? path) => Safe.RunAsync<string?>(() => _avatars.UrlAsync(path));
 }
 
-/// <summary>Signed links last an hour; one is reused for 50 minutes instead of asking the server on every redraw.</summary>
-public sealed class LinkCache(ISupabaseGateway gw, string bucket)
+/// <summary>
+/// Signed links last an hour; one is reused for 50 minutes instead of asking the server on every redraw. With rememberMisses, a file that is not
+/// there is remembered for a minute, so a missing photo is not asked for again on every refresh. At most six links are asked for at a time,
+/// so a page full of photos does not send fifty requests at once.
+/// </summary>
+public sealed class LinkCache(ISupabaseGateway gw, string bucket, bool rememberMisses = false)
 {
-    static readonly TimeSpan Life = TimeSpan.FromMinutes(50);
-    readonly ConcurrentDictionary<string, (string Url, DateTime Until)> _links = new();
+    static readonly TimeSpan Life = TimeSpan.FromMinutes(50), MissLife = TimeSpan.FromMinutes(1);
+    readonly ConcurrentDictionary<string, (string? Url, DateTime Until)> _links = new();
+    readonly SemaphoreSlim _gate = new(6);
 
     public async Task<string?> UrlAsync(string? path)
     {
         if (string.IsNullOrEmpty(path)) return null;
         if (_links.TryGetValue(path, out var hit) && hit.Until > DateTime.UtcNow) return hit.Url;
-        var url = await gw.SignedUrlAsync(bucket, path);
-        if (url is not null) _links[path] = (url, DateTime.UtcNow + Life);
-        return url;
+        await _gate.WaitAsync();
+        try
+        {
+            if (_links.TryGetValue(path, out hit) && hit.Until > DateTime.UtcNow) return hit.Url;   // another caller got it while this one waited
+            var url = await gw.SignedUrlAsync(bucket, path);
+            if (url is not null) _links[path] = (url, DateTime.UtcNow + Life);
+            else if (rememberMisses) _links[path] = (null, DateTime.UtcNow + MissLife);
+            return url;
+        }
+        finally { _gate.Release(); }
     }
 }
