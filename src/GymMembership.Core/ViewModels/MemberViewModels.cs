@@ -281,6 +281,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     List<ChatThread> all = [];
     string? myId;
     int openTicket, listTicket, searchTicket;
+    readonly Dictionary<string, string> drafts = new();   // what was half typed in each conversation you left
 
     public ObservableCollection<ThreadItem> Threads { get; } = new();
     public ObservableCollection<ChatBubble> Bubbles { get; } = new();
@@ -327,8 +328,9 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     void Reset()
     {
         myId = auth.UserId; all = [];
+        openTicket++; listTicket++; searchTicket++;   // an answer still on its way for the last person is dropped when it lands
         Threads.Clear(); Bubbles.Clear(); SetHits([]);
-        Selected = null; Draft = ""; SearchText = ""; HasMore = false; ShowingChat = false;
+        Selected = null; drafts.Clear(); Draft = ""; SearchText = ""; HasMore = false; ShowingChat = false;
         Tab = "coach"; Filter = "open"; HasTabs = false; HasFilters = false; CoachTabBadge = 0; StaffTabBadge = 0;
         ErrorMessage = null;
     }
@@ -432,6 +434,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         var thread = all.FirstOrDefault(t => t.Kind == hit.Kind && t.CoachId == hit.CoachId && t.MemberId == hit.MemberId);
         if (thread is null) return;
         if (HasTabs) Tab = thread.IsSupport ? "support" : "coach";
+        if (HasFilters) Filter = thread.Status == "closed" ? "closed" : "open";   // show the list the conversation is in
         Rebuild();
         if (Threads.FirstOrDefault(x => x.Thread.Key == thread.Key) is { } item) await OpenAsync(item);
     }
@@ -454,8 +457,10 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     private async Task SendAsync()
     {
         if (Selected is not { } item || string.IsNullOrWhiteSpace(Draft)) return;
-        if (!await RunAsync(() => chat.SendAsync(item.Thread, Draft))) return;   // the draft stays, with the error line
-        Draft = "";
+        var sent = Draft;
+        if (!await RunAsync(() => chat.SendAsync(item.Thread, sent))) return;   // the draft stays, with the error line
+        drafts.Remove(item.Thread.Key);
+        if (Selected?.Thread.Key == item.Thread.Key && Draft == sent) Draft = "";   // not if more was typed, or you moved on, while it was sending
         await MergeLatestAsync(item);
         await LoadThreadsAsync(first: false);
     }
@@ -495,6 +500,9 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     {
         if (oldValue is not null) oldValue.IsOpen = false;
         if (newValue is not null) newValue.IsOpen = true;
+        if (oldValue?.Thread.Key == newValue?.Thread.Key) return;   // the same conversation, just refreshed
+        if (oldValue is not null) drafts[oldValue.Thread.Key] = Draft;
+        Draft = newValue is null ? "" : drafts.GetValueOrDefault(newValue.Thread.Key, "");
     }
 
     // ---- front desk

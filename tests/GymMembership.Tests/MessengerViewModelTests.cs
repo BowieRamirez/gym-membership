@@ -241,4 +241,63 @@ public class MessengerViewModelTests
         var (_, _, beaLater) = await Open("bea@demo.io", gw);
         Assert.Equal("Staff (1)", beaLater.StaffTabText);
     }
+    // ---- fixes from the whole-branch review
+
+    [Fact]
+    public async Task A_half_typed_message_stays_with_its_own_conversation_and_never_goes_to_another()
+    {
+        var (_, _, vm) = await Open("member@demo.io");
+        vm.Draft = "see you at 5";                              // meant for the coach
+
+        await vm.ShowTabCommand.ExecuteAsync("support");         // the person moves to the front desk
+        Assert.Equal("", vm.Draft);
+        vm.Draft = "about my payment";
+
+        await vm.ShowTabCommand.ExecuteAsync("coach");           // and back
+        Assert.Equal("see you at 5", vm.Draft);
+        await vm.ShowTabCommand.ExecuteAsync("support");
+        Assert.Equal("about my payment", vm.Draft);
+    }
+
+    [Fact]
+    public async Task Tapping_a_message_hit_in_a_conversation_the_filter_hides_still_opens_it()
+    {
+        var (gw, _, bea) = await Open("bea@demo.io");
+        await bea.ShowTabCommand.ExecuteAsync("support");
+        bea.Draft = "refund please"; await bea.SendCommand.ExecuteAsync(null);
+        var (_, _, closing) = await Open("employee@demo.io", gw);
+        await closing.OpenCommand.ExecuteAsync(closing.Threads.Single());
+        await closing.CloseChatCommand.ExecuteAsync(null);       // now it is closed, and the desk's list shows Open
+
+        var (_, _, desk) = await Open("employee@demo.io", gw);
+        Assert.Empty(desk.Threads);
+        desk.SearchText = "refund";
+        await Task.Delay(700);
+        await desk.OpenHitCommand.ExecuteAsync(desk.Hits.Single());
+
+        Assert.Equal("Bea Lim", desk.Selected!.Thread.WithName);
+        Assert.Equal("closed", desk.Filter);
+        Assert.NotEmpty(desk.Bubbles);
+    }
+
+    [Fact]
+    public async Task A_slow_answer_for_the_last_person_never_shows_under_the_next_one_who_signs_in()
+    {
+        var chat = new SlowChat { Threads = [new ChatThread { Kind = "coach", CoachId = "c-1", MemberId = "m-1", WithName = "Anna", CanSend = true }] };
+        var gw = new DemoGateway(); await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
+        var vm = new MessengerViewModel(chat, new ProfileService(gw), new AuthService(gw));
+        var loading = vm.OnAppearingAsync();
+        await Task.Delay(50);
+        var stale = chat.Waiting.Dequeue();                      // the first person's messages are still on their way
+
+        await gw.SignOutAsync(); await gw.SignInAsync("carlo@demo.io", DemoGateway.DemoPassword);
+        chat.Threads = [];
+        await vm.OnAppearingAsync();                             // the next person opens Messages
+        stale.Reply.SetResult(AppResult<ChatPage>.Success(PageOf("the first person's message")));
+        await loading;
+        await Task.Delay(50);
+
+        Assert.Empty(vm.Bubbles);
+        Assert.Null(vm.Selected);
+    }
 }

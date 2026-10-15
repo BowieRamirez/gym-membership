@@ -868,7 +868,7 @@ public sealed class DemoGateway : ISupabaseGateway
 
                 // the inbox, for staff who may answer
                 if (Has("support:reply"))
-                    foreach (var t in All<SupportThread>().Where(t => t.MemberId != uid))
+                    foreach (var t in All<SupportThread>().Where(t => t.MemberId != uid).OrderByDescending(t => t.LastMessageAt).Take(500))
                     {
                         var msgs = All<SupportMessage>().Where(m => m.MemberId == t.MemberId).OrderBy(m => m.Id).ToList();
                         var last = msgs.LastOrDefault();
@@ -966,12 +966,12 @@ public sealed class DemoGateway : ISupabaseGateway
                 var thread = All<SupportThread>().FirstOrDefault(t => t.MemberId == S("p_member")) ?? throw Err("not_found");
                 if (B("p_claim"))
                 {
-                    if (thread.ClaimedBy is not null && thread.ClaimedBy != uid) throw Err("already_processed");
+                    if (thread.ClaimedBy is not null && thread.ClaimedBy != uid && All<Profile>().Any(p => p.Id == thread.ClaimedBy && p.IsActive)) throw Err("already_processed");
                     thread.ClaimedBy = uid;
                 }
                 else
                 {
-                    if (thread.ClaimedBy is not null && thread.ClaimedBy != uid && !RolesOf(uid).Contains("admin")) throw Err("forbidden");
+                    if (thread.ClaimedBy is not null && thread.ClaimedBy != uid && !RolesOf(uid).Contains("admin") && All<Profile>().Any(p => p.Id == thread.ClaimedBy && p.IsActive)) throw Err("forbidden");
                     thread.ClaimedBy = null;
                 }
                 return null;

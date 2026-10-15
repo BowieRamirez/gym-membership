@@ -502,7 +502,7 @@ const say = (who, kind, coachId, memberId, body) => kind === 'support'
   ? run(who, `select send_support_message($1, $2)`, [memberId, body])
   : db.query(`insert into messages (coach_id, member_id, sender_id, body) values ($1, $2, $3, $4)`, [coachId, memberId, who, body]);
 const threads = async uid => (await run(uid, `select * from chat_threads()`)).rows;
-const page = (uid, kind, c, m, before = null, limit = 50) => run(uid, `select * from chat_messages($1, $2, $3, $4, $5)`, [kind, c, m, before, limit]);
+const page = (uid, kind, c, m, before = null, limit = 50) => run(uid, `select * from chat_messages(p_kind => $1, p_coach => $2, p_member => $3, p_before => $4, p_limit => $5)`, [kind, c, m, before, limit]);
 
 // a coach chat between the coach and Bea, with a hire so it is open
 await db.query(`insert into coach_hires (coach_id, member_id) values ($1, $2) on conflict do nothing`, [coach, bea]);
@@ -536,14 +536,14 @@ await test('a page is newest first, bounded, and the next page starts after the 
 await test('opening a conversation marks what you received delivered and read, and clears its alert; the sender sees it', async () => {
   await db.query(`delete from user_notifications where user_id = $1`, [bea]);
   await db.query(`insert into user_notifications (user_id, type, title, reference) values ($1, 'message', 'New message', jsonb_build_object('coach_id', $2::text, 'member_id', $3::text))`, [bea, coach, bea]);
-  await run(bea, `select mark_chat_read('coach', $1, $2)`, [coach, bea]);
+  await run(bea, `select mark_chat_read(p_kind => 'coach', p_coach => $1, p_member => $2)`, [coach, bea]);
   assert.equal((await threads(bea)).find(r => r.kind === 'coach').unread, 0);
   const mine = (await page(coach, 'coach', coach, bea, null, 2)).rows;   // the coach's view of Bea's newest messages
   assert.ok(mine.every(r => r.read_at === null || r.sender_id === coach));   // the coach's own messages were read by Bea
   const fromCoach = (await page(coach, 'coach', coach, bea)).rows.filter(r => r.sender_id === coach);
   assert.ok(fromCoach.every(r => r.delivered_at && r.read_at));
   assert.equal((await db.query(`select 1 from user_notifications where user_id = $1 and read_at is null`, [bea])).rowCount, 0);
-  assert.match(await code(run(alex, `select mark_chat_read('coach', $1, $2)`, [coach, bea])), /42501/);
+  assert.match(await code(run(alex, `select mark_chat_read(p_kind => 'coach', p_coach => $1, p_member => $2)`, [coach, bea])), /42501/);
 });
 await test('delivered is set when the list is loaded, read only when the chat is opened', async () => {
   await say(coach, 'coach', coach, bea, 'one more');
@@ -585,7 +585,7 @@ await test('staff reply: the member is alerted and sees "Front desk"; staff see 
   const deskName = (await db.query(`select full_name from profiles where id = $1`, [desk])).rows[0].full_name;
   assert.equal(asStaff[0].sender_name, deskName);
   assert.equal((await threads(alex)).find(r => r.kind === 'support').unread, 1);
-  await run(alex, `select mark_chat_read('support', null, $1)`, [alex]);
+  await run(alex, `select mark_chat_read(p_kind => 'support', p_member => $1)`, [alex]);
   assert.equal((await threads(alex)).find(r => r.kind === 'support').unread, 0);
   const seen = (await page(desk, 'support', null, alex)).rows.find(r => r.body === 'looking into it');
   assert.ok(seen.read_at);
@@ -622,6 +622,32 @@ await test('search finds a person by name and a conversation by message text, on
 await test('support permission exists for admin and front desk only', async () => {
   const p = await db.query(`select r.name from role_permissions rp join roles r using (role_id) join permissions p using (permission_id) where p.resource = 'support' and p.action = 'reply' order by r.name`);
   assert.deepEqual(p.rows.map(r => r.name), ['admin', 'employee']);
+});
+
+console.log('\nmessenger review fixes');
+await test('the front desk thread can be read and marked read the way the app calls it: by name, with no coach argument', async () => {
+  // PostgREST calls a function by argument name and cannot match one whose required argument was left out
+  assert.ok((await run(alex, `select * from chat_messages(p_kind => 'support', p_member => $1, p_limit => 51)`, [alex])).rowCount > 0);
+  assert.equal(await code(run(alex, `select mark_chat_read(p_kind => 'support', p_member => $1)`, [alex])), 'ok');
+  assert.equal(await code(run(desk, `select * from chat_messages(p_kind => 'support', p_member => $1)`, [alex])), 'ok');
+});
+await test('a conversation taken by someone who has since been deactivated can be taken by another staff member', async () => {
+  const desk2 = await user('desk2@t.io', 'employee', 'Second Desk');
+  await run(desk, `select claim_support_thread($1, true)`, [alex]);
+  assert.match(await code(run(desk2, `select claim_support_thread($1, true)`, [alex])), /P0002/);   // still active: stays taken
+  await db.query(`update profiles set is_active = false where id = $1`, [desk]);
+  try {
+    assert.equal(await code(run(desk2, `select claim_support_thread($1, true)`, [alex])), 'ok');
+    assert.equal((await threads(desk2)).find(r => r.kind === 'support' && r.member_id === alex).claimed_by, desk2);
+  } finally { await db.query(`update profiles set is_active = true where id = $1`, [desk]); }
+  await run(desk2, `select claim_support_thread($1, false)`, [alex]);
+});
+await test('the inbox is bounded: staff get the 500 most recently active member threads, not every thread there is', async () => {
+  await db.query(`insert into auth.users (email, raw_user_meta_data, raw_app_meta_data)
+                  select 'bulk' || g || '@t.io', jsonb_build_object('full_name', 'Bulk'), jsonb_build_object('role', 'member') from generate_series(1, 505) g`);
+  await db.query(`insert into support_threads (member_id) select user_id from members where user_id not in (select member_id from support_threads)`);
+  const inbox = (await threads(desk)).filter(r => r.kind === 'support');
+  assert.equal(inbox.length, 500);
 });
 
 console.log(`\n${pass} passed, ${failed} failed`);

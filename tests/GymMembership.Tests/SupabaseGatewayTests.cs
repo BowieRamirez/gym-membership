@@ -267,6 +267,25 @@ public sealed class SupabaseGatewayTests : IDisposable
     }
 
     [Fact]
+    public async Task A_front_desk_thread_is_requested_and_marked_read_by_member_alone_with_no_coach_argument()
+    {
+        var gw = await SignedInAsync();
+        var svc = new ChatService(gw, new NotificationService(gw));
+        var thread = new ChatThread { Kind = "support", MemberId = "u-9" };
+
+        _reply = _ => (200, "[]");
+        await svc.MessagesAsync(thread);
+        Assert.Equal("/rest/v1/rpc/chat_messages", Last.Path);
+        Assert.Contains("\"p_kind\":\"support\"", Last.Body);
+        Assert.Contains("\"p_member\":\"u-9\"", Last.Body);
+        Assert.DoesNotContain("p_coach", Last.Body);   // the function has no coach for this thread, and its argument is optional
+
+        await svc.MarkReadAsync(thread);
+        Assert.Equal("/rest/v1/rpc/mark_chat_read", Last.Path);
+        Assert.DoesNotContain("p_coach", Last.Body);
+    }
+
+    [Fact]
     public async Task Marking_every_unread_notification_read_is_one_request_that_leaves_read_ones_alone()
     {
         var gw = await SignedInAsync();

@@ -104,18 +104,20 @@ begin
 		       lm.body, lm.sent_at, coalesce(lm.sender_id <> t.member_id, false),
 		       (select count(*)::integer from public.support_messages s where s.member_id = t.member_id and s.sender_id = t.member_id and s.read_at is null),
 		       true, t.status, t.claimed_by, cb.full_name
-		from public.support_threads t
+		-- the 500 most recently active threads, so the list stays small however many members have written
+		from (select * from public.support_threads st where public.has_permission('support:reply') and st.member_id <> v_uid
+		      order by st.last_message_at desc limit 500) t
 		join public.profiles pr on pr.id = t.member_id
 		left join public.profiles cb on cb.id = t.claimed_by
 		left join lateral (select s.body, s.sent_at, s.sender_id from public.support_messages s where s.member_id = t.member_id order by s.message_id desc limit 1) lm on true
-		where public.has_permission('support:reply') and t.member_id <> v_uid
 	) q
 	order by q.last_at desc nulls last;
 end;
 $$;
 
 -- One page of a conversation, newest first. p_before is the id of the oldest message already shown.
-create function public.chat_messages(p_kind text, p_coach uuid, p_member uuid, p_before bigint default null, p_limit integer default 50)
+-- p_coach is only for coach chats; a front desk thread leaves it out, so it follows p_member and has a default (the app calls these by argument name)
+create function public.chat_messages(p_kind text, p_member uuid, p_coach uuid default null, p_before bigint default null, p_limit integer default 50)
 returns table (message_id bigint, sender_id uuid, body text, sent_at timestamptz, delivered_at timestamptz, read_at timestamptz, sender_name text)
 language plpgsql stable security definer
 set search_path = ''
@@ -154,7 +156,7 @@ $$;
 -- ---------------------------------------------------------------------
 
 -- You opened a conversation: what you received there is delivered and read, and its alert in the bell is cleared.
-create function public.mark_chat_read(p_kind text, p_coach uuid, p_member uuid) returns void
+create function public.mark_chat_read(p_kind text, p_member uuid, p_coach uuid default null) returns void
 language plpgsql security definer
 set search_path = ''
 as $$
@@ -266,10 +268,13 @@ begin
 	if not found then perform public.fail('not_found', '22023'); end if;
 
 	if p_claim then
-		if v.claimed_by is not null and v.claimed_by <> auth.uid() then perform public.fail('already_processed', 'P0002'); end if;
+		-- taken by somebody else who is still active: stays theirs. Taken by someone since deactivated: free to take.
+		if v.claimed_by is not null and v.claimed_by <> auth.uid()
+		   and exists (select 1 from public.profiles where id = v.claimed_by and is_active) then perform public.fail('already_processed', 'P0002'); end if;
 		update public.support_threads set claimed_by = auth.uid() where member_id = p_member;
 	else
-		if v.claimed_by is not null and v.claimed_by <> auth.uid() and not public.has_role('admin') then perform public.fail('forbidden', '42501'); end if;
+		if v.claimed_by is not null and v.claimed_by <> auth.uid() and not public.has_role('admin')
+		   and exists (select 1 from public.profiles where id = v.claimed_by and is_active) then perform public.fail('forbidden', '42501'); end if;
 		update public.support_threads set claimed_by = null where member_id = p_member;
 	end if;
 end;

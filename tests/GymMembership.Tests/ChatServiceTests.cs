@@ -179,4 +179,20 @@ public class ChatServiceTests
         svc.Pending = ("u-coach1", null);   // "me, as the member"
         Assert.Equal("u-coach1", svc.Pending!.Value.CoachId);
     }
+    [Fact]
+    public async Task A_conversation_held_by_a_staff_member_who_was_deactivated_can_be_taken_by_another()
+    {
+        var (gw, bea) = await As("bea@demo.io");
+        await bea.SendAsync((await bea.ThreadsAsync()).Value!.Single(t => t.IsSupport), "hello");
+        var (_, desk) = await As("employee@demo.io", gw);
+        var thread = (await desk.ThreadsAsync()).Value!.Single(t => t.IsSupport);
+        await desk.ClaimAsync(thread, true);
+
+        var (_, admin) = await As("admin@demo.io", gw);
+        Assert.Equal(AppErrorKind.Conflict, (await admin.ClaimAsync(thread, true)).Error);   // still active: stays theirs
+        await gw.RpcAsync("set_user_active", new() { ["p_user"] = "u-emp", ["p_active"] = false });
+
+        Assert.True((await admin.ClaimAsync(thread, true)).Ok);
+        Assert.Equal("Dana Reyes", (await admin.ThreadsAsync()).Value!.Single(t => t.IsSupport).ClaimedByName);
+    }
 }
