@@ -129,4 +129,58 @@ public class HeaderTests
 
         Assert.Equal("?", vm.Letters);
     }
+
+    // a notification service whose answers the test releases by hand, to make two refreshes finish out of order
+    sealed class SlowNotes : INotificationService
+    {
+        public readonly Queue<TaskCompletionSource<AppResult<int>>> Pending = new();
+        public event Action? Changed;
+        public void Raise() => Changed?.Invoke();
+        public Task<AppResult<int>> UnreadCountAsync() { var t = new TaskCompletionSource<AppResult<int>>(); Pending.Enqueue(t); return t.Task; }
+        public Task<AppResult<IReadOnlyList<GymMembership.Core.Models.UserNotification>>> ListAsync() => throw new NotSupportedException();
+        public Task<AppResult<bool>> MarkReadAsync(int id) => throw new NotSupportedException();
+        public Task<AppResult<bool>> MarkAllReadAsync() => throw new NotSupportedException();
+    }
+
+    [Fact]
+    public async Task A_late_answer_from_an_older_refresh_does_not_overwrite_the_newer_count()
+    {
+        var gw = new DemoGateway();
+        await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
+        var notes = new SlowNotes();
+        var vm = new HeaderViewModel(new ProfileService(gw), notes, new AuthService(gw), new Nav());
+
+        var older = vm.RefreshAsync();
+        var newer = vm.RefreshAsync();
+        var first = notes.Pending.Dequeue();
+        var second = notes.Pending.Dequeue();
+        second.SetResult(AppResult<int>.Success(5));
+        await newer;
+        first.SetResult(AppResult<int>.Success(2));
+        await older;
+
+        Assert.Equal(5, vm.UnreadCount);
+    }
+
+    [Fact]
+    public async Task Reading_an_alert_anywhere_updates_the_badge_at_once_and_a_disposed_header_stops_listening()
+    {
+        var gw = new DemoGateway();
+        await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
+        var notes = new NotificationService(gw);
+        var vm = new HeaderViewModel(new ProfileService(gw), notes, new AuthService(gw), new Nav());
+        await vm.RefreshAsync();
+        var before = vm.UnreadCount;
+        Assert.True(before > 0);
+
+        var closed = new HeaderViewModel(new ProfileService(gw), notes, new AuthService(gw), new Nav());
+        await closed.RefreshAsync();
+        Assert.Equal(before, closed.UnreadCount);
+        closed.Dispose();
+
+        await notes.MarkAllReadAsync();
+        await Task.Delay(100);
+        Assert.Equal(0, vm.UnreadCount);   // the live header followed at once: no page change was needed
+        Assert.Equal(before, closed.UnreadCount);   // the disposed one did not react
+    }
 }

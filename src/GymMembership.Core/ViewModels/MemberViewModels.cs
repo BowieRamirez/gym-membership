@@ -373,17 +373,19 @@ public partial class HeaderViewModel : LoadableViewModel, IDisposable
     readonly INotificationService notes;
     readonly IAuthService auth;
     readonly IAppNavigator nav;
-    readonly Action onAvatarChanged;
+    readonly Action onChanged;
+    int refreshTicket;
 
     public HeaderViewModel(IProfileService profile, INotificationService notes, IAuthService auth, IAppNavigator nav)
     {
         (this.profile, this.notes, this.auth, this.nav) = (profile, notes, auth, nav);
-        onAvatarChanged = () => _ = RefreshAsync();
-        profile.AvatarChanged += onAvatarChanged;   // the service outlives every header, so each header must let go (Dispose)
+        onChanged = () => _ = RefreshAsync();
+        profile.AvatarChanged += onChanged;   // the services outlive every header, so each header must let go (Dispose)
+        notes.Changed += onChanged;
     }
 
-    /// <summary>Stops listening for picture changes. Called on sign-out and when the shell is torn down.</summary>
-    public void Dispose() => profile.AvatarChanged -= onAvatarChanged;
+    /// <summary>Stops listening. Called on sign-out and when the shell is torn down.</summary>
+    public void Dispose() { profile.AvatarChanged -= onChanged; notes.Changed -= onChanged; }
 
     [ObservableProperty] private string letters = "?";
     [ObservableProperty] private string? avatarUrl;
@@ -395,16 +397,17 @@ public partial class HeaderViewModel : LoadableViewModel, IDisposable
 
     public override Task OnAppearingAsync() => RefreshAsync();
 
-    /// <summary>Reloads quietly: a bar that cannot reach the server keeps what it had and shows no error.</summary>
+    /// <summary>Reloads quietly: a bar that cannot reach the server keeps what it had and shows no error. The newest refresh wins.</summary>
     [RelayCommand]
     public async Task RefreshAsync()
     {
-        if ((await profile.MeAsync()).Value is { } me)
-        {
-            Letters = Initials.From(me.Name);
-            AvatarUrl = (await profile.AvatarUrlAsync(me.AvatarPath)).Value;
-        }
-        if ((await notes.ListAsync()).Value is { } list) UnreadCount = list.Count(n => n.ReadAt is null);
+        var ticket = ++refreshTicket;
+        var me = (await profile.MeAsync()).Value;
+        var link = me is null ? null : await profile.AvatarUrlAsync(me.AvatarPath);
+        var unread = await notes.UnreadCountAsync();
+        if (ticket != refreshTicket) return;   // a newer refresh started while this one waited; its answer is the one to show
+        if (me is not null) { Letters = Initials.From(me.Name); if (link is { Ok: true }) AvatarUrl = link.Value; }
+        if (unread.Ok) UnreadCount = unread.Value;
     }
 
     [RelayCommand] private async Task SignOutAsync() { await auth.SignOutAsync(); Dispose(); nav.GoToLogin(); }

@@ -25,6 +25,13 @@ public partial class HeaderBar : ContentView
 		shell.Navigated += (_, _) => Update();
 		shell.Loaded += (_, _) => Update();
 		shell.Unloaded += (_, _) => vm.Dispose();   // a rebuilt shell gets a new header; this one must stop listening
+
+		// no live connection yet (Realtime arrives with the messenger), so look again once a minute while the app is open
+		var timer = Application.Current!.Dispatcher.CreateTimer();
+		timer.Interval = TimeSpan.FromSeconds(60);
+		timer.Tick += (_, _) => _ = vm.RefreshAsync();
+		timer.Start();
+		shell.Unloaded += (_, _) => timer.Stop();
 	}
 
 	// already looking at it: do nothing, so repeated taps do not stack copies
