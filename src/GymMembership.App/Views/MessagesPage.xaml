@@ -147,7 +147,18 @@
                                         <!-- front desk only, for staff: which of them wrote it -->
                                         <Label Text="{Binding Line.SenderName}" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold"
                                                IsVisible="{Binding Line.SenderName, Converter={StaticResource HasText}}" />
-                                        <Label Text="{Binding Line.Body}">
+                                        <!-- a photo, when the message has one: a fixed crop with rounded corners; if no link could be made, say so instead of leaving a gap -->
+                                        <Border IsVisible="{Binding ShowPhoto}" StrokeThickness="0" StrokeShape="RoundRectangle 10" HorizontalOptions="Start">
+                                            <Image Source="{Binding PhotoUrl}" Aspect="AspectFill" WidthRequest="240" HeightRequest="170" SemanticProperties.Description="Photo in this message" />
+                                        </Border>
+                                        <Label Text="Photo unavailable" Style="{StaticResource Caption}" IsVisible="{Binding PhotoMissing}">
+                                            <Label.Triggers>
+                                                <DataTrigger TargetType="Label" Binding="{Binding Mine}" Value="True">
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" />
+                                                </DataTrigger>
+                                            </Label.Triggers>
+                                        </Label>
+                                        <Label Text="{Binding Line.Body}" IsVisible="{Binding HasText}">
                                             <Label.Triggers>
                                                 <DataTrigger TargetType="Label" Binding="{Binding Mine}" Value="True">
                                                     <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" />
@@ -174,11 +185,21 @@
                 </CollectionView>
 
                 <!-- the message box stays at the bottom -->
-                <Grid Grid.Row="3" ColumnDefinitions="*,Auto" ColumnSpacing="10" Padding="16,10,16,14" IsVisible="{Binding CanSend}">
-                    <Border Style="{StaticResource Field}">
-                        <Entry Text="{Binding Draft}" Placeholder="Write a message" MaxLength="2000" ReturnCommand="{Binding SendCommand}" SemanticProperties.Description="Message" />
+                <Grid Grid.Row="3" RowDefinitions="Auto,Auto" RowSpacing="8" Padding="16,10,16,14" IsVisible="{Binding CanSend}">
+                    <!-- a photo that is chosen and waiting to be sent -->
+                    <Border Style="{StaticResource Panel}" Padding="12,8" IsVisible="{Binding HasPhoto}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <Label Text="{Binding PhotoName, StringFormat='Photo ready to send: {0}'}" VerticalOptions="Center" LineBreakMode="MiddleTruncation" />
+                            <Button Grid.Column="1" Text="Remove" Style="{StaticResource SmallOutlineButton}" Command="{Binding RemovePhotoCommand}" />
+                        </Grid>
                     </Border>
-                    <Button Grid.Column="1" Text="Send" Command="{Binding SendCommand}" />
+                    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                        <Button Text="Photo" Style="{StaticResource SmallOutlineButton}" Command="{Binding AttachCommand}" VerticalOptions="Center" />
+                        <Border Grid.Column="1" Style="{StaticResource Field}">
+                            <Entry Text="{Binding Draft}" Placeholder="Write a message" MaxLength="2000" ReturnCommand="{Binding SendCommand}" SemanticProperties.Description="Message" />
+                        </Border>
+                        <Button Grid.Column="2" Text="Send" Command="{Binding SendCommand}" />
+                    </Grid>
                 </Grid>
                 <Label Grid.Row="3" Text="You can read this conversation, but you can't send new messages in it right now." Style="{StaticResource Muted}"
                        Padding="16,10,16,14" IsVisible="{Binding ReadOnly}" />
