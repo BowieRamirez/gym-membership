@@ -31,5 +31,6 @@
     <FlyoutItem Title="Revenue" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:RevenuePage}" /></FlyoutItem>
     <FlyoutItem Title="Audit log" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:AuditPage}" /></FlyoutItem>
 
+    <FlyoutItem Title="Messages" Route="messages"><ShellContent ContentTemplate="{DataTemplate views:MessagesPage}" /></FlyoutItem>
     <FlyoutItem Title="Settings" Route="settings"><ShellContent ContentTemplate="{DataTemplate views:SettingsPage}" /></FlyoutItem>
 </Shell>

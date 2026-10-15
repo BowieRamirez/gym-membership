@@ -268,7 +268,12 @@ public partial class ThreadItem(ChatThread thread) : ObservableObject
 {
     public ChatThread Thread { get; } = thread;
     [ObservableProperty] private string? avatarUrl;
+    [ObservableProperty] private bool isOpen;   // the row of the conversation on screen
     public string Letters => Initials.From(Thread.WithName);
+
+    /// <summary>Staff only: who has taken a member's front desk conversation, and whether it is closed.</summary>
+    public string Subtitle => !Thread.IsSupport || Thread.WithId is null ? ""
+        : (Thread.ClaimedByName is { } n ? $"Taken by {n}" : "Not taken yet") + (Thread.Status == "closed" ? ", closed" : "");
 }
 
 public partial class MessengerViewModel(IChatService chat, IProfileService profile, IAuthService auth) : LoadableViewModel
@@ -283,7 +288,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowChat), nameof(ShowList))] private bool isCompact;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowChat), nameof(ShowList))] private bool showingChat;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasChat), nameof(CanSend), nameof(CanTake), nameof(CanRelease), nameof(CanClose), nameof(CanReopen))] private ThreadItem? selected;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasChat), nameof(CanSend), nameof(ReadOnly), nameof(CanTake), nameof(CanRelease), nameof(CanClose), nameof(CanReopen))] private ThreadItem? selected;
     [ObservableProperty] private string draft = "";
     [ObservableProperty] private bool hasMore;
     [ObservableProperty] private string tab = "coach";
@@ -291,8 +296,8 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsSearching))] private string searchText = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CanTake), nameof(CanRelease), nameof(CanClose), nameof(CanReopen))] private bool hasFilters;
     [ObservableProperty] private bool hasTabs;
-    [ObservableProperty] private int coachTabBadge;
-    [ObservableProperty] private int staffTabBadge;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CoachTabText))] private int coachTabBadge;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(StaffTabText))] private int staffTabBadge;
 
     /// <summary>On a phone the list and the chat take turns; on a desktop they sit side by side.</summary>
     public bool ShowList => !IsCompact || !ShowingChat;
@@ -300,6 +305,11 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     public bool HasChat => Selected is not null;
     public bool IsSearching => SearchText.Trim().Length >= 1;
     public bool CanSend => Selected?.Thread.CanSend == true;
+    /// <summary>A conversation is open but nobody can add to it now (the hire ended, or no active plan): history only.</summary>
+    public bool ReadOnly => Selected is not null && !CanSend;
+    public bool HasHits => Hits.Count > 0;
+    public string CoachTabText => CoachTabBadge > 0 ? $"Coach ({CoachTabBadge})" : "Coach";   // the count is in words, not only a coloured dot
+    public string StaffTabText => StaffTabBadge > 0 ? $"Staff ({StaffTabBadge})" : "Staff";
     public bool CanTake => HasFilters && Selected?.Thread is { IsSupport: true, ClaimedBy: null };
     public bool CanRelease => HasFilters && Selected?.Thread is { IsSupport: true, ClaimedBy: not null } t && t.ClaimedBy == myId;
     public bool CanClose => HasFilters && Selected?.Thread is { IsSupport: true, Status: "open" };
@@ -317,7 +327,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     void Reset()
     {
         myId = auth.UserId; all = [];
-        Threads.Clear(); Bubbles.Clear(); Hits.Clear();
+        Threads.Clear(); Bubbles.Clear(); SetHits([]);
         Selected = null; Draft = ""; SearchText = ""; HasMore = false; ShowingChat = false;
         Tab = "coach"; Filter = "open"; HasTabs = false; HasFilters = false; CoachTabBadge = 0; StaffTabBadge = 0;
         ErrorMessage = null;
@@ -465,7 +475,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     {
         Rebuild();
         var ticket = ++searchTicket;
-        if (value.Trim().Length < 2) { Hits.Clear(); return; }
+        if (value.Trim().Length < 2) { SetHits([]); return; }
         _ = SearchLaterAsync(value, ticket);
     }
 
@@ -474,7 +484,17 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         await Task.Delay(350);   // wait for a pause in typing
         if (ticket != searchTicket) return;
         var result = await chat.SearchAsync(text);
-        if (ticket == searchTicket && result.Ok) Fill(Hits, result.Value!);
+        // a person whose name matches is already in the list above; this section is for what was said in messages
+        if (ticket == searchTicket && result.Ok) SetHits(result.Value!.Where(h => h.Snippet?.Contains(text.Trim(), StringComparison.OrdinalIgnoreCase) == true));
+    }
+
+    void SetHits(IEnumerable<ChatSearchHit> rows) { Fill(Hits, rows); OnPropertyChanged(nameof(HasHits)); }
+
+    // the row of the open conversation is marked, so the list shows where you are
+    partial void OnSelectedChanged(ThreadItem? oldValue, ThreadItem? newValue)
+    {
+        if (oldValue is not null) oldValue.IsOpen = false;
+        if (newValue is not null) newValue.IsOpen = true;
     }
 
     // ---- front desk

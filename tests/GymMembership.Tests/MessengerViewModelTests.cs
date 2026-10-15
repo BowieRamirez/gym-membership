@@ -219,4 +219,26 @@ public class MessengerViewModelTests
         Assert.False(vm.IsSearching);
         Assert.Empty(vm.Hits);
     }
+    [Fact]
+    public async Task The_screen_has_words_for_the_open_row_the_unread_tab_the_read_only_chat_and_who_took_a_conversation()
+    {
+        var (gw, _, bea) = await Open("bea@demo.io");   // Bea has Lena as a coach but no active plan: she can read, not write
+        Assert.True(bea.ReadOnly);
+        Assert.True(bea.Selected!.IsOpen);
+
+        await bea.ShowTabCommand.ExecuteAsync("support");
+        bea.Draft = "hello"; await bea.SendCommand.ExecuteAsync(null);
+        Assert.False(bea.ReadOnly);
+
+        var (_, _, desk) = await Open("employee@demo.io", gw);
+        Assert.Equal("Not taken yet", desk.Threads.Single().Subtitle);
+        await desk.OpenCommand.ExecuteAsync(desk.Threads.Single());
+        await desk.TakeCommand.ExecuteAsync(null);
+        Assert.Equal("Taken by Marco Santos", desk.Selected!.Subtitle);
+
+        Assert.Equal("Coach", bea.CoachTabText);   // nothing unread on the coach side: no count
+        desk.Draft = "on it"; await desk.SendCommand.ExecuteAsync(null);
+        var (_, _, beaLater) = await Open("bea@demo.io", gw);
+        Assert.Equal("Staff (1)", beaLater.StaffTabText);
+    }
 }
