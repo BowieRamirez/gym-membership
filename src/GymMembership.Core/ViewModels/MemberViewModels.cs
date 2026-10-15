@@ -308,16 +308,36 @@ public partial class NotificationsViewModel(INotificationService svc) : Loadable
     { if (n.ReadAt is null && await RunAsync(() => svc.MarkReadAsync(n.Id))) await LoadAsync(); }
 }
 
-public partial class SettingsViewModel(ISettingsService settings, IAuthService auth, IAppNavigator nav) : LoadableViewModel
+public partial class SettingsViewModel(ISettingsService settings, IAuthService auth, IAppNavigator nav, IProfileService profile, IProofPicker picker) : LoadableViewModel
 {
     public string[] Themes { get; } = ["system", "light", "dark"];
     [ObservableProperty] private string theme = "system";
     [ObservableProperty] private bool mustChange;
+    [ObservableProperty] private string letters = "?";
+    [ObservableProperty] private string? avatarUrl;
 
     public override async Task OnAppearingAsync()
     {
         await LoadAsync();
         await RunAsync(auth.MustChangePasswordAsync, m => MustChange = m);
+        await LoadPhotoAsync();
+    }
+
+    async Task LoadPhotoAsync()
+    {
+        if ((await profile.MeAsync()).Value is not { } me) return;
+        Letters = Initials.From(me.Name);
+        AvatarUrl = (await profile.AvatarUrlAsync(me.AvatarPath)).Value;   // no link: the initials stay
+    }
+
+    [RelayCommand]
+    private async Task ChangePhotoAsync()
+    {
+        Notice = null;
+        if (await picker.PickAsync() is not { } file) return;
+        if (!await RunAsync(() => profile.SetAvatarAsync(file.FileName, file.Data), _ => { })) return;
+        await LoadPhotoAsync();
+        Notice = "Picture updated.";
     }
 
     [RelayCommand] private Task LoadAsync() => RunAsync(settings.LoadAsync, s => Theme = s.Theme);
