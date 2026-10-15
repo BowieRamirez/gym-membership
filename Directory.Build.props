@@ -1,0 +1,12 @@
+<Project>
+
+  <!-- One package version for every project and every target platform. Set explicitly because:
+       - NuGet fails with NU1105 when Android and Windows end up with different values;
+       - MSBuild reads environment variables as properties, so a variable called VERSION would otherwise become the
+         project version, and NuGet rejects a value like 0.1.0a.
+       The version users see on a release is ApplicationDisplayVersion, which the workflows set from the git tag. -->
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+</Project>
