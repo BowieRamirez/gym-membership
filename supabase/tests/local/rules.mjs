@@ -418,6 +418,85 @@ await test('amenities and packages have an image_path, empty by default', async 
   assert.equal((await run(admin, `select image_path from membership_packages limit 1`)).rows[0].image_path, null);
 });
 
+console.log('\namenity status (0014)');
+const boxing = (await db.query(`select amenity_id from amenities where name = 'Boxing'`)).rows[0].amenity_id;
+const statusOf = async () => (await db.query(`select status, status_reason, back_at from amenities where amenity_id = $1`, [boxing])).rows[0];
+const setStatus = (uid, status, reason = null, back = null) => run(uid, `select * from set_amenity_status($1, $2, $3, $4)`, [boxing, status, reason, back]);
+const alertsFor = async uid => (await db.query(`select title, body, type from user_notifications where user_id = $1 and type = 'amenity' order by notification_id`, [uid])).rows;
+const hours = n => new Date(Date.now() + n * 3600e3).toISOString();
+
+await test('a new amenity is available with no reason or return time', async () => {
+  const s = await statusOf();
+  assert.equal(s.status, 'available'); assert.equal(s.status_reason, null); assert.equal(s.back_at, null);
+});
+await test('a member can save and un-save an amenity, once; a coach cannot', async () => {
+  await run(alex, `select set_amenity_followed($1, true)`, [boxing]);
+  await run(alex, `select set_amenity_followed($1, true)`, [boxing]);   // twice is fine
+  assert.equal((await run(alex, `select * from amenity_follows`)).rowCount, 1);
+  assert.equal((await run(bea, `select * from amenity_follows`)).rowCount, 0);   // nobody else's list is visible
+  assert.match(await code(run(coach, `select set_amenity_followed($1, true)`, [boxing])), /42501/);
+  assert.match(await code(run(alex, `select set_amenity_followed($1, true)`, [999999])), /22023/);
+});
+await test('front desk marks it unavailable: status, reason and return time are saved, the audit log has it, and only the follower is alerted and listed', async () => {
+  const back = hours(3);
+  const told = (await setStatus(desk, 'unavailable', '  Cleaning  ', back)).rows;
+  assert.deepEqual(told.map(r => r.full_name), ['Alex']);
+  const s = await statusOf();
+  assert.equal(s.status, 'unavailable'); assert.equal(s.status_reason, 'Cleaning'); assert.ok(s.back_at);
+  const a = await alertsFor(alex);
+  assert.equal(a.length, 1); assert.match(a[0].title, /Boxing is unavailable/); assert.match(a[0].body, /Cleaning/);
+  assert.equal((await alertsFor(bea)).length, 0);
+  assert.equal((await db.query(`select 1 from audit_log where action = 'amenity.status' and entity_id = $1`, [String(boxing)])).rowCount, 1);
+});
+await test('saving the same thing again changes nothing and alerts nobody', async () => {
+  const before = (await alertsFor(alex)).length;
+  const s = await statusOf();
+  assert.equal((await setStatus(desk, 'unavailable', 'Cleaning', s.back_at.toISOString())).rowCount, 0);
+  assert.equal((await alertsFor(alex)).length, before);
+});
+await test('"in use" alerts nobody; "available" alerts the follower and clears the reason and return time', async () => {
+  const before = (await alertsFor(alex)).length;
+  assert.equal((await setStatus(desk, 'in_use', 'ignored')).rowCount, 0);
+  assert.equal((await statusOf()).status_reason, null);                       // a reason only belongs to "unavailable"
+  assert.equal((await alertsFor(alex)).length, before);
+  assert.equal((await setStatus(desk, 'available')).rowCount, 1);
+  const a = await alertsFor(alex);
+  assert.equal(a.length, before + 1); assert.match(a.at(-1).title, /Boxing is available/);
+});
+await test('a 201-character reason and a return time in the past are refused', async () => {
+  assert.match(await code(setStatus(desk, 'unavailable', 'x'.repeat(201))), /22023/);
+  assert.match(await code(setStatus(desk, 'unavailable', 'Cleaning', hours(-1))), /22023/);
+  assert.equal((await statusOf()).status, 'available');
+});
+await test('a deactivated follower and one who un-saved are not alerted and not listed', async () => {
+  await run(bea, `select set_amenity_followed($1, true)`, [boxing]);
+  await db.query(`update profiles set is_active = false where id = $1`, [bea]);
+  try {
+    const told = (await setStatus(desk, 'unavailable', 'Repairs')).rows;
+    assert.deepEqual(told.map(r => r.full_name), ['Alex']);
+  } finally { await db.query(`update profiles set is_active = true where id = $1`, [bea]); }
+  await run(alex, `select set_amenity_followed($1, false)`, [boxing]);
+  const told2 = (await setStatus(desk, 'available')).rows;
+  assert.deepEqual(told2.map(r => r.full_name), ['Bea']);   // Alex un-saved, Bea is active again
+});
+await test('members and coaches cannot set a status; admin can', async () => {
+  assert.match(await code(setStatus(alex, 'unavailable')), /42501/);
+  assert.match(await code(setStatus(coach, 'unavailable')), /42501/);
+  assert.equal(await code(setStatus(admin, 'in_use')), 'ok');
+  await setStatus(admin, 'available');
+});
+await test('the status columns cannot be written directly, but the catalog can still be edited', async () => {
+  assert.match(await code(run(admin, `update amenities set status = 'unavailable' where amenity_id = $1`, [boxing])), /42501/);
+  assert.match(await code(run(admin, `insert into amenities (name, status) values ('Steam', 'unavailable')`)), /42501/);
+  assert.equal(await code(run(admin, `update amenities set description = 'Ring' where amenity_id = $1`, [boxing])), 'ok');
+  assert.equal(await code(run(admin, `insert into amenities (name, price) values ('Steam', 100)`)), 'ok');
+});
+await test('the amenity alert type and permission exist', async () => {
+  assert.equal((await db.query(`select 'amenity'::notification_type as t`)).rows[0].t, 'amenity');
+  const p = await db.query(`select r.name from role_permissions rp join roles r using (role_id) join permissions p using (permission_id) where p.resource = 'amenities' and p.action = 'set_status' order by r.name`);
+  assert.deepEqual(p.rows.map(r => r.name), ['admin', 'employee']);
+});
+
 console.log(`\n${pass} passed, ${failed} failed`);
 await db.end(); await server.stop();
 process.exit(failed ? 1 : 0);
