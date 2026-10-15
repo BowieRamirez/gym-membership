@@ -371,6 +371,44 @@ await test('sign-up with a bad name fails, with no name it falls back to the let
   assert.equal(await nameOf('x1@t.io', '   '), 'Member');   // one letter is too short for a name
 });
 
+console.log('\nprofile pictures and catalog images (0013)');
+const avatarOf = async uid => (await run(uid, `select avatar_path from profiles where id = $1`, [uid])).rows[0].avatar_path;
+await test('a member sets and clears their own picture', async () => {
+  await run(alex, `select set_my_avatar($1)`, [`${alex}/avatar-1.jpg`]);
+  assert.equal(await avatarOf(alex), `${alex}/avatar-1.jpg`);
+  await run(alex, `select set_my_avatar(null)`);
+  assert.equal(await avatarOf(alex), null);
+});
+await test("a path in someone else's folder is refused", async () => {
+  assert.match(await code(run(alex, `select set_my_avatar($1)`, [`${bea}/avatar-1.jpg`])), /42501/);
+});
+await test('avatar_path cannot be written directly', async () => {
+  assert.match(await code(run(alex, `update profiles set avatar_path = 'x' where id = $1`, [alex])), /42501/);
+});
+await test('a deactivated user cannot set a picture', async () => {
+  assert.equal(await code(run(bea, `select set_my_avatar($1)`, [`${bea}/avatar-1.jpg`])), 'ok');   // works while active
+  await db.query(`update profiles set is_active = false where id = $1`, [bea]);
+  try { assert.notEqual(await code(run(bea, `select set_my_avatar($1)`, [`${bea}/avatar-2.jpg`])), 'ok'); }
+  finally { await db.query(`update profiles set is_active = true, avatar_path = null where id = $1`, [bea]); }
+});
+await test('the avatars bucket is private, images only, 5 MB', async () => {
+  const b = (await db.query(`select public, file_size_limit, allowed_mime_types from storage.buckets where id = 'avatars'`)).rows[0];
+  assert.equal(b.public, false);
+  assert.equal(Number(b.file_size_limit), 5242880);
+  assert.deepEqual([...b.allowed_mime_types].sort(), ['image/jpeg', 'image/png', 'image/webp']);
+});
+await test('storage: add only to your own folder; any signed-in user reads', async () => {
+  await db.query(`grant select, insert on storage.objects to authenticated`);   // the real project grants this; the local stub does not
+  const add = (uid, folder) => run(uid, `insert into storage.objects (bucket_id, name) values ('avatars', $1)`, [`${folder}/avatar-1.jpg`]);
+  assert.equal(await code(add(alex, alex)), 'ok');
+  assert.match(await code(add(alex, bea)), /42501/);
+  assert.equal((await run(bea, `select name from storage.objects where bucket_id = 'avatars'`)).rowCount, 1);
+});
+await test('amenities and packages have an image_path, empty by default', async () => {
+  assert.equal((await run(admin, `select image_path from amenities limit 1`)).rows[0].image_path, null);
+  assert.equal((await run(admin, `select image_path from membership_packages limit 1`)).rows[0].image_path, null);
+});
+
 console.log(`\n${pass} passed, ${failed} failed`);
 await db.end(); await server.stop();
 process.exit(failed ? 1 : 0);
