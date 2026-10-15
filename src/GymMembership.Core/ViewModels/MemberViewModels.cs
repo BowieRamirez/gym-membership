@@ -345,3 +345,43 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
 
     [RelayCommand] private async Task SignOutAsync() { await auth.SignOutAsync(); nav.GoToLogin(); }
 }
+
+/// <summary>Feeds the bar at the top of every signed-in screen: your picture, the unread badge and Sign out.</summary>
+public partial class HeaderViewModel : LoadableViewModel
+{
+    readonly IProfileService profile;
+    readonly INotificationService notes;
+    readonly IAuthService auth;
+    readonly IAppNavigator nav;
+
+    public HeaderViewModel(IProfileService profile, INotificationService notes, IAuthService auth, IAppNavigator nav)
+    {
+        (this.profile, this.notes, this.auth, this.nav) = (profile, notes, auth, nav);
+        // ponytail: the service lives for the whole run and this object for one sign-in, so the handler is never removed
+        profile.AvatarChanged += () => _ = RefreshAsync();
+    }
+
+    [ObservableProperty] private string letters = "?";
+    [ObservableProperty] private string? avatarUrl;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasUnread), nameof(UnreadText), nameof(AlertsLabel))] private int unreadCount;
+
+    public bool HasUnread => UnreadCount > 0;
+    public string UnreadText => UnreadCount > 99 ? "99+" : UnreadCount.ToString();
+    public string AlertsLabel => HasUnread ? $"Alerts, {UnreadCount} unread" : "Alerts";
+
+    public override Task OnAppearingAsync() => RefreshAsync();
+
+    /// <summary>Reloads quietly: a bar that cannot reach the server keeps what it had and shows no error.</summary>
+    [RelayCommand]
+    public async Task RefreshAsync()
+    {
+        if ((await profile.MeAsync()).Value is { } me)
+        {
+            Letters = Initials.From(me.Name);
+            AvatarUrl = (await profile.AvatarUrlAsync(me.AvatarPath)).Value;
+        }
+        if ((await notes.ListAsync()).Value is { } list) UnreadCount = list.Count(n => n.ReadAt is null);
+    }
+
+    [RelayCommand] private async Task SignOutAsync() { await auth.SignOutAsync(); nav.GoToLogin(); }
+}
