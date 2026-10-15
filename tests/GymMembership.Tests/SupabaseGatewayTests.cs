@@ -201,6 +201,19 @@ public sealed class SupabaseGatewayTests : IDisposable
     }
 
     [Fact]
+    public async Task Marking_every_unread_notification_read_is_one_request_that_leaves_read_ones_alone()
+    {
+        var gw = await SignedInAsync();
+        _reply = _ => (200, "[]");
+        await gw.UpdateWhereAsync<UserNotification, DateTime?>(n => n.UserId == "u-1" && n.ReadAt == null, n => n.ReadAt, DateTime.UtcNow);
+        Assert.Equal("PATCH", Last.Method);
+        // a compound filter goes out as one grouped "and=(...)"; both conditions must be there
+        Assert.Contains("user_id.eq.u-1", Last.Query);
+        Assert.Contains("read_at.is.null", Last.Query);   // without this every already-read alert would get a new read time
+        Assert.Equal(new[] { "read_at" }, Columns(Last.Body));
+    }
+
+    [Fact]
     public async Task A_coach_profile_update_sends_the_four_editable_fields_and_filters_on_their_own_id()
     {
         var gw = await SignedInAsync();

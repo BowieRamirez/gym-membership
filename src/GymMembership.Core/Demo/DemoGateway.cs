@@ -283,6 +283,18 @@ public sealed class DemoGateway : ISupabaseGateway
         catch (Exception ex) { return Task.FromException(ex); }
     }
 
+    // The demo supports exactly what the app uses this for: marking your own notifications read. It follows the same ownership rule as UpdateAsync.
+    public Task UpdateWhereAsync<T, TValue>(Expression<Func<T, bool>> where, Expression<Func<T, TValue>> column, TValue value) where T : BaseModel, new()
+    {
+        if (FailWith is not null) return Task.FromException(FailWith);
+        if (typeof(T) != typeof(UserNotification) || column.Body is not MemberExpression { Member.Name: nameof(UserNotification.ReadAt) })
+            return Task.FromException(new NotSupportedException("the demo only sets read_at on notifications"));
+        var matches = where.Compile();
+        foreach (var n in All<UserNotification>().Where(n => n.UserId == Uid && matches((T)(object)n)).ToList())
+            n.ReadAt = (DateTime?)(object?)value;
+        return Task.CompletedTask;
+    }
+
     public Task DeleteAsync<T>(T row) where T : BaseModel, new()
     {
         if (FailWith is not null) return Task.FromException(FailWith);

@@ -126,6 +126,8 @@ public interface ISupabaseGateway
     Task<T> InsertAsync<T>(T row) where T : BaseModel, new();
     Task UpdateAsync<T>(T row) where T : BaseModel, new();
     Task DeleteAsync<T>(T row) where T : BaseModel, new();
+    /// <summary>Sets one column on every row that matches, in a single request; rows the filter does not match are left alone.</summary>
+    Task UpdateWhereAsync<T, TValue>(Expression<Func<T, bool>> where, Expression<Func<T, TValue>> column, TValue value) where T : BaseModel, new();
     Task<TResult> RpcAsync<TResult>(string function, Dictionary<string, object>? args = null);
     Task RpcAsync(string function, Dictionary<string, object>? args = null);
     Task<string> UploadAsync(string bucket, string path, byte[] data);

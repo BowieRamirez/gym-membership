@@ -139,6 +139,14 @@ public sealed class SupabaseGateway : ISupabaseGateway
         await c.From<T>().Update(row);
     }
 
+    public async Task UpdateWhereAsync<T, TValue>(Expression<Func<T, bool>> where, Expression<Func<T, TValue>> column, TValue value) where T : BaseModel, new()
+    {
+        var c = await ReadyAsync();
+        // the library wants the column as Func<T, object>; boxing the member access keeps the column name it reads from the expression
+        var boxed = Expression.Lambda<Func<T, object>>(Expression.Convert(column.Body, typeof(object)), column.Parameters);
+        await c.From<T>().Where(where).Set(boxed, value).Update();
+    }
+
     public async Task DeleteAsync<T>(T row) where T : BaseModel, new()
     {
         var c = await ReadyAsync();
