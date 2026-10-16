@@ -61,6 +61,13 @@ public class IconTests
     }
 
     [Fact]
+    public void The_calendar_icons_are_drawn()
+    {
+        var drawn = Drawn();
+        foreach (var name in new[] { "check", "x", "chevron-left", "chevron-right" }) Assert.Contains(name, drawn);
+    }
+
+    [Fact]
     public void Each_drawn_icon_is_a_real_path_of_numbers_and_commands()
     {
         var source = File.ReadAllText(AppFile("Controls", "Icons.cs"));
