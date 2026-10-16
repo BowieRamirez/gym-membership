@@ -265,7 +265,7 @@ public sealed class DemoGateway : ISupabaseGateway
                 case (MembershipPackage, _): if (!Has("catalog:manage")) throw Err(Rls); list[index] = Clone(row); break;
                 case (Amenity a, Amenity old):       // a catalog edit never changes the live status, like the column rights in the database
                     if (!Has("catalog:manage")) throw Err(Rls);
-                    var edited = Clone(a); edited.Availability = old.Availability; edited.StatusReason = old.StatusReason; edited.BackAt = old.BackAt;
+                    var edited = Clone(a); edited.Availability = old.Availability; edited.StatusReason = old.StatusReason; edited.BackAt = old.BackAt; edited.ImagePath = old.ImagePath;
                     list[index] = edited;
                     break;
                 case (Discount, _): if (!Has("discounts:manage")) throw Err(Rls); list[index] = Clone(row); break;
@@ -301,12 +301,23 @@ public sealed class DemoGateway : ISupabaseGateway
         catch (Exception ex) { return Task.FromException(ex); }
     }
 
-    // The demo supports exactly what the app uses this for: marking your own notifications read. It follows the same ownership rule as UpdateAsync.
+    // Only the filtered column writes used by the app; all other columns remain refused.
     public Task UpdateWhereAsync<T, TValue>(Expression<Func<T, bool>> where, Expression<Func<T, TValue>> column, TValue value) where T : BaseModel, new()
     {
         if (FailWith is not null) return Task.FromException(FailWith);
+        if (typeof(T) == typeof(Amenity) && column.Body is MemberExpression { Member.Name: nameof(Amenity.ImagePath) })
+        {
+            try
+            {
+                Require("catalog:manage");
+                var filter = where.Compile();
+                foreach (var a in All<Amenity>().Where(a => filter((T)(object)a))) a.ImagePath = (string?)(object?)value;
+                return Task.CompletedTask;
+            }
+            catch (Exception ex) { return Task.FromException(ex); }
+        }
         if (typeof(T) != typeof(UserNotification) || column.Body is not MemberExpression { Member.Name: nameof(UserNotification.ReadAt) })
-            return Task.FromException(new NotSupportedException("the demo only sets read_at on notifications"));
+            return Task.FromException(new NotSupportedException("unsupported filtered column write"));
         var matches = where.Compile();
         foreach (var n in All<UserNotification>().Where(n => n.UserId == Uid && matches((T)(object)n)).ToList())
             n.ReadAt = (DateTime?)(object?)value;
@@ -369,8 +380,20 @@ public sealed class DemoGateway : ISupabaseGateway
     public Task<string> UploadAsync(string bucket, string path, byte[] data)
     {
         if (FailWith is not null) return Task.FromException<string>(FailWith);
-        if (bucket != "chat-attachments") return Task.FromResult(path);
         path = StoragePath.Safe(path);
+        if (bucket == "gym-assets")
+        {
+            if (!IsActiveUser || !Has("gym_settings:manage")) return Task.FromException<string>(Err(Rls));
+            _files[$"{bucket}/{path}"] = data;
+            return Task.FromResult(path);
+        }
+        if (bucket == "avatars")
+        {
+            if (!IsActiveUser || !path.StartsWith(Uid + "/", StringComparison.Ordinal)) return Task.FromException<string>(Err(Rls));
+            _files[$"{bucket}/{path}"] = data;
+            return Task.FromResult(path);
+        }
+        if (bucket != "chat-attachments") return Task.FromResult(path);
         if (!CanUseChatFile(path, write: true)) return Task.FromException<string>(Err(Rls));
         _files[path] = data;
         return Task.FromResult(path);
@@ -379,9 +402,12 @@ public sealed class DemoGateway : ISupabaseGateway
     public Task<string?> SignedUrlAsync(string bucket, string path)
     {
         if (FailWith is not null) return Task.FromException<string?>(FailWith);
-        if (bucket != "chat-attachments" || !CanUseChatFile(path, write: false) || !_files.TryGetValue(path, out var bytes)) return Task.FromResult<string?>(null);   // the demo keeps no other files
+        var key = bucket == "chat-attachments" ? path : $"{bucket}/{path}";
+        var canRead = bucket == "chat-attachments" ? CanUseChatFile(path, write: false)
+            : bucket is "avatars" or "gym-assets" && IsActiveUser;
+        if (!canRead || !_files.TryGetValue(key, out var bytes)) return Task.FromResult<string?>(null);
         // a plain file in the temp folder stands in for the signed link, so the picture shows without a server
-        var file = Path.Combine(Path.GetTempPath(), $"gym-demo-{Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(path)))[..16]}{Path.GetExtension(path)}");
+        var file = Path.Combine(Path.GetTempPath(), $"gym-demo-{Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(key)))[..16]}{Path.GetExtension(path)}");
         if (!File.Exists(file)) File.WriteAllBytes(file, bytes);
         return Task.FromResult<string?>(file);
     }

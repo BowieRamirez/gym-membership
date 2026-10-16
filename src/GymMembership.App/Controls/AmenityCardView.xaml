@@ -6,9 +6,15 @@
              x:Class="GymMembership.App.Controls.AmenityCardView" x:DataType="svc:AmenityCard">
 
     <Border Style="{StaticResource Panel}">
-        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14" RowDefinitions="Auto,Auto">
-            <c:Avatar x:Name="Mark" Letters="?" Diameter="48" VerticalOptions="Start" />
-            <VerticalStackLayout Grid.Column="1" Spacing="4">
+        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="12">
+            <Border StrokeThickness="0" Padding="0" HeightRequest="160" StrokeShape="RoundRectangle 10"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}">
+                <Grid>
+                    <c:Avatar x:Name="Mark" Letters="?" Diameter="56" HorizontalOptions="Center" VerticalOptions="Center" />
+                    <Image Source="{Binding PhotoUrl}" Aspect="AspectFill" SemanticProperties.Description="{Binding Amenity.Name, StringFormat='Photo of {0}'}" />
+                </Grid>
+            </Border>
+            <VerticalStackLayout Grid.Row="1" Spacing="4">
                 <Label Text="{Binding Amenity.Name}" Style="{StaticResource Heading}" />
                 <c:StatusChip Status="{Binding Availability}" />
                 <Label Text="{Binding Reason}" FontFamily="BarlowMedium" IsVisible="{Binding HasReason}" />
@@ -16,7 +22,7 @@
                        Style="{StaticResource Caption}" IsVisible="{Binding HasBackAt}" />
                 <Label Text="{Binding Amenity.Description}" Style="{StaticResource Muted}" />
             </VerticalStackLayout>
-            <Button x:Name="Action" Grid.Row="1" Grid.ColumnSpan="2" Margin="0,10,0,0" Style="{StaticResource SmallOutlineButton}" IsVisible="False" />
+            <Button x:Name="Action" Grid.Row="2" HorizontalOptions="Start" Style="{StaticResource SmallOutlineButton}" IsVisible="False" />
         </Grid>
     </Border>
 </ContentView>

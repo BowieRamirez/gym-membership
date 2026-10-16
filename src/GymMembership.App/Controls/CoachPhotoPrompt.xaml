@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:c="clr-namespace:GymMembership.App.Controls"
+             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+             x:Class="GymMembership.App.Controls.CoachPhotoPrompt" x:DataType="vm:CoachPhotoViewModel">
+    <Border Style="{StaticResource Panel}">
+        <VerticalStackLayout Spacing="10">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                <c:Avatar Letters="{Binding Letters}" Url="{Binding PhotoUrl}" Diameter="64" SemanticProperties.Description="Your coach profile photo" />
+                <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                    <Label Text="Your coach photo" Style="{StaticResource Heading}" />
+                    <Label Text="Add a photo so members can recognise you. You can still accept hires and run sessions without one."
+                           Style="{StaticResource Caption}" IsVisible="{Binding NeedsPhoto}" />
+                    <Label Text="Members see this photo on your coach card." Style="{StaticResource Caption}"
+                           IsVisible="{Binding NeedsPhoto, Converter={StaticResource Not}}" />
+                </VerticalStackLayout>
+            </Grid>
+            <Button Text="{Binding PhotoAction}" Command="{Binding ChangePhotoCommand}" Style="{StaticResource SmallOutlineButton}"
+                    IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}" HorizontalOptions="Start" />
+            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" HorizontalOptions="Start" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+        </VerticalStackLayout>
+    </Border>
+</ContentView>

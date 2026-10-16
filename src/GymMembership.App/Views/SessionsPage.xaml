@@ -12,6 +12,7 @@
             <Label Text="Your booked training sessions, soonest first." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
+            <c:CoachPhotoPrompt x:DataType="vm:CoachPhotoViewModel" BindingContext="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=Photo}" IsVisible="{Binding NeedsPhoto}" />
 
             <Border Style="{StaticResource Panel}" IsVisible="{Binding Rescheduling, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="12">

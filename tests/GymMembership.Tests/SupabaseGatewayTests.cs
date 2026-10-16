@@ -449,6 +449,57 @@ public sealed class SupabaseGatewayTests : IDisposable
         Assert.Equal("Someone already uses that email.", ErrorText.For(result.Error, result.Message?.Contains("email_taken") == true ? "email_taken" : result.Message));
     }
 
+    [Fact]
+    public async Task Amenity_photo_upload_patches_only_image_path_on_the_selected_row()
+    {
+        var gw = await SignedInAsync();
+        _reply = s => s.Method == "GET" ? (200, """[{"amenity_id":7,"name":"Pool","status":"in_use"}]""")
+            : s.Path.StartsWith("/storage/") ? (200, """{"Key":"photo","Id":"abc"}""") : (200, "[]");
+        var result = await new AdminService(gw).SetAmenityPhotoAsync(7, "photo.png", [1]);
+        Assert.True(result.Ok, result.Message);
+        Assert.Equal("PATCH", Last.Method);
+        Assert.Equal("/rest/v1/amenities", Last.Path);
+        Assert.Contains("amenity_id=eq.7", Last.Query);
+        Assert.Equal(new[] { "image_path" }, Columns(Last.Body));
+        Assert.Equal(result.Value, JsonDocument.Parse(Last.Body).RootElement.GetProperty("image_path").GetString());
+    }
+
+    [Fact]
+    public async Task A_failed_photo_path_save_is_not_reported_as_a_successful_upload()
+    {
+        var gw = await SignedInAsync();
+        _reply = s => s.Method == "GET" ? (200, """[{"amenity_id":7,"name":"Pool","image_path":"old.png"}]""")
+            : s.Path.StartsWith("/storage/") ? (200, """{"Key":"photo","Id":"abc"}""")
+            : (403, """{"code":"42501","message":"forbidden"}""");
+        var result = await new AdminService(gw).SetAmenityPhotoAsync(7, "photo.png", [1]);
+        Assert.Equal(AppErrorKind.Unauthorized, result.Error);
+        Assert.Null(result.Value);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Broken_photo_links_leave_the_catalogue_usable(bool coach)
+    {
+        var gw = await SignedInAsync();
+        _reply = s => s.Path.StartsWith("/storage/") ? (500, """{"error":"boom"}""")
+            : s.Path.EndsWith("/coaches") ? (200, """[{"user_id":"c-1","is_available":true}]""")
+            : s.Path.EndsWith("/profiles") ? (200, """[{"id":"c-1","full_name":"Coach One","avatar_path":"c-1/a.png"}]""")
+            : s.Path.EndsWith("/amenities") ? (200, """[{"amenity_id":7,"name":"Pool","image_path":"pool.png","is_active":true}]""") : (200, "[]");
+        if (coach)
+        {
+            var result = await new CoachService(gw).ListCoachesAsync();
+            Assert.True(result.Ok);
+            Assert.Null(Assert.Single(result.Value!).PhotoUrl);
+        }
+        else
+        {
+            var result = await new AmenityService(gw).BoardAsync();
+            Assert.True(result.Ok);
+            Assert.Null(Assert.Single(result.Value!.Cards).PhotoUrl);
+        }
+    }
+
     // ---------- files ----------
     [Fact]
     public async Task An_upload_goes_to_the_bucket_with_a_safe_name_and_returns_the_path_inside_it()

@@ -59,7 +59,7 @@ public sealed class ProfileService(ISupabaseGateway gw) : IProfileService
         // ponytail: a new file name per upload so the link is never stale; the old file stays in the bucket. Add cleanup when storage use matters.
         var result = await Safe.RunAsync(async () =>
         {
-            var path = await gw.UploadAsync("avatars", $"{gw.CurrentUserId}/avatar-{DateTime.UtcNow:yyyyMMddHHmmss}{ext}", data);
+            var path = await gw.UploadAsync("avatars", $"{gw.CurrentUserId}/avatar-{Guid.NewGuid():N}{ext}", data);
             await gw.RpcAsync("set_my_avatar", new() { ["p_path"] = path });
             return path;
         });

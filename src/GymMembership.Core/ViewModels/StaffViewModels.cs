@@ -252,14 +252,19 @@ public partial class CheckInViewModel(IAttendanceService svc) : LoadableViewMode
 }
 
 // ---------- coach ----------
-public partial class CoachProfileViewModel(ICoachService svc) : LoadableViewModel
+public partial class CoachProfileViewModel(ICoachService svc, CoachPhotoViewModel? photo = null) : LoadableViewModel
 {
+    public CoachPhotoViewModel? Photo { get; } = photo;
     [ObservableProperty] private string? bio;
     [ObservableProperty] private string? specialty;
     [ObservableProperty] private decimal? hourlyRate;
     [ObservableProperty] private bool isAvailable;
 
-    public override Task OnAppearingAsync() => LoadAsync();
+    public override async Task OnAppearingAsync()
+    {
+        await LoadAsync();
+        if (Photo is not null) await Photo.OnAppearingAsync();
+    }
 
     [RelayCommand]
     private Task LoadAsync() => RunAsync(svc.MyCoachAsync, c =>
@@ -392,14 +397,19 @@ public partial class RequestsViewModel(ISessionService svc) : LoadableViewModel
     }
 }
 
-public partial class SessionsViewModel(ISessionService svc) : LoadableViewModel
+public partial class SessionsViewModel(ISessionService svc, CoachPhotoViewModel? photo = null) : LoadableViewModel
 {
+    public CoachPhotoViewModel? Photo { get; } = photo;
     public ObservableCollection<SessionRow> Sessions { get; } = new();
     [ObservableProperty] private SessionRow? rescheduling;
     [ObservableProperty] private DateTime date = DateTime.Today.AddDays(1);
     [ObservableProperty] private TimeSpan time = new(9, 0, 0);
 
-    public override Task OnAppearingAsync() => LoadAsync();
+    public override async Task OnAppearingAsync()
+    {
+        await LoadAsync();
+        if (Photo is not null) await Photo.OnAppearingAsync();
+    }
 
     [RelayCommand] private Task LoadAsync() => RunAsync(svc.SessionsAsync, rows => Fill(Sessions, rows));
     [RelayCommand] private Task CompleteAsync(SessionRow row) => SetAsync(row, Status.Completed);
@@ -620,7 +630,7 @@ public partial class UsersViewModel(IAdminService svc) : LoadableViewModel
     { if (await RunAsync(() => svc.SetActiveAsync(user.UserId, !user.IsActive))) await LoadAsync(); }
 }
 
-public partial class CatalogAdminViewModel(IAdminService svc) : LoadableViewModel
+public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? picker = null) : LoadableViewModel
 {
     public ObservableCollection<MembershipPackage> Packages { get; } = new();
     public ObservableCollection<Amenity> Amenities { get; } = new();
@@ -692,6 +702,23 @@ public partial class CatalogAdminViewModel(IAdminService svc) : LoadableViewMode
         if (NewAmenityPrice < 0 || NewAmenityDays <= 0) { ErrorMessage = "Price can't be negative and days must be more than zero."; return; }
         if (await RunAsync(() => svc.SaveAmenityAsync(new Amenity { Name = NewAmenityName.Trim(), Price = NewAmenityPrice, DurationDays = NewAmenityDays })))
         { NewAmenityName = ""; await LoadAsync(); }
+    }
+
+    [RelayCommand]
+    private async Task UploadAmenityPhotoAsync(Amenity amenity)
+    {
+        if (IsBusy || picker is null) return;
+        IsBusy = true; ErrorMessage = Notice = null;
+        try
+        {
+            if (await picker.PickAsync() is not { } file) return;
+            var result = await svc.SetAmenityPhotoAsync(amenity.Id, file.FileName, file.Data);
+            if (!result.Ok) { ErrorMessage = ErrorText.For(result.Error, result.Message); return; }
+            await LoadAsync();
+            Notice = $"Photo updated for {amenity.Name}.";
+        }
+        catch (Exception ex) { ErrorMessage = ErrorText.For(ErrorMapper.Map(ex), ex.Message); }
+        finally { IsBusy = false; }
     }
 
     [RelayCommand]

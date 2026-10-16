@@ -365,7 +365,7 @@ public sealed record AmenityRow(Amenity Amenity, int? UserAmenityId, string? Sta
 }
 public sealed record UsageRow(AmenityUsage Usage, string Member, string Amenity);
 
-public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow)
+public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow, string? PhotoUrl = null)
 {
     public string Availability => Amenity.Availability;
     public bool IsUnavailable => Amenity.Availability == "unavailable";
@@ -378,7 +378,8 @@ public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow)
 
     /// <summary>Everything the card shows is the same, so a refresh can leave it alone.</summary>
     public bool SameAs(AmenityCard o) => Followed == o.Followed && CanFollow == o.CanFollow && Amenity.Name == o.Amenity.Name && Amenity.Description == o.Amenity.Description
-        && Availability == o.Availability && Reason == o.Reason && BackAt == o.BackAt;
+        && Availability == o.Availability && Reason == o.Reason && BackAt == o.BackAt
+        && Amenity.ImagePath == o.Amenity.ImagePath && PhotoUrl == o.PhotoUrl;
 }
 
 /// <summary>What a status change did: whether the amenity really changed, and the members who were alerted.</summary>
@@ -404,6 +405,7 @@ public interface IAmenityService
 public sealed class AmenityService(ISupabaseGateway gw) : IAmenityService
 {
     static readonly string[] Statuses = ["available", "in_use", "unavailable"];
+    readonly LinkCache photos = new(gw, "gym-assets", rememberMisses: true);
 
     public Task<AppResult<AmenityBoard>> BoardAsync() => Safe.RunAsync(async () =>
     {
@@ -411,7 +413,9 @@ public sealed class AmenityService(ISupabaseGateway gw) : IAmenityService
         var amenities = (await gw.ListAsync<Amenity>(a => a.IsActive == true)).OrderBy(a => a.Name).ToList();
         var saved = (await gw.ListAsync<AmenityFollow>(f => f.MemberId == uid)).Select(f => f.AmenityId).ToHashSet();
         var isMember = (await gw.ListAsync<Member>(m => m.UserId == uid)).Count > 0;
-        return new AmenityBoard(amenities.Select(a => new AmenityCard(a, saved.Contains(a.Id), isMember)).ToList(), isMember);
+        var cards = await Task.WhenAll(amenities.Select(async a =>
+            new AmenityCard(a, saved.Contains(a.Id), isMember, (await Safe.RunAsync(() => photos.UrlAsync(a.ImagePath))).Value)));
+        return new AmenityBoard(cards, isMember);
     });
 
     public Task<AppResult<bool>> SetFollowedAsync(int amenityId, bool follow) => Safe.RunAsync(async () =>
@@ -497,8 +501,9 @@ public sealed class AmenityService(ISupabaseGateway gw) : IAmenityService
 }
 
 // ===================== Coaches =====================
-public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId, IReadOnlyList<ShiftPost>? Shifts = null)
+public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId, IReadOnlyList<ShiftPost>? Shifts = null, string? PhotoUrl = null)
 {
+    public string Letters => Initials.From(Name);
     /// <summary>The coach paused hiring and this member has no hire to keep: shown grayed out, Hire disabled.</summary>
     public bool Closed => !Coach.IsAvailable && !Hired;
 
@@ -524,17 +529,24 @@ public interface ICoachService
 
 public sealed class CoachService(ISupabaseGateway gw) : ICoachService
 {
+    readonly LinkCache photos = new(gw, "avatars", rememberMisses: true);
+
     public Task<AppResult<IReadOnlyList<CoachCard>>> ListCoachesAsync() => Safe.RunAsync<IReadOnlyList<CoachCard>>(async () =>
     {
         var uid = gw.CurrentUserId;
         var coaches = await gw.ListAsync<Coach>();   // paused coaches stay listed, shown as closed
-        var names = await Directory_.UserNamesAsync(gw);
+        var profiles = (await gw.ListAsync<Profile>()).ToDictionary(p => p.Id);
         var hires = await gw.ListAsync<CoachHire>(h => h.MemberId == uid && h.Status == "active");
         var now = DateTime.UtcNow;
         var shifts = await gw.ListAsync<ShiftPost>(s => s.Status == "scheduled" && s.End > now);
-        return coaches.Select(c => new CoachCard(c, names.GetValueOrDefault(c.UserId, "Coach"),
-            hires.Any(h => h.CoachId == c.UserId), hires.FirstOrDefault(h => h.CoachId == c.UserId)?.Id,
-            shifts.Where(s => s.CoachId == c.UserId).OrderBy(s => s.Start).ToList())).ToList();
+        return await Task.WhenAll(coaches.Select(async c =>
+        {
+            var p = profiles.GetValueOrDefault(c.UserId);
+            var name = p is null ? "Coach" : string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName;
+            var photo = (await Safe.RunAsync(() => photos.UrlAsync(p?.AvatarPath))).Value;
+            return new CoachCard(c, name, hires.Any(h => h.CoachId == c.UserId), hires.FirstOrDefault(h => h.CoachId == c.UserId)?.Id,
+                shifts.Where(s => s.CoachId == c.UserId).OrderBy(s => s.Start).ToList(), photo);
+        }));
     });
 
     public Task<AppResult<bool>> HireAsync(string coachId) => Safe.RunAsync(async () =>
@@ -851,6 +863,7 @@ public interface IAdminService
     Task<AppResult<bool>> DeleteDiscountAsync(Discount discount);
     Task<AppResult<bool>> SavePackageAsync(MembershipPackage package);
     Task<AppResult<bool>> SaveAmenityAsync(Amenity amenity);
+    Task<AppResult<string>> SetAmenityPhotoAsync(int amenityId, string fileName, byte[] data);
     Task<AppResult<IReadOnlyList<MembershipPackage>>> AllPackagesAsync();
     Task<AppResult<IReadOnlyList<Amenity>>> AllAmenitiesAsync();
     Task<AppResult<IReadOnlyList<RevenueRow>>> RevenueAsync(DateOnly from, DateOnly to);
@@ -916,6 +929,19 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         Safe.RunAsync(async () => { if (p.Id == 0) await gw.InsertAsync(p); else await gw.UpdateAsync(p); return true; });
     public Task<AppResult<bool>> SaveAmenityAsync(Amenity a) =>
         Safe.RunAsync(async () => { if (a.Id == 0) await gw.InsertAsync(a); else await gw.UpdateAsync(a); return true; });
+
+    public Task<AppResult<string>> SetAmenityPhotoAsync(int amenityId, string fileName, byte[] data)
+    {
+        if (!ProfileService.IsAcceptableImage(fileName, data)) return Task.FromResult(AppResult<string>.Fail(AppErrorKind.Validation, "bad_image"));
+        return Safe.RunAsync(async () =>
+        {
+            if (!(await gw.ListAsync<Amenity>(a => a.Id == amenityId)).Any()) throw new Exception("not_found");
+            var path = await gw.UploadAsync("gym-assets", $"amenities/{amenityId}/{Guid.NewGuid():N}{Path.GetExtension(fileName).ToLowerInvariant()}", data);
+            // Only the image changes: a catalog row on another screen may already have newer details or status.
+            await gw.UpdateWhereAsync<Amenity, string?>(a => a.Id == amenityId, a => a.ImagePath, path);
+            return path;
+        });
+    }
 
     public Task<AppResult<IReadOnlyList<MembershipPackage>>> AllPackagesAsync() => Safe.RunAsync(() => gw.ListAsync<MembershipPackage>());
     public Task<AppResult<IReadOnlyList<Amenity>>> AllAmenitiesAsync() => Safe.RunAsync(() => gw.ListAsync<Amenity>());

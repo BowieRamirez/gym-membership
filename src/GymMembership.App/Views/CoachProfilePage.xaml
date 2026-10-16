@@ -10,6 +10,7 @@
         <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='20,16,20,24'}" Spacing="16">
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
+            <c:CoachPhotoPrompt x:DataType="vm:CoachPhotoViewModel" BindingContext="{Binding Source={RelativeSource AncestorType={x:Type vm:CoachProfileViewModel}}, Path=Photo}" IsVisible="{Binding IsCoach}" />
 
             <VerticalStackLayout Spacing="6">
                 <Label Text="Specialty" Style="{StaticResource Caption}" />

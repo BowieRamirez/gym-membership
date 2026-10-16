@@ -8,7 +8,8 @@ public class Avatar : ContentView
     public static readonly BindableProperty LettersProperty = BindableProperty.Create(nameof(Letters), typeof(string), typeof(Avatar), "?",
         propertyChanged: (b, _, n) => ((Avatar)b)._letters.Text = n as string);
     public static readonly BindableProperty UrlProperty = BindableProperty.Create(nameof(Url), typeof(string), typeof(Avatar),
-        propertyChanged: (b, _, n) => ((Avatar)b)._photo.Source = Uri.TryCreate(n as string, UriKind.Absolute, out var uri) ? ImageSource.FromUri(uri) : null);
+        propertyChanged: (b, _, n) => ((Avatar)b)._photo.Source = Uri.TryCreate(n as string, UriKind.Absolute, out var uri)
+            ? uri.IsFile ? ImageSource.FromFile(uri.LocalPath) : ImageSource.FromUri(uri) : null);
     public static readonly BindableProperty DiameterProperty = BindableProperty.Create(nameof(Diameter), typeof(double), typeof(Avatar), 40d,
         propertyChanged: (b, _, _) => ((Avatar)b).Resize());
 

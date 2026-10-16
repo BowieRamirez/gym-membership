@@ -68,6 +68,7 @@ public static class PayMethod { public const string Qr = "qr", Cash = "cash", Gc
 [Table("amenities")] public class Amenity : BaseModel
 { [PrimaryKey("amenity_id")] public int Id { get; set; } [Column("name")] public string Name { get; set; } = ""; [Column("description")] public string? Description { get; set; }
   [Column("price")] public decimal Price { get; set; } [Column("duration_days")] public int? DurationDays { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true;
+  [Column("image_path", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? ImagePath { get; set; }
   // live status: written only by set_amenity_status, so a catalog edit never sends these
   [Column("status", ignoreOnInsert: true, ignoreOnUpdate: true)] public string Availability { get; set; } = "available";
   [Column("status_reason", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? StatusReason { get; set; }
