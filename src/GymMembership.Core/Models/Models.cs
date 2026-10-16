@@ -178,10 +178,13 @@ public class ChatThread : BaseModel
   [Column("status")] public string? Status { get; set; }
   [Column("claimed_by")] public string? ClaimedBy { get; set; }
   [Column("claimed_by_name")] public string? ClaimedByName { get; set; }
+  [Column("with_last_seen")] public DateTime? WithLastSeen { get; set; }
 
   public string Key => $"{Kind}|{CoachId}|{MemberId}";
   public bool IsSupport => Kind == "support";
   public bool HasUnread => Unread > 0;
+  /// <summary>Whether to show online / last active for the other person: not for a member's own "Front desk" thread (staff come and go) and not once a hire has ended.</summary>
+  public bool ShowsPresence => WithId is not null && (IsSupport || CanSend);
   public string UnreadText => Unread > 99 ? "99+" : Unread.ToString();
   public string Preview => LastBody is null ? "No messages yet" : LastFromMe ? "You: " + LastBody : LastBody;
 }
