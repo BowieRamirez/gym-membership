@@ -266,7 +266,7 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
 public sealed record PaymentRow(Payment Payment, string Payer, string Item, bool HasProof);
 public sealed record CashRow(string Kind, long Payments, decimal Total);
 /// <summary>Something the counter can take a payment for: a package, a membership to renew, or an amenity.</summary>
-public sealed record CounterItem(int Id, string Label);
+public sealed record CounterItem(int Id, string Label, decimal? Price = null);
 
 public interface IPaymentStaffService
 {
@@ -338,13 +338,17 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
         switch (kind)
         {
             case PayKind.Membership:
-                return (await gw.ListAsync<MembershipPackage>(p => p.IsActive == true)).Select(p => new CounterItem(p.Id, $"{p.Name}  ₱{p.Price:N2}")).ToList();
+                return (await gw.ListAsync<MembershipPackage>(p => p.IsActive == true)).Select(p => new CounterItem(p.Id, p.Name, p.Price)).ToList();
             case PayKind.Amenity:
-                return (await gw.ListAsync<Amenity>(a => a.IsActive == true)).Select(a => new CounterItem(a.Id, $"{a.Name}  ₱{a.Price:N2}")).ToList();
+                return (await gw.ListAsync<Amenity>(a => a.IsActive == true)).Select(a => new CounterItem(a.Id, a.Name, a.Price)).ToList();
             case PayKind.Renewal:
                 var packages = await gw.ListAsync<MembershipPackage>();
                 return (await gw.ListAsync<UserMembershipPackage>(m => m.MemberId == memberId && (m.Status == "active" || m.Status == "expired")))
-                    .Select(m => new CounterItem(m.Id, $"{packages.FirstOrDefault(p => p.Id == m.MembershipPackageId)?.Name ?? "Membership"}  ({m.Status}, ends {m.EndsAt:d MMM yyyy})")).ToList();
+                    .Select(m =>
+                    {
+                        var package = packages.FirstOrDefault(p => p.Id == m.MembershipPackageId);
+                        return new CounterItem(m.Id, $"{package?.Name ?? "Membership"}  ({m.Status}, ends {m.EndsAt:d MMM yyyy})", package?.Price);
+                    }).ToList();
             default:
                 return [];
         }
