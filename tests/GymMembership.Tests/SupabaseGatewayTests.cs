@@ -535,6 +535,8 @@ public sealed class SupabaseGatewayTests : IDisposable
         Note("pending payments", await new PaymentStaffService(gw).PendingAsync());
         Note("notifications", await new NotificationService(gw).ListAsync());
         Note("discounts", await new AdminService(gw).DiscountsAsync());
+        Note("desk home", await new DeskHomeService(gw, new ChatService(gw, new NotificationService(gw))).SummaryAsync());
+        Assert.Contains(_seen, r => r.Path.EndsWith("/gym_check_ins") && r.Query.Contains("checked_in_at"));   // today's check-ins are filtered on the server
 
         Assert.True(results.All(r => r.Ok), string.Join("; ", results.Where(r => !r.Ok).Select(r => $"{r.Name}: {r.Why}")));
     }
