@@ -111,7 +111,7 @@ Built per `docs/superpowers/plans/2026-10-17-role-redesign-phase5.md`: a Home sc
 
 ## 6c. Phase 6a status (17 Oct 2026)
 
-Phase 6 is split: **6a** (the coach attendance calendar) is built per `2026-10-17-phase6a-attendance-calendar-design.md`, with no database change, and is waiting for a look on Windows and a phone. **6b** (coach photo prompt, visual coach and package cards, photos for amenities and packages) is not started and gets its own spec; the `image_path` columns already exist, and photo upload is admin-only today because of the `gym-assets` storage policy.
+Phase 6 is split: **6a** (the coach attendance calendar) is built per `2026-10-17-phase6a-attendance-calendar-design.md`, with no database change, and is done: the owner confirmed on 17 Oct 2026 that it works on Windows. The phone layout was not separately recorded. **6b** (coach photo prompt, visual coach and package cards, photos for amenities and packages) is not started and gets its own spec; the `image_path` columns already exist, and photo upload is admin-only today because of the `gym-assets` storage policy.
 
 ## 7. Not in scope
 
