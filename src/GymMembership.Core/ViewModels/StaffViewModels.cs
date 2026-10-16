@@ -40,13 +40,13 @@ public partial class HomeViewModel(IDeskHomeService svc) : LoadableViewModel
         var amenityDetail = string.Join(", ", new[] { s.AmenitiesInUse > 0 ? $"{s.AmenitiesInUse} in use" : null, s.AmenitiesUnavailable > 0 ? $"{s.AmenitiesUnavailable} unavailable" : null }.OfType<string>());
         return
         [
-            new("checkin", "🏃", "Check-ins today", s.CheckInsToday.ToString(),
+            new("checkin", "log-in", "Check-ins today", s.CheckInsToday.ToString(),
                 s.CheckInsToday == 0 ? "No one has checked in yet" : "Tap to check someone in", false),
-            new("verify", "🧾", "Payments to verify", s.PaymentsToVerify.ToString(),
+            new("verify", "receipt", "Payments to verify", s.PaymentsToVerify.ToString(),
                 s.PaymentsToVerify == 0 ? "All caught up" : s.PaymentsToVerify == 1 ? "1 payment is waiting" : $"{s.PaymentsToVerify} payments are waiting", s.PaymentsToVerify > 0),
-            new("amenities", "🏊", "Amenities available", $"{s.AmenitiesAvailable} of {s.AmenitiesTotal}",
+            new("amenities", "waves", "Amenities available", $"{s.AmenitiesAvailable} of {s.AmenitiesTotal}",
                 amenityDetail.Length == 0 ? "All open" : amenityDetail, s.AmenitiesUnavailable > 0),
-            new("messages", "💬", "Unread messages", s.UnreadMessages.ToString(),
+            new("messages", "message-square", "Unread messages", s.UnreadMessages.ToString(),
                 s.UnclaimedChats > 0 ? (s.UnclaimedChats == 1 ? "1 chat nobody has taken" : $"{s.UnclaimedChats} chats nobody has taken")
                 : s.UnreadMessages > 0 ? "Open Messages to reply" : "No new messages", s.UnreadMessages > 0 || s.UnclaimedChats > 0),
         ];

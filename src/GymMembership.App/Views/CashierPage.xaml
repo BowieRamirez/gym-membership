@@ -15,18 +15,18 @@
 
             <Label Text="What are they paying for?" Style="{StaticResource Heading}" />
             <FlexLayout Wrap="Wrap">
-                <Button Text="🎟  Membership" SemanticProperties.Description="Membership" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Membership">
-                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="Membership"><Setter Property="Style" Value="{StaticResource SmallButton}" /></DataTrigger></Button.Triggers>
-                </Button>
-                <Button Text="🔄  Renewal" SemanticProperties.Description="Renewal" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Renewal">
-                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="Renewal"><Setter Property="Style" Value="{StaticResource SmallButton}" /></DataTrigger></Button.Triggers>
-                </Button>
-                <Button Text="🏊  Amenity" SemanticProperties.Description="Amenity" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Amenity">
-                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="Amenity"><Setter Property="Style" Value="{StaticResource SmallButton}" /></DataTrigger></Button.Triggers>
-                </Button>
-                <Button Text="🚶  Walk-in" SemanticProperties.Description="Walk-in" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Walk-in">
-                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="Walk-in"><Setter Property="Style" Value="{StaticResource SmallButton}" /></DataTrigger></Button.Triggers>
-                </Button>
+                <c:IconButton Text="Membership" Icon="ticket" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Membership">
+                    <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Kind}" Value="Membership"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
+                </c:IconButton>
+                <c:IconButton Text="Renewal" Icon="refresh-cw" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Renewal">
+                    <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Kind}" Value="Renewal"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
+                </c:IconButton>
+                <c:IconButton Text="Amenity" Icon="waves" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Amenity">
+                    <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Kind}" Value="Amenity"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
+                </c:IconButton>
+                <c:IconButton Text="Walk-in" Icon="footprints" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Walk-in">
+                    <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Kind}" Value="Walk-in"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
+                </c:IconButton>
             </FlexLayout>
 
             <!-- walk-ins have no member: just a name -->
@@ -88,15 +88,15 @@
 
                     <Label Text="Paid with" Style="{StaticResource Caption}" />
                     <FlexLayout Wrap="Wrap">
-                        <Button Text="💵  Cash" SemanticProperties.Description="Cash" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="Cash">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Method}" Value="Cash"><Setter Property="Style" Value="{StaticResource SmallButton}" /></DataTrigger></Button.Triggers>
-                        </Button>
-                        <Button Text="📱  GCash" SemanticProperties.Description="GCash" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="GCash">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Method}" Value="GCash"><Setter Property="Style" Value="{StaticResource SmallButton}" /></DataTrigger></Button.Triggers>
-                        </Button>
-                        <Button Text="🏦  Bank transfer" SemanticProperties.Description="Bank transfer" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="Bank transfer">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Method}" Value="Bank transfer"><Setter Property="Style" Value="{StaticResource SmallButton}" /></DataTrigger></Button.Triggers>
-                        </Button>
+                        <c:IconButton Text="Cash" Icon="banknote" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="Cash">
+                            <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Method}" Value="Cash"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
+                        </c:IconButton>
+                        <c:IconButton Text="GCash" Icon="smartphone" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="GCash">
+                            <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Method}" Value="GCash"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
+                        </c:IconButton>
+                        <c:IconButton Text="Bank transfer" Icon="landmark" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="Bank transfer">
+                            <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Method}" Value="Bank transfer"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
+                        </c:IconButton>
                     </FlexLayout>
 
                     <VerticalStackLayout Spacing="4" WidthRequest="260" HorizontalOptions="Start" IsVisible="{Binding NeedsReference}">
