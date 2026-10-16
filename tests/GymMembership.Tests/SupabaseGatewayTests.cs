@@ -63,7 +63,8 @@ public sealed class SupabaseGatewayTests : IDisposable
     async Task<SupabaseGateway> SignedInAsync()
     {
         var gw = new SupabaseGateway(new SupabaseSettings(_url, "anon-key"));
-        _reply = s => s.Path.Contains("/auth/v1/token") ? (200, SessionJson()) : (200, "[]");
+        _reply = s => s.Path.Contains("/auth/v1/token") ? (200, SessionJson())
+            : s.Path.EndsWith("/rpc/is_active_member") ? (200, "false") : (200, "[]");
         await gw.SignInAsync("ana@demo.io", "secret12");
         return gw;
     }
@@ -398,6 +399,35 @@ public sealed class SupabaseGatewayTests : IDisposable
         Assert.Equal("WELCOME10", args.GetProperty("p_discount_code").GetString());
         Assert.Equal(("GYM-7F3K2", 4000m, 9), (pay.PaymentCode, pay.Amount, pay.Id));
         Assert.NotNull(pay.ExpiresAt);
+    }
+
+    [Fact]
+    public async Task Subscription_wire_contract_reads_snapshots_and_sends_no_client_refund_amount()
+    {
+        var gw = await SignedInAsync();
+        var subscription = new SubscriptionService(gw);
+        _reply = _ => (200, """{"payment_id":9,"membership_package_snapshot_id":3,"membership_package_name":"Annual","membership_duration_days":365,"amount":900}""");
+        var payment = await subscription.ExtendAsync(3," SAVE10 ");
+        Assert.True(payment.Ok,payment.Message);
+        Assert.Equal((3,"Annual",365,900m),(payment.Value!.PackageSnapshotId,payment.Value.PackageSnapshotName,payment.Value.PackageSnapshotDays,payment.Value.Amount));
+        Assert.Equal("/rest/v1/rpc/extend_membership",Last.Path);
+        Assert.Equal(new[] { "p_discount_code","p_package_id" },Columns(Last.Body).Order());
+        Assert.Equal("SAVE10",JsonDocument.Parse(Last.Body).RootElement.GetProperty("p_discount_code").GetString());
+        _reply = _ => (200,"""[{"term_id":5,"member_id":"u-1","payment_id":9,"package_name":"Annual","duration_days":365,"amount_paid":900,"snapshot_source":"purchase"}]""");
+        var terms=await gw.ListAsync<MembershipTerm>(t=>t.MemberId=="u-1");
+        Assert.Equal((5,9,"Annual",365,900m),(terms.Single().Id,terms.Single().PaymentId,terms.Single().PackageName,terms.Single().DurationDays,terms.Single().AmountPaid));
+        Assert.Contains("member_id=eq.u-1",Last.Query);
+        _reply = _ => (200,"{}");
+        Assert.True((await subscription.RequestRefundAsync(5," Changed plans ")).Ok);
+        Assert.Equal("/rest/v1/rpc/request_membership_refund",Last.Path);
+        Assert.Equal(new[] { "p_reason","p_term_id" },Columns(Last.Body).Order());
+        Assert.True((await subscription.DecideAsync(7,true,"Approve")).Ok);
+        Assert.Equal("/rest/v1/rpc/decide_membership_refund",Last.Path);
+        Assert.Equal(new[] { "p_approve","p_reason","p_request_id" },Columns(Last.Body).Order());
+        Assert.True((await subscription.MarkPaidAsync(7,PayMethod.Gcash," REF-7 ")).Ok);
+        Assert.Equal("/rest/v1/rpc/record_membership_refund_paid",Last.Path);
+        Assert.Equal(new[] { "p_method","p_reference","p_request_id" },Columns(Last.Body).Order());
+        Assert.Equal("REF-7",JsonDocument.Parse(Last.Body).RootElement.GetProperty("p_reference").GetString());
     }
 
     [Fact]

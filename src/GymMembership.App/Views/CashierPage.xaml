@@ -118,15 +118,15 @@
                 </VerticalStackLayout>
             </Border>
 
-            <Label Text="Cash taken today" Style="{StaticResource Heading}" Margin="0,8,0,0" />
+            <Label Text="Net cash today" Style="{StaticResource Heading}" Margin="0,8,0,0" />
             <Border Style="{StaticResource Panel}" Padding="24,18">
                 <VerticalStackLayout Spacing="4">
-                    <Label Text="Compare this with the drawer at closing." Style="{StaticResource Caption}" />
+                    <Label Text="Cash receipts minus cash refunds actually repaid today (Manila). Compare the net amount with the drawer; approval alone does not remove cash." Style="{StaticResource Caption}" />
                     <Label Text="{Binding CashTotal}" Style="{StaticResource Numeral}" />
                 </VerticalStackLayout>
             </Border>
             <VerticalStackLayout BindableLayout.ItemsSource="{Binding CashToday}" Spacing="8">
-                <BindableLayout.EmptyView><Label Text="No cash payments recorded today." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+                <BindableLayout.EmptyView><Label Text="No cash receipts or repaid cash refunds recorded today." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="svc:CashRow">
                         <Border Style="{StaticResource Panel}" Padding="16,12">

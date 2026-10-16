@@ -317,10 +317,10 @@ await test('memberships past their end become expired, and reminders go out once
   await db.query(`select record_counter_payment_test()`).catch(() => {});
   const gp = (await run(g, `select * from avail_membership($1)`, [monthly])).rows[0];
   await run(desk, `select verify_payment($1,true)`, [gp.payment_id]);
-  await db.query(`update user_membership_packages set ends_at = now() + interval '3 days' where member_id=$1`, [g]);
+  await db.query(`update membership_terms set ends_at = now() + interval '3 days' where member_id=$1`, [g]);
   assert.equal((await db.query(`select send_expiry_reminders() n`)).rows[0].n >= 1, true);
   assert.equal((await db.query(`select send_expiry_reminders() n`)).rows[0].n, 0);
-  await db.query(`update user_membership_packages set ends_at = now() - interval '1 minute', starts_at = now() - interval '31 days' where member_id=$1`, [g]);
+  await db.query(`update membership_terms set ends_at = now() - interval '1 minute', starts_at = now() - interval '31 days' where member_id=$1`, [g]);
   assert.equal((await db.query(`select expire_memberships() n`)).rows[0].n >= 1, true);
   assert.equal((await run(g, `select is_active_member() m`)).rows[0].m, false);
 });
@@ -652,7 +652,7 @@ await test('the inbox is bounded: staff get the 500 most recently active member 
 
 console.log('\nchat photos (0016)');
 const fay = await user('fay@t.io', 'member', 'Fay');
-await db.query(`insert into user_membership_packages (member_id, membership_package_id, status, starts_at, ends_at) values ($1, $2, 'active', now(), now() + interval '30 days')`, [fay, monthly]);
+await run(desk, `select * from record_counter_payment('membership','cash',$1,$2)`, [fay, monthly]);
 await db.query(`insert into coach_hires (coach_id, member_id) values ($1, $2)`, [coach, fay]);
 const okFile = async (uid, name, write) => (await run(uid, `select can_use_chat_file($1, $2) as ok`, [name, write])).rows[0].ok;
 const pic = (a, b) => `${a}/${b}/photo-1.jpg`;

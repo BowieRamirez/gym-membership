@@ -53,33 +53,31 @@
                             <Border Style="{StaticResource Field}"><Entry Text="{Binding ReferenceNo}" SemanticProperties.Description="Reference number from your receipt" /></Border>
                         </VerticalStackLayout>
                         <Button Text="Choose screenshot and send" Style="{StaticResource SmallButton}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" Command="{Binding SendProofCommand}" />
+                        <Button Text="Cancel this payment" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" Clicked="OnCancelPayment" />
                     </VerticalStackLayout>
                 </VerticalStackLayout>
             </Border>
 
-            <Label Text="Your memberships" Style="{StaticResource Heading}" Margin="0,8,0,0" />
-            <VerticalStackLayout Spacing="4" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" WidthRequest="{OnIdiom Phone=-1, Default=260}">
-                <Label Text="Discount code for renewing (optional)" Style="{StaticResource Caption}" />
-                <Border Style="{StaticResource Field}"><Entry Text="{Binding DiscountCode}" SemanticProperties.Description="Discount code" /></Border>
-            </VerticalStackLayout>
-            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Memberships}" Spacing="10">
+            <Label Text="Your paid terms" Style="{StaticResource Heading}" Margin="0,8,0,0" />
+            <Label Text="Extensions start after your last paid term. No upgrades or unused-time credits. Other paid terms keep their dates if one is cancelled, so a gap may remain." Style="{StaticResource Muted}" />
+            <Button Text="Choose a package / extend" Style="{StaticResource SmallButton}" HorizontalOptions="Start" Clicked="OnChoosePackage" />
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Terms}" Spacing="10">
                 <BindableLayout.EmptyView>
-                    <Label Text="You don't have a membership yet. Open Packages to start one." Style="{StaticResource Muted}" />
+                    <Label Text="No paid terms yet. Choose a package, pay and wait for verification." Style="{StaticResource Muted}" />
                 </BindableLayout.EmptyView>
                 <BindableLayout.ItemTemplate>
-                    <DataTemplate x:DataType="svc:MembershipRow">
+                    <DataTemplate x:DataType="svc:TermCard">
                         <Border Style="{StaticResource Panel}">
-                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12">
-                                <VerticalStackLayout Spacing="6">
-                                    <Label Text="{Binding PackageName}" Style="{StaticResource Heading}" />
-                                    <c:StatusChip Status="{Binding Status}" />
-                                    <Label Text="{Binding EndsAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM yyyy', StringFormat='Ends {0}'}"
-                                           Style="{StaticResource Caption}" IsVisible="{Binding EndsAt, Converter={StaticResource IsNotNull}}" />
-                                </VerticalStackLayout>
-                                <Button Text="Renew" Style="{StaticResource CardButton}" VerticalOptions="Start"
-                                        IsVisible="{Binding CanRenew}"
-                                        Clicked="OnRenew" />
-                            </Grid>
+                            <VerticalStackLayout Spacing="8">
+                                <Label Text="{Binding Term.PackageName}" Style="{StaticResource Heading}" />
+                                <c:StatusChip Status="{Binding State}" />
+                                <Label Text="{Binding Dates}" Style="{StaticResource Caption}" />
+                                <Label Text="{Binding Term.AmountPaid, StringFormat='Actually paid: ₱{0:N2}'}" />
+                                <Label Text="{Binding RefundText}" Style="{StaticResource Muted}" />
+                                <Label Text="{Binding Refund.DecisionReason}" IsVisible="{Binding Refund.DecisionReason, Converter={StaticResource IsNotNull}}" />
+                                <Button Text="Cancel &amp; request refund" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start"
+                                        IsVisible="{Binding CanRequestRefund}" Clicked="OnRequestRefund" />
+                            </VerticalStackLayout>
                         </Border>
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
@@ -111,6 +109,8 @@
                                     <Label Text="{Binding Amount, StringFormat='₱{0:N2}'}" Style="{StaticResource Heading}" HorizontalOptions="{OnIdiom Phone=Start, Default=End}" />
                                     <Button Text="Pay again" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanPayAgain}"
                                             Clicked="OnPayAgain" />
+                                    <Button Text="Cancel payment" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanCancel}"
+                                            Clicked="OnCancelPayment" />
                                 </VerticalStackLayout>
                             </Grid>
                         </Border>

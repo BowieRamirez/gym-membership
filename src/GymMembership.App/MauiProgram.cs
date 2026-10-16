@@ -38,6 +38,7 @@ public static class MauiProgram
 		s.AddSingleton<IProofPicker>(sp => sp.GetRequiredService<ISupabaseGateway>() is DemoGateway ? new DemoPhotoPicker() : new MauiProofPicker());
 		s.AddSingleton<IAuthService, AuthService>();
 		s.AddSingleton<IMembershipService, MembershipService>();
+		s.AddSingleton<ISubscriptionService, SubscriptionService>();
 		s.AddSingleton<IPaymentStaffService, PaymentStaffService>();
 		s.AddSingleton<IAmenityService, AmenityService>();
 		s.AddSingleton<ICoachService, CoachService>();

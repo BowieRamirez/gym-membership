@@ -122,8 +122,8 @@ sealed class PaymentLookup
 
     public string Item(Payment p) => p.Kind switch
     {
-        PayKind.Membership => p.UserMembershipPackageId is { } u ? PackageName(u) : "Membership",
-        PayKind.Renewal => "Renewal: " + (_renewals.FirstOrDefault(r => r.Id == p.RenewalId) is { } r ? PackageName(r.UserMembershipPackageId) : "Membership"),
+        PayKind.Membership => p.PackageSnapshotName ?? (p.UserMembershipPackageId is { } u ? PackageName(u) : "Membership"),
+        PayKind.Renewal => "Extension: " + (p.PackageSnapshotName ?? (_renewals.FirstOrDefault(r => r.Id == p.RenewalId) is { } r ? PackageName(r.UserMembershipPackageId) : "Membership")),
         PayKind.Amenity => _catalog.FirstOrDefault(a => a.Id == _amenities.FirstOrDefault(x => x.Id == p.UserAmenityId)?.AmenityId)?.Name ?? "Amenity",
         _ => "Walk-in"
     };
@@ -143,11 +143,13 @@ public sealed record MembershipRow(int Id, string PackageName, string Status, Da
 
 /// <summary>One of the member's payments. QR payments show the code to type into the e-wallet and wait for a reference number and screenshot.</summary>
 public sealed record PaymentItem(int Id, string What, string PaymentCode, string Kind, string Method, decimal Amount, decimal DiscountAmount, string Status,
-    DateTime CreatedAt, DateTime? ExpiresAt, string? ReferenceNo, bool HasProof, string? ReceiptNo, string? RejectedReason, int? ItemId)
+    DateTime CreatedAt, DateTime? ExpiresAt, string? ReferenceNo, bool HasProof, string? ReceiptNo, string? RejectedReason, int? ItemId, int? PackageSnapshotId = null)
 {
     /// <summary>A QR payment that still needs the member to pay, then send the reference number and screenshot.</summary>
     public bool NeedsProof => Status == Models.Status.Pending && Method == PayMethod.Qr && !HasProof && (ExpiresAt is null || ExpiresAt > DateTime.UtcNow);
     public bool AwaitingReview => Status == Models.Status.Pending && HasProof;
+    /// <summary>A membership or extension payment nobody has verified yet: the member can still withdraw it.</summary>
+    public bool CanCancel => Status == Models.Status.Pending && Kind is PayKind.Membership or PayKind.Renewal;
     /// <summary>Rejected and expired payments are final; the member pays again with a fresh one.</summary>
     public bool CanPayAgain => Status is Models.Status.Rejected or Models.Status.Expired && ItemId is not null;
     public string Detail => Status switch
@@ -186,10 +188,9 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
     public Task<AppResult<Access>> AccessAsync() => Safe.RunAsync(async () =>
     {
         var uid = gw.CurrentUserId;
-        var now = DateTime.UtcNow;
-        var plans = await gw.ListAsync<UserMembershipPackage>(m => m.MemberId == uid);
+        var active = await gw.RpcAsync<bool>("is_active_member");
         var pays = await gw.ListAsync<Payment>(p => p.MemberId == uid);
-        return new Access(plans.Any(m => m.Status == Status.Active && m.EndsAt > now), pays.Any(p => p.Status == Status.Pending));
+        return new Access(active, pays.Any(p => p.Status == Status.Pending));
     });
 
     public Task<AppResult<IReadOnlyList<MembershipPackage>>> ListPackagesAsync() =>
@@ -205,11 +206,11 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
     public Task<AppResult<IReadOnlyList<MembershipRow>>> MyMembershipsAsync() => Safe.RunAsync<IReadOnlyList<MembershipRow>>(async () =>
     {
         var uid = gw.CurrentUserId;
-        var mine = await gw.ListAsync<UserMembershipPackage>(m => m.MemberId == uid);
-        var packages = await gw.ListAsync<MembershipPackage>();
-        // pending and cancelled rows are payments in progress or abandoned: the Payments list shows those
-        return mine.Where(m => m.Status is Status.Active or Status.Expired).OrderByDescending(m => m.EndsAt ?? DateTime.MaxValue)
-            .Select(m => ToRow(m, packages.FirstOrDefault(p => p.Id == m.MembershipPackageId), DateTime.UtcNow)).ToList();
+        var terms = await gw.ListAsync<MembershipTerm>(t => t.MemberId == uid);
+        var now = DateTime.UtcNow;
+        return terms.Where(t => t.CancelledAt is null && t.StartsAt <= now).OrderByDescending(t => t.EndsAt)
+            .Select(t => new MembershipRow(t.MembershipId,t.PackageName,t.EndsAt > now ? Status.Active : Status.Expired,
+                t.EndsAt,Math.Max(0,(int)Math.Ceiling((t.EndsAt-now).TotalDays)),t.DurationDays,false,t.AmountPaid)).ToList();
     });
 
     public Task<AppResult<IReadOnlyList<PaymentItem>>> MyPaymentsAsync() => Safe.RunAsync<IReadOnlyList<PaymentItem>>(async () =>
@@ -219,7 +220,7 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
         var look = await PaymentLookup.LoadAsync(gw);
         return pays.OrderByDescending(p => p.CreatedAt).Select(p => new PaymentItem(p.Id,
             p.DiscountAmount > 0 ? look.Item(p) + " (discount)" : look.Item(p), p.PaymentCode, p.Kind, p.Method, p.Amount, p.DiscountAmount, p.Status,
-            p.CreatedAt, p.ExpiresAt, p.ReferenceNo, p.ProofPath is not null, p.ReceiptNo, p.RejectedReason, look.ItemId(p))).ToList();
+            p.CreatedAt, p.ExpiresAt, p.ReferenceNo, p.ProofPath is not null, p.ReceiptNo, p.RejectedReason, look.ItemId(p), p.PackageSnapshotId)).ToList();
     });
 
     static Dictionary<string, object> WithCode(Dictionary<string, object> args, string? code)
@@ -243,7 +244,9 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
         });
     }
 
-    public async Task<AppResult<Payment>> PayAgainAsync(PaymentItem item) => item.ItemId is not { } id
+    public async Task<AppResult<Payment>> PayAgainAsync(PaymentItem item) => item.PackageSnapshotId is { } package && item.Kind is PayKind.Membership or PayKind.Renewal
+        ? await new SubscriptionService(gw).ExtendAsync(package)
+        : item.ItemId is not { } id
         ? AppResult<Payment>.Fail(AppErrorKind.Validation, "not_found")
         : item.Kind switch
         {

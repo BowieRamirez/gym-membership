@@ -114,7 +114,7 @@ public partial class RegisterViewModel(IAuthService auth, IAppNavigator nav) : L
     [RelayCommand] private void BackToSignIn() => nav.GoToLogin();
 }
 
-public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav) : LoadableViewModel
+public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav, ISubscriptionService subscription) : LoadableViewModel
 {
     public ObservableCollection<MembershipPackage> Packages { get; } = new();
     [ObservableProperty] private string? discountCode;
@@ -128,20 +128,19 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
     private async Task AvailAsync(MembershipPackage package)
     {
         Notice = null;
-        if (!await RunAsync(() => svc.AvailAsync(package.Id, DiscountCode), _ => { })) return;
+        if (!await RunAsync(() => subscription.ExtendAsync(package.Id, DiscountCode), _ => { })) return;
         DiscountCode = null;
         nav.GoToMembership();
     }
 }
 
-public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker picker) : LoadableViewModel
+public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker picker, ISubscriptionService subscription) : LoadableViewModel
 {
     public ObservableCollection<MembershipRow> Memberships { get; } = new();
     public ObservableCollection<PaymentItem> Payments { get; } = new();
     [ObservableProperty] private string heroNumber = "–";
     [ObservableProperty] private string heroCaption = "Pick a package to get started.";
     [ObservableProperty] private double laneFraction;
-    [ObservableProperty] private string? discountCode;
 
     /// <summary>The QR payment the member still has to pay and send proof for, if any.</summary>
     [ObservableProperty] private PaymentItem? payNow;
@@ -155,19 +154,26 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
     [RelayCommand]
     private async Task LoadAsync()
     {
-        var waiting = false;
-        await RunAsync(svc.MyPaymentsAsync, rows =>
+        if (_loading) return;
+        _loading = true;
+        try
         {
-            Fill(Payments, rows);
-            PayNow = rows.FirstOrDefault(p => p.NeedsProof);
-            waiting = PayNow is not null || rows.Any(p => p.AwaitingReview);
-        });
-        await RunAsync(svc.MyMembershipsAsync, rows => { Fill(Memberships, rows); UpdateHero(rows, waiting); });
-        if (PayNow is not null)
-        {
-            await RunAsync(svc.GymAsync, g => AccountName = g.QrAccountName);
-            await RunAsync(svc.QrUrlAsync, url => QrUrl = url);
+            if (!await RunAsync(subscription.TermsAsync, rows => Fill(Terms, rows))) return;
+            var waiting = false;
+            if (!await RunAsync(svc.MyPaymentsAsync, rows =>
+            {
+                Fill(Payments, rows);
+                PayNow = rows.FirstOrDefault(p => p.NeedsProof);
+                waiting = PayNow is not null || rows.Any(p => p.AwaitingReview);
+            })) return;
+            if (!await RunAsync(svc.MyMembershipsAsync, rows => { Fill(Memberships, rows); UpdateHero(rows, waiting); })) return;
+            if (PayNow is not null)
+            {
+                if (!await RunAsync(svc.GymAsync, g => AccountName = g.QrAccountName)) return;
+                await RunAsync(svc.QrUrlAsync, url => QrUrl = url);
+            }
         }
+        finally { _loading = false; }
     }
 
     void UpdateHero(IReadOnlyList<MembershipRow> rows, bool waitingOnPayment)
@@ -182,20 +188,12 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
         }
         else if (waitingOnPayment)
         { HeroNumber = "–"; HeroCaption = PayNow is not null ? "Pay by QR and send your proof to start your membership." : "Waiting for staff to verify your payment."; LaneFraction = 0; }
+        else if (Terms.FirstOrDefault(t => t.State == Status.Scheduled) is { } next)
+        { HeroNumber = "0"; HeroCaption = $"No active access. Your next paid term starts {next.Term.StartsAt.AddHours(8):dd MMM yyyy, HH:mm} (Manila)."; LaneFraction = 0; }
         else if (expired is not null)
-        { HeroNumber = "0"; HeroCaption = $"{expired.PackageName} has expired. Renew to get back in."; LaneFraction = 0; }
+        { HeroNumber = "0"; HeroCaption = $"{expired.PackageName} has expired. Choose a package to extend."; LaneFraction = 0; }
         else
         { HeroNumber = "–"; HeroCaption = "Pick a package to get started."; LaneFraction = 0; }
-    }
-
-    [RelayCommand]
-    private async Task RenewAsync(MembershipRow row)
-    {
-        Notice = null;
-        if (!await RunAsync(() => svc.RenewAsync(row.Id, DiscountCode), _ => { })) return;
-        DiscountCode = null;
-        Notice = "Renewal payment created. Pay by QR below, then send your proof.";
-        await LoadAsync();
     }
 
     // the reference number from the e-wallet receipt, plus a screenshot of it

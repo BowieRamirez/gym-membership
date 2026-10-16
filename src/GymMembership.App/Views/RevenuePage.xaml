@@ -9,7 +9,7 @@
 
     <ScrollView MaximumWidthRequest="720">
         <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
-            <Label Text="Verified payments only, grouped by the day they were verified, then by what was bought and how it was paid. Voided payments are left out." Style="{StaticResource Muted}" />
+            <Label Text="Net receipts: verified payments minus approved refunds, grouped by Manila day, item and payment method. A refund counts on the day it was approved, and is shown against the method the member paid with. The cash drawer on the Cashier page drops only when the repayment is recorded. Payment counts count receipts, not refunds. Voids are excluded." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
 
             <FlexLayout Wrap="Wrap" AlignItems="End">
@@ -26,13 +26,13 @@
 
             <Border Style="{StaticResource Panel}" Padding="24,20">
                 <VerticalStackLayout Spacing="4">
-                    <Label Text="Total in this period" Style="{StaticResource Caption}" />
+                    <Label Text="Net in this period" Style="{StaticResource Caption}" />
                     <Label Text="{Binding TotalText}" Style="{StaticResource Numeral}" />
                 </VerticalStackLayout>
             </Border>
 
             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Rows}" Spacing="8">
-                <BindableLayout.EmptyView><Label Text="No verified payments in this period." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+                <BindableLayout.EmptyView><Label Text="No receipts or approved refunds in this period." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="m:RevenueRow">
                         <Border Style="{StaticResource Panel}" Padding="16,12">

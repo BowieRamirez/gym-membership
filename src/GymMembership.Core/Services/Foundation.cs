@@ -33,9 +33,9 @@ public static class ErrorMapper
     {
         var m = message.ToLowerInvariant();
         if (Has(m, "forbidden", "42501", "jwt", "row-level security", "invalid login", "not authenticated")) return AppErrorKind.Unauthorized;
-        if (Has(m, "already_processed", "already_availed", "renewal_pending", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
-        if (Has(m, "no_active_membership", "self_verify", "not_renewable", "wrong_member", "not_found", "23514",
-                   "invalid_code", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "end must be after start")) return AppErrorKind.Validation;
+        if (Has(m, "already_processed", "already_availed", "renewal_pending", "already_requested", "refund_in_progress", "not_refundable", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
+        if (Has(m, "no_active_membership", "self_verify", "self_decision", "not_renewable", "wrong_member", "not_found", "23514",
+                   "refund_window_closed", "payment_expired", "invalid_code", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "end must be after start")) return AppErrorKind.Validation;
         return AppErrorKind.Unknown;
     }
 
@@ -73,8 +73,14 @@ public static class ErrorText
         "email_taken" =>"Someone already uses that email.",
         "in_use" => "Existing records use this, so it can't be deleted. Turn it off instead.",
         "already_availed" => "You already have this, or a payment for it is waiting. Renew it, or wait for the payment to be reviewed.",
-        "renewal_pending" => "A renewal payment is already waiting for this membership.",
+        "renewal_pending" => "A membership or extension payment is already waiting. Finish that payment first.",
+        "refund_window_closed" => "The 24-hour cancellation and refund request window has closed.",
+        "payment_expired" => "That unpaid payment has expired. Create a fresh payment.",
+        "already_requested" => "A cancellation and refund request already exists for this term.",
+        "not_refundable" => "This term has no eligible verified payment to refund.",
+        "refund_in_progress" => "This payment has a pending or approved refund. It cannot also be voided.",
         "not_renewable" => "This membership can't be renewed right now.",
+        "self_decision" => "You can't decide or repay your own refund request.",
         "self_verify" => "You can't approve a payment you made yourself.",
         "no_active_membership" => "You need an active membership for that. Buy a package and wait for the payment to be verified.",
         "already_processed" => "That was already handled. Refresh the page and try again.",

@@ -63,6 +63,9 @@ public static class PayMethod { public const string Qr = "qr", Cash = "cash", Gc
   [Column("recorded_by")] public string? RecordedBy { get; set; } [Column("verified_by")] public string? VerifiedBy { get; set; } [Column("verified_at")] public DateTime? VerifiedAt { get; set; }
   [Column("receipt_no")] public string? ReceiptNo { get; set; } [Column("rejected_reason")] public string? RejectedReason { get; set; }
   [Column("voided_by")] public string? VoidedBy { get; set; } [Column("voided_at")] public DateTime? VoidedAt { get; set; } [Column("void_reason")] public string? VoidReason { get; set; }
+  [Column("membership_package_snapshot_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? PackageSnapshotId { get; set; }
+  [Column("membership_package_name", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? PackageSnapshotName { get; set; }
+  [Column("membership_duration_days", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? PackageSnapshotDays { get; set; }
   [Column("created_at")] public DateTime CreatedAt { get; set; } }
 
 [Table("amenities")] public class Amenity : BaseModel

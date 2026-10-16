@@ -13,7 +13,7 @@ namespace GymMembership.Core.Demo;
 /// directly, and the server-side functions (0005_functions.sql). Error messages are the same tokens the SQL raises.
 /// Demo logins: admin@ / employee@ / coach@ / kai@ / member@ / bea@ / carlo@ demo.io, password "demo1234".
 /// </summary>
-public sealed class DemoGateway : ISupabaseGateway
+public sealed partial class DemoGateway : ISupabaseGateway
 {
     public const string DemoPassword = "demo1234";
 
@@ -35,7 +35,11 @@ public sealed class DemoGateway : ISupabaseGateway
     public string? CurrentUserId { get; private set; }
     public Exception? FailWith { get; set; }
 
-    public DemoGateway(bool seed = true) { if (seed) Seed(); }
+    readonly TimeProvider _clock;
+    readonly object _rpcLock = new();
+    DateTime SubscriptionNow => _clock.GetUtcNow().UtcDateTime;
+    public DemoGateway(bool seed = true, TimeProvider? clock = null)
+    { _clock = clock ?? TimeProvider.System; if (seed) { Seed(); SeedMembershipTerms(); } }
 
     // ---------- storage helpers ----------
     List<object> Table(Type t) => _tables.TryGetValue(t, out var l) ? l : _tables[t] = new();
@@ -48,6 +52,7 @@ public sealed class DemoGateway : ISupabaseGateway
         var pk = Pk(typeof(T));
         if (pk.PropertyType == typeof(int) && (int)pk.GetValue(row)! == 0)
             pk.SetValue(row, All<T>().Select(r => (int)pk.GetValue(r)!).DefaultIfEmpty(0).Max() + 1);
+        if (row is Payment payment) SnapshotMembershipPayment(payment);
         Table(typeof(T)).Add(row);
         return row;
     }
@@ -65,7 +70,8 @@ public sealed class DemoGateway : ISupabaseGateway
     void Require(string permission) { RequireActive(); if (!Has(permission)) throw Err("forbidden"); }
 
     static bool Running(UserMembershipPackage m) => m.Status == Status.Active && m.EndsAt > DateTime.UtcNow;
-    bool ActiveMember(string? userId) => All<UserMembershipPackage>().Any(m => m.MemberId == userId && Running(m));
+    bool ActiveMember(string? userId) => All<Profile>().Any(p => p.Id == userId && p.IsActive)
+        && All<MembershipTerm>().Any(t => t.MemberId == userId && t.CancelledAt is null && t.StartsAt <= SubscriptionNow && t.EndsAt > SubscriptionNow);
     bool CoachesMember(string coach, string? member) => All<CoachHire>().Any(h => h.CoachId == coach && h.MemberId == member && h.Status == Status.Active);
     bool IsCoach(string? userId) => All<Coach>().Any(c => c.UserId == userId);
 
@@ -166,6 +172,8 @@ public sealed class DemoGateway : ISupabaseGateway
                 || All<CoachHire>().Any(h => (h.CoachId == uid && h.MemberId == p.Id) || (h.MemberId == uid && h.CoachId == p.Id)),
             Member m => m.UserId == uid || staff || All<CoachHire>().Any(h => h.CoachId == uid && h.MemberId == m.UserId),
             Payment p => p.MemberId == uid || staff,
+            MembershipTerm t => t.MemberId == uid || staff,
+            RefundRequest r => r.MemberId == uid || RolesOf(uid).Contains("admin"),
             UserMembershipPackage m => m.MemberId == uid || staff,
             MembershipRenewal r => staff || All<UserMembershipPackage>().Any(m => m.Id == r.UserMembershipPackageId && m.MemberId == uid),
             UserAmenity a => a.MemberId == uid || staff,
@@ -459,7 +467,7 @@ public sealed class DemoGateway : ISupabaseGateway
         {
             PaymentCode = PaymentCode(), Kind = kind, Method = PayMethod.Qr, Status = Status.Pending, Amount = d.Amount, DiscountId = d.Id, DiscountAmount = d.Cut,
             MemberId = member, UserMembershipPackageId = ump, RenewalId = renewal, UserAmenityId = amenity,
-            ExpiresAt = DateTime.UtcNow.AddHours(hours), CreatedAt = DateTime.UtcNow
+            ExpiresAt = SubscriptionNow.AddHours(hours), CreatedAt = SubscriptionNow
         });
     }
 
@@ -467,19 +475,9 @@ public sealed class DemoGateway : ISupabaseGateway
     void ActivateTarget(Payment pay)
     {
         var now = DateTime.UtcNow;
-        if (pay.UserMembershipPackageId is { } umpId)
+        if (pay.Kind is PayKind.Membership or PayKind.Renewal)
         {
-            var ump = All<UserMembershipPackage>().First(m => m.Id == umpId);
-            if (All<UserMembershipPackage>().Any(m => m.MemberId == ump.MemberId && m.Id != ump.Id && m.Status == Status.Active)) throw Err("duplicate key value violates unique constraint");
-            var days = All<MembershipPackage>().First(p => p.Id == ump.MembershipPackageId).DurationDays;
-            ump.Status = Status.Active; ump.StartsAt = now; ump.EndsAt = now.AddDays(days);
-        }
-        else if (pay.RenewalId is { } renId)
-        {
-            var ren = All<MembershipRenewal>().First(r => r.Id == renId);
-            var ump = All<UserMembershipPackage>().First(m => m.Id == ren.UserMembershipPackageId);
-            ump.Status = Status.Active; ump.EndsAt = ren.NewEndsAt;
-            ren.Status = Status.Completed; ren.CompletedAt = now;
+            ActivateMembershipTerm(pay);
         }
         else if (pay.UserAmenityId is { } uaId)
         {
@@ -502,8 +500,12 @@ public sealed class DemoGateway : ISupabaseGateway
 
     // ---------- functions (mirror 0005_functions.sql) ----------
     object? Call(string fn, Dictionary<string, object> a)
+    { lock (_rpcLock) return CallLocked(fn, a); }
+
+    object? CallLocked(string fn, Dictionary<string, object> a)
     {
-        var now = DateTime.UtcNow;
+        if (SubscriptionCall(fn, a, out var subscriptionResult)) return subscriptionResult;
+        var now = SubscriptionNow;
         int I(string k) => Convert.ToInt32(a[k]);
         bool B(string k) => Convert.ToBoolean(a[k]);
         string S(string k) => (string)a[k];
@@ -518,10 +520,9 @@ public sealed class DemoGateway : ISupabaseGateway
                 RequireActive();
                 if (All<Member>().All(m => m.UserId != uid)) throw Err("forbidden");
                 var pkg = All<MembershipPackage>().FirstOrDefault(p => p.Id == I("p_package_id") && p.IsActive) ?? throw Err("not_found");
-                if (All<UserMembershipPackage>().Any(m => m.MemberId == uid && m.Status is Status.Pending or Status.Active)) throw Err("already_availed");
-                var d = Discounted(uid, a, pkg.Price);
-                var ump = Add(new UserMembershipPackage { MemberId = uid, MembershipPackageId = pkg.Id, Status = Status.Pending });
-                return Clone(NewQrPayment(PayKind.Membership, uid, d, ump: ump.Id));
+                if (All<UserMembershipPackage>().Any(m => m.MemberId == uid && m.Status == Status.Pending)
+                    || All<MembershipTerm>().Any(t => t.MemberId == uid && t.CancelledAt is null && t.EndsAt > now)) throw Err("already_availed");
+                return Clone(CreateExtension(uid, pkg.Id, a));
             }
             case "avail_amenity":
             {
@@ -538,12 +539,7 @@ public sealed class DemoGateway : ISupabaseGateway
                 RequireActive();
                 var ump = All<UserMembershipPackage>().FirstOrDefault(m => m.Id == I("p_ump_id") && m.MemberId == uid) ?? throw Err("not_found");
                 if (ump.Status is not (Status.Active or Status.Expired)) throw Err("not_renewable");
-                if (All<MembershipRenewal>().Any(r => r.UserMembershipPackageId == ump.Id && r.Status == Status.Pending)) throw Err("renewal_pending");
-                var pkg = All<MembershipPackage>().First(p => p.Id == ump.MembershipPackageId);
-                var d = Discounted(uid, a, pkg.Price);
-                var start = ump.EndsAt is { } e && e > now ? e : now;   // an expired term renews from today, not from the past end date
-                var ren = Add(new MembershipRenewal { UserMembershipPackageId = ump.Id, PreviousEndsAt = ump.EndsAt ?? now, NewStartsAt = start, NewEndsAt = start.AddDays(pkg.DurationDays) });
-                return Clone(NewQrPayment(PayKind.Renewal, uid, d, renewal: ren.Id));
+                return Clone(CreateExtension(uid, ump.MembershipPackageId, a));
             }
             case "submit_payment_proof":
             {
@@ -566,6 +562,7 @@ public sealed class DemoGateway : ISupabaseGateway
                 if (pay.MemberId == uid) throw Err("self_verify");
                 if (B("p_approve"))
                 {
+                    if (pay.Method == PayMethod.Qr && pay.ExpiresAt <= now) throw Err("payment_expired");
                     pay.Status = Status.Verified; pay.VerifiedBy = uid; pay.VerifiedAt = now; pay.ReceiptNo = ReceiptNo();
                     ActivateTarget(pay);
                     Notify(pay.MemberId, "payment", "Payment approved", pay.PaymentCode);
@@ -603,6 +600,8 @@ public sealed class DemoGateway : ISupabaseGateway
                 else
                 {
                     if (memberId is null || All<Member>().All(m => m.UserId != memberId)) throw Err("not_found");
+                    if (kind is PayKind.Membership or PayKind.Renewal && All<Payment>().Any(p => p.MemberId == memberId && p.Status == Status.Pending && p.Kind is PayKind.Membership or PayKind.Renewal)) throw Err("renewal_pending");
+                    if (kind == PayKind.Membership && All<MembershipTerm>().Any(t => t.MemberId == memberId && t.CancelledAt is null && t.EndsAt > now)) throw Err("already_availed");
                     if (kind == PayKind.Membership)
                     {
                         var pkg = All<MembershipPackage>().FirstOrDefault(p => p.Id == itemId && p.IsActive) ?? throw Err("not_found");
@@ -648,37 +647,12 @@ public sealed class DemoGateway : ISupabaseGateway
                 var pay = All<Payment>().FirstOrDefault(p => p.Id == I("p_payment_id")) ?? throw Err("not_found");
                 if (pay.Status != Status.Verified) throw Err("already_processed");
                 pay.Status = Status.Voided; pay.VoidedBy = uid; pay.VoidedAt = now; pay.VoidReason = reason;
-                if (pay.UserMembershipPackageId is { } umpId) All<UserMembershipPackage>().First(m => m.Id == umpId).Status = Status.Cancelled;
-                else if (pay.RenewalId is { } renId)
-                {
-                    var ren = All<MembershipRenewal>().First(r => r.Id == renId);
-                    var ump = All<UserMembershipPackage>().First(m => m.Id == ren.UserMembershipPackageId);
-                    ump.EndsAt = ren.PreviousEndsAt; ump.Status = ren.PreviousEndsAt > now ? Status.Active : Status.Expired;
-                    ren.Status = Status.Cancelled;
-                }
-                else if (pay.UserAmenityId is { } uaId) All<UserAmenity>().First(x => x.Id == uaId).Status = Status.Cancelled;
+                if (pay.UserAmenityId is { } uaId) All<UserAmenity>().First(x => x.Id == uaId).Status = Status.Cancelled;
                 else Table(typeof(GymCheckIn)).RemoveAll(c => ((GymCheckIn)c).PaymentId == pay.Id);
                 Notify(pay.MemberId, "payment", "Payment voided", reason);
                 Audit("payment.void", "payments", pay.Id.ToString());
                 return null;
             }
-            case "revenue_summary":
-            {
-                Require("reports:revenue");
-                var from = DateTime.Parse(S("p_from")).Date; var to = DateTime.Parse(S("p_to")).Date;
-                DateTime Day(Payment p) => p.VerifiedAt!.Value.AddHours(8).Date;   // Manila
-                return All<Payment>().Where(p => p.Status == Status.Verified && Day(p) >= from && Day(p) <= to)
-                    .GroupBy(p => (Day: Day(p), p.Kind, p.Method)).OrderBy(g => g.Key.Day).ThenBy(g => g.Key.Kind).ThenBy(g => g.Key.Method)
-                    .Select(g => new RevenueRow(g.Key.Day, g.Key.Kind, g.Key.Method, g.Count(), g.Sum(p => p.Amount))).ToList();
-            }
-            case "daily_cash_summary":
-            {
-                Require("reports:cash");
-                var day = DateTime.Parse(S("p_day")).Date;
-                return All<Payment>().Where(p => p.Status == Status.Verified && p.Method == PayMethod.Cash && p.VerifiedAt!.Value.AddHours(8).Date == day)
-                    .GroupBy(p => p.Kind).OrderBy(g => g.Key).Select(g => new CashRow(g.Key, g.Count(), g.Sum(p => p.Amount))).ToList();
-            }
-
             // ----- coaching -----
             case "hire_coach":
             {
