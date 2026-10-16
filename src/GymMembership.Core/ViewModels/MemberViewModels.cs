@@ -16,6 +16,9 @@ public abstract partial class LoadableViewModel : ObservableObject
     /// <summary>Called by the page each time it appears.</summary>
     public virtual Task OnAppearingAsync() => Task.CompletedTask;
 
+    /// <summary>Called by the page each time it goes away.</summary>
+    public virtual void OnDisappearing() { }
+
     protected async Task<bool> RunAsync<T>(Func<Task<AppResult<T>>> operation, Action<T> onOk)
     {
         IsBusy = true; ErrorMessage = null;
@@ -276,12 +279,15 @@ public partial class ThreadItem(ChatThread thread) : ObservableObject
         : (Thread.ClaimedByName is { } n ? $"Taken by {n}" : "Not taken yet") + (Thread.Status == "closed" ? ", closed" : "");
 }
 
-public partial class MessengerViewModel(IChatService chat, IProfileService profile, IAuthService auth, IProofPicker picker) : LoadableViewModel
+public partial class MessengerViewModel(IChatService chat, IProfileService profile, IAuthService auth, IProofPicker picker, IRealtimeChat? live = null) : LoadableViewModel
 {
     List<ChatThread> all = [];
     string? myId;
     int openTicket, listTicket, searchTicket;
     readonly Dictionary<string, string> drafts = new();   // what was half typed in each conversation you left
+    readonly IRealtimeChat rt = live ?? NoRealtime.Instance;
+    bool listening;
+    int changeTicket;
 
     public ObservableCollection<ThreadItem> Threads { get; } = new();
     public ObservableCollection<ChatBubble> Bubbles { get; } = new();
@@ -320,12 +326,64 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     public bool CanReopen => HasFilters && Selected?.Thread is { IsSupport: true, Status: "closed" };
     public string EmptyListText => HasFilters ? "No conversations here." : Tab == "coach" && HasTabs ? "You have no coach yet. Hire one from the Coaches page to start a conversation." : "";
 
+    // ---- live updates. Every Realtime event is a hint; the answer always comes from the server through AutoRefreshAsync.
+    /// <summary>Realtime calls back on its own thread, and the lists must change on the UI thread. The page sets this; with none (tests) the work runs where it is.</summary>
+    public SynchronizationContext? UiContext { get; set; }
+    public TimeSpan ChangeDelay { get; set; } = TimeSpan.FromMilliseconds(300);   // a burst of signals becomes one reload
+    /// <summary>How often the page looks again by itself: rarely while Realtime is connected, as before when not.</summary>
+    public TimeSpan RefreshEvery => rt.Connected ? TimeSpan.FromSeconds(30) : TimeSpan.FromSeconds(6);
+
     // ---- loading
     public override async Task OnAppearingAsync()
     {
-        if (auth.UserId != myId) Reset();   // somebody else signed in: nothing of the last person stays on screen
+        if (auth.UserId != myId)   // somebody else signed in: nothing of the last person stays on screen
+        {
+            var hadSomeone = myId is not null;
+            Reset();
+            if (hadSomeone) StopLive();   // the last person's connection, if any, goes
+        }
         await LoadThreadsAsync(first: true);
         if (Selected is { } item) await ShowAsync(item, markRead: ShowChat);
+        await StartLiveAsync();
+    }
+
+    public override void OnDisappearing() => StopLive();
+
+    async Task StartLiveAsync()
+    {
+        if (myId is null) return;
+        if (!listening)
+        {
+            rt.Changed += OnRealtimeChanged; rt.ConnectionChanged += OnRealtimeConnection;
+            listening = true;
+        }
+        try { await rt.StartAsync(myId); }
+        catch { /* Realtime is a bonus: without it the timer keeps the page fresh and nobody needs to hear about it */ }
+        OnPropertyChanged(nameof(RefreshEvery));
+    }
+
+    void StopLive()
+    {
+        if (listening)
+        {
+            rt.Changed -= OnRealtimeChanged; rt.ConnectionChanged -= OnRealtimeConnection;
+            listening = false;
+        }
+        changeTicket++;   // a reload still waiting for its pause is dropped
+        _ = StopQuietlyAsync();
+    }
+
+    async Task StopQuietlyAsync() { try { await rt.StopAsync(); } catch { /* already gone */ } }
+
+    void Post(Action work) { if (UiContext is { } ui) ui.Post(_ => work(), null); else work(); }
+    void OnRealtimeConnection() => Post(() => OnPropertyChanged(nameof(RefreshEvery)));
+    void OnRealtimeChanged() => Post(() => _ = ReloadSoonAsync());
+
+    async Task ReloadSoonAsync()
+    {
+        var ticket = ++changeTicket;
+        await Task.Delay(ChangeDelay);
+        if (ticket == changeTicket && listening) await AutoRefreshAsync();   // the same quiet reload the timer does
     }
 
     void Reset()

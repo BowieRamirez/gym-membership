@@ -23,6 +23,7 @@ public class BasePage : ContentPage
     protected override void OnDisappearing()
     {
         _refresh?.Stop();
+        (BindingContext as LoadableViewModel)?.OnDisappearing();
         base.OnDisappearing();
     }
 
@@ -32,7 +33,10 @@ public class BasePage : ContentPage
     IDispatcherTimer? _refresh;
 
     async void OnRefreshTick(object? sender, EventArgs e)
-    { if (BindingContext is LoadableViewModel live) await live.AutoRefreshAsync(); }
+    {
+        if (AutoRefresh is { } every && _refresh is not null) _refresh.Interval = every;   // a page whose pace depends on its connection
+        if (BindingContext is LoadableViewModel live) await live.AutoRefreshAsync();
+    }
 
     /// <summary>
     /// Runs a view-model command for the list row a button (or tap) belongs to. Used instead of binding the command through

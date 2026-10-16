@@ -15,11 +15,12 @@ public partial class MessagesPage : BasePage
 			Root.ColumnDefinitions = new ColumnDefinitionCollection(new ColumnDefinition(GridLength.Star));
 			Grid.SetColumn(ChatPane, 0);
 		}
+		vm.UiContext = SynchronizationContext.Current;   // the page is built on the UI thread; Realtime calls back on another
 		BindingContext = vm;
 	}
 
-	// new messages arrive by looking again every few seconds while the page is open (Realtime comes later)
-	protected override TimeSpan? AutoRefresh => TimeSpan.FromSeconds(6);
+	// new messages arrive instantly through Realtime; this timer is the safety net (slower while connected)
+	protected override TimeSpan? AutoRefresh => (BindingContext as MessengerViewModel)?.RefreshEvery ?? TimeSpan.FromSeconds(6);
 
 	void OnOpen(object? sender, TappedEventArgs e) => Row<MessengerViewModel>(sender, v => v.OpenCommand);
 	void OnOpenHit(object? sender, TappedEventArgs e) => Row<MessengerViewModel>(sender, v => v.OpenHitCommand);
