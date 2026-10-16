@@ -68,9 +68,9 @@ Notifications and amenity status are **not** added to the publication in this ph
 
 ## 5. Things to verify during the build
 
-1. **Open.** The Supabase C# client (`Supabase` 8.3.1) connects and receives change events with the user token on Windows and on Android. The code compiles and both apps build; it has not yet been run inside the app on a device.
+1. **Open.** The Supabase C# client (`Supabase` 8.3.1) connects and receives change events with the user token on Windows and on Android. The code compiles, both apps build, and the owner reported on 16 Oct 2026 that it works on real devices (no detailed notes recorded).
 2. **Verified 16 Oct 2026** on the real project with `scripts/check-realtime.mjs`: front desk was told of a new support message, and an unrelated member was told nothing, so change events follow the user's row access.
-3. **Open.** A dropped connection (airplane mode, sleep) is noticed and the app falls back to the 6 second timer, then reconnects. Covered with a fake in the unit tests; not yet tried on a device.
+3. **Open.** A dropped connection (airplane mode, sleep) is noticed and the app falls back to the 6 second timer, then reconnects. Covered with a fake in the unit tests. Airplane-mode behaviour on a device was not separately recorded; it stays on the deferred list in the progress doc.
 
 If 1 fails on Android, the polling fallback ships and only typing and last-active are dropped, as the redesign spec says.
 

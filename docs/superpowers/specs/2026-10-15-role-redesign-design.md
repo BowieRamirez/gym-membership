@@ -103,7 +103,7 @@ Each phase is its own branch; it merges to `main` only when the owner says so. U
 
 ## 6a. Phase 4c status (16 Oct 2026)
 
-Built per `2026-10-16-phase4c-realtime-design.md` with migration `0017` (applied). Changes from this document: last active is a locked table `user_last_seen`, not a `profiles.last_seen_at` column (migration `0006` grants `select` on every table, so a column would have been readable), and it is shown only while a coach hire is current. Realtime was checked against the real project with a script; checking it inside the app on a device is still open. Bell and amenity-status Realtime remain for later.
+Built per `2026-10-16-phase4c-realtime-design.md` with migration `0017` (applied). Changes from this document: last active is a locked table `user_last_seen`, not a `profiles.last_seen_at` column (migration `0006` grants `select` on every table, so a column would have been readable), and it is shown only while a coach hire is current. Realtime was checked against the real project with a script, and the owner confirmed it works on real devices. Bell and amenity-status Realtime remain for later.
 
 ## 7. Not in scope
 
