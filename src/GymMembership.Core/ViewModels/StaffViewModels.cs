@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -436,25 +437,130 @@ public partial class SessionsViewModel(ISessionService svc) : LoadableViewModel
     { if (await RunAsync(() => svc.SetSessionStatusAsync(row.Session.Id, status))) await LoadAsync(); }
 }
 
+/// <summary>One day of the week view with its sessions inline.</summary>
+public sealed record WeekRow(CalendarDay Day, IReadOnlyList<CalendarSession> Sessions)
+{
+    public string Title => Day.Date.ToString("ddd d MMM", CultureInfo.InvariantCulture);
+}
+
+// the coach's attendance calendar: a month or a week, a day list underneath, and marks that can be corrected in place
 public partial class AttendanceViewModel(ISessionService sessions, IAttendanceService attendance) : LoadableViewModel
 {
-    public ObservableCollection<SessionRow> Sessions { get; } = new();
+    /// <summary>The moment "now" is; tests set a fixed one.</summary>
+    public Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
+    /// <summary>Days are the coach's local days. Tests set a fixed zone.</summary>
+    public TimeZoneInfo Zone { get; set; } = TimeZoneInfo.Local;
 
-    public override Task OnAppearingAsync() => LoadAsync();
+    public ObservableCollection<CalendarDay> Days { get; } = new();          // the month grid, 42 cells
+    public ObservableCollection<WeekRow> WeekRows { get; } = new();          // the week view, 7 rows
+    public ObservableCollection<CalendarSession> DaySessions { get; } = new();
+
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsMonth), nameof(IsWeek), nameof(PeriodTitle))] private string viewMode = "Month";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(PeriodTitle))] private DateOnly focus;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(DayTitle), nameof(HasDay))] private DateOnly? selectedDay;
+    [ObservableProperty] private string sessionsText = "—";
+    [ObservableProperty] private string rateText = "—";
+    [ObservableProperty] private string upcomingText = "—";
+    [ObservableProperty] private string nextText = "";
+
+    List<CalendarSession> loaded = [];      // what the server last said for the range in view
+    List<CalendarSession> upcoming = [];
+    int loadTicket;
+
+    public bool IsMonth => ViewMode == "Month";
+    public bool IsWeek => ViewMode == "Week";
+    public bool HasDay => SelectedDay is not null;
+    public string DayTitle => SelectedDay is { } d ? d.ToString("dddd d MMMM", CultureInfo.InvariantCulture) : "";
+    public string PeriodTitle => IsMonth ? Focus.ToString("MMMM yyyy", CultureInfo.InvariantCulture) : WeekTitle();
+
+    string WeekTitle()
+    {
+        var w = AttendanceCalendar.WeekOf(Focus);
+        return w[0].Month == w[6].Month
+            ? $"{w[0].Day} to {w[6].Day} {w[6].ToString("MMM", CultureInfo.InvariantCulture)}"
+            : $"{w[0].Day} {w[0].ToString("MMM", CultureInfo.InvariantCulture)} to {w[6].Day} {w[6].ToString("MMM", CultureInfo.InvariantCulture)}";
+    }
+
+    DateOnly Today => AttendanceCalendar.LocalDay(Clock(), Zone);
+
+    public override async Task OnAppearingAsync()
+    {
+        if (Focus == default) { Focus = Today; SelectedDay = Today; }
+        await ReloadAsync();
+    }
+
+    // one range covers both views of the same date (the month grid and its week), so switching between them needs no new load
+    (DateTime From, DateTime To) Range()
+    {
+        var grid = AttendanceCalendar.MonthGrid(Focus.Year, Focus.Month); var week = AttendanceCalendar.WeekOf(Focus);
+        var first = grid[0] < week[0] ? grid[0] : week[0];
+        var last = grid[^1] > week[6] ? grid[^1] : week[6];
+        return (AttendanceCalendar.StartOfDayUtc(first, Zone), AttendanceCalendar.StartOfDayUtc(last.AddDays(1), Zone));
+    }
+
+    async Task ReloadAsync()
+    {
+        var ticket = ++loadTicket;                       // the newest request wins: a slow answer for a period the coach has left is dropped
+        ErrorMessage = null;
+        var (from, to) = Range();
+        var calendar = sessions.CalendarAsync(from, to);
+        var coming = sessions.UpcomingAsync();
+        await Task.WhenAll(calendar, coming);
+        if (ticket != loadTicket) return;
+        var cal = await calendar; var up = await coming;
+        if (cal.Ok) loaded = cal.Value!.ToList(); else ErrorMessage = ErrorText.For(cal.Error, cal.Message);   // a failed look leaves what is shown as it was
+        if (up.Ok) upcoming = up.Value!.ToList();
+        Rebuild();
+    }
+
+    void Rebuild()
+    {
+        var today = Today;
+        Sync(Days, AttendanceCalendar.Days(AttendanceCalendar.MonthGrid(Focus.Year, Focus.Month), loaded, today, SelectedDay, new DateOnly(Focus.Year, Focus.Month, 1), Zone), d => d.Date, (a, b) => a == b);
+        var week = AttendanceCalendar.Days(AttendanceCalendar.WeekOf(Focus), loaded, today, SelectedDay, null, Zone);
+        Fill(WeekRows, week.Select(d => new WeekRow(d, AttendanceCalendar.SessionsOn(loaded, d.Date, Zone))));
+        Fill(DaySessions, SelectedDay is { } day ? AttendanceCalendar.SessionsOn(loaded, day, Zone) : Array.Empty<CalendarSession>());
+
+        var summary = AttendanceCalendar.Summary(AttendanceCalendar.SessionsInMonth(loaded, Focus.Year, Focus.Month, Zone), upcoming);
+        SessionsText = summary.SessionsThisMonth.ToString(CultureInfo.InvariantCulture);
+        RateText = summary.RatePercent is { } r ? $"{r}%" : "—";
+        UpcomingText = summary.Upcoming.ToString(CultureInfo.InvariantCulture);
+        NextText = summary.Next is { } n
+            ? $"Next: {AttendanceCalendar.LocalTime(n.Session.ScheduledStart, Zone).ToString("ddd d MMM, h:mm tt", CultureInfo.InvariantCulture)} with {n.With}"
+            : "No upcoming sessions.";
+    }
+
+    [RelayCommand] private void ShowMonth() { ViewMode = "Month"; Rebuild(); }
+    [RelayCommand] private void ShowWeek() { ViewMode = "Week"; Rebuild(); }
+
+    [RelayCommand] private Task PreviousAsync() => MoveAsync(IsMonth ? Focus.AddMonths(-1) : Focus.AddDays(-7));
+    [RelayCommand] private Task NextAsync() => MoveAsync(IsMonth ? Focus.AddMonths(1) : Focus.AddDays(7));
+    [RelayCommand] private Task TodayAsync() => MoveAsync(Today, select: Today);
+
+    async Task MoveAsync(DateOnly to, DateOnly? select = null)
+    {
+        Focus = to; SelectedDay = select;
+        loaded = [];                                      // do not show the last period's marks on the new one while it loads
+        Rebuild();
+        await ReloadAsync();
+    }
 
     [RelayCommand]
-    private Task LoadAsync() => RunAsync(sessions.SessionsAsync, rows =>
-        Fill(Sessions, rows.Where(r => r.IsMine && r.Session.Status is Status.Scheduled or Status.Completed)));
+    private void SelectDay(CalendarDay day) { SelectedDay = day.Date; Rebuild(); }
 
-    // argument is "<sessionId>|<status>" so one XAML button template serves all four marks
+    // the argument is "<sessionId>|<mark>" so one XAML button template serves all four marks
     [RelayCommand]
     private async Task MarkAsync(string arg)
     {
         var parts = arg.Split('|');
-        var row = Sessions.First(s => s.Session.Id == int.Parse(parts[0]));
-        Notice = null;
-        if (await RunAsync(() => attendance.RecordAsync(row.Session.Id, parts[1])))
-            Notice = $"Marked {row.With} as {parts[1]}.";
+        var id = int.Parse(parts[0], CultureInfo.InvariantCulture);
+        var row = loaded.FirstOrDefault(s => s.Session.Id == id);
+        if (row is null || !row.CanMark) return;          // a cancelled session cannot be marked
+        Notice = null; ErrorMessage = null;
+        var result = await attendance.RecordAsync(id, parts[1]);
+        if (!result.Ok) { ErrorMessage = ErrorText.For(result.Error, result.Message); return; }
+        Notice = $"Marked {row.With} as {parts[1]}.";
+        await ReloadAsync();
     }
 }
 
