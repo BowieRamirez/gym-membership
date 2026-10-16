@@ -615,6 +615,10 @@ public interface ISessionService
     Task<AppResult<bool>> SetSessionStatusAsync(int sessionId, string status);
     Task<AppResult<bool>> RescheduleAsync(int sessionId, DateTime startUtc, DateTime endUtc);
     Task<AppResult<bool>> CancelSessionAsync(int sessionId);
+    /// <summary>The signed-in coach's sessions that start in [fromUtc, toUtc), oldest first, each with how it went (Mark is null until marked).</summary>
+    Task<AppResult<IReadOnlyList<CalendarSession>>> CalendarAsync(DateTime fromUtc, DateTime toUtc);
+    /// <summary>The signed-in coach's scheduled sessions from now on, nearest first.</summary>
+    Task<AppResult<IReadOnlyList<CalendarSession>>> UpcomingAsync();
 }
 
 public sealed class SessionService(ISupabaseGateway gw) : ISessionService
@@ -709,6 +713,26 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
     {
         await gw.RpcAsync("record_session_attendance", new() { ["p_session_id"] = sessionId, ["p_status"] = status == Status.NoShow ? "absent" : "present" });
         return true;
+    });
+
+    public Task<AppResult<IReadOnlyList<CalendarSession>>> CalendarAsync(DateTime fromUtc, DateTime toUtc) => Safe.RunAsync<IReadOnlyList<CalendarSession>>(async () =>
+    {
+        var uid = gw.CurrentUserId ?? throw new Exception("not authenticated");
+        var sessions = await gw.ListAsync<TrainingSession>(s => s.CoachId == uid && s.ScheduledStart >= fromUtc && s.ScheduledStart < toUtc);
+        var ids = sessions.Select(s => s.Id).ToList();
+        var marks = (await gw.ListAsync<SessionAttendance>(a => ids.Contains(a.SessionId))).ToDictionary(a => a.SessionId, a => a.Status);   // asked even for an empty month: one tiny request, and the filter stays proven
+        var names = await Directory_.UserNamesAsync(gw);
+        return sessions.OrderBy(s => s.ScheduledStart)
+            .Select(s => new CalendarSession(s, names.GetValueOrDefault(s.MemberId, "Member"), marks.GetValueOrDefault(s.Id))).ToList();
+    });
+
+    public Task<AppResult<IReadOnlyList<CalendarSession>>> UpcomingAsync() => Safe.RunAsync<IReadOnlyList<CalendarSession>>(async () =>
+    {
+        var uid = gw.CurrentUserId ?? throw new Exception("not authenticated");
+        var now = DateTime.UtcNow;
+        var sessions = await gw.ListAsync<TrainingSession>(s => s.CoachId == uid && s.Status == Status.Scheduled && s.ScheduledStart >= now);
+        var names = await Directory_.UserNamesAsync(gw);
+        return sessions.OrderBy(s => s.ScheduledStart).Select(s => new CalendarSession(s, names.GetValueOrDefault(s.MemberId, "Member"), null)).ToList();
     });
 }
 

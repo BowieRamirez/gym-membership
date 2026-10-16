@@ -1142,6 +1142,23 @@ public sealed class DemoGateway : ISupabaseGateway
         Add(new TrainingSession { CoachId = "u-coach1", MemberId = "u-alex", Title = "Squat technique", ScheduledStart = At(2, 9), ScheduledEnd = At(2, 10) });
         Add(new TrainingSession { CoachId = "u-coach1", MemberId = "u-alex", Title = "Upper body", ScheduledStart = At(-3, 9), ScheduledEnd = At(-3, 10), Status = Status.Completed });
 
+        // a month of history for the coach's calendar: marks of every kind, a mixed day, a cancelled session and one more upcoming
+        void Past(string member, int days, int hour, string status, string? mark)
+        {
+            var s = Add(new TrainingSession { CoachId = "u-coach1", MemberId = member, Title = "Training session", ScheduledStart = At(days, hour), ScheduledEnd = At(days, hour + 1), Status = status });
+            if (mark is not null) Add(new SessionAttendance { SessionId = s.Id, Status = mark, CheckedInAt = mark is "present" or "late" ? At(days, hour) : null });
+        }
+        Past("u-alex", -1, 9, Status.Completed, "present");
+        Past("u-bea", -2, 17, Status.Completed, "late");
+        Past("u-alex", -5, 9, Status.NoShow, "absent");
+        Past("u-bea", -6, 10, Status.Completed, "excused");
+        Past("u-alex", -8, 9, Status.Completed, "present");        // a mixed day: attended and absent
+        Past("u-bea", -8, 11, Status.NoShow, "absent");
+        Past("u-alex", -12, 9, Status.Cancelled, null);
+        Past("u-alex", -20, 9, Status.Completed, "present");
+        Past("u-bea", -30, 9, Status.Completed, "present");
+        Add(new TrainingSession { CoachId = "u-coach1", MemberId = "u-bea", Title = "Mobility", ScheduledStart = At(5, 9), ScheduledEnd = At(5, 10) });
+
         Add(new UserNotification { UserId = "u-alex", Type = "payment", Title = "Payment approved", CreatedAt = now.AddDays(-25), ReadAt = now.AddDays(-25) });
         Add(new UserNotification { UserId = "u-alex", Type = "membership", Title = "Membership expires in 5 days", Body = "Renew to keep your access.", CreatedAt = now.AddHours(-6) });
         Add(new UserNotification { UserId = "u-coach1", Type = "time_request", Title = "New time request", CreatedAt = now.AddHours(-1) });
