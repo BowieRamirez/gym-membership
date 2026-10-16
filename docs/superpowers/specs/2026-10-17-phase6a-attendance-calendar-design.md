@@ -38,7 +38,7 @@ A coach opens one screen and sees, for any month or week, which days their sessi
 
 ### 4.1 Data
 
-One new call on `ISessionService`: `CalendarAsync(DateTime fromUtc, DateTime toUtc)` returns the signed-in coach's sessions that start in the range, each with the member's name and its attendance mark (or none):
+Two read calls on `ISessionService` (the first draft had one; "upcoming" has to cover every future session whatever month is in view, so it has its own call, `UpcomingAsync()`, which returns the coach's scheduled sessions from now on). `CalendarAsync(DateTime fromUtc, DateTime toUtc)` returns the signed-in coach's sessions that start in the range, each with the member's name and its attendance mark (or none):
 
 ```
 CalendarSession(TrainingSession Session, string With, string? Mark)   // Mark is present, late, absent, excused or null

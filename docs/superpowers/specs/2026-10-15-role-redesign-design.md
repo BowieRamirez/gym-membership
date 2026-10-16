@@ -109,6 +109,10 @@ Built per `2026-10-16-phase4c-realtime-design.md` with migration `0017` (applied
 
 Built per `docs/superpowers/plans/2026-10-17-role-redesign-phase5.md`: a Home screen (four tiles; front desk and admin) and the Cashier (the Counter payment, redesigned), no database change. Differences from the description above: the Cashier total shows the item's price **before** any discount (the server applies the discount code when the payment is completed; a preview would need a new database function), a walk-in's total reads "Day pass", and the live counts refresh on a 20 second timer rather than through Realtime. Done: the owner confirmed on 17 Oct 2026 that Home and the Cashier work on Windows (after a crash from the icon outlines was found and fixed). Not separately recorded: the phone layout, and a small payment on the real project.
 
+## 6c. Phase 6a status (17 Oct 2026)
+
+Phase 6 is split: **6a** (the coach attendance calendar) is built per `2026-10-17-phase6a-attendance-calendar-design.md`, with no database change, and is waiting for a look on Windows and a phone. **6b** (coach photo prompt, visual coach and package cards, photos for amenities and packages) is not started and gets its own spec; the `image_path` columns already exist, and photo upload is admin-only today because of the `gym-assets` storage policy.
+
 ## 7. Not in scope
 
 Downgrade, multi-item POS cart, "recently viewed" tracking, iOS and Mac, store listings, push notifications while the app is closed (bell and Realtime work only while the app is open).
