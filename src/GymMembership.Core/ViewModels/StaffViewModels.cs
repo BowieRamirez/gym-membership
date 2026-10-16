@@ -91,41 +91,66 @@ public partial class VerifyPaymentsViewModel(IPaymentStaffService svc) : Loadabl
     [RelayCommand] private void CloseProof() { Viewing = null; ProofUrl = null; }
 }
 
-// front desk: cash and GCash at the counter, and walk-ins. Verified straight away with a receipt number
-public partial class CounterViewModel(IPaymentStaffService svc, IAttendanceService members) : LoadableViewModel
+/// <summary>One thing for sale on the cashier's grid, and whether it is the one picked.</summary>
+public partial class ItemOption(CounterItem item) : ObservableObject
+{
+    public CounterItem Item { get; } = item;
+    public string Name => Item.Label;
+    public string PriceText => Item.Price is { } p ? $"₱{p:N2}" : "";
+    [ObservableProperty] private bool isPicked;
+}
+
+// front desk: cash, GCash and bank transfers at the counter, and walk-ins. Verified straight away with a receipt number
+public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceService members) : LoadableViewModel
 {
     public string[] Kinds { get; } = ["Membership", "Renewal", "Amenity", "Walk-in"];
     public string[] Methods { get; } = ["Cash", "GCash", "Bank transfer"];
     public ObservableCollection<MemberHit> Hits { get; } = new();
-    public ObservableCollection<CounterItem> Items { get; } = new();
+    public ObservableCollection<ItemOption> Options { get; } = new();
     public ObservableCollection<CashRow> CashToday { get; } = new();
+    int itemsTicket;
 
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWalkIn), nameof(NeedsMember), nameof(NeedsReference))] private string kind = "Membership";
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(NeedsReference))] private string method = "Cash";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWalkIn), nameof(NeedsMember), nameof(NeedsReference), nameof(OrderWho), nameof(OrderWhat), nameof(TotalText), nameof(TotalNote), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))]
+    private string kind = "Membership";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(NeedsReference)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string method = "Cash";
     [ObservableProperty] private string search = "";
-    [ObservableProperty] private MemberHit? member;
-    [ObservableProperty] private CounterItem? item;
-    [ObservableProperty] private string walkInName = "";
-    [ObservableProperty] private string referenceNo = "";
-    [ObservableProperty] private string discountCode = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private MemberHit? member;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWhat), nameof(TotalText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private CounterItem? item;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string walkInName = "";
+    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string referenceNo = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(TotalNote))] private string discountCode = "";
     [ObservableProperty] private string cashTotal = "₱0.00";
 
     public bool IsWalkIn => Kind == "Walk-in";
     public bool NeedsMember => !IsWalkIn;
     public bool NeedsReference => Method != "Cash";
 
+    // the order panel, in the words the cashier uses
+    public string OrderWho => IsWalkIn ? (string.IsNullOrWhiteSpace(WalkInName) ? "Walk-in: type a name" : WalkInName.Trim()) : Member?.Username ?? "Find and choose a member";
+    public string OrderWhat => Item?.Label ?? (IsWalkIn ? "Day pass" : "Choose what they are paying for");
+    public string TotalText => IsWalkIn ? "Day pass" : Item?.Price is { } p ? $"₱{p:N2}" : "₱0.00";
+    public string TotalNote => IsWalkIn ? "The day pass price is set in Gym settings."
+        : string.IsNullOrWhiteSpace(DiscountCode) ? "" : "The discount code is checked when you complete the payment.";
+    public string ItemsEmptyText => Kind == "Renewal" && Member is null ? "Choose a member to see their memberships." : "Nothing to sell here yet.";
+
     static string KindKey(string k) => k switch { "Renewal" => PayKind.Renewal, "Amenity" => PayKind.Amenity, "Walk-in" => PayKind.WalkIn, _ => PayKind.Membership };
     static string MethodKey(string m) => m switch { "GCash" => PayMethod.Gcash, "Bank transfer" => PayMethod.BankTransfer, _ => PayMethod.Cash };
 
     public override async Task OnAppearingAsync() { await RefreshItemsAsync(); await LoadCashAsync(); }
 
+    // an item belongs to the kind (and member) it was listed for: change either and the pick goes
     partial void OnKindChanged(string value) { Item = null; _ = RefreshItemsAsync(); }
     partial void OnMemberChanged(MemberHit? value) { Item = null; if (Kind == "Renewal") _ = RefreshItemsAsync(); }
+    partial void OnItemChanged(CounterItem? value) { foreach (var o in Options) o.IsPicked = value is not null && o.Item.Id == value.Id; }
 
     async Task RefreshItemsAsync()
     {
-        if (IsWalkIn) { Items.Clear(); return; }
-        await RunAsync(() => svc.ItemsAsync(KindKey(Kind), Member?.MemberId), rows => Fill(Items, rows));
+        var ticket = ++itemsTicket;   // the newest request wins: a slow answer for a kind you have left is dropped
+        if (IsWalkIn) { Options.Clear(); return; }
+        await RunAsync(() => svc.ItemsAsync(KindKey(Kind), Member?.MemberId), rows =>
+        {
+            if (ticket == itemsTicket) Fill(Options, rows.Select(r => new ItemOption(r)));
+        });
     }
 
     async Task LoadCashAsync() =>
@@ -133,8 +158,16 @@ public partial class CounterViewModel(IPaymentStaffService svc, IAttendanceServi
         { Fill(CashToday, rows); CashTotal = $"₱{rows.Sum(r => r.Total):N2}"; });
 
     [RelayCommand] private Task FindAsync() => RunAsync(() => members.FindMembersAsync(Search), rows => Fill(Hits, rows));
+    [RelayCommand] private void PickKind(string value) => Kind = value;
+    [RelayCommand] private void PickMethod(string value) => Method = value;
+    [RelayCommand] private void PickItem(ItemOption option) => Item = option.Item;   // OnItemChanged marks the card
 
-    [RelayCommand]
+    bool CanComplete() =>
+        (IsWalkIn ? !string.IsNullOrWhiteSpace(WalkInName) : Member is not null && Item is not null)
+        && (!NeedsReference || !string.IsNullOrWhiteSpace(ReferenceNo));
+
+    // The command is off while it runs, so a double tap records one payment.
+    [RelayCommand(CanExecute = nameof(CanComplete))]
     private async Task RecordAsync()
     {
         Notice = null;
@@ -142,7 +175,7 @@ public partial class CounterViewModel(IPaymentStaffService svc, IAttendanceServi
         Payment? paid = null;
         if (!await RunAsync(() => svc.RecordCounterAsync(KindKey(Kind), MethodKey(Method), IsWalkIn ? null : Member!.MemberId, Item?.Id,
                 IsWalkIn ? WalkInName : null, NeedsReference ? ReferenceNo : null, IsWalkIn ? null : DiscountCode), p => paid = p)) return;
-        Notice = $"Recorded ₱{paid!.Amount:N2}. Receipt {paid.ReceiptNo}.";
+        Notice = $"Payment complete: ₱{paid!.Amount:N2}. Receipt {paid.ReceiptNo}.";
         Item = null; ReferenceNo = ""; DiscountCode = ""; WalkInName = "";
         await LoadCashAsync();
     }
