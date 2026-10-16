@@ -9,7 +9,7 @@ if (!base || !key || need.some(n => !process.env[n])) { console.error('Set SUPAB
 const signIn = async x => {
   const r = await fetch(`${base}/auth/v1/token?grant_type=password`, { method: 'POST', headers: { apikey: key, 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: process.env[`${x}_EMAIL`], password: process.env[`${x}_PASSWORD`] }) });
-  const j = await r.json(); if (!j.access_token) throw new Error(`${x} sign-in failed (${r.status})`);
+  const j = await r.json(); if (!j.access_token) throw new Error(`${x} sign-in failed (${r.status}: ${j.error_description ?? j.msg ?? 'no reason given'})`);
   return { token: j.access_token, id: j.user.id };
 };
 const listen = (who, topic) => new Promise((resolve, reject) => {
