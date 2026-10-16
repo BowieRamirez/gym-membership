@@ -60,6 +60,10 @@ public sealed class SupabaseGateway : ISupabaseGateway
 
     public string? CurrentUserId => _client.Auth.CurrentUser?.Id;
 
+    // for SupabaseRealtimeChat, which lives in this assembly: the connected client and the current sign-in token
+    internal async Task<Client> ClientAsync() => await ReadyAsync();
+    internal string? AccessToken => _client.Auth.CurrentSession?.AccessToken;
+
     async Task<Client> ReadyAsync()
     {
         if (_started) return _client;
