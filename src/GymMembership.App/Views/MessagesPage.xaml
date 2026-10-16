@@ -113,6 +113,8 @@
                     <VerticalStackLayout Grid.Column="2" VerticalOptions="Center">
                         <Label Text="{Binding Selected.Thread.WithName}" Style="{StaticResource Heading}" LineBreakMode="TailTruncation" />
                         <Label Text="{Binding Selected.Subtitle}" Style="{StaticResource Caption}" IsVisible="{Binding Selected.Subtitle, Converter={StaticResource HasText}}" />
+                        <Label Text="{Binding StatusLine}" Style="{StaticResource Caption}" IsVisible="{Binding StatusLine, Converter={StaticResource HasText}}"
+                               SemanticProperties.Description="{Binding StatusLine}" />
                     </VerticalStackLayout>
                     <HorizontalStackLayout Grid.Column="3" Spacing="8" VerticalOptions="Center">
                         <Button Text="Take" Style="{StaticResource SmallButton}" Command="{Binding TakeCommand}" IsVisible="{Binding CanTake}" />

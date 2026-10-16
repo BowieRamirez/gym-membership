@@ -60,7 +60,7 @@ public class RealtimeMessengerTests
         rt ??= new FakeRealtime();
         var chat = new CountingChat(new ChatService(gw, new NotificationService(gw)));
         var vm = new MessengerViewModel(chat, new ProfileService(gw), new AuthService(gw), new DemoPhotoPicker(), rt)
-        { ChangeDelay = TimeSpan.FromMilliseconds(20) };
+        { ChangeDelay = TimeSpan.FromMilliseconds(20), TypingHold = TimeSpan.FromMilliseconds(80) };
         await vm.OnAppearingAsync();
         return (gw, chat, rt, vm);
     }
@@ -155,5 +155,103 @@ public class RealtimeMessengerTests
         Assert.NotEmpty(vm.Threads);
         Assert.Equal(TimeSpan.FromSeconds(6), vm.RefreshEvery);
         vm.OnDisappearing();   // nothing to stop, and no error
+    }
+
+    [Fact]
+    public async Task The_open_conversation_is_watched_and_switching_changes_the_watched_channel()
+    {
+        var (_, _, rt, vm) = await Open();
+        Assert.Equal(vm.Selected!.Thread.Key, rt.Watched.Last());
+        await vm.ShowTabCommand.ExecuteAsync("support");
+        await vm.OpenCommand.ExecuteAsync(vm.Threads.Single());
+        Assert.Equal(vm.Selected!.Thread.Key, rt.Watched.Last());
+        Assert.StartsWith("support|", rt.Watched.Last());
+    }
+
+    [Fact]
+    public async Task Typing_from_the_other_side_shows_then_hides_by_itself()
+    {
+        var (_, _, rt, vm) = await Open();
+        Assert.False(vm.OtherTyping);
+        rt.RaiseTyping(vm.Selected!.Thread.Key);
+        Assert.True(vm.OtherTyping);
+        Assert.Equal("typing…", vm.StatusLine);
+        await Task.Delay(250);   // TypingHold is 80 ms in these tests
+        Assert.False(vm.OtherTyping);
+    }
+
+    [Fact]
+    public async Task Typing_in_a_conversation_that_is_not_open_is_ignored()
+    {
+        var (_, _, rt, vm) = await Open();
+        rt.RaiseTyping("coach|someone|else");
+        Assert.False(vm.OtherTyping);
+    }
+
+    [Fact]
+    public async Task A_message_from_them_ends_the_typing_line()
+    {
+        var (gw, _, rt, member) = await Open();
+        member.TypingHold = TimeSpan.FromSeconds(30);
+        rt.RaiseTyping(member.Selected!.Thread.Key);
+        Assert.True(member.OtherTyping);
+
+        var (_, _, _, lena) = await Open("coach@demo.io", gw);
+        lena.Draft = "here"; await lena.SendCommand.ExecuteAsync(null);
+
+        await gw.SignOutAsync(); await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
+        await member.AutoRefreshAsync();
+        Assert.False(member.OtherTyping);
+    }
+
+    [Fact]
+    public async Task Typing_is_sent_at_most_once_in_the_window_and_never_for_an_empty_box()
+    {
+        var (_, _, rt, vm) = await Open();
+        vm.TypingEvery = TimeSpan.FromHours(1);
+        vm.Draft = "h"; vm.Draft = "he"; vm.Draft = "hel";
+        Assert.Equal(new[] { vm.Selected!.Thread.Key }, rt.TypingSent);
+        vm.Draft = "";
+        Assert.Single(rt.TypingSent);
+    }
+
+    [Fact]
+    public async Task With_no_wait_every_keystroke_is_a_ping()
+    {
+        var (_, _, rt, vm) = await Open();
+        vm.TypingEvery = TimeSpan.Zero;
+        vm.Draft = "h"; vm.Draft = "he";
+        Assert.Equal(2, rt.TypingSent.Count);
+    }
+
+    [Fact]
+    public async Task Restoring_a_saved_draft_in_another_conversation_is_not_typing_and_clears_the_line()
+    {
+        var (_, _, rt, vm) = await Open("carlo@demo.io");
+        vm.TypingEvery = TimeSpan.Zero;
+        await vm.ShowTabCommand.ExecuteAsync("support");
+        await vm.OpenCommand.ExecuteAsync(vm.Threads.Single());
+        vm.Draft = "my payment is stuck";
+        var pings = rt.TypingSent.Count;
+        rt.RaiseTyping(vm.Selected!.Thread.Key);
+        Assert.True(vm.OtherTyping);
+
+        await vm.ShowTabCommand.ExecuteAsync("coach");   // leave: the draft is kept, the line goes
+        Assert.False(vm.OtherTyping);
+        await vm.ShowTabCommand.ExecuteAsync("support");
+        await vm.OpenCommand.ExecuteAsync(vm.Threads.Single());   // back: the draft returns by itself
+        Assert.Equal("my payment is stuck", vm.Draft);
+        Assert.Equal(pings, rt.TypingSent.Count);
+    }
+
+    [Fact]
+    public async Task A_conversation_you_cannot_write_in_sends_no_typing()
+    {
+        var (_, _, rt, vm) = await Open();
+        vm.TypingEvery = TimeSpan.Zero;
+        vm.Selected = new ThreadItem(new ChatThread { Kind = "coach", CoachId = "x", MemberId = "y", WithId = "x", CanSend = false });
+        var before = rt.TypingSent.Count;
+        vm.Draft = "can't";
+        Assert.Equal(before, rt.TypingSent.Count);
     }
 }

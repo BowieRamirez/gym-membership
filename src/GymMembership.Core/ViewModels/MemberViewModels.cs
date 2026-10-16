@@ -287,7 +287,9 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     readonly Dictionary<string, string> drafts = new();   // what was half typed in each conversation you left
     readonly IRealtimeChat rt = live ?? NoRealtime.Instance;
     bool listening;
-    int changeTicket;
+    int changeTicket, typingTicket;
+    DateTime lastTypingSent = DateTime.MinValue;
+    bool restoringDraft;
 
     public ObservableCollection<ThreadItem> Threads { get; } = new();
     public ObservableCollection<ChatBubble> Bubbles { get; } = new();
@@ -332,6 +334,11 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     public TimeSpan ChangeDelay { get; set; } = TimeSpan.FromMilliseconds(300);   // a burst of signals becomes one reload
     /// <summary>How often the page looks again by itself: rarely while Realtime is connected, as before when not.</summary>
     public TimeSpan RefreshEvery => rt.Connected ? TimeSpan.FromSeconds(30) : TimeSpan.FromSeconds(6);
+    public TimeSpan TypingHold { get; set; } = TimeSpan.FromSeconds(4);    // "typing…" goes away this long after the last ping
+    public TimeSpan TypingEvery { get; set; } = TimeSpan.FromSeconds(2);   // at most one ping this often while you type
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(StatusLine))] private bool otherTyping;
+    /// <summary>Under the name in the chat header: "typing…" now; online / last active come next.</summary>
+    public string StatusLine => OtherTyping ? "typing…" : "";
 
     // ---- loading
     public override async Task OnAppearingAsync()
@@ -354,10 +361,14 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         if (myId is null) return;
         if (!listening)
         {
-            rt.Changed += OnRealtimeChanged; rt.ConnectionChanged += OnRealtimeConnection;
+            rt.Changed += OnRealtimeChanged; rt.ConnectionChanged += OnRealtimeConnection; rt.Typing += OnRealtimeTyping;
             listening = true;
         }
-        try { await rt.StartAsync(myId); }
+        try
+        {
+            await rt.StartAsync(myId);
+            if (Selected is { } open) await rt.WatchAsync(open.Thread.Key);
+        }
         catch { /* Realtime is a bonus: without it the timer keeps the page fresh and nobody needs to hear about it */ }
         OnPropertyChanged(nameof(RefreshEvery));
     }
@@ -366,12 +377,42 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     {
         if (listening)
         {
-            rt.Changed -= OnRealtimeChanged; rt.ConnectionChanged -= OnRealtimeConnection;
+            rt.Changed -= OnRealtimeChanged; rt.ConnectionChanged -= OnRealtimeConnection; rt.Typing -= OnRealtimeTyping;
             listening = false;
         }
         changeTicket++;   // a reload still waiting for its pause is dropped
+        StopTyping();
         _ = StopQuietlyAsync();
     }
+
+    void OnRealtimeTyping(string key) => Post(() =>
+    {
+        if (Selected?.Thread.Key != key) return;   // typing in a conversation that is not on screen
+        OtherTyping = true;
+        _ = HideTypingLaterAsync();
+    });
+
+    async Task HideTypingLaterAsync()
+    {
+        var ticket = ++typingTicket;
+        await Task.Delay(TypingHold);
+        if (ticket == typingTicket) OtherTyping = false;
+    }
+
+    void StopTyping() { typingTicket++; OtherTyping = false; }
+
+    // what you type is a ping to the other side, at most one in TypingEvery; text put back from a saved draft is not typing
+    partial void OnDraftChanged(string value)
+    {
+        if (restoringDraft || !listening || string.IsNullOrEmpty(value) || Selected is not { } item || !item.Thread.CanSend) return;
+        var now = DateTime.UtcNow;
+        if (now - lastTypingSent < TypingEvery) return;
+        lastTypingSent = now;
+        _ = SendTypingQuietlyAsync(item.Thread.Key);
+    }
+
+    async Task SendTypingQuietlyAsync(string key) { try { await rt.SendTypingAsync(key); } catch { /* a missed ping is nothing */ } }
+    async Task WatchQuietlyAsync(string? key) { try { await rt.WatchAsync(key); } catch { /* typing just will not show */ } }
 
     async Task StopQuietlyAsync() { try { await rt.StopAsync(); } catch { /* already gone */ } }
 
@@ -581,8 +622,12 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         if (newValue is not null) newValue.IsOpen = true;
         if (oldValue?.Thread.Key == newValue?.Thread.Key) return;   // the same conversation, just refreshed
         if (oldValue is not null) drafts[oldValue.Thread.Key] = Draft;
+        restoringDraft = true;
         Draft = newValue is null ? "" : drafts.GetValueOrDefault(newValue.Thread.Key, "");
+        restoringDraft = false;
         PendingPhoto = null;   // a half-chosen photo is dropped when you move to another conversation
+        StopTyping();
+        if (listening) _ = WatchQuietlyAsync(newValue?.Thread.Key);
     }
 
     // ---- front desk
@@ -621,7 +666,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         var known = Bubbles.ToDictionary(b => b.Line.MessageId);
         foreach (var b in page.Value!.Bubbles)
         {
-            if (!known.TryGetValue(b.Line.MessageId, out var old)) Bubbles.Add(b);
+            if (!known.TryGetValue(b.Line.MessageId, out var old)) { Bubbles.Add(b); if (!b.Mine) StopTyping(); }   // they sent it, so they are no longer typing
             else if (old.Status != b.Status || old.PhotoUrl != b.PhotoUrl) Bubbles[Bubbles.IndexOf(old)] = b;   // Sent became Read, or a photo link was renewed
         }
     }
