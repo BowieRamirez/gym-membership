@@ -7,6 +7,46 @@ using GymMembership.Core.Services;
 namespace GymMembership.Core.ViewModels;
 
 // ---------- front desk ----------
+
+/// <summary>One tile on the front desk home. Route says which screen it opens (a StaffShell route).</summary>
+public sealed record HomeTile(string Route, string Icon, string Title, string Count, string Detail, bool NeedsAttention);
+
+public partial class HomeViewModel(IDeskHomeService svc) : LoadableViewModel
+{
+    public ObservableCollection<HomeTile> Tiles { get; } = new();
+
+    public override Task OnAppearingAsync() => LoadAsync();
+
+    [RelayCommand] private Task LoadAsync() => RunAsync(svc.SummaryAsync, s => Show(s));
+
+    // Quiet: the error line is never touched and a failed look leaves the numbers as they were.
+    public override async Task AutoRefreshAsync()
+    {
+        if (IsBusy) return;
+        var result = await svc.SummaryAsync();
+        if (result.Ok) Show(result.Value!);
+    }
+
+    void Show(DeskSummary s) => Sync(Tiles, Build(s), t => t.Route, (a, b) => a == b);
+
+    public static IReadOnlyList<HomeTile> Build(DeskSummary s)
+    {
+        var amenityDetail = string.Join(", ", new[] { s.AmenitiesInUse > 0 ? $"{s.AmenitiesInUse} in use" : null, s.AmenitiesUnavailable > 0 ? $"{s.AmenitiesUnavailable} unavailable" : null }.OfType<string>());
+        return
+        [
+            new("checkin", "🏃", "Check-ins today", s.CheckInsToday.ToString(),
+                s.CheckInsToday == 0 ? "No one has checked in yet" : "Tap to check someone in", false),
+            new("verify", "🧾", "Payments to verify", s.PaymentsToVerify.ToString(),
+                s.PaymentsToVerify == 0 ? "All caught up" : s.PaymentsToVerify == 1 ? "1 payment is waiting" : $"{s.PaymentsToVerify} payments are waiting", s.PaymentsToVerify > 0),
+            new("amenities", "🏊", "Amenities available", $"{s.AmenitiesAvailable} of {s.AmenitiesTotal}",
+                amenityDetail.Length == 0 ? "All open" : amenityDetail, s.AmenitiesUnavailable > 0),
+            new("messages", "💬", "Unread messages", s.UnreadMessages.ToString(),
+                s.UnclaimedChats > 0 ? (s.UnclaimedChats == 1 ? "1 chat nobody has taken" : $"{s.UnclaimedChats} chats nobody has taken")
+                : s.UnreadMessages > 0 ? "Open Messages to reply" : "No new messages", s.UnreadMessages > 0 || s.UnclaimedChats > 0),
+        ];
+    }
+}
+
 public partial class VerifyPaymentsViewModel(IPaymentStaffService svc) : LoadableViewModel
 {
     public ObservableCollection<PaymentRow> Pending { get; } = new();
