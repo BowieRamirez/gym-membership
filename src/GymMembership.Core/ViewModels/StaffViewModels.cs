@@ -466,6 +466,7 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     List<CalendarSession> loaded = [];      // what the server last said for the range in view
     List<CalendarSession> upcoming = [];
     int loadTicket;
+    bool known;                             // the summary is only a fact once the month in view has really loaded; until then it says "—"
 
     public bool IsMonth => ViewMode == "Month";
     public bool IsWeek => ViewMode == "Week";
@@ -508,7 +509,7 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
         await Task.WhenAll(calendar, coming);
         if (ticket != loadTicket) return;
         var cal = await calendar; var up = await coming;
-        if (cal.Ok) loaded = cal.Value!.ToList(); else ErrorMessage = ErrorText.For(cal.Error, cal.Message);   // a failed look leaves what is shown as it was
+        if (cal.Ok) { loaded = cal.Value!.ToList(); known = true; } else ErrorMessage = ErrorText.For(cal.Error, cal.Message);   // a failed look leaves what is shown as it was
         if (up.Ok) upcoming = up.Value!.ToList();
         Rebuild();
     }
@@ -522,8 +523,8 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
         Fill(DaySessions, SelectedDay is { } day ? AttendanceCalendar.SessionsOn(loaded, day, Zone) : Array.Empty<CalendarSession>());
 
         var summary = AttendanceCalendar.Summary(AttendanceCalendar.SessionsInMonth(loaded, Focus.Year, Focus.Month, Zone), upcoming);
-        SessionsText = summary.SessionsThisMonth.ToString(CultureInfo.InvariantCulture);
-        RateText = summary.RatePercent is { } r ? $"{r}%" : "—";
+        SessionsText = known ? summary.SessionsThisMonth.ToString(CultureInfo.InvariantCulture) : "—";   // not a made-up zero while the month is loading or could not load
+        RateText = known && summary.RatePercent is { } r ? $"{r}%" : "—";
         UpcomingText = summary.Upcoming.ToString(CultureInfo.InvariantCulture);
         NextText = summary.Next is { } n
             ? $"Next: {AttendanceCalendar.LocalTime(n.Session.ScheduledStart, Zone).ToString("ddd d MMM, h:mm tt", CultureInfo.InvariantCulture)} with {n.With}"
@@ -540,7 +541,7 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     async Task MoveAsync(DateOnly to, DateOnly? select = null)
     {
         Focus = to; SelectedDay = select;
-        loaded = [];                                      // do not show the last period's marks on the new one while it loads
+        known = false;                                    // days keep the marks the old data has for their own dates; the month's numbers wait for the new answer
         Rebuild();
         await ReloadAsync();
     }

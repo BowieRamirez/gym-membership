@@ -62,9 +62,17 @@ public static class AttendanceCalendar
     public static DateOnly LocalDay(DateTime utc, TimeZoneInfo zone) => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(AsUtc(utc), zone));
     public static DateTime LocalTime(DateTime utc, TimeZoneInfo zone) => TimeZoneInfo.ConvertTimeFromUtc(AsUtc(utc), zone);
 
-    /// <summary>Midnight at the start of a local day, as a UTC time, for asking the server for a range.</summary>
-    public static DateTime StartOfDayUtc(DateOnly day, TimeZoneInfo zone) =>
-        TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(day.ToDateTime(TimeOnly.MinValue), DateTimeKind.Unspecified), zone);
+    /// <summary>
+    /// Midnight at the start of a local day, as a UTC time, for asking the server for a range. A few zones skip or repeat the hour after midnight
+    /// on a clock-change day: a skipped midnight starts the day when the clocks resume, a repeated one starts it the first time it happens.
+    /// </summary>
+    public static DateTime StartOfDayUtc(DateOnly day, TimeZoneInfo zone)
+    {
+        var local = DateTime.SpecifyKind(day.ToDateTime(TimeOnly.MinValue), DateTimeKind.Unspecified);
+        while (zone.IsInvalidTime(local)) local = local.AddMinutes(30);
+        if (zone.IsAmbiguousTime(local)) return new DateTimeOffset(local, zone.GetAmbiguousTimeOffsets(local).Max()).UtcDateTime;
+        return TimeZoneInfo.ConvertTimeToUtc(local, zone);
+    }
 
     public static IReadOnlyList<CalendarDay> Days(IEnumerable<DateOnly> dates, IReadOnlyList<CalendarSession> sessions, DateOnly today, DateOnly? selected, DateOnly? monthOf, TimeZoneInfo zone)
     {

@@ -232,6 +232,38 @@ public class AttendanceViewModelTests
     }
 
     [Fact]
+    public async Task A_failed_look_at_another_month_says_the_summary_is_unknown_instead_of_zero()
+    {
+        var (server, _, vm) = await Open();
+        server.FailCalendar = true;                                          // offline: the coach goes to November and it cannot load
+        await vm.NextCommand.ExecuteAsync(null);
+
+        Assert.NotNull(vm.ErrorMessage);
+        Assert.Equal("November 2026", vm.PeriodTitle);
+        Assert.Equal(42, vm.Days.Count);
+        Assert.Equal("—", vm.SessionsText);                                  // not "0 sessions"
+        Assert.Equal("—", vm.RateText);                                      // and not 0%
+
+        server.FailCalendar = false;                                         // back online: the numbers return
+        await vm.TodayCommand.ExecuteAsync(null);
+        Assert.Null(vm.ErrorMessage);
+        Assert.Equal("4", vm.SessionsText);
+        Assert.Equal("50%", vm.RateText);
+    }
+
+    [Fact]
+    public async Task While_another_month_loads_the_summary_is_not_a_misleading_partial_count()
+    {
+        var (server, _, vm) = await Open();
+        server.Hold = true;
+        var moving = vm.NextCommand.ExecuteAsync(null);                      // November's answer has not come back yet
+        Assert.Equal("—", vm.SessionsText);
+        server.Held.Dequeue().Reply.SetResult(AppResult<IReadOnlyList<CalendarSession>>.Success([]));
+        await moving;
+        Assert.Equal("0", vm.SessionsText);                                  // a real, loaded, empty month is a real zero
+    }
+
+    [Fact]
     public async Task A_failed_first_load_shows_an_error_and_a_plain_grid()
     {
         var server = new FakeSessions { FailCalendar = true };

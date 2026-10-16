@@ -90,6 +90,28 @@ public class AttendanceCalendarTests
         Assert.Equal(new DateTime(2026, 10, 12, 0, 0, 0, DateTimeKind.Utc), AttendanceCalendar.StartOfDayUtc(D("2026-10-12"), Utc));
     }
 
+    // a zone whose clocks skip the hour after midnight on 29 March, and repeat it on 25 October (some real zones do)
+    static TimeZoneInfo SkipsAndRepeatsMidnight() => TimeZoneInfo.CreateCustomTimeZone("Midnight", TimeSpan.FromHours(2), "Midnight", "Midnight", "Midnight DST",
+        [TimeZoneInfo.AdjustmentRule.CreateAdjustmentRule(DateTime.MinValue.Date, DateTime.MaxValue.Date, TimeSpan.FromHours(1),
+            TimeZoneInfo.TransitionTime.CreateFixedDateRule(new DateTime(1, 1, 1, 0, 0, 0), 3, 29),
+            TimeZoneInfo.TransitionTime.CreateFixedDateRule(new DateTime(1, 1, 1, 1, 0, 0), 10, 25))]);
+
+    [Fact]
+    public void A_day_whose_midnight_is_skipped_or_repeated_still_has_a_start()
+    {
+        var zone = SkipsAndRepeatsMidnight();
+        Assert.True(zone.IsInvalidTime(new DateTime(2026, 3, 29, 0, 30, 0)), "test zone: the hour after midnight is skipped");
+        Assert.True(zone.IsAmbiguousTime(new DateTime(2026, 10, 25, 0, 30, 0)), "test zone: the hour after midnight is repeated");
+
+        // skipped: the day starts when the clocks resume, 01:00 in daylight time (UTC+3)
+        Assert.Equal(new DateTime(2026, 3, 28, 22, 0, 0, DateTimeKind.Utc), AttendanceCalendar.StartOfDayUtc(D("2026-03-29"), zone));
+        // repeated: the day starts the first time midnight happens, in daylight time (UTC+3)
+        Assert.Equal(new DateTime(2026, 10, 24, 21, 0, 0, DateTimeKind.Utc), AttendanceCalendar.StartOfDayUtc(D("2026-10-25"), zone));
+        // and the days stay in order, so a range from one start to the next never runs backwards
+        Assert.True(AttendanceCalendar.StartOfDayUtc(D("2026-10-24"), zone) < AttendanceCalendar.StartOfDayUtc(D("2026-10-25"), zone));
+        Assert.True(AttendanceCalendar.StartOfDayUtc(D("2026-10-25"), zone) < AttendanceCalendar.StartOfDayUtc(D("2026-10-26"), zone));
+    }
+
     [Fact]
     public void Sessions_of_a_day_come_back_in_time_order()
     {
