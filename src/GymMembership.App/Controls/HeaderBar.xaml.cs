@@ -39,7 +39,25 @@ public partial class HeaderBar : ContentView
 		timer.Start();
 		shell.Loaded += (_, _) => _ = profile.TouchSeenAsync();   // and once when the app opens
 		shell.Unloaded += (_, _) => timer.Stop();
+#if WINDOWS
+		shell.FlyoutFooter = new SignOutFooter { BindingContext = vm };   // Sign out sits at the bottom of the side menu on Windows
+		shell.Loaded += (_, _) => HideOverflowButton(shell);
+		shell.Navigated += (_, _) => HideOverflowButton(shell);
+#endif
 	}
+
+#if WINDOWS
+	// Windows draws a "…" overflow button next to the title bar that has nothing in it. Collapse it on whatever command bar the shell shows.
+	static void HideOverflowButton(Shell shell)
+	{
+		static void Walk(Microsoft.UI.Xaml.DependencyObject node)
+		{
+			if (node is Microsoft.UI.Xaml.Controls.CommandBar bar) bar.OverflowButtonVisibility = Microsoft.UI.Xaml.Controls.CommandBarOverflowButtonVisibility.Collapsed;
+			for (var i = 0; i < Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(node); i++) Walk(Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(node, i));
+		}
+		if (shell.Handler?.PlatformView is Microsoft.UI.Xaml.DependencyObject root) Walk(root);
+	}
+#endif
 
 	// already looking at it: do nothing, so repeated taps do not stack copies
 	static void Open<TPage>(string route) where TPage : Page => MainThread.BeginInvokeOnMainThread(async () =>

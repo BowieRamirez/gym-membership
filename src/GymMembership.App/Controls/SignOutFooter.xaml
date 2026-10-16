@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+             x:Class="GymMembership.App.Controls.SignOutFooter" x:DataType="vm:HeaderViewModel">
+    <!-- bottom of the Windows side menu: the one place Sign out lives there (phones keep it in the header) -->
+    <Button Text="Sign out" Style="{StaticResource OutlineButton}" Command="{Binding SignOutCommand}" Margin="16,8,16,16" HorizontalOptions="Fill" />
+</ContentView>

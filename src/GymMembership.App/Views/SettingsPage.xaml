@@ -56,7 +56,7 @@
                         DashColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}"
                         TrackColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
 
-            <Button Text="Sign out" Style="{StaticResource OutlineButton}" Command="{Binding SignOutCommand}" HorizontalOptions="Start" />
+            <Button Text="Sign out" IsVisible="{OnPlatform WinUI=False, Default=True}" Style="{StaticResource OutlineButton}" Command="{Binding SignOutCommand}" HorizontalOptions="Start" />
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>
