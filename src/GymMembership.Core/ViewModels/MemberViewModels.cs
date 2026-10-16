@@ -272,6 +272,7 @@ public partial class ThreadItem(ChatThread thread) : ObservableObject
     public ChatThread Thread { get; } = thread;
     [ObservableProperty] private string? avatarUrl;
     [ObservableProperty] private bool isOpen;   // the row of the conversation on screen
+    [ObservableProperty] private bool isOnline; // the other person is in the app right now (set only where the thread allows it)
     public string Letters => Initials.From(Thread.WithName);
 
     /// <summary>Staff only: who has taken a member's front desk conversation, and whether it is closed.</summary>
@@ -290,6 +291,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     int changeTicket, typingTicket;
     DateTime lastTypingSent = DateTime.MinValue;
     bool restoringDraft;
+    IReadOnlySet<string> online = new HashSet<string>();   // ids of everyone online right now, as Realtime last said
 
     public ObservableCollection<ThreadItem> Threads { get; } = new();
     public ObservableCollection<ChatBubble> Bubbles { get; } = new();
@@ -297,7 +299,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowChat), nameof(ShowList))] private bool isCompact;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowChat), nameof(ShowList))] private bool showingChat;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasChat), nameof(CanSend), nameof(ReadOnly), nameof(CanTake), nameof(CanRelease), nameof(CanClose), nameof(CanReopen))] private ThreadItem? selected;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasChat), nameof(CanSend), nameof(ReadOnly), nameof(CanTake), nameof(CanRelease), nameof(CanClose), nameof(CanReopen), nameof(StatusLine))] private ThreadItem? selected;
     [ObservableProperty] private string draft = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPhoto), nameof(PhotoName))] private (string Name, byte[] Data)? pendingPhoto;   // chosen, not sent yet
     [ObservableProperty] private bool hasMore;
@@ -337,8 +339,11 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     public TimeSpan TypingHold { get; set; } = TimeSpan.FromSeconds(4);    // "typing…" goes away this long after the last ping
     public TimeSpan TypingEvery { get; set; } = TimeSpan.FromSeconds(2);   // at most one ping this often while you type
     [ObservableProperty, NotifyPropertyChangedFor(nameof(StatusLine))] private bool otherTyping;
-    /// <summary>Under the name in the chat header: "typing…" now; online / last active come next.</summary>
-    public string StatusLine => OtherTyping ? "typing…" : "";
+    /// <summary>Under the name in the chat header: "typing…", else "Online", else "Active 2 h ago", else nothing.</summary>
+    public string StatusLine => OtherTyping ? "typing…" : PresenceText;
+    string PresenceText => Selected?.Thread is { ShowsPresence: true } t
+        ? (online.Contains(t.WithId!) ? "Online" : ActiveAgo.Text(t.WithLastSeen, DateTime.UtcNow))
+        : "";
 
     // ---- loading
     public override async Task OnAppearingAsync()
@@ -361,7 +366,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         if (myId is null) return;
         if (!listening)
         {
-            rt.Changed += OnRealtimeChanged; rt.ConnectionChanged += OnRealtimeConnection; rt.Typing += OnRealtimeTyping;
+            rt.Changed += OnRealtimeChanged; rt.ConnectionChanged += OnRealtimeConnection; rt.Typing += OnRealtimeTyping; rt.OnlineChanged += OnRealtimeOnline;
             listening = true;
         }
         try
@@ -377,12 +382,22 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     {
         if (listening)
         {
-            rt.Changed -= OnRealtimeChanged; rt.ConnectionChanged -= OnRealtimeConnection; rt.Typing -= OnRealtimeTyping;
+            rt.Changed -= OnRealtimeChanged; rt.ConnectionChanged -= OnRealtimeConnection; rt.Typing -= OnRealtimeTyping; rt.OnlineChanged -= OnRealtimeOnline;
             listening = false;
         }
         changeTicket++;   // a reload still waiting for its pause is dropped
         StopTyping();
+        online = new HashSet<string>(); ApplyOnline();   // nobody is shown as online while we are not listening
         _ = StopQuietlyAsync();
+    }
+
+    void OnRealtimeOnline(IReadOnlySet<string> ids) => Post(() => { online = ids; ApplyOnline(); });
+
+    // the dot and the header text, for the people whose thread allows it
+    void ApplyOnline()
+    {
+        foreach (var item in Threads) item.IsOnline = item.Thread is { ShowsPresence: true } t && online.Contains(t.WithId!);
+        OnPropertyChanged(nameof(StatusLine));
     }
 
     void OnRealtimeTyping(string key) => Post(() =>
@@ -475,6 +490,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         if (Selected is { } open && all.FirstOrDefault(t => t.Key == open.Thread.Key) is { } fresh && !Same(open.Thread, fresh))
             Selected = Threads.FirstOrDefault(x => x.Thread.Key == fresh.Key) ?? new ThreadItem(fresh) { AvatarUrl = open.AvatarUrl };
         OnPropertyChanged(nameof(EmptyListText));
+        ApplyOnline();   // rows built by this reload get their dot
     }
 
     static bool Same(ChatThread a, ChatThread b) => a.LastBody == b.LastBody && a.LastAt == b.LastAt && a.Unread == b.Unread && a.Status == b.Status

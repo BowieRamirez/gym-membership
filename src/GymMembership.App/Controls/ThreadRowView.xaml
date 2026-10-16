@@ -14,10 +14,15 @@
             </DataTrigger>
         </Border.Triggers>
         <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
-            <c:Avatar Letters="{Binding Letters}" Url="{Binding AvatarUrl}" Diameter="44" VerticalOptions="Center" />
+            <Grid VerticalOptions="Center">
+                <c:Avatar Letters="{Binding Letters}" Url="{Binding AvatarUrl}" Diameter="44" />
+                <BoxView IsVisible="{Binding IsOnline}" WidthRequest="12" HeightRequest="12" CornerRadius="6" HorizontalOptions="End" VerticalOptions="End"
+                         Color="{AppThemeBinding Light={StaticResource PlateGreenLight}, Dark={StaticResource PlateGreenDark}}" />
+            </Grid>
             <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
                 <Label Text="{Binding Thread.WithName}" FontFamily="BarlowSemiBold" LineBreakMode="TailTruncation" />
                 <Label Text="{Binding Thread.Preview}" Style="{StaticResource Muted}" LineBreakMode="TailTruncation" MaxLines="1" />
+                <Label Text="Online" Style="{StaticResource Caption}" IsVisible="{Binding IsOnline}" />
             </VerticalStackLayout>
             <VerticalStackLayout Grid.Column="2" Spacing="4" VerticalOptions="Center" HorizontalOptions="End">
                 <Label Text="{Binding Thread.LastAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM'}" Style="{StaticResource Caption}" HorizontalOptions="End" />

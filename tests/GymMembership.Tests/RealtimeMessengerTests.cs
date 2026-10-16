@@ -254,4 +254,73 @@ public class RealtimeMessengerTests
         vm.Draft = "can't";
         Assert.Equal(before, rt.TypingSent.Count);
     }
+
+    [Fact]
+    public async Task A_coach_who_is_online_gets_a_dot_in_the_list_and_Online_in_the_header()
+    {
+        var (_, _, rt, vm) = await Open();
+        var lena = vm.Selected!.Thread.WithId!;
+        Assert.False(vm.Threads.Single().IsOnline);
+        rt.RaiseOnline(lena, "someone-else");
+        Assert.True(vm.Threads.Single().IsOnline);
+        Assert.Equal("Online", vm.StatusLine);
+        rt.RaiseOnline();
+        Assert.False(vm.Threads.Single().IsOnline);
+        Assert.Equal("", vm.StatusLine);   // never seen: nothing is better than a guess
+    }
+
+    [Fact]
+    public async Task When_they_are_not_online_the_header_says_when_they_were_last_active()
+    {
+        var (_, _, _, vm) = await Open();
+        vm.Selected!.Thread.WithLastSeen = DateTime.UtcNow.AddHours(-3);
+        Assert.Equal("Active 3 h ago", vm.StatusLine);   // read each time it is asked, so no event is needed in the test
+    }
+
+    [Fact]
+    public async Task Typing_wins_over_online_in_the_header()
+    {
+        var (_, _, rt, vm) = await Open();
+        rt.RaiseOnline(vm.Selected!.Thread.WithId!);
+        rt.RaiseTyping(vm.Selected.Thread.Key);
+        Assert.Equal("typing…", vm.StatusLine);
+    }
+
+    [Fact]
+    public async Task A_members_own_front_desk_thread_never_shows_presence_even_if_its_id_is_online()
+    {
+        var (_, _, rt, vm) = await Open("carlo@demo.io");
+        await vm.ShowTabCommand.ExecuteAsync("support");
+        var desk = vm.Threads.Single();
+        Assert.Null(desk.Thread.WithId);
+        rt.RaiseOnline("", "u-emp", "u-admin");
+        Assert.False(desk.IsOnline);
+        await vm.OpenCommand.ExecuteAsync(desk);
+        Assert.Equal("", vm.StatusLine);
+    }
+
+    [Fact]
+    public async Task Front_desk_sees_a_member_as_online()
+    {
+        var gw = new DemoGateway();
+        var (_, _, _, carlo) = await Open("carlo@demo.io", gw);
+        await carlo.ShowTabCommand.ExecuteAsync("support");
+        carlo.Draft = "hello"; await carlo.SendCommand.ExecuteAsync(null);
+
+        var (_, _, rt, desk) = await Open("employee@demo.io", gw);
+        await desk.OpenCommand.ExecuteAsync(desk.Threads.Single());
+        rt.RaiseOnline("u-carlo");
+        Assert.True(desk.Threads.Single().IsOnline);
+        Assert.Equal("Online", desk.StatusLine);
+    }
+
+    [Fact]
+    public async Task Leaving_the_page_forgets_who_was_online()
+    {
+        var (_, _, rt, vm) = await Open();
+        rt.RaiseOnline(vm.Selected!.Thread.WithId!);
+        vm.OnDisappearing();
+        Assert.False(vm.Threads.Single().IsOnline);
+        Assert.Equal("", vm.StatusLine);
+    }
 }
