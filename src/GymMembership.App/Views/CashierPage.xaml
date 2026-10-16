@@ -84,6 +84,7 @@
                     <Label Text="Order" Style="{StaticResource Heading}" />
                     <Label Text="{Binding OrderWho}" FontFamily="BarlowSemiBold" />
                     <Label Text="{Binding OrderWhat}" Style="{StaticResource Muted}" />
+                    <Label Text="{Binding OrderHow}" Style="{StaticResource Caption}" />
 
                     <Label Text="Paid with" Style="{StaticResource Caption}" />
                     <FlexLayout Wrap="Wrap">

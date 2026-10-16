@@ -136,6 +136,28 @@ public class DeskHomeTests
     }
 
     [Fact]
+    public async Task A_good_refresh_clears_the_error_a_failed_first_load_left_behind()
+    {
+        var home = new FakeHome { Next = AppResult<DeskSummary>.Fail(AppErrorKind.Validation, "bad_input") };
+        var vm = new HomeViewModel(home);
+        await vm.OnAppearingAsync();
+        Assert.NotNull(vm.ErrorMessage);
+
+        home.Next = AppResult<DeskSummary>.Success(new DeskSummary(1, 0, 1, 0, 0, 0, 0));
+        await vm.AutoRefreshAsync();                           // the 20 second look works this time
+        Assert.Null(vm.ErrorMessage);                          // so the banner above working numbers goes
+        Assert.Equal(4, vm.Tiles.Count);
+    }
+
+    [Fact]
+    public void A_tile_reads_its_count_aloud_with_its_title()
+    {
+        var tiles = HomeViewModel.Build(new DeskSummary(12, 3, 2, 1, 1, 4, 2));
+        Assert.Equal("Payments to verify: 3", tiles.Single(t => t.Route == "verify").Description);
+        Assert.Equal("Amenities available: 2 of 4", tiles.Single(t => t.Route == "amenities").Description);
+    }
+
+    [Fact]
     public async Task A_failed_first_load_shows_an_error_but_a_failed_refresh_keeps_the_numbers_and_says_nothing()
     {
         var home = new FakeHome { Next = AppResult<DeskSummary>.Fail(AppErrorKind.Validation, "bad_input") };

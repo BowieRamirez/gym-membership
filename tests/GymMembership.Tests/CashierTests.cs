@@ -213,4 +213,68 @@ public class CashierTests
 
         Assert.Equal(new[] { "Pool" }, vm.Options.Select(o => o.Name));
     }
+
+    static AppResult<IReadOnlyList<CounterItem>> Items(params CounterItem[] items) => AppResult<IReadOnlyList<CounterItem>>.Success(items);
+
+    [Fact]
+    public async Task While_the_new_kind_loads_the_old_cards_are_gone_so_they_cannot_be_tapped()
+    {
+        var slow = new SlowItems();
+        var gw = new DemoGateway(); await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        var vm = new CashierViewModel(slow, new AttendanceService(gw));
+        var opening = vm.OnAppearingAsync();
+        slow.Waiting.Dequeue().Reply.SetResult(Items(new CounterItem(3, "Gold", 5000m)));
+        await opening;
+        vm.PickItemCommand.Execute(vm.Options.Single());
+        Assert.NotNull(vm.Item);
+
+        vm.PickKindCommand.Execute("Amenity");                 // the amenity list has not come back yet
+        Assert.Empty(vm.Options);                              // so there is no membership card left to tap
+        Assert.Null(vm.Item);
+        Assert.False(vm.RecordCommand.CanExecute(null));
+        Assert.Equal("Loading…", vm.ItemsEmptyText);           // not "Nothing to sell here yet."
+
+        slow.Waiting.Dequeue().Reply.SetResult(Items(new CounterItem(7, "Pool", 300m)));
+        Assert.Equal(new[] { "Pool" }, vm.Options.Select(o => o.Name));
+        Assert.Equal("Nothing to sell here yet.", vm.ItemsEmptyText);
+    }
+
+    [Fact]
+    public async Task A_stale_failure_for_a_kind_the_cashier_left_shows_no_error()
+    {
+        var slow = new SlowItems();
+        var gw = new DemoGateway(); await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        var vm = new CashierViewModel(slow, new AttendanceService(gw));
+        var opening = vm.OnAppearingAsync();
+        vm.PickKindCommand.Execute("Amenity");
+        var membership = slow.Waiting.Dequeue(); var amenity = slow.Waiting.Dequeue();
+
+        amenity.Reply.SetResult(Items(new CounterItem(7, "Pool", 300m)));
+        membership.Reply.SetResult(AppResult<IReadOnlyList<CounterItem>>.Fail(AppErrorKind.Validation, "bad_input"));   // fails late, for a screen already left
+        await opening;
+
+        Assert.Null(vm.ErrorMessage);
+        Assert.Equal(new[] { "Pool" }, vm.Options.Select(o => o.Name));
+    }
+
+    [Fact]
+    public async Task Coming_back_to_the_cashier_does_not_keep_a_pick_that_no_card_shows()
+    {
+        var (_, vm) = await Open();
+        vm.PickItemCommand.Execute(vm.Options[0]);
+        Assert.NotNull(vm.Item);
+        await vm.OnAppearingAsync();                           // the page appears again and reloads its cards
+        Assert.Null(vm.Item);
+        Assert.All(vm.Options, o => Assert.False(o.IsPicked));
+    }
+
+    [Fact]
+    public async Task The_order_panel_names_the_kind_and_how_it_is_paid_in_words()
+    {
+        var (_, vm) = await Open();
+        Assert.Equal("Membership, paid with Cash", vm.OrderHow);
+        vm.PickKindCommand.Execute("Walk-in");
+        vm.PickMethodCommand.Execute("GCash");
+        Assert.Equal("Walk-in, paid with GCash", vm.OrderHow);
+    }
 }

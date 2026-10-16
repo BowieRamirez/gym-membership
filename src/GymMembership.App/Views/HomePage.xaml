@@ -17,7 +17,7 @@
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="vm:HomeTile">
                         <Border Style="{StaticResource Panel}" WidthRequest="{OnIdiom Phone=156, Default=210}" Margin="0,0,12,12"
-                                SemanticProperties.Description="{Binding Title}" SemanticProperties.Hint="{Binding Detail}">
+                                SemanticProperties.Description="{Binding Description}" SemanticProperties.Hint="{Binding Detail}">
                             <Border.Triggers>
                                 <DataTrigger TargetType="Border" Binding="{Binding NeedsAttention}" Value="True">
                                     <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
@@ -28,7 +28,7 @@
                                 <TapGestureRecognizer Tapped="OnTile" />
                             </Border.GestureRecognizers>
                             <VerticalStackLayout Spacing="6">
-                                <Label Text="{Binding Icon}" FontSize="26" />
+                                <Label Text="{Binding Icon}" FontSize="26" AutomationProperties.IsInAccessibleTree="False" />
                                 <Label Text="{Binding Count}" Style="{StaticResource Numeral}" />
                                 <Label Text="{Binding Title}" FontFamily="BarlowSemiBold" />
                                 <Label Text="{Binding Detail}" Style="{StaticResource Caption}" />

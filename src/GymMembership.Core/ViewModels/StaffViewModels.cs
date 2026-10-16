@@ -9,7 +9,11 @@ namespace GymMembership.Core.ViewModels;
 // ---------- front desk ----------
 
 /// <summary>One tile on the front desk home. Route says which screen it opens (a StaffShell route).</summary>
-public sealed record HomeTile(string Route, string Icon, string Title, string Count, string Detail, bool NeedsAttention);
+public sealed record HomeTile(string Route, string Icon, string Title, string Count, string Detail, bool NeedsAttention)
+{
+    /// <summary>What a screen reader says: the count belongs with the title, not only in the picture.</summary>
+    public string Description => $"{Title}: {Count}";
+}
 
 public partial class HomeViewModel(IDeskHomeService svc) : LoadableViewModel
 {
@@ -24,7 +28,9 @@ public partial class HomeViewModel(IDeskHomeService svc) : LoadableViewModel
     {
         if (IsBusy) return;
         var result = await svc.SummaryAsync();
-        if (result.Ok) Show(result.Value!);
+        if (!result.Ok) return;
+        ErrorMessage = null;   // a look that works replaces the banner a failed first load left above these numbers
+        Show(result.Value!);
     }
 
     void Show(DeskSummary s) => Sync(Tiles, Build(s), t => t.Route, (a, b) => a == b);
@@ -110,9 +116,9 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     public ObservableCollection<CashRow> CashToday { get; } = new();
     int itemsTicket;
 
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWalkIn), nameof(NeedsMember), nameof(NeedsReference), nameof(OrderWho), nameof(OrderWhat), nameof(TotalText), nameof(TotalNote), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))]
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWalkIn), nameof(NeedsMember), nameof(NeedsReference), nameof(OrderWho), nameof(OrderWhat), nameof(OrderHow), nameof(TotalText), nameof(TotalNote), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))]
     private string kind = "Membership";
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(NeedsReference)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string method = "Cash";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(NeedsReference), nameof(OrderHow)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string method = "Cash";
     [ObservableProperty] private string search = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private MemberHit? member;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWhat), nameof(TotalText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private CounterItem? item;
@@ -120,6 +126,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     [ObservableProperty, NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string referenceNo = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(TotalNote))] private string discountCode = "";
     [ObservableProperty] private string cashTotal = "₱0.00";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ItemsEmptyText))] private bool loadingItems;
 
     public bool IsWalkIn => Kind == "Walk-in";
     public bool NeedsMember => !IsWalkIn;
@@ -131,7 +138,10 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     public string TotalText => IsWalkIn ? "Day pass" : Item?.Price is { } p ? $"₱{p:N2}" : "₱0.00";
     public string TotalNote => IsWalkIn ? "The day pass price is set in Gym settings."
         : string.IsNullOrWhiteSpace(DiscountCode) ? "" : "The discount code is checked when you complete the payment.";
-    public string ItemsEmptyText => Kind == "Renewal" && Member is null ? "Choose a member to see their memberships." : "Nothing to sell here yet.";
+    public string ItemsEmptyText => LoadingItems ? "Loading…"
+        : Kind == "Renewal" && Member is null ? "Choose a member to see their memberships." : "Nothing to sell here yet.";
+    /// <summary>The kind and the way of paying in words, so the order reads the same to someone who cannot see which button is filled.</summary>
+    public string OrderHow => $"{Kind}, paid with {Method}";
 
     static string KindKey(string k) => k switch { "Renewal" => PayKind.Renewal, "Amenity" => PayKind.Amenity, "Walk-in" => PayKind.WalkIn, _ => PayKind.Membership };
     static string MethodKey(string m) => m switch { "GCash" => PayMethod.Gcash, "Bank transfer" => PayMethod.BankTransfer, _ => PayMethod.Cash };
@@ -146,11 +156,15 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     async Task RefreshItemsAsync()
     {
         var ticket = ++itemsTicket;   // the newest request wins: a slow answer for a kind you have left is dropped
-        if (IsWalkIn) { Options.Clear(); return; }
-        await RunAsync(() => svc.ItemsAsync(KindKey(Kind), Member?.MemberId), rows =>
-        {
-            if (ticket == itemsTicket) Fill(Options, rows.Select(r => new ItemOption(r)));
-        });
+        // Cards listed for another kind or member must not stay tappable while the right ones load: a tap would send their item id with the new kind.
+        Options.Clear(); Item = null; ErrorMessage = null;
+        if (IsWalkIn) { LoadingItems = false; return; }
+        LoadingItems = true;
+        var result = await svc.ItemsAsync(KindKey(Kind), Member?.MemberId);
+        if (ticket != itemsTicket) return;   // a newer request owns the screen now; a stale answer, even a failed one, says nothing
+        LoadingItems = false;
+        if (!result.Ok) { ErrorMessage = ErrorText.For(result.Error, result.Message); return; }
+        Fill(Options, result.Value!.Select(r => new ItemOption(r)));
     }
 
     async Task LoadCashAsync() =>
