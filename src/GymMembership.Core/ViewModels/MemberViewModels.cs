@@ -287,7 +287,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     int openTicket, listTicket, searchTicket;
     readonly Dictionary<string, string> drafts = new();   // what was half typed in each conversation you left
     readonly IRealtimeChat rt = live ?? NoRealtime.Instance;
-    bool listening;
+    bool listening, visible;   // visible: the page is on screen, so a connection that finishes later is still wanted
     int changeTicket, typingTicket;
     DateTime lastTypingSent = DateTime.MinValue;
     bool restoringDraft;
@@ -348,6 +348,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     // ---- loading
     public override async Task OnAppearingAsync()
     {
+        visible = true;
         if (auth.UserId != myId)   // somebody else signed in: nothing of the last person stays on screen
         {
             var hadSomeone = myId is not null;
@@ -356,14 +357,15 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         }
         await LoadThreadsAsync(first: true);
         if (Selected is { } item) await ShowAsync(item, markRead: ShowChat);
-        await StartLiveAsync();
+        _ = StartLiveAsync();   // not awaited: connecting can take a while, and the page must not wait for it before its own timer starts
     }
 
-    public override void OnDisappearing() => StopLive();
+    public override void OnDisappearing() { visible = false; StopLive(); }
 
     async Task StartLiveAsync()
     {
-        if (myId is null) return;
+        var who = myId;
+        if (who is null || !visible) return;   // not signed in, or the page was left while it was loading
         if (!listening)
         {
             rt.Changed += OnRealtimeChanged; rt.ConnectionChanged += OnRealtimeConnection; rt.Typing += OnRealtimeTyping; rt.OnlineChanged += OnRealtimeOnline;
@@ -371,20 +373,24 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         }
         try
         {
-            await rt.StartAsync(myId);
+            await rt.StartAsync(who);
+            if (!visible || auth.UserId != who) { await StopQuietlyAsync(); return; }   // the page was left (or someone else signed in) while it connected
             if (Selected is { } open) await rt.WatchAsync(open.Thread.Key);
         }
         catch { /* Realtime is a bonus: without it the timer keeps the page fresh and nobody needs to hear about it */ }
         OnPropertyChanged(nameof(RefreshEvery));
     }
 
+    void Unsubscribe()
+    {
+        if (!listening) return;
+        rt.Changed -= OnRealtimeChanged; rt.ConnectionChanged -= OnRealtimeConnection; rt.Typing -= OnRealtimeTyping; rt.OnlineChanged -= OnRealtimeOnline;
+        listening = false;
+    }
+
     void StopLive()
     {
-        if (listening)
-        {
-            rt.Changed -= OnRealtimeChanged; rt.ConnectionChanged -= OnRealtimeConnection; rt.Typing -= OnRealtimeTyping; rt.OnlineChanged -= OnRealtimeOnline;
-            listening = false;
-        }
+        Unsubscribe();
         changeTicket++;   // a reload still waiting for its pause is dropped
         StopTyping();
         online = new HashSet<string>(); ApplyOnline();   // nobody is shown as online while we are not listening
@@ -437,6 +443,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
 
     async Task ReloadSoonAsync()
     {
+        if (auth.UserId != myId) { Unsubscribe(); return; }   // a page left behind by a sign-out: it is not this person's any more
         var ticket = ++changeTicket;
         await Task.Delay(ChangeDelay);
         if (ticket == changeTicket && listening) await AutoRefreshAsync();   // the same quiet reload the timer does
@@ -494,7 +501,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     }
 
     static bool Same(ChatThread a, ChatThread b) => a.LastBody == b.LastBody && a.LastAt == b.LastAt && a.Unread == b.Unread && a.Status == b.Status
-        && a.ClaimedBy == b.ClaimedBy && a.CanSend == b.CanSend && a.WithName == b.WithName && a.WithAvatar == b.WithAvatar;
+        && a.ClaimedBy == b.ClaimedBy && a.CanSend == b.CanSend && a.WithName == b.WithName && a.WithAvatar == b.WithAvatar && a.WithLastSeen == b.WithLastSeen;
 
     void PickInitial()
     {

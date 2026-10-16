@@ -19,12 +19,13 @@ public class RealtimeMessengerTests
         public List<string> TypingSent = [];
         public int Stops;
         public Exception? FailStart;
-        public Task StartAsync(string userId)
+        public TaskCompletionSource? StartGate;   // when set, connecting takes as long as the test says
+        public async Task StartAsync(string userId)
         {
             Started.Add(userId);
             if (FailStart is not null) throw FailStart;
+            if (StartGate is not null) await StartGate.Task;
             SetConnected(true);
-            return Task.CompletedTask;
         }
         public Task StopAsync() { Stops++; SetConnected(false); return Task.CompletedTask; }
         public Task WatchAsync(string? key) { Watched.Add(key); return Task.CompletedTask; }
@@ -63,6 +64,110 @@ public class RealtimeMessengerTests
         { ChangeDelay = TimeSpan.FromMilliseconds(20), TypingHold = TimeSpan.FromMilliseconds(80) };
         await vm.OnAppearingAsync();
         return (gw, chat, rt, vm);
+    }
+
+    // a chat service that returns exactly the threads the test sets, to change what the server says between two looks
+    sealed class StubChat : IChatService
+    {
+        public ChatThread? Thread;
+        public TaskCompletionSource? ThreadsGate;   // when set, the list answers only when the test says
+        public (string CoachId, string? MemberId)? Pending { get; set; }
+        public async Task<AppResult<IReadOnlyList<ChatThread>>> ThreadsAsync()
+        {
+            if (ThreadsGate is not null) await ThreadsGate.Task;
+            return AppResult<IReadOnlyList<ChatThread>>.Success(Thread is null ? [] : [Thread]);
+        }
+        public Task<AppResult<ChatPage>> MessagesAsync(ChatThread t, long? beforeId = null, int limit = 50) => Task.FromResult(AppResult<ChatPage>.Success(new ChatPage([], false)));
+        public Task<AppResult<bool>> SendAsync(ChatThread t, string body) => Task.FromResult(AppResult<bool>.Success(true));
+        public Task<AppResult<bool>> SendPhotoAsync(ChatThread t, string fileName, byte[] data, string caption) => Task.FromResult(AppResult<bool>.Success(true));
+        public Task<AppResult<bool>> MarkReadAsync(ChatThread t) => Task.FromResult(AppResult<bool>.Success(true));
+        public Task<AppResult<bool>> MarkDeliveredAsync() => Task.FromResult(AppResult<bool>.Success(true));
+        public Task<AppResult<bool>> ClaimAsync(ChatThread t, bool claim) => Task.FromResult(AppResult<bool>.Success(true));
+        public Task<AppResult<bool>> SetOpenAsync(ChatThread t, bool open) => Task.FromResult(AppResult<bool>.Success(true));
+        public Task<AppResult<IReadOnlyList<ChatSearchHit>>> SearchAsync(string query) => Task.FromResult(AppResult<IReadOnlyList<ChatSearchHit>>.Success([]));
+    }
+
+    // a view model that has not been opened yet, so a test can control when the page "appears"
+    static async Task<(DemoGateway Gw, MessengerViewModel Vm)> Fresh(IRealtimeChat rt, IChatService? chat = null)
+    {
+        var gw = new DemoGateway(); await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
+        chat ??= new ChatService(gw, new NotificationService(gw));
+        return (gw, new MessengerViewModel(chat, new ProfileService(gw), new AuthService(gw), new DemoPhotoPicker(), rt) { ChangeDelay = TimeSpan.FromMilliseconds(20) });
+    }
+
+    [Fact]
+    public async Task A_slow_realtime_start_does_not_hold_up_the_page()
+    {
+        var rt = new FakeRealtime { StartGate = new TaskCompletionSource() };
+        var (_, vm) = await Fresh(rt);
+        var appearing = vm.OnAppearingAsync();
+        await Task.WhenAny(appearing, Task.Delay(2000));
+        var finished = appearing.IsCompleted;
+        rt.StartGate.SetResult();
+        await appearing;
+        Assert.True(finished, "the page waited for Realtime to answer before it finished opening");
+        Assert.NotEmpty(vm.Threads);
+    }
+
+    [Fact]
+    public async Task Leaving_while_realtime_is_still_connecting_ends_with_it_stopped()
+    {
+        var rt = new FakeRealtime { StartGate = new TaskCompletionSource() };
+        var (_, vm) = await Fresh(rt);
+        var appearing = vm.OnAppearingAsync();
+        vm.OnDisappearing();
+        rt.StartGate.SetResult();   // the connection finishes after the page has gone
+        await appearing;
+        await Task.Delay(100);
+        Assert.False(rt.Connected);
+        Assert.False(rt.HasListeners);
+    }
+
+    [Fact]
+    public async Task Leaving_while_the_list_is_still_loading_never_starts_realtime()
+    {
+        var rt = new FakeRealtime();
+        var chat = new StubChat { ThreadsGate = new TaskCompletionSource() };
+        var (_, vm) = await Fresh(rt, chat);
+        var appearing = vm.OnAppearingAsync();
+        vm.OnDisappearing();            // gone before the list came back
+        chat.ThreadsGate.SetResult();
+        await appearing;
+        await Task.Delay(100);
+        Assert.Empty(rt.Started);
+        Assert.False(rt.HasListeners);
+    }
+
+    [Fact]
+    public async Task A_newer_last_seen_from_the_server_replaces_the_one_on_screen()
+    {
+        static ChatThread Thread(DateTime seen) => new()
+        {
+            Kind = "coach", CoachId = "c1", MemberId = "m1", WithId = "c1", WithName = "Lena Cruz", CanSend = true,
+            LastBody = "hi", LastAt = new DateTime(2026, 10, 16, 9, 0, 0, DateTimeKind.Utc), WithLastSeen = seen
+        };
+        var first = DateTime.UtcNow.AddHours(-3);
+        var chat = new StubChat { Thread = Thread(first) };
+        var (_, vm) = await Fresh(new FakeRealtime(), chat);
+        await vm.OnAppearingAsync();
+        Assert.Equal(first, vm.Threads.Single().Thread.WithLastSeen);
+
+        var later = DateTime.UtcNow.AddMinutes(-1);
+        chat.Thread = Thread(later);   // nothing else about the thread changed
+        await vm.AutoRefreshAsync();
+        Assert.Equal(later, vm.Threads.Single().Thread.WithLastSeen);
+    }
+
+    [Fact]
+    public async Task A_page_left_behind_by_a_sign_out_lets_go_of_the_events_once_someone_else_is_signed_in()
+    {
+        var (gw, chat, rt, _) = await Open();
+        await gw.SignOutAsync(); await gw.SignInAsync("bea@demo.io", DemoGateway.DemoPassword);   // signed out with no OnDisappearing
+        var before = chat.ThreadCalls;
+        rt.RaiseChanged();
+        await Task.Delay(100);
+        Assert.Equal(before, chat.ThreadCalls);   // the old page did not reload for the new person
+        Assert.False(rt.HasListeners);            // and it let go
     }
 
     [Fact]

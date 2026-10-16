@@ -29,7 +29,8 @@ public sealed class SupabaseRealtimeChat(SupabaseGateway gateway) : IRealtimeCha
     RealtimeBroadcast<TypingBroadcast>? typingBroadcast;
     RealtimePresence<Here>? presence;
     string? userId, watching;
-    bool hooked;   // the socket state handler is added once, not on every visit to the page
+    IRealtimeClient<RealtimeSocket, RealtimeChannel>.SocketStateEventHandler? stateHandler;   // added on each start and removed on each stop, so nothing depends on what Disconnect() clears
+    bool signOutHooked;
 
     public bool Connected { get; private set; }
     public event Action? ConnectionChanged;
@@ -46,10 +47,14 @@ public sealed class SupabaseRealtimeChat(SupabaseGateway gateway) : IRealtimeCha
         {
             if (userId == user && Connected) return;
             await StopCoreAsync();
-            var rt = (await gateway.ClientAsync()).Realtime;
+            var client = await gateway.ClientAsync();
+            // signing out ends the connection and the "online" presence at once, whether or not the page is told it went away
+            if (!signOutHooked) { client.Auth.AddStateChangedListener((sender, state) => { if (state == Supabase.Gotrue.Constants.AuthState.SignedOut) _ = StopAsync(); }); signOutHooked = true; }
+            var rt = client.Realtime;
             if (gateway.AccessToken is { } token) rt.SetAuth(token);   // so the server filters changes by this user's row access
             await rt.ConnectAsync();
-            if (!hooked) { rt.AddStateChangedHandler((_, state) => SetConnected(state == Constants.SocketState.Open && userId is not null)); hooked = true; }
+            stateHandler = (_, state) => SetConnected(state == Constants.SocketState.Open && userId is not null);
+            rt.AddStateChangedHandler(stateHandler);
 
             changes = rt.Channel("messenger-changes");
             changes.OnPostgresChange((_, _) => Changed?.Invoke(), ListenType.All, new PostgresChangesFilter { Table = "messages" });
@@ -83,7 +88,14 @@ public sealed class SupabaseRealtimeChat(SupabaseGateway gateway) : IRealtimeCha
         foreach (var c in new[] { changes, online, typing })
             try { if (c is not null) { c.Unsubscribe(); (await gateway.ClientAsync()).Realtime.Remove(c); } } catch { /* same */ }
         changes = online = typing = null; presence = null; typingBroadcast = null;
-        try { (await gateway.ClientAsync()).Realtime.Disconnect(); } catch { /* same */ }
+        try
+        {
+            var rt = (await gateway.ClientAsync()).Realtime;
+            if (stateHandler is not null) rt.RemoveStateChangedHandler(stateHandler);
+            rt.Disconnect();
+        }
+        catch { /* same */ }
+        stateHandler = null;
     }
 
     public async Task WatchAsync(string? key)
