@@ -17,10 +17,11 @@
         </VerticalStackLayout>
     </Shell.FlyoutHeader>
 
-    <FlyoutItem Title="Payments to verify" ClassId="desk"><ShellContent ContentTemplate="{DataTemplate views:VerifyPaymentsPage}" /></FlyoutItem>
-    <FlyoutItem Title="Counter payment" ClassId="desk"><ShellContent ContentTemplate="{DataTemplate views:CounterPage}" /></FlyoutItem>
-    <FlyoutItem Title="Check-in" ClassId="desk"><ShellContent ContentTemplate="{DataTemplate views:CheckInPage}" /></FlyoutItem>
-    <FlyoutItem Title="Amenity Status" ClassId="desk"><ShellContent ContentTemplate="{DataTemplate views:AmenityStatusPage}" /></FlyoutItem>
+    <FlyoutItem Title="Home" ClassId="desk" Route="home"><ShellContent ContentTemplate="{DataTemplate views:HomePage}" /></FlyoutItem>
+    <FlyoutItem Title="Payments to verify" ClassId="desk" Route="verify"><ShellContent ContentTemplate="{DataTemplate views:VerifyPaymentsPage}" /></FlyoutItem>
+    <FlyoutItem Title="Cashier" ClassId="desk" Route="cashier"><ShellContent ContentTemplate="{DataTemplate views:CashierPage}" /></FlyoutItem>
+    <FlyoutItem Title="Check-in" ClassId="desk" Route="checkin"><ShellContent ContentTemplate="{DataTemplate views:CheckInPage}" /></FlyoutItem>
+    <FlyoutItem Title="Amenity Status" ClassId="desk" Route="amenities"><ShellContent ContentTemplate="{DataTemplate views:AmenityStatusPage}" /></FlyoutItem>
 
     <!-- Admin only: ClassId="admin" items are removed for the front-desk role -->
     <FlyoutItem Title="Users and roles" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:UsersPage}" /></FlyoutItem>

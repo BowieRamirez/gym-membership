@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.CashierPage" x:DataType="vm:CashierViewModel" Title="Cashier">
+
+    <ScrollView MaximumWidthRequest="920">
+        <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
+            <Label Text="Take cash, GCash or a bank transfer. It is verified at once and gets a receipt number to write on the paper receipt." Style="{StaticResource Muted}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+            <Label Text="What are they paying for?" Style="{StaticResource Heading}" />
+            <FlexLayout Wrap="Wrap">
+                <Button Text="🎟  Membership" SemanticProperties.Description="Membership" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Membership">
+                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="Membership"><Setter Property="Style" Value="{StaticResource SmallButton}" /></DataTrigger></Button.Triggers>
+                </Button>
+                <Button Text="🔄  Renewal" SemanticProperties.Description="Renewal" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Renewal">
+                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="Renewal"><Setter Property="Style" Value="{StaticResource SmallButton}" /></DataTrigger></Button.Triggers>
+                </Button>
+                <Button Text="🏊  Amenity" SemanticProperties.Description="Amenity" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Amenity">
+                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="Amenity"><Setter Property="Style" Value="{StaticResource SmallButton}" /></DataTrigger></Button.Triggers>
+                </Button>
+                <Button Text="🚶  Walk-in" SemanticProperties.Description="Walk-in" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Walk-in">
+                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="Walk-in"><Setter Property="Style" Value="{StaticResource SmallButton}" /></DataTrigger></Button.Triggers>
+                </Button>
+            </FlexLayout>
+
+            <!-- walk-ins have no member: just a name -->
+            <VerticalStackLayout Spacing="4" WidthRequest="300" HorizontalOptions="Start" IsVisible="{Binding IsWalkIn}">
+                <Label Text="Name" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}"><Entry Text="{Binding WalkInName}" SemanticProperties.Description="Walk-in name" /></Border>
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Spacing="12" IsVisible="{Binding NeedsMember}">
+                <FlexLayout Wrap="Wrap" AlignItems="End">
+                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="240">
+                        <Label Text="Find the member" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><Entry Text="{Binding Search}" Placeholder="Start of their name" ReturnCommand="{Binding FindCommand}" SemanticProperties.Description="Search members" /></Border>
+                    </VerticalStackLayout>
+                    <Button Text="Find" Style="{StaticResource SmallOutlineButton}" Margin="0,0,12,8" Command="{Binding FindCommand}" />
+                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="260">
+                        <Label Text="Member" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Hits}" ItemDisplayBinding="{Binding Username}" SelectedItem="{Binding Member}" SemanticProperties.Description="Member" /></Border>
+                    </VerticalStackLayout>
+                </FlexLayout>
+
+                <Label Text="Choose one" Style="{StaticResource Heading}" />
+                <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Options}">
+                    <BindableLayout.EmptyView>
+                        <Label Text="{Binding ItemsEmptyText}" Style="{StaticResource Muted}" />
+                    </BindableLayout.EmptyView>
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ItemOption">
+                            <Border Style="{StaticResource Panel}" Padding="14,12" WidthRequest="{OnIdiom Phone=156, Default=200}" Margin="0,0,12,12"
+                                    SemanticProperties.Description="{Binding Name}" SemanticProperties.Hint="{Binding PriceText}">
+                                <Border.Triggers>
+                                    <DataTrigger TargetType="Border" Binding="{Binding IsPicked}" Value="True">
+                                        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChalkLight}, Dark={StaticResource ChalkDark}}" />
+                                        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+                                        <Setter Property="StrokeThickness" Value="2" />
+                                    </DataTrigger>
+                                </Border.Triggers>
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnPickItem" />
+                                </Border.GestureRecognizers>
+                                <VerticalStackLayout Spacing="4">
+                                    <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" LineBreakMode="WordWrap" />
+                                    <Label Text="{Binding PriceText}" Style="{StaticResource Heading}" />
+                                    <Label Text="Selected" Style="{StaticResource Caption}" IsVisible="{Binding IsPicked}" />
+                                </VerticalStackLayout>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </FlexLayout>
+            </VerticalStackLayout>
+
+            <!-- the order: what the cashier is about to charge, how, and the one button that does it -->
+            <Border Style="{StaticResource Panel}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Order" Style="{StaticResource Heading}" />
+                    <Label Text="{Binding OrderWho}" FontFamily="BarlowSemiBold" />
+                    <Label Text="{Binding OrderWhat}" Style="{StaticResource Muted}" />
+
+                    <Label Text="Paid with" Style="{StaticResource Caption}" />
+                    <FlexLayout Wrap="Wrap">
+                        <Button Text="💵  Cash" SemanticProperties.Description="Cash" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="Cash">
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Method}" Value="Cash"><Setter Property="Style" Value="{StaticResource SmallButton}" /></DataTrigger></Button.Triggers>
+                        </Button>
+                        <Button Text="📱  GCash" SemanticProperties.Description="GCash" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="GCash">
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Method}" Value="GCash"><Setter Property="Style" Value="{StaticResource SmallButton}" /></DataTrigger></Button.Triggers>
+                        </Button>
+                        <Button Text="🏦  Bank transfer" SemanticProperties.Description="Bank transfer" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="Bank transfer">
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Method}" Value="Bank transfer"><Setter Property="Style" Value="{StaticResource SmallButton}" /></DataTrigger></Button.Triggers>
+                        </Button>
+                    </FlexLayout>
+
+                    <VerticalStackLayout Spacing="4" WidthRequest="260" HorizontalOptions="Start" IsVisible="{Binding NeedsReference}">
+                        <Label Text="Reference number" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><Entry Text="{Binding ReferenceNo}" SemanticProperties.Description="Reference number" /></Border>
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="4" WidthRequest="260" HorizontalOptions="Start" IsVisible="{Binding NeedsMember}">
+                        <Label Text="Discount code (optional)" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><Entry Text="{Binding DiscountCode}" SemanticProperties.Description="Discount code" /></Border>
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="Total" Style="{StaticResource Caption}" />
+                        <Label Text="{Binding TotalText}" Style="{StaticResource Numeral}" />
+                        <Label Text="{Binding TotalNote}" Style="{StaticResource Caption}" IsVisible="{Binding TotalNote, Converter={StaticResource HasText}}" />
+                    </VerticalStackLayout>
+
+                    <Button Text="Complete payment" Command="{Binding RecordCommand}" MinimumHeightRequest="56" FontSize="18" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Label Text="Cash taken today" Style="{StaticResource Heading}" Margin="0,8,0,0" />
+            <Border Style="{StaticResource Panel}" Padding="24,18">
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="Compare this with the drawer at closing." Style="{StaticResource Caption}" />
+                    <Label Text="{Binding CashTotal}" Style="{StaticResource Numeral}" />
+                </VerticalStackLayout>
+            </Border>
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding CashToday}" Spacing="8">
+                <BindableLayout.EmptyView><Label Text="No cash payments recorded today." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="svc:CashRow">
+                        <Border Style="{StaticResource Panel}" Padding="16,12">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                <Label Style="{StaticResource BaseLabel}" VerticalOptions="Center">
+                                    <Label.Text>
+                                        <MultiBinding StringFormat="{}{0}  ({1})"><Binding Path="Kind" /><Binding Path="Payments" /></MultiBinding>
+                                    </Label.Text>
+                                </Label>
+                                <Label Grid.Column="1" Text="{Binding Total, StringFormat='₱{0:N2}'}" Style="{StaticResource Heading}" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</v:BasePage>
