@@ -14,6 +14,7 @@ const DIR = path.join(os.tmpdir(), 'gym-pg-data');
 const stubs = `
 create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
 create schema auth; create schema extensions; create schema storage; create schema cron;
+create publication supabase_realtime;
 grant usage on schema auth, extensions, storage, public to anon, authenticated, service_role;
 create table auth.users (
   id uuid primary key default gen_random_uuid(),

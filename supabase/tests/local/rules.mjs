@@ -738,6 +738,63 @@ await test('a photo whose text is only blanks still reads "Photo" in the list', 
   assert.equal((await threads(coach)).find(r => r.kind === 'coach' && r.member_id === fay).last_body, 'Photo');
 });
 
+console.log('\nlive chat (0017)');
+await test('messages and support_messages are in the Realtime publication', async () => {
+  const r = await db.query(`select tablename from pg_publication_tables where pubname = 'supabase_realtime' order by 1`);
+  assert.deepEqual(r.rows.map(x => x.tablename), ['messages', 'support_messages']);
+});
+const gus = await user('gus@t.io', 'member', 'Gus');
+await db.query(`insert into coach_hires (coach_id, member_id) values ($1, $2)`, [coach, gus]);
+const seenAt = async uid => (await db.query(`select seen_at from user_last_seen where user_id = $1`, [uid])).rows[0]?.seen_at;
+await test('touch_last_seen records the caller and moves at most once every 5 minutes', async () => {
+  await run(gus, `select touch_last_seen()`);
+  const first = await seenAt(gus);
+  assert.ok(first);
+  await run(gus, `select touch_last_seen()`);
+  assert.equal((await seenAt(gus)).getTime(), first.getTime());   // too soon: unchanged
+  await db.query(`update user_last_seen set seen_at = now() - interval '10 minutes' where user_id = $1`, [gus]);
+  await run(gus, `select touch_last_seen()`);
+  assert.ok((await seenAt(gus)).getTime() > Date.now() - 60000);   // old enough: moved to now
+  assert.equal(await seenAt(alex), undefined);                     // nobody else was touched
+});
+await test('the last-seen table cannot be read or written directly, by anyone', async () => {
+  assert.match(await code(run(gus, `select * from user_last_seen`)), /42501/);
+  assert.match(await code(run(desk, `select * from user_last_seen`)), /42501/);
+  assert.match(await code(run(admin, `select * from user_last_seen`)), /42501/);
+  assert.match(await code(run(gus, `insert into user_last_seen (user_id, seen_at) values ($1, now())`, [alex])), /42501/);
+  assert.match(await code(run(gus, `update user_last_seen set seen_at = now()`)), /42501/);
+  assert.match(await code(run(gus, `delete from user_last_seen`)), /42501/);
+});
+await test('a profile read does not expose last seen', async () => {
+  const cols = (await run(desk, `select * from profiles limit 1`)).fields.map(f => f.name);
+  assert.ok(!cols.includes('last_seen_at') && !cols.includes('seen_at'));
+});
+await test('coach and member with a current hire see each other\'s last seen; nobody else does', async () => {
+  await run(coach, `select touch_last_seen()`);
+  await db.query(`insert into messages (coach_id, member_id, sender_id, body) values ($1, $2, $2, 'hi')`, [coach, gus]);
+  const mine = (await threads(gus)).find(r => r.kind === 'coach');
+  const theirs = (await threads(coach)).find(r => r.kind === 'coach' && r.member_id === gus);
+  assert.ok(mine.with_last_seen, 'the member sees the coach');
+  assert.ok(theirs.with_last_seen, 'the coach sees the member');
+  assert.equal((await threads(desk)).filter(r => r.kind === 'coach').length, 0);                 // front desk is not in coach chats
+  assert.equal((await threads(alex)).filter(r => r.kind === 'coach' && r.member_id === gus).length, 0);   // a stranger sees no such thread
+});
+await test('an ended hire shows no last seen', async () => {
+  await db.query(`update coach_hires set status = 'ended', ended_at = now() where member_id = $1 and status = 'active'`, [gus]);
+  assert.equal((await threads(gus)).find(r => r.kind === 'coach').with_last_seen, null);
+  assert.equal((await threads(coach)).find(r => r.kind === 'coach' && r.member_id === gus).with_last_seen, null);
+  await db.query(`insert into coach_hires (coach_id, member_id) values ($1, $2)`, [coach, gus]);   // hired again for the next check
+});
+await test('front desk sees a member\'s last seen; the member never sees the front desk\'s', async () => {
+  await run(gus, `select send_support_message($1, 'hello desk')`, [gus]);
+  await run(desk, `select touch_last_seen()`);
+  const inbox = (await threads(desk)).find(r => r.kind === 'support' && r.member_id === gus);
+  assert.ok(inbox.with_last_seen);
+  const own = (await threads(gus)).find(r => r.kind === 'support');
+  assert.equal(own.with_last_seen, null);
+  assert.equal(own.with_id, null);
+});
+
 console.log(`\n${pass} passed, ${failed} failed`);
 await db.end(); await server.stop();
 process.exit(failed ? 1 : 0);
