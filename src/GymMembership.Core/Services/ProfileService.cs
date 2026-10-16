@@ -26,6 +26,8 @@ public interface IProfileService
     Task<AppResult<string>> SetAvatarAsync(string fileName, byte[] data);
     /// <summary>A short-lived link for a stored picture; null when there is none, so the initials are shown instead.</summary>
     Task<AppResult<string?>> AvatarUrlAsync(string? path);
+    /// <summary>Tells the server you are in the app (it counts at most once every 5 minutes). The result can be ignored.</summary>
+    Task<AppResult<bool>> TouchSeenAsync();
 }
 
 public sealed class ProfileService(ISupabaseGateway gw) : IProfileService
@@ -39,6 +41,8 @@ public sealed class ProfileService(ISupabaseGateway gw) : IProfileService
         Extensions.Contains(Path.GetExtension(fileName).ToLowerInvariant()) && data.Length is > 0 and <= MaxBytes;
 
     public event Action? AvatarChanged;
+
+    public Task<AppResult<bool>> TouchSeenAsync() => Safe.RunAsync(async () => { await gw.RpcAsync("touch_last_seen"); return true; });
 
     public Task<AppResult<MyProfile>> MeAsync() => Safe.RunAsync(async () =>
     {

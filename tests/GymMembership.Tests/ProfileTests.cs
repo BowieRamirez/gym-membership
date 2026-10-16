@@ -22,6 +22,13 @@ public class ProfileTests
     public void Initials_come_from_the_first_and_last_word(string? name, string expected) => Assert.Equal(expected, Initials.From(name));
 
     [Fact]
+    public async Task Touching_last_seen_succeeds()
+    {
+        var (_, svc) = await As("member@demo.io");
+        Assert.True((await svc.TouchSeenAsync()).Ok);
+    }
+
+    [Fact]
     public async Task Me_returns_the_name_and_no_picture_at_first()
     {
         var (_, svc) = await As("member@demo.io");

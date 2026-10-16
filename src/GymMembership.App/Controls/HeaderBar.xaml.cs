@@ -1,6 +1,7 @@
 using CommunityToolkit.Maui;
 using CommunityToolkit.Maui.Extensions;
 using GymMembership.App.Views;
+using GymMembership.Core.Services;
 using GymMembership.Core.ViewModels;
 using Microsoft.Maui.Controls.Shapes;
 
@@ -29,11 +30,14 @@ public partial class HeaderBar : ContentView
 		shell.Loaded += (_, _) => Update();
 		shell.Unloaded += (_, _) => vm.Dispose();   // a rebuilt shell gets a new header; this one must stop listening
 
-		// no live connection yet (Realtime arrives with the messenger), so look again once a minute while the app is open
+		// look again once a minute while the app is open; every fifth look also tells the server you are here (last active)
+		var profile = sp.GetRequiredService<IProfileService>();
+		var ticks = 0;
 		var timer = Application.Current!.Dispatcher.CreateTimer();
 		timer.Interval = TimeSpan.FromSeconds(60);
-		timer.Tick += (_, _) => _ = vm.RefreshAsync();
+		timer.Tick += (_, _) => { _ = vm.RefreshAsync(); if (++ticks % 5 == 0) _ = profile.TouchSeenAsync(); };
 		timer.Start();
+		shell.Loaded += (_, _) => _ = profile.TouchSeenAsync();   // and once when the app opens
 		shell.Unloaded += (_, _) => timer.Stop();
 	}
 

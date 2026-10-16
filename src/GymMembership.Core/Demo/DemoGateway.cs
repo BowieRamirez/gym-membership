@@ -1053,6 +1053,7 @@ public sealed class DemoGateway : ISupabaseGateway
                 (All<Profile>().FirstOrDefault(x => x.Id == uid) ?? throw Err("not_found")).AvatarPath = path;
                 return null;
             }
+            case "touch_last_seen": return null;   // the demo has no one to show it to
             case "mark_password_changed":
             {
                 var p = All<Profile>().FirstOrDefault(x => x.Id == uid);
