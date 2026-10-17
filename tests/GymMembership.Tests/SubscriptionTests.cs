@@ -216,12 +216,13 @@ public class SubscriptionTests
     [Fact]
     public async Task Approving_a_refund_lowers_revenue_at_once_and_repayment_only_lowers_the_cash_drawer()
     {
-        var (gw, _, svc, monthly, _) = await Setup();
+        var (gw, clock, svc, monthly, _) = await Setup();
+        clock.Now = DateTimeOffset.UtcNow.AddYears(1);
         var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
         var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
         Assert.True((await svc.RequestRefundAsync(term.Id,"Changed plans")).Ok);
         var request=Assert.Single((await svc.RefundsAsync()).Value!).Request;
-        var day=new DateOnly(2026,10,17);
+        var day=DateOnly.FromDateTime(clock.Now.UtcDateTime.AddHours(8));
         await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
         async Task<decimal> Net()=>(await new AdminService(gw).RevenueAsync(day,day)).Value!.Sum(r=>r.Total);
         async Task<decimal> Cash()=>(await new PaymentStaffService(gw).CashSummaryAsync(day)).Value!.Sum(r=>r.Total);

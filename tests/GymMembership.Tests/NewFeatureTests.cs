@@ -269,6 +269,8 @@ public class NewFeatureTests
     {
         var gw = await As("member@demo.io");
         var sessions = new SessionService(gw);
+        foreach (var booked in (await sessions.SessionsAsync()).Value!.Where(r => r.Session.Status == Status.Scheduled))
+            Assert.True((await sessions.CancelSessionAsync(booked.Session.Id)).Ok);
         var slot = (await sessions.RequestsAsync()).Value!.Rows.First(r => r.Kind == "Open availability");
         Assert.True(slot.CanRespond);
         Assert.True((await sessions.RespondAsync(slot.Request.Id, true)).Ok);

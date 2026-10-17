@@ -30,6 +30,7 @@ public class AttendanceViewModelTests
         public Task<AppResult<RequestsView>> RequestsAsync() => throw new NotSupportedException();
         public Task<AppResult<bool>> RequestAsync(string coachId, DateTime startUtc, DateTime endUtc, string? message) => throw new NotSupportedException();
         public Task<AppResult<bool>> PostAvailabilityAsync(DateTime startUtc, DateTime endUtc) => throw new NotSupportedException();
+        public Task<AppResult<bool>> InviteMemberAsync(string memberId, DateTime startUtc, DateTime endUtc) => throw new NotSupportedException();
         public Task<AppResult<bool>> RespondAsync(int requestId, bool approve) => throw new NotSupportedException();
         public Task<AppResult<bool>> CancelRequestAsync(int requestId) => throw new NotSupportedException();
         public Task<AppResult<IReadOnlyList<SessionRow>>> SessionsAsync() => throw new NotSupportedException();

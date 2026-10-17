@@ -235,9 +235,12 @@ await test('a member requests a time; the coach approves and a session is create
   assert.equal((await run(coach, `select * from training_sessions where status='scheduled'`)).rowCount, 1);
   assert.match(await code(run(coach, `select respond_time_request($1,true)`, [reqId])), /already_processed/);
 });
+const overlapCoach = await user('overlap-coach@t.io', 'coach', 'Coach Other');
+await run(alex, 'select hire_coach($1)', [overlapCoach]);
 await test('overlapping sessions are refused', async () => {
-  const r2 = (await run(alex, `select request_time($1,$2,$3) id`, [coach, new Date(t0.getTime() + 18e5), t2])).rows[0].id;
-  assert.match(await code(run(coach, `select respond_time_request($1,true)`, [r2])), /23P01/);
+  const r2 = (await run(alex, `select request_time($1,$2,$3) id`, [overlapCoach, new Date(t0.getTime() + 18e5), t2])).rows[0].id;
+  assert.match(await code(run(overlapCoach, `select respond_time_request($1,true)`, [r2])), /23P01/);
+  await run(alex, `select cancel_time_request($1)`, [r2]); // release the one-pending-request slot before the next test
 });
 await test('reschedule moves the same session once the other side approves', async () => {
   const s = (await run(alex, `select training_session_id id from training_sessions`)).rows[0].id;
@@ -248,7 +251,7 @@ await test('reschedule moves the same session once the other side approves', asy
   assert.equal(r.rows[0].n, 1); assert.equal(new Date(r.rows[0].st).getTime(), t2.getTime());
 });
 await test('a pending request can be withdrawn only by whoever made it', async () => {
-  const r = (await run(alex, `select request_time($1,$2,$3) id`, [coach, new Date(t0.getTime() + 5 * 864e5), new Date(t0.getTime() + 5 * 864e5 + 36e5)])).rows[0].id;
+  const r = (await run(alex, `select request_time($1,$2,$3) id`, [overlapCoach, new Date(t0.getTime() + 5 * 864e5), new Date(t0.getTime() + 5 * 864e5 + 36e5)])).rows[0].id;
   assert.match(await code(run(coach, `select cancel_time_request($1)`, [r])), /forbidden/);
   await run(alex, `select cancel_time_request($1)`, [r]);
   assert.match(await code(run(alex, `select cancel_time_request($1)`, [r])), /already_processed/);

@@ -348,38 +348,85 @@ public partial class RequestsViewModel(ISessionService svc) : LoadableViewModel
 {
     public ObservableCollection<RequestRow> Requests { get; } = new();
     public ObservableCollection<CoachCard> Coaches { get; } = new();
+    public ObservableCollection<RequestMember> Members { get; } = new();
     public int[] Durations { get; } = [30, 45, 60, 90];
 
     [ObservableProperty] private bool isCoach;
     [ObservableProperty] private bool canCompose;
+    [ObservableProperty] private bool useWindowsRequestForm;
     [ObservableProperty] private CoachCard? selectedCoach;
+    [ObservableProperty] private RequestMember? selectedMember;
     [ObservableProperty] private DateTime date = DateTime.Today.AddDays(1);
     [ObservableProperty] private TimeSpan time = new(9, 0, 0);
     [ObservableProperty] private int durationMinutes = 60;
     [ObservableProperty] private string? message;
 
+    IReadOnlyList<TrainingSession> activeSessions = [];
+    public bool HasActiveSession => IsCoach
+        ? SelectedMember is { } member && activeSessions.Any(s => s.MemberId == member.MemberId)
+        : SelectedCoach is { } coach && activeSessions.Any(s => s.CoachId == coach.Coach.UserId);
+    public bool ShowActiveSession => UseWindowsRequestForm && HasActiveSession;
+    public bool ShowMemberPicker => UseWindowsRequestForm && IsCoach;
+    public bool HasPendingRequest => !IsCoach && SelectedCoach is { } c && Requests.Any(r => r.CanCancel && r.Request.RequestedBy == "member" && r.Request.SessionId is null && r.Request.CoachId == c.Coach.UserId);
+    public bool ShowPendingRequest => UseWindowsRequestForm && HasPendingRequest && !HasActiveSession;
+    public string ComposeTitle => IsCoach ? (UseWindowsRequestForm ? "Invite a member" : "Offer an open slot") : "Request a session";
+    public string SubmitText => IsCoach ? (UseWindowsRequestForm ? "Send invitation" : "Post slot") : "Send request";
+    public string MemberPickerHint => Members.Count == 0 ? "No active trainees to invite. A member must hire you first." : "Choose one of your current trainees. Only that member receives this invitation.";
+    public bool CanSubmit => !IsBusy && CanCompose && !HasActiveSession && (IsCoach ? !UseWindowsRequestForm || SelectedMember is not null : SelectedCoach is not null && !HasPendingRequest);
+
+    partial void OnSelectedCoachChanged(CoachCard? value) => RefreshCompose();
+    partial void OnSelectedMemberChanged(RequestMember? value) => RefreshCompose();
+    partial void OnUseWindowsRequestFormChanged(bool value) => RefreshCompose();
+    protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (e.PropertyName == nameof(IsBusy)) SubmitCommand.NotifyCanExecuteChanged();
+    }
+    void RefreshCompose()
+    {
+        foreach (var name in new[] { nameof(HasActiveSession), nameof(ShowActiveSession), nameof(ShowMemberPicker), nameof(HasPendingRequest), nameof(ShowPendingRequest), nameof(ComposeTitle), nameof(SubmitText), nameof(MemberPickerHint) }) OnPropertyChanged(name);
+        SubmitCommand.NotifyCanExecuteChanged();
+    }
+
     public override Task OnAppearingAsync() => LoadAsync();
 
     [RelayCommand]
-    private Task LoadAsync() => RunAsync(svc.RequestsAsync, v =>
+    private async Task LoadAsync()
     {
-        Fill(Requests, v.Rows); Fill(Coaches, v.HiredCoaches);
-        IsCoach = v.IsCoach;
-        CanCompose = v.IsCoach || v.HiredCoaches.Count > 0;
-        SelectedCoach ??= Coaches.FirstOrDefault();
-    });
+        if (IsBusy) return;
+        CanCompose = false;
+        await RunAsync(svc.RequestsAsync, v =>
+        {
+            activeSessions = v.ActiveSessions ?? [];
+            Fill(Requests, v.Rows); Fill(Coaches, v.HiredCoaches); Fill(Members, v.Trainees ?? []);
+            IsCoach = v.IsCoach;
+            CanCompose = v.IsCoach || v.HiredCoaches.Count > 0;
+            SelectedCoach = Coaches.FirstOrDefault(c => c.Coach.UserId == SelectedCoach?.Coach.UserId) ?? Coaches.FirstOrDefault();
+            SelectedMember = Members.FirstOrDefault(m => m.MemberId == SelectedMember?.MemberId);
+        });
+        RefreshCompose();
+    }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanSubmit))]
     private async Task SubmitAsync()
     {
+        if (!CanSubmit) return;
         Notice = null;
         var start = (Date.Date + Time).ToUniversalTime();
         var end = start.AddMinutes(DurationMinutes);
-        if (!IsCoach && SelectedCoach is null) { ErrorMessage = "Choose a coach first."; return; }
         var ok = IsCoach
-            ? await RunAsync(() => svc.PostAvailabilityAsync(start, end))
+            ? UseWindowsRequestForm
+                ? await RunAsync(() => svc.InviteMemberAsync(SelectedMember!.MemberId, start, end))
+                : await RunAsync(() => svc.PostAvailabilityAsync(start, end))
             : await RunAsync(() => svc.RequestAsync(SelectedCoach!.Coach.UserId, start, end, Message));
-        if (ok) { Notice = IsCoach ? "Availability posted." : "Request sent."; Message = null; await LoadAsync(); }
+        if (ok) { Notice = IsCoach ? (UseWindowsRequestForm ? "Invitation sent. The member must approve it before a session is booked." : "Availability posted.") : "Request sent."; Message = null; await LoadAsync(); }
+        else if (ErrorMessage == ErrorText.For(AppErrorKind.Conflict, "pending_session_request") ||
+                 ErrorMessage == ErrorText.For(AppErrorKind.Conflict, "active_coaching_session"))
+        {
+            var error = ErrorMessage;
+            await LoadAsync();
+            ErrorMessage = error;
+        }
     }
 
     [RelayCommand] private Task ApproveAsync(RequestRow row) => RespondAsync(row, true);

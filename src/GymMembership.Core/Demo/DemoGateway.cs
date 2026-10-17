@@ -692,10 +692,25 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 {
                     if (!ActiveMember(uid)) throw Err("no_active_membership");
                     if (!CoachesMember(coachId, uid)) throw Err("no_active_hire");
+                    if (All<TrainingSession>().Any(s => s.CoachId == coachId && s.MemberId == uid && s.Status == Status.Scheduled)) throw Err("active_coaching_session");
+                    if (All<TimeRequest>().Any(r => r.CoachId == coachId && r.MemberId == uid && r.RequestedBy == "member" && r.SessionId is null && r.Status == Status.Pending)) throw Err("pending_session_request");
                     req = Add(new TimeRequest { CoachId = coachId, MemberId = uid, RequestedBy = "member", RequestedStart = start, RequestedEnd = end, Message = Opt("p_message") });
                     Notify(coachId, "time_request", "New time request");
                 }
                 return req.Id;
+            }
+            case "request_member_time":
+            {
+                RequireActive();
+                if (!IsCoach(uid)) throw Err("forbidden");
+                var member = S("p_member_id"); var start = T("p_start"); var end = T("p_end");
+                if (end <= start) throw Err("end must be after start");
+                if (!CoachesMember(uid, member)) throw Err("no_active_hire");
+                if (!ActiveMember(member)) throw Err("invite_member_inactive");
+                if (All<TrainingSession>().Any(s => s.CoachId == uid && s.MemberId == member && s.Status == Status.Scheduled)) throw Err("active_coaching_session");
+                var invitation = Add(new TimeRequest { CoachId = uid, MemberId = member, RequestedBy = "coach", RequestedStart = start, RequestedEnd = end });
+                Notify(member, "time_request", "Your coach invited you to a session");
+                return invitation.Id;
             }
             case "request_reschedule":
             {
@@ -729,6 +744,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (approve)
                 {
                     if (r.SessionId is null && !ActiveMember(member)) throw Err("no_active_membership");
+                    if (r.SessionId is null && All<TrainingSession>().Any(s => s.CoachId == r.CoachId && s.MemberId == member && s.Status == Status.Scheduled)) throw Err("active_coaching_session");
                     var ignore = r.SessionId ?? 0;
                     if (Overlap(r.CoachId, true, r.RequestedStart, r.RequestedEnd, ignore) || Overlap(member, false, r.RequestedStart, r.RequestedEnd, ignore)) throw Err("overlap");
                     if (r.SessionId is { } sid)

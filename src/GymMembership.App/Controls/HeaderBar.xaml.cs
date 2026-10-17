@@ -40,6 +40,7 @@ public partial class HeaderBar : ContentView
 		shell.Loaded += (_, _) => _ = profile.TouchSeenAsync();   // and once when the app opens
 		shell.Unloaded += (_, _) => timer.Stop();
 #if WINDOWS
+		SetupWindowsSidebar(shell);
 		shell.FlyoutFooter = new SignOutFooter { BindingContext = vm };   // Sign out sits at the bottom of the side menu on Windows
 		shell.Loaded += (_, _) => HideOverflowButton(shell);
 		shell.Navigated += (_, _) => HideOverflowButton(shell);

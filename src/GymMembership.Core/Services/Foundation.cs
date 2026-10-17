@@ -33,9 +33,9 @@ public static class ErrorMapper
     {
         var m = message.ToLowerInvariant();
         if (Has(m, "forbidden", "42501", "jwt", "row-level security", "invalid login", "not authenticated")) return AppErrorKind.Unauthorized;
-        if (Has(m, "already_processed", "already_availed", "renewal_pending", "already_requested", "refund_in_progress", "not_refundable", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
+        if (Has(m, "already_processed", "already_availed", "renewal_pending", "already_requested", "refund_in_progress", "not_refundable", "pending_session_request", "active_coaching_session", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
         if (Has(m, "no_active_membership", "self_verify", "self_decision", "not_renewable", "wrong_member", "not_found", "23514",
-                   "refund_window_closed", "payment_expired", "invalid_code", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "end must be after start")) return AppErrorKind.Validation;
+                   "refund_window_closed", "payment_expired", "invite_member_inactive", "invalid_code", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "end must be after start")) return AppErrorKind.Validation;
         return AppErrorKind.Unknown;
     }
 
@@ -77,6 +77,10 @@ public static class ErrorText
         "refund_window_closed" => "The 24-hour cancellation and refund request window has closed.",
         "payment_expired" => "That unpaid payment has expired. Create a fresh payment.",
         "already_requested" => "A cancellation and refund request already exists for this term.",
+        "active_coaching_session" => "You already have an active session together. Open Sessions to reschedule or cancel it. Finish, cancel or mark that session no-show before requesting another.",
+        "pending_session_request" => "You already have a pending request to this coach. Wait for a reply or cancel it below before sending another.",
+        "invite_member_inactive" => "This member needs an active membership before you can invite them to a session.",
+        _ when raw?.Contains("time_requests_one_pending_member_per_coach", StringComparison.OrdinalIgnoreCase) == true => "You already have a pending request to this coach. Wait for a reply or cancel it below before sending another.",
         "not_refundable" => "This term has no eligible verified payment to refund.",
         "refund_in_progress" => "This payment has a pending or approved refund. It cannot also be voided.",
         "not_renewable" => "This membership can't be renewed right now.",

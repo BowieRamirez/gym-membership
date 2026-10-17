@@ -7,6 +7,9 @@ public partial class RequestsPage : BasePage
 	public RequestsPage(RequestsViewModel vm)
 	{
 		InitializeComponent();
+#if WINDOWS
+		vm.UseWindowsRequestForm = true;
+#endif
 		BindingContext = vm;
 	}
 

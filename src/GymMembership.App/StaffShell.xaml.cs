@@ -13,6 +13,13 @@ public partial class StaffShell : Shell
 			foreach (var item in Items.Where(i => i.ClassId == "admin").ToList())
 				Items.Remove(item);
 		if (DeviceInfo.Idiom == DeviceIdiom.Phone) MoveDeskItemsToBottomBar();
+#if WINDOWS
+		if (role == AppRole.Admin)
+		{
+			SetupAdminOverview(sp);
+			SetupAdminNavigation();
+		}
+#endif
 	}
 
 	// short names fit under a bottom-bar slot; the pages themselves keep their full titles

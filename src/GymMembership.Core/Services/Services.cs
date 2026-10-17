@@ -616,13 +616,15 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
 // ===================== Time requests and sessions =====================
 public sealed record RequestRow(TimeRequest Request, string With, string Kind, bool CanRespond, bool CanCancel);
 public sealed record SessionRow(TrainingSession Session, string With, bool IsMine, bool CanManage, bool CanChange);
-public sealed record RequestsView(IReadOnlyList<RequestRow> Rows, bool IsCoach, IReadOnlyList<CoachCard> HiredCoaches);
+public sealed record RequestMember(string MemberId, string Name);
+public sealed record RequestsView(IReadOnlyList<RequestRow> Rows, bool IsCoach, IReadOnlyList<CoachCard> HiredCoaches, IReadOnlyList<RequestMember>? Trainees = null, IReadOnlyList<TrainingSession>? ActiveSessions = null);
 
 public interface ISessionService
 {
     Task<AppResult<RequestsView>> RequestsAsync();
     Task<AppResult<bool>> RequestAsync(string coachId, DateTime startUtc, DateTime endUtc, string? message);
     Task<AppResult<bool>> PostAvailabilityAsync(DateTime startUtc, DateTime endUtc);
+    Task<AppResult<bool>> InviteMemberAsync(string memberId, DateTime startUtc, DateTime endUtc);
     Task<AppResult<bool>> RespondAsync(int requestId, bool approve);
     Task<AppResult<bool>> CancelRequestAsync(int requestId);
     Task<AppResult<IReadOnlyList<SessionRow>>> SessionsAsync();
@@ -662,7 +664,16 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
         var hires = await gw.ListAsync<CoachHire>(h => h.MemberId == uid && h.Status == "active");
         IReadOnlyList<CoachCard> hired = coaches.Where(c => hires.Any(h => h.CoachId == c.UserId))
             .Select(c => new CoachCard(c, CoachName(c.UserId), true, null)).ToList();
-        return new RequestsView(rows, iAmCoach, hired);
+        IReadOnlyList<RequestMember> trainees = [];
+        if (iAmCoach)
+        {
+            var mine = await gw.ListAsync<CoachHire>(h => h.CoachId == uid && h.Status == "active");
+            var profiles = await gw.ListAsync<Profile>(p => p.IsActive == true);
+            trainees = profiles.Where(p => mine.Any(h => h.MemberId == p.Id))
+                .Select(p => new RequestMember(p.Id, MemberName(p.Id))).OrderBy(m => m.Name).ToList();
+        }
+        var active = await gw.ListAsync<TrainingSession>(s => s.Status == Status.Scheduled);
+        return new RequestsView(rows, iAmCoach, hired, trainees, active.Where(s => s.CoachId == uid || s.MemberId == uid).ToList());
     });
 
     public async Task<AppResult<bool>> RequestAsync(string coachId, DateTime startUtc, DateTime endUtc, string? message)
@@ -678,6 +689,20 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
         {
             var uid = gw.CurrentUserId ?? throw new Exception("not authenticated");
             await gw.RpcAsync<int>("request_time", TimeArgs(uid, startUtc, endUtc, null));   // a coach asking for their own id is an open slot
+            return true;
+        });
+    }
+
+    public async Task<AppResult<bool>> InviteMemberAsync(string memberId, DateTime startUtc, DateTime endUtc)
+    {
+        if (string.IsNullOrWhiteSpace(memberId)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
+        if (endUtc <= startUtc) return AppResult<bool>.Fail(AppErrorKind.Validation, "end must be after start");
+        return await Safe.RunAsync(async () =>
+        {
+            await gw.RpcAsync<int>("request_member_time", new()
+            {
+                ["p_member_id"] = memberId, ["p_start"] = startUtc.ToString("O"), ["p_end"] = endUtc.ToString("O")
+            });
             return true;
         });
     }
