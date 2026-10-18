@@ -119,14 +119,15 @@ public class NewFeatureTests
     public async Task Member_and_coach_can_chat_only_while_hired()
     {
         var gw = await As("member@demo.io");
-        var svc = new MessageService(gw);
-        var thread = (await svc.ThreadsAsync()).Value!.Single();
+        var svc = new ChatService(gw, new NotificationService(gw));
+        var thread = (await svc.ThreadsAsync()).Value!.Single(t => !t.IsSupport);
         Assert.True(thread.CanSend);
-        Assert.True((await svc.SendAsync(thread.CoachId, thread.MemberId, "  See you at 9  ")).Ok);
+        Assert.True((await svc.SendAsync(thread, "  See you at 9  ")).Ok);
 
         await gw.SignInAsync("coach@demo.io", DemoGateway.DemoPassword);
-        var seen = (await svc.MessagesAsync(thread.CoachId, thread.MemberId)).Value!;
-        Assert.Equal("See you at 9", seen.Last().Message.Body);
+        var theirs = (await svc.ThreadsAsync()).Value!.Single(t => t.WithName == "Alex Tan");
+        var seen = (await svc.MessagesAsync(theirs)).Value!.Bubbles;
+        Assert.Equal("See you at 9", seen.Last().Line.Body);
         Assert.False(seen.Last().Mine);
         Assert.Contains(await gw.ListAsync<UserNotification>(), n => n.Type == "message");
     }
@@ -135,20 +136,21 @@ public class NewFeatureTests
     public async Task Chat_rejects_empty_text_outsiders_and_ended_hires()
     {
         var gw = await As("member@demo.io");
-        var svc = new MessageService(gw);
-        var thread = (await svc.ThreadsAsync()).Value!.Single();
-        Assert.Equal(AppErrorKind.Validation, (await svc.SendAsync(thread.CoachId, thread.MemberId, "   ")).Error);
+        var svc = new ChatService(gw, new NotificationService(gw));
+        var thread = (await svc.ThreadsAsync()).Value!.Single(t => !t.IsSupport);
+        Assert.Equal(AppErrorKind.Validation, (await svc.SendAsync(thread, "   ")).Error);
 
         await gw.SignInAsync("carlo@demo.io", DemoGateway.DemoPassword); // never hired Lena
-        Assert.Empty((await svc.MessagesAsync(thread.CoachId, thread.MemberId)).Value!);
-        Assert.Equal(AppErrorKind.Validation, (await svc.SendAsync(thread.CoachId, thread.MemberId, "hi")).Error);   // not one of the two people in it
+        Assert.DoesNotContain((await svc.ThreadsAsync()).Value!, t => !t.IsSupport);                       // no coach conversations of their own
+        Assert.Equal(AppErrorKind.Unauthorized, (await svc.MessagesAsync(thread)).Error);                  // and Alex and Lena's is not readable
+        Assert.Equal(AppErrorKind.Validation, (await svc.SendAsync(thread, "hi")).Error);                  // not one of the two people in it
 
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         var hire = (await gw.ListAsync<CoachHire>()).First(h => h.Status == "active");
         Assert.True((await new CoachService(gw).EndHireAsync(hire.Id)).Ok);
-        Assert.False((await svc.ThreadsAsync()).Value!.Single().CanSend); // history stays, sending stops
-        Assert.Equal(AppErrorKind.Unauthorized, (await svc.SendAsync(thread.CoachId, thread.MemberId, "still there?")).Error);
-        Assert.NotEmpty((await svc.MessagesAsync(thread.CoachId, thread.MemberId)).Value!);
+        Assert.False((await svc.ThreadsAsync()).Value!.Single(t => !t.IsSupport).CanSend); // history stays, sending stops
+        Assert.NotEmpty((await svc.MessagesAsync(thread)).Value!.Bubbles);
+        Assert.Equal(AppErrorKind.Unauthorized, (await svc.SendAsync(thread, "still there?")).Error);
     }
 
     // ---------- shifts and trainees ----------
@@ -267,6 +269,8 @@ public class NewFeatureTests
     {
         var gw = await As("member@demo.io");
         var sessions = new SessionService(gw);
+        foreach (var booked in (await sessions.SessionsAsync()).Value!.Where(r => r.Session.Status == Status.Scheduled))
+            Assert.True((await sessions.CancelSessionAsync(booked.Session.Id)).Ok);
         var slot = (await sessions.RequestsAsync()).Value!.Rows.First(r => r.Kind == "Open availability");
         Assert.True(slot.CanRespond);
         Assert.True((await sessions.RespondAsync(slot.Request.Id, true)).Ok);

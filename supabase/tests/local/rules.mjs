@@ -235,9 +235,12 @@ await test('a member requests a time; the coach approves and a session is create
   assert.equal((await run(coach, `select * from training_sessions where status='scheduled'`)).rowCount, 1);
   assert.match(await code(run(coach, `select respond_time_request($1,true)`, [reqId])), /already_processed/);
 });
+const overlapCoach = await user('overlap-coach@t.io', 'coach', 'Coach Other');
+await run(alex, 'select hire_coach($1)', [overlapCoach]);
 await test('overlapping sessions are refused', async () => {
-  const r2 = (await run(alex, `select request_time($1,$2,$3) id`, [coach, new Date(t0.getTime() + 18e5), t2])).rows[0].id;
-  assert.match(await code(run(coach, `select respond_time_request($1,true)`, [r2])), /23P01/);
+  const r2 = (await run(alex, `select request_time($1,$2,$3) id`, [overlapCoach, new Date(t0.getTime() + 18e5), t2])).rows[0].id;
+  assert.match(await code(run(overlapCoach, `select respond_time_request($1,true)`, [r2])), /23P01/);
+  await run(alex, `select cancel_time_request($1)`, [r2]); // release the one-pending-request slot before the next test
 });
 await test('reschedule moves the same session once the other side approves', async () => {
   const s = (await run(alex, `select training_session_id id from training_sessions`)).rows[0].id;
@@ -248,7 +251,7 @@ await test('reschedule moves the same session once the other side approves', asy
   assert.equal(r.rows[0].n, 1); assert.equal(new Date(r.rows[0].st).getTime(), t2.getTime());
 });
 await test('a pending request can be withdrawn only by whoever made it', async () => {
-  const r = (await run(alex, `select request_time($1,$2,$3) id`, [coach, new Date(t0.getTime() + 5 * 864e5), new Date(t0.getTime() + 5 * 864e5 + 36e5)])).rows[0].id;
+  const r = (await run(alex, `select request_time($1,$2,$3) id`, [overlapCoach, new Date(t0.getTime() + 5 * 864e5), new Date(t0.getTime() + 5 * 864e5 + 36e5)])).rows[0].id;
   assert.match(await code(run(coach, `select cancel_time_request($1)`, [r])), /forbidden/);
   await run(alex, `select cancel_time_request($1)`, [r]);
   assert.match(await code(run(alex, `select cancel_time_request($1)`, [r])), /already_processed/);
@@ -317,10 +320,10 @@ await test('memberships past their end become expired, and reminders go out once
   await db.query(`select record_counter_payment_test()`).catch(() => {});
   const gp = (await run(g, `select * from avail_membership($1)`, [monthly])).rows[0];
   await run(desk, `select verify_payment($1,true)`, [gp.payment_id]);
-  await db.query(`update user_membership_packages set ends_at = now() + interval '3 days' where member_id=$1`, [g]);
+  await db.query(`update membership_terms set ends_at = now() + interval '3 days' where member_id=$1`, [g]);
   assert.equal((await db.query(`select send_expiry_reminders() n`)).rows[0].n >= 1, true);
   assert.equal((await db.query(`select send_expiry_reminders() n`)).rows[0].n, 0);
-  await db.query(`update user_membership_packages set ends_at = now() - interval '1 minute', starts_at = now() - interval '31 days' where member_id=$1`, [g]);
+  await db.query(`update membership_terms set ends_at = now() - interval '1 minute', starts_at = now() - interval '31 days' where member_id=$1`, [g]);
   assert.equal((await db.query(`select expire_memberships() n`)).rows[0].n >= 1, true);
   assert.equal((await run(g, `select is_active_member() m`)).rows[0].m, false);
 });
@@ -369,6 +372,430 @@ await test('sign-up with a bad name fails, with no name it falls back to the let
   assert.equal(await nameOf('jane.doe99@t.io'), 'jane doe');
   assert.equal(await nameOf('99@t.io'), 'Member');
   assert.equal(await nameOf('x1@t.io', '   '), 'Member');   // one letter is too short for a name
+});
+
+console.log('\nprofile pictures and catalog images (0013)');
+const avatarOf = async uid => (await run(uid, `select avatar_path from profiles where id = $1`, [uid])).rows[0].avatar_path;
+await test('a member sets and clears their own picture', async () => {
+  await run(alex, `select set_my_avatar($1)`, [`${alex}/avatar-1.jpg`]);
+  assert.equal(await avatarOf(alex), `${alex}/avatar-1.jpg`);
+  await run(alex, `select set_my_avatar(null)`);
+  assert.equal(await avatarOf(alex), null);
+});
+await test("a path in someone else's folder is refused", async () => {
+  assert.match(await code(run(alex, `select set_my_avatar($1)`, [`${bea}/avatar-1.jpg`])), /42501/);
+});
+await test('avatar_path cannot be written directly', async () => {
+  assert.match(await code(run(alex, `update profiles set avatar_path = 'x' where id = $1`, [alex])), /42501/);
+});
+await test('a deactivated user cannot set a picture', async () => {
+  assert.equal(await code(run(bea, `select set_my_avatar($1)`, [`${bea}/avatar-1.jpg`])), 'ok');   // works while active
+  await db.query(`update profiles set is_active = false where id = $1`, [bea]);
+  try { assert.notEqual(await code(run(bea, `select set_my_avatar($1)`, [`${bea}/avatar-2.jpg`])), 'ok'); }
+  finally { await db.query(`update profiles set is_active = true, avatar_path = null where id = $1`, [bea]); }
+});
+await test('the avatars bucket is private, images only, 5 MB', async () => {
+  const b = (await db.query(`select public, file_size_limit, allowed_mime_types from storage.buckets where id = 'avatars'`)).rows[0];
+  assert.equal(b.public, false);
+  assert.equal(Number(b.file_size_limit), 5242880);
+  assert.deepEqual([...b.allowed_mime_types].sort(), ['image/jpeg', 'image/png', 'image/webp']);
+});
+await test('storage: add only to your own folder; any signed-in user reads', async () => {
+  await db.query(`grant select, insert on storage.objects to authenticated`);   // the real project grants this; the local stub does not
+  const add = (uid, folder) => run(uid, `insert into storage.objects (bucket_id, name) values ('avatars', $1)`, [`${folder}/avatar-1.jpg`]);
+  assert.equal(await code(add(alex, alex)), 'ok');
+  assert.match(await code(add(alex, bea)), /42501/);
+  assert.equal((await run(bea, `select name from storage.objects where bucket_id = 'avatars'`)).rowCount, 1);
+});
+await test('traversal, bare ids, other-case ids and odd file names are refused', async () => {
+  for (const bad of [`${alex}/../${bea}/a.jpg`, `${alex}/..`, alex, `${alex}/`, `${alex.toUpperCase()}/a.jpg`, `${alex}/.hidden.jpg`, `${alex}/a/b.jpg`, `${alex}/${'a'.repeat(121)}`, `${alex}/a b.jpg`])
+    assert.match(await code(run(alex, `select set_my_avatar($1)`, [bad])), /42501/, bad);
+  assert.equal(await code(run(alex, `select set_my_avatar($1)`, [`${alex}/avatar-20261015120000.jpg`])), 'ok');
+});
+await test('storage: traversal and nested names are refused too', async () => {
+  const add = name => run(alex, `insert into storage.objects (bucket_id, name) values ('avatars', $1)`, [name]);
+  for (const bad of [`${alex}/../${bea}/a.jpg`, `${alex}/.x`, `${alex}/a/b.jpg`]) assert.match(await code(add(bad)), /42501/, bad);
+});
+await test('amenities and packages have an image_path, empty by default', async () => {
+  assert.equal((await run(admin, `select image_path from amenities limit 1`)).rows[0].image_path, null);
+  assert.equal((await run(admin, `select image_path from membership_packages limit 1`)).rows[0].image_path, null);
+});
+
+console.log('\namenity status (0014)');
+const boxing = (await db.query(`select amenity_id from amenities where name = 'Boxing'`)).rows[0].amenity_id;
+const statusOf = async () => (await db.query(`select status, status_reason, back_at from amenities where amenity_id = $1`, [boxing])).rows[0];
+const setStatus = (uid, status, reason = null, back = null) => run(uid, `select * from set_amenity_status($1, $2, $3, $4)`, [boxing, status, reason, back]);
+const alertsFor = async uid => (await db.query(`select title, body, type from user_notifications where user_id = $1 and type = 'amenity' order by notification_id`, [uid])).rows;
+const hours = n => new Date(Date.now() + n * 3600e3).toISOString();
+
+await test('a new amenity is available with no reason or return time', async () => {
+  const s = await statusOf();
+  assert.equal(s.status, 'available'); assert.equal(s.status_reason, null); assert.equal(s.back_at, null);
+});
+await test('a member can save and un-save an amenity, once; a coach cannot', async () => {
+  await run(alex, `select set_amenity_followed($1, true)`, [boxing]);
+  await run(alex, `select set_amenity_followed($1, true)`, [boxing]);   // twice is fine
+  assert.equal((await run(alex, `select * from amenity_follows`)).rowCount, 1);
+  assert.equal((await run(bea, `select * from amenity_follows`)).rowCount, 0);   // nobody else's list is visible
+  assert.match(await code(run(coach, `select set_amenity_followed($1, true)`, [boxing])), /42501/);
+  assert.match(await code(run(alex, `select set_amenity_followed($1, true)`, [999999])), /22023/);
+});
+await test('front desk marks it unavailable: status, reason and return time are saved, the audit log has it, and only the follower is alerted and listed', async () => {
+  const back = hours(3);
+  const told = (await setStatus(desk, 'unavailable', '  Cleaning  ', back)).rows;
+  assert.deepEqual(told.map(r => r.full_name), ['Alex']);
+  const s = await statusOf();
+  assert.equal(s.status, 'unavailable'); assert.equal(s.status_reason, 'Cleaning'); assert.ok(s.back_at);
+  const a = await alertsFor(alex);
+  assert.equal(a.length, 1); assert.match(a[0].title, /Boxing is unavailable/); assert.match(a[0].body, /Cleaning/);
+  assert.equal((await alertsFor(bea)).length, 0);
+  assert.equal((await db.query(`select 1 from audit_log where action = 'amenity.status' and entity_id = $1`, [String(boxing)])).rowCount, 1);
+});
+await test('saving the same thing again changes nothing and alerts nobody', async () => {
+  const before = (await alertsFor(alex)).length;
+  const s = await statusOf();
+  assert.equal((await setStatus(desk, 'unavailable', 'Cleaning', s.back_at.toISOString())).rowCount, 0);
+  assert.equal((await alertsFor(alex)).length, before);
+});
+await test('"in use" alerts nobody; "available" alerts the follower and clears the reason and return time', async () => {
+  const before = (await alertsFor(alex)).length;
+  assert.equal((await setStatus(desk, 'in_use', 'ignored')).rowCount, 0);
+  assert.equal((await statusOf()).status_reason, null);                       // a reason only belongs to "unavailable"
+  assert.equal((await alertsFor(alex)).length, before);
+  assert.equal((await setStatus(desk, 'available')).rowCount, 1);
+  const a = await alertsFor(alex);
+  assert.equal(a.length, before + 1); assert.match(a.at(-1).title, /Boxing is available/);
+});
+await test('a 201-character reason and a return time in the past are refused', async () => {
+  assert.match(await code(setStatus(desk, 'unavailable', 'x'.repeat(201))), /22023:bad_reason/);
+  assert.match(await code(setStatus(desk, 'unavailable', 'Cleaning', hours(-1))), /22023:bad_back_at/);   // each has its own message so the screen can say what to fix
+  assert.equal((await statusOf()).status, 'available');
+});
+await test('a deactivated follower and one who un-saved are not alerted and not listed', async () => {
+  await run(bea, `select set_amenity_followed($1, true)`, [boxing]);
+  await db.query(`update profiles set is_active = false where id = $1`, [bea]);
+  try {
+    const told = (await setStatus(desk, 'unavailable', 'Repairs')).rows;
+    assert.deepEqual(told.map(r => r.full_name), ['Alex']);
+  } finally { await db.query(`update profiles set is_active = true where id = $1`, [bea]); }
+  await run(alex, `select set_amenity_followed($1, false)`, [boxing]);
+  const told2 = (await setStatus(desk, 'available')).rows;
+  assert.deepEqual(told2.map(r => r.full_name), ['Bea']);   // Alex un-saved, Bea is active again
+});
+await test('members and coaches cannot set a status; admin can', async () => {
+  assert.match(await code(setStatus(alex, 'unavailable')), /42501/);
+  assert.match(await code(setStatus(coach, 'unavailable')), /42501/);
+  assert.equal(await code(setStatus(admin, 'in_use')), 'ok');
+  await setStatus(admin, 'available');
+});
+await test('the status columns cannot be written directly, but the catalog can still be edited', async () => {
+  assert.match(await code(run(admin, `update amenities set status = 'unavailable' where amenity_id = $1`, [boxing])), /42501/);
+  assert.match(await code(run(admin, `insert into amenities (name, status) values ('Steam', 'unavailable')`)), /42501/);
+  assert.equal(await code(run(admin, `update amenities set description = 'Ring' where amenity_id = $1`, [boxing])), 'ok');
+  assert.equal(await code(run(admin, `insert into amenities (name, price) values ('Steam', 100)`)), 'ok');
+});
+await test('the amenity alert type and permission exist', async () => {
+  assert.equal((await db.query(`select 'amenity'::notification_type as t`)).rows[0].t, 'amenity');
+  const p = await db.query(`select r.name from role_permissions rp join roles r using (role_id) join permissions p using (permission_id) where p.resource = 'amenities' and p.action = 'set_status' order by r.name`);
+  assert.deepEqual(p.rows.map(r => r.name), ['admin', 'employee']);
+});
+
+console.log('\nmessenger (0015)');
+const say = (who, kind, coachId, memberId, body) => kind === 'support'
+  ? run(who, `select send_support_message($1, $2)`, [memberId, body])
+  : db.query(`insert into messages (coach_id, member_id, sender_id, body) values ($1, $2, $3, $4)`, [coachId, memberId, who, body]);
+const threads = async uid => (await run(uid, `select * from chat_threads()`)).rows;
+const page = (uid, kind, c, m, before = null, limit = 50) => run(uid, `select * from chat_messages(p_kind => $1, p_coach => $2, p_member => $3, p_before => $4, p_limit => $5)`, [kind, c, m, before, limit]);
+
+// a coach chat between the coach and Bea, with a hire so it is open
+await db.query(`insert into coach_hires (coach_id, member_id) values ($1, $2) on conflict do nothing`, [coach, bea]);
+for (let i = 1; i <= 3; i++) await say(i % 2 ? bea : coach, 'coach', coach, bea, `coach chat ${i}`);
+
+await test('the conversation list shows the last message, who sent it and the unread count, and nothing the person is not part of', async () => {
+  const t = (await threads(bea)).find(r => r.kind === 'coach' && r.coach_id === coach);
+  assert.equal(t.last_body, 'coach chat 3'); assert.equal(t.last_from_me, true); assert.equal(t.unread, 1);   // the coach's message 2 is waiting
+  assert.equal(t.with_id, coach);
+  const c = (await threads(coach)).find(r => r.kind === 'coach' && r.member_id === bea);
+  assert.equal(c.unread, 2); assert.equal(c.with_id, bea);
+  assert.equal((await threads(alex)).filter(r => r.kind === 'coach' && (r.member_id === bea)).length, 0);   // Alex is not in that chat
+});
+await test('staff and admin cannot read a coach chat, and a member cannot read someone else\'s', async () => {
+  assert.equal((await threads(desk)).filter(r => r.kind === 'coach').length, 0);
+  assert.match(await code(page(desk, 'coach', coach, bea)), /42501/);
+  assert.match(await code(page(admin, 'coach', coach, bea)), /42501/);
+  assert.match(await code(page(alex, 'coach', coach, bea)), /42501/);
+  assert.equal((await page(bea, 'coach', coach, bea)).rowCount, 3);
+});
+await test('a page is newest first, bounded, and the next page starts after the last id (150 messages, no duplicates)', async () => {
+  for (let i = 4; i <= 150; i++) await say(i % 2 ? bea : coach, 'coach', coach, bea, `coach chat ${i}`);
+  const first = (await page(bea, 'coach', coach, bea)).rows;
+  assert.equal(first.length, 50); assert.equal(first[0].body, 'coach chat 150');
+  const second = (await page(bea, 'coach', coach, bea, first.at(-1).message_id)).rows;
+  assert.equal(second.length, 50); assert.equal(second[0].body, 'coach chat 100');
+  const rest = (await page(bea, 'coach', coach, bea, second.at(-1).message_id, 500)).rows;   // 500 is clamped to 100
+  assert.equal(rest.length, 50);
+  assert.equal(new Set([...first, ...second, ...rest].map(r => r.message_id)).size, 150);
+});
+await test('opening a conversation marks what you received delivered and read, and clears its alert; the sender sees it', async () => {
+  await db.query(`delete from user_notifications where user_id = $1`, [bea]);
+  await db.query(`insert into user_notifications (user_id, type, title, reference) values ($1, 'message', 'New message', jsonb_build_object('coach_id', $2::text, 'member_id', $3::text))`, [bea, coach, bea]);
+  await run(bea, `select mark_chat_read(p_kind => 'coach', p_coach => $1, p_member => $2)`, [coach, bea]);
+  assert.equal((await threads(bea)).find(r => r.kind === 'coach').unread, 0);
+  const mine = (await page(coach, 'coach', coach, bea, null, 2)).rows;   // the coach's view of Bea's newest messages
+  assert.ok(mine.every(r => r.read_at === null || r.sender_id === coach));   // the coach's own messages were read by Bea
+  const fromCoach = (await page(coach, 'coach', coach, bea)).rows.filter(r => r.sender_id === coach);
+  assert.ok(fromCoach.every(r => r.delivered_at && r.read_at));
+  assert.equal((await db.query(`select 1 from user_notifications where user_id = $1 and read_at is null`, [bea])).rowCount, 0);
+  assert.match(await code(run(alex, `select mark_chat_read(p_kind => 'coach', p_coach => $1, p_member => $2)`, [coach, bea])), /42501/);
+});
+await test('delivered is set when the list is loaded, read only when the chat is opened', async () => {
+  await say(coach, 'coach', coach, bea, 'one more');
+  await run(bea, `select mark_chats_delivered()`);
+  const m = (await page(coach, 'coach', coach, bea, null, 1)).rows[0];
+  assert.equal(m.body, 'one more'); assert.ok(m.delivered_at); assert.equal(m.read_at, null);
+});
+
+// front desk
+await test('any member, even a guest, can write to the front desk; staff are alerted; the thread appears in both lists', async () => {
+  await db.query(`delete from user_notifications where user_id = $1`, [desk]);
+  const id = (await run(alex, `select send_support_message($1, $2)`, [alex, '  my payment is stuck  '])).rows[0].send_support_message;
+  assert.ok(id);
+  const mine = (await threads(alex)).find(r => r.kind === 'support');
+  assert.equal(mine.with_name, 'Front desk'); assert.equal(mine.last_body, 'my payment is stuck'); assert.equal(mine.last_from_me, true); assert.equal(mine.can_send, true);
+  const inbox = (await threads(desk)).find(r => r.kind === 'support' && r.member_id === alex);
+  assert.equal(inbox.with_name, 'Alex'); assert.equal(inbox.unread, 1); assert.equal(inbox.status, 'open'); assert.equal(inbox.claimed_by, null);
+  assert.equal((await db.query(`select 1 from user_notifications where user_id = $1 and type = 'message'`, [desk])).rowCount, 1);
+});
+await test('a member sees one front-desk thread even with no messages; coaches and members cannot read or write other threads', async () => {
+  assert.equal((await threads(bea)).filter(r => r.kind === 'support').length, 1);
+  assert.equal((await threads(coach)).filter(r => r.kind === 'support').length, 0);
+  assert.match(await code(run(bea, `select send_support_message($1, 'hi')`, [alex])), /42501/);
+  assert.match(await code(run(coach, `select send_support_message($1, 'hi')`, [alex])), /42501/);
+  assert.match(await code(page(bea, 'support', null, alex)), /42501/);
+  assert.equal((await page(alex, 'support', null, alex)).rowCount, 1);
+});
+await test('empty and over-long messages are refused', async () => {
+  assert.match(await code(run(alex, `select send_support_message($1, '   ')`, [alex])), /22023:empty_message/);
+  assert.match(await code(run(alex, `select send_support_message($1, $2)`, [alex, 'x'.repeat(2001)])), /22023:message_too_long/);
+});
+await test('staff reply: the member is alerted and sees "Front desk"; staff see who answered; reading marks it read', async () => {
+  await db.query(`delete from user_notifications where user_id = $1`, [alex]);
+  await run(desk, `select send_support_message($1, 'looking into it')`, [alex]);
+  assert.equal((await db.query(`select 1 from user_notifications where user_id = $1 and type = 'message'`, [alex])).rowCount, 1);
+  const asMember = (await page(alex, 'support', null, alex)).rows;
+  assert.equal(asMember[0].body, 'looking into it'); assert.equal(asMember[0].sender_name, null);
+  const asStaff = (await page(desk, 'support', null, alex)).rows;
+  const deskName = (await db.query(`select full_name from profiles where id = $1`, [desk])).rows[0].full_name;
+  assert.equal(asStaff[0].sender_name, deskName);
+  assert.equal((await threads(alex)).find(r => r.kind === 'support').unread, 1);
+  await run(alex, `select mark_chat_read(p_kind => 'support', p_member => $1)`, [alex]);
+  assert.equal((await threads(alex)).find(r => r.kind === 'support').unread, 0);
+  const seen = (await page(desk, 'support', null, alex)).rows.find(r => r.body === 'looking into it');
+  assert.ok(seen.read_at);
+});
+await test('taking a conversation: one person at a time, release by that person or an admin; only the one who took it is alerted', async () => {
+  await run(desk, `select claim_support_thread($1, true)`, [alex]);
+  assert.equal((await threads(desk)).find(r => r.kind === 'support' && r.member_id === alex).claimed_by, desk);
+  assert.match(await code(run(admin, `select claim_support_thread($1, true)`, [alex])), /P0002/);   // already taken
+  assert.match(await code(run(alex, `select claim_support_thread($1, true)`, [alex])), /42501/);
+  await db.query(`delete from user_notifications where user_id in ($1, $2)`, [desk, admin]);
+  await run(alex, `select send_support_message($1, 'any news?')`, [alex]);
+  assert.equal((await db.query(`select 1 from user_notifications where user_id = $1 and type = 'message'`, [desk])).rowCount, 1);
+  assert.equal((await db.query(`select 1 from user_notifications where user_id = $1 and type = 'message'`, [admin])).rowCount, 0);
+  await run(admin, `select claim_support_thread($1, false)`, [alex]);   // an admin may release
+  assert.equal((await threads(desk)).find(r => r.kind === 'support' && r.member_id === alex).claimed_by, null);
+});
+await test('closing and reopening: staff can; a new message from the member reopens it', async () => {
+  await run(desk, `select set_support_status($1, false)`, [alex]);
+  assert.equal((await threads(desk)).find(r => r.kind === 'support' && r.member_id === alex).status, 'closed');
+  assert.match(await code(run(alex, `select set_support_status($1, true)`, [alex])), /42501/);
+  await run(alex, `select send_support_message($1, 'sorry, one more thing')`, [alex]);
+  assert.equal((await threads(desk)).find(r => r.kind === 'support' && r.member_id === alex).status, 'open');
+});
+await test('search finds a person by name and a conversation by message text, only among your own, and treats % and _ as plain characters', async () => {
+  const byName = (await run(coach, `select * from chat_search('bea')`)).rows;
+  assert.ok(byName.some(r => r.kind === 'coach' && r.member_id === bea && r.with_name === 'Bea'));
+  const byText = (await run(bea, `select * from chat_search('chat 77')`)).rows;
+  assert.equal(byText.length, 1); assert.match(byText[0].snippet, /coach chat 77/);
+  assert.equal((await run(alex, `select * from chat_search('chat 77')`)).rowCount, 0);   // not Alex's conversation
+  assert.equal((await run(bea, `select * from chat_search('c')`)).rowCount, 0);          // under two characters
+  assert.equal((await run(bea, `select * from chat_search('%')`)).rowCount, 0);
+  assert.equal((await run(desk, `select * from chat_search('payment is stuck')`)).rowCount, 1);   // staff find front-desk text
+});
+await test('support permission exists for admin and front desk only', async () => {
+  const p = await db.query(`select r.name from role_permissions rp join roles r using (role_id) join permissions p using (permission_id) where p.resource = 'support' and p.action = 'reply' order by r.name`);
+  assert.deepEqual(p.rows.map(r => r.name), ['admin', 'employee']);
+});
+
+console.log('\nmessenger review fixes');
+await test('the front desk thread can be read and marked read the way the app calls it: by name, with no coach argument', async () => {
+  // PostgREST calls a function by argument name and cannot match one whose required argument was left out
+  assert.ok((await run(alex, `select * from chat_messages(p_kind => 'support', p_member => $1, p_limit => 51)`, [alex])).rowCount > 0);
+  assert.equal(await code(run(alex, `select mark_chat_read(p_kind => 'support', p_member => $1)`, [alex])), 'ok');
+  assert.equal(await code(run(desk, `select * from chat_messages(p_kind => 'support', p_member => $1)`, [alex])), 'ok');
+});
+await test('a conversation taken by someone who has since been deactivated can be taken by another staff member', async () => {
+  const desk2 = await user('desk2@t.io', 'employee', 'Second Desk');
+  await run(desk, `select claim_support_thread($1, true)`, [alex]);
+  assert.match(await code(run(desk2, `select claim_support_thread($1, true)`, [alex])), /P0002/);   // still active: stays taken
+  await db.query(`update profiles set is_active = false where id = $1`, [desk]);
+  try {
+    assert.equal(await code(run(desk2, `select claim_support_thread($1, true)`, [alex])), 'ok');
+    assert.equal((await threads(desk2)).find(r => r.kind === 'support' && r.member_id === alex).claimed_by, desk2);
+  } finally { await db.query(`update profiles set is_active = true where id = $1`, [desk]); }
+  await run(desk2, `select claim_support_thread($1, false)`, [alex]);
+});
+await test('the inbox is bounded: staff get the 500 most recently active member threads, not every thread there is', async () => {
+  await db.query(`insert into auth.users (email, raw_user_meta_data, raw_app_meta_data)
+                  select 'bulk' || g || '@t.io', jsonb_build_object('full_name', 'Bulk'), jsonb_build_object('role', 'member') from generate_series(1, 505) g`);
+  await db.query(`insert into support_threads (member_id) select user_id from members where user_id not in (select member_id from support_threads)`);
+  const inbox = (await threads(desk)).filter(r => r.kind === 'support');
+  assert.equal(inbox.length, 500);
+});
+
+console.log('\nchat photos (0016)');
+const fay = await user('fay@t.io', 'member', 'Fay');
+await run(desk, `select * from record_counter_payment('membership','cash',$1,$2)`, [fay, monthly]);
+await db.query(`insert into coach_hires (coach_id, member_id) values ($1, $2)`, [coach, fay]);
+const okFile = async (uid, name, write) => (await run(uid, `select can_use_chat_file($1, $2) as ok`, [name, write])).rows[0].ok;
+const pic = (a, b) => `${a}/${b}/photo-1.jpg`;
+
+await test('the chat-attachments bucket is private, images only, 5 MB', async () => {
+  const b = (await db.query(`select public, file_size_limit, allowed_mime_types from storage.buckets where id = 'chat-attachments'`)).rows[0];
+  assert.equal(b.public, false); assert.equal(Number(b.file_size_limit), 5242880);
+  assert.deepEqual([...b.allowed_mime_types].sort(), ['image/jpeg', 'image/png', 'image/webp']);
+});
+await test('coach chat photos: only the two people read them; both can add while the hire and plan are active', async () => {
+  const f = pic(coach, fay);
+  for (const who of [coach, fay]) { assert.equal(await okFile(who, f, false), true); assert.equal(await okFile(who, f, true), true); }
+  for (const who of [bea, alex, desk, admin]) assert.equal(await okFile(who, f, false), false);   // other members, front desk and even the admin
+  assert.equal(await okFile(desk, f, true), false);
+});
+await test('a guest can read a coach chat photo but not add one; an ended hire is the same', async () => {
+  const g = pic(coach, bea);   // Bea has a hire but no active plan
+  assert.equal(await okFile(bea, g, false), true); assert.equal(await okFile(bea, g, true), false);
+  await db.query(`update coach_hires set status = 'ended', ended_at = now() where member_id = $1 and status = 'active'`, [fay]);
+  assert.equal(await okFile(fay, pic(coach, fay), false), true); assert.equal(await okFile(fay, pic(coach, fay), true), false);
+  await db.query(`insert into coach_hires (coach_id, member_id) values ($1, $2)`, [coach, fay]);   // hired again for the tests below
+});
+await test('front desk photos: the member and staff with support:reply, nobody else', async () => {
+  const f = `support/${fay}/photo-1.png`;
+  for (const w of [true, false]) { assert.equal(await okFile(fay, f, w), true); assert.equal(await okFile(desk, f, w), true); }
+  assert.equal(await okFile(admin, f, false), true);
+  for (const who of [bea, alex, coach]) { assert.equal(await okFile(who, f, false), false); assert.equal(await okFile(who, f, true), false); }
+});
+await test('a name that is not exactly one of the two shapes is refused', async () => {
+  for (const name of [`support/${fay}/../x.jpg`, `support/${fay}/.hidden.jpg`, `support/${fay}/a/b.jpg`, `${fay}/photo.jpg`, `support/not-a-uuid/x.jpg`,
+                      `${coach}/${fay}/${'x'.repeat(121)}`, `${coach}/${fay}/x.jpg/`, `SUPPORT/${fay}/x.jpg`, ''])
+    assert.equal(await okFile(fay, name, false), false, name);
+});
+await test('the storage policies apply the same rule to real uploads and reads', async () => {
+  await db.query(`grant select, insert on storage.objects to authenticated`);   // the real project grants this; the local stub does not
+  const add = (uid, name) => run(uid, `insert into storage.objects (bucket_id, name) values ('chat-attachments', $1)`, [name]);
+  assert.equal(await code(add(fay, pic(coach, fay))), 'ok');
+  assert.match(await code(add(bea, pic(coach, fay))), /42501/);
+  assert.match(await code(add(fay, pic(coach, alex))), /42501/);
+  assert.equal(await code(add(fay, `support/${fay}/p.png`)), 'ok');
+  assert.equal((await run(coach, `select name from storage.objects where bucket_id = 'chat-attachments'`)).rowCount, 1);   // only the coach chat photo
+  assert.equal((await run(desk, `select name from storage.objects where bucket_id = 'chat-attachments'`)).rowCount, 1);    // only the front desk photo
+  assert.equal((await run(alex, `select name from storage.objects where bucket_id = 'chat-attachments'`)).rowCount, 0);
+});
+await test('a photo can be the whole message; a blank message with no photo is still refused', async () => {
+  assert.equal(await code(run(fay, `insert into messages (coach_id, member_id, sender_id, body, attachment_path) values ($1, $2, $2, '', $3)`, [coach, fay, pic(coach, fay)])), 'ok');
+  assert.match(await code(run(fay, `insert into messages (coach_id, member_id, sender_id, body) values ($1, $2, $2, '  ')`, [coach, fay])), /23514/);
+});
+await test('a photo from another conversation or a made-up path cannot be attached', async () => {
+  const send = path => run(fay, `insert into messages (coach_id, member_id, sender_id, body, attachment_path) values ($1, $2, $2, 'x', $3)`, [coach, fay, path]);
+  assert.match(await code(send(pic(coach, alex))), /23514/);
+  assert.match(await code(send('../x.jpg')), /23514/);
+  assert.match(await code(send(`support/${fay}/p.png`)), /23514/);
+});
+await test('front desk: a photo alone or with a caption, only into the right thread', async () => {
+  const send = (uid, member, body, att) => run(uid, `select send_support_message(p_member => $1, p_body => $2, p_attachment => $3) as id`, [member, body, att]);
+  assert.ok((await send(fay, fay, '', `support/${fay}/photo-2.png`)).rows[0].id);
+  assert.match(await code(send(fay, fay, '', null)), /22023:empty_message/);
+  assert.match(await code(send(fay, fay, 'hi', `support/${alex}/p.png`)), /42501/);
+  assert.match(await code(send(fay, fay, 'hi', pic(coach, fay))), /42501/);
+  assert.equal(await code(send(desk, fay, 'here you go', `support/${fay}/photo-3.png`)), 'ok');
+  assert.match(await code(send(desk, fay, 'x', `support/${alex}/p.png`)), /42501/);
+  assert.equal(await code(run(fay, `select send_support_message($1, 'text only still works')`, [fay])), 'ok');   // the two-argument call is unchanged
+});
+await test('pages carry the photo path, and the list says "Photo" when the last message has no text', async () => {
+  const rows = (await page(fay, 'support', null, fay)).rows;
+  assert.equal(rows.find(r => r.body === '').attachment_path, `support/${fay}/photo-2.png`);
+  assert.equal(rows.find(r => r.body === 'here you go').attachment_path, `support/${fay}/photo-3.png`);
+  assert.equal(rows.find(r => r.body === 'text only still works').attachment_path, null);
+
+  await db.query(`delete from user_notifications where user_id = $1`, [desk]);
+  await run(fay, `select send_support_message(p_member => $1, p_body => '', p_attachment => $2)`, [fay, `support/${fay}/photo-4.png`]);
+  assert.equal((await threads(fay)).find(r => r.kind === 'support').last_body, 'Photo');
+  assert.equal((await threads(desk)).find(r => r.kind === 'support' && r.member_id === fay).last_body, 'Photo');
+  assert.equal((await threads(fay)).find(r => r.kind === 'coach').last_body, 'Photo');   // the coach chat's last message was the photo-only one above
+  assert.equal((await db.query(`select body from user_notifications where user_id = $1 and type = 'message'`, [desk])).rows[0].body, 'Photo');
+});
+
+
+await test('a photo whose text is only blanks still reads "Photo" in the list', async () => {
+  await db.query(`insert into messages (coach_id, member_id, sender_id, body, attachment_path) values ($1, $2, $2, '   ', $3)`, [coach, fay, pic(coach, fay)]);
+  assert.equal((await threads(fay)).find(r => r.kind === 'coach').last_body, 'Photo');
+  assert.equal((await threads(coach)).find(r => r.kind === 'coach' && r.member_id === fay).last_body, 'Photo');
+});
+
+console.log('\nlive chat (0017)');
+await test('messages and support_messages are in the Realtime publication', async () => {
+  const r = await db.query(`select tablename from pg_publication_tables where pubname = 'supabase_realtime' order by 1`);
+  assert.deepEqual(r.rows.map(x => x.tablename), ['messages', 'support_messages']);
+});
+const gus = await user('gus@t.io', 'member', 'Gus');
+await db.query(`insert into coach_hires (coach_id, member_id) values ($1, $2)`, [coach, gus]);
+const seenAt = async uid => (await db.query(`select seen_at from user_last_seen where user_id = $1`, [uid])).rows[0]?.seen_at;
+await test('touch_last_seen records the caller and moves at most once every 5 minutes', async () => {
+  await run(gus, `select touch_last_seen()`);
+  const first = await seenAt(gus);
+  assert.ok(first);
+  await run(gus, `select touch_last_seen()`);
+  assert.equal((await seenAt(gus)).getTime(), first.getTime());   // too soon: unchanged
+  await db.query(`update user_last_seen set seen_at = now() - interval '10 minutes' where user_id = $1`, [gus]);
+  await run(gus, `select touch_last_seen()`);
+  assert.ok((await seenAt(gus)).getTime() > Date.now() - 60000);   // old enough: moved to now
+  assert.equal(await seenAt(alex), undefined);                     // nobody else was touched
+});
+await test('the last-seen table cannot be read or written directly, by anyone', async () => {
+  assert.match(await code(run(gus, `select * from user_last_seen`)), /42501/);
+  assert.match(await code(run(desk, `select * from user_last_seen`)), /42501/);
+  assert.match(await code(run(admin, `select * from user_last_seen`)), /42501/);
+  assert.match(await code(run(gus, `insert into user_last_seen (user_id, seen_at) values ($1, now())`, [alex])), /42501/);
+  assert.match(await code(run(gus, `update user_last_seen set seen_at = now()`)), /42501/);
+  assert.match(await code(run(gus, `delete from user_last_seen`)), /42501/);
+});
+await test('a profile read does not expose last seen', async () => {
+  const cols = (await run(desk, `select * from profiles limit 1`)).fields.map(f => f.name);
+  assert.ok(!cols.includes('last_seen_at') && !cols.includes('seen_at'));
+});
+await test('coach and member with a current hire see each other\'s last seen; nobody else does', async () => {
+  await run(coach, `select touch_last_seen()`);
+  await db.query(`insert into messages (coach_id, member_id, sender_id, body) values ($1, $2, $2, 'hi')`, [coach, gus]);
+  const mine = (await threads(gus)).find(r => r.kind === 'coach');
+  const theirs = (await threads(coach)).find(r => r.kind === 'coach' && r.member_id === gus);
+  assert.ok(mine.with_last_seen, 'the member sees the coach');
+  assert.ok(theirs.with_last_seen, 'the coach sees the member');
+  assert.equal((await threads(desk)).filter(r => r.kind === 'coach').length, 0);                 // front desk is not in coach chats
+  assert.equal((await threads(alex)).filter(r => r.kind === 'coach' && r.member_id === gus).length, 0);   // a stranger sees no such thread
+});
+await test('an ended hire shows no last seen', async () => {
+  await db.query(`update coach_hires set status = 'ended', ended_at = now() where member_id = $1 and status = 'active'`, [gus]);
+  assert.equal((await threads(gus)).find(r => r.kind === 'coach').with_last_seen, null);
+  assert.equal((await threads(coach)).find(r => r.kind === 'coach' && r.member_id === gus).with_last_seen, null);
+  await db.query(`insert into coach_hires (coach_id, member_id) values ($1, $2)`, [coach, gus]);   // hired again for the next check
+});
+await test('front desk sees a member\'s last seen; the member never sees the front desk\'s', async () => {
+  await run(gus, `select send_support_message($1, 'hello desk')`, [gus]);
+  await run(desk, `select touch_last_seen()`);
+  const inbox = (await threads(desk)).find(r => r.kind === 'support' && r.member_id === gus);
+  assert.ok(inbox.with_last_seen);
+  const own = (await threads(gus)).find(r => r.kind === 'support');
+  assert.equal(own.with_last_seen, null);
+  assert.equal(own.with_id, null);
 });
 
 console.log(`\n${pass} passed, ${failed} failed`);

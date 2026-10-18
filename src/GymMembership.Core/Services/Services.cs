@@ -122,8 +122,8 @@ sealed class PaymentLookup
 
     public string Item(Payment p) => p.Kind switch
     {
-        PayKind.Membership => p.UserMembershipPackageId is { } u ? PackageName(u) : "Membership",
-        PayKind.Renewal => "Renewal: " + (_renewals.FirstOrDefault(r => r.Id == p.RenewalId) is { } r ? PackageName(r.UserMembershipPackageId) : "Membership"),
+        PayKind.Membership => p.PackageSnapshotName ?? (p.UserMembershipPackageId is { } u ? PackageName(u) : "Membership"),
+        PayKind.Renewal => "Extension: " + (p.PackageSnapshotName ?? (_renewals.FirstOrDefault(r => r.Id == p.RenewalId) is { } r ? PackageName(r.UserMembershipPackageId) : "Membership")),
         PayKind.Amenity => _catalog.FirstOrDefault(a => a.Id == _amenities.FirstOrDefault(x => x.Id == p.UserAmenityId)?.AmenityId)?.Name ?? "Amenity",
         _ => "Walk-in"
     };
@@ -143,11 +143,13 @@ public sealed record MembershipRow(int Id, string PackageName, string Status, Da
 
 /// <summary>One of the member's payments. QR payments show the code to type into the e-wallet and wait for a reference number and screenshot.</summary>
 public sealed record PaymentItem(int Id, string What, string PaymentCode, string Kind, string Method, decimal Amount, decimal DiscountAmount, string Status,
-    DateTime CreatedAt, DateTime? ExpiresAt, string? ReferenceNo, bool HasProof, string? ReceiptNo, string? RejectedReason, int? ItemId)
+    DateTime CreatedAt, DateTime? ExpiresAt, string? ReferenceNo, bool HasProof, string? ReceiptNo, string? RejectedReason, int? ItemId, int? PackageSnapshotId = null)
 {
     /// <summary>A QR payment that still needs the member to pay, then send the reference number and screenshot.</summary>
     public bool NeedsProof => Status == Models.Status.Pending && Method == PayMethod.Qr && !HasProof && (ExpiresAt is null || ExpiresAt > DateTime.UtcNow);
     public bool AwaitingReview => Status == Models.Status.Pending && HasProof;
+    /// <summary>A membership or extension payment nobody has verified yet: the member can still withdraw it.</summary>
+    public bool CanCancel => Status == Models.Status.Pending && Kind is PayKind.Membership or PayKind.Renewal;
     /// <summary>Rejected and expired payments are final; the member pays again with a fresh one.</summary>
     public bool CanPayAgain => Status is Models.Status.Rejected or Models.Status.Expired && ItemId is not null;
     public string Detail => Status switch
@@ -186,10 +188,9 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
     public Task<AppResult<Access>> AccessAsync() => Safe.RunAsync(async () =>
     {
         var uid = gw.CurrentUserId;
-        var now = DateTime.UtcNow;
-        var plans = await gw.ListAsync<UserMembershipPackage>(m => m.MemberId == uid);
+        var active = await gw.RpcAsync<bool>("is_active_member");
         var pays = await gw.ListAsync<Payment>(p => p.MemberId == uid);
-        return new Access(plans.Any(m => m.Status == Status.Active && m.EndsAt > now), pays.Any(p => p.Status == Status.Pending));
+        return new Access(active, pays.Any(p => p.Status == Status.Pending));
     });
 
     public Task<AppResult<IReadOnlyList<MembershipPackage>>> ListPackagesAsync() =>
@@ -205,11 +206,11 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
     public Task<AppResult<IReadOnlyList<MembershipRow>>> MyMembershipsAsync() => Safe.RunAsync<IReadOnlyList<MembershipRow>>(async () =>
     {
         var uid = gw.CurrentUserId;
-        var mine = await gw.ListAsync<UserMembershipPackage>(m => m.MemberId == uid);
-        var packages = await gw.ListAsync<MembershipPackage>();
-        // pending and cancelled rows are payments in progress or abandoned: the Payments list shows those
-        return mine.Where(m => m.Status is Status.Active or Status.Expired).OrderByDescending(m => m.EndsAt ?? DateTime.MaxValue)
-            .Select(m => ToRow(m, packages.FirstOrDefault(p => p.Id == m.MembershipPackageId), DateTime.UtcNow)).ToList();
+        var terms = await gw.ListAsync<MembershipTerm>(t => t.MemberId == uid);
+        var now = DateTime.UtcNow;
+        return terms.Where(t => t.CancelledAt is null && t.StartsAt <= now).OrderByDescending(t => t.EndsAt)
+            .Select(t => new MembershipRow(t.MembershipId,t.PackageName,t.EndsAt > now ? Status.Active : Status.Expired,
+                t.EndsAt,Math.Max(0,(int)Math.Ceiling((t.EndsAt-now).TotalDays)),t.DurationDays,false,t.AmountPaid)).ToList();
     });
 
     public Task<AppResult<IReadOnlyList<PaymentItem>>> MyPaymentsAsync() => Safe.RunAsync<IReadOnlyList<PaymentItem>>(async () =>
@@ -219,7 +220,7 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
         var look = await PaymentLookup.LoadAsync(gw);
         return pays.OrderByDescending(p => p.CreatedAt).Select(p => new PaymentItem(p.Id,
             p.DiscountAmount > 0 ? look.Item(p) + " (discount)" : look.Item(p), p.PaymentCode, p.Kind, p.Method, p.Amount, p.DiscountAmount, p.Status,
-            p.CreatedAt, p.ExpiresAt, p.ReferenceNo, p.ProofPath is not null, p.ReceiptNo, p.RejectedReason, look.ItemId(p))).ToList();
+            p.CreatedAt, p.ExpiresAt, p.ReferenceNo, p.ProofPath is not null, p.ReceiptNo, p.RejectedReason, look.ItemId(p), p.PackageSnapshotId)).ToList();
     });
 
     static Dictionary<string, object> WithCode(Dictionary<string, object> args, string? code)
@@ -243,7 +244,9 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
         });
     }
 
-    public async Task<AppResult<Payment>> PayAgainAsync(PaymentItem item) => item.ItemId is not { } id
+    public async Task<AppResult<Payment>> PayAgainAsync(PaymentItem item) => item.PackageSnapshotId is { } package && item.Kind is PayKind.Membership or PayKind.Renewal
+        ? await new SubscriptionService(gw).ExtendAsync(package)
+        : item.ItemId is not { } id
         ? AppResult<Payment>.Fail(AppErrorKind.Validation, "not_found")
         : item.Kind switch
         {
@@ -266,7 +269,7 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
 public sealed record PaymentRow(Payment Payment, string Payer, string Item, bool HasProof);
 public sealed record CashRow(string Kind, long Payments, decimal Total);
 /// <summary>Something the counter can take a payment for: a package, a membership to renew, or an amenity.</summary>
-public sealed record CounterItem(int Id, string Label);
+public sealed record CounterItem(int Id, string Label, decimal? Price = null);
 
 public interface IPaymentStaffService
 {
@@ -338,13 +341,17 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
         switch (kind)
         {
             case PayKind.Membership:
-                return (await gw.ListAsync<MembershipPackage>(p => p.IsActive == true)).Select(p => new CounterItem(p.Id, $"{p.Name}  ₱{p.Price:N2}")).ToList();
+                return (await gw.ListAsync<MembershipPackage>(p => p.IsActive == true)).Select(p => new CounterItem(p.Id, p.Name, p.Price)).ToList();
             case PayKind.Amenity:
-                return (await gw.ListAsync<Amenity>(a => a.IsActive == true)).Select(a => new CounterItem(a.Id, $"{a.Name}  ₱{a.Price:N2}")).ToList();
+                return (await gw.ListAsync<Amenity>(a => a.IsActive == true)).Select(a => new CounterItem(a.Id, a.Name, a.Price)).ToList();
             case PayKind.Renewal:
                 var packages = await gw.ListAsync<MembershipPackage>();
                 return (await gw.ListAsync<UserMembershipPackage>(m => m.MemberId == memberId && (m.Status == "active" || m.Status == "expired")))
-                    .Select(m => new CounterItem(m.Id, $"{packages.FirstOrDefault(p => p.Id == m.MembershipPackageId)?.Name ?? "Membership"}  ({m.Status}, ends {m.EndsAt:d MMM yyyy})")).ToList();
+                    .Select(m =>
+                    {
+                        var package = packages.FirstOrDefault(p => p.Id == m.MembershipPackageId);
+                        return new CounterItem(m.Id, $"{package?.Name ?? "Membership"}  ({m.Status}, ends {m.EndsAt:d MMM yyyy})", package?.Price);
+                    }).ToList();
             default:
                 return [];
         }
@@ -361,8 +368,36 @@ public sealed record AmenityRow(Amenity Amenity, int? UserAmenityId, string? Sta
 }
 public sealed record UsageRow(AmenityUsage Usage, string Member, string Amenity);
 
+public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow, string? PhotoUrl = null)
+{
+    public string Availability => Amenity.Availability;
+    public bool IsUnavailable => Amenity.Availability == "unavailable";
+    public string? Reason => Amenity.StatusReason;
+    public DateTime? BackAt => Amenity.BackAt;
+    public bool HasReason => !string.IsNullOrWhiteSpace(Amenity.StatusReason);
+    public bool HasBackAt => IsUnavailable && Amenity.BackAt is not null;
+    // empty hides the button: coaches and staff can look but not save
+    public string FollowText => !CanFollow ? "" : Followed ? "Following" : "Notify me";
+
+    /// <summary>Everything the card shows is the same, so a refresh can leave it alone.</summary>
+    public bool SameAs(AmenityCard o) => Followed == o.Followed && CanFollow == o.CanFollow && Amenity.Name == o.Amenity.Name && Amenity.Description == o.Amenity.Description
+        && Availability == o.Availability && Reason == o.Reason && BackAt == o.BackAt
+        && Amenity.ImagePath == o.Amenity.ImagePath && PhotoUrl == o.PhotoUrl;
+}
+
+/// <summary>What a status change did: whether the amenity really changed, and the members who were alerted.</summary>
+public sealed record AmenityChange(bool Changed, IReadOnlyList<NotifiedMember> Told);
+
+public sealed record AmenityBoard(IReadOnlyList<AmenityCard> Cards, bool CanFollow);
+
 public interface IAmenityService
 {
+    /// <summary>Every amenity that is switched on, with its live status and whether this member saved it. CanFollow is false for coaches and staff.</summary>
+    Task<AppResult<AmenityBoard>> BoardAsync();
+    Task<AppResult<bool>> SetFollowedAsync(int amenityId, bool follow);
+    /// <summary>Front desk and admin only. Says whether anything really changed (judged against the amenity as it is now, not an older card) and who was alerted.</summary>
+    Task<AppResult<AmenityChange>> SetStatusAsync(int amenityId, string status, string? reason, DateTime? backAtUtc);
+
     Task<AppResult<IReadOnlyList<AmenityRow>>> CatalogAsync();
     Task<AppResult<Payment>> AvailAsync(int amenityId, string? discountCode = null);
     Task<AppResult<bool>> LogUsageAsync(int userAmenityId, (string FileName, byte[] Data)? proof);
@@ -372,6 +407,48 @@ public interface IAmenityService
 
 public sealed class AmenityService(ISupabaseGateway gw) : IAmenityService
 {
+    static readonly string[] Statuses = ["available", "in_use", "unavailable"];
+    readonly LinkCache photos = new(gw, "gym-assets", rememberMisses: true);
+
+    public Task<AppResult<AmenityBoard>> BoardAsync() => Safe.RunAsync(async () =>
+    {
+        var uid = gw.CurrentUserId;
+        var amenities = (await gw.ListAsync<Amenity>(a => a.IsActive == true)).OrderBy(a => a.Name).ToList();
+        var saved = (await gw.ListAsync<AmenityFollow>(f => f.MemberId == uid)).Select(f => f.AmenityId).ToHashSet();
+        var isMember = (await gw.ListAsync<Member>(m => m.UserId == uid)).Count > 0;
+        var cards = await Task.WhenAll(amenities.Select(async a =>
+            new AmenityCard(a, saved.Contains(a.Id), isMember, (await Safe.RunAsync(() => photos.UrlAsync(a.ImagePath))).Value)));
+        return new AmenityBoard(cards, isMember);
+    });
+
+    public Task<AppResult<bool>> SetFollowedAsync(int amenityId, bool follow) => Safe.RunAsync(async () =>
+    { await gw.RpcAsync("set_amenity_followed", new() { ["p_amenity_id"] = amenityId, ["p_follow"] = follow }); return true; });
+
+    public async Task<AppResult<AmenityChange>> SetStatusAsync(int amenityId, string status, string? reason, DateTime? backAtUtc)
+    {
+        var trimmed = reason?.Trim();
+        var problem = !Statuses.Contains(status) ? "bad_status" : trimmed?.Length > 200 ? "bad_reason" : backAtUtc <= DateTime.UtcNow ? "bad_back_at" : null;
+        if (problem is not null) return AppResult<AmenityChange>.Fail(AppErrorKind.Validation, problem);
+
+        var args = new Dictionary<string, object> { ["p_amenity_id"] = amenityId, ["p_status"] = status };
+        if (!string.IsNullOrWhiteSpace(trimmed)) args["p_reason"] = trimmed;
+        if (backAtUtc is { } back) args["p_back_at"] = back.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
+        return await Safe.RunAsync(async () =>
+        {
+            // The card on a front desk screen can be half a minute old, so ask what the amenity is right now. The same rule as the database
+            // (a reason and a return time only count while unavailable) decides whether this save really changes anything.
+            var current = (await gw.ListAsync<Amenity>(a => a.Id == amenityId)).FirstOrDefault();
+            var unavailable = status == "unavailable";
+            var wantReason = unavailable && !string.IsNullOrWhiteSpace(trimmed) ? trimmed : null;
+            var wantBack = unavailable ? backAtUtc : null;
+            var changed = current is null || current.Availability != status || current.StatusReason != wantReason || !SameMoment(current.BackAt, wantBack);
+            var told = await gw.RpcAsync<List<NotifiedMember>>("set_amenity_status", args) ?? [];
+            return new AmenityChange(changed, told);
+        });
+    }
+
+    static bool SameMoment(DateTime? a, DateTime? b) => a is null ? b is null : b is not null && Math.Abs((a.Value.ToUniversalTime() - b.Value.ToUniversalTime()).TotalSeconds) < 1;
+
     public Task<AppResult<IReadOnlyList<AmenityRow>>> CatalogAsync() => Safe.RunAsync<IReadOnlyList<AmenityRow>>(async () =>
     {
         var uid = gw.CurrentUserId;
@@ -427,8 +504,9 @@ public sealed class AmenityService(ISupabaseGateway gw) : IAmenityService
 }
 
 // ===================== Coaches =====================
-public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId, IReadOnlyList<ShiftPost>? Shifts = null)
+public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId, IReadOnlyList<ShiftPost>? Shifts = null, string? PhotoUrl = null)
 {
+    public string Letters => Initials.From(Name);
     /// <summary>The coach paused hiring and this member has no hire to keep: shown grayed out, Hire disabled.</summary>
     public bool Closed => !Coach.IsAvailable && !Hired;
 
@@ -454,17 +532,24 @@ public interface ICoachService
 
 public sealed class CoachService(ISupabaseGateway gw) : ICoachService
 {
+    readonly LinkCache photos = new(gw, "avatars", rememberMisses: true);
+
     public Task<AppResult<IReadOnlyList<CoachCard>>> ListCoachesAsync() => Safe.RunAsync<IReadOnlyList<CoachCard>>(async () =>
     {
         var uid = gw.CurrentUserId;
         var coaches = await gw.ListAsync<Coach>();   // paused coaches stay listed, shown as closed
-        var names = await Directory_.UserNamesAsync(gw);
+        var profiles = (await gw.ListAsync<Profile>()).ToDictionary(p => p.Id);
         var hires = await gw.ListAsync<CoachHire>(h => h.MemberId == uid && h.Status == "active");
         var now = DateTime.UtcNow;
         var shifts = await gw.ListAsync<ShiftPost>(s => s.Status == "scheduled" && s.End > now);
-        return coaches.Select(c => new CoachCard(c, names.GetValueOrDefault(c.UserId, "Coach"),
-            hires.Any(h => h.CoachId == c.UserId), hires.FirstOrDefault(h => h.CoachId == c.UserId)?.Id,
-            shifts.Where(s => s.CoachId == c.UserId).OrderBy(s => s.Start).ToList())).ToList();
+        return await Task.WhenAll(coaches.Select(async c =>
+        {
+            var p = profiles.GetValueOrDefault(c.UserId);
+            var name = p is null ? "Coach" : string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName;
+            var photo = (await Safe.RunAsync(() => photos.UrlAsync(p?.AvatarPath))).Value;
+            return new CoachCard(c, name, hires.Any(h => h.CoachId == c.UserId), hires.FirstOrDefault(h => h.CoachId == c.UserId)?.Id,
+                shifts.Where(s => s.CoachId == c.UserId).OrderBy(s => s.Start).ToList(), photo);
+        }));
     });
 
     public Task<AppResult<bool>> HireAsync(string coachId) => Safe.RunAsync(async () =>
@@ -531,13 +616,15 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
 // ===================== Time requests and sessions =====================
 public sealed record RequestRow(TimeRequest Request, string With, string Kind, bool CanRespond, bool CanCancel);
 public sealed record SessionRow(TrainingSession Session, string With, bool IsMine, bool CanManage, bool CanChange);
-public sealed record RequestsView(IReadOnlyList<RequestRow> Rows, bool IsCoach, IReadOnlyList<CoachCard> HiredCoaches);
+public sealed record RequestMember(string MemberId, string Name);
+public sealed record RequestsView(IReadOnlyList<RequestRow> Rows, bool IsCoach, IReadOnlyList<CoachCard> HiredCoaches, IReadOnlyList<RequestMember>? Trainees = null, IReadOnlyList<TrainingSession>? ActiveSessions = null);
 
 public interface ISessionService
 {
     Task<AppResult<RequestsView>> RequestsAsync();
     Task<AppResult<bool>> RequestAsync(string coachId, DateTime startUtc, DateTime endUtc, string? message);
     Task<AppResult<bool>> PostAvailabilityAsync(DateTime startUtc, DateTime endUtc);
+    Task<AppResult<bool>> InviteMemberAsync(string memberId, DateTime startUtc, DateTime endUtc);
     Task<AppResult<bool>> RespondAsync(int requestId, bool approve);
     Task<AppResult<bool>> CancelRequestAsync(int requestId);
     Task<AppResult<IReadOnlyList<SessionRow>>> SessionsAsync();
@@ -545,6 +632,10 @@ public interface ISessionService
     Task<AppResult<bool>> SetSessionStatusAsync(int sessionId, string status);
     Task<AppResult<bool>> RescheduleAsync(int sessionId, DateTime startUtc, DateTime endUtc);
     Task<AppResult<bool>> CancelSessionAsync(int sessionId);
+    /// <summary>The signed-in coach's sessions that start in [fromUtc, toUtc), oldest first, each with how it went (Mark is null until marked).</summary>
+    Task<AppResult<IReadOnlyList<CalendarSession>>> CalendarAsync(DateTime fromUtc, DateTime toUtc);
+    /// <summary>The signed-in coach's scheduled sessions from now on, nearest first.</summary>
+    Task<AppResult<IReadOnlyList<CalendarSession>>> UpcomingAsync();
 }
 
 public sealed class SessionService(ISupabaseGateway gw) : ISessionService
@@ -573,7 +664,16 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
         var hires = await gw.ListAsync<CoachHire>(h => h.MemberId == uid && h.Status == "active");
         IReadOnlyList<CoachCard> hired = coaches.Where(c => hires.Any(h => h.CoachId == c.UserId))
             .Select(c => new CoachCard(c, CoachName(c.UserId), true, null)).ToList();
-        return new RequestsView(rows, iAmCoach, hired);
+        IReadOnlyList<RequestMember> trainees = [];
+        if (iAmCoach)
+        {
+            var mine = await gw.ListAsync<CoachHire>(h => h.CoachId == uid && h.Status == "active");
+            var profiles = await gw.ListAsync<Profile>(p => p.IsActive == true);
+            trainees = profiles.Where(p => mine.Any(h => h.MemberId == p.Id))
+                .Select(p => new RequestMember(p.Id, MemberName(p.Id))).OrderBy(m => m.Name).ToList();
+        }
+        var active = await gw.ListAsync<TrainingSession>(s => s.Status == Status.Scheduled);
+        return new RequestsView(rows, iAmCoach, hired, trainees, active.Where(s => s.CoachId == uid || s.MemberId == uid).ToList());
     });
 
     public async Task<AppResult<bool>> RequestAsync(string coachId, DateTime startUtc, DateTime endUtc, string? message)
@@ -589,6 +689,20 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
         {
             var uid = gw.CurrentUserId ?? throw new Exception("not authenticated");
             await gw.RpcAsync<int>("request_time", TimeArgs(uid, startUtc, endUtc, null));   // a coach asking for their own id is an open slot
+            return true;
+        });
+    }
+
+    public async Task<AppResult<bool>> InviteMemberAsync(string memberId, DateTime startUtc, DateTime endUtc)
+    {
+        if (string.IsNullOrWhiteSpace(memberId)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
+        if (endUtc <= startUtc) return AppResult<bool>.Fail(AppErrorKind.Validation, "end must be after start");
+        return await Safe.RunAsync(async () =>
+        {
+            await gw.RpcAsync<int>("request_member_time", new()
+            {
+                ["p_member_id"] = memberId, ["p_start"] = startUtc.ToString("O"), ["p_end"] = endUtc.ToString("O")
+            });
             return true;
         });
     }
@@ -640,6 +754,26 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
         await gw.RpcAsync("record_session_attendance", new() { ["p_session_id"] = sessionId, ["p_status"] = status == Status.NoShow ? "absent" : "present" });
         return true;
     });
+
+    public Task<AppResult<IReadOnlyList<CalendarSession>>> CalendarAsync(DateTime fromUtc, DateTime toUtc) => Safe.RunAsync<IReadOnlyList<CalendarSession>>(async () =>
+    {
+        var uid = gw.CurrentUserId ?? throw new Exception("not authenticated");
+        var sessions = await gw.ListAsync<TrainingSession>(s => s.CoachId == uid && s.ScheduledStart >= fromUtc && s.ScheduledStart < toUtc);
+        var ids = sessions.Select(s => s.Id).ToList();
+        var marks = (await gw.ListAsync<SessionAttendance>(a => ids.Contains(a.SessionId))).ToDictionary(a => a.SessionId, a => a.Status);   // asked even for an empty month: one tiny request, and the filter stays proven
+        var names = await Directory_.UserNamesAsync(gw);
+        return sessions.OrderBy(s => s.ScheduledStart)
+            .Select(s => new CalendarSession(s, names.GetValueOrDefault(s.MemberId, "Member"), marks.GetValueOrDefault(s.Id))).ToList();
+    });
+
+    public Task<AppResult<IReadOnlyList<CalendarSession>>> UpcomingAsync() => Safe.RunAsync<IReadOnlyList<CalendarSession>>(async () =>
+    {
+        var uid = gw.CurrentUserId ?? throw new Exception("not authenticated");
+        var now = DateTime.UtcNow;
+        var sessions = await gw.ListAsync<TrainingSession>(s => s.CoachId == uid && s.Status == Status.Scheduled && s.ScheduledStart >= now);
+        var names = await Directory_.UserNamesAsync(gw);
+        return sessions.OrderBy(s => s.ScheduledStart).Select(s => new CalendarSession(s, names.GetValueOrDefault(s.MemberId, "Member"), null)).ToList();
+    });
 }
 
 // ===================== Attendance and check-ins =====================
@@ -681,16 +815,34 @@ public sealed class AttendanceService(ISupabaseGateway gw) : IAttendanceService
 // ===================== Notifications =====================
 public interface INotificationService
 {
+    /// <summary>Raised after an alert is read or all are, so the bell and an open panel redraw together.</summary>
+    event Action? Changed;
+    /// <summary>Newest first.</summary>
     Task<AppResult<IReadOnlyList<UserNotification>>> ListAsync();
+    Task<AppResult<int>> UnreadCountAsync();
     Task<AppResult<bool>> MarkReadAsync(int id);
+    Task<AppResult<bool>> MarkAllReadAsync();
+    /// <summary>Something outside this service cleared alerts (a chat was opened): redraw the bell.</summary>
+    void Refresh();
 }
 
 public sealed class NotificationService(ISupabaseGateway gw) : INotificationService
 {
+    public event Action? Changed;
+
+    public void Refresh() => Changed?.Invoke();
+
     public Task<AppResult<IReadOnlyList<UserNotification>>> ListAsync() => Safe.RunAsync(async () =>
     {
         var uid = gw.CurrentUserId;
         return (IReadOnlyList<UserNotification>)(await gw.ListAsync<UserNotification>(n => n.UserId == uid)).OrderByDescending(n => n.CreatedAt).ToList();
+    });
+
+    // fetches only the unread rows, so the bell does not download every alert you ever had
+    public Task<AppResult<int>> UnreadCountAsync() => Safe.RunAsync(async () =>
+    {
+        var uid = gw.CurrentUserId;
+        return (await gw.ListAsync<UserNotification>(n => n.UserId == uid && n.ReadAt == null)).Count;
     });
 
     public Task<AppResult<bool>> MarkReadAsync(int id) => Safe.RunAsync(async () =>
@@ -698,6 +850,15 @@ public sealed class NotificationService(ISupabaseGateway gw) : INotificationServ
         var row = (await gw.ListAsync<UserNotification>(n => n.Id == id)).First();
         row.ReadAt = DateTime.UtcNow;
         await gw.UpdateAsync(row);
+        Changed?.Invoke();
+        return true;
+    });
+
+    public Task<AppResult<bool>> MarkAllReadAsync() => Safe.RunAsync(async () =>
+    {
+        var uid = gw.CurrentUserId;
+        await gw.UpdateWhereAsync<UserNotification, DateTime?>(n => n.UserId == uid && n.ReadAt == null, n => n.ReadAt, DateTime.UtcNow);
+        Changed?.Invoke();
         return true;
     });
 }
@@ -730,6 +891,7 @@ public interface IAdminService
     Task<AppResult<bool>> DeleteDiscountAsync(Discount discount);
     Task<AppResult<bool>> SavePackageAsync(MembershipPackage package);
     Task<AppResult<bool>> SaveAmenityAsync(Amenity amenity);
+    Task<AppResult<string>> SetAmenityPhotoAsync(int amenityId, string fileName, byte[] data);
     Task<AppResult<IReadOnlyList<MembershipPackage>>> AllPackagesAsync();
     Task<AppResult<IReadOnlyList<Amenity>>> AllAmenitiesAsync();
     Task<AppResult<IReadOnlyList<RevenueRow>>> RevenueAsync(DateOnly from, DateOnly to);
@@ -795,6 +957,19 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         Safe.RunAsync(async () => { if (p.Id == 0) await gw.InsertAsync(p); else await gw.UpdateAsync(p); return true; });
     public Task<AppResult<bool>> SaveAmenityAsync(Amenity a) =>
         Safe.RunAsync(async () => { if (a.Id == 0) await gw.InsertAsync(a); else await gw.UpdateAsync(a); return true; });
+
+    public Task<AppResult<string>> SetAmenityPhotoAsync(int amenityId, string fileName, byte[] data)
+    {
+        if (!ProfileService.IsAcceptableImage(fileName, data)) return Task.FromResult(AppResult<string>.Fail(AppErrorKind.Validation, "bad_image"));
+        return Safe.RunAsync(async () =>
+        {
+            if (!(await gw.ListAsync<Amenity>(a => a.Id == amenityId)).Any()) throw new Exception("not_found");
+            var path = await gw.UploadAsync("gym-assets", $"amenities/{amenityId}/{Guid.NewGuid():N}{Path.GetExtension(fileName).ToLowerInvariant()}", data);
+            // Only the image changes: a catalog row on another screen may already have newer details or status.
+            await gw.UpdateWhereAsync<Amenity, string?>(a => a.Id == amenityId, a => a.ImagePath, path);
+            return path;
+        });
+    }
 
     public Task<AppResult<IReadOnlyList<MembershipPackage>>> AllPackagesAsync() => Safe.RunAsync(() => gw.ListAsync<MembershipPackage>());
     public Task<AppResult<IReadOnlyList<Amenity>>> AllAmenitiesAsync() => Safe.RunAsync(() => gw.ListAsync<Amenity>());

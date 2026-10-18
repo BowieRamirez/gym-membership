@@ -7,7 +7,7 @@ public class LockedPage : ContentPage
 	{
 		Title = feature;
 		var action = new Button { Text = paymentPending ? "See my payment" : "See packages", HorizontalOptions = LayoutOptions.Start };
-		action.Clicked += async (_, _) => await Shell.Current.GoToAsync(paymentPending ? "//memberships" : "//packages");
+		action.Clicked += async (_, _) => await Controls.PhoneNavigation.GoToAsync(Shell.Current, paymentPending ? "//memberships" : "//packages");
 
 		var res = Application.Current!.Resources;
 		Content = new VerticalStackLayout

@@ -20,7 +20,9 @@ public static class PayMethod { public const string Qr = "qr", Cash = "cash", Gc
 
 [Table("profiles")] public class Profile : BaseModel
 { [PrimaryKey("id")] public string Id { get; set; } = ""; [Column("username")] public string Username { get; set; } = ""; [Column("full_name")] public string FullName { get; set; } = "";
-  [Column("phone")] public string? Phone { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true; [Column("must_change_password")] public bool MustChangePassword { get; set; } }
+  [Column("phone")] public string? Phone { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true; [Column("must_change_password")] public bool MustChangePassword { get; set; }
+  // written only by the set_my_avatar function
+  [Column("avatar_path", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? AvatarPath { get; set; } }
 
 [Table("roles")] public class Role : BaseModel
 { [PrimaryKey("role_id")] public int RoleId { get; set; } [Column("name")] public string Name { get; set; } = ""; }
@@ -61,11 +63,32 @@ public static class PayMethod { public const string Qr = "qr", Cash = "cash", Gc
   [Column("recorded_by")] public string? RecordedBy { get; set; } [Column("verified_by")] public string? VerifiedBy { get; set; } [Column("verified_at")] public DateTime? VerifiedAt { get; set; }
   [Column("receipt_no")] public string? ReceiptNo { get; set; } [Column("rejected_reason")] public string? RejectedReason { get; set; }
   [Column("voided_by")] public string? VoidedBy { get; set; } [Column("voided_at")] public DateTime? VoidedAt { get; set; } [Column("void_reason")] public string? VoidReason { get; set; }
+  [Column("membership_package_snapshot_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? PackageSnapshotId { get; set; }
+  [Column("membership_package_name", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? PackageSnapshotName { get; set; }
+  [Column("membership_duration_days", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? PackageSnapshotDays { get; set; }
   [Column("created_at")] public DateTime CreatedAt { get; set; } }
 
 [Table("amenities")] public class Amenity : BaseModel
 { [PrimaryKey("amenity_id")] public int Id { get; set; } [Column("name")] public string Name { get; set; } = ""; [Column("description")] public string? Description { get; set; }
-  [Column("price")] public decimal Price { get; set; } [Column("duration_days")] public int? DurationDays { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true; }
+  [Column("price")] public decimal Price { get; set; } [Column("duration_days")] public int? DurationDays { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true;
+  [Column("image_path", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? ImagePath { get; set; }
+  // live status: written only by set_amenity_status, so a catalog edit never sends these
+  [Column("status", ignoreOnInsert: true, ignoreOnUpdate: true)] public string Availability { get; set; } = "available";
+  [Column("status_reason", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? StatusReason { get; set; }
+  [Column("back_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? BackAt { get; set; } }
+
+// read only: a member's saved amenities change through set_amenity_followed
+[Table("amenity_follows")] public class AmenityFollow : BaseModel
+{ [PrimaryKey("amenity_id")] public int AmenityId { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; }
+
+// what set_amenity_status returns for each member it alerted (a function result, not a table)
+public class NotifiedMember : BaseModel
+{
+  [Column("member_id")] public string MemberId { get; set; } = "";
+  [Column("full_name")] public string Name { get; set; } = "";
+  public NotifiedMember() { }
+  public NotifiedMember(string memberId, string name) { MemberId = memberId; Name = name; }
+}
 
 [Table("user_amenities")] public class UserAmenity : BaseModel
 { [PrimaryKey("user_amenity_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("amenity_id")] public int AmenityId { get; set; }
@@ -126,7 +149,74 @@ public static class PayMethod { public const string Qr = "qr", Cash = "cash", Gc
 [Table("messages")] public class ChatMessage : BaseModel
 { [PrimaryKey("message_id")] public int Id { get; set; } [Column("coach_id")] public string CoachId { get; set; } = ""; [Column("member_id")] public string MemberId { get; set; } = "";
   [Column("sender_id")] public string SenderId { get; set; } = ""; [Column("body")] public string Body { get; set; } = "";
-  [Column("sent_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime SentAt { get; set; } [Column("read_at", ignoreOnInsert: true)] public DateTime? ReadAt { get; set; } }
+  [Column("sent_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime SentAt { get; set; } [Column("read_at", ignoreOnInsert: true)] public DateTime? ReadAt { get; set; }
+  [Column("delivered_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? DeliveredAt { get; set; }
+  [Column("attachment_path", ignoreOnUpdate: true)] public string? AttachmentPath { get; set; } }
+
+// the front desk conversation: one thread per member. The app never reads these tables; it uses chat_threads, chat_messages and send_support_message.
+// The demo keeps its data here.
+[Table("support_threads")] public class SupportThread : BaseModel
+{ [PrimaryKey("member_id")] public string MemberId { get; set; } = ""; [Column("claimed_by")] public string? ClaimedBy { get; set; } [Column("status")] public string Status { get; set; } = "open";
+  [Column("last_message_at")] public DateTime LastMessageAt { get; set; } = DateTime.UtcNow; }
+
+[Table("support_messages")] public class SupportMessage : BaseModel
+{ [PrimaryKey("message_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("sender_id")] public string SenderId { get; set; } = "";
+  [Column("body")] public string Body { get; set; } = ""; [Column("sent_at")] public DateTime SentAt { get; set; } [Column("delivered_at")] public DateTime? DeliveredAt { get; set; }
+  [Column("read_at")] public DateTime? ReadAt { get; set; }
+  [Column("attachment_path")] public string? AttachmentPath { get; set; } }
+
+// one row of chat_threads(): a coach chat ("coach") or a front desk thread ("support"). A function result, never written.
+public class ChatThread : BaseModel
+{
+  [Column("kind")] public string Kind { get; set; } = "coach";
+  [Column("coach_id")] public string? CoachId { get; set; }
+  [Column("member_id")] public string MemberId { get; set; } = "";
+  [Column("with_id")] public string? WithId { get; set; }
+  [Column("with_name")] public string WithName { get; set; } = "";
+  [Column("with_avatar")] public string? WithAvatar { get; set; }
+  [Column("last_body")] public string? LastBody { get; set; }
+  [Column("last_at")] public DateTime? LastAt { get; set; }
+  [Column("last_from_me")] public bool LastFromMe { get; set; }
+  [Column("unread")] public int Unread { get; set; }
+  [Column("can_send")] public bool CanSend { get; set; }
+  [Column("status")] public string? Status { get; set; }
+  [Column("claimed_by")] public string? ClaimedBy { get; set; }
+  [Column("claimed_by_name")] public string? ClaimedByName { get; set; }
+  [Column("with_last_seen")] public DateTime? WithLastSeen { get; set; }
+
+  public string Key => $"{Kind}|{CoachId}|{MemberId}";
+  public bool IsSupport => Kind == "support";
+  public bool HasUnread => Unread > 0;
+  /// <summary>Whether to show online / last active for the other person: not for a member's own "Front desk" thread (staff come and go) and not once a hire has ended.</summary>
+  public bool ShowsPresence => WithId is not null && (IsSupport || CanSend);
+  public string UnreadText => Unread > 99 ? "99+" : Unread.ToString();
+  public string Preview => LastBody is null ? "No messages yet" : LastFromMe ? "You: " + LastBody : LastBody;
+}
+
+// one row of chat_messages(): a message with its delivery times and, in the front desk thread for staff only, who sent it
+public class ChatLine : BaseModel
+{
+  [Column("message_id")] public long MessageId { get; set; }
+  [Column("sender_id")] public string SenderId { get; set; } = "";
+  [Column("body")] public string Body { get; set; } = "";
+  [Column("sent_at")] public DateTime SentAt { get; set; }
+  [Column("delivered_at")] public DateTime? DeliveredAt { get; set; }
+  [Column("read_at")] public DateTime? ReadAt { get; set; }
+  [Column("sender_name")] public string? SenderName { get; set; }
+  [Column("attachment_path")] public string? AttachmentPath { get; set; }
+}
+
+// one row of chat_search()
+public class ChatSearchHit : BaseModel
+{
+  [Column("kind")] public string Kind { get; set; } = "coach";
+  [Column("coach_id")] public string? CoachId { get; set; }
+  [Column("member_id")] public string MemberId { get; set; } = "";
+  [Column("with_id")] public string? WithId { get; set; }
+  [Column("with_name")] public string WithName { get; set; } = "";
+  [Column("snippet")] public string? Snippet { get; set; }
+  [Column("sent_at")] public DateTime? SentAt { get; set; }
+}
 
 [Table("shift_posts")] public class ShiftPost : BaseModel
 { [PrimaryKey("shift_post_id")] public int Id { get; set; } [Column("coach_id", ignoreOnUpdate: true)] public string CoachId { get; set; } = ""; [Column("starts_at")] public DateTime Start { get; set; }

@@ -60,6 +60,10 @@ public sealed class SupabaseGateway : ISupabaseGateway
 
     public string? CurrentUserId => _client.Auth.CurrentUser?.Id;
 
+    // for SupabaseRealtimeChat, which lives in this assembly: the connected client and the current sign-in token
+    internal async Task<Client> ClientAsync() => await ReadyAsync();
+    internal string? AccessToken => _client.Auth.CurrentSession?.AccessToken;
+
     async Task<Client> ReadyAsync()
     {
         if (_started) return _client;
@@ -139,6 +143,14 @@ public sealed class SupabaseGateway : ISupabaseGateway
         await c.From<T>().Update(row);
     }
 
+    public async Task UpdateWhereAsync<T, TValue>(Expression<Func<T, bool>> where, Expression<Func<T, TValue>> column, TValue value) where T : BaseModel, new()
+    {
+        var c = await ReadyAsync();
+        // the library wants the column as Func<T, object>; boxing the member access keeps the column name it reads from the expression
+        var boxed = Expression.Lambda<Func<T, object>>(Expression.Convert(column.Body, typeof(object)), column.Parameters);
+        await c.From<T>().Where(where).Set(boxed, value).Update();
+    }
+
     public async Task DeleteAsync<T>(T row) where T : BaseModel, new()
     {
         var c = await ReadyAsync();
@@ -173,8 +185,7 @@ public sealed class SupabaseGateway : ISupabaseGateway
     public async Task<string> UploadAsync(string bucket, string path, byte[] data)
     {
         var c = await ReadyAsync();
-        var slash = path.LastIndexOf('/');
-        var safe = path[..(slash + 1)] + Regex.Replace(path[(slash + 1)..], @"[^A-Za-z0-9._-]", "_");   // spaces and accents in a camera file name
+        var safe = StoragePath.Safe(path);   // spaces and accents in a camera file name
         var mime = MimeByExtension.GetValueOrDefault(Path.GetExtension(safe), "image/jpeg");
         await c.Storage.From(bucket).Upload(data, safe, new FileOptions { ContentType = mime, Upsert = false });
         return safe;

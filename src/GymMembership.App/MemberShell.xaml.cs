@@ -13,12 +13,14 @@ public partial class MemberShell : Shell
 	{
 		InitializeComponent();
 		_sp = sp; _access = access;
+		((Controls.HeaderBar)GetTitleView(this)).Attach(this, sp);
 		if (!access.Active)
 			foreach (var item in Items.Where(i => i.ClassId == "members-only"))
 			{
 				var title = item.Title;
 				((ShellContent)item.Items[0].Items[0]).ContentTemplate = new DataTemplate(() => new LockedPage(title, access.PaymentPending));
 			}
+		Controls.PhoneNavigation.Attach(this, coach: false, services: sp, access: access);
 		Navigated += async (_, _) => await RecheckAsync();
 	}
 

@@ -9,7 +9,7 @@
 
     <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='20,16,20,0'}" MaximumWidthRequest="920">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
-            <Label Text="Choose a package. You get a payment code and the gym's QR to pay with GCash, Maya or your bank app. Your membership starts when the front desk checks the payment." Style="{StaticResource Muted}" />
+            <Label Text="Choose your next package. Pay by QR and send proof on My membership. After verification, a paid extension starts after your last paid term, or immediately if it has ended. No upgrades, automatic charges or unused-time credits." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
             <VerticalStackLayout Spacing="4" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" WidthRequest="{OnIdiom Phone=-1, Default=260}">
@@ -34,9 +34,8 @@
                             </VerticalStackLayout>
                             <VerticalStackLayout Style="{StaticResource CardActions}" Spacing="6">
                                 <Label Text="{Binding Price, StringFormat='₱{0:N0}'}" Style="{StaticResource PriceNumeral}" HorizontalOptions="{OnIdiom Phone=Start, Default=End}" />
-                                <Button Text="Buy" Style="{StaticResource SmallButton}"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:PackagesViewModel}}, Path=AvailCommand}"
-                                        CommandParameter="{Binding .}" />
+                                <Button Text="Choose next term" Style="{StaticResource SmallButton}"
+                                        Clicked="OnAvail" />
                             </VerticalStackLayout>
                         </Grid>
                     </Border>

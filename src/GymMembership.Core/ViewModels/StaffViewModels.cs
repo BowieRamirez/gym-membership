@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -7,6 +8,52 @@ using GymMembership.Core.Services;
 namespace GymMembership.Core.ViewModels;
 
 // ---------- front desk ----------
+
+/// <summary>One tile on the front desk home. Route says which screen it opens (a StaffShell route).</summary>
+public sealed record HomeTile(string Route, string Icon, string Title, string Count, string Detail, bool NeedsAttention)
+{
+    /// <summary>What a screen reader says: the count belongs with the title, not only in the picture.</summary>
+    public string Description => $"{Title}: {Count}";
+}
+
+public partial class HomeViewModel(IDeskHomeService svc) : LoadableViewModel
+{
+    public ObservableCollection<HomeTile> Tiles { get; } = new();
+
+    public override Task OnAppearingAsync() => LoadAsync();
+
+    [RelayCommand] private Task LoadAsync() => RunAsync(svc.SummaryAsync, s => Show(s));
+
+    // Quiet: the error line is never touched and a failed look leaves the numbers as they were.
+    public override async Task AutoRefreshAsync()
+    {
+        if (IsBusy) return;
+        var result = await svc.SummaryAsync();
+        if (!result.Ok) return;
+        ErrorMessage = null;   // a look that works replaces the banner a failed first load left above these numbers
+        Show(result.Value!);
+    }
+
+    void Show(DeskSummary s) => Sync(Tiles, Build(s), t => t.Route, (a, b) => a == b);
+
+    public static IReadOnlyList<HomeTile> Build(DeskSummary s)
+    {
+        var amenityDetail = string.Join(", ", new[] { s.AmenitiesInUse > 0 ? $"{s.AmenitiesInUse} in use" : null, s.AmenitiesUnavailable > 0 ? $"{s.AmenitiesUnavailable} unavailable" : null }.OfType<string>());
+        return
+        [
+            new("checkin", "log-in", "Check-ins today", s.CheckInsToday.ToString(),
+                s.CheckInsToday == 0 ? "No one has checked in yet" : "Tap to check someone in", false),
+            new("verify", "receipt", "Payments to verify", s.PaymentsToVerify.ToString(),
+                s.PaymentsToVerify == 0 ? "All caught up" : s.PaymentsToVerify == 1 ? "1 payment is waiting" : $"{s.PaymentsToVerify} payments are waiting", s.PaymentsToVerify > 0),
+            new("amenities", "waves", "Amenities available", $"{s.AmenitiesAvailable} of {s.AmenitiesTotal}",
+                amenityDetail.Length == 0 ? "All open" : amenityDetail, s.AmenitiesUnavailable > 0),
+            new("messages", "message-square", "Unread messages", s.UnreadMessages.ToString(),
+                s.UnclaimedChats > 0 ? (s.UnclaimedChats == 1 ? "1 chat nobody has taken" : $"{s.UnclaimedChats} chats nobody has taken")
+                : s.UnreadMessages > 0 ? "Open Messages to reply" : "No new messages", s.UnreadMessages > 0 || s.UnclaimedChats > 0),
+        ];
+    }
+}
+
 public partial class VerifyPaymentsViewModel(IPaymentStaffService svc) : LoadableViewModel
 {
     public ObservableCollection<PaymentRow> Pending { get; } = new();
@@ -51,41 +98,74 @@ public partial class VerifyPaymentsViewModel(IPaymentStaffService svc) : Loadabl
     [RelayCommand] private void CloseProof() { Viewing = null; ProofUrl = null; }
 }
 
-// front desk: cash and GCash at the counter, and walk-ins. Verified straight away with a receipt number
-public partial class CounterViewModel(IPaymentStaffService svc, IAttendanceService members) : LoadableViewModel
+/// <summary>One thing for sale on the cashier's grid, and whether it is the one picked.</summary>
+public partial class ItemOption(CounterItem item) : ObservableObject
+{
+    public CounterItem Item { get; } = item;
+    public string Name => Item.Label;
+    public string PriceText => Item.Price is { } p ? $"₱{p:N2}" : "";
+    [ObservableProperty] private bool isPicked;
+}
+
+// front desk: cash, GCash and bank transfers at the counter, and walk-ins. Verified straight away with a receipt number
+public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceService members) : LoadableViewModel
 {
     public string[] Kinds { get; } = ["Membership", "Renewal", "Amenity", "Walk-in"];
     public string[] Methods { get; } = ["Cash", "GCash", "Bank transfer"];
     public ObservableCollection<MemberHit> Hits { get; } = new();
-    public ObservableCollection<CounterItem> Items { get; } = new();
+    public ObservableCollection<ItemOption> Options { get; } = new();
     public ObservableCollection<CashRow> CashToday { get; } = new();
+    int itemsTicket;
 
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWalkIn), nameof(NeedsMember), nameof(NeedsReference))] private string kind = "Membership";
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(NeedsReference))] private string method = "Cash";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWalkIn), nameof(NeedsMember), nameof(NeedsReference), nameof(OrderWho), nameof(OrderWhat), nameof(OrderHow), nameof(TotalText), nameof(TotalNote), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))]
+    private string kind = "Membership";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(NeedsReference), nameof(OrderHow)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string method = "Cash";
     [ObservableProperty] private string search = "";
-    [ObservableProperty] private MemberHit? member;
-    [ObservableProperty] private CounterItem? item;
-    [ObservableProperty] private string walkInName = "";
-    [ObservableProperty] private string referenceNo = "";
-    [ObservableProperty] private string discountCode = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private MemberHit? member;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWhat), nameof(TotalText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private CounterItem? item;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string walkInName = "";
+    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string referenceNo = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(TotalNote))] private string discountCode = "";
     [ObservableProperty] private string cashTotal = "₱0.00";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ItemsEmptyText))] private bool loadingItems;
 
     public bool IsWalkIn => Kind == "Walk-in";
     public bool NeedsMember => !IsWalkIn;
     public bool NeedsReference => Method != "Cash";
+
+    // the order panel, in the words the cashier uses
+    public string OrderWho => IsWalkIn ? (string.IsNullOrWhiteSpace(WalkInName) ? "Walk-in: type a name" : WalkInName.Trim()) : Member?.Username ?? "Find and choose a member";
+    public string OrderWhat => Item?.Label ?? (IsWalkIn ? "Day pass" : "Choose what they are paying for");
+    public string TotalText => IsWalkIn ? "Day pass" : Item?.Price is { } p ? $"₱{p:N2}" : "₱0.00";
+    public string TotalNote => IsWalkIn ? "The day pass price is set in Gym settings."
+        : string.IsNullOrWhiteSpace(DiscountCode) ? "" : "The discount code is checked when you complete the payment.";
+    public string ItemsEmptyText => LoadingItems ? "Loading…"
+        : Kind == "Renewal" && Member is null ? "Choose a member to see their memberships." : "Nothing to sell here yet.";
+    /// <summary>The kind and the way of paying in words, so the order reads the same to someone who cannot see which button is filled.</summary>
+    public string OrderHow => $"{Kind}, paid with {Method}";
 
     static string KindKey(string k) => k switch { "Renewal" => PayKind.Renewal, "Amenity" => PayKind.Amenity, "Walk-in" => PayKind.WalkIn, _ => PayKind.Membership };
     static string MethodKey(string m) => m switch { "GCash" => PayMethod.Gcash, "Bank transfer" => PayMethod.BankTransfer, _ => PayMethod.Cash };
 
     public override async Task OnAppearingAsync() { await RefreshItemsAsync(); await LoadCashAsync(); }
 
+    // an item belongs to the kind (and member) it was listed for: change either and the pick goes
     partial void OnKindChanged(string value) { Item = null; _ = RefreshItemsAsync(); }
     partial void OnMemberChanged(MemberHit? value) { Item = null; if (Kind == "Renewal") _ = RefreshItemsAsync(); }
+    partial void OnItemChanged(CounterItem? value) { foreach (var o in Options) o.IsPicked = value is not null && o.Item.Id == value.Id; }
 
     async Task RefreshItemsAsync()
     {
-        if (IsWalkIn) { Items.Clear(); return; }
-        await RunAsync(() => svc.ItemsAsync(KindKey(Kind), Member?.MemberId), rows => Fill(Items, rows));
+        var ticket = ++itemsTicket;   // the newest request wins: a slow answer for a kind you have left is dropped
+        // Cards listed for another kind or member must not stay tappable while the right ones load: a tap would send their item id with the new kind.
+        Options.Clear(); Item = null; ErrorMessage = null;
+        if (IsWalkIn) { LoadingItems = false; return; }
+        LoadingItems = true;
+        var result = await svc.ItemsAsync(KindKey(Kind), Member?.MemberId);
+        if (ticket != itemsTicket) return;   // a newer request owns the screen now; a stale answer, even a failed one, says nothing
+        LoadingItems = false;
+        if (!result.Ok) { ErrorMessage = ErrorText.For(result.Error, result.Message); return; }
+        Fill(Options, result.Value!.Select(r => new ItemOption(r)));
     }
 
     async Task LoadCashAsync() =>
@@ -93,8 +173,16 @@ public partial class CounterViewModel(IPaymentStaffService svc, IAttendanceServi
         { Fill(CashToday, rows); CashTotal = $"₱{rows.Sum(r => r.Total):N2}"; });
 
     [RelayCommand] private Task FindAsync() => RunAsync(() => members.FindMembersAsync(Search), rows => Fill(Hits, rows));
+    [RelayCommand] private void PickKind(string value) => Kind = value;
+    [RelayCommand] private void PickMethod(string value) => Method = value;
+    [RelayCommand] private void PickItem(ItemOption option) => Item = option.Item;   // OnItemChanged marks the card
 
-    [RelayCommand]
+    bool CanComplete() =>
+        (IsWalkIn ? !string.IsNullOrWhiteSpace(WalkInName) : Member is not null && Item is not null)
+        && (!NeedsReference || !string.IsNullOrWhiteSpace(ReferenceNo));
+
+    // The command is off while it runs, so a double tap records one payment.
+    [RelayCommand(CanExecute = nameof(CanComplete))]
     private async Task RecordAsync()
     {
         Notice = null;
@@ -102,7 +190,7 @@ public partial class CounterViewModel(IPaymentStaffService svc, IAttendanceServi
         Payment? paid = null;
         if (!await RunAsync(() => svc.RecordCounterAsync(KindKey(Kind), MethodKey(Method), IsWalkIn ? null : Member!.MemberId, Item?.Id,
                 IsWalkIn ? WalkInName : null, NeedsReference ? ReferenceNo : null, IsWalkIn ? null : DiscountCode), p => paid = p)) return;
-        Notice = $"Recorded ₱{paid!.Amount:N2}. Receipt {paid.ReceiptNo}.";
+        Notice = $"Payment complete: ₱{paid!.Amount:N2}. Receipt {paid.ReceiptNo}.";
         Item = null; ReferenceNo = ""; DiscountCode = ""; WalkInName = "";
         await LoadCashAsync();
     }
@@ -164,14 +252,19 @@ public partial class CheckInViewModel(IAttendanceService svc) : LoadableViewMode
 }
 
 // ---------- coach ----------
-public partial class CoachProfileViewModel(ICoachService svc) : LoadableViewModel
+public partial class CoachProfileViewModel(ICoachService svc, CoachPhotoViewModel? photo = null) : LoadableViewModel
 {
+    public CoachPhotoViewModel? Photo { get; } = photo;
     [ObservableProperty] private string? bio;
     [ObservableProperty] private string? specialty;
     [ObservableProperty] private decimal? hourlyRate;
     [ObservableProperty] private bool isAvailable;
 
-    public override Task OnAppearingAsync() => LoadAsync();
+    public override async Task OnAppearingAsync()
+    {
+        await LoadAsync();
+        if (Photo is not null) await Photo.OnAppearingAsync();
+    }
 
     [RelayCommand]
     private Task LoadAsync() => RunAsync(svc.MyCoachAsync, c =>
@@ -182,7 +275,7 @@ public partial class CoachProfileViewModel(ICoachService svc) : LoadableViewMode
     { if (await RunAsync(() => svc.UpdateProfileAsync(Bio, Specialty, HourlyRate, IsAvailable))) Notice = "Profile saved."; }
 }
 
-public partial class TraineesViewModel(ICoachService svc, IMessageService messages, IAppNavigator nav) : LoadableViewModel
+public partial class TraineesViewModel(ICoachService svc, IChatService messages, IAppNavigator nav) : LoadableViewModel
 {
     public ObservableCollection<TraineeRow> Trainees { get; } = new();
 
@@ -255,38 +348,85 @@ public partial class RequestsViewModel(ISessionService svc) : LoadableViewModel
 {
     public ObservableCollection<RequestRow> Requests { get; } = new();
     public ObservableCollection<CoachCard> Coaches { get; } = new();
+    public ObservableCollection<RequestMember> Members { get; } = new();
     public int[] Durations { get; } = [30, 45, 60, 90];
 
     [ObservableProperty] private bool isCoach;
     [ObservableProperty] private bool canCompose;
+    [ObservableProperty] private bool useWindowsRequestForm;
     [ObservableProperty] private CoachCard? selectedCoach;
+    [ObservableProperty] private RequestMember? selectedMember;
     [ObservableProperty] private DateTime date = DateTime.Today.AddDays(1);
     [ObservableProperty] private TimeSpan time = new(9, 0, 0);
     [ObservableProperty] private int durationMinutes = 60;
     [ObservableProperty] private string? message;
 
+    IReadOnlyList<TrainingSession> activeSessions = [];
+    public bool HasActiveSession => IsCoach
+        ? SelectedMember is { } member && activeSessions.Any(s => s.MemberId == member.MemberId)
+        : SelectedCoach is { } coach && activeSessions.Any(s => s.CoachId == coach.Coach.UserId);
+    public bool ShowActiveSession => UseWindowsRequestForm && HasActiveSession;
+    public bool ShowMemberPicker => UseWindowsRequestForm && IsCoach;
+    public bool HasPendingRequest => !IsCoach && SelectedCoach is { } c && Requests.Any(r => r.CanCancel && r.Request.RequestedBy == "member" && r.Request.SessionId is null && r.Request.CoachId == c.Coach.UserId);
+    public bool ShowPendingRequest => UseWindowsRequestForm && HasPendingRequest && !HasActiveSession;
+    public string ComposeTitle => IsCoach ? (UseWindowsRequestForm ? "Invite a member" : "Offer an open slot") : "Request a session";
+    public string SubmitText => IsCoach ? (UseWindowsRequestForm ? "Send invitation" : "Post slot") : "Send request";
+    public string MemberPickerHint => Members.Count == 0 ? "No active trainees to invite. A member must hire you first." : "Choose one of your current trainees. Only that member receives this invitation.";
+    public bool CanSubmit => !IsBusy && CanCompose && !HasActiveSession && (IsCoach ? !UseWindowsRequestForm || SelectedMember is not null : SelectedCoach is not null && !HasPendingRequest);
+
+    partial void OnSelectedCoachChanged(CoachCard? value) => RefreshCompose();
+    partial void OnSelectedMemberChanged(RequestMember? value) => RefreshCompose();
+    partial void OnUseWindowsRequestFormChanged(bool value) => RefreshCompose();
+    protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (e.PropertyName == nameof(IsBusy)) SubmitCommand.NotifyCanExecuteChanged();
+    }
+    void RefreshCompose()
+    {
+        foreach (var name in new[] { nameof(HasActiveSession), nameof(ShowActiveSession), nameof(ShowMemberPicker), nameof(HasPendingRequest), nameof(ShowPendingRequest), nameof(ComposeTitle), nameof(SubmitText), nameof(MemberPickerHint) }) OnPropertyChanged(name);
+        SubmitCommand.NotifyCanExecuteChanged();
+    }
+
     public override Task OnAppearingAsync() => LoadAsync();
 
     [RelayCommand]
-    private Task LoadAsync() => RunAsync(svc.RequestsAsync, v =>
+    private async Task LoadAsync()
     {
-        Fill(Requests, v.Rows); Fill(Coaches, v.HiredCoaches);
-        IsCoach = v.IsCoach;
-        CanCompose = v.IsCoach || v.HiredCoaches.Count > 0;
-        SelectedCoach ??= Coaches.FirstOrDefault();
-    });
+        if (IsBusy) return;
+        CanCompose = false;
+        await RunAsync(svc.RequestsAsync, v =>
+        {
+            activeSessions = v.ActiveSessions ?? [];
+            Fill(Requests, v.Rows); Fill(Coaches, v.HiredCoaches); Fill(Members, v.Trainees ?? []);
+            IsCoach = v.IsCoach;
+            CanCompose = v.IsCoach || v.HiredCoaches.Count > 0;
+            SelectedCoach = Coaches.FirstOrDefault(c => c.Coach.UserId == SelectedCoach?.Coach.UserId) ?? Coaches.FirstOrDefault();
+            SelectedMember = Members.FirstOrDefault(m => m.MemberId == SelectedMember?.MemberId);
+        });
+        RefreshCompose();
+    }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanSubmit))]
     private async Task SubmitAsync()
     {
+        if (!CanSubmit) return;
         Notice = null;
         var start = (Date.Date + Time).ToUniversalTime();
         var end = start.AddMinutes(DurationMinutes);
-        if (!IsCoach && SelectedCoach is null) { ErrorMessage = "Choose a coach first."; return; }
         var ok = IsCoach
-            ? await RunAsync(() => svc.PostAvailabilityAsync(start, end))
+            ? UseWindowsRequestForm
+                ? await RunAsync(() => svc.InviteMemberAsync(SelectedMember!.MemberId, start, end))
+                : await RunAsync(() => svc.PostAvailabilityAsync(start, end))
             : await RunAsync(() => svc.RequestAsync(SelectedCoach!.Coach.UserId, start, end, Message));
-        if (ok) { Notice = IsCoach ? "Availability posted." : "Request sent."; Message = null; await LoadAsync(); }
+        if (ok) { Notice = IsCoach ? (UseWindowsRequestForm ? "Invitation sent. The member must approve it before a session is booked." : "Availability posted.") : "Request sent."; Message = null; await LoadAsync(); }
+        else if (ErrorMessage == ErrorText.For(AppErrorKind.Conflict, "pending_session_request") ||
+                 ErrorMessage == ErrorText.For(AppErrorKind.Conflict, "active_coaching_session"))
+        {
+            var error = ErrorMessage;
+            await LoadAsync();
+            ErrorMessage = error;
+        }
     }
 
     [RelayCommand] private Task ApproveAsync(RequestRow row) => RespondAsync(row, true);
@@ -304,14 +444,19 @@ public partial class RequestsViewModel(ISessionService svc) : LoadableViewModel
     }
 }
 
-public partial class SessionsViewModel(ISessionService svc) : LoadableViewModel
+public partial class SessionsViewModel(ISessionService svc, CoachPhotoViewModel? photo = null) : LoadableViewModel
 {
+    public CoachPhotoViewModel? Photo { get; } = photo;
     public ObservableCollection<SessionRow> Sessions { get; } = new();
     [ObservableProperty] private SessionRow? rescheduling;
     [ObservableProperty] private DateTime date = DateTime.Today.AddDays(1);
     [ObservableProperty] private TimeSpan time = new(9, 0, 0);
 
-    public override Task OnAppearingAsync() => LoadAsync();
+    public override async Task OnAppearingAsync()
+    {
+        await LoadAsync();
+        if (Photo is not null) await Photo.OnAppearingAsync();
+    }
 
     [RelayCommand] private Task LoadAsync() => RunAsync(svc.SessionsAsync, rows => Fill(Sessions, rows));
     [RelayCommand] private Task CompleteAsync(SessionRow row) => SetAsync(row, Status.Completed);
@@ -349,25 +494,131 @@ public partial class SessionsViewModel(ISessionService svc) : LoadableViewModel
     { if (await RunAsync(() => svc.SetSessionStatusAsync(row.Session.Id, status))) await LoadAsync(); }
 }
 
+/// <summary>One day of the week view with its sessions inline.</summary>
+public sealed record WeekRow(CalendarDay Day, IReadOnlyList<CalendarSession> Sessions)
+{
+    public string Title => Day.Date.ToString("ddd d MMM", CultureInfo.InvariantCulture);
+}
+
+// the coach's attendance calendar: a month or a week, a day list underneath, and marks that can be corrected in place
 public partial class AttendanceViewModel(ISessionService sessions, IAttendanceService attendance) : LoadableViewModel
 {
-    public ObservableCollection<SessionRow> Sessions { get; } = new();
+    /// <summary>The moment "now" is; tests set a fixed one.</summary>
+    public Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
+    /// <summary>Days are the coach's local days. Tests set a fixed zone.</summary>
+    public TimeZoneInfo Zone { get; set; } = TimeZoneInfo.Local;
 
-    public override Task OnAppearingAsync() => LoadAsync();
+    public ObservableCollection<CalendarDay> Days { get; } = new();          // the month grid, 42 cells
+    public ObservableCollection<WeekRow> WeekRows { get; } = new();          // the week view, 7 rows
+    public ObservableCollection<CalendarSession> DaySessions { get; } = new();
+
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsMonth), nameof(IsWeek), nameof(PeriodTitle))] private string viewMode = "Month";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(PeriodTitle))] private DateOnly focus;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(DayTitle), nameof(HasDay))] private DateOnly? selectedDay;
+    [ObservableProperty] private string sessionsText = "—";
+    [ObservableProperty] private string rateText = "—";
+    [ObservableProperty] private string upcomingText = "—";
+    [ObservableProperty] private string nextText = "";
+
+    List<CalendarSession> loaded = [];      // what the server last said for the range in view
+    List<CalendarSession> upcoming = [];
+    int loadTicket;
+    bool known;                             // the summary is only a fact once the month in view has really loaded; until then it says "—"
+
+    public bool IsMonth => ViewMode == "Month";
+    public bool IsWeek => ViewMode == "Week";
+    public bool HasDay => SelectedDay is not null;
+    public string DayTitle => SelectedDay is { } d ? d.ToString("dddd d MMMM", CultureInfo.InvariantCulture) : "";
+    public string PeriodTitle => IsMonth ? Focus.ToString("MMMM yyyy", CultureInfo.InvariantCulture) : WeekTitle();
+
+    string WeekTitle()
+    {
+        var w = AttendanceCalendar.WeekOf(Focus);
+        return w[0].Month == w[6].Month
+            ? $"{w[0].Day} to {w[6].Day} {w[6].ToString("MMM", CultureInfo.InvariantCulture)}"
+            : $"{w[0].Day} {w[0].ToString("MMM", CultureInfo.InvariantCulture)} to {w[6].Day} {w[6].ToString("MMM", CultureInfo.InvariantCulture)}";
+    }
+
+    DateOnly Today => AttendanceCalendar.LocalDay(Clock(), Zone);
+
+    public override async Task OnAppearingAsync()
+    {
+        if (Focus == default) { Focus = Today; SelectedDay = Today; }
+        await ReloadAsync();
+    }
+
+    // one range covers both views of the same date (the month grid and its week), so switching between them needs no new load
+    (DateTime From, DateTime To) Range()
+    {
+        var grid = AttendanceCalendar.MonthGrid(Focus.Year, Focus.Month); var week = AttendanceCalendar.WeekOf(Focus);
+        var first = grid[0] < week[0] ? grid[0] : week[0];
+        var last = grid[^1] > week[6] ? grid[^1] : week[6];
+        return (AttendanceCalendar.StartOfDayUtc(first, Zone), AttendanceCalendar.StartOfDayUtc(last.AddDays(1), Zone));
+    }
+
+    async Task ReloadAsync()
+    {
+        var ticket = ++loadTicket;                       // the newest request wins: a slow answer for a period the coach has left is dropped
+        ErrorMessage = null;
+        var (from, to) = Range();
+        var calendar = sessions.CalendarAsync(from, to);
+        var coming = sessions.UpcomingAsync();
+        await Task.WhenAll(calendar, coming);
+        if (ticket != loadTicket) return;
+        var cal = await calendar; var up = await coming;
+        if (cal.Ok) { loaded = cal.Value!.ToList(); known = true; } else ErrorMessage = ErrorText.For(cal.Error, cal.Message);   // a failed look leaves what is shown as it was
+        if (up.Ok) upcoming = up.Value!.ToList();
+        Rebuild();
+    }
+
+    void Rebuild()
+    {
+        var today = Today;
+        Sync(Days, AttendanceCalendar.Days(AttendanceCalendar.MonthGrid(Focus.Year, Focus.Month), loaded, today, SelectedDay, new DateOnly(Focus.Year, Focus.Month, 1), Zone), d => d.Date, (a, b) => a == b);
+        var week = AttendanceCalendar.Days(AttendanceCalendar.WeekOf(Focus), loaded, today, SelectedDay, null, Zone);
+        Fill(WeekRows, week.Select(d => new WeekRow(d, AttendanceCalendar.SessionsOn(loaded, d.Date, Zone))));
+        Fill(DaySessions, SelectedDay is { } day ? AttendanceCalendar.SessionsOn(loaded, day, Zone) : Array.Empty<CalendarSession>());
+
+        var summary = AttendanceCalendar.Summary(AttendanceCalendar.SessionsInMonth(loaded, Focus.Year, Focus.Month, Zone), upcoming);
+        SessionsText = known ? summary.SessionsThisMonth.ToString(CultureInfo.InvariantCulture) : "—";   // not a made-up zero while the month is loading or could not load
+        RateText = known && summary.RatePercent is { } r ? $"{r}%" : "—";
+        UpcomingText = summary.Upcoming.ToString(CultureInfo.InvariantCulture);
+        NextText = summary.Next is { } n
+            ? $"Next: {AttendanceCalendar.LocalTime(n.Session.ScheduledStart, Zone).ToString("ddd d MMM, h:mm tt", CultureInfo.InvariantCulture)} with {n.With}"
+            : "No upcoming sessions.";
+    }
+
+    [RelayCommand] private void ShowMonth() { ViewMode = "Month"; Rebuild(); }
+    [RelayCommand] private void ShowWeek() { ViewMode = "Week"; Rebuild(); }
+
+    [RelayCommand] private Task PreviousAsync() => MoveAsync(IsMonth ? Focus.AddMonths(-1) : Focus.AddDays(-7));
+    [RelayCommand] private Task NextAsync() => MoveAsync(IsMonth ? Focus.AddMonths(1) : Focus.AddDays(7));
+    [RelayCommand] private Task TodayAsync() => MoveAsync(Today, select: Today);
+
+    async Task MoveAsync(DateOnly to, DateOnly? select = null)
+    {
+        Focus = to; SelectedDay = select;
+        known = false;                                    // days keep the marks the old data has for their own dates; the month's numbers wait for the new answer
+        Rebuild();
+        await ReloadAsync();
+    }
 
     [RelayCommand]
-    private Task LoadAsync() => RunAsync(sessions.SessionsAsync, rows =>
-        Fill(Sessions, rows.Where(r => r.IsMine && r.Session.Status is Status.Scheduled or Status.Completed)));
+    private void SelectDay(CalendarDay day) { SelectedDay = day.Date; Rebuild(); }
 
-    // argument is "<sessionId>|<status>" so one XAML button template serves all four marks
+    // the argument is "<sessionId>|<mark>" so one XAML button template serves all four marks
     [RelayCommand]
     private async Task MarkAsync(string arg)
     {
         var parts = arg.Split('|');
-        var row = Sessions.First(s => s.Session.Id == int.Parse(parts[0]));
-        Notice = null;
-        if (await RunAsync(() => attendance.RecordAsync(row.Session.Id, parts[1])))
-            Notice = $"Marked {row.With} as {parts[1]}.";
+        var id = int.Parse(parts[0], CultureInfo.InvariantCulture);
+        var row = loaded.FirstOrDefault(s => s.Session.Id == id);
+        if (row is null || !row.CanMark) return;          // a cancelled session cannot be marked
+        Notice = null; ErrorMessage = null;
+        var result = await attendance.RecordAsync(id, parts[1]);
+        if (!result.Ok) { ErrorMessage = ErrorText.For(result.Error, result.Message); return; }
+        Notice = $"Marked {row.With} as {parts[1]}.";
+        await ReloadAsync();
     }
 }
 
@@ -426,7 +677,7 @@ public partial class UsersViewModel(IAdminService svc) : LoadableViewModel
     { if (await RunAsync(() => svc.SetActiveAsync(user.UserId, !user.IsActive))) await LoadAsync(); }
 }
 
-public partial class CatalogAdminViewModel(IAdminService svc) : LoadableViewModel
+public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? picker = null) : LoadableViewModel
 {
     public ObservableCollection<MembershipPackage> Packages { get; } = new();
     public ObservableCollection<Amenity> Amenities { get; } = new();
@@ -498,6 +749,23 @@ public partial class CatalogAdminViewModel(IAdminService svc) : LoadableViewMode
         if (NewAmenityPrice < 0 || NewAmenityDays <= 0) { ErrorMessage = "Price can't be negative and days must be more than zero."; return; }
         if (await RunAsync(() => svc.SaveAmenityAsync(new Amenity { Name = NewAmenityName.Trim(), Price = NewAmenityPrice, DurationDays = NewAmenityDays })))
         { NewAmenityName = ""; await LoadAsync(); }
+    }
+
+    [RelayCommand]
+    private async Task UploadAmenityPhotoAsync(Amenity amenity)
+    {
+        if (IsBusy || picker is null) return;
+        IsBusy = true; ErrorMessage = Notice = null;
+        try
+        {
+            if (await picker.PickAsync() is not { } file) return;
+            var result = await svc.SetAmenityPhotoAsync(amenity.Id, file.FileName, file.Data);
+            if (!result.Ok) { ErrorMessage = ErrorText.For(result.Error, result.Message); return; }
+            await LoadAsync();
+            Notice = $"Photo updated for {amenity.Name}.";
+        }
+        catch (Exception ex) { ErrorMessage = ErrorText.For(ErrorMapper.Map(ex), ex.Message); }
+        finally { IsBusy = false; }
     }
 
     [RelayCommand]
@@ -613,4 +881,84 @@ public partial class AuditViewModel(IAdminService svc) : LoadableViewModel
     public override Task OnAppearingAsync() => LoadAsync();
 
     [RelayCommand] private Task LoadAsync() => RunAsync(svc.AuditAsync, rows => Fill(Entries, rows));
+}
+
+public sealed record StatusChoice(string Value, string Label);
+
+/// <summary>Front desk and admin: mark an amenity available, in use or unavailable, and see who was alerted.</summary>
+public partial class AmenityStatusViewModel(IAmenityService svc) : LoadableViewModel
+{
+    public ObservableCollection<AmenityCard> Cards { get; } = new();
+    public StatusChoice[] Choices { get; } = [new("available", "Available"), new("in_use", "In use"), new("unavailable", "Unavailable")];
+
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsEditing))] private AmenityCard? editing;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowDetail))] private StatusChoice choice = new("available", "Available");
+    [ObservableProperty] private string reason = "";
+    [ObservableProperty] private bool hasBackAt;
+    [ObservableProperty] private DateTime backDate = DateTime.Today;
+    [ObservableProperty] private TimeSpan backTime = TimeSpan.FromHours(12);
+
+    public bool IsEditing => Editing is not null;
+    public bool ShowDetail => Choice.Value == "unavailable";   // a reason and a return time only belong to "unavailable"
+
+    public override Task OnAppearingAsync() => LoadAsync();
+
+    [RelayCommand] private Task LoadAsync() => RunAsync(svc.BoardAsync, board => Fill(Cards, board.Cards));
+
+    // Quiet and in place: the error line, the notice and the open form stay as they are, and only cards that changed are swapped.
+    public override async Task AutoRefreshAsync()
+    {
+        if (IsBusy) return;
+        var board = await svc.BoardAsync();
+        if (!board.Ok) return;
+        Sync(Cards, board.Value!.Cards, c => c.Amenity.Id, (a, b) => a.SameAs(b));
+    }
+
+    [RelayCommand]
+    private void Select(AmenityCard card)
+    {
+        Editing = card;
+        ErrorMessage = null; Notice = null;
+        Choice = Choices.First(c => c.Value == card.Availability);
+        Reason = card.Reason ?? "";
+        HasBackAt = card.BackAt is not null;
+        var back = (card.BackAt ?? DateTime.UtcNow.AddHours(2)).ToLocalTime();
+        BackDate = back.Date; BackTime = back.TimeOfDay;
+    }
+
+    [RelayCommand] private void QuickReason(string text) => Reason = text;
+
+    [RelayCommand]
+    private void Cancel() { Editing = null; ErrorMessage = null; }
+
+    [RelayCommand]
+    private async Task SaveAsync()
+    {
+        if (Editing is not { } card) return;
+        DateTime? back = null;
+        if (ShowDetail && HasBackAt)
+        {
+            back = DateTime.SpecifyKind(BackDate.Date + BackTime, DateTimeKind.Local).ToUniversalTime();
+            if (back <= DateTime.UtcNow) { ErrorMessage = "Pick a return time that is still ahead."; return; }
+        }
+        var reason = ShowDetail ? Reason.Trim() : "";
+
+        Notice = null;
+        AmenityChange? result = null;
+        if (!await RunAsync(() => svc.SetStatusAsync(card.Amenity.Id, Choice.Value, reason, back), r => result = r)) return;   // the editor stays open with what was typed
+
+        // the service judged "changed" against the amenity as it is now, not against this possibly older card
+        Notice = result!.Changed ? Summary(card.Amenity.Name, Choice, result.Told) : $"Nothing changed for {card.Amenity.Name}.";
+        Editing = null;
+        await LoadAsync();
+    }
+
+    static string Summary(string name, StatusChoice choice, IReadOnlyList<NotifiedMember> told)
+    {
+        if (choice.Value == "in_use") return $"{name} is now in use. Members are not alerted for this.";
+        var now = $"{name} is now {choice.Label.ToLowerInvariant()}.";
+        if (told.Count == 0) return $"{now} Nobody had saved it, so no alerts were sent.";
+        var names = string.Join(", ", told.Take(5).Select(t => t.Name)) + (told.Count > 5 ? $" and {told.Count - 5} more" : "");
+        return $"{now} Alerted {told.Count} {(told.Count == 1 ? "member" : "members")}: {names}.";
+    }
 }

@@ -22,31 +22,28 @@
                         <Border.Triggers>
                             <DataTrigger TargetType="Border" Binding="{Binding Closed}" Value="True"><Setter Property="Opacity" Value="0.55" /></DataTrigger>
                         </Border.Triggers>
-                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="16">
-                            <VerticalStackLayout Spacing="4">
-                                <Label Text="{Binding Name}" Style="{StaticResource Heading}" />
-                                <Label Text="{Binding Coach.Specialty}" FontFamily="BarlowMedium" />
-                                <Label Text="{Binding Coach.Bio}" Style="{StaticResource Muted}" />
-                                <Label Text="On the floor" FontFamily="BarlowMedium" Margin="0,6,0,0" />
-                                <Label Text="{Binding ShiftsText}" Style="{StaticResource Caption}" />
-                                <Label Text="Not taking new members right now." Style="{StaticResource Caption}" FontFamily="BarlowSemiBold"
-                                       IsVisible="{Binding Closed}" />
-                            </VerticalStackLayout>
-                            <VerticalStackLayout Style="{StaticResource CardActions}" Spacing="6">
-                                <Label Text="{Binding Coach.HourlyRate, StringFormat='₱{0:N0}'}" Style="{StaticResource PriceNumeral}" HorizontalOptions="{OnIdiom Phone=Start, Default=End}" />
-                                <Label Text="per hour" Style="{StaticResource Caption}" HorizontalOptions="{OnIdiom Phone=Start, Default=End}" />
-                                <Button Text="Hire" Style="{StaticResource SmallButton}" IsVisible="{Binding Hired, Converter={StaticResource Not}}"
-                                        IsEnabled="{Binding Closed, Converter={StaticResource Not}}"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:CoachesViewModel}}, Path=HireCommand}"
-                                        CommandParameter="{Binding .}" />
-                                <Button Text="Message" Style="{StaticResource SmallButton}" IsVisible="{Binding Hired}"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:CoachesViewModel}}, Path=MessageCommand}"
-                                        CommandParameter="{Binding .}" />
-                                <Button Text="End hire" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding Hired}"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:CoachesViewModel}}, Path=EndHireCommand}"
-                                        CommandParameter="{Binding .}" />
-                            </VerticalStackLayout>
-                        </Grid>
+                        <VerticalStackLayout Spacing="12">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                                <c:Avatar Letters="{Binding Letters}" Url="{Binding PhotoUrl}" Diameter="72"
+                                          SemanticProperties.Description="{Binding Name, StringFormat='Profile photo of {0}'}" />
+                                <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                                    <Label Text="{Binding Name}" Style="{StaticResource Heading}" />
+                                    <Label Text="{Binding Coach.Specialty}" FontFamily="BarlowMedium" />
+                                    <Label Text="Not taking new members right now." Style="{StaticResource Caption}" IsVisible="{Binding Closed}" />
+                                    <Label Text="Your coach" Style="{StaticResource Caption}" IsVisible="{Binding Hired}" />
+                                </VerticalStackLayout>
+                            </Grid>
+                            <Label Text="{Binding Coach.Bio}" Style="{StaticResource Muted}" />
+                            <Label Text="On the floor" FontFamily="BarlowMedium" />
+                            <Label Text="{Binding ShiftsText}" Style="{StaticResource Caption}" />
+                            <Label Text="{Binding Coach.HourlyRate, StringFormat='₱{0:N0} per hour'}" FontFamily="BarlowSemiBold" />
+                            <FlexLayout Wrap="Wrap">
+                                <Button Text="Hire" Style="{StaticResource SmallButton}" Margin="0,0,8,8"
+                                        IsVisible="{Binding Hired, Converter={StaticResource Not}}" IsEnabled="{Binding Closed, Converter={StaticResource Not}}" Clicked="OnHire" />
+                                <Button Text="Message" Style="{StaticResource SmallButton}" Margin="0,0,8,8" IsVisible="{Binding Hired}" Clicked="OnMessage" />
+                                <Button Text="End hire" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding Hired}" Clicked="OnEndHire" />
+                            </FlexLayout>
+                        </VerticalStackLayout>
                     </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>

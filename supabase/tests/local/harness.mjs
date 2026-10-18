@@ -5,15 +5,23 @@ import pg from 'pg';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 
 const MIGRATIONS = process.env.MIGRATIONS ?? path.join(path.dirname(fileURLToPath(import.meta.url)), '../../migrations');
-const PORT = 54329;
-const DIR = path.join(os.tmpdir(), 'gym-pg-data');
+async function unusedPort() {
+  const socket = net.createServer();
+  await new Promise((resolve, reject) => { socket.once('error', reject); socket.listen(0, '127.0.0.1', resolve); });
+  const port = socket.address().port;
+  await new Promise(resolve => socket.close(resolve));
+  return port;
+}
+const DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-pg-data-'));
 
 const stubs = `
 create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
 create schema auth; create schema extensions; create schema storage; create schema cron;
+create publication supabase_realtime;
 grant usage on schema auth, extensions, storage, public to anon, authenticated, service_role;
 create table auth.users (
   id uuid primary key default gen_random_uuid(),
@@ -28,9 +36,12 @@ create function storage.foldername(name text) returns text[] language sql immuta
 create function cron.schedule(job text, sched text, cmd text) returns bigint language sql as $$ select 1::bigint $$;
 `;
 
-export async function start() {
-  fs.rmSync(DIR, { recursive: true, force: true });
-  const server = new EmbeddedPostgres({ databaseDir: DIR, user: 'postgres', password: 'pw', port: PORT, persistent: false });
+export async function start({ beforeMigration } = {}) {
+  const PORT = await unusedPort();
+  // PG18's Windows I/O workers can stall initdb; these disposable tests use synchronous I/O.
+  const flags = process.platform === 'win32' ? ['-c', 'io_method=sync'] : [];
+  const server = new EmbeddedPostgres({ databaseDir: DIR, user: 'postgres', password: 'pw', port: PORT, persistent: false,
+    initdbFlags: flags, postgresFlags: flags });
   await server.initialise();
   await server.start();
   const client = new pg.Client({ host: 'localhost', port: PORT, user: 'postgres', password: 'pw', database: 'postgres' });
@@ -40,8 +51,8 @@ export async function start() {
   for (const f of files) {
     // pg_cron is a Supabase extension; the stub schema above stands in for it
     const sql = fs.readFileSync(path.join(MIGRATIONS, f), 'utf8').replace(/create extension if not exists pg_cron[^;]*;/i, '');
-    try { await client.query(sql); console.log('ok  ', f); }
-    catch (e) { console.log('FAIL', f, '\n    ', e.message, e.position ? `(pos ${e.position})` : '', e.where ?? ''); await server.stop(); process.exit(1); }
+    try { await beforeMigration?.(client, f, sql); await client.query(sql); console.log('ok  ', f); }
+    catch (e) { console.log('FAIL', f, '\n    ', e.message, e.position ? `(pos ${e.position})` : '', e.where ?? ''); await client.end(); await server.stop(); throw e; }
   }
   return { server, client };
 }

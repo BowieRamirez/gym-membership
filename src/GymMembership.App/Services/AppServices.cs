@@ -9,7 +9,7 @@ public sealed class AppNavigator(IServiceProvider sp) : IAppNavigator
     public void GoTo(AppRole role, bool changePassword = false)
     {
         if (role == AppRole.Member) { _ = ShowMemberShellAsync(changePassword); return; }
-        Show(role == AppRole.Coach ? new CoachShell() : new StaffShell(role));
+        Show(role == AppRole.Coach ? new CoachShell(sp) : new StaffShell(role, sp));
         if (changePassword) GoToSettings();
         _ = ApplyStoredThemeAsync();
     }
@@ -17,7 +17,7 @@ public sealed class AppNavigator(IServiceProvider sp) : IAppNavigator
     // someone on a temporary password lands on Settings first, where the change-password form is
     static void GoToSettings() => MainThread.BeginInvokeOnMainThread(async () =>
     {
-        try { await Shell.Current.GoToAsync("//settings"); } catch (Exception) { /* the shell is not ready yet: they can open Settings from the menu */ }
+        try { await GymMembership.App.Controls.PhoneNavigation.GoToAsync(Shell.Current, "//settings"); } catch (Exception) { /* the shell is not ready yet: they can open Settings from the menu */ }
     });
 
     // a member's menu depends on whether they have an active plan, so ask before building it
@@ -37,9 +37,9 @@ public sealed class AppNavigator(IServiceProvider sp) : IAppNavigator
         Show(sp.GetRequiredService<LoginPage>());
     }
 
-    public void GoToMembership() => MainThread.BeginInvokeOnMainThread(async () => await Shell.Current.GoToAsync("//memberships"));
+    public void GoToMembership() => MainThread.BeginInvokeOnMainThread(async () => await GymMembership.App.Controls.PhoneNavigation.GoToAsync(Shell.Current, "//memberships"));
 
-    public void GoToMessages() => MainThread.BeginInvokeOnMainThread(async () => await Shell.Current.GoToAsync("//messages"));
+    public void GoToMessages() => MainThread.BeginInvokeOnMainThread(async () => await GymMembership.App.Controls.PhoneNavigation.GoToAsync(Shell.Current, "//messages"));
 
     public void ApplyTheme(string theme) => MainThread.BeginInvokeOnMainThread(() =>
         Application.Current!.UserAppTheme = theme switch { "dark" => AppTheme.Dark, "light" => AppTheme.Light, _ => AppTheme.Unspecified });

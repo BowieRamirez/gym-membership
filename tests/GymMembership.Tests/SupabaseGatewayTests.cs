@@ -63,7 +63,8 @@ public sealed class SupabaseGatewayTests : IDisposable
     async Task<SupabaseGateway> SignedInAsync()
     {
         var gw = new SupabaseGateway(new SupabaseSettings(_url, "anon-key"));
-        _reply = s => s.Path.Contains("/auth/v1/token") ? (200, SessionJson()) : (200, "[]");
+        _reply = s => s.Path.Contains("/auth/v1/token") ? (200, SessionJson())
+            : s.Path.EndsWith("/rpc/is_active_member") ? (200, "false") : (200, "[]");
         await gw.SignInAsync("ana@demo.io", "secret12");
         return gw;
     }
@@ -161,12 +162,12 @@ public sealed class SupabaseGatewayTests : IDisposable
     }
 
     [Fact]
-    public async Task Sending_a_message_never_sets_the_time_or_read_flag()
+    public async Task Sending_a_message_never_sets_the_time_or_read_flag_and_sends_only_columns_the_insert_grant_allows()
     {
         var gw = await SignedInAsync();
         _reply = _ => (201, """[{"message_id":1,"coach_id":"c","member_id":"m","sender_id":"m","body":"hi","sent_at":"2026-10-12T01:00:00+00:00"}]""");
         await gw.InsertAsync(new ChatMessage { CoachId = "c", MemberId = "m", SenderId = "m", Body = "hi" });
-        Assert.Equal(new[] { "body", "coach_id", "member_id", "sender_id" }, Columns(Last.Body).Order());
+        Assert.Equal(new[] { "attachment_path", "body", "coach_id", "member_id", "sender_id" }, Columns(Last.Body).Order());
     }
 
     [Fact]
@@ -198,6 +199,158 @@ public sealed class SupabaseGatewayTests : IDisposable
         await gw.UpdateAsync(new UserNotification { Id = 3, UserId = "u-1", Type = "payment", Title = "Payment approved", ReadAt = DateTime.UtcNow });
         Assert.Equal(new[] { "read_at" }, Columns(Last.Body));
         Assert.Contains("notification_id=eq.3", Last.Query);
+    }
+
+    [Fact]
+    public async Task Editing_an_amenity_in_the_catalog_never_sends_the_status_columns()
+    {
+        var gw = await SignedInAsync();
+        _reply = _ => (200, "[]");
+        await gw.UpdateAsync(new Amenity { Id = 4, Name = "Pool", Price = 300, IsActive = true, Availability = "unavailable", StatusReason = "x", BackAt = DateTime.UtcNow });
+        var columns = Columns(Last.Body);
+        Assert.DoesNotContain("status", columns);
+        Assert.DoesNotContain("status_reason", columns);
+        Assert.DoesNotContain("back_at", columns);
+        Assert.Contains("amenity_id=eq.4", Last.Query);
+    }
+
+    [Fact]
+    public async Task Setting_a_status_calls_the_function_and_reads_back_who_was_alerted()
+    {
+        var gw = await SignedInAsync();
+        _reply = _ => (200, """[{"member_id":"u-9","full_name":"Alex Tan"}]""");
+        var told = (await new AmenityService(gw).SetStatusAsync(4, "unavailable", "Cleaning", new DateTime(2026, 10, 20, 2, 0, 0, DateTimeKind.Utc))).Value!.Told;
+
+        Assert.Equal("/rest/v1/rpc/set_amenity_status", Last.Path);
+        var body = Last.Body;
+        Assert.Contains("\"p_amenity_id\":4", body);
+        Assert.Contains("\"p_status\":\"unavailable\"", body);
+        Assert.Contains("\"p_reason\":\"Cleaning\"", body);
+        Assert.Contains("2026-10-20T02:00:00", body);
+        Assert.Equal("u-9", told[0].MemberId);
+        Assert.Equal("Alex Tan", told[0].Name);
+    }
+
+    [Fact]
+    public async Task The_conversation_list_and_a_page_of_messages_are_read_through_functions_and_parse()
+    {
+        var gw = await SignedInAsync();
+        var svc = new ChatService(gw, new NotificationService(gw));
+
+        _reply = _ => (200, """[{"kind":"coach","coach_id":"c-1","member_id":"u-1","with_id":"c-1","with_name":"Lena Cruz","with_avatar":null,"last_body":"hi","last_at":"2026-10-15T01:00:00+00:00","last_from_me":false,"unread":2,"can_send":true,"status":null,"claimed_by":null,"claimed_by_name":null}]""");
+        var thread = (await svc.ThreadsAsync()).Value!.Single();
+        Assert.Equal("/rest/v1/rpc/chat_threads", Last.Path);
+        Assert.Equal(("Lena Cruz", 2, "coach|c-1|u-1"), (thread.WithName, thread.Unread, thread.Key));
+
+        _reply = _ => (200, """[{"message_id":7,"sender_id":"c-1","body":"hello","sent_at":"2026-10-15T01:00:00+00:00","delivered_at":null,"read_at":null,"sender_name":null}]""");
+        var page = (await svc.MessagesAsync(thread, 99, 20)).Value!;
+        Assert.Equal("/rest/v1/rpc/chat_messages", Last.Path);
+        Assert.Contains("\"p_kind\":\"coach\"", Last.Body);
+        Assert.Contains("\"p_before\":99", Last.Body);
+        Assert.Contains("\"p_limit\":21", Last.Body);
+        Assert.Equal("hello", page.Bubbles.Single().Line.Body);
+    }
+
+    [Fact]
+    public async Task Sending_to_a_coach_inserts_a_message_and_sending_to_the_front_desk_calls_the_function()
+    {
+        var gw = await SignedInAsync();
+        var svc = new ChatService(gw, new NotificationService(gw));
+        _reply = _ => (201, "[]");
+        await svc.SendAsync(new ChatThread { Kind = "coach", CoachId = "c-1", MemberId = "u-1" }, "  hello ");
+        Assert.Equal("/rest/v1/messages", Last.Path);
+        Assert.Contains("\"body\":\"hello\"", Last.Body);
+
+        _reply = _ => (200, "42");
+        await svc.SendAsync(new ChatThread { Kind = "support", MemberId = "u-1" }, "help");
+        Assert.Equal("/rest/v1/rpc/send_support_message", Last.Path);
+        Assert.Contains("\"p_member\":\"u-1\"", Last.Body);
+    }
+
+    [Fact]
+    public async Task A_front_desk_thread_is_requested_and_marked_read_by_member_alone_with_no_coach_argument()
+    {
+        var gw = await SignedInAsync();
+        var svc = new ChatService(gw, new NotificationService(gw));
+        var thread = new ChatThread { Kind = "support", MemberId = "u-9" };
+
+        _reply = _ => (200, "[]");
+        await svc.MessagesAsync(thread);
+        Assert.Equal("/rest/v1/rpc/chat_messages", Last.Path);
+        Assert.Contains("\"p_kind\":\"support\"", Last.Body);
+        Assert.Contains("\"p_member\":\"u-9\"", Last.Body);
+        Assert.DoesNotContain("p_coach", Last.Body);   // the function has no coach for this thread, and its argument is optional
+
+        await svc.MarkReadAsync(thread);
+        Assert.Equal("/rest/v1/rpc/mark_chat_read", Last.Path);
+        Assert.DoesNotContain("p_coach", Last.Body);
+    }
+
+    [Fact]
+    public async Task Sending_a_photo_uploads_it_to_the_conversation_folder_then_sends_the_message_with_its_path()
+    {
+        var gw = await SignedInAsync();
+        var svc = new ChatService(gw, new NotificationService(gw));
+        _reply = s => s.Path.StartsWith("/storage/") ? (200, """{"Key":"x"}""") : (201, "[]");
+
+        await svc.SendPhotoAsync(new ChatThread { Kind = "coach", CoachId = "c-1", MemberId = "u-1" }, "My Pic.png", [1, 2, 3], "look");
+        var upload = _seen.First(s => s.Path.StartsWith("/storage/v1/object/chat-attachments/c-1/u-1/"));
+        Assert.EndsWith("-My_Pic.png", upload.Path);
+        Assert.Equal("/rest/v1/messages", Last.Path);
+        Assert.Contains("\"attachment_path\":\"c-1/u-1/", Last.Body);
+        Assert.Contains("\"body\":\"look\"", Last.Body);
+
+        await svc.SendPhotoAsync(new ChatThread { Kind = "support", MemberId = "u-1" }, "a.jpg", [1], "");
+        Assert.Contains("/storage/v1/object/chat-attachments/support/u-1/", _seen.Last(s => s.Path.StartsWith("/storage/")).Path);
+        Assert.Equal("/rest/v1/rpc/send_support_message", Last.Path);
+        Assert.Contains("\"p_attachment\":\"support/u-1/", Last.Body);
+        Assert.Contains("\"p_body\":\"\"", Last.Body);
+    }
+
+    [Fact]
+    public async Task A_page_with_a_photo_asks_for_a_signed_link_and_a_failed_link_does_not_fail_the_page()
+    {
+        var gw = await SignedInAsync();
+        var svc = new ChatService(gw, new NotificationService(gw));
+        const string rows = """[{"message_id":7,"sender_id":"c-1","body":"","sent_at":"2026-10-15T01:00:00+00:00","delivered_at":null,"read_at":null,"sender_name":null,"attachment_path":"c-1/u-1/p.png"}]""";
+        var thread = new ChatThread { Kind = "coach", CoachId = "c-1", MemberId = "u-1" };
+
+        _reply = s => s.Path.Contains("/object/sign/") ? (200, """{"signedURL":"/object/sign/chat-attachments/c-1/u-1/p.png?token=t"}""") : (200, rows);
+        var bubble = (await svc.MessagesAsync(thread)).Value!.Bubbles.Single();
+        Assert.Contains("token=t", bubble.PhotoUrl);
+        Assert.Contains(_seen, s => s.Path == "/storage/v1/object/sign/chat-attachments/c-1/u-1/p.png");
+
+        var svc2 = new ChatService(gw, new NotificationService(gw));   // no cached link
+        _reply = s => s.Path.Contains("/object/sign/") ? (500, """{"error":"boom"}""") : (200, rows);
+        var page = await svc2.MessagesAsync(thread);
+        Assert.True(page.Ok);
+        Assert.True(page.Value!.Bubbles.Single().PhotoMissing);
+    }
+
+    [Fact]
+    public async Task A_database_that_lacks_a_function_the_app_calls_gives_the_server_update_message()
+    {
+        var gw = await SignedInAsync();
+        var svc = new ChatService(gw, new NotificationService(gw));
+        _reply = _ => (404, """{"code":"PGRST202","details":"Searched for the function public.chat_threads without parameters","hint":null,"message":"Could not find the function public.chat_threads without parameters in the schema cache"}""");
+
+        var result = await svc.ThreadsAsync();
+
+        Assert.False(result.Ok);
+        Assert.Equal("This part of the app needs a server update that hasn't been installed yet. Tell the gym owner.", ErrorText.For(result.Error, result.Message));
+    }
+
+    [Fact]
+    public async Task Marking_every_unread_notification_read_is_one_request_that_leaves_read_ones_alone()
+    {
+        var gw = await SignedInAsync();
+        _reply = _ => (200, "[]");
+        await gw.UpdateWhereAsync<UserNotification, DateTime?>(n => n.UserId == "u-1" && n.ReadAt == null, n => n.ReadAt, DateTime.UtcNow);
+        Assert.Equal("PATCH", Last.Method);
+        // a compound filter goes out as one grouped "and=(...)"; both conditions must be there
+        Assert.Contains("user_id.eq.u-1", Last.Query);
+        Assert.Contains("read_at.is.null", Last.Query);   // without this every already-read alert would get a new read time
+        Assert.Equal(new[] { "read_at" }, Columns(Last.Body));
     }
 
     [Fact]
@@ -249,6 +402,35 @@ public sealed class SupabaseGatewayTests : IDisposable
     }
 
     [Fact]
+    public async Task Subscription_wire_contract_reads_snapshots_and_sends_no_client_refund_amount()
+    {
+        var gw = await SignedInAsync();
+        var subscription = new SubscriptionService(gw);
+        _reply = _ => (200, """{"payment_id":9,"membership_package_snapshot_id":3,"membership_package_name":"Annual","membership_duration_days":365,"amount":900}""");
+        var payment = await subscription.ExtendAsync(3," SAVE10 ");
+        Assert.True(payment.Ok,payment.Message);
+        Assert.Equal((3,"Annual",365,900m),(payment.Value!.PackageSnapshotId,payment.Value.PackageSnapshotName,payment.Value.PackageSnapshotDays,payment.Value.Amount));
+        Assert.Equal("/rest/v1/rpc/extend_membership",Last.Path);
+        Assert.Equal(new[] { "p_discount_code","p_package_id" },Columns(Last.Body).Order());
+        Assert.Equal("SAVE10",JsonDocument.Parse(Last.Body).RootElement.GetProperty("p_discount_code").GetString());
+        _reply = _ => (200,"""[{"term_id":5,"member_id":"u-1","payment_id":9,"package_name":"Annual","duration_days":365,"amount_paid":900,"snapshot_source":"purchase"}]""");
+        var terms=await gw.ListAsync<MembershipTerm>(t=>t.MemberId=="u-1");
+        Assert.Equal((5,9,"Annual",365,900m),(terms.Single().Id,terms.Single().PaymentId,terms.Single().PackageName,terms.Single().DurationDays,terms.Single().AmountPaid));
+        Assert.Contains("member_id=eq.u-1",Last.Query);
+        _reply = _ => (200,"{}");
+        Assert.True((await subscription.RequestRefundAsync(5," Changed plans ")).Ok);
+        Assert.Equal("/rest/v1/rpc/request_membership_refund",Last.Path);
+        Assert.Equal(new[] { "p_reason","p_term_id" },Columns(Last.Body).Order());
+        Assert.True((await subscription.DecideAsync(7,true,"Approve")).Ok);
+        Assert.Equal("/rest/v1/rpc/decide_membership_refund",Last.Path);
+        Assert.Equal(new[] { "p_approve","p_reason","p_request_id" },Columns(Last.Body).Order());
+        Assert.True((await subscription.MarkPaidAsync(7,PayMethod.Gcash," REF-7 ")).Ok);
+        Assert.Equal("/rest/v1/rpc/record_membership_refund_paid",Last.Path);
+        Assert.Equal(new[] { "p_method","p_reference","p_request_id" },Columns(Last.Body).Order());
+        Assert.Equal("REF-7",JsonDocument.Parse(Last.Body).RootElement.GetProperty("p_reference").GetString());
+    }
+
+    [Fact]
     public async Task Reports_come_back_as_typed_rows_and_a_number_function_returns_a_number()
     {
         var gw = await SignedInAsync();
@@ -295,6 +477,57 @@ public sealed class SupabaseGatewayTests : IDisposable
         var result = await new AdminService(gw).CreateUserAsync("Rey", "rey@demo.io", "coach", "temp1234");
         Assert.Equal(AppErrorKind.Validation, result.Error);
         Assert.Equal("Someone already uses that email.", ErrorText.For(result.Error, result.Message?.Contains("email_taken") == true ? "email_taken" : result.Message));
+    }
+
+    [Fact]
+    public async Task Amenity_photo_upload_patches_only_image_path_on_the_selected_row()
+    {
+        var gw = await SignedInAsync();
+        _reply = s => s.Method == "GET" ? (200, """[{"amenity_id":7,"name":"Pool","status":"in_use"}]""")
+            : s.Path.StartsWith("/storage/") ? (200, """{"Key":"photo","Id":"abc"}""") : (200, "[]");
+        var result = await new AdminService(gw).SetAmenityPhotoAsync(7, "photo.png", [1]);
+        Assert.True(result.Ok, result.Message);
+        Assert.Equal("PATCH", Last.Method);
+        Assert.Equal("/rest/v1/amenities", Last.Path);
+        Assert.Contains("amenity_id=eq.7", Last.Query);
+        Assert.Equal(new[] { "image_path" }, Columns(Last.Body));
+        Assert.Equal(result.Value, JsonDocument.Parse(Last.Body).RootElement.GetProperty("image_path").GetString());
+    }
+
+    [Fact]
+    public async Task A_failed_photo_path_save_is_not_reported_as_a_successful_upload()
+    {
+        var gw = await SignedInAsync();
+        _reply = s => s.Method == "GET" ? (200, """[{"amenity_id":7,"name":"Pool","image_path":"old.png"}]""")
+            : s.Path.StartsWith("/storage/") ? (200, """{"Key":"photo","Id":"abc"}""")
+            : (403, """{"code":"42501","message":"forbidden"}""");
+        var result = await new AdminService(gw).SetAmenityPhotoAsync(7, "photo.png", [1]);
+        Assert.Equal(AppErrorKind.Unauthorized, result.Error);
+        Assert.Null(result.Value);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Broken_photo_links_leave_the_catalogue_usable(bool coach)
+    {
+        var gw = await SignedInAsync();
+        _reply = s => s.Path.StartsWith("/storage/") ? (500, """{"error":"boom"}""")
+            : s.Path.EndsWith("/coaches") ? (200, """[{"user_id":"c-1","is_available":true}]""")
+            : s.Path.EndsWith("/profiles") ? (200, """[{"id":"c-1","full_name":"Coach One","avatar_path":"c-1/a.png"}]""")
+            : s.Path.EndsWith("/amenities") ? (200, """[{"amenity_id":7,"name":"Pool","image_path":"pool.png","is_active":true}]""") : (200, "[]");
+        if (coach)
+        {
+            var result = await new CoachService(gw).ListCoachesAsync();
+            Assert.True(result.Ok);
+            Assert.Null(Assert.Single(result.Value!).PhotoUrl);
+        }
+        else
+        {
+            var result = await new AmenityService(gw).BoardAsync();
+            Assert.True(result.Ok);
+            Assert.Null(Assert.Single(result.Value!.Cards).PhotoUrl);
+        }
     }
 
     // ---------- files ----------
@@ -375,7 +608,7 @@ public sealed class SupabaseGatewayTests : IDisposable
         Note("access", await new MembershipService(gw).AccessAsync());
         Note("my payments", await new MembershipService(gw).MyPaymentsAsync());
         Note("my memberships", await new MembershipService(gw).MyMembershipsAsync());
-        Note("messages", await new MessageService(gw).MessagesAsync("c-1", "m-1"));
+        Note("chat threads", await new ChatService(gw, new NotificationService(gw)).ThreadsAsync());
         Note("find members", await new AttendanceService(gw).FindMembersAsync("a"));
         Note("requests", await new SessionService(gw).RequestsAsync());
         Note("sessions", await new SessionService(gw).SessionsAsync());
@@ -383,6 +616,12 @@ public sealed class SupabaseGatewayTests : IDisposable
         Note("pending payments", await new PaymentStaffService(gw).PendingAsync());
         Note("notifications", await new NotificationService(gw).ListAsync());
         Note("discounts", await new AdminService(gw).DiscountsAsync());
+        Note("calendar", await new SessionService(gw).CalendarAsync(DateTime.UtcNow.AddDays(-30), DateTime.UtcNow.AddDays(30)));
+        Note("upcoming", await new SessionService(gw).UpcomingAsync());
+        Assert.Contains(_seen, r => r.Path.EndsWith("/training_sessions") && r.Query.Contains("scheduled_start"));          // the date range is a server filter
+        Assert.Contains(_seen, r => r.Path.EndsWith("/session_attendance") && r.Query.Contains("training_session_id"));      // and so is the lookup of marks by session id
+        Note("desk home", await new DeskHomeService(gw, new ChatService(gw, new NotificationService(gw))).SummaryAsync());
+        Assert.Contains(_seen, r => r.Path.EndsWith("/gym_check_ins") && r.Query.Contains("checked_in_at"));   // today's check-ins are filtered on the server
 
         Assert.True(results.All(r => r.Ok), string.Join("; ", results.Where(r => !r.Ok).Select(r => $"{r.Name}: {r.Why}")));
     }

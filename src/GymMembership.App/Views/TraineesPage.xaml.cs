@@ -9,4 +9,7 @@ public partial class TraineesPage : BasePage
 		InitializeComponent();
 		BindingContext = vm;
 	}
+
+	void OnMessage(object? sender, EventArgs e) => Row<TraineesViewModel>(sender, v => v.MessageCommand);
+	void OnRemove(object? sender, EventArgs e) => Row<TraineesViewModel>(sender, v => v.RemoveCommand);
 }

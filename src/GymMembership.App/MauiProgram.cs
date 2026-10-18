@@ -34,17 +34,23 @@ public static class MauiProgram
 			: new DemoGateway());
 
 		s.AddSingleton<IAppNavigator, AppNavigator>();
-		s.AddSingleton<IProofPicker, MauiProofPicker>();
+		// the real photo library on a device; in demo mode a generated picture, so the screens can be tried without choosing a file
+		s.AddSingleton<IProofPicker>(sp => sp.GetRequiredService<ISupabaseGateway>() is DemoGateway ? new DemoPhotoPicker() : new MauiProofPicker());
 		s.AddSingleton<IAuthService, AuthService>();
 		s.AddSingleton<IMembershipService, MembershipService>();
+		s.AddSingleton<ISubscriptionService, SubscriptionService>();
 		s.AddSingleton<IPaymentStaffService, PaymentStaffService>();
 		s.AddSingleton<IAmenityService, AmenityService>();
 		s.AddSingleton<ICoachService, CoachService>();
 		s.AddSingleton<ISessionService, SessionService>();
 		s.AddSingleton<IAttendanceService, AttendanceService>();
 		s.AddSingleton<INotificationService, NotificationService>();
-		s.AddSingleton<IMessageService, MessageService>();
+		s.AddSingleton<IChatService, ChatService>();
+		// live updates need the real project; the demo and the tests use the do-nothing version
+		s.AddSingleton<IRealtimeChat>(sp => sp.GetRequiredService<ISupabaseGateway>() is SupabaseGateway g ? new SupabaseRealtimeChat(g) : NoRealtime.Instance);
+		s.AddSingleton<IDeskHomeService, DeskHomeService>();
 		s.AddSingleton<IAdminService, AdminService>();
+		s.AddSingleton<IProfileService, ProfileService>();
 		s.AddSingleton<ISettingsService, SettingsService>();
 
 		// every ViewModel and every page, by convention

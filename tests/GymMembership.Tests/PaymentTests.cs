@@ -200,7 +200,7 @@ public class PaymentTests
         Assert.Equal(AppErrorKind.Validation, (await new CoachService(gw).HireAsync("u-coach1")).Error);
         var t = DateTime.UtcNow.AddDays(3);
         Assert.Equal(AppErrorKind.Validation, (await new SessionService(gw).RequestAsync("u-coach1", t, t.AddHours(1), null)).Error);
-        Assert.Equal(AppErrorKind.Unauthorized, (await new MessageService(gw).SendAsync("u-coach1", gw.CurrentUserId!, "hello")).Error);
+        Assert.Equal(AppErrorKind.Unauthorized, (await new ChatService(gw, new NotificationService(gw)).SendAsync(new ChatThread { Kind = "coach", CoachId = "u-coach1", MemberId = gw.CurrentUserId! }, "hello")).Error);
 
         // but they can see the catalogue and the coaches
         Assert.NotEmpty((await new MembershipService(gw).ListPackagesAsync()).Value!);

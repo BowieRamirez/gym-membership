@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.HomePage" x:DataType="vm:HomeViewModel" Title="Home">
+
+    <ScrollView MaximumWidthRequest="920">
+        <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
+            <Label Text="Today at the desk" Style="{StaticResource Title}" />
+            <Label Text="Tap a number to open the screen that handles it." Style="{StaticResource Muted}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+
+            <!-- A tile with something to do carries an outline AND says what in words, so weight is never the only signal -->
+            <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Tiles}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:HomeTile">
+                        <Border Style="{StaticResource Panel}" WidthRequest="{OnIdiom Phone=156, Default=210}" Margin="0,0,12,12"
+                                SemanticProperties.Description="{Binding Description}" SemanticProperties.Hint="{Binding Detail}">
+                            <Border.Triggers>
+                                <DataTrigger TargetType="Border" Binding="{Binding NeedsAttention}" Value="True">
+                                    <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+                                    <Setter Property="StrokeThickness" Value="2" />
+                                </DataTrigger>
+                            </Border.Triggers>
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnTile" />
+                            </Border.GestureRecognizers>
+                            <VerticalStackLayout Spacing="6">
+                                <c:IconView Icon="{Binding Icon}" WidthRequest="28" HeightRequest="28" HorizontalOptions="Start" />
+                                <Label Text="{Binding Count}" Style="{StaticResource Numeral}" />
+                                <Label Text="{Binding Title}" FontFamily="BarlowSemiBold" />
+                                <Label Text="{Binding Detail}" Style="{StaticResource Caption}" />
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </FlexLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</v:BasePage>

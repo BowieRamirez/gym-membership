@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.RefundsPage" x:DataType="vm:RefundsViewModel" Title="Cancellations &amp; refunds">
+    <CollectionView ItemsSource="{Binding Requests}" MaximumWidthRequest="920" Margin="{OnIdiom Phone='16,12', Default='20,16'}">
+        <CollectionView.Header>
+            <VerticalStackLayout Spacing="10" Padding="0,0,0,16">
+                <Label Text="Cancellations &amp; refunds" Style="{StaticResource Heading}" />
+                <Label Text="A timely request remains reviewable after 24 hours. Approving cancels only its selected term; other paid dates stay fixed. Return the actual paid amount manually, then record repayment. This app does not send money." Style="{StaticResource Muted}" />
+                <c:Banner Message="{Binding ErrorMessage}" />
+                <c:Banner Kind="notice" Message="{Binding Notice}" />
+            </VerticalStackLayout>
+        </CollectionView.Header>
+        <CollectionView.EmptyView><Label Text="No cancellation or refund requests." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
+        <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="12" /></CollectionView.ItemsLayout>
+        <CollectionView.ItemTemplate>
+            <DataTemplate x:DataType="svc:RefundCard">
+                <Border Style="{StaticResource Panel}">
+                    <VerticalStackLayout Spacing="8">
+                        <Label Text="{Binding Member}" Style="{StaticResource Heading}" />
+                        <Label Text="{Binding PackageName}" />
+                        <Label Text="{Binding Dates}" Style="{StaticResource Caption}" />
+                        <Label Text="{Binding Request.Amount, StringFormat='Full refund: ₱{0:N2}'}" Style="{StaticResource PriceNumeral}" />
+                        <Label Text="{Binding Request.Reason, StringFormat='Member reason: {0}'}" />
+                        <Label Text="{Binding State}" Style="{StaticResource Muted}" />
+                        <Label Text="{Binding Request.DecisionReason}" IsVisible="{Binding Request.DecisionReason, Converter={StaticResource IsNotNull}}" />
+                        <VerticalStackLayout Spacing="8" IsVisible="{Binding CanDecide}">
+                            <Button Text="Approve cancellation / refund" Style="{StaticResource SmallButton}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" Clicked="OnApprove" />
+                            <Button Text="Reject request" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" Clicked="OnReject" />
+                        </VerticalStackLayout>
+                        <Button Text="Record money repaid" Style="{StaticResource SmallButton}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" IsVisible="{Binding CanRepay}" Clicked="OnPaid" />
+                    </VerticalStackLayout>
+                </Border>
+            </DataTemplate>
+        </CollectionView.ItemTemplate>
+    </CollectionView>
+</v:BasePage>

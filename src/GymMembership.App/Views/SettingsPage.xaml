@@ -11,6 +11,18 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
+            <HorizontalStackLayout Spacing="16">
+                <c:Avatar Letters="{Binding Letters}" Url="{Binding AvatarUrl}" Diameter="72" />
+                <VerticalStackLayout Spacing="6" VerticalOptions="Center">
+                    <Label Text="Profile picture" Style="{StaticResource Heading}" />
+                    <Button Text="Change picture" Style="{StaticResource SmallOutlineButton}" Command="{Binding ChangePhotoCommand}" HorizontalOptions="Start" />
+                </VerticalStackLayout>
+            </HorizontalStackLayout>
+
+            <c:LaneView Margin="0,12"
+                        DashColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}"
+                        TrackColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+
             <VerticalStackLayout Spacing="6">
                 <Label Text="Theme" Style="{StaticResource Caption}" />
                 <Border Style="{StaticResource Field}">
@@ -44,7 +56,7 @@
                         DashColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}"
                         TrackColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
 
-            <Button Text="Sign out" Style="{StaticResource OutlineButton}" Command="{Binding SignOutCommand}" HorizontalOptions="Start" />
+            <Button Text="Sign out" IsVisible="{OnPlatform WinUI=False, Default=True}" Style="{StaticResource OutlineButton}" Command="{Binding SignOutCommand}" HorizontalOptions="Start" />
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

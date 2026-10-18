@@ -20,7 +20,7 @@
     <!-- Plate colours: colour only ever means status. Never decoration. -->
     <Color x:Key="PlateBlueLight">#2F62D9</Color>    <!-- scheduled, focus -->
     <Color x:Key="PlateBlueDark">#7AA2FF</Color>
-    <Color x:Key="PlateYellowLight">#B58200</Color>  <!-- pending -->
+    <Color x:Key="PlateYellowLight">#A47600</Color>  <!-- pending; was #B58200 (2.96:1 on ChalkLight), now 3.52:1 -->
     <Color x:Key="PlateYellowDark">#F2C230</Color>
     <Color x:Key="PlateGreenLight">#1B7F45</Color>   <!-- verified, active -->
     <Color x:Key="PlateGreenDark">#4CC585</Color>

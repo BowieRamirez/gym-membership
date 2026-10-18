@@ -5,69 +5,207 @@
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
-            x:Class="GymMembership.App.Views.MessagesPage" x:DataType="vm:MessagesViewModel" Title="Messages">
+            xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.MessagesPage" x:DataType="vm:MessengerViewModel" Title="Messages">
 
-    <Grid RowDefinitions="Auto,*,Auto" Padding="{OnIdiom Phone='16,12,16,12', Default='20,16,20,16'}" RowSpacing="12" MaximumWidthRequest="720">
-        <VerticalStackLayout Spacing="10">
-            <c:Banner Message="{Binding ErrorMessage}" />
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10" VerticalOptions="End">
-                <VerticalStackLayout Spacing="4">
-                    <Label Text="Conversation with" Style="{StaticResource Caption}" />
-                    <Border Style="{StaticResource Field}">
-                        <Picker ItemsSource="{Binding Threads}" ItemDisplayBinding="{Binding With}" SelectedItem="{Binding Selected}"
-                                SemanticProperties.Description="Conversation with" />
-                    </Border>
-                </VerticalStackLayout>
-                <Button Grid.Column="1" Text="Refresh" Style="{StaticResource SmallOutlineButton}" VerticalOptions="End" Command="{Binding RefreshCommand}" />
-            </Grid>
-        </VerticalStackLayout>
+    <!-- Desktop: the list (360 wide) beside the chat. Phone: one at a time, the list first (the code-behind sets the columns). -->
+    <Grid x:Name="Root" ColumnDefinitions="360,*" RowDefinitions="Auto,*">
 
-        <!-- Your messages sit right in Rubber (the primary ink); theirs sit left on a hairline panel -->
-        <CollectionView Grid.Row="1" ItemsSource="{Binding Messages}" ItemsUpdatingScrollMode="KeepLastItemInView">
-            <CollectionView.EmptyView>
-                <Label Text="No messages yet. Say hello below, or hire a coach from the Coaches page to start a conversation." Style="{StaticResource Muted}" />
-            </CollectionView.EmptyView>
-            <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="svc:MessageRow">
-                    <Border Style="{StaticResource Panel}" Padding="14,10" Margin="0,0,0,8" MaximumWidthRequest="460"
-                            HorizontalOptions="Start" StrokeShape="RoundRectangle 14,14,14,4">
-                        <Border.Triggers>
-                            <DataTrigger TargetType="Border" Binding="{Binding Mine}" Value="True">
-                                <Setter Property="HorizontalOptions" Value="End" />
-                                <Setter Property="StrokeShape" Value="RoundRectangle 14,14,4,14" />
-                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
-                            </DataTrigger>
-                        </Border.Triggers>
-                        <VerticalStackLayout Spacing="3">
-                            <Label Text="{Binding Message.Body}">
-                                <Label.Triggers>
-                                    <DataTrigger TargetType="Label" Binding="{Binding Mine}" Value="True">
-                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" />
-                                    </DataTrigger>
-                                </Label.Triggers>
-                            </Label>
-                            <Label Text="{Binding Message.SentAt, Converter={StaticResource LocalDate}, ConverterParameter='ddd d MMM, h:mm tt'}"
-                                   Style="{StaticResource Caption}" FontSize="12" HorizontalOptions="End">
-                                <Label.Triggers>
-                                    <DataTrigger TargetType="Label" Binding="{Binding Mine}" Value="True">
-                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" />
-                                        <Setter Property="Opacity" Value="0.75" />
-                                    </DataTrigger>
-                                </Label.Triggers>
-                            </Label>
-                        </VerticalStackLayout>
-                    </Border>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+        <c:Banner Grid.ColumnSpan="2" Message="{Binding ErrorMessage}" Margin="16,12,16,0" />
 
-        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="10" IsVisible="{Binding CanSend}">
+        <!-- ===== conversations ===== -->
+        <Grid x:Name="ListPane" Grid.Row="1" RowDefinitions="Auto,Auto,Auto,Auto,*" RowSpacing="10" Padding="16,12" IsVisible="{Binding ShowList}">
             <Border Style="{StaticResource Field}">
-                <Entry Text="{Binding Draft}" Placeholder="Write a message" ReturnCommand="{Binding SendCommand}" SemanticProperties.Description="Message" />
+                <Entry Text="{Binding SearchText}" Placeholder="Search people and messages" ClearButtonVisibility="WhileEditing" SemanticProperties.Description="Search" />
             </Border>
-            <Button Grid.Column="1" Text="Send" Command="{Binding SendCommand}" />
+
+            <!-- a member's two conversations -->
+            <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="8" IsVisible="{Binding HasTabs}">
+                <Button Text="{Binding CoachTabText}" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowTabCommand}" CommandParameter="coach">
+                    <Button.Triggers>
+                        <DataTrigger TargetType="Button" Binding="{Binding Tab}" Value="coach">
+                            <Setter Property="Style" Value="{StaticResource SmallButton}" />
+                        </DataTrigger>
+                    </Button.Triggers>
+                </Button>
+                <Button Grid.Column="1" Text="{Binding StaffTabText}" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowTabCommand}" CommandParameter="support">
+                    <Button.Triggers>
+                        <DataTrigger TargetType="Button" Binding="{Binding Tab}" Value="support">
+                            <Setter Property="Style" Value="{StaticResource SmallButton}" />
+                        </DataTrigger>
+                    </Button.Triggers>
+                </Button>
+            </Grid>
+
+            <!-- front desk: which members' conversations -->
+            <Grid Grid.Row="2" ColumnDefinitions="*,*,*" ColumnSpacing="8" IsVisible="{Binding HasFilters}">
+                <Button Text="Open" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowFilterCommand}" CommandParameter="open">
+                    <Button.Triggers>
+                        <DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="open">
+                            <Setter Property="Style" Value="{StaticResource SmallButton}" />
+                        </DataTrigger>
+                    </Button.Triggers>
+                </Button>
+                <Button Grid.Column="1" Text="Mine" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowFilterCommand}" CommandParameter="mine">
+                    <Button.Triggers>
+                        <DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="mine">
+                            <Setter Property="Style" Value="{StaticResource SmallButton}" />
+                        </DataTrigger>
+                    </Button.Triggers>
+                </Button>
+                <Button Grid.Column="2" Text="Closed" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowFilterCommand}" CommandParameter="closed">
+                    <Button.Triggers>
+                        <DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="closed">
+                            <Setter Property="Style" Value="{StaticResource SmallButton}" />
+                        </DataTrigger>
+                    </Button.Triggers>
+                </Button>
+            </Grid>
+
+            <!-- what the search found inside messages (names are matched in the list below) -->
+            <ScrollView Grid.Row="3" MaximumHeightRequest="240" IsVisible="{Binding HasHits}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="In messages" Style="{StaticResource Caption}" />
+                    <VerticalStackLayout Spacing="8" BindableLayout.ItemsSource="{Binding Hits}">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="m:ChatSearchHit">
+                                <Border Style="{StaticResource Panel}" Padding="12,10">
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer Tapped="OnOpenHit" />
+                                    </Border.GestureRecognizers>
+                                    <VerticalStackLayout Spacing="2">
+                                        <Label Text="{Binding WithName}" FontFamily="BarlowSemiBold" />
+                                        <Label Text="{Binding Snippet}" Style="{StaticResource Muted}" LineBreakMode="TailTruncation" MaxLines="2" />
+                                    </VerticalStackLayout>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </ScrollView>
+
+            <CollectionView Grid.Row="4" ItemsSource="{Binding Threads}">
+                <CollectionView.EmptyView>
+                    <Label Text="{Binding EmptyListText}" Style="{StaticResource Muted}" Margin="0,8" />
+                </CollectionView.EmptyView>
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ThreadItem">
+                        <c:ThreadRowView Margin="0,0,0,8">
+                            <c:ThreadRowView.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnOpen" />
+                            </c:ThreadRowView.GestureRecognizers>
+                        </c:ThreadRowView>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
         </Grid>
-        <Label Grid.Row="2" Text="This hire has ended. You can read the history, but not reply." Style="{StaticResource Muted}"
-               IsVisible="{Binding ReadOnly}" />
+
+        <!-- ===== the open conversation ===== -->
+        <Grid x:Name="ChatPane" Grid.Row="1" Grid.Column="1" IsVisible="{Binding ShowChat}">
+            <Label Text="Choose a conversation to read and reply." Style="{StaticResource Muted}" Margin="20,24"
+                   IsVisible="{Binding HasChat, Converter={StaticResource Not}}" />
+
+            <Grid RowDefinitions="Auto,Auto,*,Auto" IsVisible="{Binding HasChat}">
+                <!-- who you are talking to, and for staff: take, release, close -->
+                <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="12" Padding="16,12">
+                    <Button Text="Back" Style="{StaticResource SmallOutlineButton}" Command="{Binding BackCommand}" IsVisible="{Binding IsCompact}" VerticalOptions="Center" />
+                    <c:Avatar Grid.Column="1" Letters="{Binding Selected.Letters}" Url="{Binding Selected.AvatarUrl}" Diameter="40" VerticalOptions="Center" />
+                    <VerticalStackLayout Grid.Column="2" VerticalOptions="Center">
+                        <Label Text="{Binding Selected.Thread.WithName}" Style="{StaticResource Heading}" LineBreakMode="TailTruncation" />
+                        <Label Text="{Binding Selected.Subtitle}" Style="{StaticResource Caption}" IsVisible="{Binding Selected.Subtitle, Converter={StaticResource HasText}}" />
+                        <Label Text="{Binding StatusLine}" Style="{StaticResource Caption}" IsVisible="{Binding StatusLine, Converter={StaticResource HasText}}"
+                               SemanticProperties.Description="{Binding StatusLine}" />
+                    </VerticalStackLayout>
+                    <HorizontalStackLayout Grid.Column="3" Spacing="8" VerticalOptions="Center">
+                        <Button Text="Take" Style="{StaticResource SmallButton}" Command="{Binding TakeCommand}" IsVisible="{Binding CanTake}" />
+                        <Button Text="Release" Style="{StaticResource SmallOutlineButton}" Command="{Binding ReleaseCommand}" IsVisible="{Binding CanRelease}" />
+                        <Button Text="Close chat" Style="{StaticResource SmallOutlineButton}" Command="{Binding CloseChatCommand}" IsVisible="{Binding CanClose}" />
+                        <Button Text="Reopen" Style="{StaticResource SmallOutlineButton}" Command="{Binding ReopenCommand}" IsVisible="{Binding CanReopen}" />
+                    </HorizontalStackLayout>
+                </Grid>
+
+                <Button Grid.Row="1" Text="Load earlier messages" Style="{StaticResource SmallOutlineButton}" Command="{Binding LoadEarlierCommand}"
+                        IsVisible="{Binding HasMore}" HorizontalOptions="Center" Margin="0,0,0,10" />
+
+                <!-- Your messages sit right in Rubber (the primary ink); theirs sit left on a hairline panel -->
+                <CollectionView Grid.Row="2" ItemsSource="{Binding Bubbles}" ItemsUpdatingScrollMode="KeepLastItemInView" Margin="16,0">
+                    <CollectionView.EmptyView>
+                        <Label Text="No messages yet. Say hello below." Style="{StaticResource Muted}" />
+                    </CollectionView.EmptyView>
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="svc:ChatBubble">
+                            <!-- the grid fills the row; the bubble inside it sits left or right (a list row ignores its own alignment on Windows) -->
+                            <Grid>
+                                <Border Style="{StaticResource Panel}" Padding="14,10" Margin="0,0,0,8" MaximumWidthRequest="460"
+                                        HorizontalOptions="Start" StrokeShape="RoundRectangle 14,14,14,4">
+                                    <Border.Triggers>
+                                        <DataTrigger TargetType="Border" Binding="{Binding Mine}" Value="True">
+                                            <Setter Property="HorizontalOptions" Value="End" />
+                                            <Setter Property="StrokeShape" Value="RoundRectangle 14,14,4,14" />
+                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+                                        </DataTrigger>
+                                    </Border.Triggers>
+                                    <VerticalStackLayout Spacing="3">
+                                        <!-- front desk only, for staff: which of them wrote it -->
+                                        <Label Text="{Binding Line.SenderName}" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold"
+                                               IsVisible="{Binding Line.SenderName, Converter={StaticResource HasText}}" />
+                                        <!-- a photo, when the message has one: a fixed crop with rounded corners; if no link could be made, say so instead of leaving a gap -->
+                                        <Border IsVisible="{Binding ShowPhoto}" StrokeThickness="0" StrokeShape="RoundRectangle 10" HorizontalOptions="Start">
+                                            <Image Source="{Binding PhotoUrl}" Aspect="AspectFill" WidthRequest="240" HeightRequest="170" SemanticProperties.Description="Photo in this message" />
+                                        </Border>
+                                        <Label Text="Photo unavailable" Style="{StaticResource Caption}" IsVisible="{Binding PhotoMissing}">
+                                            <Label.Triggers>
+                                                <DataTrigger TargetType="Label" Binding="{Binding Mine}" Value="True">
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" />
+                                                </DataTrigger>
+                                            </Label.Triggers>
+                                        </Label>
+                                        <Label Text="{Binding Line.Body}" IsVisible="{Binding HasText}">
+                                            <Label.Triggers>
+                                                <DataTrigger TargetType="Label" Binding="{Binding Mine}" Value="True">
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" />
+                                                </DataTrigger>
+                                            </Label.Triggers>
+                                        </Label>
+                                        <!-- time, and under what you sent: Sent, Delivered or Read -->
+                                        <Label Text="{Binding Line.SentAt, Converter={StaticResource LocalDate}, ConverterParameter='ddd d MMM, h:mm tt'}"
+                                               Style="{StaticResource Caption}" FontSize="12" HorizontalOptions="End">
+                                            <Label.Triggers>
+                                                <DataTrigger TargetType="Label" Binding="{Binding Mine}" Value="True">
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" />
+                                                    <Setter Property="Opacity" Value="0.75" />
+                                                </DataTrigger>
+                                            </Label.Triggers>
+                                        </Label>
+                                        <Label Text="{Binding Status}" Style="{StaticResource Caption}" FontSize="12" HorizontalOptions="End"
+                                               IsVisible="{Binding Mine}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" Opacity="0.75" />
+                                    </VerticalStackLayout>
+                                </Border>
+                            </Grid>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+
+                <!-- the message box stays at the bottom -->
+                <Grid Grid.Row="3" RowDefinitions="Auto,Auto" RowSpacing="8" Padding="16,10,16,14" IsVisible="{Binding CanSend}">
+                    <!-- a photo that is chosen and waiting to be sent -->
+                    <Border Style="{StaticResource Panel}" Padding="12,8" IsVisible="{Binding HasPhoto}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <Label Text="{Binding PhotoName, StringFormat='Photo ready to send: {0}'}" VerticalOptions="Center" LineBreakMode="MiddleTruncation" />
+                            <Button Grid.Column="1" Text="Remove" Style="{StaticResource SmallOutlineButton}" Command="{Binding RemovePhotoCommand}" />
+                        </Grid>
+                    </Border>
+                    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                        <Button Text="Photo" Style="{StaticResource SmallOutlineButton}" Command="{Binding AttachCommand}" VerticalOptions="Center" />
+                        <Border Grid.Column="1" Style="{StaticResource Field}">
+                            <Entry Text="{Binding Draft}" Placeholder="Write a message" MaxLength="2000" ReturnCommand="{Binding SendCommand}" SemanticProperties.Description="Message" />
+                        </Border>
+                        <Button Grid.Column="2" Text="Send" Command="{Binding SendCommand}" />
+                    </Grid>
+                </Grid>
+                <Label Grid.Row="3" Text="You can read this conversation, but you can't send new messages in it right now." Style="{StaticResource Muted}"
+                       Padding="16,10,16,14" IsVisible="{Binding ReadOnly}" />
+            </Grid>
+        </Grid>
     </Grid>
 </v:BasePage>

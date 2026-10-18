@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:c="clr-namespace:GymMembership.App.Controls"
+             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+             x:Class="GymMembership.App.Controls.AmenityCardView" x:DataType="svc:AmenityCard">
+
+    <Border Style="{StaticResource Panel}">
+        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="12">
+            <Border StrokeThickness="0" Padding="0" HeightRequest="160" StrokeShape="RoundRectangle 10"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}">
+                <Grid>
+                    <c:Avatar x:Name="Mark" Letters="?" Diameter="56" HorizontalOptions="Center" VerticalOptions="Center" />
+                    <Image Source="{Binding PhotoUrl}" Aspect="AspectFill" SemanticProperties.Description="{Binding Amenity.Name, StringFormat='Photo of {0}'}" />
+                </Grid>
+            </Border>
+            <VerticalStackLayout Grid.Row="1" Spacing="4">
+                <Label Text="{Binding Amenity.Name}" Style="{StaticResource Heading}" />
+                <c:StatusChip Status="{Binding Availability}" />
+                <Label Text="{Binding Reason}" FontFamily="BarlowMedium" IsVisible="{Binding HasReason}" />
+                <Label Text="{Binding BackAt, Converter={StaticResource LocalDate}, ConverterParameter='ddd d MMM, h:mm tt', StringFormat='Back about {0}'}"
+                       Style="{StaticResource Caption}" IsVisible="{Binding HasBackAt}" />
+                <Label Text="{Binding Amenity.Description}" Style="{StaticResource Muted}" />
+            </VerticalStackLayout>
+            <Button x:Name="Action" Grid.Row="2" HorizontalOptions="Start" Style="{StaticResource SmallOutlineButton}" IsVisible="False" />
+        </Grid>
+    </Border>
+</ContentView>

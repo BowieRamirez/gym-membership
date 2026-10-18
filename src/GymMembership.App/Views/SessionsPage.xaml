@@ -12,6 +12,7 @@
             <Label Text="Your booked training sessions, soonest first." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
+            <c:CoachPhotoPrompt x:DataType="vm:CoachPhotoViewModel" BindingContext="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=Photo}" IsVisible="{Binding NeedsPhoto}" />
 
             <Border Style="{StaticResource Panel}" IsVisible="{Binding Rescheduling, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="12">
@@ -59,16 +60,16 @@
                             </Grid>
                             <FlexLayout Wrap="Wrap" IsVisible="{Binding CanManage}">
                                 <Button Text="Mark complete" Style="{StaticResource SmallButton}" Margin="0,0,8,8"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=CompleteCommand}" CommandParameter="{Binding .}" />
+                                        Clicked="OnComplete" />
                                 <Button Text="No-show" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=NoShowCommand}" CommandParameter="{Binding .}" />
+                                        Clicked="OnNoShow" />
                             </FlexLayout>
                             <!-- both the member and the coach can move or cancel a booked session -->
                             <FlexLayout Wrap="Wrap" IsVisible="{Binding CanChange}">
                                 <Button Text="Reschedule" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=StartRescheduleCommand}" CommandParameter="{Binding .}" />
+                                        Clicked="OnStartReschedule" />
                                 <Button Text="Cancel session" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=CancelCommand}" CommandParameter="{Binding .}" />
+                                        Clicked="OnCancel" />
                             </FlexLayout>
                         </VerticalStackLayout>
                     </Border>

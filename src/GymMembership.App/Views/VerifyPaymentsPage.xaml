@@ -58,12 +58,12 @@
                             <VerticalStackLayout Grid.Column="1" Spacing="8" HorizontalOptions="End">
                                 <Label Text="{Binding Payment.Amount, StringFormat='₱{0:N2}'}" Style="{StaticResource Numeral}" HorizontalOptions="End" />
                                 <Button Text="View screenshot" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding HasProof}"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:VerifyPaymentsViewModel}}, Path=ViewProofCommand}" CommandParameter="{Binding .}" />
+                                        Clicked="OnViewProof" />
                                 <HorizontalStackLayout Spacing="8">
                                     <Button Text="Verify" Style="{StaticResource SmallButton}"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:VerifyPaymentsViewModel}}, Path=ApproveCommand}" CommandParameter="{Binding .}" />
+                                            Clicked="OnApprove" />
                                     <Button Text="Reject" Style="{StaticResource SmallOutlineButton}"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:VerifyPaymentsViewModel}}, Path=RejectCommand}" CommandParameter="{Binding .}" />
+                                            Clicked="OnReject" />
                                 </HorizontalStackLayout>
                             </VerticalStackLayout>
                         </Grid>

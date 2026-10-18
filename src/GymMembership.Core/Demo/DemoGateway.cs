@@ -13,16 +13,16 @@ namespace GymMembership.Core.Demo;
 /// directly, and the server-side functions (0005_functions.sql). Error messages are the same tokens the SQL raises.
 /// Demo logins: admin@ / employee@ / coach@ / kai@ / member@ / bea@ / carlo@ demo.io, password "demo1234".
 /// </summary>
-public sealed class DemoGateway : ISupabaseGateway
+public sealed partial class DemoGateway : ISupabaseGateway
 {
     public const string DemoPassword = "demo1234";
 
     // plan 5.2
     static readonly Dictionary<string, string[]> RolePermissions = new()
     {
-        ["admin"] = ["payments:verify", "payments:record", "payments:void", "check_ins:record", "amenity_usages:verify", "users:manage", "roles:manage",
+        ["admin"] = ["payments:verify", "payments:record", "payments:void", "check_ins:record", "amenity_usages:verify", "amenities:set_status", "support:reply", "users:manage", "roles:manage",
                      "catalog:manage", "discounts:manage", "gym_settings:manage", "reports:revenue", "reports:cash", "audit:read"],
-        ["employee"] = ["payments:verify", "payments:record", "check_ins:record", "amenity_usages:verify", "reports:cash"],
+        ["employee"] = ["payments:verify", "payments:record", "check_ins:record", "amenity_usages:verify", "amenities:set_status", "support:reply", "reports:cash"],
         ["coach"] = ["sessions:manage", "shifts:manage", "attendance:record"],
         ["member"] = []
     };
@@ -35,7 +35,11 @@ public sealed class DemoGateway : ISupabaseGateway
     public string? CurrentUserId { get; private set; }
     public Exception? FailWith { get; set; }
 
-    public DemoGateway(bool seed = true) { if (seed) Seed(); }
+    readonly TimeProvider _clock;
+    readonly object _rpcLock = new();
+    DateTime SubscriptionNow => _clock.GetUtcNow().UtcDateTime;
+    public DemoGateway(bool seed = true, TimeProvider? clock = null)
+    { _clock = clock ?? TimeProvider.System; if (seed) { Seed(); SeedMembershipTerms(); } }
 
     // ---------- storage helpers ----------
     List<object> Table(Type t) => _tables.TryGetValue(t, out var l) ? l : _tables[t] = new();
@@ -48,6 +52,7 @@ public sealed class DemoGateway : ISupabaseGateway
         var pk = Pk(typeof(T));
         if (pk.PropertyType == typeof(int) && (int)pk.GetValue(row)! == 0)
             pk.SetValue(row, All<T>().Select(r => (int)pk.GetValue(r)!).DefaultIfEmpty(0).Max() + 1);
+        if (row is Payment payment) SnapshotMembershipPayment(payment);
         Table(typeof(T)).Add(row);
         return row;
     }
@@ -65,12 +70,21 @@ public sealed class DemoGateway : ISupabaseGateway
     void Require(string permission) { RequireActive(); if (!Has(permission)) throw Err("forbidden"); }
 
     static bool Running(UserMembershipPackage m) => m.Status == Status.Active && m.EndsAt > DateTime.UtcNow;
-    bool ActiveMember(string? userId) => All<UserMembershipPackage>().Any(m => m.MemberId == userId && Running(m));
+    bool ActiveMember(string? userId) => All<Profile>().Any(p => p.Id == userId && p.IsActive)
+        && All<MembershipTerm>().Any(t => t.MemberId == userId && t.CancelledAt is null && t.StartsAt <= SubscriptionNow && t.EndsAt > SubscriptionNow);
     bool CoachesMember(string coach, string? member) => All<CoachHire>().Any(h => h.CoachId == coach && h.MemberId == member && h.Status == Status.Active);
     bool IsCoach(string? userId) => All<Coach>().Any(c => c.UserId == userId);
 
-    void Notify(string? userId, string type, string title, string? body = null)
+    /// <summary>The demo's stand-in for the server sending someone an alert (a client cannot insert one itself, here or on the real table).</summary>
+    public void Notify(string? userId, string type, string title, string? body = null)
     { if (userId is not null) Add(new UserNotification { UserId = userId, Type = type, Title = title, Body = body, CreatedAt = DateTime.UtcNow }); }
+    // which chat an alert is about, so opening that chat clears only its alerts (the database keeps this in the alert's reference)
+    readonly Dictionary<int, string> _chatAlerts = new();
+    void NotifyChat(string userId, string title, string? body, string key)
+    { var n = Add(new UserNotification { UserId = userId, Type = "message", Title = title, Body = body, CreatedAt = DateTime.UtcNow }); _chatAlerts[n.Id] = key; }
+    void ClearChatAlerts(string userId, string key)
+    { foreach (var n in All<UserNotification>().Where(n => n.UserId == userId && n.Type == "message" && n.ReadAt is null && _chatAlerts.GetValueOrDefault(n.Id) == key)) n.ReadAt = DateTime.UtcNow; }
+
     void NotifyStaff(string type, string title) { foreach (var id in All<UserRole>().Where(u => RolesOf(u.UserId).Any(r => r is "admin" or "employee")).Select(u => u.UserId).Distinct().ToList()) Notify(id, type, title); }
     void Audit(string action, string entity, string entityId) =>
         Add(new AuditEntry { ActorId = CurrentUserId, Action = action, Entity = entity, EntityId = entityId, CreatedAt = DateTime.UtcNow });
@@ -158,6 +172,8 @@ public sealed class DemoGateway : ISupabaseGateway
                 || All<CoachHire>().Any(h => (h.CoachId == uid && h.MemberId == p.Id) || (h.MemberId == uid && h.CoachId == p.Id)),
             Member m => m.UserId == uid || staff || All<CoachHire>().Any(h => h.CoachId == uid && h.MemberId == m.UserId),
             Payment p => p.MemberId == uid || staff,
+            MembershipTerm t => t.MemberId == uid || staff,
+            RefundRequest r => r.MemberId == uid || RolesOf(uid).Contains("admin"),
             UserMembershipPackage m => m.MemberId == uid || staff,
             MembershipRenewal r => staff || All<UserMembershipPackage>().Any(m => m.Id == r.UserMembershipPackageId && m.MemberId == uid),
             UserAmenity a => a.MemberId == uid || staff,
@@ -176,6 +192,9 @@ public sealed class DemoGateway : ISupabaseGateway
             Discount => Has("discounts:manage"),   // members only learn a code is valid by using it
             MembershipPackage k => k.IsActive || Has("catalog:manage"),
             Amenity a => a.IsActive || Has("catalog:manage"),
+            AmenityFollow f => f.MemberId == uid,
+            SupportThread t => t.MemberId == uid || Has("support:reply"),
+            SupportMessage m => m.MemberId == uid || Has("support:reply"),
             _ => true
         };
     }
@@ -207,8 +226,10 @@ public sealed class DemoGateway : ISupabaseGateway
                     break;
                 case ChatMessage c:
                     if (c.SenderId != Uid || !CoachesMember(c.CoachId, c.MemberId) || !ActiveMember(c.MemberId)) throw Err(Rls);
-                    // the table's own checks: the sender is one of the two people, and the text is not blank
-                    if (c.SenderId != c.CoachId && c.SenderId != c.MemberId || string.IsNullOrWhiteSpace(c.Body)) throw Err("new row for relation \"messages\" violates check constraint (23514)");
+                    // the table's own checks: the sender is one of the two people, there is text or a photo, and the photo is in this conversation's folder
+                    var photoOk = c.AttachmentPath is null || System.Text.RegularExpressions.Regex.IsMatch(c.AttachmentPath, $"^{c.CoachId}/{c.MemberId}/{FilePart}$");
+                    if (c.SenderId != c.CoachId && c.SenderId != c.MemberId || (string.IsNullOrWhiteSpace(c.Body) && c.AttachmentPath is null) || !photoOk)
+                        throw Err("new row for relation \"messages\" violates check constraint (23514)");
                     break;
                 case AmenityUsage u:
                     if (!ActiveMember(Uid) || !All<UserAmenity>().Any(a => a.Id == u.UserAmenityId && a.MemberId == Uid && a.Status == Status.Active && (a.ExpiresAt is null || a.ExpiresAt > DateTime.UtcNow)))
@@ -227,8 +248,8 @@ public sealed class DemoGateway : ISupabaseGateway
                 foreach (var h in All<CoachHire>().Where(h => h.CoachId == s.CoachId && h.Status == Status.Active)) Notify(h.MemberId, "system", "Your coach posted a shift");
                 break;
             case ChatMessage c:
-                c.SentAt = DateTime.UtcNow; c.ReadAt = null;
-                Notify(c.SenderId == c.CoachId ? c.MemberId : c.CoachId, "message", "New message");
+                c.SentAt = DateTime.UtcNow; c.ReadAt = null; c.DeliveredAt = null;
+                NotifyChat(c.SenderId == c.CoachId ? c.MemberId : c.CoachId, "New message", null, $"c|{c.CoachId}|{c.MemberId}");
                 break;
             case AmenityUsage u: u.UsedAt = DateTime.UtcNow; u.Status = Status.Pending; break;
         }
@@ -249,7 +270,12 @@ public sealed class DemoGateway : ISupabaseGateway
 
             switch (row, list[index])
             {
-                case (MembershipPackage or Amenity, _): if (!Has("catalog:manage")) throw Err(Rls); list[index] = Clone(row); break;
+                case (MembershipPackage, _): if (!Has("catalog:manage")) throw Err(Rls); list[index] = Clone(row); break;
+                case (Amenity a, Amenity old):       // a catalog edit never changes the live status, like the column rights in the database
+                    if (!Has("catalog:manage")) throw Err(Rls);
+                    var edited = Clone(a); edited.Availability = old.Availability; edited.StatusReason = old.StatusReason; edited.BackAt = old.BackAt; edited.ImagePath = old.ImagePath;
+                    list[index] = edited;
+                    break;
                 case (Discount, _): if (!Has("discounts:manage")) throw Err(Rls); list[index] = Clone(row); break;
                 case (GymSettings, _): if (!Has("gym_settings:manage")) throw Err(Rls); list[index] = Clone(row); break;
                 case (ShiftPost s, ShiftPost old):   // a coach changes times, note and status, never the owner
@@ -281,6 +307,29 @@ public sealed class DemoGateway : ISupabaseGateway
             return Task.CompletedTask;
         }
         catch (Exception ex) { return Task.FromException(ex); }
+    }
+
+    // Only the filtered column writes used by the app; all other columns remain refused.
+    public Task UpdateWhereAsync<T, TValue>(Expression<Func<T, bool>> where, Expression<Func<T, TValue>> column, TValue value) where T : BaseModel, new()
+    {
+        if (FailWith is not null) return Task.FromException(FailWith);
+        if (typeof(T) == typeof(Amenity) && column.Body is MemberExpression { Member.Name: nameof(Amenity.ImagePath) })
+        {
+            try
+            {
+                Require("catalog:manage");
+                var filter = where.Compile();
+                foreach (var a in All<Amenity>().Where(a => filter((T)(object)a))) a.ImagePath = (string?)(object?)value;
+                return Task.CompletedTask;
+            }
+            catch (Exception ex) { return Task.FromException(ex); }
+        }
+        if (typeof(T) != typeof(UserNotification) || column.Body is not MemberExpression { Member.Name: nameof(UserNotification.ReadAt) })
+            return Task.FromException(new NotSupportedException("unsupported filtered column write"));
+        var matches = where.Compile();
+        foreach (var n in All<UserNotification>().Where(n => n.UserId == Uid && matches((T)(object)n)).ToList())
+            n.ReadAt = (DateTime?)(object?)value;
+        return Task.CompletedTask;
     }
 
     public Task DeleteAsync<T>(T row) where T : BaseModel, new()
@@ -316,11 +365,63 @@ public sealed class DemoGateway : ISupabaseGateway
         catch (Exception ex) { return Task.FromException(ex); }
     }
 
-    public Task<string> UploadAsync(string bucket, string path, byte[] data) =>
-        FailWith is null ? Task.FromResult(path) : Task.FromException<string>(FailWith);
+    // ---------- chat photos (mirrors 0016: can_use_chat_file) ----------
+    readonly Dictionary<string, byte[]> _files = new();
+    const string FilePart = @"[A-Za-z0-9_-][A-Za-z0-9._-]{0,119}";
+    static readonly System.Text.RegularExpressions.Regex SupportFile = new(@$"^support/(?<m>[A-Za-z0-9_-]+)/{FilePart}$");
+    static readonly System.Text.RegularExpressions.Regex CoachFile = new(@$"^(?<c>[A-Za-z0-9_-]+)/(?<m>[A-Za-z0-9_-]+)/{FilePart}$");
 
-    public Task<string?> SignedUrlAsync(string bucket, string path) =>
-        FailWith is null ? Task.FromResult<string?>(null) : Task.FromException<string?>(FailWith);   // the demo keeps no files
+    bool CanUseChatFile(string path, bool write)
+    {
+        var uid = CurrentUserId;
+        if (uid is null || !IsActiveUser) return false;
+        if (SupportFile.Match(path) is { Success: true } s) return s.Groups["m"].Value == uid || Has("support:reply");
+        if (CoachFile.Match(path) is { Success: true } c)
+        {
+            var coach = c.Groups["c"].Value; var member = c.Groups["m"].Value;
+            if (uid != coach && uid != member) return false;
+            return !write || (CoachesMember(coach, member) && ActiveMember(member));
+        }
+        return false;
+    }
+
+    public Task<string> UploadAsync(string bucket, string path, byte[] data)
+    {
+        if (FailWith is not null) return Task.FromException<string>(FailWith);
+        path = StoragePath.Safe(path);
+        if (bucket == "gym-assets")
+        {
+            if (!IsActiveUser || !Has("gym_settings:manage")) return Task.FromException<string>(Err(Rls));
+            _files[$"{bucket}/{path}"] = data;
+            return Task.FromResult(path);
+        }
+        if (bucket == "avatars")
+        {
+            if (!IsActiveUser || !path.StartsWith(Uid + "/", StringComparison.Ordinal)) return Task.FromException<string>(Err(Rls));
+            _files[$"{bucket}/{path}"] = data;
+            return Task.FromResult(path);
+        }
+        if (bucket != "chat-attachments") return Task.FromResult(path);
+        if (!CanUseChatFile(path, write: true)) return Task.FromException<string>(Err(Rls));
+        _files[path] = data;
+        return Task.FromResult(path);
+    }
+
+    public Task<string?> SignedUrlAsync(string bucket, string path)
+    {
+        if (FailWith is not null) return Task.FromException<string?>(FailWith);
+        var key = bucket == "chat-attachments" ? path : $"{bucket}/{path}";
+        var canRead = bucket == "chat-attachments" ? CanUseChatFile(path, write: false)
+            : bucket is "avatars" or "gym-assets" && IsActiveUser;
+        if (!canRead || !_files.TryGetValue(key, out var bytes)) return Task.FromResult<string?>(null);
+        // a plain file in the temp folder stands in for the signed link, so the picture shows without a server
+        var file = Path.Combine(Path.GetTempPath(), $"gym-demo-{Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(key)))[..16]}{Path.GetExtension(path)}");
+        if (!File.Exists(file)) File.WriteAllBytes(file, bytes);
+        return Task.FromResult<string?>(file);
+    }
+
+    /// <summary>What the list shows for a message: its text, or the word Photo when it has none.</summary>
+    static string? Preview(string? body, string? photo) => !string.IsNullOrWhiteSpace(body) ? body : photo is not null ? "Photo" : body;
 
     public Task RpcAsync(string function, Dictionary<string, object>? args = null)
     {
@@ -366,7 +467,7 @@ public sealed class DemoGateway : ISupabaseGateway
         {
             PaymentCode = PaymentCode(), Kind = kind, Method = PayMethod.Qr, Status = Status.Pending, Amount = d.Amount, DiscountId = d.Id, DiscountAmount = d.Cut,
             MemberId = member, UserMembershipPackageId = ump, RenewalId = renewal, UserAmenityId = amenity,
-            ExpiresAt = DateTime.UtcNow.AddHours(hours), CreatedAt = DateTime.UtcNow
+            ExpiresAt = SubscriptionNow.AddHours(hours), CreatedAt = SubscriptionNow
         });
     }
 
@@ -374,19 +475,9 @@ public sealed class DemoGateway : ISupabaseGateway
     void ActivateTarget(Payment pay)
     {
         var now = DateTime.UtcNow;
-        if (pay.UserMembershipPackageId is { } umpId)
+        if (pay.Kind is PayKind.Membership or PayKind.Renewal)
         {
-            var ump = All<UserMembershipPackage>().First(m => m.Id == umpId);
-            if (All<UserMembershipPackage>().Any(m => m.MemberId == ump.MemberId && m.Id != ump.Id && m.Status == Status.Active)) throw Err("duplicate key value violates unique constraint");
-            var days = All<MembershipPackage>().First(p => p.Id == ump.MembershipPackageId).DurationDays;
-            ump.Status = Status.Active; ump.StartsAt = now; ump.EndsAt = now.AddDays(days);
-        }
-        else if (pay.RenewalId is { } renId)
-        {
-            var ren = All<MembershipRenewal>().First(r => r.Id == renId);
-            var ump = All<UserMembershipPackage>().First(m => m.Id == ren.UserMembershipPackageId);
-            ump.Status = Status.Active; ump.EndsAt = ren.NewEndsAt;
-            ren.Status = Status.Completed; ren.CompletedAt = now;
+            ActivateMembershipTerm(pay);
         }
         else if (pay.UserAmenityId is { } uaId)
         {
@@ -409,8 +500,12 @@ public sealed class DemoGateway : ISupabaseGateway
 
     // ---------- functions (mirror 0005_functions.sql) ----------
     object? Call(string fn, Dictionary<string, object> a)
+    { lock (_rpcLock) return CallLocked(fn, a); }
+
+    object? CallLocked(string fn, Dictionary<string, object> a)
     {
-        var now = DateTime.UtcNow;
+        if (SubscriptionCall(fn, a, out var subscriptionResult)) return subscriptionResult;
+        var now = SubscriptionNow;
         int I(string k) => Convert.ToInt32(a[k]);
         bool B(string k) => Convert.ToBoolean(a[k]);
         string S(string k) => (string)a[k];
@@ -425,10 +520,9 @@ public sealed class DemoGateway : ISupabaseGateway
                 RequireActive();
                 if (All<Member>().All(m => m.UserId != uid)) throw Err("forbidden");
                 var pkg = All<MembershipPackage>().FirstOrDefault(p => p.Id == I("p_package_id") && p.IsActive) ?? throw Err("not_found");
-                if (All<UserMembershipPackage>().Any(m => m.MemberId == uid && m.Status is Status.Pending or Status.Active)) throw Err("already_availed");
-                var d = Discounted(uid, a, pkg.Price);
-                var ump = Add(new UserMembershipPackage { MemberId = uid, MembershipPackageId = pkg.Id, Status = Status.Pending });
-                return Clone(NewQrPayment(PayKind.Membership, uid, d, ump: ump.Id));
+                if (All<UserMembershipPackage>().Any(m => m.MemberId == uid && m.Status == Status.Pending)
+                    || All<MembershipTerm>().Any(t => t.MemberId == uid && t.CancelledAt is null && t.EndsAt > now)) throw Err("already_availed");
+                return Clone(CreateExtension(uid, pkg.Id, a));
             }
             case "avail_amenity":
             {
@@ -445,12 +539,7 @@ public sealed class DemoGateway : ISupabaseGateway
                 RequireActive();
                 var ump = All<UserMembershipPackage>().FirstOrDefault(m => m.Id == I("p_ump_id") && m.MemberId == uid) ?? throw Err("not_found");
                 if (ump.Status is not (Status.Active or Status.Expired)) throw Err("not_renewable");
-                if (All<MembershipRenewal>().Any(r => r.UserMembershipPackageId == ump.Id && r.Status == Status.Pending)) throw Err("renewal_pending");
-                var pkg = All<MembershipPackage>().First(p => p.Id == ump.MembershipPackageId);
-                var d = Discounted(uid, a, pkg.Price);
-                var start = ump.EndsAt is { } e && e > now ? e : now;   // an expired term renews from today, not from the past end date
-                var ren = Add(new MembershipRenewal { UserMembershipPackageId = ump.Id, PreviousEndsAt = ump.EndsAt ?? now, NewStartsAt = start, NewEndsAt = start.AddDays(pkg.DurationDays) });
-                return Clone(NewQrPayment(PayKind.Renewal, uid, d, renewal: ren.Id));
+                return Clone(CreateExtension(uid, ump.MembershipPackageId, a));
             }
             case "submit_payment_proof":
             {
@@ -473,6 +562,7 @@ public sealed class DemoGateway : ISupabaseGateway
                 if (pay.MemberId == uid) throw Err("self_verify");
                 if (B("p_approve"))
                 {
+                    if (pay.Method == PayMethod.Qr && pay.ExpiresAt <= now) throw Err("payment_expired");
                     pay.Status = Status.Verified; pay.VerifiedBy = uid; pay.VerifiedAt = now; pay.ReceiptNo = ReceiptNo();
                     ActivateTarget(pay);
                     Notify(pay.MemberId, "payment", "Payment approved", pay.PaymentCode);
@@ -510,6 +600,8 @@ public sealed class DemoGateway : ISupabaseGateway
                 else
                 {
                     if (memberId is null || All<Member>().All(m => m.UserId != memberId)) throw Err("not_found");
+                    if (kind is PayKind.Membership or PayKind.Renewal && All<Payment>().Any(p => p.MemberId == memberId && p.Status == Status.Pending && p.Kind is PayKind.Membership or PayKind.Renewal)) throw Err("renewal_pending");
+                    if (kind == PayKind.Membership && All<MembershipTerm>().Any(t => t.MemberId == memberId && t.CancelledAt is null && t.EndsAt > now)) throw Err("already_availed");
                     if (kind == PayKind.Membership)
                     {
                         var pkg = All<MembershipPackage>().FirstOrDefault(p => p.Id == itemId && p.IsActive) ?? throw Err("not_found");
@@ -555,37 +647,12 @@ public sealed class DemoGateway : ISupabaseGateway
                 var pay = All<Payment>().FirstOrDefault(p => p.Id == I("p_payment_id")) ?? throw Err("not_found");
                 if (pay.Status != Status.Verified) throw Err("already_processed");
                 pay.Status = Status.Voided; pay.VoidedBy = uid; pay.VoidedAt = now; pay.VoidReason = reason;
-                if (pay.UserMembershipPackageId is { } umpId) All<UserMembershipPackage>().First(m => m.Id == umpId).Status = Status.Cancelled;
-                else if (pay.RenewalId is { } renId)
-                {
-                    var ren = All<MembershipRenewal>().First(r => r.Id == renId);
-                    var ump = All<UserMembershipPackage>().First(m => m.Id == ren.UserMembershipPackageId);
-                    ump.EndsAt = ren.PreviousEndsAt; ump.Status = ren.PreviousEndsAt > now ? Status.Active : Status.Expired;
-                    ren.Status = Status.Cancelled;
-                }
-                else if (pay.UserAmenityId is { } uaId) All<UserAmenity>().First(x => x.Id == uaId).Status = Status.Cancelled;
+                if (pay.UserAmenityId is { } uaId) All<UserAmenity>().First(x => x.Id == uaId).Status = Status.Cancelled;
                 else Table(typeof(GymCheckIn)).RemoveAll(c => ((GymCheckIn)c).PaymentId == pay.Id);
                 Notify(pay.MemberId, "payment", "Payment voided", reason);
                 Audit("payment.void", "payments", pay.Id.ToString());
                 return null;
             }
-            case "revenue_summary":
-            {
-                Require("reports:revenue");
-                var from = DateTime.Parse(S("p_from")).Date; var to = DateTime.Parse(S("p_to")).Date;
-                DateTime Day(Payment p) => p.VerifiedAt!.Value.AddHours(8).Date;   // Manila
-                return All<Payment>().Where(p => p.Status == Status.Verified && Day(p) >= from && Day(p) <= to)
-                    .GroupBy(p => (Day: Day(p), p.Kind, p.Method)).OrderBy(g => g.Key.Day).ThenBy(g => g.Key.Kind).ThenBy(g => g.Key.Method)
-                    .Select(g => new RevenueRow(g.Key.Day, g.Key.Kind, g.Key.Method, g.Count(), g.Sum(p => p.Amount))).ToList();
-            }
-            case "daily_cash_summary":
-            {
-                Require("reports:cash");
-                var day = DateTime.Parse(S("p_day")).Date;
-                return All<Payment>().Where(p => p.Status == Status.Verified && p.Method == PayMethod.Cash && p.VerifiedAt!.Value.AddHours(8).Date == day)
-                    .GroupBy(p => p.Kind).OrderBy(g => g.Key).Select(g => new CashRow(g.Key, g.Count(), g.Sum(p => p.Amount))).ToList();
-            }
-
             // ----- coaching -----
             case "hire_coach":
             {
@@ -625,10 +692,25 @@ public sealed class DemoGateway : ISupabaseGateway
                 {
                     if (!ActiveMember(uid)) throw Err("no_active_membership");
                     if (!CoachesMember(coachId, uid)) throw Err("no_active_hire");
+                    if (All<TrainingSession>().Any(s => s.CoachId == coachId && s.MemberId == uid && s.Status == Status.Scheduled)) throw Err("active_coaching_session");
+                    if (All<TimeRequest>().Any(r => r.CoachId == coachId && r.MemberId == uid && r.RequestedBy == "member" && r.SessionId is null && r.Status == Status.Pending)) throw Err("pending_session_request");
                     req = Add(new TimeRequest { CoachId = coachId, MemberId = uid, RequestedBy = "member", RequestedStart = start, RequestedEnd = end, Message = Opt("p_message") });
                     Notify(coachId, "time_request", "New time request");
                 }
                 return req.Id;
+            }
+            case "request_member_time":
+            {
+                RequireActive();
+                if (!IsCoach(uid)) throw Err("forbidden");
+                var member = S("p_member_id"); var start = T("p_start"); var end = T("p_end");
+                if (end <= start) throw Err("end must be after start");
+                if (!CoachesMember(uid, member)) throw Err("no_active_hire");
+                if (!ActiveMember(member)) throw Err("invite_member_inactive");
+                if (All<TrainingSession>().Any(s => s.CoachId == uid && s.MemberId == member && s.Status == Status.Scheduled)) throw Err("active_coaching_session");
+                var invitation = Add(new TimeRequest { CoachId = uid, MemberId = member, RequestedBy = "coach", RequestedStart = start, RequestedEnd = end });
+                Notify(member, "time_request", "Your coach invited you to a session");
+                return invitation.Id;
             }
             case "request_reschedule":
             {
@@ -662,6 +744,7 @@ public sealed class DemoGateway : ISupabaseGateway
                 if (approve)
                 {
                     if (r.SessionId is null && !ActiveMember(member)) throw Err("no_active_membership");
+                    if (r.SessionId is null && All<TrainingSession>().Any(s => s.CoachId == r.CoachId && s.MemberId == member && s.Status == Status.Scheduled)) throw Err("active_coaching_session");
                     var ignore = r.SessionId ?? 0;
                     if (Overlap(r.CoachId, true, r.RequestedStart, r.RequestedEnd, ignore) || Overlap(member, false, r.RequestedStart, r.RequestedEnd, ignore)) throw Err("overlap");
                     if (r.SessionId is { } sid)
@@ -758,6 +841,235 @@ public sealed class DemoGateway : ISupabaseGateway
                 Audit(B("p_active") ? "user.activate" : "user.deactivate", "profiles", S("p_user"));
                 return null;
             }
+            case "set_amenity_followed":
+            {
+                if (!All<Member>().Any(m => m.UserId == uid)) throw Err(Rls);
+                var id = I("p_amenity_id");
+                var saved = All<AmenityFollow>().FirstOrDefault(f => f.MemberId == uid && f.AmenityId == id);
+                if (B("p_follow"))
+                {
+                    if (All<Amenity>().All(x => x.Id != id || !x.IsActive)) throw Err("not_found");
+                    if (saved is null) Add(new AmenityFollow { MemberId = uid, AmenityId = id });
+                }
+                else if (saved is not null) Table(typeof(AmenityFollow)).Remove(saved);
+                return null;
+            }
+            case "set_amenity_status":
+            {
+                Require("amenities:set_status");
+                var amenity = All<Amenity>().FirstOrDefault(x => x.Id == I("p_amenity_id")) ?? throw Err("not_found");
+                var status = S("p_status");
+                var unavailable = status == "unavailable";
+                var reason = unavailable ? Opt("p_reason") : null;
+                DateTime? backAt = unavailable && Opt("p_back_at") is { } raw ? DateTime.Parse(raw, null, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime() : null;
+                if (status is not ("available" or "in_use" or "unavailable")) throw Err("bad_status");
+                if (reason?.Length > 200) throw Err("bad_reason");
+                if (backAt <= DateTime.UtcNow) throw Err("bad_back_at");
+
+                var told = new List<NotifiedMember>();
+                if (amenity.Availability == status && amenity.StatusReason == reason && amenity.BackAt == backAt) return told;   // nothing changed: nobody is told
+                amenity.Availability = status; amenity.StatusReason = reason; amenity.BackAt = backAt;
+                Audit("amenity.status", "amenities", amenity.Id.ToString());
+                if (status == "in_use") return told;
+
+                var title = status == "available" ? $"{amenity.Name} is available" : $"{amenity.Name} is unavailable";
+                var body = status == "available" ? null : string.Join(". ", new[] { reason, backAt is { } b ? $"Back about {b.AddHours(8):ddd dd MMM, h:mm tt}" : null }.Where(x => x is not null));
+                foreach (var f in All<AmenityFollow>().Where(f => f.AmenityId == amenity.Id).ToList())
+                {
+                    var person = All<Profile>().FirstOrDefault(p => p.Id == f.MemberId);
+                    if (person is not { IsActive: true }) continue;
+                    Notify(f.MemberId, "amenity", title, body);
+                    told.Add(new NotifiedMember(f.MemberId, person.FullName));
+                }
+                return told.OrderBy(t => t.Name).ToList();
+            }
+            // ---- messenger (mirrors 0015_messenger.sql)
+            case "chat_threads":
+            {
+                RequireActive();
+                string NameOf(string id) => All<Profile>().FirstOrDefault(p => p.Id == id)?.FullName ?? "Unknown";
+                var rows = new List<ChatThread>();
+
+                // coach chats: every hire (current or ended) and every pair already written to
+                var pairs = All<CoachHire>().Select(h => (h.CoachId, h.MemberId)).Union(All<ChatMessage>().Select(m => (m.CoachId, m.MemberId)))
+                    .Where(p => p.CoachId == uid || p.MemberId == uid).ToList();
+                foreach (var (coachId, memberId) in pairs)
+                {
+                    var withId = coachId == uid ? memberId : coachId;
+                    var msgs = All<ChatMessage>().Where(m => m.CoachId == coachId && m.MemberId == memberId).OrderBy(m => m.Id).ToList();
+                    var last = msgs.LastOrDefault();
+                    rows.Add(new ChatThread
+                    {
+                        Kind = "coach", CoachId = coachId, MemberId = memberId, WithId = withId, WithName = NameOf(withId),
+                        WithAvatar = All<Profile>().FirstOrDefault(p => p.Id == withId)?.AvatarPath,
+                        LastBody = last is null ? null : Preview(last.Body, last.AttachmentPath), LastAt = last?.SentAt, LastFromMe = last?.SenderId == uid,
+                        Unread = msgs.Count(m => m.SenderId != uid && m.ReadAt is null),
+                        CanSend = CoachesMember(coachId, memberId) && ActiveMember(memberId)
+                    });
+                }
+
+                // a member's own front desk thread is always there
+                if (All<Member>().Any(m => m.UserId == uid))
+                {
+                    var msgs = All<SupportMessage>().Where(m => m.MemberId == uid).OrderBy(m => m.Id).ToList();
+                    var last = msgs.LastOrDefault();
+                    rows.Add(new ChatThread
+                    {
+                        Kind = "support", MemberId = uid, WithName = "Front desk", LastBody = last is null ? null : Preview(last.Body, last.AttachmentPath), LastAt = last?.SentAt, LastFromMe = last?.SenderId == uid,
+                        Unread = msgs.Count(m => m.SenderId != uid && m.ReadAt is null), CanSend = true,
+                        Status = All<SupportThread>().FirstOrDefault(t => t.MemberId == uid)?.Status ?? "open"
+                    });
+                }
+
+                // the inbox, for staff who may answer
+                if (Has("support:reply"))
+                    foreach (var t in All<SupportThread>().Where(t => t.MemberId != uid).OrderByDescending(t => t.LastMessageAt).Take(500))
+                    {
+                        var msgs = All<SupportMessage>().Where(m => m.MemberId == t.MemberId).OrderBy(m => m.Id).ToList();
+                        var last = msgs.LastOrDefault();
+                        rows.Add(new ChatThread
+                        {
+                            Kind = "support", MemberId = t.MemberId, WithId = t.MemberId, WithName = NameOf(t.MemberId),
+                            WithAvatar = All<Profile>().FirstOrDefault(p => p.Id == t.MemberId)?.AvatarPath,
+                            LastBody = last is null ? null : Preview(last.Body, last.AttachmentPath), LastAt = last?.SentAt, LastFromMe = last is not null && last.SenderId != t.MemberId,
+                            Unread = msgs.Count(m => m.SenderId == t.MemberId && m.ReadAt is null), CanSend = true,
+                            Status = t.Status, ClaimedBy = t.ClaimedBy, ClaimedByName = t.ClaimedBy is null ? null : NameOf(t.ClaimedBy)
+                        });
+                    }
+                return rows.OrderByDescending(r => r.LastAt ?? DateTime.MinValue).ToList();
+            }
+            case "chat_messages":
+            {
+                RequireActive();
+                var kind = S("p_kind"); var member = Opt("p_member"); var coach = Opt("p_coach");
+                long? before = a.TryGetValue("p_before", out var bv) && bv is not null ? Convert.ToInt64(bv) : null;
+                var limit = Math.Clamp(a.TryGetValue("p_limit", out var lv) && lv is not null ? Convert.ToInt32(lv) : 50, 1, 100);
+                if (kind == "coach")
+                {
+                    if (uid != coach && uid != member) throw Err("forbidden");
+                    return All<ChatMessage>().Where(m => m.CoachId == coach && m.MemberId == member && (before is null || m.Id < before)).OrderByDescending(m => m.Id).Take(limit)
+                        .Select(m => new ChatLine { MessageId = m.Id, SenderId = m.SenderId, Body = m.Body, SentAt = m.SentAt, DeliveredAt = m.DeliveredAt, ReadAt = m.ReadAt, AttachmentPath = m.AttachmentPath }).ToList();
+                }
+                if (kind == "support")
+                {
+                    if (uid != member && !Has("support:reply")) throw Err("forbidden");
+                    return All<SupportMessage>().Where(m => m.MemberId == member && (before is null || m.Id < before)).OrderByDescending(m => m.Id).Take(limit)
+                        .Select(m => new ChatLine
+                        {
+                            MessageId = m.Id, SenderId = m.SenderId, Body = m.Body, SentAt = m.SentAt, DeliveredAt = m.DeliveredAt, ReadAt = m.ReadAt, AttachmentPath = m.AttachmentPath,
+                            // a member never learns which staff member answered; staff do
+                            SenderName = uid == member || m.SenderId == member ? null : All<Profile>().FirstOrDefault(p => p.Id == m.SenderId)?.FullName
+                        }).ToList();
+                }
+                throw Err("bad_input");
+            }
+            case "mark_chat_read":
+            {
+                RequireActive();
+                var kind = S("p_kind"); var member = Opt("p_member"); var coach = Opt("p_coach");
+                if (kind == "coach")
+                {
+                    if (uid != coach && uid != member) throw Err("forbidden");
+                    foreach (var m in All<ChatMessage>().Where(m => m.CoachId == coach && m.MemberId == member && m.SenderId != uid && m.ReadAt is null)) { m.DeliveredAt ??= now; m.ReadAt = now; }
+                    ClearChatAlerts(uid, $"c|{coach}|{member}");
+                }
+                else if (kind == "support")
+                {
+                    if (uid != member && !Has("support:reply")) throw Err("forbidden");
+                    foreach (var m in All<SupportMessage>().Where(m => m.MemberId == member && m.ReadAt is null && (uid == member ? m.SenderId != member : m.SenderId == member))) { m.DeliveredAt ??= now; m.ReadAt = now; }
+                    ClearChatAlerts(uid, $"s|{member}");
+                }
+                else throw Err("bad_input");
+                return null;
+            }
+            case "mark_chats_delivered":
+            {
+                RequireActive();
+                foreach (var m in All<ChatMessage>().Where(m => (m.CoachId == uid || m.MemberId == uid) && m.SenderId != uid && m.DeliveredAt is null)) m.DeliveredAt = now;
+                foreach (var m in All<SupportMessage>().Where(m => m.DeliveredAt is null && m.SenderId != uid && (m.MemberId == uid || (Has("support:reply") && m.SenderId == m.MemberId)))) m.DeliveredAt = now;
+                return null;
+            }
+            case "send_support_message":
+            {
+                RequireActive();
+                var member = S("p_member");
+                var body = (a["p_body"] as string)?.Trim() ?? "";
+                var att = Opt("p_attachment");
+                if (body == "" && att is null) throw Err("empty_message");
+                if (body.Length > 2000) throw Err("message_too_long");
+                if (uid == member) { if (!All<Member>().Any(m => m.UserId == uid)) throw Err("forbidden"); }
+                else if (Has("support:reply")) { if (!All<Member>().Any(m => m.UserId == member)) throw Err("not_found"); }
+                else throw Err("forbidden");
+                // the photo has to be in this member's front desk folder
+                if (att is not null && !System.Text.RegularExpressions.Regex.IsMatch(att, $"^support/{member}/{FilePart}$")) throw Err("forbidden");
+
+                var thread = All<SupportThread>().FirstOrDefault(t => t.MemberId == member) ?? Add(new SupportThread { MemberId = member });
+                var msg = Add(new SupportMessage { MemberId = member, SenderId = uid, Body = body, SentAt = now, AttachmentPath = att });
+                thread.LastMessageAt = now;
+                var shown = Preview(body, att) ?? "";
+                var key = $"s|{member}"; var preview = shown.Length > 80 ? shown[..80] : shown;
+                if (uid == member)
+                {
+                    thread.Status = "open";   // writing again reopens it
+                    var title = $"New message from {All<Profile>().First(p => p.Id == uid).FullName}";
+                    if (thread.ClaimedBy is { } taker && All<Profile>().Any(p => p.Id == taker && p.IsActive)) NotifyChat(taker, title, preview, key);
+                    else foreach (var id in All<UserRole>().Where(u => RolesOf(u.UserId).Any(r => r is "admin" or "employee")).Select(u => u.UserId).Distinct().ToList())
+                        if (All<Profile>().Any(p => p.Id == id && p.IsActive)) NotifyChat(id, title, preview, key);
+                }
+                else NotifyChat(member, "Message from the front desk", preview, key);
+                return (long)msg.Id;
+            }
+            case "claim_support_thread":
+            {
+                Require("support:reply");
+                var thread = All<SupportThread>().FirstOrDefault(t => t.MemberId == S("p_member")) ?? throw Err("not_found");
+                if (B("p_claim"))
+                {
+                    if (thread.ClaimedBy is not null && thread.ClaimedBy != uid && All<Profile>().Any(p => p.Id == thread.ClaimedBy && p.IsActive)) throw Err("already_processed");
+                    thread.ClaimedBy = uid;
+                }
+                else
+                {
+                    if (thread.ClaimedBy is not null && thread.ClaimedBy != uid && !RolesOf(uid).Contains("admin") && All<Profile>().Any(p => p.Id == thread.ClaimedBy && p.IsActive)) throw Err("forbidden");
+                    thread.ClaimedBy = null;
+                }
+                return null;
+            }
+            case "set_support_status":
+            {
+                Require("support:reply");
+                (All<SupportThread>().FirstOrDefault(t => t.MemberId == S("p_member")) ?? throw Err("not_found")).Status = B("p_open") ? "open" : "closed";
+                return null;
+            }
+            case "chat_search":
+            {
+                RequireActive();
+                var q = ((a.TryGetValue("p_query", out var qv) ? qv as string : null) ?? "").Trim();
+                var hits = new List<ChatSearchHit>();
+                if (q.Length < 2) return hits;
+                bool Has_(string? s) => s?.Contains(q, StringComparison.OrdinalIgnoreCase) == true;   // % and _ are plain characters here, like in the database
+                foreach (var t in (List<ChatThread>)Call("chat_threads", new())!)
+                {
+                    var found = t.IsSupport
+                        ? All<SupportMessage>().Where(m => m.MemberId == t.MemberId && Has_(m.Body)).OrderByDescending(m => m.SentAt).Select(m => (m.Body, m.SentAt)).FirstOrDefault()
+                        : All<ChatMessage>().Where(m => m.CoachId == t.CoachId && m.MemberId == t.MemberId && Has_(m.Body)).OrderByDescending(m => m.SentAt).Select(m => (m.Body, m.SentAt)).FirstOrDefault();
+                    if (found.Body is null && !Has_(t.WithName)) continue;
+                    hits.Add(new ChatSearchHit
+                    {
+                        Kind = t.Kind, CoachId = t.CoachId, MemberId = t.MemberId, WithId = t.WithId, WithName = t.WithName,
+                        Snippet = found.Body ?? t.LastBody, SentAt = found.Body is null ? t.LastAt : found.SentAt
+                    });
+                }
+                return hits.OrderByDescending(h => h.SentAt ?? DateTime.MinValue).Take(30).ToList();
+            }
+            case "set_my_avatar":
+            {
+                var path = Opt("p_path");
+                if (path is not null && !path.StartsWith(uid + "/")) throw Err("forbidden");
+                (All<Profile>().FirstOrDefault(x => x.Id == uid) ?? throw Err("not_found")).AvatarPath = path;
+                return null;
+            }
+            case "touch_last_seen": return null;   // the demo has no one to show it to
             case "mark_password_changed":
             {
                 var p = All<Profile>().FirstOrDefault(x => x.Id == uid);
@@ -805,9 +1117,12 @@ public sealed class DemoGateway : ISupabaseGateway
         Add(new MembershipPackage { Name = "Annual", Description = "A full year, best value for regulars.", Price = 14000, DurationDays = 365 });
 
         var pool = Add(new Amenity { Name = "Pool", Description = "25 m lap pool, open 6:00 to 21:00.", Price = 300, DurationDays = 30 });
-        Add(new Amenity { Name = "Sauna", Description = "Dry sauna next to the locker rooms.", Price = 200, DurationDays = 30 });
+        var sauna = Add(new Amenity { Name = "Sauna", Description = "Dry sauna next to the locker rooms.", Price = 200, DurationDays = 30,
+                                      Availability = "unavailable", StatusReason = "Cleaning", BackAt = DateTime.UtcNow.AddMinutes(90) });
         Add(new Amenity { Name = "Group classes", Description = "Spin, yoga and circuit classes on the studio floor.", Price = 500, DurationDays = 30 });
         Add(new Amenity { Name = "Boxing ring", Description = "Closed for maintenance.", Price = 400, DurationDays = 30, IsActive = false });
+        Add(new AmenityFollow { MemberId = "u-alex", AmenityId = pool.Id });     // Alex saved the pool and the sauna
+        Add(new AmenityFollow { MemberId = "u-alex", AmenityId = sauna.Id });
 
         // Alex: active, 5 days left so the renew prompt shows
         var alexMembership = Add(new UserMembershipPackage { MemberId = "u-alex", MembershipPackageId = monthly.Id, Status = Status.Active, StartsAt = now.AddDays(-25), EndsAt = now.AddDays(5) });
@@ -843,6 +1158,23 @@ public sealed class DemoGateway : ISupabaseGateway
         Add(new TrainingSession { CoachId = "u-coach1", MemberId = "u-alex", Title = "Squat technique", ScheduledStart = At(2, 9), ScheduledEnd = At(2, 10) });
         Add(new TrainingSession { CoachId = "u-coach1", MemberId = "u-alex", Title = "Upper body", ScheduledStart = At(-3, 9), ScheduledEnd = At(-3, 10), Status = Status.Completed });
 
+        // a month of history for the coach's calendar: marks of every kind, a mixed day, a cancelled session and one more upcoming
+        void Past(string member, int days, int hour, string status, string? mark)
+        {
+            var s = Add(new TrainingSession { CoachId = "u-coach1", MemberId = member, Title = "Training session", ScheduledStart = At(days, hour), ScheduledEnd = At(days, hour + 1), Status = status });
+            if (mark is not null) Add(new SessionAttendance { SessionId = s.Id, Status = mark, CheckedInAt = mark is "present" or "late" ? At(days, hour) : null });
+        }
+        Past("u-alex", -1, 9, Status.Completed, "present");
+        Past("u-bea", -2, 17, Status.Completed, "late");
+        Past("u-alex", -5, 9, Status.NoShow, "absent");
+        Past("u-bea", -6, 10, Status.Completed, "excused");
+        Past("u-alex", -8, 9, Status.Completed, "present");        // a mixed day: attended and absent
+        Past("u-bea", -8, 11, Status.NoShow, "absent");
+        Past("u-alex", -12, 9, Status.Cancelled, null);
+        Past("u-alex", -20, 9, Status.Completed, "present");
+        Past("u-bea", -30, 9, Status.Completed, "present");
+        Add(new TrainingSession { CoachId = "u-coach1", MemberId = "u-bea", Title = "Mobility", ScheduledStart = At(5, 9), ScheduledEnd = At(5, 10) });
+
         Add(new UserNotification { UserId = "u-alex", Type = "payment", Title = "Payment approved", CreatedAt = now.AddDays(-25), ReadAt = now.AddDays(-25) });
         Add(new UserNotification { UserId = "u-alex", Type = "membership", Title = "Membership expires in 5 days", Body = "Renew to keep your access.", CreatedAt = now.AddHours(-6) });
         Add(new UserNotification { UserId = "u-coach1", Type = "time_request", Title = "New time request", CreatedAt = now.AddHours(-1) });
@@ -855,9 +1187,9 @@ public sealed class DemoGateway : ISupabaseGateway
         Add(new ShiftPost { CoachId = "u-coach1", Start = At(3, 14), End = At(3, 20) });
         Add(new ShiftPost { CoachId = "u-coach2", Start = At(1, 14), End = At(1, 22), Note = "Heavy bags and pad work" });
 
-        Add(new ChatMessage { CoachId = "u-coach1", MemberId = "u-alex", SenderId = "u-alex", Body = "Hi Lena, can we work on my squat depth this week?", SentAt = now.AddHours(-26) });
+        Add(new ChatMessage { CoachId = "u-coach1", MemberId = "u-alex", SenderId = "u-alex", Body = "Hi Lena, can we work on my squat depth this week?", SentAt = now.AddHours(-26), DeliveredAt = now.AddHours(-25.5), ReadAt = now.AddHours(-25.5) });
         Add(new ChatMessage { CoachId = "u-coach1", MemberId = "u-alex", SenderId = "u-coach1", Body = "Sure. Bring a flat-soled pair of shoes and we'll film it from the side.", SentAt = now.AddHours(-25) });
-        Add(new ChatMessage { CoachId = "u-coach1", MemberId = "u-alex", SenderId = "u-alex", Body = "Perfect, see you on the session.", SentAt = now.AddHours(-24) });
+        Add(new ChatMessage { CoachId = "u-coach1", MemberId = "u-alex", SenderId = "u-alex", Body = "Perfect, see you on the session.", SentAt = now.AddHours(-24), DeliveredAt = now.AddHours(-23), ReadAt = now.AddHours(-23) });
 
         Add(new AuditEntry { ActorId = "u-emp", Action = "payment.verify", Entity = "payments", EntityId = "5", CreatedAt = now.AddDays(-3) });
         Add(new AuditEntry { ActorId = "u-admin", Action = "role.assign", Entity = "user_roles", EntityId = "u-coach2", CreatedAt = now.AddDays(-8) });

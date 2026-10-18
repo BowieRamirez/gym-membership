@@ -5,40 +5,22 @@
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
-            x:Class="GymMembership.App.Views.AmenitiesPage" x:DataType="vm:AmenitiesViewModel" Title="Amenities">
+            x:Class="GymMembership.App.Views.AmenitiesPage" x:DataType="vm:AmenityBoardViewModel" Title="Amenities">
 
     <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='20,16,20,0'}" MaximumWidthRequest="920">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
-            <Label Text="Buy an amenity with the same QR payment as a package. Once it is verified, log each visit so staff can confirm it." Style="{StaticResource Muted}" />
+            <Label Text="What is open right now." Style="{StaticResource Muted}" />
+            <Label Text="Tap Notify me on an amenity to get an alert when it becomes available or unavailable." Style="{StaticResource Muted}" IsVisible="{Binding CanFollow}" />
             <c:Banner Message="{Binding ErrorMessage}" />
-            <c:Banner Kind="notice" Message="{Binding Notice}" />
         </VerticalStackLayout>
 
-        <CollectionView Grid.Row="1" ItemsSource="{Binding Items}">
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Cards}">
             <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
-            <CollectionView.EmptyView><Label Text="No amenities are available." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
+            <CollectionView.EmptyView><Label Text="No amenities are listed yet." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
             <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="svc:AmenityRow">
-                    <Border Style="{StaticResource Panel}">
-                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12">
-                            <VerticalStackLayout Spacing="4">
-                                <Label Text="{Binding Amenity.Name}" Style="{StaticResource Heading}" />
-                                <Label Text="{Binding Amenity.Description}" Style="{StaticResource Muted}" />
-                                <Label Text="{Binding Amenity.Price, StringFormat='₱{0:N2}'}" Style="{StaticResource Caption}" />
-                                <Label Style="{StaticResource Caption}" IsVisible="{Binding IsActive}"
-                                       Text="{Binding ExpiresAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM yyyy', StringFormat='Yours until {0}'}" />
-                                <Label Style="{StaticResource Caption}" IsVisible="{Binding IsPending}" Text="Payment started. Finish it on My membership." />
-                            </VerticalStackLayout>
-                            <Button Text="Buy" Style="{StaticResource CardButton}" VerticalOptions="Center"
-                                    IsVisible="{Binding CanBuy}"
-                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:AmenitiesViewModel}}, Path=AvailCommand}"
-                                    CommandParameter="{Binding .}" />
-                            <Button Text="Log a visit" Style="{StaticResource CardOutlineButton}" VerticalOptions="Center"
-                                    IsVisible="{Binding IsActive}"
-                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:AmenitiesViewModel}}, Path=LogUsageCommand}"
-                                    CommandParameter="{Binding .}" />
-                        </Grid>
-                    </Border>
+                <DataTemplate x:DataType="svc:AmenityCard">
+                    <!-- the button text is empty for coaches, which hides the button -->
+                    <c:AmenityCardView ActionText="{Binding FollowText}" ActionClicked="OnFollow" />
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>

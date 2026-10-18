@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:c="clr-namespace:GymMembership.App.Controls"
+             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+             x:Class="GymMembership.App.Controls.ThreadRowView" x:DataType="vm:ThreadItem">
+
+    <!-- One conversation in the list: picture, name, last message, time and an unread count. The open one sits on chalk. -->
+    <Border Style="{StaticResource Panel}" Padding="12,10">
+        <Border.Triggers>
+            <DataTrigger TargetType="Border" Binding="{Binding IsOpen}" Value="True">
+                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChalkLight}, Dark={StaticResource ChalkDark}}" />
+                <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+            </DataTrigger>
+        </Border.Triggers>
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+            <Grid VerticalOptions="Center">
+                <c:Avatar Letters="{Binding Letters}" Url="{Binding AvatarUrl}" Diameter="44" />
+                <BoxView IsVisible="{Binding IsOnline}" WidthRequest="12" HeightRequest="12" CornerRadius="6" HorizontalOptions="End" VerticalOptions="End"
+                         Color="{AppThemeBinding Light={StaticResource PlateGreenLight}, Dark={StaticResource PlateGreenDark}}" />
+            </Grid>
+            <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                <Label Text="{Binding Thread.WithName}" FontFamily="BarlowSemiBold" LineBreakMode="TailTruncation" />
+                <Label Text="{Binding Thread.Preview}" Style="{StaticResource Muted}" LineBreakMode="TailTruncation" MaxLines="1" />
+                <Label Text="Online" Style="{StaticResource Caption}" IsVisible="{Binding IsOnline}" />
+            </VerticalStackLayout>
+            <VerticalStackLayout Grid.Column="2" Spacing="4" VerticalOptions="Center" HorizontalOptions="End">
+                <Label Text="{Binding Thread.LastAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM'}" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                <Border IsVisible="{Binding Thread.HasUnread}" HorizontalOptions="End" MinimumWidthRequest="20" HeightRequest="20" Padding="6,0" StrokeThickness="0"
+                        StrokeShape="RoundRectangle 10" BackgroundColor="{AppThemeBinding Light={StaticResource PlateRedLight}, Dark={StaticResource PlateRedDark}}"
+                        SemanticProperties.Description="{Binding Thread.UnreadText, StringFormat='{0} unread'}">
+                    <Label Text="{Binding Thread.UnreadText}" FontSize="12" FontFamily="BarlowSemiBold" HorizontalOptions="Center" VerticalOptions="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" />
+                </Border>
+            </VerticalStackLayout>
+        </Grid>
+    </Border>
+</ContentView>

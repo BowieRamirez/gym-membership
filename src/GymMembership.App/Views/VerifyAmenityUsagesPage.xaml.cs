@@ -9,4 +9,7 @@ public partial class VerifyAmenityUsagesPage : BasePage
 		InitializeComponent();
 		BindingContext = vm;
 	}
+
+	void OnApprove(object? sender, EventArgs e) => Row<VerifyAmenityUsagesViewModel>(sender, v => v.ApproveCommand);
+	void OnReject(object? sender, EventArgs e) => Row<VerifyAmenityUsagesViewModel>(sender, v => v.RejectCommand);
 }

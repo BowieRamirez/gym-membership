@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.AmenityStatusPage" x:DataType="vm:AmenityStatusViewModel" Title="Amenity Status">
+
+    <ScrollView MaximumWidthRequest="920">
+        <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='20,16,20,24'}" Spacing="12">
+            <Label Text="Mark an amenity available, in use or unavailable. Members who saved an amenity are alerted when it becomes available or unavailable, and you see who." Style="{StaticResource Muted}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+            <!-- the editor for the amenity you chose -->
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding IsEditing}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="{Binding Editing.Amenity.Name, StringFormat='Change {0}'}" Style="{StaticResource Heading}" />
+                    <Border Style="{StaticResource Field}">
+                        <Picker ItemsSource="{Binding Choices}" ItemDisplayBinding="{Binding Label}" SelectedItem="{Binding Choice}" SemanticProperties.Description="Status" />
+                    </Border>
+
+                    <VerticalStackLayout Spacing="10" IsVisible="{Binding ShowDetail}">
+                        <Label Text="Reason (shown to members)" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}">
+                            <Entry Text="{Binding Reason}" MaxLength="200" Placeholder="For example maintenance, cleaning, closed" SemanticProperties.Description="Reason" />
+                        </Border>
+                        <FlexLayout Wrap="Wrap">
+                            <Button Text="Maintenance" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnMaintenance" />
+                            <Button Text="Cleaning" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnCleaning" />
+                            <Button Text="Closed" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnClosed" />
+                        </FlexLayout>
+                        <HorizontalStackLayout Spacing="10">
+                            <Switch IsToggled="{Binding HasBackAt}" SemanticProperties.Description="I know when it will be back" />
+                            <Label Text="I know when it will be back" VerticalOptions="Center" />
+                        </HorizontalStackLayout>
+                        <HorizontalStackLayout Spacing="10" IsVisible="{Binding HasBackAt}">
+                            <DatePicker Date="{Binding BackDate}" SemanticProperties.Description="Return date" />
+                            <TimePicker Time="{Binding BackTime}" SemanticProperties.Description="Return time" />
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
+
+                    <HorizontalStackLayout Spacing="10">
+                        <Button Text="Save status" Command="{Binding SaveCommand}" />
+                        <Button Text="Cancel" Style="{StaticResource OutlineButton}" Command="{Binding CancelCommand}" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <CollectionView ItemsSource="{Binding Cards}" HeightRequest="{OnIdiom Phone=900, Default=700}">
+                <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
+                <CollectionView.EmptyView><Label Text="No amenities are listed yet." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="svc:AmenityCard">
+                        <c:AmenityCardView ActionText="Change status" ActionClicked="OnChange" />
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </VerticalStackLayout>
+    </ScrollView>
+</v:BasePage>

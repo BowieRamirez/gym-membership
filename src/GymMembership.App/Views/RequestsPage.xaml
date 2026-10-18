@@ -15,16 +15,15 @@
             <!-- Compose -->
             <Border Style="{StaticResource Panel}" IsVisible="{Binding CanCompose}">
                 <VerticalStackLayout Spacing="12">
-                    <Label Style="{StaticResource Heading}">
-                        <Label.Triggers>
-                            <DataTrigger TargetType="Label" Binding="{Binding IsCoach}" Value="True">
-                                <Setter Property="Text" Value="Offer an open slot" />
-                            </DataTrigger>
-                            <DataTrigger TargetType="Label" Binding="{Binding IsCoach}" Value="False">
-                                <Setter Property="Text" Value="Request a session" />
-                            </DataTrigger>
-                        </Label.Triggers>
-                    </Label>
+                    <Label Text="{Binding ComposeTitle}" Style="{StaticResource Heading}" />
+                    <VerticalStackLayout Spacing="4" IsVisible="{Binding ShowMemberPicker}">
+                        <Label Text="Member" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}">
+                            <Picker ItemsSource="{Binding Members}" ItemDisplayBinding="{Binding Name}" SelectedItem="{Binding SelectedMember}"
+                                    Title="Choose a member" AutomationId="RequestMemberPicker" SemanticProperties.Description="Member to invite" />
+                        </Border>
+                        <Label Text="{Binding MemberPickerHint}" Style="{StaticResource Caption}" />
+                    </VerticalStackLayout>
 
                     <VerticalStackLayout Spacing="4" IsVisible="{Binding IsCoach, Converter={StaticResource Not}}">
                         <Label Text="Coach" Style="{StaticResource Caption}" />
@@ -56,17 +55,19 @@
                         <Border Style="{StaticResource Field}"><Entry Text="{Binding Message}" /></Border>
                     </VerticalStackLayout>
 
-                    <Button Style="{StaticResource SmallButton}" HorizontalOptions="Start" Command="{Binding SubmitCommand}">
-                        <Button.Triggers>
-                            <DataTrigger TargetType="Button" Binding="{Binding IsCoach}" Value="True"><Setter Property="Text" Value="Post slot" /></DataTrigger>
-                            <DataTrigger TargetType="Button" Binding="{Binding IsCoach}" Value="False"><Setter Property="Text" Value="Send request" /></DataTrigger>
-                        </Button.Triggers>
-                    </Button>
+                    <Label Text="You already have an active session together. Open Sessions to reschedule or cancel it. Finish, cancel or mark that session no-show before requesting another. Refresh requests to check for updates."
+                           Style="{StaticResource Muted}" IsVisible="{Binding ShowActiveSession}" AutomationId="ActiveSessionRequestHint" />
+                    <Label Text="You already have a pending request to this coach. Wait for a reply or cancel it below before sending another. Refresh requests to check for a reply."
+                           Style="{StaticResource Muted}" IsVisible="{Binding ShowPendingRequest}" AutomationId="PendingSessionRequestHint" />
+                    <Button Text="{Binding SubmitText}" Style="{StaticResource SmallButton}" HorizontalOptions="Start"
+                            Command="{Binding SubmitCommand}" AutomationId="SubmitSessionRequest" />
                 </VerticalStackLayout>
             </Border>
             <Label Text="Hire a coach first, then you can request sessions here." Style="{StaticResource Muted}"
                    IsVisible="{Binding CanCompose, Converter={StaticResource Not}}" />
 
+            <Button Text="Refresh requests" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start"
+                    Command="{Binding LoadCommand}" IsVisible="{Binding UseWindowsRequestForm}" AutomationId="RefreshSessionRequests" />
             <Label Text="Waiting for a reply" Style="{StaticResource Heading}" Margin="0,8,0,0" />
             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Requests}" Spacing="10">
                 <BindableLayout.EmptyView><Label Text="Nothing pending." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
@@ -85,11 +86,11 @@
                                 <Label Text="{Binding Request.Message}" Style="{StaticResource Muted}" IsVisible="{Binding Request.Message, Converter={StaticResource HasText}}" />
                                 <FlexLayout Wrap="Wrap">
                                     <Button Text="Approve" Style="{StaticResource SmallButton}" Margin="0,0,8,8" IsVisible="{Binding CanRespond}"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RequestsViewModel}}, Path=ApproveCommand}" CommandParameter="{Binding .}" />
+                                            Clicked="OnApprove" />
                                     <Button Text="Reject" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanRespond}"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RequestsViewModel}}, Path=RejectCommand}" CommandParameter="{Binding .}" />
+                                            Clicked="OnReject" />
                                     <Button Text="Cancel request" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanCancel}"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RequestsViewModel}}, Path=CancelCommand}" CommandParameter="{Binding .}" />
+                                            Clicked="OnCancel" />
                                 </FlexLayout>
                             </VerticalStackLayout>
                         </Border>
