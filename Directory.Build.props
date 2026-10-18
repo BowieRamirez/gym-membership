@@ -6,7 +6,7 @@
          project version, and NuGet rejects a value like 0.1.0a.
        The version users see on a release is ApplicationDisplayVersion, which the workflows set from the git tag. -->
   <PropertyGroup>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
   </PropertyGroup>
 
 </Project>
