@@ -20,6 +20,7 @@ public partial class MemberShell : Shell
 				var title = item.Title;
 				((ShellContent)item.Items[0].Items[0]).ContentTemplate = new DataTemplate(() => new LockedPage(title, access.PaymentPending));
 			}
+		Controls.PhoneNavigation.Attach(this, coach: false, services: sp, access: access);
 		Navigated += async (_, _) => await RecheckAsync();
 	}
 

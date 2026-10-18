@@ -32,6 +32,6 @@
             </Border>
         </Grid>
 
-        <Button Grid.Column="3" Text="Sign out" IsVisible="{OnPlatform WinUI=False, Default=True}" Style="{StaticResource SmallOutlineButton}" Command="{Binding SignOutCommand}" VerticalOptions="Center" />
+        <Button x:Name="SignOutButton" Grid.Column="3" Text="Sign out" IsVisible="{OnPlatform WinUI=False, Default=True}" Style="{StaticResource SmallOutlineButton}" Command="{Binding SignOutCommand}" VerticalOptions="Center" />
     </Grid>
 </ContentView>

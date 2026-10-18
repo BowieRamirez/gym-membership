@@ -25,6 +25,9 @@ public partial class HeaderBar : ContentView
 		_sp = sp;
 		var vm = sp.GetRequiredService<HeaderViewModel>();
 		BindingContext = vm;
+#if ANDROID
+		SetupAndroidAccountMenu(shell);
+#endif
 		void Update() { TitleLabel.Text = shell.CurrentPage?.Title; _ = vm.RefreshAsync(); }
 		shell.Navigated += (_, _) => Update();
 		shell.Loaded += (_, _) => Update();

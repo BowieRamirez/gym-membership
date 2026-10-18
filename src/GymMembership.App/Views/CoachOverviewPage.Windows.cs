@@ -1,4 +1,4 @@
-#if WINDOWS
+#if WINDOWS || ANDROID
 using GymMembership.Core.ViewModels;
 
 namespace GymMembership.App.Views;
@@ -9,7 +9,11 @@ public sealed class CoachOverviewPage : BasePage
     {
         Title = "Overview";
         BindingContext = vm;
+#if ANDROID
+        var body = new VerticalStackLayout { Padding = new Thickness(16, 20, 16, 24), Spacing = 16 };
+#else
         var body = new VerticalStackLayout { Padding = new Thickness(24, 20, 24, 32), Spacing = 16 };
+#endif
         body.Children.Add(Text("Coach overview", "Title", "CoachOverviewTitle"));
         body.Children.Add(Text("Your coaching day at a glance. A read-only summary of your sessions, trainees and activity.", "Muted"));
         var status = new VerticalStackLayout { Spacing = 8 };

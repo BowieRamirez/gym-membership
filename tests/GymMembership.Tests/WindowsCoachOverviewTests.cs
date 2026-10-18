@@ -3,7 +3,7 @@ using System.Xml.Linq;
 public class WindowsCoachOverviewTests
 {
     [Fact]
-    public void Coach_overview_is_a_Windows_only_first_page_without_changing_Android_navigation()
+    public void Windows_coach_overview_remains_the_first_sidebar_page()
     {
         var app = TestPaths.AppFolder();
         var shell = File.ReadAllText(Path.Combine(app, "CoachShell.xaml.cs")).Replace("\r\n", "\n");
@@ -22,7 +22,7 @@ public class WindowsCoachOverviewTests
     public void Summary_page_has_no_quick_access_or_navigation_actions()
     {
         var page = File.ReadAllText(Path.Combine(TestPaths.AppFolder(), "Views", "CoachOverviewPage.Windows.cs"));
-        Assert.StartsWith("#if WINDOWS", page);
+        Assert.StartsWith("#if WINDOWS || ANDROID", page);
         Assert.EndsWith("#endif", page.TrimEnd());
         Assert.Contains("Coach overview", page);
         Assert.Contains("CoachOverviewRefresh", page);

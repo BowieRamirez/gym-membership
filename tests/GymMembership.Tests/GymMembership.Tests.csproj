@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\GymMembership.Core\GymMembership.Core.csproj" />
+    <Compile Include="..\..\src\GymMembership.App\Controls\PhonePageTemplates.cs" Link="App\PhonePageTemplates.cs" />
   </ItemGroup>
 
 </Project>

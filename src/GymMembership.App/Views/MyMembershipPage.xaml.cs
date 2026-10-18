@@ -26,7 +26,7 @@ public partial class MyMembershipPage : BasePage
         }
         finally { vm.DialogOpen = false; }
     }
-    async void OnChoosePackage(object? sender, EventArgs e) => await Shell.Current.GoToAsync("//packages");
+    async void OnChoosePackage(object? sender, EventArgs e) => await Controls.PhoneNavigation.GoToAsync(Shell.Current, "//packages");
     async void OnRequestRefund(object? sender, EventArgs e)
     {
         if (BindingContext is not MyMembershipViewModel vm || vm.IsBusy || vm.DialogOpen
