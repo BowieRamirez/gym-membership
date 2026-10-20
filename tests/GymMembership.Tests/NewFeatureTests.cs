@@ -80,7 +80,7 @@ public class NewFeatureTests
     }
 
     [Fact]
-    public async Task Members_cannot_manage_or_read_discounts_and_admins_can_delete_them()
+    public async Task Members_cannot_manage_or_read_discounts_and_admins_can_archive_them()
     {
         var gw = await As("member@demo.io");
         Assert.Empty(await gw.ListAsync<Discount>());
@@ -93,19 +93,26 @@ public class NewFeatureTests
 
         var rows = (await admin.DiscountsAsync()).Value!;
         Assert.Equal("expired", rows.First(r => r.Discount.Code == "NEWYEAR20").State);
-        Assert.True((await admin.DeleteDiscountAsync(rows.First(r => r.Discount.Code == "NEWYEAR20").Discount)).Ok);
-        Assert.DoesNotContain((await admin.DiscountsAsync()).Value!, r => r.Discount.Code == "NEWYEAR20");
+        var expired = rows.First(r => r.Discount.Code == "NEWYEAR20").Discount;
+        Assert.Equal("record_archived", (await admin.DeleteDiscountAsync(expired)).Message);
+        var live = rows.First(r => r.State == "active").Discount;
+        Assert.True((await admin.DeleteDiscountAsync(live)).Ok);
+        Assert.False((await admin.DiscountsAsync()).Value!.Single(r => r.Discount.Id == live.Id).Discount.IsActive);
+        Assert.Contains((await new ArchiveService(gw).ListAsync(new("code"), 0)).Value!.Rows, r => r.RecordId == live.Id.ToString());
     }
 
     // ---------- plans: edit and delete ----------
     [Fact]
-    public async Task A_plan_in_use_cannot_be_deleted_but_an_unused_one_can()
+    public async Task Used_and_unused_plans_can_be_archived_without_losing_history()
     {
         var gw = await As("admin@demo.io");
         var admin = new AdminService(gw);
         var plans = (await admin.AllPackagesAsync()).Value!;
 
-        Assert.Equal(AppErrorKind.Conflict, (await admin.DeletePackageAsync(plans.First(p => p.Name == "Monthly"))).Error); // Alex has it
+        var history = (await gw.ListAsync<UserMembershipPackage>()).Count;
+        Assert.True((await admin.DeletePackageAsync(plans.First(p => p.Name == "Monthly"))).Ok);
+        Assert.Equal(history, (await gw.ListAsync<UserMembershipPackage>()).Count);
+        Assert.False((await admin.AllPackagesAsync()).Value!.Single(p => p.Name == "Monthly").IsActive);
         Assert.True((await admin.DeletePackageAsync(plans.First(p => p.Name == "Annual"))).Ok);
 
         var quarterly = plans.First(p => p.Name == "Quarterly");

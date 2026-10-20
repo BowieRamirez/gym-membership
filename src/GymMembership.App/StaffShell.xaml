@@ -26,7 +26,7 @@
     <!-- Admin only: ClassId="admin" items are removed for the front-desk role -->
     <FlyoutItem Title="Users and roles" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:UsersPage}" /></FlyoutItem>
     <FlyoutItem Title="Packages and amenities" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:CatalogAdminPage}" /></FlyoutItem>
-    <FlyoutItem Title="Discounts" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:DiscountsPage}" /></FlyoutItem>
+    <FlyoutItem Title="Discounts &amp; Archive" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:DiscountsPage}" /></FlyoutItem>
     <FlyoutItem Title="Cancellations &amp; refunds" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:RefundsPage}" /></FlyoutItem>
     <FlyoutItem Title="Void a payment" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:VoidPaymentsPage}" /></FlyoutItem>
     <FlyoutItem Title="Gym settings" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:GymSettingsPage}" /></FlyoutItem>

@@ -146,6 +146,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 case "reset-password":
                 {
                     var p = All<Profile>().FirstOrDefault(x => x.Id == S("user_id")) ?? throw Err("not_found");
+                    if (!p.IsActive) throw Err("record_archived");
                     if (S("password").Length < 6) throw Err("bad_input");
                     _passwords[p.Id] = S("password"); p.MustChangePassword = true;
                     Notify(p.Id, "system", "Your password was reset. Sign in with the new one.");
@@ -243,6 +244,12 @@ public sealed partial class DemoGateway : ISupabaseGateway
         var added = Add(row);
         switch (added)
         {
+            case MembershipPackage { IsActive: false } p: StampArchive("plan", p.Id.ToString(), "Created inactive"); break;
+            case Amenity { IsActive: false } a: StampArchive("amenity", a.Id.ToString(), "Created inactive"); break;
+            case Discount { IsActive: false } d: StampArchive("code", d.Id.ToString(), "Created inactive"); break;
+        }
+        switch (added)
+        {
             case ShiftPost s:
                 s.Status = Status.Scheduled;
                 foreach (var h in All<CoachHire>().Where(h => h.CoachId == s.CoachId && h.Status == Status.Active)) Notify(h.MemberId, "system", "Your coach posted a shift");
@@ -268,6 +275,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
             var index = list.FindIndex(r => Equals(pk.GetValue(r), key));
             if (index < 0 || !Allowed(list[index])) throw Err("not_found");
 
+            if (row is MembershipPackage or Amenity && !Has("catalog:manage") || row is Discount && !Has("discounts:manage")) throw Err(Rls);
+            if (row is MembershipPackage or Amenity or Discount) GuardCatalogEdit(list[index], row);
             switch (row, list[index])
             {
                 case (MembershipPackage, _): if (!Has("catalog:manage")) throw Err(Rls); list[index] = Clone(row); break;
@@ -284,6 +293,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     break;
                 case (Coach c, Coach old):           // bio, specialty, rate, availability
                     if (old.UserId != Uid && !RolesOf(Uid).Contains("admin")) throw Err(Rls);
+                    if (!All<Profile>().Any(p => p.Id == old.UserId && p.IsActive)) throw Err("record_archived");
                     old.Bio = c.Bio; old.Specialty = c.Specialty; old.HourlyRate = c.HourlyRate; old.IsAvailable = c.IsAvailable;
                     break;
                 case (UserSettings s, UserSettings old):
@@ -319,13 +329,16 @@ public sealed partial class DemoGateway : ISupabaseGateway
             {
                 Require("catalog:manage");
                 var filter = where.Compile();
-                foreach (var a in All<Amenity>().Where(a => filter((T)(object)a))) a.ImagePath = (string?)(object?)value;
+                var amenities = All<Amenity>().Where(a => filter((T)(object)a)).ToList();
+                if (amenities.Any(a => !a.IsActive)) throw Err("record_archived");
+                foreach (var a in amenities) a.ImagePath = (string?)(object?)value;
                 return Task.CompletedTask;
             }
             catch (Exception ex) { return Task.FromException(ex); }
         }
         if (typeof(T) != typeof(UserNotification) || column.Body is not MemberExpression { Member.Name: nameof(UserNotification.ReadAt) })
             return Task.FromException(new NotSupportedException("unsupported filtered column write"));
+        if (!IsActiveUser) return Task.FromException(Err(Rls));
         var matches = where.Compile();
         foreach (var n in All<UserNotification>().Where(n => n.UserId == Uid && matches((T)(object)n)).ToList())
             n.ReadAt = (DateTime?)(object?)value;
@@ -338,21 +351,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
         try
         {
             RequireActive();
-            const string fk = "violates foreign key constraint";   // what the database says when something still points at the row
             switch (row)
             {
-                case MembershipPackage p:
-                    if (!Has("catalog:manage")) throw Err(Rls);
-                    if (All<UserMembershipPackage>().Any(m => m.MembershipPackageId == p.Id)) throw Err($"update or delete on membership_packages {fk}");
-                    break;
-                case Amenity a:
-                    if (!Has("catalog:manage")) throw Err(Rls);
-                    if (All<UserAmenity>().Any(x => x.AmenityId == a.Id)) throw Err($"update or delete on amenities {fk}");
-                    break;
-                case Discount d:
-                    if (!Has("discounts:manage")) throw Err(Rls);
-                    if (All<Payment>().Any(x => x.DiscountId == d.Id)) throw Err($"update or delete on discounts {fk}");
-                    break;
+                case MembershipPackage or Amenity or Discount: throw Err(Rls);
                 case ShiftPost s when s.CoachId == Uid: break;
                 case UserNotification n when n.UserId == Uid: break;
                 default: throw Err(Rls);
@@ -515,6 +516,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
 
         switch (fn)
         {
+            case "archive_records": return ArchiveRecords(a);
+            case "archive_catalog_record": ArchiveCatalog(S("p_type"), I("p_id"), S("p_reason")); return null;
+            case "restore_archived_record": RestoreArchived(S("p_type"), S("p_id")); return null;
             case "avail_membership":
             {
                 RequireActive();
@@ -818,6 +822,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 Require("roles:manage");
                 var role = All<Role>().FirstOrDefault(r => r.Name == S("p_role")) ?? throw Err("bad_input");
                 if (All<Profile>().All(p => p.Id != S("p_user"))) throw Err("not_found");
+                if (!All<Profile>().Any(p => p.Id == S("p_user") && p.IsActive)) throw Err("record_archived");
                 if (!All<UserRole>().Any(u => u.UserId == S("p_user") && u.RoleId == role.RoleId)) Add(new UserRole { UserId = S("p_user"), RoleId = role.RoleId });
                 if (role.Name == "coach" && All<Coach>().All(c => c.UserId != S("p_user"))) Add(new Coach { UserId = S("p_user") });
                 if (role.Name == "member" && All<Member>().All(m => m.UserId != S("p_user"))) Add(new Member { UserId = S("p_user") });
@@ -828,16 +833,28 @@ public sealed partial class DemoGateway : ISupabaseGateway
             {
                 Require("roles:manage");
                 if (S("p_user") == uid && S("p_role") == "admin") throw Err("forbidden");
+                if (!All<Profile>().Any(p => p.Id == S("p_user") && p.IsActive)) throw Err("record_archived");
                 var role = All<Role>().First(r => r.Name == S("p_role"));
                 Table(typeof(UserRole)).RemoveAll(u => ((UserRole)u).UserId == S("p_user") && ((UserRole)u).RoleId == role.RoleId);
                 Audit("role.revoke", "user_roles", S("p_user"));
                 return null;
             }
+            case "archive_account":
+                ArchiveAccount(S("p_user"), Opt("p_reason") ?? "");
+                return null;
+            case "restore_account":
+                RestoreAccount(S("p_user"));
+                return null;
             case "set_user_active":
             {
                 Require("users:manage");
                 if (S("p_user") == uid) throw Err("forbidden");
-                (All<Profile>().FirstOrDefault(p => p.Id == S("p_user")) ?? throw Err("not_found")).IsActive = B("p_active");
+                var profile = All<Profile>().FirstOrDefault(p => p.Id == S("p_user")) ?? throw Err("not_found");
+                if (profile.DeletedAt is not null) throw Err("account_archived");
+                if (!B("p_active")) CheckAccountRemoval(profile);
+                if (!B("p_active")) StampArchive("account", profile.Id, "Deactivated account");
+                else { RequireArchiveAdmin(); _archiveMetadata.Remove(("account", profile.Id)); }
+                profile.IsActive = B("p_active");
                 Audit(B("p_active") ? "user.activate" : "user.deactivate", "profiles", S("p_user"));
                 return null;
             }
@@ -858,6 +875,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             {
                 Require("amenities:set_status");
                 var amenity = All<Amenity>().FirstOrDefault(x => x.Id == I("p_amenity_id")) ?? throw Err("not_found");
+                if (!amenity.IsActive) throw Err("record_archived");
                 var status = S("p_status");
                 var unavailable = status == "unavailable";
                 var reason = unavailable ? Opt("p_reason") : null;
@@ -1069,9 +1087,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 (All<Profile>().FirstOrDefault(x => x.Id == uid) ?? throw Err("not_found")).AvatarPath = path;
                 return null;
             }
-            case "touch_last_seen": return null;   // the demo has no one to show it to
+            case "touch_last_seen": RequireActive(); return null;   // the demo has no one to show it to
             case "mark_password_changed":
             {
+                RequireActive();
                 var p = All<Profile>().FirstOrDefault(x => x.Id == uid);
                 if (p is not null) p.MustChangePassword = false;
                 return null;

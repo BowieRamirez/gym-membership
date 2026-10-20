@@ -18,7 +18,7 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
 {
     public IReadOnlyList<AdminOverviewCard> Cards { get; } = [
         new("users", "Users and roles"), new("catalog", "Packages and amenities"),
-        new("discounts", "Discounts"), new("refunds", "Cancellations & refunds"),
+        new("discounts", "Discounts & Archive"), new("refunds", "Cancellations & refunds"),
         new("revenue", "Revenue"), new("void", "Void a payment"),
         new("gym", "Gym settings"), new("audit", "Audit log")];
     public Func<DateTimeOffset> Clock { get; set; } = () => DateTimeOffset.UtcNow;

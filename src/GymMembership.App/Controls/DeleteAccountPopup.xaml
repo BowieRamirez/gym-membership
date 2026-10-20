@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<toolkit:Popup xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+               xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+               xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+               xmlns:c="clr-namespace:GymMembership.App.Controls"
+               xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+               x:Class="GymMembership.App.Controls.DeleteAccountPopup" x:DataType="vm:AccountDeletionViewModel"
+               Padding="20" Margin="16" MaximumWidthRequest="440"
+               BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}">
+    <ScrollView MaximumHeightRequest="580">
+        <VerticalStackLayout Spacing="12" WidthRequest="{OnIdiom Phone=280, Default=380}">
+            <Label Text="Delete Account" Style="{StaticResource Heading}" />
+            <Label Text="{Binding User.Username}" FontFamily="BarlowSemiBold" />
+            <Label Text="This disables the account and preserves its history in Archive. No payments are refunded or bookings cancelled automatically." Style="{StaticResource Muted}" />
+            <Label Text="Reason for deletion" Style="{StaticResource Caption}" />
+            <Border Style="{StaticResource Field}">
+                <Editor Text="{Binding Reason}" AutoSize="TextChanges" MinimumHeightRequest="100" MaxLength="500"
+                        SemanticProperties.Description="Reason for deletion, required" AutomationId="DeletionReason">
+                    <Editor.Triggers><DataTrigger TargetType="Editor" Binding="{Binding IsBusy}" Value="True"><Setter Property="IsEnabled" Value="False" /></DataTrigger></Editor.Triggers>
+                </Editor>
+            </Border>
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+            <FlexLayout Wrap="Wrap" JustifyContent="End">
+                <Button Text="No, Cancel" Style="{StaticResource SmallOutlineButton}" Clicked="OnCancel" Margin="0,0,8,8" AutomationId="CancelAccountDeletion">
+                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsBusy}" Value="True"><Setter Property="IsEnabled" Value="False" /></DataTrigger></Button.Triggers>
+                </Button>
+                <Button x:Name="ConfirmButton" Text="Confirm" Style="{StaticResource SmallButton}" Clicked="OnConfirm" IsEnabled="False" Margin="0,0,0,8"
+                        BackgroundColor="{StaticResource PlateRedLight}" TextColor="White" AutomationId="ConfirmAccountDeletion" />
+            </FlexLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</toolkit:Popup>

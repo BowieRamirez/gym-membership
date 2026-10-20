@@ -50,6 +50,8 @@ public static class MauiProgram
 		s.AddSingleton<IRealtimeChat>(sp => sp.GetRequiredService<ISupabaseGateway>() is SupabaseGateway g ? new SupabaseRealtimeChat(g) : NoRealtime.Instance);
 		s.AddSingleton<IDeskHomeService, DeskHomeService>();
 		s.AddSingleton<IAdminService, AdminService>();
+		s.AddSingleton<IAccountArchiveService, AccountArchiveService>();
+		s.AddSingleton<IArchiveService, ArchiveService>();
 		s.AddSingleton<IProfileService, ProfileService>();
 		s.AddSingleton<ISettingsService, SettingsService>();
 

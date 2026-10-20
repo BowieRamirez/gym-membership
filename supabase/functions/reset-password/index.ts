@@ -15,6 +15,11 @@ Deno.serve(async (req) => {
   const password = String(body.password ?? '');
   if (!userId || password.length < 6) return reply({ error: 'bad_input' }, 400);
 
+  const { data: target, error: targetError } = await admin.from('profiles').select('is_active').eq('id', userId).maybeSingle();
+  if (targetError) return reply({ error: 'bad_input' }, 400);
+  if (!target) return reply({ error: 'not_found' }, 404);
+  if (!target.is_active) return reply({ error: 'record_archived' }, 409);
+
   const { error } = await admin.auth.admin.updateUserById(userId, { password });
   if (error) return reply({ error: /not found/i.test(error.message) ? 'not_found' : 'bad_input', detail: error.message }, 400);
 

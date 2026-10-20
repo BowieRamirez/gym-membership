@@ -15,9 +15,9 @@
 
             <Border Style="{StaticResource Panel}" IsVisible="{Binding Deleting, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="10">
-                    <Label Text="{Binding Deleting.Name, StringFormat='Delete “{0}”? This can’t be undone.'}" Style="{StaticResource Heading}" />
+                    <Label Text="{Binding Deleting.Name, StringFormat='Archive “{0}”? History will be retained.'}" Style="{StaticResource Heading}" />
                     <HorizontalStackLayout Spacing="8">
-                        <Button Text="Yes, delete" Style="{StaticResource SmallButton}" Command="{Binding ConfirmDeleteCommand}" />
+                        <Button Text="Yes, archive" Style="{StaticResource SmallButton}" Command="{Binding ConfirmDeleteCommand}" />
                         <Button Text="Keep it" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepPackageCommand}" />
                     </HorizontalStackLayout>
                 </VerticalStackLayout>
@@ -72,9 +72,9 @@
                                 <HorizontalStackLayout Spacing="8">
                                     <Button Text="Edit" Style="{StaticResource SmallButton}"
                                             Clicked="OnEditPackage" />
-                                    <Button Text="Turn on or off" Style="{StaticResource SmallOutlineButton}"
+                                    <Button Text="Deactivate" Style="{StaticResource SmallOutlineButton}"
                                             Clicked="OnTogglePackage" />
-                                    <Button Text="Delete" Style="{StaticResource SmallOutlineButton}"
+                                    <Button Text="Archive" Style="{StaticResource SmallOutlineButton}"
                                             Clicked="OnDeletePackage" />
                                 </HorizontalStackLayout>
                             </VerticalStackLayout>
@@ -122,7 +122,7 @@
                                 <FlexLayout Wrap="Wrap">
                                     <Button Text="Add or replace photo" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnUploadAmenityPhoto"
                                             SemanticProperties.Hint="Choose a JPG, PNG or WebP up to 5 MB for this amenity" />
-                                    <Button Text="Turn on or off" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnToggleAmenity" />
+                                    <Button Text="Deactivate" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnToggleAmenity" />
                                 </FlexLayout>
                             </VerticalStackLayout>
                         </Border>

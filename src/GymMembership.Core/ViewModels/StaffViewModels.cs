@@ -623,7 +623,7 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
 }
 
 // ---------- admin ----------
-public partial class UsersViewModel(IAdminService svc) : LoadableViewModel
+public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? archive = null) : LoadableViewModel
 {
     public ObservableCollection<UserRow> Users { get; } = new();
     public string[] Roles { get; } = ["Member", "Coach", "Employee"];
@@ -636,7 +636,19 @@ public partial class UsersViewModel(IAdminService svc) : LoadableViewModel
 
     public override Task OnAppearingAsync() => LoadAsync();
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.UsersAsync, rows => Fill(Users, rows));
+    [ObservableProperty] private bool canDeleteAccounts;
+
+    public AccountDeletionViewModel? DeletionFor(UserRow user) => CanDeleteAccounts && archive is not null
+        ? new AccountDeletionViewModel(archive, user) : null;
+
+    [RelayCommand]
+    private async Task LoadAsync()
+    {
+        CanDeleteAccounts = false;
+        if (archive is not null)
+            await RunAsync(archive.CanManageAsync, allowed => CanDeleteAccounts = allowed);
+        await RunAsync(svc.UsersAsync, rows => Fill(Users, rows));
+    }
 
     [RelayCommand]
     private async Task AddUserAsync()
@@ -698,8 +710,8 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     [RelayCommand]
     private async Task LoadAsync()
     {
-        await RunAsync(svc.AllPackagesAsync, r => Fill(Packages, r));
-        await RunAsync(svc.AllAmenitiesAsync, r => Fill(Amenities, r));
+        await RunAsync(svc.AllPackagesAsync, r => Fill(Packages, r.Where(p => p.IsActive)));
+        await RunAsync(svc.AllAmenitiesAsync, r => Fill(Amenities, r.Where(a => a.IsActive)));
     }
 
     // one form serves both "add" and "edit": Editing holds the package being changed, or null for a new one
@@ -773,8 +785,13 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     { a.IsActive = !a.IsActive; if (await RunAsync(() => svc.SaveAmenityAsync(a))) await LoadAsync(); else a.IsActive = !a.IsActive; }
 }
 
-public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
+public partial class DiscountsViewModel(IAdminService svc, ArchiveViewModel? archive = null) : LoadableViewModel
 {
+    public ArchiveViewModel? Archive { get; } = archive;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowDiscounts))] private bool showArchive;
+    public bool ShowDiscounts => !ShowArchive;
+    [RelayCommand] private async Task OpenArchiveAsync() { if (Archive is null) return; ShowArchive = true; await Archive.OnAppearingAsync(); }
+    [RelayCommand] private async Task OpenDiscountsAsync() { ShowArchive = false; await LoadAsync(); }
     public ObservableCollection<DiscountRow> Discounts { get; } = new();
     [ObservableProperty] private string newCode = "";
     [ObservableProperty] private int newPercent = 10;
@@ -782,7 +799,7 @@ public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
 
     public override Task OnAppearingAsync() => LoadAsync();
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.DiscountsAsync, rows => Fill(Discounts, rows));
+    [RelayCommand] private Task LoadAsync() => RunAsync(svc.DiscountsAsync, rows => Fill(Discounts, rows.Where(r => r.Discount.IsActive && r.Discount.ExpiresAt > DateTime.UtcNow)));
 
     [RelayCommand]
     private async Task AddAsync()

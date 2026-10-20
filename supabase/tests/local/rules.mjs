@@ -301,9 +301,8 @@ await test('mark_password_changed clears the flag', async () => {
   await run(id, `select mark_password_changed()`);
   assert.equal((await db.query(`select must_change_password m from profiles where id=$1`, [id])).rows[0].m, false);
 });
-await test('delete rules: a used package cannot be deleted, an unused one can', async () => {
-  assert.equal((await run(admin, `delete from membership_packages where name='Monthly'`).catch(e => e.code)), '23503');
-  assert.equal((await run(admin, `delete from membership_packages where name='Weekly'`)).rowCount, 1);
+await test('catalog history cannot be physically deleted, even when unused', async () => {
+  for (const name of ['Monthly','Weekly']) assert.equal((await run(admin, `delete from membership_packages where name=$1`, [name]).catch(e => e.code)), '42501');
 });
 
 console.log('\nexpiry jobs');

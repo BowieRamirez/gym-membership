@@ -908,7 +908,7 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         var profiles = await gw.ListAsync<Profile>();
         var roles = await gw.ListAsync<Role>();
         var links = await gw.ListAsync<UserRole>();
-        return profiles.Select(p => new UserRow(p.Id, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName, p.IsActive,
+        return profiles.Where(p => p.IsActive && p.DeletedAt is null).Select(p => new UserRow(p.Id, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName, p.IsActive,
             links.Where(l => l.UserId == p.Id).Select(l => roles.First(r => r.RoleId == l.RoleId).Name).OrderBy(n => n).ToList())).ToList();
     });
 
@@ -935,7 +935,7 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         return await Safe.RunAsync(async () => { await gw.InvokeFunctionAsync("reset-password", new() { ["user_id"] = userId, ["password"] = password }); return true; });
     }
 
-    public Task<AppResult<bool>> DeletePackageAsync(MembershipPackage p) => Safe.RunAsync(async () => { await gw.DeleteAsync(p); return true; });
+    public Task<AppResult<bool>> DeletePackageAsync(MembershipPackage p) => Rpc("archive_catalog_record", new() { ["p_type"] = "plan", ["p_id"] = p.Id, ["p_reason"] = "Deactivated gym plan" });
 
     public Task<AppResult<IReadOnlyList<DiscountRow>>> DiscountsAsync() => Safe.RunAsync<IReadOnlyList<DiscountRow>>(async () =>
     {
@@ -951,7 +951,7 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         return await Safe.RunAsync(async () => { if (d.Id == 0) await gw.InsertAsync(d); else await gw.UpdateAsync(d); return true; });
     }
 
-    public Task<AppResult<bool>> DeleteDiscountAsync(Discount d) => Safe.RunAsync(async () => { await gw.DeleteAsync(d); return true; });
+    public Task<AppResult<bool>> DeleteDiscountAsync(Discount d) => Rpc("archive_catalog_record", new() { ["p_type"] = "code", ["p_id"] = d.Id, ["p_reason"] = "Deactivated code" });
 
     public Task<AppResult<bool>> SavePackageAsync(MembershipPackage p) =>
         Safe.RunAsync(async () => { if (p.Id == 0) await gw.InsertAsync(p); else await gw.UpdateAsync(p); return true; });
@@ -963,7 +963,8 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         if (!ProfileService.IsAcceptableImage(fileName, data)) return Task.FromResult(AppResult<string>.Fail(AppErrorKind.Validation, "bad_image"));
         return Safe.RunAsync(async () =>
         {
-            if (!(await gw.ListAsync<Amenity>(a => a.Id == amenityId)).Any()) throw new Exception("not_found");
+            var amenity = (await gw.ListAsync<Amenity>(a => a.Id == amenityId)).FirstOrDefault() ?? throw new Exception("not_found");
+            if (!amenity.IsActive) throw new Exception("record_archived");
             var path = await gw.UploadAsync("gym-assets", $"amenities/{amenityId}/{Guid.NewGuid():N}{Path.GetExtension(fileName).ToLowerInvariant()}", data);
             // Only the image changes: a catalog row on another screen may already have newer details or status.
             await gw.UpdateWhereAsync<Amenity, string?>(a => a.Id == amenityId, a => a.ImagePath, path);

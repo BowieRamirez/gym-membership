@@ -48,6 +48,27 @@ public sealed class SupabaseGatewayTests : IDisposable
 
     public void Dispose() => _http.Close();
 
+    [Fact]
+    public async Task Archive_RPC_maps_database_columns_and_passes_combined_filters_and_restore_identity()
+    {
+        var gw = await SignedInAsync();
+        _reply = _ => (200, """[{"record_type":"plan","record_id":"17","name":"Retired plan","status":"inactive","archived_at":"2026-10-20T12:00:00Z","archived_by":"u-1","reason":"Retired","details":"PHP 1000.00","can_restore":true}]""");
+        var service = new ArchiveService(gw);
+        var result = await service.ListAsync(new("plan", "inactive", new(2026, 10, 1), new(2026, 10, 20), " Retired "), 2);
+        Assert.True(result.Ok);
+        var row = Assert.Single(result.Value!.Rows);
+        Assert.Equal("plan", row.Type); Assert.Equal("17", row.RecordId); Assert.True(row.CanRestore);
+        Assert.Equal("u-1", row.ArchivedBy); Assert.NotNull(row.ArchivedAt); Assert.Equal("Retired", row.Reason);
+        var request = JsonDocument.Parse(Last.Body).RootElement;
+        Assert.Equal("2026-10-01", request.GetProperty("p_from").GetString());
+        Assert.Equal("Retired", request.GetProperty("p_reason").GetString());
+        Assert.Equal(60, request.GetProperty("p_offset").GetInt32()); Assert.Equal(31, request.GetProperty("p_limit").GetInt32());
+        _reply = _ => (200, "null");
+        Assert.True((await service.RestoreAsync(row)).Ok);
+        Assert.EndsWith("/rpc/restore_archived_record", Last.Path);
+        Assert.Equal("17", JsonDocument.Parse(Last.Body).RootElement.GetProperty("p_id").GetString());
+    }
+
     Seen Last { get { lock (_seen) return _seen.Last(); } }
 
     static string Jwt() // header.payload.signature, with an expiry far away so the client keeps it

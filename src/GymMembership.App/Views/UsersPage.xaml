@@ -52,7 +52,7 @@
                 </VerticalStackLayout>
             </Border>
 
-            <Label Text="Everyone" Style="{StaticResource Heading}" Margin="0,8,0,0" />
+            <Label Text="Active accounts" Style="{StaticResource Heading}" Margin="0,8,0,0" />
             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Users}" Spacing="10">
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="svc:UserRow">
@@ -65,16 +65,9 @@
                                     </VerticalStackLayout>
                                     <c:StatusChip Grid.Column="1" Status="{Binding ActiveStatus}" VerticalOptions="Start" />
                                 </Grid>
-                                <FlexLayout Wrap="Wrap">
-                                    <Button Text="{Binding CoachActionText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                            Clicked="OnToggleRoleCoach" />
-                                    <Button Text="{Binding EmployeeActionText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                            Clicked="OnToggleRoleEmployee" />
-                                    <Button Text="Reset password" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                            Clicked="OnStartReset" />
-                                    <Button Text="{Binding ActiveActionText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                            Clicked="OnToggleActive" />
-                                </FlexLayout>
+                                <Button Text="⋮" Style="{StaticResource SmallOutlineButton}" FontSize="24" WidthRequest="48" MinimumHeightRequest="48"
+                                        HorizontalOptions="End" Clicked="OnAccountActions" AutomationId="UserAccountActions"
+                                        SemanticProperties.Description="Account actions" SemanticProperties.Hint="Open role, password and account actions" />
                             </VerticalStackLayout>
                         </Border>
                     </DataTemplate>

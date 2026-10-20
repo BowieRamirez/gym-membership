@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:c="clr-namespace:GymMembership.App.Controls"
+             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+             xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
+             x:Class="GymMembership.App.Controls.ArchivePanel" x:DataType="vm:ArchiveViewModel">
+    <ScrollView MaximumWidthRequest="920">
+        <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
+            <Label Text="Archive" Style="{StaticResource Title}" />
+            <Label Text="Inactive accounts, codes, gym plans and amenities. History is retained. Restore a record before editing it." Style="{StaticResource Muted}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+            <VerticalStackLayout Spacing="14" IsVisible="{Binding CanManage}">
+                <Border Style="{StaticResource Panel}">
+                    <VerticalStackLayout Spacing="10">
+                        <FlexLayout Wrap="Wrap" AlignItems="End">
+                            <VerticalStackLayout WidthRequest="200" Margin="0,0,12,8" Spacing="4">
+                                <Label Text="Record type" Style="{StaticResource Caption}" />
+                                <Picker Title="Record type" ItemsSource="{Binding Types}" SelectedIndex="{Binding TypeIndex}" AutomationId="ArchiveType" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout WidthRequest="200" Margin="0,0,12,8" Spacing="4">
+                                <Label Text="Status" Style="{StaticResource Caption}" />
+                                <Picker Title="Status" ItemsSource="{Binding Statuses}" SelectedIndex="{Binding StatusIndex}" AutomationId="ArchiveStatus" />
+                            </VerticalStackLayout>
+                        </FlexLayout>
+                        <Label Text="Reason contains" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><Entry Text="{Binding Reason}" Placeholder="For example: deleted, expired, deactivated" AutomationId="ArchiveReason" /></Border>
+                        <HorizontalStackLayout Spacing="8">
+                            <Switch IsToggled="{Binding UseDates}" AutomationId="ArchiveUseDates" />
+                            <Label Text="Filter by date archived (Asia/Manila)" VerticalOptions="Center" />
+                        </HorizontalStackLayout>
+                        <FlexLayout Wrap="Wrap" IsVisible="{Binding UseDates}">
+                            <VerticalStackLayout Margin="0,0,16,8"><Label Text="From" Style="{StaticResource Caption}" /><DatePicker Date="{Binding From}" /></VerticalStackLayout>
+                            <VerticalStackLayout Margin="0,0,16,8"><Label Text="Through" Style="{StaticResource Caption}" /><DatePicker Date="{Binding To}" /></VerticalStackLayout>
+                        </FlexLayout>
+                        <Label Text="Legacy records with an unknown archive date are excluded when filtering by date." Style="{StaticResource Caption}" />
+                        <FlexLayout Wrap="Wrap">
+                            <Button Text="Apply filters" Command="{Binding ApplyCommand}" Style="{StaticResource SmallButton}" Margin="0,0,8,8" AutomationId="ArchiveApply" />
+                            <Button Text="Clear filters" Command="{Binding ClearFiltersCommand}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" AutomationId="ArchiveClear" />
+                        </FlexLayout>
+                    </VerticalStackLayout>
+                </Border>
+                <Border Style="{StaticResource Panel}" IsVisible="{Binding Selected, Converter={StaticResource IsNotNull}}">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="Read-only record" Style="{StaticResource Caption}" />
+                        <Label Text="{Binding Selected.Name}" Style="{StaticResource Heading}" />
+                        <Label Text="{Binding Selected.RecordId, StringFormat='Record ID: {0}'}" Style="{StaticResource Caption}" />
+                        <Label Text="{Binding Selected.TypeLabel}" />
+                        <Label Text="{Binding Selected.Status, StringFormat='Status: {0}'}" />
+                        <Label Text="{Binding Selected.DateText, StringFormat='Archived: {0}'}" />
+                        <Label Text="{Binding Selected.ActorText, StringFormat='Archived by: {0}'}" />
+                        <Label Text="{Binding Selected.Reason, StringFormat='Reason: {0}'}" LineBreakMode="WordWrap" />
+                        <Label Text="{Binding Selected.Details}" LineBreakMode="WordWrap" />
+                        <FlexLayout Wrap="Wrap">
+                            <Button Text="Restore record" Command="{Binding RequestRestoreCommand}" IsVisible="{Binding Selected.CanRestore}" Style="{StaticResource SmallButton}" Margin="0,0,8,8" AutomationId="ArchiveRestore" />
+                            <Button Text="Close details" Command="{Binding CloseDetailsCommand}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" />
+                        </FlexLayout>
+                        <VerticalStackLayout Spacing="10" IsVisible="{Binding ConfirmingRestore}">
+                            <Label Text="Restore this record to active use? Availability and permissions will be checked again." />
+                            <FlexLayout Wrap="Wrap">
+                                <Button Text="Confirm restore" Command="{Binding ConfirmRestoreCommand}" Style="{StaticResource SmallButton}" Margin="0,0,8,8" AutomationId="ArchiveConfirmRestore" />
+                                <Button Text="No, cancel" Command="{Binding CancelRestoreCommand}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" />
+                            </FlexLayout>
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+                <Label Text="No archived records match these filters." Style="{StaticResource Muted}" IsVisible="{Binding IsEmpty}" AutomationId="ArchiveEmpty" />
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Rows}" Spacing="10">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="m:ArchiveRecord">
+                            <Border Style="{StaticResource Panel}">
+                                <VerticalStackLayout Spacing="8">
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                        <VerticalStackLayout Spacing="2"><Label Text="{Binding Name}" Style="{StaticResource Heading}" /><Label Text="{Binding TypeLabel}" Style="{StaticResource Caption}" /></VerticalStackLayout>
+                                        <c:StatusChip Grid.Column="1" Status="{Binding Status}" VerticalOptions="Start" />
+                                    </Grid>
+                                    <Label Text="{Binding DateText}" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding Reason}" LineBreakMode="WordWrap" />
+                                    <Button Text="View details" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" Clicked="OnView" />
+                                </VerticalStackLayout>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+                <FlexLayout Wrap="Wrap" AlignItems="Center">
+                    <Button Text="Previous page" Command="{Binding PreviousCommand}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" />
+                    <Label Text="{Binding PageText}" Margin="0,0,12,8" />
+                    <Button Text="Next page" Command="{Binding NextCommand}" IsVisible="{Binding HasMore}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" />
+                </FlexLayout>
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentView>

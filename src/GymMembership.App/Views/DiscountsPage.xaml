@@ -5,9 +5,17 @@
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
-            x:Class="GymMembership.App.Views.DiscountsPage" x:DataType="vm:DiscountsViewModel" Title="Discounts">
+            x:Class="GymMembership.App.Views.DiscountsPage" x:DataType="vm:DiscountsViewModel" Title="Discounts &amp; Archive">
 
-    <ScrollView MaximumWidthRequest="920">
+    <Grid RowDefinitions="Auto,*">
+        <HorizontalStackLayout Padding="20,12" Spacing="10">
+            <Button Text="Discounts" Command="{Binding OpenDiscountsCommand}" Style="{StaticResource SmallOutlineButton}" />
+            <Button Text="Archive" Command="{Binding OpenArchiveCommand}" Style="{StaticResource SmallOutlineButton}" AutomationId="OpenArchive" />
+        </HorizontalStackLayout>
+        <Grid Grid.Row="1" IsVisible="{Binding ShowArchive}">
+            <c:ArchivePanel BindingContext="{Binding Archive}" />
+        </Grid>
+    <ScrollView Grid.Row="1" IsVisible="{Binding ShowDiscounts}" MaximumWidthRequest="920">
         <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
             <Label Text="Percent-off codes. Members type a code when they buy or renew a package." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
@@ -15,9 +23,9 @@
 
             <Border Style="{StaticResource Panel}" IsVisible="{Binding Deleting, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="10">
-                    <Label Text="{Binding Deleting.Discount.Code, StringFormat='Delete code {0}? This can’t be undone.'}" Style="{StaticResource Heading}" />
+                    <Label Text="{Binding Deleting.Discount.Code, StringFormat='Archive code {0}? History will be retained.'}" Style="{StaticResource Heading}" />
                     <HorizontalStackLayout Spacing="8">
-                        <Button Text="Yes, delete" Style="{StaticResource SmallButton}" Command="{Binding ConfirmDeleteCommand}" />
+                        <Button Text="Yes, archive" Style="{StaticResource SmallButton}" Command="{Binding ConfirmDeleteCommand}" />
                         <Button Text="Keep it" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepCommand}" />
                     </HorizontalStackLayout>
                 </VerticalStackLayout>
@@ -62,9 +70,9 @@
                                     <c:StatusChip Grid.Column="1" Status="{Binding State}" VerticalOptions="Start" />
                                 </Grid>
                                 <HorizontalStackLayout Spacing="8">
-                                    <Button Text="Turn on or off" Style="{StaticResource SmallOutlineButton}"
+                                    <Button Text="Deactivate" Style="{StaticResource SmallOutlineButton}"
                                             Clicked="OnToggle" />
-                                    <Button Text="Delete" Style="{StaticResource SmallOutlineButton}"
+                                    <Button Text="Archive" Style="{StaticResource SmallOutlineButton}"
                                             Clicked="OnDelete" />
                                 </HorizontalStackLayout>
                             </VerticalStackLayout>
@@ -74,4 +82,5 @@
             </VerticalStackLayout>
         </VerticalStackLayout>
     </ScrollView>
+    </Grid>
 </v:BasePage>
