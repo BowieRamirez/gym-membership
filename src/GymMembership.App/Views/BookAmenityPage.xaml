@@ -8,14 +8,19 @@
             x:Class="GymMembership.App.Views.BookAmenityPage" x:DataType="vm:BookAmenityViewModel" Title="Book an amenity">
 
     <v:BasePage.Resources>
+        <!-- cell sizes; on Windows the page resizes these to fill the window (see FitGrid) -->
+        <x:Double x:Key="SlotWidth">46</x:Double>
+        <x:Double x:Key="SlotHeight">26</x:Double>
+        <x:Double x:Key="AmenityWidth">94</x:Double>
+        <x:Double x:Key="SlotFont">11</x:Double>
         <!-- One half-hour cell. Colour only ever means status: plate colours on the outline and text, a solid fill only for your picks.
              Always enabled so the disabled look never hides the status; tapping a cell that can't be picked does nothing. -->
         <Style x:Key="SlotButton" TargetType="Button" x:DataType="vm:SlotCell">
-            <Setter Property="WidthRequest" Value="{OnIdiom Phone=46, Default=64}" />
-            <Setter Property="HeightRequest" Value="{OnIdiom Phone=26, Default=28}" />
+            <Setter Property="WidthRequest" Value="{DynamicResource SlotWidth}" />
+            <Setter Property="HeightRequest" Value="{DynamicResource SlotHeight}" />
             <Setter Property="MinimumHeightRequest" Value="26" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontSize" Value="{DynamicResource SlotFont}" />
             <Setter Property="CornerRadius" Value="4" />
             <Setter Property="BorderWidth" Value="1.5" />
             <Setter Property="BackgroundColor" Value="Transparent" />
@@ -90,14 +95,14 @@
             <!-- wide screens: grid on the left, your bookings beside it; phones: one column -->
             <Grid ColumnDefinitions="{OnIdiom Phone='*', Default='*,300'}" RowDefinitions="{OnIdiom Phone='Auto,Auto', Default='Auto'}" ColumnSpacing="20" RowSpacing="16">
                 <!-- a row per hour; each amenity has its :00 and :30 cell side by side. Scrolls sideways when amenities don't fit. -->
-                <ScrollView Orientation="Horizontal" HorizontalOptions="Start">
+                <ScrollView x:Name="GridArea" Orientation="Horizontal" HorizontalOptions="Fill" SizeChanged="OnGridAreaSized">
                     <VerticalStackLayout Spacing="3">
                         <HorizontalStackLayout Spacing="10">
                             <Label WidthRequest="40" />
                             <HorizontalStackLayout BindableLayout.ItemsSource="{Binding Amenities}" Spacing="10">
                                 <BindableLayout.ItemTemplate>
                                     <DataTemplate x:DataType="x:String">
-                                        <Label Text="{Binding .}" WidthRequest="{OnIdiom Phone=94, Default=130}" FontFamily="BarlowMedium" FontSize="13" LineBreakMode="TailTruncation" HorizontalTextAlignment="Center" />
+                                        <Label Text="{Binding .}" WidthRequest="{DynamicResource AmenityWidth}" FontFamily="BarlowMedium" FontSize="13" LineBreakMode="TailTruncation" HorizontalTextAlignment="Center" />
                                     </DataTemplate>
                                 </BindableLayout.ItemTemplate>
                             </HorizontalStackLayout>
