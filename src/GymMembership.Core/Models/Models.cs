@@ -228,4 +228,11 @@ public class ChatSearchHit : BaseModel
 { [PrimaryKey("shift_post_id")] public int Id { get; set; } [Column("coach_id", ignoreOnUpdate: true)] public string CoachId { get; set; } = ""; [Column("starts_at")] public DateTime Start { get; set; }
   [Column("ends_at")] public DateTime End { get; set; } [Column("note")] public string? Note { get; set; } [Column("status", ignoreOnInsert: true)] public string Status { get; set; } = "scheduled"; }
 
+// one amenity booking (0029). Written only through book_slots / cancel_reservation / end_reservation / extend_reservation.
+[Table("reservations")] public class Reservation : BaseModel
+{ [PrimaryKey("reservation_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("amenity_id")] public int AmenityId { get; set; }
+  [Column("coach_id")] public string? CoachId { get; set; } [Column("training_session_id")] public int? TrainingSessionId { get; set; }
+  [Column("starts_at")] public DateTime StartsAt { get; set; } [Column("ends_at")] public DateTime EndsAt { get; set; } [Column("status")] public string Status { get; set; } = "confirmed";
+  [Column("cancelled_at")] public DateTime? CancelledAt { get; set; } [Column("cancelled_by")] public string? CancelledBy { get; set; } [Column("cancel_reason")] public string? CancelReason { get; set; } }
+
 public record RevenueRow(DateTime Day, string Kind, string Method, long Payments, decimal Total);

@@ -191,6 +191,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             ShiftPost s => s.CoachId == uid || staff || CoachesMember(s.CoachId, uid),
             GymCheckIn c => c.MemberId == uid || staff,
             Discount => Has("discounts:manage"),   // members only learn a code is valid by using it
+            Reservation r => r.MemberId == uid || r.CoachId == uid || staff,
             MembershipPackage k => k.IsActive || Has("catalog:manage"),
             Amenity a => a.IsActive || Has("catalog:manage"),
             AmenityFollow f => f.MemberId == uid,
@@ -530,6 +531,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     object? CallLocked(string fn, Dictionary<string, object> a)
     {
         if (SubscriptionCall(fn, a, out var subscriptionResult)) return subscriptionResult;
+        if (ReservationCall(fn, a, out var reservationResult)) return reservationResult;
         var now = SubscriptionNow;
         int I(string k) => Convert.ToInt32(a[k]);
         bool B(string k) => Convert.ToBoolean(a[k]);

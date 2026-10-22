@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.BookAmenityPage" x:DataType="vm:BookAmenityViewModel" Title="Book an amenity">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='20,16,20,24'}" Spacing="12" MaximumWidthRequest="1100" HorizontalOptions="Fill">
+            <Label Text="Pick open half-hours, then book them together. Touching slots become one session of up to 2 hours, and each use is followed by 30 minutes of cooldown." Style="{StaticResource Muted}" />
+            <Label Text="Green is yours, blue is someone else's booking, yellow is cooldown, red is closed." Style="{StaticResource Caption}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+            <FlexLayout Wrap="Wrap" AlignItems="Center">
+                <Button Text="Previous day" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding PreviousDayCommand}" />
+                <Label Text="{Binding DayText}" Style="{StaticResource Heading}" Margin="0,0,8,8" VerticalOptions="Center" />
+                <Button Text="Next day" Style="{StaticResource SmallOutlineButton}" Margin="0,0,16,8" Command="{Binding NextDayCommand}" />
+                <Button Text="{Binding BookText}" Style="{StaticResource SmallButton}" Margin="0,0,0,8" Command="{Binding BookCommand}" />
+            </FlexLayout>
+
+            <!-- one column per amenity; scrolls sideways on a phone -->
+            <ScrollView Orientation="Horizontal">
+                <VerticalStackLayout Spacing="4">
+                    <HorizontalStackLayout Spacing="4">
+                        <Label WidthRequest="52" />
+                        <HorizontalStackLayout BindableLayout.ItemsSource="{Binding Amenities}" Spacing="4">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <Label Text="{Binding .}" WidthRequest="104" FontFamily="BarlowMedium" LineBreakMode="TailTruncation" HorizontalTextAlignment="Center" />
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </HorizontalStackLayout>
+                    </HorizontalStackLayout>
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Rows}" Spacing="4">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SlotRow">
+                                <HorizontalStackLayout Spacing="4">
+                                    <Label Text="{Binding Time}" WidthRequest="52" Style="{StaticResource Caption}" VerticalOptions="Center" />
+                                    <HorizontalStackLayout BindableLayout.ItemsSource="{Binding Cells}" Spacing="4">
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:SlotCell">
+                                                <!-- colour only ever means status: plate colours on the outline and text, a solid fill only for your picks.
+                                                     Always enabled so the disabled look never hides the status; tapping a cell that can't be picked does nothing. -->
+                                                <Button Text="{Binding Label}" WidthRequest="104" HeightRequest="34" Padding="0" FontSize="13" CornerRadius="6" BorderWidth="1.5"
+                                                        BackgroundColor="Transparent" Clicked="OnCell" SemanticProperties.Description="{Binding Label}"
+                                                        BorderColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}"
+                                                        TextColor="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}">
+                                                    <Button.Triggers>
+                                                        <DataTrigger TargetType="Button" Binding="{Binding State}" Value="open">
+                                                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+                                                        </DataTrigger>
+                                                        <DataTrigger TargetType="Button" Binding="{Binding State}" Value="yours">
+                                                            <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource PlateGreenLight}, Dark={StaticResource PlateGreenDark}}" />
+                                                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource PlateGreenLight}, Dark={StaticResource PlateGreenDark}}" />
+                                                        </DataTrigger>
+                                                        <DataTrigger TargetType="Button" Binding="{Binding State}" Value="booked">
+                                                            <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource PlateBlueLight}, Dark={StaticResource PlateBlueDark}}" />
+                                                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource PlateBlueLight}, Dark={StaticResource PlateBlueDark}}" />
+                                                        </DataTrigger>
+                                                        <DataTrigger TargetType="Button" Binding="{Binding State}" Value="cooldown">
+                                                            <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource PlateYellowLight}, Dark={StaticResource PlateYellowDark}}" />
+                                                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource PlateYellowLight}, Dark={StaticResource PlateYellowDark}}" />
+                                                        </DataTrigger>
+                                                        <DataTrigger TargetType="Button" Binding="{Binding State}" Value="closed">
+                                                            <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource PlateRedLight}, Dark={StaticResource PlateRedDark}}" />
+                                                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource PlateRedLight}, Dark={StaticResource PlateRedDark}}" />
+                                                        </DataTrigger>
+                                                        <DataTrigger TargetType="Button" Binding="{Binding Selected}" Value="True">
+                                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+                                                            <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+                                                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}" />
+                                                        </DataTrigger>
+                                                    </Button.Triggers>
+                                                </Button>
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
+                                    </HorizontalStackLayout>
+                                </HorizontalStackLayout>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </ScrollView>
+
+            <Label Text="Your bookings" Style="{StaticResource Heading}" Margin="0,12,0,0" />
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Bookings}" Spacing="8">
+                <BindableLayout.EmptyView><Label Text="No upcoming bookings. Pick open slots above to book one." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="svc:BookingRow">
+                        <Border Style="{StaticResource Panel}" Padding="16,12">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                <VerticalStackLayout Spacing="2">
+                                    <Label Text="{Binding Amenity}" Style="{StaticResource Heading}" />
+                                    <Label Text="{Binding When}" Style="{StaticResource Caption}" />
+                                </VerticalStackLayout>
+                                <HorizontalStackLayout Grid.Column="1" Spacing="8" VerticalOptions="Center">
+                                    <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanCancel}" Clicked="OnCancel" />
+                                    <Button Text="End now" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanEnd}" Clicked="OnEnd"
+                                            SemanticProperties.Hint="Ends the session early. The amenity cools down for 30 minutes from now." />
+                                </HorizontalStackLayout>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</v:BasePage>

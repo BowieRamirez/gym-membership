@@ -57,7 +57,7 @@ public sealed class PhoneNavigation
 #endif
         var pageTypes = new Dictionary<string, Type>
         {
-            ["Amenities"] = typeof(AmenitiesPage), ["Coaches"] = typeof(CoachesPage),
+            ["Amenities"] = typeof(AmenitiesPage), ["Book an amenity"] = typeof(BookAmenityPage), ["Coaches"] = typeof(CoachesPage),
             ["Time requests"] = typeof(RequestsPage), ["My shifts"] = typeof(ShiftsPage),
             ["Attendance"] = typeof(AttendancePage), ["My coach profile"] = typeof(CoachProfilePage),
             ["Settings"] = typeof(SettingsPage)
