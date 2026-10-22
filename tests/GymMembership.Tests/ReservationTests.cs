@@ -16,15 +16,21 @@ public class ReservationTests
         return (gw, vm);
     }
 
-    static SlotCell Cell(BookAmenityViewModel vm, string amenity, string time) =>
-        vm.Rows.Single(r => r.Time == time).Cells[vm.Amenities.IndexOf(amenity)];
+    // rows are whole hours; each amenity has its :00 and :30 cell side by side
+    static SlotCell Cell(BookAmenityViewModel vm, string amenity, string time)
+    {
+        var pair = vm.Rows.Single(r => r.Time == time[..3] + "00").Amenities[vm.Amenities.IndexOf(amenity)];
+        return time.EndsWith(":30") ? pair.Late : pair.Early;
+    }
 
     [Fact]
-    public async Task The_grid_has_a_row_per_half_hour_of_gym_hours_and_a_column_per_amenity()
+    public async Task The_grid_has_a_row_per_hour_of_gym_hours_with_two_half_hour_cells_per_amenity()
     {
         var (_, vm) = await Member();
-        Assert.Equal(32, vm.Rows.Count);                                        // 06:00 to 22:00
-        Assert.Equal(("06:00", "21:30"), (vm.Rows[0].Time, vm.Rows[^1].Time));
+        Assert.Equal(16, vm.Rows.Count);                                        // 06:00 to 22:00, an hour a row
+        Assert.Equal(("06:00", "21:00"), (vm.Rows[0].Time, vm.Rows[^1].Time));
+        Assert.Equal(vm.Amenities.Count, vm.Rows[0].Amenities.Count);
+        Assert.Equal(("", "10:00 open"), (Cell(vm, "Pool", "10:00").Short, Cell(vm, "Pool", "10:00").Label));
         Assert.Contains("Pool", vm.Amenities);
         Assert.DoesNotContain("Boxing ring", vm.Amenities);                   // inactive amenities are not bookable
         Assert.Equal("open", Cell(vm, "Pool", "10:00").State);

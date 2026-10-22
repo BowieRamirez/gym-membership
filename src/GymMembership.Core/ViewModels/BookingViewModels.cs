@@ -10,17 +10,29 @@ public partial class SlotCell(int amenityId, DateTime startUtc, string state) : 
 {
     public int AmenityId { get; } = amenityId;
     public DateTime StartUtc { get; } = startUtc;
-    public string State { get; } = state;   // open, yours, booked, cooldown, blocked, closed, past
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(Label))] private bool selected;
+    public string State { get; } = state;   // open, yours, booked, cooldown, blocked, closed, past, outside (not gym hours)
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(Label), nameof(Short))] private bool selected;
     public bool CanSelect => State == "open";
-    public string Label => Selected ? "Selected" : State switch
+    // read aloud: the full time and status
+    public string Label => $"{StartUtc.AddHours(8):HH:mm} " + (Selected ? "selected" : State switch
     {
-        "open" => "Open", "yours" => "Yours", "booked" => "Booked", "cooldown" => "Cooldown",
-        "blocked" => "Too close", "closed" => "Closed", _ => "—"
+        "open" => "open", "yours" => "your booking", "booked" => "booked", "cooldown" => "cooldown",
+        "blocked" => "too close to the next booking", "closed" => "closed", "outside" => "outside gym hours", _ => "past"
+    });
+    // shown in the small cell; free cells stay blank so bookings, picks and cooldowns stand out
+    public string Short => Selected ? "Picked" : State switch
+    {
+        "yours" => "Yours", "booked" => "Booked", "cooldown" => "Cool", "closed" => "Closed", _ => ""
     };
 }
 
-public sealed record SlotRow(string Time, IReadOnlyList<SlotCell> Cells);
+/// <summary>One amenity's hour: the :00 and :30 cells side by side.</summary>
+public sealed record AmenityHour(SlotCell Early, SlotCell Late);
+/// <summary>One hour of the grid, one pair of cells per amenity.</summary>
+public sealed record SlotRow(string Time, IReadOnlyList<AmenityHour> Amenities)
+{
+    public IEnumerable<SlotCell> Cells => Amenities.SelectMany(a => new[] { a.Early, a.Late });
+}
 
 /// <summary>Members: a day of 30-minute slots, one column per amenity. Pick open cells and book them in one go (all or nothing).</summary>
 public partial class BookAmenityViewModel(IReservationService svc) : LoadableViewModel
@@ -50,18 +62,17 @@ public partial class BookAmenityViewModel(IReservationService svc) : LoadableVie
     void Build(AmenityGrid g, HashSet<(int, DateTime)> keep)
     {
         Fill(Amenities, g.Amenities.Select(a => a.Name));
-        var rows = new List<SlotRow>();
-        for (var t = g.Opens; t < g.Closes; t = t.AddMinutes(30))
+        SlotCell Cell(GridAmenity a, DateTime t)
         {
-            var cells = g.Amenities.Select(a =>
-            {
-                var cell = new SlotCell(a.Id, t, StateOf(g, a, t));
-                cell.Selected = cell.CanSelect && keep.Contains((a.Id, t));
-                cell.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(SlotCell.Selected)) SelectedCount = Selected().Count(); };
-                return cell;
-            }).ToList();
-            rows.Add(new SlotRow(t.AddHours(8).ToString("HH:mm"), cells));
+            var cell = new SlotCell(a.Id, t, t < g.Opens || t >= g.Closes ? "outside" : StateOf(g, a, t));
+            cell.Selected = cell.CanSelect && keep.Contains((a.Id, t));
+            cell.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(SlotCell.Selected)) SelectedCount = Selected().Count(); };
+            return cell;
         }
+        // whole hours, so a gym that opens or closes on the half hour gets one blank half cell
+        var rows = new List<SlotRow>();
+        for (var h = g.Opens.AddMinutes(-g.Opens.Minute); h < g.Closes; h = h.AddHours(1))
+            rows.Add(new SlotRow(h.AddHours(8).ToString("HH:mm"), g.Amenities.Select(a => new AmenityHour(Cell(a, h), Cell(a, h.AddMinutes(30)))).ToList()));
         Fill(Rows, rows);
         SelectedCount = Selected().Count();
     }
