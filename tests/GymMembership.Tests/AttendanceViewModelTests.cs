@@ -28,7 +28,12 @@ public class AttendanceViewModelTests
         public Task<AppResult<IReadOnlyList<CalendarSession>>> UpcomingAsync() => Task.FromResult(AppResult<IReadOnlyList<CalendarSession>>.Success(Upcoming));
 
         public Task<AppResult<RequestsView>> RequestsAsync() => throw new NotSupportedException();
-        public Task<AppResult<bool>> RequestAsync(string coachId, DateTime startUtc, DateTime endUtc, string? message) => throw new NotSupportedException();
+        public Task<AppResult<bool>> RequestAsync(string coachId, DateTime startUtc, DateTime endUtc, string? message, int? amenityId = null) => throw new NotSupportedException();
+        public Task<AppResult<bool>> ProposeAsync(int requestId, DateTime startUtc, DateTime endUtc, int? amenityId, string reason) => throw new NotSupportedException();
+        public Task<AppResult<string>> AcceptProposalAsync(int requestId, int version) => throw new NotSupportedException();
+        public Task<AppResult<bool>> RequestAnotherTimeAsync(int requestId, DateTime startUtc, DateTime endUtc, int? amenityId, string? message) => throw new NotSupportedException();
+        public Task<AppResult<bool>> DeclineAsync(int requestId, string reason) => throw new NotSupportedException();
+        public Task<AppResult<bool>> ExtendAsync(int reservationId, int minutes) => throw new NotSupportedException();
         public Task<AppResult<bool>> PostAvailabilityAsync(DateTime startUtc, DateTime endUtc) => throw new NotSupportedException();
         public Task<AppResult<bool>> InviteMemberAsync(string memberId, DateTime startUtc, DateTime endUtc) => throw new NotSupportedException();
         public Task<AppResult<bool>> RespondAsync(int requestId, bool approve) => throw new NotSupportedException();

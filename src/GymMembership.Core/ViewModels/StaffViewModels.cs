@@ -349,7 +349,9 @@ public partial class RequestsViewModel(ISessionService svc) : LoadableViewModel
     public ObservableCollection<RequestRow> Requests { get; } = new();
     public ObservableCollection<CoachCard> Coaches { get; } = new();
     public ObservableCollection<RequestMember> Members { get; } = new();
+    public ObservableCollection<AmenityChoice> AmenityChoices { get; } = new();   // "No amenity" first
     public int[] Durations { get; } = [30, 45, 60, 90];
+    [ObservableProperty] private AmenityChoice? selectedAmenity;
 
     [ObservableProperty] private bool isCoach;
     [ObservableProperty] private bool canCompose;
@@ -399,6 +401,8 @@ public partial class RequestsViewModel(ISessionService svc) : LoadableViewModel
         {
             activeSessions = v.ActiveSessions ?? [];
             Fill(Requests, v.Rows); Fill(Coaches, v.HiredCoaches); Fill(Members, v.Trainees ?? []);
+            Fill(AmenityChoices, new[] { new AmenityChoice(null, "No amenity") }.Concat((v.Amenities ?? []).Select(a => new AmenityChoice(a.Id, a.Name))));
+            SelectedAmenity = AmenityChoices.FirstOrDefault(a => a.Id == SelectedAmenity?.Id) ?? AmenityChoices.First();
             IsCoach = v.IsCoach;
             CanCompose = v.IsCoach || v.HiredCoaches.Count > 0;
             SelectedCoach = Coaches.FirstOrDefault(c => c.Coach.UserId == SelectedCoach?.Coach.UserId) ?? Coaches.FirstOrDefault();
@@ -418,7 +422,7 @@ public partial class RequestsViewModel(ISessionService svc) : LoadableViewModel
             ? UseWindowsRequestForm
                 ? await RunAsync(() => svc.InviteMemberAsync(SelectedMember!.MemberId, start, end))
                 : await RunAsync(() => svc.PostAvailabilityAsync(start, end))
-            : await RunAsync(() => svc.RequestAsync(SelectedCoach!.Coach.UserId, start, end, Message));
+            : await RunAsync(() => svc.RequestAsync(SelectedCoach!.Coach.UserId, start, end, Message, SelectedAmenity?.Id));
         if (ok) { Notice = IsCoach ? (UseWindowsRequestForm ? "Invitation sent. The member must approve it before a session is booked." : "Availability posted.") : "Request sent."; Message = null; await LoadAsync(); }
         else if (ErrorMessage == ErrorText.For(AppErrorKind.Conflict, "pending_session_request") ||
                  ErrorMessage == ErrorText.For(AppErrorKind.Conflict, "active_coaching_session"))
@@ -427,6 +431,75 @@ public partial class RequestsViewModel(ISessionService svc) : LoadableViewModel
             await LoadAsync();
             ErrorMessage = error;
         }
+    }
+
+    // ---------- answering a request (D8): one panel for propose, ask for another time and decline ----------
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ResponseTitle), nameof(ResponseNeedsTime), nameof(ResponseSubmitText), nameof(ResponseReasonHint))]
+    private string responseMode = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsResponding), nameof(ResponseTitle))] private RequestRow? responding;
+    [ObservableProperty] private DateTime responseDate = DateTime.Today.AddDays(1);
+    [ObservableProperty] private TimeSpan responseTime = new(9, 0, 0);
+    [ObservableProperty] private int responseDuration = 60;
+    [ObservableProperty] private AmenityChoice? responseAmenity;
+    [ObservableProperty] private string? responseReason;
+    public bool IsResponding => Responding is not null;
+    public bool ResponseNeedsTime => ResponseMode != "decline";
+    public string ResponseTitle => ResponseMode switch
+    {
+        "propose" => $"Propose another time to {Responding?.With}", "another" => "Ask your coach for another time", _ => $"Decline the request from {Responding?.With}"
+    };
+    public string ResponseSubmitText => ResponseMode switch { "propose" => "Send proposal", "another" => "Send request", _ => "Decline" };
+    public string ResponseReasonHint => ResponseMode switch
+    {
+        "propose" => "Why this time? The member sees it.", "another" => "Optional note for your coach", _ => "Reason (the other person sees it)"
+    };
+
+    void StartResponse(RequestRow row, string mode)
+    {
+        Notice = null; ErrorMessage = null;
+        var start = (row.Request.ProposedStart ?? row.Request.RequestedStart).ToLocalTime();
+        var end = (row.Request.ProposedEnd ?? row.Request.RequestedEnd).ToLocalTime();
+        ResponseDate = start.Date; ResponseTime = start.TimeOfDay; ResponseDuration = (int)Math.Max(30, (end - start).TotalMinutes);
+        ResponseAmenity = AmenityChoices.FirstOrDefault(a => a.Id == (row.Request.ProposedAmenityId ?? row.Request.AmenityId)) ?? AmenityChoices.FirstOrDefault();
+        ResponseReason = null; ResponseMode = mode; Responding = row;
+    }
+
+    [RelayCommand] private void StartPropose(RequestRow row) => StartResponse(row, "propose");
+    [RelayCommand] private void StartAnother(RequestRow row) => StartResponse(row, "another");
+    [RelayCommand] private void StartDecline(RequestRow row) => StartResponse(row, "decline");
+    [RelayCommand] private void CloseResponse() => Responding = null;
+
+    [RelayCommand]
+    private async Task SubmitResponseAsync()
+    {
+        if (Responding is not { } row) return;
+        var start = (ResponseDate.Date + ResponseTime).ToUniversalTime();
+        var end = start.AddMinutes(ResponseDuration);
+        var id = row.Request.Id;
+        var ok = ResponseMode switch
+        {
+            "propose" => await RunAsync(() => svc.ProposeAsync(id, start, end, ResponseAmenity?.Id, ResponseReason ?? "")),
+            "another" => await RunAsync(() => svc.RequestAnotherTimeAsync(id, start, end, ResponseAmenity?.Id, ResponseReason)),
+            _ => await RunAsync(() => svc.DeclineAsync(id, ResponseReason ?? ""))
+        };
+        if (!ok) return;   // the panel stays open with what was typed and the reason it failed
+        Notice = ResponseMode switch
+        {
+            "propose" => "Proposal sent. The member has 24 hours, or until it starts, to accept.",
+            "another" => "Sent. Your coach will answer the new time.", _ => "Declined."
+        };
+        Responding = null;
+        await LoadAsync();
+    }
+
+    [RelayCommand]
+    private async Task AcceptAsync(RequestRow row)
+    {
+        Notice = null;
+        var result = "";
+        if (!await RunAsync(() => svc.AcceptProposalAsync(row.Request.Id, row.Request.Version), r => result = r)) { var error = ErrorMessage; await LoadAsync(); ErrorMessage = error; return; }
+        await LoadAsync();
+        Notice = result == "expired" ? "That proposal expired before you accepted it. Your coach will answer again." : "Booked. The session is on your calendar.";
     }
 
     [RelayCommand] private Task ApproveAsync(RequestRow row) => RespondAsync(row, true);
@@ -467,6 +540,13 @@ public partial class SessionsViewModel(ISessionService svc, CoachPhotoViewModel?
     {
         Notice = null;
         if (await RunAsync(() => svc.CancelSessionAsync(row.Session.Id))) { Notice = "Session cancelled. The other person has been told."; await LoadAsync(); }
+    }
+
+    [RelayCommand]
+    private async Task ExtendAsync(SessionRow row)
+    {
+        Notice = null;
+        if (row.ReservationId is { } id && await RunAsync(() => svc.ExtendAsync(id, 30))) { Notice = "Added 30 minutes. The member has been told."; await LoadAsync(); }
     }
 
     [RelayCommand]

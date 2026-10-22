@@ -120,7 +120,12 @@ public class NotifiedMember : BaseModel
 { [PrimaryKey("time_request_id")] public int Id { get; set; } [Column("coach_id")] public string CoachId { get; set; } = ""; [Column("member_id")] public string? MemberId { get; set; }
   [Column("requested_by")] public string RequestedBy { get; set; } = ""; [Column("requested_start")] public DateTime RequestedStart { get; set; } [Column("requested_end")] public DateTime RequestedEnd { get; set; }
   [Column("status")] public string Status { get; set; } = "pending"; [Column("message")] public string? Message { get; set; }
-  [Column("training_session_id")] public int? SessionId { get; set; } } // set when the request moves an existing session
+  [Column("training_session_id")] public int? SessionId { get; set; }  // set when the request moves an existing session
+  // 0031: optional amenity, and the coach's current counter-proposal (version guards against accepting a stale one)
+  [Column("amenity_id")] public int? AmenityId { get; set; } [Column("proposed_start")] public DateTime? ProposedStart { get; set; } [Column("proposed_end")] public DateTime? ProposedEnd { get; set; }
+  [Column("proposed_amenity_id")] public int? ProposedAmenityId { get; set; } [Column("proposal_reason")] public string? ProposalReason { get; set; }
+  [Column("proposal_expires_at")] public DateTime? ProposalExpiresAt { get; set; } [Column("decline_reason")] public string? DeclineReason { get; set; }
+  [Column("version")] public int Version { get; set; } }
 
 [Table("training_sessions")] public class TrainingSession : BaseModel
 { [PrimaryKey("training_session_id")] public int Id { get; set; } [Column("coach_id")] public string CoachId { get; set; } = ""; [Column("member_id")] public string MemberId { get; set; } = "";

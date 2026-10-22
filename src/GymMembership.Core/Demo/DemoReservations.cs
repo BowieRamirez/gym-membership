@@ -120,6 +120,7 @@ public sealed partial class DemoGateway
                 if (rest.Any(o => (o.MemberId == r.MemberId || o.CoachId == r.CoachId) && o.StartsAt < end && r.EndsAt < o.EndsAt)) throw Err("member_busy");
                 if (rest.Any(o => o.AmenityId == r.AmenityId && o.StartsAt < end + Cooldown && r.StartsAt < o.EndsAt + Cooldown)) throw Err("slot_taken");
                 r.EndsAt = end;
+                foreach (var s in All<TrainingSession>().Where(s => s.Id == r.TrainingSessionId && s.Status == Status.Scheduled)) s.ScheduledEnd = end;   // 0031: the session moves with it
                 Notify(r.MemberId, "amenity", "Session extended", (end + Manila).ToString("HH:mm"));
                 Audit("reservation.extend", "reservations", r.Id.ToString());
                 return true;

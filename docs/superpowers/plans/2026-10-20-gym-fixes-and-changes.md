@@ -91,7 +91,7 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 | 4 | Revenue PDF export | 6 | 2; D11 | DEPLOYED (DB) 2026-10-22 — 0027 live; device check/acceptance pending |
 | 5 | Purchasable amenity catalog and coach availability | 10, 11 | 0; archive integration from 1; D6 | DEPLOYED (DB) 2026-10-22 — 0028 live; device check/acceptance pending |
 | 6 | Reservation engine and booking grid | 8 | 5; D6–D8 | DEPLOYED (DB) 2026-10-22 — 0029 live; device check/acceptance pending |
-| 7 | Structured training requests and rescheduling | 9 | 6; D7–D8 | PLANNED — D7/D8 approved 2026-10-22; needs Phase 6 |
+| 7 | Structured training requests and rescheduling | 9 | 6; D7–D8 | DEPLOYED (DB) 2026-10-22 — 0030/0031 live; device check/acceptance pending |
 | 8 | Physical coach presence and discovery | 12 | 5; D9 | PLANNED |
 | 9 | Coach dashboard, shifts and profile polish | 13, 14 | 5–8; D10 | PLANNED |
 | 10 | Permanent member QR and scan logging | 15 | 1; D12 | PLANNED |
@@ -276,29 +276,31 @@ Acceptance / verification:
 
 Starting points: `RequestsPage.xaml`, `SessionsPage.xaml`, related ViewModels, `ISessionService`, `TimeRequest`/`TrainingSession`, migrations `0021`/`0022`, Phase 6 reservation operations.
 
-- [ ] Add structured request fields: training service, coach, amenity, date, start and end. Pending requests do not consume confirmed reservation capacity; any temporary hold policy must be separately approved.
-- [ ] Implement server-enforced state transitions and actor authority:
-  - Pending Coach Approval → Confirmed when the coach approves the original request and confirmation checks pass.
-  - Pending Coach Approval → Awaiting User Response when the coach proposes a structured alternative with a required reason.
-  - Awaiting User Response → Confirmed only on explicit acceptance of the current proposal by the target user.
-  - Awaiting User Response → Pending Coach Approval when the user submits Request Another Time with the agreed structured fields.
-  - Pending/Awaiting → Declined or Cancelled by the authorized actor, with required reasons for declines.
-  - Confirmed cancellation/rescheduling uses the reservation lifecycle, not silent request-field mutation.
-- [ ] Store proposal version and complete date/start/end/coach/amenity/reason. A stale Accept or duplicate response must not confirm a different or already-resolved proposal.
-- [ ] Chat remains communication only: sending “yes” or discussing another time does not mutate schedule/status.
-- [ ] At each relevant review/confirmation, check active account/membership/hire/entitlement, posted coach availability, operating hours, member and coach overlap, amenity occupancy and cooldowns.
-- [ ] At final approval/acceptance, recheck atomically through Phase 6. If unavailable, keep the request unresolved with a clear conflict message; never show a false Confirmed state.
-- [ ] Reschedule by linking a proposal to the existing confirmed booking. Retain the original reservation until replacement approval and perform the swap atomically. Failure/decline/cancellation of the proposal leaves the original untouched.
-- [ ] Enforce the D7 decision on `0022` same-pair guard without allowing duplicate new bookings or blocking legitimate replacement proposals.
-- [ ] Append every transition/proposal/confirmation failure that affects workflow to an authorized history record with actor, server timestamp, from/to state and reason. Keep history append-only.
-- [ ] Notify both parties and refresh both schedules from committed state; failed transactions send no success notification. Retried operations do not duplicate booking or event history.
+Status: DEPLOYED (DB) 2026-10-22 on `phase1-archive-checkpoint-2026-10-20`. Migrations `0030_request_proposed_status.sql` and `0031_structured_requests.sql` applied live at the owner's request after the full local SQL suite passed (dry run showed only 0030 and 0031; remote history shows both).
+
+- [x] Built on the existing `time_requests` (no second request system). New columns: `amenity_id`, the current proposal (`proposed_start/end`, `proposed_amenity_id`, `proposal_reason`, `proposed_at`, `proposal_expires_at`), `decline_reason`, `version`. New status `proposed` (0030 on its own, because a new enum value cannot be used in the transaction that adds it). Pending requests still hold no reservation capacity. "Training service" is the coach session itself; no separate service catalogue (none exists).
+- [x] Transitions, each enforced in the database with the actor checked:
+  - Pending → Confirmed: coach approves (`respond_time_request`), all checks pass.
+  - Pending → Awaiting member (`proposed`): coach `propose_time` with time, optional amenity and a required reason. Expires 24 h after it is made or when it starts, whichever is first (D8).
+  - Awaiting member → Confirmed: member `accept_proposal(id, version)`; a stale version is refused (`stale_proposal`); an expired one returns `expired` and the request goes back to the coach.
+  - Awaiting member → Pending: member `request_another_time` (same coach; same or different amenity), proposal cleared, version bumped.
+  - Declined with a reason (`decline_time_request`): coach on a member request, member on a proposal or a coach invitation. Cancelled: the requester withdraws (now also while a proposal waits).
+  - Confirmed reschedules keep using `request_reschedule` + approval, which moves the existing session (no new booking).
+- [x] Confirming a request or proposal that names an amenity reserves it in the same transaction (`place_session_amenity`): inside one of the coach's posted shifts (`coach_unavailable` otherwise), amenity not closed, and the 0029 constraints (cooldown, member/coach busy). On any clash nothing is created and the request stays open with the error shown. Requests without an amenity keep their previous rules.
+- [x] Reschedule approval moves the session and its reservation together, or neither (SQL test with a blocked slot). Cancelling a session frees its reservation.
+- [x] D7: the same-pair guard (`assert_no_active_coaching_session`, app and demo) now only counts sessions whose booked end has not passed. A waiting proposal still counts as the member's one open request to that coach (0021 index widened to `pending`/`proposed`).
+- [x] Chat is untouched: messages never change a request.
+- [x] `time_request_events`: append-only history written by a trigger on every status/version change (actor, time, from/to, version, reason, times and amenity), readable by the two people and staff only, no write grants.
+- [x] Notifications to the other person on propose, accept, ask again and decline, inside the same transaction (a failed step sends nothing).
+- [x] App: the member request form has an Amenity choice; request rows show the amenity and the live proposal ("Proposed: …, reason, Answer by …"); one answer panel for Propose another time (coach), Ask for another time (member) and Decline with a reason (either); Accept on a live proposal. Coach Sessions show the session's amenity and an "Add 30 minutes" button: `extend_reservation` now moves the training session's end with its reservation (redefined in 0031).
+- [x] Demo mirrors all of it (DemoRequests plus the existing request functions).
 
 Acceptance / verification:
-- [ ] Original approval, counterproposal acceptance, Request Another Time, decline, cancellation and stale acceptance paths work as specified.
-- [ ] No pending request or chat message alone becomes a reservation.
-- [ ] Competing acceptances or a newly taken slot leave one valid booking and unresolved conflicting requests.
-- [ ] Rescheduling retains the original until a successful atomic replacement.
-- [ ] Transition history and notifications identify the correct actor/time on both clients.
+- [x] Approval, counter-proposal acceptance, Request Another Time, decline, cancellation and stale/expired acceptance (SQL `structured-requests.mjs`, xUnit `StructuredRequestTests`).
+- [x] No pending request or chat message alone becomes a reservation.
+- [x] A slot taken meanwhile leaves the proposal open and books nothing (SQL); competing approvals are still serialized by the 0022 pair lock.
+- [x] Rescheduling keeps the original until the move succeeds (SQL).
+- [x] History records the right actor and time; both people get notified (SQL). Owner device check still pending.
 
 ## Phase 8 — Physical coach check-in and live discovery
 
@@ -546,6 +548,19 @@ Fill cells with date, command/test, result and evidence location. `—` means no
 - Tests: `reservations.mjs` 14/14 (all RED before 0029); `ReservationTests` 6/6; xUnit 599/601 with the same 2 baseline failures; Windows and Android Debug builds succeed. The page was not run on a device. Review: author self-review + ponytail; no independent reviewer.
 - 0029 applied live 2026-10-22 at the owner's request; `migration list --linked` shows 0029 in both columns.
 - Next: owner tries Book an amenity on Windows and Android, then accepts Phase 6. Phase 7 (structured requests and reschedules) is next.
+
+### 2026-10-22 — Phase 7
+
+- Phase 7 implemented on `phase1-archive-checkpoint-2026-10-20` (D7/D8 approved earlier today).
+- Ruling: built on `time_requests` instead of a new request table, so old app builds keep working with `request_time`/`respond_time_request` (they will not show proposals until updated).
+- Ruling: a coach's posted shift is required only for sessions that name an amenity; plain coaching requests keep their previous rules, so existing flows do not break.
+- Ruling: a failed confirmation (for example a taken slot) rolls the whole transaction back, so it is shown to the user but not written to the history; only committed changes are history.
+- Ruling: the screen judges whether a proposal is still live by the device clock; the server decides, so a late Accept returns "expired" and the request goes back to the coach.
+- Ruling: a coach answers a member's reschedule by approving or declining it; counter-proposals apply to new requests only.
+- `extend_reservation` redefined in 0031 so the coach's extension also moves the training session's end; the coach now has an "Add 30 minutes" button.
+- Tests: `structured-requests.mjs` 13/13 (written first; all RED before 0031); the old 0022 "date passing still blocks" check in `session-requests.mjs` was updated to the approved D7 rule. `StructuredRequestTests` 6 (written before the app code). xUnit 605/607 with the same 2 baseline failures; Windows and Android Debug builds succeed. Coach and member request screens checked by screenshot in an isolated demo copy (found and fixed a blank name in the panel title). Review: author self-review + ponytail; no independent reviewer.
+- 0030 and 0031 applied live 2026-10-22 at the owner's request; `migration list --linked` shows both in both columns.
+- Next: owner tries requests with an amenity, a proposal, accept/ask again/decline and Add 30 minutes on Windows and Android, then accepts Phase 7. Phase 8 needs D9.
 
 ## 6. Copyable resume prompt
 

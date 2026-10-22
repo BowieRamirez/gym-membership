@@ -14,6 +14,9 @@ public partial class RequestsPage : BasePage
 	}
 
 	void OnApprove(object? sender, EventArgs e) => Row<RequestsViewModel>(sender, v => v.ApproveCommand);
-	void OnReject(object? sender, EventArgs e) => Row<RequestsViewModel>(sender, v => v.RejectCommand);
+	void OnAccept(object? sender, EventArgs e) => Row<RequestsViewModel>(sender, v => v.AcceptCommand);
+	void OnPropose(object? sender, EventArgs e) => Row<RequestsViewModel>(sender, v => v.StartProposeCommand);
+	void OnAnother(object? sender, EventArgs e) => Row<RequestsViewModel>(sender, v => v.StartAnotherCommand);
+	void OnDecline(object? sender, EventArgs e) => Row<RequestsViewModel>(sender, v => v.StartDeclineCommand);
 	void OnCancel(object? sender, EventArgs e) => Row<RequestsViewModel>(sender, v => v.CancelCommand);
 }

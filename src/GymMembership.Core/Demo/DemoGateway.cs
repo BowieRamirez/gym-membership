@@ -532,6 +532,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     {
         if (SubscriptionCall(fn, a, out var subscriptionResult)) return subscriptionResult;
         if (ReservationCall(fn, a, out var reservationResult)) return reservationResult;
+        if (RequestCall(fn, a, out var requestResult)) return requestResult;
         var now = SubscriptionNow;
         int I(string k) => Convert.ToInt32(a[k]);
         bool B(string k) => Convert.ToBoolean(a[k]);
@@ -725,8 +726,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 {
                     if (!ActiveMember(uid)) throw Err("no_active_membership");
                     if (!CoachesMember(coachId, uid)) throw Err("no_active_hire");
-                    if (All<TrainingSession>().Any(s => s.CoachId == coachId && s.MemberId == uid && s.Status == Status.Scheduled)) throw Err("active_coaching_session");
-                    if (All<TimeRequest>().Any(r => r.CoachId == coachId && r.MemberId == uid && r.RequestedBy == "member" && r.SessionId is null && r.Status == Status.Pending)) throw Err("pending_session_request");
+                    if (All<TrainingSession>().Any(s => s.CoachId == coachId && s.MemberId == uid && s.Status == Status.Scheduled && s.ScheduledEnd > now)) throw Err("active_coaching_session");
+                    if (All<TimeRequest>().Any(r => r.CoachId == coachId && r.MemberId == uid && r.RequestedBy == "member" && r.SessionId is null && r.Status is Status.Pending or "proposed")) throw Err("pending_session_request");
                     req = Add(new TimeRequest { CoachId = coachId, MemberId = uid, RequestedBy = "member", RequestedStart = start, RequestedEnd = end, Message = Opt("p_message") });
                     Notify(coachId, "time_request", "New time request");
                 }
@@ -740,7 +741,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (end <= start) throw Err("end must be after start");
                 if (!CoachesMember(uid, member)) throw Err("no_active_hire");
                 if (!ActiveMember(member)) throw Err("invite_member_inactive");
-                if (All<TrainingSession>().Any(s => s.CoachId == uid && s.MemberId == member && s.Status == Status.Scheduled)) throw Err("active_coaching_session");
+                if (All<TrainingSession>().Any(s => s.CoachId == uid && s.MemberId == member && s.Status == Status.Scheduled && s.ScheduledEnd > now)) throw Err("active_coaching_session");
                 var invitation = Add(new TimeRequest { CoachId = uid, MemberId = member, RequestedBy = "coach", RequestedStart = start, RequestedEnd = end });
                 Notify(member, "time_request", "Your coach invited you to a session");
                 return invitation.Id;
@@ -762,7 +763,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             {
                 RequireActive();
                 var r = All<TimeRequest>().FirstOrDefault(x => x.Id == I("p_request_id")) ?? throw Err("not_found");
-                if (r.Status != Status.Pending) throw Err("already_processed");
+                if (!CoachTurn(r, now)) throw Err("already_processed");
                 var approve = B("p_approve");
                 string member;
                 if (r.MemberId is null)
@@ -777,16 +778,25 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (approve)
                 {
                     if (r.SessionId is null && !ActiveMember(member)) throw Err("no_active_membership");
-                    if (r.SessionId is null && All<TrainingSession>().Any(s => s.CoachId == r.CoachId && s.MemberId == member && s.Status == Status.Scheduled)) throw Err("active_coaching_session");
+                    if (r.SessionId is null && All<TrainingSession>().Any(s => s.CoachId == r.CoachId && s.MemberId == member && s.Status == Status.Scheduled && s.ScheduledEnd > now)) throw Err("active_coaching_session");
                     var ignore = r.SessionId ?? 0;
                     if (Overlap(r.CoachId, true, r.RequestedStart, r.RequestedEnd, ignore) || Overlap(member, false, r.RequestedStart, r.RequestedEnd, ignore)) throw Err("overlap");
+                    // the session's amenity (0031) is checked before anything changes, so a clash leaves the request waiting
+                    var amenity = r.SessionId is { } held ? Confirmed.FirstOrDefault(x => x.TrainingSessionId == held)?.AmenityId : r.AmenityId;
+                    if (amenity is { } am)
+                    {
+                        if (r.SessionId is not null) CheckSessionTime(r.RequestedStart, r.RequestedEnd, am, now);
+                        CheckSessionAmenity(r.CoachId, member, r.SessionId, am, r.RequestedStart, r.RequestedEnd);
+                    }
+                    TrainingSession session;
                     if (r.SessionId is { } sid)
                     {   // a reschedule moves the booked session instead of creating a second one
-                        var moved = All<TrainingSession>().First(s => s.Id == sid);
-                        if (moved.Status != Status.Scheduled) throw Err("already_processed");
-                        moved.ScheduledStart = r.RequestedStart; moved.ScheduledEnd = r.RequestedEnd;
+                        session = All<TrainingSession>().First(s => s.Id == sid);
+                        if (session.Status != Status.Scheduled) throw Err("already_processed");
+                        session.ScheduledStart = r.RequestedStart; session.ScheduledEnd = r.RequestedEnd;
                     }
-                    else Add(new TrainingSession { CoachId = r.CoachId, MemberId = member, Title = "Training session", ScheduledStart = r.RequestedStart, ScheduledEnd = r.RequestedEnd });
+                    else session = Add(new TrainingSession { CoachId = r.CoachId, MemberId = member, Title = "Training session", ScheduledStart = r.RequestedStart, ScheduledEnd = r.RequestedEnd });
+                    if (amenity is { } placed) PlaceSessionAmenity(session, placed, r.RequestedStart, r.RequestedEnd);
                     r.Status = Status.Approved; r.MemberId = member;
                 }
                 else r.Status = Status.Rejected;
@@ -799,7 +809,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 var r = All<TimeRequest>().FirstOrDefault(x => x.Id == I("p_request_id")) ?? throw Err("not_found");
                 var mine = (r.RequestedBy == "member" && r.MemberId == uid) || (r.RequestedBy == "coach" && r.CoachId == uid);
                 if (!mine) throw Err("forbidden");
-                if (r.Status != Status.Pending) throw Err("already_processed");
+                if (r.Status is not (Status.Pending or "proposed")) throw Err("already_processed");
                 r.Status = Status.Cancelled;
                 return null;
             }
@@ -810,6 +820,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (s.Status != Status.Scheduled) throw Err("already_processed");
                 s.Status = Status.Cancelled;
                 foreach (var req in All<TimeRequest>().Where(x => x.SessionId == s.Id && x.Status == Status.Pending)) req.Status = Status.Cancelled;
+                foreach (var held in Confirmed.Where(x => x.TrainingSessionId == s.Id).ToList())   // frees the session's amenity
+                { held.Status = "cancelled"; held.CancelledAt = now; held.CancelledBy = uid; held.CancelReason = Opt("p_reason") ?? "Session cancelled"; }
                 Notify(uid == s.CoachId ? s.MemberId : s.CoachId, "system", "A training session was cancelled", Opt("p_reason"));
                 return null;
             }

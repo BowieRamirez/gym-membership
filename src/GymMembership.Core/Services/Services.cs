@@ -626,15 +626,36 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
 }
 
 // ===================== Time requests and sessions =====================
-public sealed record RequestRow(TimeRequest Request, string With, string Kind, bool CanRespond, bool CanCancel);
-public sealed record SessionRow(TrainingSession Session, string With, bool IsMine, bool CanManage, bool CanChange);
+/// <summary>CanPropose: the coach may suggest another time. CanAccept: the member may accept the coach's live proposal (or ask again / decline).</summary>
+public sealed record RequestRow(TimeRequest Request, string With, string Kind, bool CanRespond, bool CanCancel,
+    string? Amenity = null, bool CanPropose = false, bool CanAccept = false, string? ProposalText = null)
+{
+    // declining always takes a reason; open slots are simply left alone
+    public bool CanDecline => (CanRespond && Request.MemberId is not null) || CanAccept;
+    public bool HasProposal => ProposalText is not null;
+}
+public sealed record AmenityChoice(int? Id, string Name);
+public sealed record SessionRow(TrainingSession Session, string With, bool IsMine, bool CanManage, bool CanChange, int? ReservationId = null, string? Amenity = null)
+{
+    // the coach running a session on an amenity can add time until it ends (extend_reservation)
+    public bool CanExtend => IsMine && ReservationId is not null && Session.Status == Status.Scheduled && Session.ScheduledEnd.ToUniversalTime() > DateTime.UtcNow;
+}
 public sealed record RequestMember(string MemberId, string Name);
-public sealed record RequestsView(IReadOnlyList<RequestRow> Rows, bool IsCoach, IReadOnlyList<CoachCard> HiredCoaches, IReadOnlyList<RequestMember>? Trainees = null, IReadOnlyList<TrainingSession>? ActiveSessions = null);
+public sealed record RequestsView(IReadOnlyList<RequestRow> Rows, bool IsCoach, IReadOnlyList<CoachCard> HiredCoaches, IReadOnlyList<RequestMember>? Trainees = null,
+    IReadOnlyList<TrainingSession>? ActiveSessions = null, IReadOnlyList<Amenity>? Amenities = null);
 
 public interface ISessionService
 {
     Task<AppResult<RequestsView>> RequestsAsync();
-    Task<AppResult<bool>> RequestAsync(string coachId, DateTime startUtc, DateTime endUtc, string? message);
+    /// <summary>A member asks a hired coach for a session, optionally on an amenity (then it follows the booking grid and hours).</summary>
+    Task<AppResult<bool>> RequestAsync(string coachId, DateTime startUtc, DateTime endUtc, string? message, int? amenityId = null);
+    /// <summary>The coach suggests another time (and amenity) for a member's request, with a reason. Valid 24 h or until it starts.</summary>
+    Task<AppResult<bool>> ProposeAsync(int requestId, DateTime startUtc, DateTime endUtc, int? amenityId, string reason);
+    /// <summary>The member accepts the proposal they saw (by version): "confirmed", or "expired" when it ran out and went back to the coach.</summary>
+    Task<AppResult<string>> AcceptProposalAsync(int requestId, int version);
+    Task<AppResult<bool>> RequestAnotherTimeAsync(int requestId, DateTime startUtc, DateTime endUtc, int? amenityId, string? message);
+    /// <summary>Declines with a reason: the coach a member's request, the member a proposal or an invitation.</summary>
+    Task<AppResult<bool>> DeclineAsync(int requestId, string reason);
     Task<AppResult<bool>> PostAvailabilityAsync(DateTime startUtc, DateTime endUtc);
     Task<AppResult<bool>> InviteMemberAsync(string memberId, DateTime startUtc, DateTime endUtc);
     Task<AppResult<bool>> RespondAsync(int requestId, bool approve);
@@ -644,6 +665,8 @@ public interface ISessionService
     Task<AppResult<bool>> SetSessionStatusAsync(int sessionId, string status);
     Task<AppResult<bool>> RescheduleAsync(int sessionId, DateTime startUtc, DateTime endUtc);
     Task<AppResult<bool>> CancelSessionAsync(int sessionId);
+    /// <summary>The coach adds minutes (30-minute steps) to a session on an amenity; the session and its reservation move together.</summary>
+    Task<AppResult<bool>> ExtendAsync(int reservationId, int minutes);
     /// <summary>The signed-in coach's sessions that start in [fromUtc, toUtc), oldest first, each with how it went (Mark is null until marked).</summary>
     Task<AppResult<IReadOnlyList<CalendarSession>>> CalendarAsync(DateTime fromUtc, DateTime toUtc);
     /// <summary>The signed-in coach's scheduled sessions from now on, nearest first.</summary>
@@ -658,7 +681,10 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
         var coaches = await gw.ListAsync<Coach>();
         var iAmCoach = coaches.Any(c => c.UserId == uid);
         var names = await Directory_.UserNamesAsync(gw);
-        var requests = await gw.ListAsync<TimeRequest>(r => r.Status == "pending");
+        var now = DateTime.UtcNow;
+        var requests = (await gw.ListAsync<TimeRequest>(r => r.Status == "pending")).Concat(await gw.ListAsync<TimeRequest>(r => r.Status == "proposed")).ToList();
+        var amenities = await gw.ListAsync<Amenity>();
+        string? AmenityName(int? id) => id is null ? null : amenities.FirstOrDefault(a => a.Id == id)?.Name ?? "Amenity";
 
         string CoachName(string id) => names.GetValueOrDefault(id, "Coach");
         string MemberName(string? id) => id is null ? "Open slot" : names.GetValueOrDefault(id, "Member");
@@ -667,10 +693,21 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
         {
             var iAmCoachOfThis = r.CoachId == uid;
             var mine = (r.RequestedBy == "member" && r.MemberId == uid) || (r.RequestedBy == "coach" && iAmCoachOfThis);
-            var canRespond = !mine && (r.RequestedBy == "member" ? iAmCoachOfThis : !iAmCoachOfThis);
+            // a proposal that ran out is the coach's turn again (D8)
+            var live = r.Status == "proposed" && r.ProposalExpiresAt?.ToUniversalTime() > now;
+            var coachTurn = r.Status == "pending" || (r.Status == "proposed" && !live);
+            var canRespond = !mine && (r.RequestedBy == "member" ? iAmCoachOfThis : !iAmCoachOfThis) && coachTurn;
             var kind = r.SessionId is not null ? (r.RequestedBy == "member" ? "Reschedule asked by member" : "Reschedule asked by coach")
+                : live ? (iAmCoachOfThis ? "You proposed another time" : "Your coach proposed another time")
+                : r.Status == "proposed" ? "Proposal expired"
                 : r.RequestedBy == "member" ? "Requested by member" : r.MemberId is null ? "Open availability" : "Offered by coach";
-            return new RequestRow(r, iAmCoachOfThis ? MemberName(r.MemberId) : CoachName(r.CoachId), kind, canRespond, mine);
+            string? proposal = r.Status == "proposed" && r.ProposedStart is { } ps && r.ProposedEnd is { } pe
+                ? $"{ps.ToLocalTime():ddd d MMM, h:mm tt}–{pe.ToLocalTime():h:mm tt}" + (AmenityName(r.ProposedAmenityId) is { } pa ? $" at {pa}" : "")
+                  + $". {r.ProposalReason}" + (live ? $" Answer by {r.ProposalExpiresAt!.Value.ToLocalTime():ddd h:mm tt}." : " This proposal has expired.")
+                : null;
+            return new RequestRow(r, iAmCoachOfThis ? MemberName(r.MemberId) : CoachName(r.CoachId), kind, canRespond, mine, AmenityName(r.AmenityId),
+                CanPropose: iAmCoachOfThis && r.RequestedBy == "member" && r.SessionId is null && coachTurn,
+                CanAccept: r.MemberId == uid && r.RequestedBy == "member" && live, ProposalText: proposal);
         }).ToList();
 
         var hires = await gw.ListAsync<CoachHire>(h => h.MemberId == uid && h.Status == "active");
@@ -685,13 +722,49 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
                 .Select(p => new RequestMember(p.Id, MemberName(p.Id))).OrderBy(m => m.Name).ToList();
         }
         var active = await gw.ListAsync<TrainingSession>(s => s.Status == Status.Scheduled);
-        return new RequestsView(rows, iAmCoach, hired, trainees, active.Where(s => s.CoachId == uid || s.MemberId == uid).ToList());
+        // D7: a session only blocks new requests until its booked end has passed
+        return new RequestsView(rows, iAmCoach, hired, trainees, active.Where(s => (s.CoachId == uid || s.MemberId == uid) && s.ScheduledEnd.ToUniversalTime() > now).ToList(),
+            amenities.Where(a => a.IsActive).OrderBy(a => a.Name).ToList());
     });
 
-    public async Task<AppResult<bool>> RequestAsync(string coachId, DateTime startUtc, DateTime endUtc, string? message)
+    public async Task<AppResult<bool>> RequestAsync(string coachId, DateTime startUtc, DateTime endUtc, string? message, int? amenityId = null)
     {
         if (endUtc <= startUtc) return AppResult<bool>.Fail(AppErrorKind.Validation, "end must be after start");
-        return await Safe.RunAsync(async () => { await gw.RpcAsync<int>("request_time", TimeArgs(coachId, startUtc, endUtc, message)); return true; });
+        var args = TimeArgs(coachId, startUtc, endUtc, message);
+        if (amenityId is null) return await Safe.RunAsync(async () => { await gw.RpcAsync<int>("request_time", args); return true; });
+        args["p_amenity_id"] = amenityId.Value;
+        if (!args.ContainsKey("p_message")) args["p_message"] = null!;
+        return await Safe.RunAsync(async () => { await gw.RpcAsync<int>("request_session", args); return true; });
+    }
+
+    public async Task<AppResult<bool>> ProposeAsync(int requestId, DateTime startUtc, DateTime endUtc, int? amenityId, string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_reason");
+        return await Safe.RunAsync(async () =>
+        {
+            await gw.RpcAsync("propose_time", new() { ["p_request_id"] = requestId, ["p_start"] = startUtc.ToString("O"), ["p_end"] = endUtc.ToString("O"),
+                ["p_amenity_id"] = amenityId!, ["p_reason"] = reason.Trim() });
+            return true;
+        });
+    }
+
+    public Task<AppResult<string>> AcceptProposalAsync(int requestId, int version) =>
+        Safe.RunAsync(() => gw.RpcAsync<string>("accept_proposal", new() { ["p_request_id"] = requestId, ["p_version"] = version }));
+
+    public Task<AppResult<bool>> RequestAnotherTimeAsync(int requestId, DateTime startUtc, DateTime endUtc, int? amenityId, string? message) => Safe.RunAsync(async () =>
+    {
+        await gw.RpcAsync("request_another_time", new() { ["p_request_id"] = requestId, ["p_start"] = startUtc.ToString("O"), ["p_end"] = endUtc.ToString("O"),
+            ["p_amenity_id"] = amenityId!, ["p_message"] = (string.IsNullOrWhiteSpace(message) ? null : message.Trim())! });
+        return true;
+    });
+
+    public Task<AppResult<bool>> ExtendAsync(int reservationId, int minutes) => Safe.RunAsync(async () =>
+    { await gw.RpcAsync("extend_reservation", new() { ["p_id"] = reservationId, ["p_minutes"] = minutes }); return true; });
+
+    public async Task<AppResult<bool>> DeclineAsync(int requestId, string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_reason");
+        return await Safe.RunAsync(async () => { await gw.RpcAsync("decline_time_request", new() { ["p_request_id"] = requestId, ["p_reason"] = reason.Trim() }); return true; });
     }
 
     public async Task<AppResult<bool>> PostAvailabilityAsync(DateTime startUtc, DateTime endUtc)
@@ -740,11 +813,15 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
         var uid = gw.CurrentUserId;
         var names = await Directory_.UserNamesAsync(gw);
         var sessions = await gw.ListAsync<TrainingSession>();
+        var held = (await gw.ListAsync<Reservation>(r => r.Status == "confirmed")).Where(r => r.TrainingSessionId is not null).ToDictionary(r => r.TrainingSessionId!.Value);
+        var amenities = held.Count == 0 ? [] : await gw.ListAsync<Amenity>();
         return sessions.OrderBy(s => s.ScheduledStart).Select(s =>
         {
             var isMine = s.CoachId == uid;
             var with = isMine ? s.MemberId : s.CoachId;
-            return new SessionRow(s, names.GetValueOrDefault(with, "Unknown"), isMine, isMine && s.Status == Status.Scheduled, s.Status == Status.Scheduled);
+            var r = held.GetValueOrDefault(s.Id);
+            return new SessionRow(s, names.GetValueOrDefault(with, "Unknown"), isMine, isMine && s.Status == Status.Scheduled, s.Status == Status.Scheduled,
+                r?.Id, r is null ? null : amenities.FirstOrDefault(a => a.Id == r.AmenityId)?.Name ?? "Amenity");
         }).ToList();
     });
 
