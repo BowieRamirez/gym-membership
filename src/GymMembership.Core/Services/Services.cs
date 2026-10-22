@@ -875,7 +875,12 @@ public sealed record UserRow(string UserId, string Username, bool IsActive, IRea
     public string ActiveStatus => IsActive ? "active" : "inactive";
 }
 public sealed record AuditRow(AuditEntry Entry, string Actor);
-public sealed record DiscountRow(Discount Discount, string State);
+public sealed record DiscountRow(Discount Discount, string State, long Used = 0, long Pending = 0)
+{
+    // used = verified + voided; pending payments hold a place too
+    public string Usage => (Discount.MaxUses is { } max ? $"{Used} of {max} used" : $"{Used} used, no limit") + (Pending > 0 ? $", {Pending} pending" : "");
+}
+public sealed record DiscountUse(long Id, long Used, long Pending);
 
 public interface IAdminService
 {
@@ -940,13 +945,16 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
     public Task<AppResult<IReadOnlyList<DiscountRow>>> DiscountsAsync() => Safe.RunAsync<IReadOnlyList<DiscountRow>>(async () =>
     {
         var now = DateTime.UtcNow;
+        var uses = (await gw.RpcAsync<List<DiscountUse>>("discount_usage", new()) ?? []).ToDictionary(u => u.Id);
         return (await gw.ListAsync<Discount>()).OrderByDescending(d => d.ExpiresAt)
-            .Select(d => new DiscountRow(d, !d.IsActive ? "inactive" : d.ExpiresAt <= now ? "expired" : "active")).ToList();
+            .Select(d => new DiscountRow(d, !d.IsActive ? "inactive" : d.ExpiresAt <= now ? "expired" : "active",
+                uses.GetValueOrDefault(d.Id)?.Used ?? 0, uses.GetValueOrDefault(d.Id)?.Pending ?? 0)).ToList();
     });
 
     public async Task<AppResult<bool>> SaveDiscountAsync(Discount d)
     {
         if (string.IsNullOrWhiteSpace(d.Code) || d.Percent is < 1 or > 100) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_discount");
+        if (d.MaxUses < 1 || d.Id == 0 && d.MaxUses is null) return AppResult<bool>.Fail(AppErrorKind.Validation, "limit_required");
         d.Code = d.Code.Trim().ToUpperInvariant();
         return await Safe.RunAsync(async () => { if (d.Id == 0) await gw.InsertAsync(d); else await gw.UpdateAsync(d); return true; });
     }

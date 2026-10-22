@@ -35,8 +35,8 @@ const alex = await user('alex@t.io', 'member', 'Alex');
 const bea = await user('bea@t.io', 'member', 'Bea');
 await db.query(`insert into membership_packages (name, price, duration_days) values ('Monthly', 1000, 30), ('Annual', 10000, 365)`);
 await db.query(`insert into amenities (name, price, duration_days) values ('Boxing', 300, 30)`);
-await db.query(`insert into discounts (code, percent, starts_at, expires_at) values ('WELCOME10', 10, now() - interval '1 day', now() + interval '30 days'),
-                ('OLD20', 20, now() - interval '10 days', now() - interval '1 day')`);
+await db.query(`insert into discounts (code, percent, starts_at, expires_at, max_uses) values ('WELCOME10', 10, now() - interval '1 day', now() + interval '30 days', 100),
+                ('OLD20', 20, now() - interval '10 days', now() - interval '1 day', 100)`);
 const monthly = 1;
 
 console.log('\nsign-up trigger');

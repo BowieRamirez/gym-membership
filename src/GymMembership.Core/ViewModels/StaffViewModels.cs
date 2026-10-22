@@ -796,6 +796,7 @@ public partial class DiscountsViewModel(IAdminService svc, ArchiveViewModel? arc
     [ObservableProperty] private string newCode = "";
     [ObservableProperty] private int newPercent = 10;
     [ObservableProperty] private DateTime validUntil = DateTime.Today.AddDays(30);
+    [ObservableProperty] private int newLimit = 100;
 
     public override Task OnAppearingAsync() => LoadAsync();
 
@@ -806,7 +807,7 @@ public partial class DiscountsViewModel(IAdminService svc, ArchiveViewModel? arc
     {
         Notice = null;
         // valid through the end of the chosen day, local time
-        var d = new Discount { Code = NewCode, Percent = NewPercent, ExpiresAt = ValidUntil.Date.AddDays(1).ToUniversalTime() };
+        var d = new Discount { Code = NewCode, Percent = NewPercent, MaxUses = NewLimit, ExpiresAt = ValidUntil.Date.AddDays(1).ToUniversalTime() };
         if (!await RunAsync(() => svc.SaveDiscountAsync(d))) return;
         Notice = $"Code {d.Code} is live.";
         NewCode = "";
@@ -818,6 +819,23 @@ public partial class DiscountsViewModel(IAdminService svc, ArchiveViewModel? arc
     {
         var d = row.Discount; d.IsActive = !d.IsActive;
         if (await RunAsync(() => svc.SaveDiscountAsync(d))) await LoadAsync(); else d.IsActive = !d.IsActive;
+    }
+
+    [ObservableProperty] private DiscountRow? editing;
+    [ObservableProperty] private int editLimit;
+
+    [RelayCommand] private void ChangeLimit(DiscountRow row) { Editing = row; EditLimit = row.Discount.MaxUses ?? Math.Max(1, (int)(row.Used + row.Pending)); Notice = null; }
+    [RelayCommand] private void CancelEdit() => Editing = null;
+
+    [RelayCommand]
+    private async Task SaveLimitAsync()
+    {
+        if (Editing is not { } row) return;
+        var old = row.Discount.MaxUses; row.Discount.MaxUses = EditLimit;
+        if (!await RunAsync(() => svc.SaveDiscountAsync(row.Discount))) { row.Discount.MaxUses = old; return; }
+        Editing = null;
+        Notice = $"Code {row.Discount.Code} can now be used {EditLimit} times.";
+        await LoadAsync();
     }
 
     [ObservableProperty] private DiscountRow? deleting;

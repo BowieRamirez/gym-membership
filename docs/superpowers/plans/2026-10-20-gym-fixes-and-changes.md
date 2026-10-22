@@ -70,8 +70,8 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 - [x] **D1 — deletion reason and safeguards (owner approved 2026-10-20):** Admin-only deletion with a mandatory trimmed reason of 1–500 characters. Block self-deletion and loss of the last active admin. Block deletion while the target has any scheduled sessions (including overdue unresolved sessions), active coaching hires, or pending payments; staff must resolve these first. Preserve history; no automatic refunds/cancellations. Owner confirmed admin-only behavior and explicitly requested no push.
 - [x] **D2 — archive location and types (owner approved 2026-10-20):** Use separate Discounts and Archive tabs in the admin area. Initial archive types: inactive/deleted accounts, discount codes, gym-plan catalog entries, and amenities. Expired member subscription terms remain in membership history, not this archive. Combined Archive UI and catalog lifecycle are now implemented locally. Future archive types are not invented; expired membership terms stay in membership history.
 - [x] **D3 — payment authority (owner approved 2026-10-22):** All admins may void/cancel; authority stays role-based via the existing `payments:void` grant (no per-user grants, no new role). No separate admin-cancel capability: void covers verified payments with reason/actor/timestamp; pending payments keep the existing Reject in the verification queue (reason + audit), per Phase 2 ruling 2026-10-22. Refund decisions (`decide_membership_refund`, `record_membership_refund_paid`) move from `has_role('admin')` to the same `payments:void` check. Members keep self-withdrawal of their own unverified payment (0019) and 24h refund requests (Phase 7). Employees, coaches, members and archived accounts cannot void.
-- [ ] **D4 — access-code meaning and activation:** Confirm these are existing discount codes, not a new access/invitation-code system. Recommend one successful verified redemption per distinct member; a pending discounted checkout temporarily reserves capacity, then consumes it on verification and releases it on rejection/expiry/cancellation. Decide refund/void effects; recommend consumed redemptions stay consumed to prevent reuse abuse. Alternative policies require corresponding tests. Answer: ___
-- [ ] **D5 — limits and restoration:** Recommend positive integer caps, no lowering below already-consumed plus reserved capacity, and no normal reactivation of exhausted codes. Decide whether raising a cap can ever unlock an exhausted code; default to no, issue a new code. Decide how existing unlimited codes are backfilled without breaking pending payments. Answer: ___
+- [x] **D4 — access-code meaning and activation (owner approved 2026-10-22):** These are the existing discount codes; add a max-uses limit, no new code system. A place is used by a payment with that code in status pending or verified (pending reserves, verification keeps it; rejection, expiry and member cancellation release it), the same rule as the existing once-per-member check (`apply_discount`, `payments_discount_once_per_member`). Voided and refunded uses stay counted and are not released; this also changes today's behavior where a void lets the same member reuse the code.
+- [x] **D5 — limits and restoration (owner approved 2026-10-22):** New codes require a positive integer limit. Existing codes stay unlimited (null) until an admin edits them; no backfill of a number, and pending payments are untouched. A limit cannot be set below places already used. When the last place is used the code is deactivated and archived with reason `limit reached`; it cannot be restored or reopened by raising the limit — issue a new code instead.
 - [ ] **D6 — slot and payment contract:** Agree slot increment (recommend 30 minutes), maximum booking duration, advance-booking window, operating hours, and whether overnight bookings are supported. With one unit per amenity, each grid column represents a different amenity, not invented extra courts. Decide entitlement/price/session-credit rules, and whether independent amenity bookings need a coach. Answer: ___
 - [ ] **D7 — slot grouping and same-pair guard:** Recommend adjacent selected slots form one continuous reservation with cooldown only after its end; nonadjacent selections become separate reservations and must independently pass all checks. Decide all-or-nothing multi-selection confirmation. Explicitly retain or revise the `0022` active coach/member guard for future multiple bookings and automatic end behavior. Do not quietly remove its protection. Answer: ___
 - [ ] **D8 — training lifecycle:** Decide proposal expiry, how Request Another Time is routed, whether coach/amenity changes require fresh approval from a different coach, and how auto-ended usage relates to training completion/no-show/attendance. Recommend separate reservation occupancy state and attendance outcome. Answer: ___
@@ -87,7 +87,7 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 | 0 | Decisions and verified baseline | All | None | IN PROGRESS — D1/D2 approved, baseline recorded; other phase decisions pending |
 | 1 | Archive foundation, account deletion, overflow menu | 1, 2, 4 | 0; D1–D2 | IMPLEMENTED locally — automated checks + Windows demo smoke verified; remaining device/owner acceptance pending |
 | 2 | Payment authorization and history | 5 | 0; D3 | DEPLOYED (DB) 2026-10-22 — 0025 live; owner app check/acceptance pending |
-| 3 | Code activation caps and archive integration | 7 | 1; D4–D5 | PLANNED |
+| 3 | Code activation caps and archive integration | 7 | 1; D4–D5 | IMPLEMENTED locally 2026-10-22 — 0026 not applied live; device check/acceptance pending |
 | 4 | Revenue PDF export | 6 | 2; D11 | PLANNED |
 | 5 | Purchasable amenity catalog and coach availability | 10, 11 | 0; archive integration from 1; D6 | PLANNED |
 | 6 | Reservation engine and booking grid | 8 | 5; D6–D8 | PLANNED |
@@ -189,21 +189,23 @@ Acceptance / verification:
 
 Starting points: Discount model, `DiscountsViewModel`, `DiscountsPage.xaml`, checkout/payment RPCs, DemoGateway, Phase 1 archive.
 
-- [ ] Implement the D4 activation definition with a durable redemption ledger and positive maximum count. Use existing discount infrastructure if these are discount codes.
-- [ ] Add create/edit cap input, name/code, and usage display such as `1/100`. Clearly distinguish confirmed usage from reserved pending capacity where applicable.
-- [ ] Enforce cap and once-per-member behavior transactionally with locking/constraints. Repeated callbacks/verification/retries must be idempotent; concurrent requests cannot claim the last place twice.
-- [ ] Reserve/release capacity for pending payments if using the recommended policy, including expiry jobs and cancellation/rejection paths. Never sell a discounted payment that cannot later be honored.
-- [ ] On final consumption, mark inactive and archive atomically with `limit reached` reason; expiry and manual deactivation use distinct reasons.
-- [ ] Permit manual deactivate/restore only for nonexhausted, otherwise-valid codes. Exhaustion cannot be bypassed through edit/reactivate or direct row updates; cap-change policy follows D5.
-- [ ] Backfill existing codes/redemptions, decide pending-checkout treatment and avoid retroactively changing paid amounts.
-- [ ] Widen or wrap the Deactivate label, or use an approved shorter label, on narrow screens.
-- [ ] Add demo/unit/SQL tests for caps, distinct users, release/retry paths and archive integration.
+Status: IMPLEMENTED locally 2026-10-22 on `phase1-archive-checkpoint-2026-10-20`. Migration `0026_discount_limits.sql` is NOT applied live; apply it before installing an app build with this change (the Discounts tab calls the new `discount_usage` RPC).
+
+- [x] D4 limit as `discounts.max_uses` (null = code made before limits, unlimited). Usage is counted from payments, not stored: held = pending + verified + voided, consumed = verified + voided (`discount_held`/`discount_consumed`). No separate ledger table: payments already are the durable record and nothing can drift.
+- [x] Discounts tab: required "Max uses" field on new codes (default 100), per-row usage text such as `3 of 100 used, 1 pending` / `3 used, no limit`, and a "Change limit" panel (also gives old unlimited codes a limit).
+- [x] `apply_discount` locks the code row (`for update`), so concurrent checkouts serialize; a full code fails with `code_limit_reached`. Voided payments now also count as the member's one use. SQL race test: two members, last place, exactly one succeeds.
+- [x] Pending payments reserve; rejection, cron expiry and member cancellation release automatically because they change the payment status. Verification keeps the place.
+- [x] When consumed reaches the limit (payment verified at the desk, recorded verified at the counter, or the limit lowered to the consumed count) the code is deactivated and archived with reason `Limit reached`. Manual deactivation keeps `Deactivated code`; expiry keeps `Expired code`.
+- [x] Used-up codes refuse restore (`record_not_restorable`) and `archive_records` offers no Restore for them; archived rows are read-only, so the limit cannot be raised either. Limit edits: required on insert, never back to null, never below held places (`limit_required`, `limit_below_used`). Enforced by trigger `discounts_limit_guard` for app writes and RPCs.
+- [x] No backfill: existing codes keep `max_uses` null and existing payments/amounts are untouched.
+- [x] Row buttons now wrap (FlexLayout) so Deactivate/Archive/Change limit are not cut off on narrow screens. Visual check on devices still pending.
+- [x] Tests: `supabase/tests/local/discount-limits.mjs` (9 checks, all RED before 0026); `DiscountLimitTests` (5 demo/ViewModel tests, RED before). Older SQL fixtures (`rules`, `phase7`, `archive-catalog`) now give their seed codes a limit; one xUnit payload got `MaxUses = 1` so it still reaches the permission check.
 
 Acceptance / verification:
-- [ ] Last-place race yields only one success and no count above cap.
-- [ ] Usage matches the ledger after verification, cancellation, expiry, retry, void and refund under the chosen policy.
-- [ ] Exhausted codes are inactive, archived and not normally restorable; manual nonexhausted deactivation is reversible.
-- [ ] Admin cap editing validates correctly and button text is legible on both platforms.
+- [x] Last-place race yields only one success and no count above cap (SQL race test).
+- [x] Usage matches payments after verification, rejection, void and counter payment (SQL + demo tests); expiry uses the same status path via the existing cron.
+- [x] Exhausted codes are inactive, archived and not restorable; manual nonexhausted deactivation remains reversible (unchanged 0024 path).
+- [ ] Admin cap editing validates correctly (tests pass) and button text is legible on both platforms — device/visual check by the owner pending.
 
 ## Phase 4 — Revenue export as PDF
 
@@ -493,6 +495,16 @@ Fill cells with date, command/test, result and evidence location. `—` means no
 - Implemented `0025_refund_payment_permission.sql`, demo parity, `payment-authority.mjs` (6 checks, RED before 0025, GREEN after). Full local SQL suites 0 failed; xUnit 574/576 with the same 2 baseline failures. Review: author self-review + ponytail review (one duplicate test removed); no independent reviewer.
 - Commit 6f986d7 pushed on `phase1-archive-checkpoint-2026-10-20`; 0025 applied live at the owner's request.
 - Next: owner verifies refund approve/reject as admin, the Phase 1 live smoke and Android checks, then records acceptance for Phases 1 and 2. Phase 3 needs D4/D5.
+
+### 2026-10-22 — D4/D5 and Phase 3
+
+- D4/D5 approved by the owner (see section 2). Phase 3 implemented on `phase1-archive-checkpoint-2026-10-20`.
+- Ruling: a code is archived when consumed (verified + voided) reaches the limit, not when a pending payment takes the last place, because a rejected payment must be able to give the place back and an archived code can never be restored.
+- Ruling: usage is counted from payments under a row lock instead of stored counters, so there is no ledger to drift or protect from direct writes.
+- Ruling: the demo archives used-up codes when codes are read or used rather than at the moment of verification; the database does it at verification.
+- Tests: SQL suites all 0 failed (discount-limits 9/9 RED before 0026); xUnit 579/581 with the same 2 baseline failures; Windows and Android Debug builds succeed. Review: author self-review + ponytail; no independent reviewer.
+- Deferred minor: setting the limit exactly to the consumed count archives the code immediately, but the success notice still says "can now be used N times".
+- Next: owner applies 0026 (`npx supabase db push`), checks the Discounts tab on Windows/Android, then accepts Phase 3. Phase 4 needs D11.
 
 ## 6. Copyable resume prompt
 

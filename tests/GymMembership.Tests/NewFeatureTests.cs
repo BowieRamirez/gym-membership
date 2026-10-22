@@ -84,7 +84,7 @@ public class NewFeatureTests
     {
         var gw = await As("member@demo.io");
         Assert.Empty(await gw.ListAsync<Discount>());
-        Assert.Equal(AppErrorKind.Unauthorized, (await new AdminService(gw).SaveDiscountAsync(new Discount { Code = "HACK", Percent = 100, ExpiresAt = DateTime.UtcNow.AddDays(1) })).Error);
+        Assert.Equal(AppErrorKind.Unauthorized, (await new AdminService(gw).SaveDiscountAsync(new Discount { Code = "HACK", Percent = 100, MaxUses = 1, ExpiresAt = DateTime.UtcNow.AddDays(1) })).Error);
 
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
         var admin = new AdminService(gw);

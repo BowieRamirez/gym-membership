@@ -220,7 +220,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             switch (row)
             {
                 case MembershipPackage or Amenity: if (!Has("catalog:manage")) throw Err(Rls); break;
-                case Discount: if (!Has("discounts:manage")) throw Err(Rls); break;
+                case Discount d: if (!Has("discounts:manage")) throw Err(Rls); GuardDiscountLimit(null, d); break;
                 case ShiftPost s:
                     if (s.CoachId != Uid || !IsCoach(Uid)) throw Err(Rls);
                     if (All<ShiftPost>().Any(x => x.CoachId == s.CoachId && x.Status == Status.Scheduled && x.Start < s.End && s.Start < x.End)) throw Err("overlap");
@@ -285,7 +285,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     var edited = Clone(a); edited.Availability = old.Availability; edited.StatusReason = old.StatusReason; edited.BackAt = old.BackAt; edited.ImagePath = old.ImagePath;
                     list[index] = edited;
                     break;
-                case (Discount, _): if (!Has("discounts:manage")) throw Err(Rls); list[index] = Clone(row); break;
+                case (Discount d, Discount old):
+                    if (!Has("discounts:manage")) throw Err(Rls);
+                    GuardDiscountLimit(old, d); list[index] = Clone(d); ArchiveUsedUpCodes();
+                    break;
                 case (GymSettings, _): if (!Has("gym_settings:manage")) throw Err(Rls); list[index] = Clone(row); break;
                 case (ShiftPost s, ShiftPost old):   // a coach changes times, note and status, never the owner
                     if (old.CoachId != Uid) throw Err(Rls);
@@ -455,8 +458,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
         if (!a.TryGetValue("p_discount_code", out var raw) || string.IsNullOrWhiteSpace(raw as string)) return (null, 0, price);
         var code = ((string)raw).Trim();
         var now = DateTime.UtcNow;
+        ArchiveUsedUpCodes();
         var d = All<Discount>().FirstOrDefault(x => x.IsActive && x.StartsAt <= now && x.ExpiresAt > now && string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase));
-        if (d is null || All<Payment>().Any(p => p.MemberId == member && p.DiscountId == d.Id && p.Status is Status.Pending or Status.Verified)) throw Err("invalid_code");
+        if (d is null || All<Payment>().Any(p => p.MemberId == member && p.DiscountId == d.Id && p.Status is Status.Pending or Status.Verified or Status.Voided)) throw Err("invalid_code");
+        if (d.MaxUses is { } max && Held(d) >= max) throw Err("code_limit_reached");
         var cut = Math.Round(price * d.Percent / 100m, 2);
         return (d.Id, cut, price - cut);
     }
@@ -517,6 +522,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
         switch (fn)
         {
             case "archive_records": return ArchiveRecords(a);
+            case "discount_usage":
+                Require("discounts:manage"); ArchiveUsedUpCodes();
+                return All<Discount>().Select(d => new DiscountUse(d.Id, Consumed(d), All<Payment>().Count(p => p.DiscountId == d.Id && p.Status == Status.Pending))).ToList();
             case "archive_catalog_record": ArchiveCatalog(S("p_type"), I("p_id"), S("p_reason")); return null;
             case "restore_archived_record": RestoreArchived(S("p_type"), S("p_id")); return null;
             case "avail_membership":

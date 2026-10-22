@@ -33,9 +33,9 @@ public static class ErrorMapper
     {
         var m = message.ToLowerInvariant();
         if (Has(m, "forbidden", "42501", "jwt", "row-level security", "invalid login", "not authenticated")) return AppErrorKind.Unauthorized;
-        if (Has(m, "account_has_commitments", "account_archived", "record_archived", "record_not_restorable", "not_archived", "already_processed", "already_availed", "renewal_pending", "already_requested", "refund_in_progress", "not_refundable", "pending_session_request", "active_coaching_session", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
+        if (Has(m, "account_has_commitments", "account_archived", "record_archived", "record_not_restorable", "code_limit_reached", "not_archived", "already_processed", "already_availed", "renewal_pending", "already_requested", "refund_in_progress", "not_refundable", "pending_session_request", "active_coaching_session", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
         if (Has(m, "account_inactive", "bad_archive_reason", "self_archive", "last_active_admin", "no_active_membership", "self_verify", "self_decision", "not_renewable", "wrong_member", "not_found", "23514",
-                   "refund_window_closed", "payment_expired", "invite_member_inactive", "invalid_code", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "end must be after start")) return AppErrorKind.Validation;
+                   "refund_window_closed", "payment_expired", "invite_member_inactive", "invalid_code", "limit_required", "limit_below_used", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "end must be after start")) return AppErrorKind.Validation;
         return AppErrorKind.Unknown;
     }
 
@@ -64,7 +64,10 @@ public static class ErrorText
         "account_archived" => "This account is archived. An administrator must restore it from Archive.",
         "not_archived" => "This record is no longer archived. Refresh Archive and try again.",
         "record_archived" => "This record is archived and read-only. An administrator must restore it before editing.",
-        "record_not_restorable" => "This code has expired and cannot be restored. Create a new code instead.",
+        "record_not_restorable" => "This code has expired or reached its limit and cannot be restored. Create a new code instead.",
+        "code_limit_reached" => "That discount code has been used up.",
+        "limit_required" => "Enter a limit of at least 1 for how many times the code can be used.",
+        "limit_below_used" => "The limit can't be lower than the number of times the code is already used or held by a pending payment.",
         "bad_archive_filter" => "Check the archive filters and date range, then try again.",
         "account_inactive" => "This account is inactive and cannot receive a new booking, coaching hire or pending payment.",
         "invalid_code" => "That discount code isn't valid, or it has expired.",

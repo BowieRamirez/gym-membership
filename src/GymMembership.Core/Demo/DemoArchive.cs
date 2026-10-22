@@ -66,7 +66,7 @@ public sealed partial class DemoGateway
                     if (a.IsActive) throw Err("not_archived"); a.IsActive = true; break;
                 case "code":
                     var d = All<Discount>().FirstOrDefault(d => d.Id == number) ?? throw Err("not_found");
-                    if (d.ExpiresAt <= SubscriptionNow) throw Err("record_not_restorable");
+                    if (d.ExpiresAt <= SubscriptionNow || UsedUp(d)) throw Err("record_not_restorable");
                     if (d.IsActive) throw Err("not_archived"); d.IsActive = true; break;
                 default: throw Err("bad_input");
             }
@@ -76,9 +76,29 @@ public sealed partial class DemoGateway
         _archiveMetadata.Remove((type, id));
     }
 
+    // 0026: pending, verified and voided payments hold a place on a code; verified and voided ones use it up
+    int Held(Discount d) => All<Payment>().Count(p => p.DiscountId == d.Id && p.Status is Status.Pending or Status.Verified or Status.Voided);
+    int Consumed(Discount d) => All<Payment>().Count(p => p.DiscountId == d.Id && p.Status is Status.Verified or Status.Voided);
+    bool UsedUp(Discount d) => d.MaxUses is { } max && Consumed(d) >= max;
+
+    // the database archives a code the moment its last place is verified; the demo catches up whenever codes are read or used
+    void ArchiveUsedUpCodes()
+    {
+        foreach (var d in All<Discount>().Where(d => d.IsActive && d.ExpiresAt > SubscriptionNow && UsedUp(d)))
+        { d.IsActive = false; StampArchive("code", d.Id.ToString(), "Limit reached"); }
+    }
+
+    void GuardDiscountLimit(Discount? old, Discount next)
+    {
+        if (next.MaxUses == old?.MaxUses && old is not null) return;
+        if (next.MaxUses is null) throw Err("limit_required");
+        if (old is not null && next.MaxUses < Held(old)) throw Err("limit_below_used");
+    }
+
     List<ArchiveRecord> ArchiveRecords(Dictionary<string, object> args)
     {
         RequireArchiveAdmin();
+        ArchiveUsedUpCodes();
         string S(string key) => Convert.ToString(args.GetValueOrDefault(key), CultureInfo.InvariantCulture) ?? "";
         DateOnly? D(string key) => string.IsNullOrEmpty(S(key)) ? null : DateOnly.ParseExact(S(key), "yyyy-MM-dd", CultureInfo.InvariantCulture);
         var type = S("p_type"); var status = S("p_status"); var from = D("p_from"); var to = D("p_to");
@@ -103,7 +123,7 @@ public sealed partial class DemoGateway
         foreach (var d in All<Discount>().Where(d => !d.IsActive || d.ExpiresAt <= SubscriptionNow))
         {
             var expired = d.ExpiresAt <= SubscriptionNow;
-            var row = Row("code", d.Id.ToString(), d.Code, expired ? "expired" : "inactive", $"{d.Percent}% discount; valid until {d.ExpiresAt.AddHours(8):yyyy-MM-dd HH:mm} (Asia/Manila)", !expired);
+            var row = Row("code", d.Id.ToString(), d.Code, expired ? "expired" : "inactive", $"{d.Percent}% discount; valid until {d.ExpiresAt.AddHours(8):yyyy-MM-dd HH:mm} (Asia/Manila)", !expired && !UsedUp(d));
             if (expired && row.ArchivedAt is null) { row.ArchivedAt = d.ExpiresAt; row.Reason = "Expired code"; }
             rows.Add(row);
         }

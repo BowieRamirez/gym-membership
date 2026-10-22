@@ -10,6 +10,7 @@ public partial class DiscountsPage : BasePage
 		BindingContext = vm;
 	}
 
+	void OnChangeLimit(object? sender, EventArgs e) => Row<DiscountsViewModel>(sender, v => v.ChangeLimitCommand);
 	void OnToggle(object? sender, EventArgs e) => Row<DiscountsViewModel>(sender, v => v.ToggleCommand);
 	void OnDelete(object? sender, EventArgs e) => Row<DiscountsViewModel>(sender, v => v.DeleteCommand);
 }
