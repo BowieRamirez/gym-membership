@@ -89,7 +89,7 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 | 2 | Payment authorization and history | 5 | 0; D3 | DEPLOYED (DB) 2026-10-22 — 0025 live; owner app check/acceptance pending |
 | 3 | Code activation caps and archive integration | 7 | 1; D4–D5 | DEPLOYED (DB) 2026-10-22 — 0026 live; device check/acceptance pending |
 | 4 | Revenue PDF export | 6 | 2; D11 | DEPLOYED (DB) 2026-10-22 — 0027 live; device check/acceptance pending |
-| 5 | Purchasable amenity catalog and coach availability | 10, 11 | 0; archive integration from 1; D6 | IMPLEMENTED locally 2026-10-22 — 0028 not applied live; device check/acceptance pending |
+| 5 | Purchasable amenity catalog and coach availability | 10, 11 | 0; archive integration from 1; D6 | DEPLOYED (DB) 2026-10-22 — 0028 live; device check/acceptance pending |
 | 6 | Reservation engine and booking grid | 8 | 5; D6–D8 | PLANNED |
 | 7 | Structured training requests and rescheduling | 9 | 6; D7–D8 | PLANNED |
 | 8 | Physical coach presence and discovery | 12 | 5; D9 | PLANNED |
@@ -231,7 +231,7 @@ Acceptance / verification:
 
 Starting points: `AmenitiesPage.xaml`, `CatalogAdminPage.xaml`, `CoachesPage.xaml`, amenity/catalog ViewModels and services, `avail_amenity`, `ShiftPost`, request/open-slot code, catalog/RLS policies.
 
-Status: IMPLEMENTED locally 2026-10-22 on `phase1-archive-checkpoint-2026-10-20`. Migration `0028_gym_hours_and_coach_availability.sql` is NOT applied live; apply it before installing an app build with these changes (Gym settings now reads opening hours).
+Status: DEPLOYED (DB) 2026-10-22. Commit 7c01591 on `phase1-archive-checkpoint-2026-10-20` (pushed). Migration `0028_gym_hours_and_coach_availability.sql` applied live at the owner's request (dry run showed only 0028; remote history shows 0028).
 
 - [x] Root cause: the role redesign replaced the member Amenities page with the status board (`AmenityBoardViewModel`), which only shows status and Notify me. `IAmenityService.CatalogAsync`/`AvailAsync` and the database `avail_amenity` still worked but nothing in the app called them, so there was no Buy button anywhere. Catalog data, RLS and payment flow were fine. (Buying also needs an active membership, which `avail_amenity` already enforces with a clear message.)
 - [x] Admin: the existing amenity form (name, price, days of access) gains a description and an Edit button that loads the amenity into the same form ("Save changes" / "Cancel edit"), like packages. Ruling: one amenity row is both the physical resource (status board, photo) and its pass product (price, days); no separate product table. No service/coach mapping: D6 makes the coach optional, so nothing needs it before Phase 6.
@@ -531,7 +531,8 @@ Fill cells with date, command/test, result and evidence location. `—` means no
 - Ruling: existing shifts are not re-validated against the new hours until they are changed, so the migration cannot fail on old data.
 - Known limit: the coach shift form takes time in the device's timezone (unchanged); off-grid or out-of-hours picks get a clear error instead of being snapped.
 - Tests: `coach-availability.mjs` 6/6 (3 RED before 0028; the other 3 cover existing behavior); `AmenityPassTests` 7 (RED before); `rules.mjs` shift fixture moved onto the grid; one older xUnit shift test moved to 10:00 Manila. xUnit 592/594 with the same 2 baseline failures; Windows and Android Debug builds succeed. Review: author self-review + ponytail; no independent reviewer.
-- Next: owner applies 0028, checks Buy pass, amenity edit, gym hours and shift posting on Windows/Android, then accepts Phase 5. Phase 6 needs D7, D8 and the two open D6 details.
+- 0028 applied live 2026-10-22 at the owner's request; `migration list --linked` shows 0028 in both columns.
+- Next: owner checks Buy pass, amenity edit, gym hours and shift posting on Windows/Android, then accepts Phase 5. Phase 6 needs D7, D8 and the two open D6 details.
 
 ## 6. Copyable resume prompt
 
