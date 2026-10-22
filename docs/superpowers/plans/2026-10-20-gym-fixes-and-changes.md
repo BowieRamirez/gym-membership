@@ -77,7 +77,7 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 - [ ] **D8 — training lifecycle:** Decide proposal expiry, how Request Another Time is routed, whether coach/amenity changes require fresh approval from a different coach, and how auto-ended usage relates to training completion/no-show/attendance. Recommend separate reservation occupancy state and attendance outcome. Answer: ___
 - [ ] **D9 — coach availability and presence:** Define who checks coaches in/out (coach self-service, front desk, or both), missed-checkout policy and freshness target. Recommend hiding absent coaches only from discovery/new booking, not erasing existing hires, chats or confirmed bookings. Decide whether physical presence is required only for listing or also for same-day confirmation; don't make future confirmed bookings vanish at checkout. Answer: ___
 - [ ] **D10 — coach dashboard and interaction count:** Confirm Windows and Android scope and supersession of the read-only Overview. Define “three interactions”: recommend calendar slot click → prefilled form/review → Post for default duration; edits to hours or an optional note add interactions. Arbitrary entry of every field cannot truthfully be promised in three taps. Request actual mockup images before claiming visual parity. Answer: ___
-- [ ] **D11 — revenue PDF detail:** Recommend individual receipt/payment entries plus refund-adjustment lines reconciling to the current net revenue total, with filters shared by screen/export. Confirm line-item versus grouped summary expectation, extra filters, destination/share behavior and PDF library license. Answer: ___
+- [x] **D11 — revenue PDF detail (owner approved 2026-10-22):** Line items: one line per verified payment (receipt no., Manila date/time, member or walk-in name, item, method, amount) plus a negative line per approved/paid refund on its approval date, ending in the same net total as the on-screen report (voids excluded, as in `revenue_summary`). Filters stay the date range only; the PDF uses the range and rows the screen loaded. Export opens the system share sheet (MAUI `Share`) on Windows and Android. Library: PDFsharp (MIT) with an embedded font that has the ₱ glyph (check Barlow; fall back to another bundled font if it lacks U+20B1); confirm current version, license and Android behavior before adding the package.
 - [ ] **D12 — QR trust boundary:** Recommend a permanent random opaque identifier mapped to user ID, an authenticated staff scanner, online status lookup, and no embedded name/status/expiry/credentials. Confirm whether QR must literally encode user ID, who can scan, logging retention, expired/guest/pending precedence, and unknown-code behavior. Permanent QR is identification, not proof of identity or payment. Answer: ___
 
 ## 3. Phases and request coverage
@@ -88,7 +88,7 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 | 1 | Archive foundation, account deletion, overflow menu | 1, 2, 4 | 0; D1–D2 | IMPLEMENTED locally — automated checks + Windows demo smoke verified; remaining device/owner acceptance pending |
 | 2 | Payment authorization and history | 5 | 0; D3 | DEPLOYED (DB) 2026-10-22 — 0025 live; owner app check/acceptance pending |
 | 3 | Code activation caps and archive integration | 7 | 1; D4–D5 | DEPLOYED (DB) 2026-10-22 — 0026 live; device check/acceptance pending |
-| 4 | Revenue PDF export | 6 | 2; D11 | PLANNED |
+| 4 | Revenue PDF export | 6 | 2; D11 | IMPLEMENTED locally 2026-10-22 — 0027 not applied live; device check/acceptance pending |
 | 5 | Purchasable amenity catalog and coach availability | 10, 11 | 0; archive integration from 1; D6 | PLANNED |
 | 6 | Reservation engine and booking grid | 8 | 5; D6–D8 | PLANNED |
 | 7 | Structured training requests and rescheduling | 9 | 6; D7–D8 | PLANNED |
@@ -211,18 +211,21 @@ Acceptance / verification:
 
 Starting points: `RevenuePage.xaml`, `RevenueViewModel`, `AdminService.RevenueAsync`, `RevenueRow`, latest `revenue_summary` (`0020`), platform save/share services.
 
-- [ ] Define one report request/snapshot shared by screen and export: loaded date range, all active filters, timezone and generation timestamp. Do not export stale rows under newly edited filter labels.
-- [ ] Add a permission-protected, fully paginated line-item query using the same accounting semantics as revenue_summary; include refund adjustments and reconcile totals. No raw-table client workaround or silent query-limit truncation.
-- [ ] Select a maintained PDF library compatible with .NET 10, Android/Windows, packaging and acceptable licensing. Record selection before adding a dependency.
-- [ ] Add `Export PDF` and a focused report-generation/save/share service; keep platform file handling out of shared business logic.
-- [ ] Render title, date range, filter description, generated date/time with timezone, totals and line-item table. Repeat headers, paginate long tables and include receipt/status details appropriate to D11.
-- [ ] Use decimal money and explicit PHP formatting (`₱1,234.56`) with an embedded font supporting the peso glyph; format refund adjustments consistently.
-- [ ] Handle empty reports, invalid ranges, busy state, export failures, permission denial and cancelled share/save without a false success message.
+Status: IMPLEMENTED locally 2026-10-22 on `phase1-archive-checkpoint-2026-10-20`. Migration `0027_revenue_lines.sql` is NOT applied live; apply it before installing an app build with Export PDF.
+
+- [x] The screen keeps the range and total it actually loaded; Export PDF uses that, not dates edited since. If the receipt lines no longer add up to the loaded total, the screen refreshes and asks to export again instead of exporting different figures.
+- [x] `revenue_lines(p_from,p_to,p_offset,p_limit)` (0027): `reports:revenue` only, same accounting as `revenue_summary` (verified on Manila verification day, minus approved/paid refunds on Manila approval day, voids excluded), deterministic order, pages of 1–1000. The app reads 500-row pages until a short page, so nothing is silently cut off.
+- [x] Library: PDFsharp pinned to 6.2.4 (MIT, January 2026, supports net10). PDFsharp 6.5+ is AGPL-3.0, so the csproj warns against upgrading without a license review. 6.2.4 pulled in `System.Security.Cryptography.Pkcs` 8.0.1 (GHSA-846f-f764-76mx, high), so Core references the patched 10.0.13 directly.
+- [x] `RevenuePdf` (Core, testable) builds the PDF; `IReportFiles` (App: `MauiReportFiles`) supplies the font and opens the system share sheet from the cache folder. No platform code in Core.
+- [x] A4 report: title, range with timezone, generated time (Asia/Manila), one-line accounting note, receipts/refunds/net totals, then a table (date and time, receipt, paid by, item, method, amount) with the header repeated on every page, long text cut with "…", a Net row, and "Page n of m".
+- [x] Money as `₱1,234.56` / `-₱1,000.00` (decimal, invariant culture). Barlow has no ₱ glyph, so the PDF embeds Noto Sans Regular (SIL OFL, `Resources/Raw/NotoSans-Regular.ttf` + `NotoSans-OFL.txt`); bold is simulated.
+- [x] Export is disabled until a report has loaded; empty periods export a one-page "No receipts or approved refunds" report; invalid range and permission errors use the normal error banner; a failed share shows an error and no success message. The share sheet cannot report whether the user actually saved or sent the file, so the notice says only that the PDF was created.
+- [x] Tests: `revenue-lines.mjs` (6 SQL checks, RED before 0027: permission, reconciliation with revenue_summary, labels, paging, bad input, Manila day boundaries); `RevenuePdfTests` (6 tests: reconciliation in demo, multi-page/empty PDFs, money/date formats, loaded-range export, failed share, changed-figures refresh). A 71-line sample was rendered through Windows' PDF renderer and checked by eye: ₱ glyphs, repeated header, truncation, page numbers.
 
 Acceptance / verification:
-- [ ] PDF totals reconcile to the filtered on-screen report, including refund approval dates and void treatment.
-- [ ] Empty, one-page and multi-page exports have readable peso symbols and no clipped rows.
-- [ ] Export/save/open or share works on Windows and Android; verify filters, timezone boundaries and full result coverage.
+- [x] PDF totals reconcile to the filtered on-screen report, including refund approval dates and void treatment (SQL + demo tests; export refuses to proceed when they differ).
+- [x] Empty, one-page and multi-page exports have readable peso symbols and no clipped rows (rendered sample; tests for page counts).
+- [ ] Export/save/open or share works on Windows and Android — owner device check pending (share sheet and a Release/trimmed Android build not yet tried).
 
 ## Phase 5 — Purchasable amenities and coach-opened availability
 
@@ -506,6 +509,16 @@ Fill cells with date, command/test, result and evidence location. `—` means no
 - Deferred minor: setting the limit exactly to the consumed count archives the code immediately, but the success notice still says "can now be used N times".
 - 0026 applied live 2026-10-22 at the owner's request; `migration list --linked` shows 0026 in both columns.
 - Next: owner checks the Discounts tab on Windows/Android, then accepts Phase 3. Phase 4 needs D11.
+
+### 2026-10-22 — D11 and Phase 4
+
+- D11 approved by the owner (section 2). Phase 4 implemented on `phase1-archive-checkpoint-2026-10-20`.
+- Ruling: PDFsharp pinned to 6.2.4 because the latest (6.5.0) changed to AGPL-3.0; the owner approved an MIT library. Cost if wrong: no PDFsharp updates past 6.2.x without a license decision.
+- Ruling: Pkcs lifted to 10.0.13 to clear GHSA-846f-f764-76mx brought in by PDFsharp 6.2.4.
+- Ruling: Noto Sans (OFL) embedded for the PDF because Barlow lacks ₱; the app's on-screen font is unchanged.
+- Ruling: when the receipt lines no longer match the loaded total, export stops and the screen refreshes rather than exporting figures that differ from what is shown.
+- Tests: SQL suites 0 failed (revenue-lines 6/6 RED before 0027); xUnit 585/587 with the same 2 baseline failures; Windows and Android Debug builds succeed with no NU1903. Review: author self-review + ponytail; no independent reviewer.
+- Next: owner applies 0027, tries Export PDF on Windows and Android (and a Release Android build, since trimming was not tested), then accepts Phase 4. Phase 5 needs D6.
 
 ## 6. Copyable resume prompt
 

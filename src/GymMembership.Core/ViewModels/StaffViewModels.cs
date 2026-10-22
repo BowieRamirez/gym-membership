@@ -852,21 +852,47 @@ public partial class DiscountsViewModel(IAdminService svc, ArchiveViewModel? arc
     }
 }
 
-public partial class RevenueViewModel(IAdminService svc) : LoadableViewModel
+public partial class RevenueViewModel(IAdminService svc, IReportFiles? files = null) : LoadableViewModel
 {
     public ObservableCollection<RevenueRow> Rows { get; } = new();
     [ObservableProperty] private DateTime from = DateTime.Today.AddDays(-30);
     [ObservableProperty] private DateTime to = DateTime.Today;
     [ObservableProperty] private string totalText = "₱0.00";
+    // what the screen shows; the PDF uses this, not dates edited since
+    (DateOnly From, DateOnly To, decimal Total)? _loaded;
 
     public override Task OnAppearingAsync() => LoadAsync();
 
     [RelayCommand]
-    private Task LoadAsync() => RunAsync(() => svc.RevenueAsync(DateOnly.FromDateTime(From), DateOnly.FromDateTime(To)), rows =>
+    private Task LoadAsync() => LoadRangeAsync(DateOnly.FromDateTime(From), DateOnly.FromDateTime(To));
+
+    Task<bool> LoadRangeAsync(DateOnly from, DateOnly to) => RunAsync(() => svc.RevenueAsync(from, to), rows =>
     {
         Fill(Rows, rows);
         TotalText = $"₱{rows.Sum(r => r.Total):N2}";
+        _loaded = (from, to, rows.Sum(r => r.Total));
+        ExportPdfCommand.NotifyCanExecuteChanged();
     });
+
+    bool CanExport() => files is not null && _loaded is not null;
+
+    [RelayCommand(CanExecute = nameof(CanExport))]
+    private async Task ExportPdfAsync()
+    {
+        if (files is null || _loaded is not { } shown) return;
+        Notice = null;
+        IReadOnlyList<RevenueLine> lines = [];
+        if (!await RunAsync(() => svc.RevenueLinesAsync(shown.From, shown.To), l => lines = l)) return;
+        if (lines.Sum(l => l.Amount) != shown.Total)
+        {
+            await LoadRangeAsync(shown.From, shown.To);
+            ErrorMessage = "Revenue changed since this report was loaded. The figures are now up to date; export again.";
+            return;
+        }
+        var name = $"revenue-{shown.From:yyyy-MM-dd}-to-{shown.To:yyyy-MM-dd}.pdf";
+        if (await RunAsync(() => Safe.RunAsync(async () => { await files.ShareAsync(name, RevenuePdf.Build(shown.From, shown.To, lines, DateTime.UtcNow, await files.FontAsync())); return true; })))
+            Notice = "Revenue PDF created. Choose where to save or send it.";
+    }
 }
 
 // admin: the gym's name, the payment QR members scan, and the walk-in price

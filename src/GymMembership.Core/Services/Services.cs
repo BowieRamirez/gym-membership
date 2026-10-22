@@ -900,6 +900,8 @@ public interface IAdminService
     Task<AppResult<IReadOnlyList<MembershipPackage>>> AllPackagesAsync();
     Task<AppResult<IReadOnlyList<Amenity>>> AllAmenitiesAsync();
     Task<AppResult<IReadOnlyList<RevenueRow>>> RevenueAsync(DateOnly from, DateOnly to);
+    /// <summary>Every receipt and approved refund in the range, all pages, for the PDF export.</summary>
+    Task<AppResult<IReadOnlyList<RevenueLine>>> RevenueLinesAsync(DateOnly from, DateOnly to);
     Task<AppResult<IReadOnlyList<AuditRow>>> AuditAsync();
     Task<AppResult<GymSettings>> GymSettingsAsync();
     /// <summary>Saves the gym name, QR account name and walk-in price, and uploads a new payment QR image when one is given.</summary>
@@ -988,6 +990,23 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         if (to < from) return AppResult<IReadOnlyList<RevenueRow>>.Fail(AppErrorKind.Validation, "to before from");
         return await Safe.RunAsync(async () => (IReadOnlyList<RevenueRow>)(await gw.RpcAsync<List<RevenueRow>>("revenue_summary",
             new() { ["p_from"] = from.ToString("yyyy-MM-dd"), ["p_to"] = to.ToString("yyyy-MM-dd") }) ?? []));
+    }
+
+    public async Task<AppResult<IReadOnlyList<RevenueLine>>> RevenueLinesAsync(DateOnly from, DateOnly to)
+    {
+        if (to < from) return AppResult<IReadOnlyList<RevenueLine>>.Fail(AppErrorKind.Validation, "to before from");
+        return await Safe.RunAsync(async () =>
+        {
+            const int page = 500;   // the server caps rows per request, so read until a short page
+            var all = new List<RevenueLine>();
+            while (true)
+            {
+                var rows = await gw.RpcAsync<List<RevenueLine>>("revenue_lines", new()
+                    { ["p_from"] = from.ToString("yyyy-MM-dd"), ["p_to"] = to.ToString("yyyy-MM-dd"), ["p_offset"] = all.Count, ["p_limit"] = page }) ?? [];
+                all.AddRange(rows);
+                if (rows.Count < page) return (IReadOnlyList<RevenueLine>)all;
+            }
+        });
     }
 
     public Task<AppResult<IReadOnlyList<AuditRow>>> AuditAsync() => Safe.RunAsync<IReadOnlyList<AuditRow>>(async () =>

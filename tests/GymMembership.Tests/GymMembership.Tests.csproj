@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\GymMembership.Core\GymMembership.Core.csproj" />
     <Compile Include="..\..\src\GymMembership.App\Controls\PhonePageTemplates.cs" Link="App\PhonePageTemplates.cs" />
+    <None Include="..\..\src\GymMembership.App\Resources\Raw\NotoSans-Regular.ttf" Link="NotoSans-Regular.ttf" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
