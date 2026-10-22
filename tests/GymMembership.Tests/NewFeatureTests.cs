@@ -166,7 +166,7 @@ public class NewFeatureTests
     {
         var gw = await As("coach@demo.io");
         var coaches = new CoachService(gw);
-        var start = DateTime.UtcNow.AddDays(5);
+        var start = DateTime.SpecifyKind(DateTime.UtcNow.AddHours(8).Date.AddDays(5).AddHours(2), DateTimeKind.Utc);   // 10:00 Manila: on the grid, inside gym hours
         Assert.Equal(AppErrorKind.Validation, (await coaches.PostShiftAsync(start, start.AddHours(-1), null)).Error);
         Assert.True((await coaches.PostShiftAsync(start, start.AddHours(4), "Late shift")).Ok);
         Assert.Equal(AppErrorKind.Conflict, (await coaches.PostShiftAsync(start.AddHours(1), start.AddHours(3), null)).Error);   // no overlapping shifts

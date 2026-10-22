@@ -12,6 +12,7 @@
             <Label Text="What is open right now." Style="{StaticResource Muted}" />
             <Label Text="Tap Notify me on an amenity to get an alert when it becomes available or unavailable." Style="{StaticResource Muted}" IsVisible="{Binding CanFollow}" />
             <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
         </VerticalStackLayout>
 
         <CollectionView Grid.Row="1" ItemsSource="{Binding Cards}">
@@ -20,7 +21,7 @@
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="svc:AmenityCard">
                     <!-- the button text is empty for coaches, which hides the button -->
-                    <c:AmenityCardView ActionText="{Binding FollowText}" ActionClicked="OnFollow" />
+                    <c:AmenityCardView ActionText="{Binding FollowText}" ActionClicked="OnFollow" BuyClicked="OnBuy" />
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>

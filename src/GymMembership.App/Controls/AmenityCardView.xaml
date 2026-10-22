@@ -21,8 +21,14 @@
                 <Label Text="{Binding BackAt, Converter={StaticResource LocalDate}, ConverterParameter='ddd d MMM, h:mm tt', StringFormat='Back about {0}'}"
                        Style="{StaticResource Caption}" IsVisible="{Binding HasBackAt}" />
                 <Label Text="{Binding Amenity.Description}" Style="{StaticResource Muted}" />
+                <!-- members only: the pass price, or where their pass stands -->
+                <Label Text="{Binding PassText}" FontFamily="BarlowMedium" IsVisible="{Binding CanFollow}" />
             </VerticalStackLayout>
-            <Button x:Name="Action" Grid.Row="2" HorizontalOptions="Start" Style="{StaticResource SmallOutlineButton}" IsVisible="False" />
+            <FlexLayout Grid.Row="2" Wrap="Wrap">
+                <Button Text="{Binding BuyText}" Style="{StaticResource SmallButton}" Margin="0,0,8,0" IsVisible="{Binding CanBuy}" Clicked="OnBuy"
+                        SemanticProperties.Hint="Orders a pass for this amenity. It starts when staff verify your payment." />
+                <Button x:Name="Action" Style="{StaticResource SmallOutlineButton}" IsVisible="False" />
+            </FlexLayout>
         </Grid>
     </Border>
 </ContentView>

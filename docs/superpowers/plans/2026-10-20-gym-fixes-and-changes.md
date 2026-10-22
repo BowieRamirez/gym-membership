@@ -72,7 +72,7 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 - [x] **D3 — payment authority (owner approved 2026-10-22):** All admins may void/cancel; authority stays role-based via the existing `payments:void` grant (no per-user grants, no new role). No separate admin-cancel capability: void covers verified payments with reason/actor/timestamp; pending payments keep the existing Reject in the verification queue (reason + audit), per Phase 2 ruling 2026-10-22. Refund decisions (`decide_membership_refund`, `record_membership_refund_paid`) move from `has_role('admin')` to the same `payments:void` check. Members keep self-withdrawal of their own unverified payment (0019) and 24h refund requests (Phase 7). Employees, coaches, members and archived accounts cannot void.
 - [x] **D4 — access-code meaning and activation (owner approved 2026-10-22):** These are the existing discount codes; add a max-uses limit, no new code system. A place is used by a payment with that code in status pending or verified (pending reserves, verification keeps it; rejection, expiry and member cancellation release it), the same rule as the existing once-per-member check (`apply_discount`, `payments_discount_once_per_member`). Voided and refunded uses stay counted and are not released; this also changes today's behavior where a void lets the same member reuse the code.
 - [x] **D5 — limits and restoration (owner approved 2026-10-22):** New codes require a positive integer limit. Existing codes stay unlimited (null) until an admin edits them; no backfill of a number, and pending payments are untouched. A limit cannot be set below places already used. When the last place is used the code is deactivated and archived with reason `limit reached`; it cannot be restored or reopened by raising the limit — issue a new code instead.
-- [ ] **D6 — slot and payment contract:** Agree slot increment (recommend 30 minutes), maximum booking duration, advance-booking window, operating hours, and whether overnight bookings are supported. With one unit per amenity, each grid column represents a different amenity, not invented extra courts. Decide entitlement/price/session-credit rules, and whether independent amenity bookings need a coach. Answer: ___
+- [x] **D6 — slot and payment contract (owner approved 2026-10-22):** 30-minute slots; one booking lasts 30 minutes to 2 hours. One opening and closing time for every day, set by an admin in Gym settings (Asia/Manila); no booking may cross closing time (no overnight). Members book up to 14 days ahead. One unit per amenity, so each grid column is a different amenity. Booking right = an active, verified pass for that amenity (today's amenity purchase); booking itself costs nothing extra; pending, rejected, voided or expired passes give no right. A coach is optional: a member may book an amenity alone, or a coach session that uses an amenity, which also needs the coach free and inside their opened availability. Still open, to confirm at the start of Phase 6: whether a coach session that uses an amenity also needs the member's own pass, and how passes with no duration (never expire) behave.
 - [ ] **D7 — slot grouping and same-pair guard:** Recommend adjacent selected slots form one continuous reservation with cooldown only after its end; nonadjacent selections become separate reservations and must independently pass all checks. Decide all-or-nothing multi-selection confirmation. Explicitly retain or revise the `0022` active coach/member guard for future multiple bookings and automatic end behavior. Do not quietly remove its protection. Answer: ___
 - [ ] **D8 — training lifecycle:** Decide proposal expiry, how Request Another Time is routed, whether coach/amenity changes require fresh approval from a different coach, and how auto-ended usage relates to training completion/no-show/attendance. Recommend separate reservation occupancy state and attendance outcome. Answer: ___
 - [ ] **D9 — coach availability and presence:** Define who checks coaches in/out (coach self-service, front desk, or both), missed-checkout policy and freshness target. Recommend hiding absent coaches only from discovery/new booking, not erasing existing hires, chats or confirmed bookings. Decide whether physical presence is required only for listing or also for same-day confirmation; don't make future confirmed bookings vanish at checkout. Answer: ___
@@ -89,7 +89,7 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 | 2 | Payment authorization and history | 5 | 0; D3 | DEPLOYED (DB) 2026-10-22 — 0025 live; owner app check/acceptance pending |
 | 3 | Code activation caps and archive integration | 7 | 1; D4–D5 | DEPLOYED (DB) 2026-10-22 — 0026 live; device check/acceptance pending |
 | 4 | Revenue PDF export | 6 | 2; D11 | DEPLOYED (DB) 2026-10-22 — 0027 live; device check/acceptance pending |
-| 5 | Purchasable amenity catalog and coach availability | 10, 11 | 0; archive integration from 1; D6 | PLANNED |
+| 5 | Purchasable amenity catalog and coach availability | 10, 11 | 0; archive integration from 1; D6 | IMPLEMENTED locally 2026-10-22 — 0028 not applied live; device check/acceptance pending |
 | 6 | Reservation engine and booking grid | 8 | 5; D6–D8 | PLANNED |
 | 7 | Structured training requests and rescheduling | 9 | 6; D7–D8 | PLANNED |
 | 8 | Physical coach presence and discovery | 12 | 5; D9 | PLANNED |
@@ -231,20 +231,21 @@ Acceptance / verification:
 
 Starting points: `AmenitiesPage.xaml`, `CatalogAdminPage.xaml`, `CoachesPage.xaml`, amenity/catalog ViewModels and services, `avail_amenity`, `ShiftPost`, request/open-slot code, catalog/RLS policies.
 
-- [ ] Reproduce why members currently cannot buy amenities: inspect active catalog data, member/guest gates, navigation, entitlement mapping and RLS. Do not duplicate the existing purchase service.
-- [ ] Support admin creation/editing of purchasable amenity products with price, description, active state and relevant service/coach mapping. Define the difference between a product entitlement and its physical amenity resource.
-- [ ] Display purchasable items to eligible users with explicit Buy action and existing payment/proof/verification workflow. Show an explanatory empty state, not a blank page.
-- [ ] Define booking rights after purchase; pending/rejected/voided payments must not grant usable entitlement. Refund/archive rules must not silently erase prior purchases.
-- [ ] Add coach availability blocks associated with the applicable amenity/service. Define how shifts and bookable availability relate; don't maintain two conflicting calendars.
-- [ ] Support authorized add/edit/remove within operating hours. Bookings must be wholly inside valid availability; overlapping blocks are rejected or normalized under a documented rule.
-- [ ] Reject or safely constrain availability edits/removals that would invalidate confirmed bookings; explain affected bookings. A coach cannot silently cancel members by deleting an availability block.
-- [ ] Expose only safe availability details to members; do not leak other members' information through grid reads.
-- [ ] Mirror behavior in demo mode and add purchase/entitlement/availability authorization tests.
+Status: IMPLEMENTED locally 2026-10-22 on `phase1-archive-checkpoint-2026-10-20`. Migration `0028_gym_hours_and_coach_availability.sql` is NOT applied live; apply it before installing an app build with these changes (Gym settings now reads opening hours).
+
+- [x] Root cause: the role redesign replaced the member Amenities page with the status board (`AmenityBoardViewModel`), which only shows status and Notify me. `IAmenityService.CatalogAsync`/`AvailAsync` and the database `avail_amenity` still worked but nothing in the app called them, so there was no Buy button anywhere. Catalog data, RLS and payment flow were fine. (Buying also needs an active membership, which `avail_amenity` already enforces with a clear message.)
+- [x] Admin: the existing amenity form (name, price, days of access) gains a description and an Edit button that loads the amenity into the same form ("Save changes" / "Cancel edit"), like packages. Ruling: one amenity row is both the physical resource (status board, photo) and its pass product (price, days); no separate product table. No service/coach mapping: D6 makes the coach optional, so nothing needs it before Phase 6.
+- [x] Members see each amenity card with the pass price ("₱300.00 for 30 days"), or "Waiting for your payment to be verified", or "Pass active until …", and a Buy pass button when they have no pending/active pass. Buying reuses `avail_amenity` (pending QR payment, paid from My membership). Coaches and staff see no price or button. The page shows the existing empty state, and load errors use the error banner.
+- [x] Booking right (D6): only an active, verified pass. Pending, rejected, voided and expired passes give none; existing purchases are never erased (passes keep their history).
+- [x] Coach availability = the coach's posted shifts (one calendar; no second availability table). `0028` adds gym hours (`opens_at`/`closes_at`, default 06:00–22:00, half-hour grid, closing after opening) to Gym settings, and a `shift_posts` trigger: new or moved shifts must sit on the 30-minute grid inside gym hours on one Manila day (`off_grid`, `outside_gym_hours`). Overlapping shifts were already refused by the existing exclusion constraint.
+- [x] A shift cannot be cancelled, deleted, or shortened/moved so that a scheduled session of that coach inside it ends up outside (`shift_has_sessions`). Cancelled sessions do not block. Existing shifts are not re-checked until changed.
+- [x] Only the coach can open or change their availability (existing RLS); members see shifts only for coaches they hire, staff see all (unchanged).
+- [x] Demo mirrors all of it (Buy pass, amenity edit, gym hours, shift grid/hours and session protection).
 
 Acceptance / verification:
-- [ ] Admin creates a product, user sees and buys it, verified payment grants the agreed entitlement.
-- [ ] Zero items shows a useful empty state, while load failure shows an error rather than pretending the catalog is empty.
-- [ ] Users cannot book unopened hours or manufacture coach availability; changes preserve confirmed bookings.
+- [x] Admin creates a product, a member sees and buys it, and the verified payment turns the pass on (`AmenityPassTests`, `coach-availability.mjs`).
+- [x] Zero items shows the existing empty state; load failure shows the error banner.
+- [x] Nobody else can open a coach's hours; shifts outside hours or off the grid are refused; changes cannot strand a scheduled session (SQL checks). Device check by the owner still pending.
 
 ## Phase 6 — Atomic reservations, cooldowns and slot grid
 
@@ -520,6 +521,17 @@ Fill cells with date, command/test, result and evidence location. `—` means no
 - Tests: SQL suites 0 failed (revenue-lines 6/6 RED before 0027); xUnit 585/587 with the same 2 baseline failures; Windows and Android Debug builds succeed with no NU1903. Review: author self-review + ponytail; no independent reviewer.
 - 0027 applied live 2026-10-22 at the owner's request; `migration list --linked` shows 0027 in both columns.
 - Next: owner tries Export PDF on Windows and Android (and a Release Android build, since trimming was not tested), then accepts Phase 4. Phase 5 needs D6.
+
+### 2026-10-22 — D6 and Phase 5
+
+- D6 approved by the owner (section 2). Phase 5 implemented on `phase1-archive-checkpoint-2026-10-20`.
+- Root cause of "members cannot buy amenities": no screen called the still-working purchase code after the amenity status redesign.
+- Ruling: an amenity row is both the resource and its pass product; no product table and no coach mapping until Phase 6 needs one.
+- Ruling: coach shifts are the opened availability; no second calendar.
+- Ruling: existing shifts are not re-validated against the new hours until they are changed, so the migration cannot fail on old data.
+- Known limit: the coach shift form takes time in the device's timezone (unchanged); off-grid or out-of-hours picks get a clear error instead of being snapped.
+- Tests: `coach-availability.mjs` 6/6 (3 RED before 0028; the other 3 cover existing behavior); `AmenityPassTests` 7 (RED before); `rules.mjs` shift fixture moved onto the grid; one older xUnit shift test moved to 10:00 Manila. xUnit 592/594 with the same 2 baseline failures; Windows and Android Debug builds succeed. Review: author self-review + ponytail; no independent reviewer.
+- Next: owner applies 0028, checks Buy pass, amenity edit, gym hours and shift posting on Windows/Android, then accepts Phase 5. Phase 6 needs D7, D8 and the two open D6 details.
 
 ## 6. Copyable resume prompt
 

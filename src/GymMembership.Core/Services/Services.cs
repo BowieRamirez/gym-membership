@@ -368,8 +368,18 @@ public sealed record AmenityRow(Amenity Amenity, int? UserAmenityId, string? Sta
 }
 public sealed record UsageRow(AmenityUsage Usage, string Member, string Amenity);
 
-public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow, string? PhotoUrl = null)
+public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow, string? PhotoUrl = null, string? PassStatus = null, DateTime? PassUntil = null)
 {
+    // members only (CanFollow): what a pass costs, or where theirs stands; empty hides it for coaches and staff
+    public string PassText => !CanFollow ? "" : PassStatus switch
+    {
+        Models.Status.Pending => "Waiting for your payment to be verified",
+        Models.Status.Active => PassUntil is { } until ? $"Pass active until {until.ToLocalTime():d MMM yyyy}" : "Pass active",
+        _ => Amenity.DurationDays is { } days ? $"₱{Amenity.Price:N2} for {days} days" : $"₱{Amenity.Price:N2}"
+    };
+    public string BuyText => CanFollow && PassStatus is not (Models.Status.Pending or Models.Status.Active) ? "Buy pass" : "";
+    public bool CanBuy => BuyText.Length > 0;
+
     public string Availability => Amenity.Availability;
     public bool IsUnavailable => Amenity.Availability == "unavailable";
     public string? Reason => Amenity.StatusReason;
@@ -382,7 +392,7 @@ public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow,
     /// <summary>Everything the card shows is the same, so a refresh can leave it alone.</summary>
     public bool SameAs(AmenityCard o) => Followed == o.Followed && CanFollow == o.CanFollow && Amenity.Name == o.Amenity.Name && Amenity.Description == o.Amenity.Description
         && Availability == o.Availability && Reason == o.Reason && BackAt == o.BackAt
-        && Amenity.ImagePath == o.Amenity.ImagePath && PhotoUrl == o.PhotoUrl;
+        && Amenity.ImagePath == o.Amenity.ImagePath && PhotoUrl == o.PhotoUrl && PassText == o.PassText && BuyText == o.BuyText;
 }
 
 /// <summary>What a status change did: whether the amenity really changed, and the members who were alerted.</summary>
@@ -416,8 +426,10 @@ public sealed class AmenityService(ISupabaseGateway gw) : IAmenityService
         var amenities = (await gw.ListAsync<Amenity>(a => a.IsActive == true)).OrderBy(a => a.Name).ToList();
         var saved = (await gw.ListAsync<AmenityFollow>(f => f.MemberId == uid)).Select(f => f.AmenityId).ToHashSet();
         var isMember = (await gw.ListAsync<Member>(m => m.UserId == uid)).Count > 0;
+        var passes = isMember ? (await CatalogAsync()).Value?.ToDictionary(r => r.Amenity.Id) ?? [] : [];
         var cards = await Task.WhenAll(amenities.Select(async a =>
-            new AmenityCard(a, saved.Contains(a.Id), isMember, (await Safe.RunAsync(() => photos.UrlAsync(a.ImagePath))).Value)));
+            new AmenityCard(a, saved.Contains(a.Id), isMember, (await Safe.RunAsync(() => photos.UrlAsync(a.ImagePath))).Value,
+                passes.GetValueOrDefault(a.Id)?.Status, passes.GetValueOrDefault(a.Id)?.ExpiresAt)));
         return new AmenityBoard(cards, isMember);
     });
 
@@ -1021,6 +1033,8 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
     public async Task<AppResult<bool>> SaveGymSettingsAsync(GymSettings s, (string FileName, byte[] Data)? qrImage)
     {
         if (string.IsNullOrWhiteSpace(s.GymName) || s.WalkInPrice < 0) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
+        static bool OnGrid(TimeSpan t) => t.Seconds == 0 && t.Minutes is 0 or 30 && t >= TimeSpan.Zero && t < TimeSpan.FromDays(1);
+        if (!OnGrid(s.OpensAt) || !OnGrid(s.ClosesAt) || s.ClosesAt <= s.OpensAt) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_hours");
         return await Safe.RunAsync(async () =>
         {
             if (qrImage is { } img) s.QrImagePath = await gw.UploadAsync("gym-assets", $"qr-{DateTime.UtcNow:yyyyMMddHHmmss}-{img.FileName}", img.Data);

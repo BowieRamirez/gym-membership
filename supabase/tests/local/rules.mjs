@@ -226,7 +226,9 @@ await test('you cannot send as someone else or to a coach you have not hired', a
   assert.match(await code(run(alex, `insert into messages (coach_id, member_id, sender_id, body) values ($1,$2,$1,'spoof')`, [coach, alex])), /42501/);
   assert.match(await code(run(eve, `insert into messages (coach_id, member_id, sender_id, body) values ($1,$2,$2,'hey')`, [coach, eve])), /42501/);
 });
-const t0 = new Date(Date.now() + 2 * 864e5), t1 = new Date(t0.getTime() + 36e5), t2 = new Date(t0.getTime() + 72e5), t3 = new Date(t0.getTime() + 108e5);
+// 08:00 Manila (00:00 UTC) two days ahead: shifts must sit on the half-hour grid inside gym hours (0028)
+const ahead = new Date(Date.now() + 2 * 864e5 + 8 * 36e5);
+const t0 = new Date(Date.UTC(ahead.getUTCFullYear(), ahead.getUTCMonth(), ahead.getUTCDate())), t1 = new Date(t0.getTime() + 36e5), t2 = new Date(t0.getTime() + 72e5), t3 = new Date(t0.getTime() + 108e5);
 let reqId;
 await test('a member requests a time; the coach approves and a session is created', async () => {
   reqId = (await run(alex, `select request_time($1,$2,$3,'Leg day') id`, [coach, t0, t1])).rows[0].id;

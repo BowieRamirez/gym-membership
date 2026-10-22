@@ -700,6 +700,11 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     [ObservableProperty] private string newAmenityName = "";
     [ObservableProperty] private decimal newAmenityPrice = 200;
     [ObservableProperty] private int newAmenityDays = 30;
+    [ObservableProperty] private string newAmenityDescription = "";
+    // like packages: one form adds an amenity, or edits the one held here
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(AmenitySaveLabel), nameof(IsEditingAmenity))] private Amenity? editingAmenity;
+    public string AmenitySaveLabel => EditingAmenity is null ? "Add amenity" : "Save changes";
+    public bool IsEditingAmenity => EditingAmenity is not null;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(SaveLabel), nameof(IsEditing))] private MembershipPackage? editing;
 
     public string SaveLabel => Editing is null ? "Add package" : "Save changes";
@@ -759,9 +764,19 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     {
         if (string.IsNullOrWhiteSpace(NewAmenityName)) { ErrorMessage = "Give the amenity a name."; return; }
         if (NewAmenityPrice < 0 || NewAmenityDays <= 0) { ErrorMessage = "Price can't be negative and days must be more than zero."; return; }
-        if (await RunAsync(() => svc.SaveAmenityAsync(new Amenity { Name = NewAmenityName.Trim(), Price = NewAmenityPrice, DurationDays = NewAmenityDays })))
-        { NewAmenityName = ""; await LoadAsync(); }
+        var a = EditingAmenity ?? new Amenity();
+        a.Name = NewAmenityName.Trim(); a.Price = NewAmenityPrice; a.DurationDays = NewAmenityDays;
+        a.Description = string.IsNullOrWhiteSpace(NewAmenityDescription) ? null : NewAmenityDescription.Trim();
+        if (await RunAsync(() => svc.SaveAmenityAsync(a))) { CancelAmenityEdit(); await LoadAsync(); }
     }
+
+    [RelayCommand]
+    private void EditAmenity(Amenity a)
+    { EditingAmenity = a; NewAmenityName = a.Name; NewAmenityPrice = a.Price; NewAmenityDays = a.DurationDays ?? 30; NewAmenityDescription = a.Description ?? ""; }
+
+    [RelayCommand]
+    private void CancelAmenityEdit()
+    { EditingAmenity = null; NewAmenityName = ""; NewAmenityPrice = 200; NewAmenityDays = 30; NewAmenityDescription = ""; }
 
     [RelayCommand]
     private async Task UploadAmenityPhotoAsync(Amenity amenity)
@@ -901,6 +916,8 @@ public partial class GymSettingsViewModel(IAdminService svc, IProofPicker picker
     [ObservableProperty] private string gymName = "";
     [ObservableProperty] private string? qrAccountName;
     [ObservableProperty] private decimal walkInPrice;
+    [ObservableProperty] private TimeSpan opensAt = TimeSpan.FromHours(6);
+    [ObservableProperty] private TimeSpan closesAt = TimeSpan.FromHours(22);
     [ObservableProperty] private string qrStatus = "No QR uploaded yet. Members can't pay until you add one.";
     GymSettings? _loaded;
     (string FileName, byte[] Data)? _newQr;
@@ -910,7 +927,7 @@ public partial class GymSettingsViewModel(IAdminService svc, IProofPicker picker
     [RelayCommand]
     private Task LoadAsync() => RunAsync(svc.GymSettingsAsync, g =>
     {
-        _loaded = g; GymName = g.GymName; QrAccountName = g.QrAccountName; WalkInPrice = g.WalkInPrice;
+        _loaded = g; GymName = g.GymName; QrAccountName = g.QrAccountName; WalkInPrice = g.WalkInPrice; OpensAt = g.OpensAt; ClosesAt = g.ClosesAt;
         QrStatus = string.IsNullOrWhiteSpace(g.QrImagePath) ? "No QR uploaded yet. Members can't pay until you add one." : "A payment QR is set. Choose a new image to replace it.";
     });
 
@@ -928,6 +945,7 @@ public partial class GymSettingsViewModel(IAdminService svc, IProofPicker picker
         Notice = null;
         if (_loaded is null) return;
         _loaded.GymName = GymName.Trim(); _loaded.QrAccountName = string.IsNullOrWhiteSpace(QrAccountName) ? null : QrAccountName.Trim(); _loaded.WalkInPrice = WalkInPrice;
+        _loaded.OpensAt = OpensAt; _loaded.ClosesAt = ClosesAt;
         if (!await RunAsync(() => svc.SaveGymSettingsAsync(_loaded, _newQr))) return;
         _newQr = null;
         Notice = "Saved.";

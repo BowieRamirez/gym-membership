@@ -223,6 +223,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 case Discount d: if (!Has("discounts:manage")) throw Err(Rls); GuardDiscountLimit(null, d); break;
                 case ShiftPost s:
                     if (s.CoachId != Uid || !IsCoach(Uid)) throw Err(Rls);
+                    GuardShift(null, s);
                     if (All<ShiftPost>().Any(x => x.CoachId == s.CoachId && x.Status == Status.Scheduled && x.Start < s.End && s.Start < x.End)) throw Err("overlap");
                     break;
                 case ChatMessage c:
@@ -292,6 +293,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 case (GymSettings, _): if (!Has("gym_settings:manage")) throw Err(Rls); list[index] = Clone(row); break;
                 case (ShiftPost s, ShiftPost old):   // a coach changes times, note and status, never the owner
                     if (old.CoachId != Uid) throw Err(Rls);
+                    GuardShift(old, s);
                     old.Start = s.Start; old.End = s.End; old.Note = s.Note; old.Status = s.Status;
                     break;
                 case (Coach c, Coach old):           // bio, specialty, rate, availability
@@ -357,7 +359,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             switch (row)
             {
                 case MembershipPackage or Amenity or Discount: throw Err(Rls);
-                case ShiftPost s when s.CoachId == Uid: break;
+                case ShiftPost s when s.CoachId == Uid: GuardShift(All<ShiftPost>().FirstOrDefault(x => x.Id == s.Id) ?? s, null); break;
                 case UserNotification n when n.UserId == Uid: break;
                 default: throw Err(Rls);
             }
@@ -450,6 +452,23 @@ public sealed partial class DemoGateway : ISupabaseGateway
     {
         var prefix = All<GymSettings>().First().ReceiptPrefix;
         return $"{prefix}-{DateTime.UtcNow.AddHours(8).Year}-{++_receiptSeq:D6}";
+    }
+
+    /// <summary>0028: a shift sits on the half-hour grid inside gym hours on one Manila day, and never leaves a scheduled session of its coach outside it.</summary>
+    void GuardShift(ShiftPost? old, ShiftPost? next)
+    {
+        if (next is { Status: Status.Scheduled } && (old is null || old.Start != next.Start || old.End != next.End || old.Status != Status.Scheduled))
+        {
+            static bool OffGrid(DateTime t) => (t.ToUniversalTime() - DateTime.UnixEpoch).Ticks % (30 * TimeSpan.TicksPerMinute) != 0;
+            if (OffGrid(next.Start) || OffGrid(next.End)) throw Err("off_grid");
+            var g = All<GymSettings>().First();
+            var day = next.Start.ToUniversalTime().AddHours(8).Date;   // Manila has no daylight saving
+            if (next.Start.ToUniversalTime() < day + g.OpensAt - TimeSpan.FromHours(8) || next.End.ToUniversalTime() > day + g.ClosesAt - TimeSpan.FromHours(8)) throw Err("outside_gym_hours");
+        }
+        if (old is { Status: Status.Scheduled } && All<TrainingSession>().Any(t => t.CoachId == old.CoachId && t.Status == Status.Scheduled
+                && t.ScheduledStart < old.End && old.Start < t.ScheduledEnd
+                && (next is not { Status: Status.Scheduled } || t.ScheduledStart < next.Start || t.ScheduledEnd > next.End)))
+            throw Err("shift_has_sessions");
     }
 
     /// <summary>No code: full price. A bad, expired or already-used code is an error, never a silent full price.</summary>

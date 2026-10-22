@@ -11,6 +11,9 @@ public partial class AmenityCardView : ContentView
 	public string? ActionText { get => (string?)GetValue(ActionTextProperty); set => SetValue(ActionTextProperty, value); }
 
 	public event EventHandler? ActionClicked;
+	public event EventHandler? BuyClicked;
+
+	void OnBuy(object? sender, EventArgs e) => BuyClicked?.Invoke(this, e);
 
 	public AmenityCardView()
 	{
