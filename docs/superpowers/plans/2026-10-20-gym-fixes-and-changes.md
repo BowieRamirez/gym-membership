@@ -87,7 +87,7 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 | 0 | Decisions and verified baseline | All | None | IN PROGRESS — D1/D2 approved, baseline recorded; other phase decisions pending |
 | 1 | Archive foundation, account deletion, overflow menu | 1, 2, 4 | 0; D1–D2 | IMPLEMENTED locally — automated checks + Windows demo smoke verified; remaining device/owner acceptance pending |
 | 2 | Payment authorization and history | 5 | 0; D3 | DEPLOYED (DB) 2026-10-22 — 0025 live; owner app check/acceptance pending |
-| 3 | Code activation caps and archive integration | 7 | 1; D4–D5 | IMPLEMENTED locally 2026-10-22 — 0026 not applied live; device check/acceptance pending |
+| 3 | Code activation caps and archive integration | 7 | 1; D4–D5 | DEPLOYED (DB) 2026-10-22 — 0026 live; device check/acceptance pending |
 | 4 | Revenue PDF export | 6 | 2; D11 | PLANNED |
 | 5 | Purchasable amenity catalog and coach availability | 10, 11 | 0; archive integration from 1; D6 | PLANNED |
 | 6 | Reservation engine and booking grid | 8 | 5; D6–D8 | PLANNED |
@@ -189,7 +189,7 @@ Acceptance / verification:
 
 Starting points: Discount model, `DiscountsViewModel`, `DiscountsPage.xaml`, checkout/payment RPCs, DemoGateway, Phase 1 archive.
 
-Status: IMPLEMENTED locally 2026-10-22 on `phase1-archive-checkpoint-2026-10-20`. Migration `0026_discount_limits.sql` is NOT applied live; apply it before installing an app build with this change (the Discounts tab calls the new `discount_usage` RPC).
+Status: DEPLOYED (DB) 2026-10-22. Commit c45b83f on `phase1-archive-checkpoint-2026-10-20` (pushed). Migration `0026_discount_limits.sql` applied live at the owner's request (dry run showed only 0026; remote history shows 0026). App builds with this change need 0026, which is now live.
 
 - [x] D4 limit as `discounts.max_uses` (null = code made before limits, unlimited). Usage is counted from payments, not stored: held = pending + verified + voided, consumed = verified + voided (`discount_held`/`discount_consumed`). No separate ledger table: payments already are the durable record and nothing can drift.
 - [x] Discounts tab: required "Max uses" field on new codes (default 100), per-row usage text such as `3 of 100 used, 1 pending` / `3 used, no limit`, and a "Change limit" panel (also gives old unlimited codes a limit).
@@ -504,7 +504,8 @@ Fill cells with date, command/test, result and evidence location. `—` means no
 - Ruling: the demo archives used-up codes when codes are read or used rather than at the moment of verification; the database does it at verification.
 - Tests: SQL suites all 0 failed (discount-limits 9/9 RED before 0026); xUnit 579/581 with the same 2 baseline failures; Windows and Android Debug builds succeed. Review: author self-review + ponytail; no independent reviewer.
 - Deferred minor: setting the limit exactly to the consumed count archives the code immediately, but the success notice still says "can now be used N times".
-- Next: owner applies 0026 (`npx supabase db push`), checks the Discounts tab on Windows/Android, then accepts Phase 3. Phase 4 needs D11.
+- 0026 applied live 2026-10-22 at the owner's request; `migration list --linked` shows 0026 in both columns.
+- Next: owner checks the Discounts tab on Windows/Android, then accepts Phase 3. Phase 4 needs D11.
 
 ## 6. Copyable resume prompt
 
