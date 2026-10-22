@@ -90,7 +90,7 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 | 3 | Code activation caps and archive integration | 7 | 1; D4–D5 | DEPLOYED (DB) 2026-10-22 — 0026 live; device check/acceptance pending |
 | 4 | Revenue PDF export | 6 | 2; D11 | DEPLOYED (DB) 2026-10-22 — 0027 live; device check/acceptance pending |
 | 5 | Purchasable amenity catalog and coach availability | 10, 11 | 0; archive integration from 1; D6 | DEPLOYED (DB) 2026-10-22 — 0028 live; device check/acceptance pending |
-| 6 | Reservation engine and booking grid | 8 | 5; D6–D8 | IMPLEMENTED locally 2026-10-22 — 0029 not applied live; device check/acceptance pending |
+| 6 | Reservation engine and booking grid | 8 | 5; D6–D8 | DEPLOYED (DB) 2026-10-22 — 0029 live; device check/acceptance pending |
 | 7 | Structured training requests and rescheduling | 9 | 6; D7–D8 | PLANNED — D7/D8 approved 2026-10-22; needs Phase 6 |
 | 8 | Physical coach presence and discovery | 12 | 5; D9 | PLANNED |
 | 9 | Coach dashboard, shifts and profile polish | 13, 14 | 5–8; D10 | PLANNED |
@@ -251,7 +251,7 @@ Acceptance / verification:
 
 Starting points: Phase 5 contracts, training/amenity models and RPCs, member amenity UI, existing cron approach. Schema/service names below are design responsibilities, not preexisting files.
 
-Status: IMPLEMENTED locally 2026-10-22 on `phase1-archive-checkpoint-2026-10-20`. Migration `0029_reservations.sql` is NOT applied live; apply it before installing an app build with the booking page.
+Status: DEPLOYED (DB) 2026-10-22. Commit 42ebeae on `phase1-archive-checkpoint-2026-10-20` (pushed). Migration `0029_reservations.sql` applied live at the owner's request (dry run showed only 0029; remote history shows 0029).
 
 - [x] `reservations` (0029): member, amenity, optional coach and training session link, UTC start/end, `confirmed`/`cancelled`, creator, cancellation actor/time/reason, extension actor/time; every change is audited. Occupancy is separate from attendance (D8): no attendance columns here.
 - [x] One unit per amenity. Exclusion constraints: amenity `[start, end + 30 min)` (cooldown after use, exact boundary allowed, first use has no pre-cooldown), member `[start, end)` and coach `[start, end)` among confirmed bookings, so different amenities run together but nobody is in two places. `book_slots` also refuses overlap with the member's scheduled training sessions.
@@ -544,7 +544,8 @@ Fill cells with date, command/test, result and evidence location. `—` means no
 - Ruling: grid cells are always-enabled buttons (keyboard reachable) so the disabled style cannot hide their status; taps on cells that cannot be picked are ignored.
 - Process note: the app-side code for Phase 6 was written before its xUnit tests (the SQL tests were written first and seen failing). As a check, breaking the "too close" rule made 2 of the 6 tests fail.
 - Tests: `reservations.mjs` 14/14 (all RED before 0029); `ReservationTests` 6/6; xUnit 599/601 with the same 2 baseline failures; Windows and Android Debug builds succeed. The page was not run on a device. Review: author self-review + ponytail; no independent reviewer.
-- Next: owner applies 0029 and tries Book an amenity on Windows and Android, then accepts Phase 6. Phase 7 (structured requests and reschedules) is next.
+- 0029 applied live 2026-10-22 at the owner's request; `migration list --linked` shows 0029 in both columns.
+- Next: owner tries Book an amenity on Windows and Android, then accepts Phase 6. Phase 7 (structured requests and reschedules) is next.
 
 ## 6. Copyable resume prompt
 
