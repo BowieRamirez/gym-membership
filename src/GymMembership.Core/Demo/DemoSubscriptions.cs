@@ -80,7 +80,6 @@ public sealed partial class DemoGateway
         return pay;
     }
 
-    void RequireRefundAdmin() {RequireActive();if(!RolesOf(Uid).Contains("admin")) throw Err("forbidden");}
 
     bool SubscriptionCall(string fn,Dictionary<string,object> a,out object? result)
     {
@@ -113,7 +112,7 @@ public sealed partial class DemoGateway
             }
             case "decide_membership_refund":
             {
-                RequireRefundAdmin();var reason=Reason();var approve=Convert.ToBoolean(a["p_approve"]);
+                Require("payments:void");var reason=Reason();var approve=Convert.ToBoolean(a["p_approve"]);
                 var r=All<RefundRequest>().FirstOrDefault(r=>r.Id==I("p_request_id"))??throw Err("not_found");
                 if(r.MemberId==Uid) throw Err("self_decision");
                 if(r.Status!="pending") throw Err("already_processed");
@@ -128,7 +127,7 @@ public sealed partial class DemoGateway
             }
             case "record_membership_refund_paid":
             {
-                RequireRefundAdmin();var method=Text("p_method");var reference=Text("p_reference");
+                Require("payments:void");var method=Text("p_method");var reference=Text("p_reference");
                 if(method is not (PayMethod.Cash or PayMethod.Gcash or PayMethod.BankTransfer) || method!=PayMethod.Cash&&string.IsNullOrWhiteSpace(reference)) throw Err("bad_input");
                 var r=All<RefundRequest>().FirstOrDefault(r=>r.Id==I("p_request_id"))??throw Err("not_found");
                 if(r.MemberId==Uid) throw Err("self_decision");

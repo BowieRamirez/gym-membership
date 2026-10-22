@@ -1,7 +1,7 @@
 # Gym management fixes and changes — implementation and progress plan
 
 Created: 2026-10-20
-Last updated: 2026-10-20
+Last updated: 2026-10-22
 Status: Phase 1 IMPLEMENTED — owner reports database migrations 0023/0024 applied live; history confirmation, Edge Function deployment and live/device acceptance pending
 Branch inspected: `main`
 
@@ -20,15 +20,16 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 
 ### Current work / restart here
 
+- Phase 2 (2026-10-22): IMPLEMENTED locally on `phase2-payment-authority` (branched from the Phase 1 checkpoint d31a97c), uncommitted. New: `0025_refund_payment_permission.sql`, `supabase/tests/local/payment-authority.mjs`, demo parity in `DemoSubscriptions.cs`. SQL suite all green incl. 6 new checks; xUnit 574/576 (same 2 baseline failures). Next: owner review, commit when asked, owner runs `npx supabase db push` for 0025.
 - Current phase: Phase 1 IMPLEMENTED; owner reports migrations 0023/0024 applied live successfully. Migration-history confirmation, reset-password Edge Function deployment, live app verification and final device/owner acceptance remain pending.
 - Current task: Implementation complete for items 1, 2 and 4; review locally before accepting the phase or starting Phase 2.
 - Working branch / original base HEAD: `phase1-archive-checkpoint-2026-10-20` / `9f6ecb097ded65b59e3c6427924dd90d288e908a`. Created from the prior local `phase1-archive-accounts` branch with the Phase 1 work intact; main is not being merged or pushed.
-- Checkpoint authorization: Owner explicitly requested a NEW branch and a Git commit/push to save progress before continuing other phases tomorrow. This supersedes the earlier no-push instruction for this checkpoint only; it does not authorize a merge, app release, further live deployment or Phase 2 changes. The checkpoint commit is the commit containing this handoff (inspect `git log -1 --oneline` and upstream status for its actual hash/publication). Owner separately reports 0023/0024 applied live; reset-password deployment is still unconfirmed.
+- Checkpoint authorization: Owner explicitly requested a NEW branch and a Git commit/push to save progress before continuing other phases tomorrow. This supersedes the earlier no-push instruction for this checkpoint only; it does not authorize a merge, app release, further live deployment or Phase 2 changes. The checkpoint commit is the commit containing this handoff (inspect `git log -1 --oneline` and upstream status for its actual hash/publication). Owner separately reports 0023/0024 applied live; reset-password deployed 2026-10-22.
 - Files changed so far: Account and catalog archive services/models/demo/ViewModels; Users native menu/deletion popup; Discounts & Archive UI; catalog actions/navigation; migrations 0023/0024; reset-password archived-target guard; regression tests and Windows smoke script. Use `git status --short` for the exact uncommitted file list.
 - Last command/test and result: 39 focused Phase 1 tests pass. Full xUnit: 574 passed, same 2 pre-existing failures / 576. SQL: 110 rules + 31 Phase 7 + 26 session + 22 account + 16 catalog/archive checks pass; populated-history upgrade checks pass. Windows and Android Debug builds pass. Windows isolated-demo smoke passes.
-- Database migrations added/applied for this plan: `0023_account_archive.sql` and `0024_archive_catalog.sql` passed disposable tests; owner now reports both APPLIED LIVE via successful `supabase db push --linked` output. Independently confirmed remote history after the push: pending. The reset-password Edge Function change is NOT yet reported deployed.
-- Remaining verification: post-push linked migration list; separate reset-password function deployment to the confirmed project; live-backed app smoke checks using designated test records; Android touch/device interaction (adb not on PATH); Windows keyboard/screen-reader/narrow/light-dark checks and owner acceptance. No claim that old signed URLs or Supabase Auth sessions are revoked by profile deactivation.
-- Next concrete action: Run `npx supabase migration list --linked` to confirm 0023/0024 in both columns; deploy `reset-password` to the confirmed project separately, then verify the updated live-backed app. Do not reapply migrations, start another phase, commit or Git-push automatically. Resolve D3 before Phase 2.
+- Database migrations added/applied for this plan: `0023_account_archive.sql` and `0024_archive_catalog.sql` passed disposable tests; owner now reports both APPLIED LIVE via successful `supabase db push --linked` output. Remote history confirmed 2026-10-22: `migration list --linked` shows 0001–0024 in both Local and Remote. The reset-password Edge Function change is NOT yet reported deployed.
+- Remaining verification: live-backed app smoke checks using designated test records; Android touch/device interaction (adb not on PATH); Windows keyboard/screen-reader/narrow/light-dark checks and owner acceptance. No claim that old signed URLs or Supabase Auth sessions are revoked by profile deactivation.
+- Next concrete action: (0023/0024 remote history confirmed 2026-10-22; `reset-password` deployed 2026-10-22 to project `avxcitoddadbblxuhiik`, the linked project the app uses.) Verify the updated live-backed app. Do not reapply migrations, start another phase, commit or Git-push automatically. D3 resolved 2026-10-22; Phase 2 is unblocked.
 - Safe stopping point: Phase 1 implementation/evidence and this restart plan are included in the owner-authorized checkpoint on `phase1-archive-checkpoint-2026-10-20`. Verify `git status -sb` and `git log -1 --oneline` when resuming to confirm commit/upstream state. No further phase work is started. Optional project skill/review integrations were unavailable; review was author self-review only.
 
 ## 1. Repository findings and guardrails
@@ -68,7 +69,7 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 
 - [x] **D1 — deletion reason and safeguards (owner approved 2026-10-20):** Admin-only deletion with a mandatory trimmed reason of 1–500 characters. Block self-deletion and loss of the last active admin. Block deletion while the target has any scheduled sessions (including overdue unresolved sessions), active coaching hires, or pending payments; staff must resolve these first. Preserve history; no automatic refunds/cancellations. Owner confirmed admin-only behavior and explicitly requested no push.
 - [x] **D2 — archive location and types (owner approved 2026-10-20):** Use separate Discounts and Archive tabs in the admin area. Initial archive types: inactive/deleted accounts, discount codes, gym-plan catalog entries, and amenities. Expired member subscription terms remain in membership history, not this archive. Combined Archive UI and catalog lifecycle are now implemented locally. Future archive types are not invented; expired membership terms stay in membership history.
-- [ ] **D3 — payment authority:** Recommend reuse of `payments:void`, plus a narrowly scoped admin-cancel capability only if needed. Existing member withdrawal of an unverified own payment and refund requests stay unless explicitly superseded. If all cancellation must become admin-only, record that policy change and update the existing flows/tests. Decide how permitted versus unpermitted admins are configured; no new higher role unless actually needed. Answer: ___
+- [x] **D3 — payment authority (owner approved 2026-10-22):** All admins may void/cancel; authority stays role-based via the existing `payments:void` grant (no per-user grants, no new role). No separate admin-cancel capability: void covers verified payments with reason/actor/timestamp; pending payments keep the existing Reject in the verification queue (reason + audit), per Phase 2 ruling 2026-10-22. Refund decisions (`decide_membership_refund`, `record_membership_refund_paid`) move from `has_role('admin')` to the same `payments:void` check. Members keep self-withdrawal of their own unverified payment (0019) and 24h refund requests (Phase 7). Employees, coaches, members and archived accounts cannot void.
 - [ ] **D4 — access-code meaning and activation:** Confirm these are existing discount codes, not a new access/invitation-code system. Recommend one successful verified redemption per distinct member; a pending discounted checkout temporarily reserves capacity, then consumes it on verification and releases it on rejection/expiry/cancellation. Decide refund/void effects; recommend consumed redemptions stay consumed to prevent reuse abuse. Alternative policies require corresponding tests. Answer: ___
 - [ ] **D5 — limits and restoration:** Recommend positive integer caps, no lowering below already-consumed plus reserved capacity, and no normal reactivation of exhausted codes. Decide whether raising a cap can ever unlock an exhausted code; default to no, issue a new code. Decide how existing unlimited codes are backfilled without breaking pending payments. Answer: ___
 - [ ] **D6 — slot and payment contract:** Agree slot increment (recommend 30 minutes), maximum booking duration, advance-booking window, operating hours, and whether overnight bookings are supported. With one unit per amenity, each grid column represents a different amenity, not invented extra courts. Decide entitlement/price/session-credit rules, and whether independent amenity bookings need a coach. Answer: ___
@@ -85,7 +86,7 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 | --- | --- | --- | --- | --- |
 | 0 | Decisions and verified baseline | All | None | IN PROGRESS — D1/D2 approved, baseline recorded; other phase decisions pending |
 | 1 | Archive foundation, account deletion, overflow menu | 1, 2, 4 | 0; D1–D2 | IMPLEMENTED locally — automated checks + Windows demo smoke verified; remaining device/owner acceptance pending |
-| 2 | Payment authorization and history | 5 | 0; D3 | PLANNED |
+| 2 | Payment authorization and history | 5 | 0; D3 | IMPLEMENTED locally 2026-10-22 — 0025 not applied live; owner acceptance pending |
 | 3 | Code activation caps and archive integration | 7 | 1; D4–D5 | PLANNED |
 | 4 | Revenue PDF export | 6 | 2; D11 | PLANNED |
 | 5 | Purchasable amenity catalog and coach availability | 10, 11 | 0; archive integration from 1; D6 | PLANNED |
@@ -168,19 +169,21 @@ Acceptance / verification for the COMPLETE phase:
 
 Starting points: `VoidPaymentsPage.xaml`, payment pages/Shell routes, `VoidPaymentsViewModel`, `PaymentStaffService`, subscription cancellation/refund code, latest definitions of `void_payment` and `cancel_pending_payment`, permission helpers/grants.
 
-- [ ] Inventory all void, cancellation, withdrawal and refund entry points, including direct table writes, RPCs, deep links and demo behavior.
-- [ ] Reuse effective `payments:void` capability for permitted admins; implement the agreed capability for administrative cancellation if distinct. Do not equate every admin label with permission if selective grants are required.
-- [ ] Hide unauthorized controls and navigation entries entirely; handle permission revocation while a page is open. Direct commands/API calls still enforce server authorization.
-- [ ] Preserve or explicitly revise member pending-payment withdrawal and refund requests according to D3; do not inadvertently disable valid member workflows.
-- [ ] Retain and verify required reason, actor, server timestamp, audit event and voided history. Ensure admin cancellation has equivalent audit data.
-- [ ] Keep receipt history visible with voided status. Preserve existing entitlement reversal and refund-vs-void race protection; no double reversal.
-- [ ] Add permission matrix and concurrency tests for allowed admin, unpermitted admin, employee, coach, member and archived account.
+Status: IMPLEMENTED locally 2026-10-22 on branch `phase2-payment-authority` (uncommitted). Migration `0025_refund_payment_permission.sql` is NOT applied live.
+
+- [x] Inventory: `void_payment` (0018 wrapper → 0005 legacy, `payments:void`); pending-payment Reject in `verify_payment` (`payments:verify`, reason + `payment.reject` audit + notification); member `cancel_pending_payment` (own unverified only, 0019); `request/decide/record` refund RPCs (0018). Direct writes to payments/refund_requests are denied (phase7 test). UI: Void + Cancellations & refunds pages are `ClassId="admin"` and removed for front desk. Demo mirrors each RPC.
+- [x] `payments:void` is the single capability. `0025` switches `decide_membership_refund` and `record_membership_refund_paid` from `has_role('admin')` to `require_permission('payments:void')` (bodies otherwise identical). Demo `RequireRefundAdmin` replaced with `Require("payments:void")`. Pending payments are cancelled through the existing Reject, not by extending void (ruling, see session log).
+- [x] Unauthorized navigation is already removed (not greyed) by role; per D3 every admin holds the grant, so role == permission. Revocation while a page is open is enforced server-side and surfaces the standard "You don't have permission" message.
+- [x] Member withdrawal (0019) and 24h refund requests (Phase 7) unchanged; covered by existing phase7 tests.
+- [x] Void and refund decisions record actor, server time, reason and an audit row (new test asserts these).
+- [x] Member payment history lists every status, so voided rows stay visible. Existing race protection (void ↔ refund mutual exclusion, simultaneous approve/void) unchanged and still passing.
+- [x] `payment-authority.mjs` (6 checks): front desk, coach, member and archived admin cannot void/decide/repay; an admin without the grant cannot; a permitted admin's actions record who/when/why and a second void fails. RED before 0025 (admin without grant could decide), GREEN after.
 
 Acceptance / verification:
-- [ ] Unauthorized controls are absent, not greyed out; forged requests are rejected.
-- [ ] Each permitted operation records who/when/why and remains visible in history.
-- [ ] Repeating/racing void, refund and cancellation cannot reverse a payment twice.
-- [ ] Member cancellation/refund behavior matches the explicitly approved policy.
+- [x] Unauthorized controls are absent, not greyed out; forged requests are rejected (SQL matrix).
+- [x] Each permitted operation records who/when/why and remains visible in history.
+- [x] Repeating/racing void, refund and cancellation cannot reverse a payment twice (phase7 race tests + double-void check).
+- [ ] Member cancellation/refund behavior matches the explicitly approved policy — automated tests pass; owner confirmation and live push of 0025 pending.
 
 ## Phase 3 — Capped access/discount-code activation
 
