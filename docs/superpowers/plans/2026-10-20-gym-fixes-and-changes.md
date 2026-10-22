@@ -20,7 +20,7 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 
 ### Current work / restart here
 
-- Phase 2 (2026-10-22): IMPLEMENTED locally on `phase2-payment-authority` (branched from the Phase 1 checkpoint d31a97c), uncommitted. New: `0025_refund_payment_permission.sql`, `supabase/tests/local/payment-authority.mjs`, demo parity in `DemoSubscriptions.cs`. SQL suite all green incl. 6 new checks; xUnit 574/576 (same 2 baseline failures). Next: owner review, commit when asked, owner runs `npx supabase db push` for 0025.
+- Phase 2 (2026-10-22): IMPLEMENTED and DEPLOYED (DB) on `phase1-archive-checkpoint-2026-10-20`, commit 6f986d7, pushed (owner asked; the temporary `phase2-payment-authority` branch was fast-forwarded in and deleted). New: `0025_refund_payment_permission.sql`, `supabase/tests/local/payment-authority.mjs`, demo parity in `DemoSubscriptions.cs`. SQL suite all green incl. 6 new checks; xUnit 574/576 (same 2 baseline failures). 0025 applied live 2026-10-22 at the owner's request (dry run showed only 0025; `migration list --linked` shows 0025 in both columns). Next: owner checks refund approve/reject as admin in the app, then accepts Phase 2.
 - Current phase: Phase 1 IMPLEMENTED; owner reports migrations 0023/0024 applied live successfully. Migration-history confirmation, reset-password Edge Function deployment, live app verification and final device/owner acceptance remain pending.
 - Current task: Implementation complete for items 1, 2 and 4; review locally before accepting the phase or starting Phase 2.
 - Working branch / original base HEAD: `phase1-archive-checkpoint-2026-10-20` / `9f6ecb097ded65b59e3c6427924dd90d288e908a`. Created from the prior local `phase1-archive-accounts` branch with the Phase 1 work intact; main is not being merged or pushed.
@@ -86,7 +86,7 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 | --- | --- | --- | --- | --- |
 | 0 | Decisions and verified baseline | All | None | IN PROGRESS — D1/D2 approved, baseline recorded; other phase decisions pending |
 | 1 | Archive foundation, account deletion, overflow menu | 1, 2, 4 | 0; D1–D2 | IMPLEMENTED locally — automated checks + Windows demo smoke verified; remaining device/owner acceptance pending |
-| 2 | Payment authorization and history | 5 | 0; D3 | IMPLEMENTED locally 2026-10-22 — 0025 not applied live; owner acceptance pending |
+| 2 | Payment authorization and history | 5 | 0; D3 | DEPLOYED (DB) 2026-10-22 — 0025 live; owner app check/acceptance pending |
 | 3 | Code activation caps and archive integration | 7 | 1; D4–D5 | PLANNED |
 | 4 | Revenue PDF export | 6 | 2; D11 | PLANNED |
 | 5 | Purchasable amenity catalog and coach availability | 10, 11 | 0; archive integration from 1; D6 | PLANNED |
@@ -169,7 +169,7 @@ Acceptance / verification for the COMPLETE phase:
 
 Starting points: `VoidPaymentsPage.xaml`, payment pages/Shell routes, `VoidPaymentsViewModel`, `PaymentStaffService`, subscription cancellation/refund code, latest definitions of `void_payment` and `cancel_pending_payment`, permission helpers/grants.
 
-Status: IMPLEMENTED locally 2026-10-22 on branch `phase2-payment-authority` (uncommitted). Migration `0025_refund_payment_permission.sql` is NOT applied live.
+Status: DEPLOYED (DB) 2026-10-22. Commit 6f986d7 on `phase1-archive-checkpoint-2026-10-20` (pushed). Migration `0025_refund_payment_permission.sql` applied live and confirmed in remote history. No app release needed: current builds behave the same because every admin holds `payments:void`.
 
 - [x] Inventory: `void_payment` (0018 wrapper → 0005 legacy, `payments:void`); pending-payment Reject in `verify_payment` (`payments:verify`, reason + `payment.reject` audit + notification); member `cancel_pending_payment` (own unverified only, 0019); `request/decide/record` refund RPCs (0018). Direct writes to payments/refund_requests are denied (phase7 test). UI: Void + Cancellations & refunds pages are `ClassId="admin"` and removed for front desk. Demo mirrors each RPC.
 - [x] `payments:void` is the single capability. `0025` switches `decide_membership_refund` and `record_membership_refund_paid` from `has_role('admin')` to `require_permission('payments:void')` (bodies otherwise identical). Demo `RequireRefundAdmin` replaced with `Require("payments:void")`. Pending payments are cancelled through the existing Reject, not by extending void (ruling, see session log).
@@ -183,7 +183,7 @@ Acceptance / verification:
 - [x] Unauthorized controls are absent, not greyed out; forged requests are rejected (SQL matrix).
 - [x] Each permitted operation records who/when/why and remains visible in history.
 - [x] Repeating/racing void, refund and cancellation cannot reverse a payment twice (phase7 race tests + double-void check).
-- [ ] Member cancellation/refund behavior matches the explicitly approved policy — automated tests pass; owner confirmation and live push of 0025 pending.
+- [ ] Member cancellation/refund behavior matches the explicitly approved policy — automated tests pass; 0025 live; owner confirmation in the app pending.
 
 ## Phase 3 — Capped access/discount-code activation
 
@@ -483,6 +483,16 @@ Fill cells with date, command/test, result and evidence location. `—` means no
 - Last known working point:
 - Next concrete action (file, function, test or command):
 - Commit / PR reference, if separately requested:
+
+### 2026-10-22 — D3 and Phase 2
+
+- Phase 1: `migration list --linked` confirmed 0001–0024 in both columns; `reset-password` Edge Function deployed to `avxcitoddadbblxuhiik` (the linked project the app uses). Live app smoke, Android and owner acceptance still pending.
+- D3 approved by the owner: all admins via role grant `payments:void`; no separate cancel capability; members keep withdrawal and 24h refund requests.
+- Ruling: pending payments are cancelled through the existing Reject in the verification queue (reason + `payment.reject` audit + notification), not by extending `void_payment`, to avoid two ways to cancel one payment. If the owner wants Void on pending rows, add it in a new migration.
+- Ruling: Void/Refunds page visibility stays role-based (`ClassId="admin"`); with D3 every admin holds the grant. An admin whose grant is removed would see the pages but get the server's permission error.
+- Implemented `0025_refund_payment_permission.sql`, demo parity, `payment-authority.mjs` (6 checks, RED before 0025, GREEN after). Full local SQL suites 0 failed; xUnit 574/576 with the same 2 baseline failures. Review: author self-review + ponytail review (one duplicate test removed); no independent reviewer.
+- Commit 6f986d7 pushed on `phase1-archive-checkpoint-2026-10-20`; 0025 applied live at the owner's request.
+- Next: owner verifies refund approve/reject as admin, the Phase 1 live smoke and Android checks, then records acceptance for Phases 1 and 2. Phase 3 needs D4/D5.
 
 ## 6. Copyable resume prompt
 
