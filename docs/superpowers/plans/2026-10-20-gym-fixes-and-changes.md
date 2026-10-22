@@ -88,7 +88,7 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 | 1 | Archive foundation, account deletion, overflow menu | 1, 2, 4 | 0; D1–D2 | IMPLEMENTED locally — automated checks + Windows demo smoke verified; remaining device/owner acceptance pending |
 | 2 | Payment authorization and history | 5 | 0; D3 | DEPLOYED (DB) 2026-10-22 — 0025 live; owner app check/acceptance pending |
 | 3 | Code activation caps and archive integration | 7 | 1; D4–D5 | DEPLOYED (DB) 2026-10-22 — 0026 live; device check/acceptance pending |
-| 4 | Revenue PDF export | 6 | 2; D11 | IMPLEMENTED locally 2026-10-22 — 0027 not applied live; device check/acceptance pending |
+| 4 | Revenue PDF export | 6 | 2; D11 | DEPLOYED (DB) 2026-10-22 — 0027 live; device check/acceptance pending |
 | 5 | Purchasable amenity catalog and coach availability | 10, 11 | 0; archive integration from 1; D6 | PLANNED |
 | 6 | Reservation engine and booking grid | 8 | 5; D6–D8 | PLANNED |
 | 7 | Structured training requests and rescheduling | 9 | 6; D7–D8 | PLANNED |
@@ -211,7 +211,7 @@ Acceptance / verification:
 
 Starting points: `RevenuePage.xaml`, `RevenueViewModel`, `AdminService.RevenueAsync`, `RevenueRow`, latest `revenue_summary` (`0020`), platform save/share services.
 
-Status: IMPLEMENTED locally 2026-10-22 on `phase1-archive-checkpoint-2026-10-20`. Migration `0027_revenue_lines.sql` is NOT applied live; apply it before installing an app build with Export PDF.
+Status: DEPLOYED (DB) 2026-10-22. Commit 1cef4f3 on `phase1-archive-checkpoint-2026-10-20` (pushed). Migration `0027_revenue_lines.sql` applied live at the owner's request (dry run showed only 0027; remote history shows 0027).
 
 - [x] The screen keeps the range and total it actually loaded; Export PDF uses that, not dates edited since. If the receipt lines no longer add up to the loaded total, the screen refreshes and asks to export again instead of exporting different figures.
 - [x] `revenue_lines(p_from,p_to,p_offset,p_limit)` (0027): `reports:revenue` only, same accounting as `revenue_summary` (verified on Manila verification day, minus approved/paid refunds on Manila approval day, voids excluded), deterministic order, pages of 1–1000. The app reads 500-row pages until a short page, so nothing is silently cut off.
@@ -518,7 +518,8 @@ Fill cells with date, command/test, result and evidence location. `—` means no
 - Ruling: Noto Sans (OFL) embedded for the PDF because Barlow lacks ₱; the app's on-screen font is unchanged.
 - Ruling: when the receipt lines no longer match the loaded total, export stops and the screen refreshes rather than exporting figures that differ from what is shown.
 - Tests: SQL suites 0 failed (revenue-lines 6/6 RED before 0027); xUnit 585/587 with the same 2 baseline failures; Windows and Android Debug builds succeed with no NU1903. Review: author self-review + ponytail; no independent reviewer.
-- Next: owner applies 0027, tries Export PDF on Windows and Android (and a Release Android build, since trimming was not tested), then accepts Phase 4. Phase 5 needs D6.
+- 0027 applied live 2026-10-22 at the owner's request; `migration list --linked` shows 0027 in both columns.
+- Next: owner tries Export PDF on Windows and Android (and a Release Android build, since trimming was not tested), then accepts Phase 4. Phase 5 needs D6.
 
 ## 6. Copyable resume prompt
 
