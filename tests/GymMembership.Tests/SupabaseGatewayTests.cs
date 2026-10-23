@@ -240,14 +240,15 @@ public sealed class SupabaseGatewayTests : IDisposable
     {
         var gw = await SignedInAsync();
         _reply = _ => (200, """[{"member_id":"u-9","full_name":"Alex Tan"}]""");
-        var told = (await new AmenityService(gw).SetStatusAsync(4, "unavailable", "Cleaning", new DateTime(2026, 10, 20, 2, 0, 0, DateTimeKind.Utc))).Value!.Told;
+        var back = DateTime.UtcNow.Date.AddDays(1).AddHours(2);   // a return time must still be ahead, so not a fixed date
+        var told = (await new AmenityService(gw).SetStatusAsync(4, "unavailable", "Cleaning", back)).Value!.Told;
 
         Assert.Equal("/rest/v1/rpc/set_amenity_status", Last.Path);
         var body = Last.Body;
         Assert.Contains("\"p_amenity_id\":4", body);
         Assert.Contains("\"p_status\":\"unavailable\"", body);
         Assert.Contains("\"p_reason\":\"Cleaning\"", body);
-        Assert.Contains("2026-10-20T02:00:00", body);
+        Assert.Contains(back.ToString("yyyy-MM-ddTHH:mm:ss"), body);
         Assert.Equal("u-9", told[0].MemberId);
         Assert.Equal("Alex Tan", told[0].Name);
     }

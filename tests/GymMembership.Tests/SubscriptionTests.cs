@@ -204,7 +204,8 @@ public class SubscriptionTests
     [Fact]
     public async Task The_membership_page_drops_the_pay_by_QR_panel_after_a_cancel()
     {
-        var (gw, _, svc, monthly, _) = await Setup();
+        var (gw, clock, svc, monthly, _) = await Setup();
+        clock.Now = DateTimeOffset.UtcNow;   // the page judges a payment's expiry by the real clock, so a fixed date here expires it
         var p=(await svc.ExtendAsync(monthly.Id)).Value!;
         var vm=new GymMembership.Core.ViewModels.MyMembershipViewModel(new MembershipService(gw),new NoPicker(),svc);
         await vm.OnAppearingAsync();
