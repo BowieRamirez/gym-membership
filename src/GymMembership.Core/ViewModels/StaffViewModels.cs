@@ -270,13 +270,14 @@ public partial class CoachProfileViewModel(ICoachService svc, CoachPhotoViewMode
     public CoachPhotoViewModel? Photo { get; } = photo;
     [ObservableProperty] private string? bio;
     [ObservableProperty] private string? specialty;
-    [ObservableProperty] private decimal? hourlyRate;
-    [ObservableProperty] private bool isAvailable;
+    [ObservableProperty] private string rateInput = "";   // text, parsed by CoachRate: never by the device's own decimal separator
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HiringText))] private bool isAvailable;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(InGym), nameof(VisitText), nameof(VisitButton))] private CoachVisit? visit;
 
     public bool InGym => Visit is not null;
     public string VisitText => Visit is { } v ? $"You are checked in since {Fmt.Time(v.CheckedInAt)}. Members can find you and hire you." : "You are not checked in. Members won't see you in the coach list until you are.";
     public string VisitButton => InGym ? "Check out" : "Check in";
+    public string HiringText => IsAvailable ? "On" : "Off";
 
     public override async Task OnAppearingAsync()
     {
@@ -288,7 +289,7 @@ public partial class CoachProfileViewModel(ICoachService svc, CoachPhotoViewMode
     private async Task LoadAsync()
     {
         if (await RunAsync(svc.MyCoachAsync, c =>
-            { if (c is null) return; Bio = c.Bio; Specialty = c.Specialty; HourlyRate = c.HourlyRate; IsAvailable = c.IsAvailable; }))
+            { if (c is null) return; Bio = c.Bio; Specialty = c.Specialty; RateInput = CoachRate.Input(c.HourlyRate); IsAvailable = c.IsAvailable; }))
             await RunAsync(svc.MyVisitAsync, v => Visit = v);
     }
 
@@ -304,7 +305,12 @@ public partial class CoachProfileViewModel(ICoachService svc, CoachPhotoViewMode
 
     [RelayCommand]
     private async Task SaveAsync()
-    { if (await RunAsync(() => svc.UpdateProfileAsync(Bio, Specialty, HourlyRate, IsAvailable))) Notice = "Profile saved."; }
+    {
+        Notice = null;
+        // D10: a rate is required on every profile save; a bad one keeps what was typed and says how to fix it
+        if (!CoachRate.TryParse(RateInput, out var rate)) { ErrorMessage = ErrorText.For(AppErrorKind.Validation, "bad_rate"); return; }
+        if (await RunAsync(() => svc.UpdateProfileAsync(Bio, Specialty, rate, IsAvailable))) { RateInput = CoachRate.Input(rate); Notice = "Profile saved."; }
+    }
 }
 
 public partial class TraineesViewModel(ICoachService svc, IChatService messages, IAppNavigator nav) : LoadableViewModel
@@ -333,7 +339,7 @@ public partial class ShiftsViewModel(ICoachService svc) : LoadableViewModel
 
     [ObservableProperty] private DateTime date = DateTime.Today.AddDays(1);
     [ObservableProperty] private TimeSpan time = new(8, 0, 0);
-    [ObservableProperty] private int hours = 6;
+    [ObservableProperty] private int hours = 4;   // D10 default length
     [ObservableProperty] private string? note;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HiringButtonText))] private bool isOpen = true;
 
@@ -613,7 +619,9 @@ public sealed record WeekRow(CalendarDay Day, IReadOnlyList<CalendarSession> Ses
 }
 
 // the coach's attendance calendar: a month or a week, a day list underneath, and marks that can be corrected in place
-public partial class AttendanceViewModel(ISessionService sessions, IAttendanceService attendance) : LoadableViewModel
+/// <summary>The coach dashboard (D10): this month's numbers, the month/week calendar with attendance marks, and shift posting for the selected day.
+/// Without a coach service (older tests) it is the attendance calendar alone.</summary>
+public partial class AttendanceViewModel(ISessionService sessions, IAttendanceService attendance, ICoachService? coach = null, IMembershipService? gym = null) : LoadableViewModel
 {
     /// <summary>The moment "now" is; tests set a fixed one.</summary>
     public Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
@@ -623,6 +631,16 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     public ObservableCollection<CalendarDay> Days { get; } = new();          // the month grid, 42 cells
     public ObservableCollection<WeekRow> WeekRows { get; } = new();          // the week view, 7 rows
     public ObservableCollection<CalendarSession> DaySessions { get; } = new();
+    public ObservableCollection<ShiftPost> DayShifts { get; } = new();
+    public int[] HoursOptions { get; } = [2, 4, 6, 8, 10];
+
+    [ObservableProperty] private TimeSpan postTime = new(8, 0, 0);   // the start, as the coach's own clock shows it
+    [ObservableProperty] private int postHours = 4;
+    [ObservableProperty] private string? postNote;
+    [ObservableProperty] private bool canPost;                       // the selected day still has gym time ahead
+    public bool HasShifts => coach is not null;
+    List<ShiftPost> shifts = [];
+    GymSettings? hours;
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsMonth), nameof(IsWeek), nameof(PeriodTitle))] private string viewMode = "Month";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(PeriodTitle))] private DateOnly focus;
@@ -656,7 +674,43 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     public override async Task OnAppearingAsync()
     {
         if (Focus == default) { Focus = Today; SelectedDay = Today; }
+        if (coach is not null && hours is null && gym is not null) { var g = await gym.GymAsync(); if (g.Ok) hours = g.Value; }
         await ReloadAsync();
+        Prefill();
+    }
+
+    /// <summary>The form for the selected day: opening time, or the next half hour today; Post shift is off when no gym time is left.</summary>
+    void Prefill()
+    {
+        var start = hours is not null && SelectedDay is { } day ? ShiftSlot.DefaultStart(day, hours.OpensAt, hours.ClosesAt, Clock()) : null;
+        CanPost = start is not null;
+        if (start is { } s) PostTime = AttendanceCalendar.LocalTime(s, Zone).TimeOfDay;
+        PostHours = 4;
+    }
+
+    [RelayCommand]
+    private async Task PostShiftAsync()
+    {
+        if (coach is null || hours is null || SelectedDay is not { } day) return;
+        Notice = null;
+        var start = AttendanceCalendar.StartOfDayUtc(day, Zone) + PostTime;
+        var end = ShiftSlot.End(start, PostHours, hours.ClosesAt);
+        if (end <= start) { ErrorMessage = "That start is at or after closing time. Pick an earlier start."; return; }
+        if (!await RunAsync(() => coach.PostShiftAsync(start, end, PostNote))) return;
+        Notice = end < start.AddHours(PostHours)
+            ? $"Shift posted until closing at {AttendanceCalendar.LocalTime(end, Zone).ToString("h:mm tt", CultureInfo.InvariantCulture)}."
+            : "Shift posted. Your trainees can see it on the Coaches page.";
+        PostNote = null;
+        await ReloadAsync();
+        Prefill();
+    }
+
+    [RelayCommand]
+    private async Task CancelShiftAsync(ShiftPost shift)
+    {
+        if (coach is null) return;
+        Notice = null;
+        if (await RunAsync(() => coach.CancelShiftAsync(shift.Id))) { Notice = "Shift cancelled."; await ReloadAsync(); }
     }
 
     // one range covers both views of the same date (the month grid and its week), so switching between them needs no new load
@@ -675,9 +729,11 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
         var (from, to) = Range();
         var calendar = sessions.CalendarAsync(from, to);
         var coming = sessions.UpcomingAsync();
-        await Task.WhenAll(calendar, coming);
+        var posted = coach?.MyShiftsAsync() ?? Task.FromResult(AppResult<IReadOnlyList<ShiftPost>>.Success([]));
+        await Task.WhenAll(calendar, coming, posted);
         if (ticket != loadTicket) return;
         var cal = await calendar; var up = await coming;
+        if ((await posted).Ok) shifts = (await posted).Value!.ToList();
         if (cal.Ok) { loaded = cal.Value!.ToList(); known = true; } else ErrorMessage = ErrorText.For(cal.Error, cal.Message);   // a failed look leaves what is shown as it was
         if (up.Ok) upcoming = up.Value!.ToList();
         Rebuild();
@@ -690,6 +746,7 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
         var week = AttendanceCalendar.Days(AttendanceCalendar.WeekOf(Focus), loaded, today, SelectedDay, null, Zone);
         Fill(WeekRows, week.Select(d => new WeekRow(d, AttendanceCalendar.SessionsOn(loaded, d.Date, Zone))));
         Fill(DaySessions, SelectedDay is { } day ? AttendanceCalendar.SessionsOn(loaded, day, Zone) : Array.Empty<CalendarSession>());
+        Fill(DayShifts, SelectedDay is { } sd ? shifts.Where(x => AttendanceCalendar.LocalDay(x.Start, Zone) == sd).OrderBy(x => x.Start) : []);
 
         var summary = AttendanceCalendar.Summary(AttendanceCalendar.SessionsInMonth(loaded, Focus.Year, Focus.Month, Zone), upcoming);
         SessionsText = known ? summary.SessionsThisMonth.ToString(CultureInfo.InvariantCulture) : "—";   // not a made-up zero while the month is loading or could not load
@@ -705,7 +762,7 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
 
     [RelayCommand] private Task PreviousAsync() => MoveAsync(IsMonth ? Focus.AddMonths(-1) : Focus.AddDays(-7));
     [RelayCommand] private Task NextAsync() => MoveAsync(IsMonth ? Focus.AddMonths(1) : Focus.AddDays(7));
-    [RelayCommand] private Task TodayAsync() => MoveAsync(Today, select: Today);
+    [RelayCommand] private async Task TodayAsync() { await MoveAsync(Today, select: Today); Prefill(); }
 
     async Task MoveAsync(DateOnly to, DateOnly? select = null)
     {
@@ -716,7 +773,7 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     }
 
     [RelayCommand]
-    private void SelectDay(CalendarDay day) { SelectedDay = day.Date; Rebuild(); }
+    private void SelectDay(CalendarDay day) { SelectedDay = day.Date; Rebuild(); Prefill(); }
 
     // the argument is "<sessionId>|<mark>" so one XAML button template serves all four marks
     [RelayCommand]

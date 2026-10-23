@@ -80,6 +80,20 @@ try {
     await as(desk, 'select verify_payment($1,true)', [bought.payment_id]);
     const p = await pass(); assert.equal(p.status, 'active'); assert.ok(p.expires_at > new Date());
   });
+  // Phase 9 (0033)
+  await test('a shift cannot start in the past or overlap another of the same coach', async () => {
+    const yesterday = (await db.query(`select ((now() at time zone 'Asia/Manila')::date - 1)::text d`)).rows[0].d;
+    await assert.rejects(as(coach, `insert into shift_posts(coach_id,starts_at,ends_at) values($1,$2,$3)`, [coach, `${yesterday} 08:00:00+08`, `${yesterday} 10:00:00+08`]), /past_slot/);
+    await post('16:00', '18:00');
+    await assert.rejects(post('17:00', '19:00'), /shift_posts_no_overlap/);
+  });
+  await test('an hourly rate must be above zero; empty stays allowed', async () => {
+    await assert.rejects(as(coach, `update coaches set hourly_rate=0 where user_id=$1`, [coach]), /coaches_rate_positive/);
+    await assert.rejects(as(coach, `update coaches set hourly_rate=-5 where user_id=$1`, [coach]), /check/);
+    await as(coach, `update coaches set hourly_rate=30.5 where user_id=$1`, [coach]);
+    assert.equal((await db.query('select hourly_rate::text r from coaches where user_id=$1', [coach])).rows[0].r, '30.50');
+    await as(coach, `update coaches set hourly_rate=null where user_id=$1`, [coach]);
+  });
 } finally {
   await db.end(); await server.stop();
 }

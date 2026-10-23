@@ -100,3 +100,27 @@ public static class AttendanceCalendar
         return new CalendarSummary(live.Count, rate, upcoming.Count, upcoming.OrderBy(s => s.Session.ScheduledStart).FirstOrDefault());
     }
 }
+
+/// <summary>Phase 9 (D10): posting a shift from the coach calendar. Gym hours are Manila wall clock and the day is read as a Manila date.</summary>
+// ponytail: assumes the coach's device is on Manila time (the calendar uses the device zone); convert the day via the gym zone if coaches travel
+public static class ShiftSlot
+{
+    static readonly TimeSpan Manila = TimeSpan.FromHours(8), Half = TimeSpan.FromMinutes(30);
+    static DateTime At(DateOnly day, TimeSpan t) => DateTime.SpecifyKind(day.ToDateTime(TimeOnly.MinValue) + t - Manila, DateTimeKind.Utc);
+
+    /// <summary>Opening time, or the next half hour still ahead on today. Null when the day has no gym time left.</summary>
+    public static DateTime? DefaultStart(DateOnly day, TimeSpan opens, TimeSpan closes, DateTime nowUtc)
+    {
+        var start = At(day, opens);
+        if (start < nowUtc) start = new DateTime((nowUtc.Ticks + Half.Ticks - 1) / Half.Ticks * Half.Ticks, DateTimeKind.Utc);
+        return start < At(day, closes) ? start : null;
+    }
+
+    /// <summary>Start plus the chosen hours, cut short at that day's closing time.</summary>
+    public static DateTime End(DateTime startUtc, int hours, TimeSpan closes)
+    {
+        var close = At(DateOnly.FromDateTime(startUtc + Manila), closes);
+        var end = startUtc.AddHours(hours);
+        return end > close ? close : end;
+    }
+}

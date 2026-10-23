@@ -42,24 +42,13 @@ public sealed class PhoneNavigation
         _shell = shell;
         var original = shell.Items.ToList();
         var primary = coach
-            ? new[] { ("Sessions", "Sessions", "sessions"), ("Time requests", "Requests", "requests"), ("Trainees", "Trainees", "trainees"), ("Messages", "Messages", "messages") }
+            ? new[] { ("Dashboard", "Dashboard", "overview"), ("Sessions", "Sessions", "sessions"), ("Trainees", "Trainees", "trainees"), ("Messages", "Messages", "messages") }
             : new[] { ("My membership", "Membership", "membership"), ("Packages", "Packages", "packages"), ("Sessions", "Sessions", "sessions"), ("Messages", "Messages", "messages") };
-#if ANDROID
-        if (coach)
-        {
-            original.Insert(0, new FlyoutItem
-            {
-                Title = "Overview", Route = "overview",
-                Items = { new ShellContent { ContentTemplate = PhonePageTemplates.ForService(services, typeof(CoachOverviewPage)) } }
-            });
-            primary = new[] { ("Overview", "Overview", "overview"), ("Sessions", "Sessions", "sessions"), ("Trainees", "Trainees", "trainees"), ("Messages", "Messages", "messages") };
-        }
-#endif
         var pageTypes = new Dictionary<string, Type>
         {
             ["Amenities"] = typeof(AmenitiesPage), ["Book an amenity"] = typeof(BookAmenityPage), ["Coaches"] = typeof(CoachesPage),
             ["Time requests"] = typeof(RequestsPage), ["My shifts"] = typeof(ShiftsPage),
-            ["Attendance"] = typeof(AttendancePage), ["My coach profile"] = typeof(CoachProfilePage),
+            ["My coach profile"] = typeof(CoachProfilePage),
             ["Settings"] = typeof(SettingsPage)
         };
         var secondary = original.Where(item => !primary.Any(p => p.Item1 == item.Title)).ToList();

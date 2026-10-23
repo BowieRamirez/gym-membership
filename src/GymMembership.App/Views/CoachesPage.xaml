@@ -37,7 +37,7 @@
                             <Label Text="{Binding Coach.Bio}" Style="{StaticResource Muted}" />
                             <Label Text="On the floor" FontFamily="BarlowMedium" />
                             <Label Text="{Binding ShiftsText}" Style="{StaticResource Caption}" />
-                            <Label Text="{Binding Coach.HourlyRate, StringFormat='₱{0:N0} per hour'}" FontFamily="BarlowSemiBold" />
+                            <Label Text="{Binding RateText}" FontFamily="BarlowSemiBold" />
                             <FlexLayout Wrap="Wrap">
                                 <Button Text="Hire" Style="{StaticResource SmallButton}" Margin="0,0,8,8"
                                         IsVisible="{Binding Hired, Converter={StaticResource Not}}" IsEnabled="{Binding Closed, Converter={StaticResource Not}}" Clicked="OnHire" />

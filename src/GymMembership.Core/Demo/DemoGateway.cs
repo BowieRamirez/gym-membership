@@ -302,6 +302,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 case (Coach c, Coach old):           // bio, specialty, rate, availability
                     if (old.UserId != Uid && !RolesOf(Uid).Contains("admin")) throw Err(Rls);
                     if (!All<Profile>().Any(p => p.Id == old.UserId && p.IsActive)) throw Err("record_archived");
+                    if (c.HourlyRate is <= 0) throw Err("new row violates check constraint \"coaches_rate_positive\"");   // 0033
                     old.Bio = c.Bio; old.Specialty = c.Specialty; old.HourlyRate = c.HourlyRate; old.IsAvailable = c.IsAvailable;
                     break;
                 case (UserSettings s, UserSettings old):
@@ -467,6 +468,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
             var g = All<GymSettings>().First();
             var day = next.Start.ToUniversalTime().AddHours(8).Date;   // Manila has no daylight saving
             if (next.Start.ToUniversalTime() < day + g.OpensAt - TimeSpan.FromHours(8) || next.End.ToUniversalTime() > day + g.ClosesAt - TimeSpan.FromHours(8)) throw Err("outside_gym_hours");
+            if ((old is null || old.Start != next.Start || old.Status != Status.Scheduled) && next.Start.ToUniversalTime() < SubscriptionNow) throw Err("past_slot");   // 0033
+            if (All<ShiftPost>().Any(s => !ReferenceEquals(s, old) && s.CoachId == next.CoachId && s.Status == Status.Scheduled && s.Start < next.End && next.Start < s.End))
+                throw Err("conflicting key value violates exclusion constraint \"shift_posts_no_overlap\"");
         }
         if (old is { Status: Status.Scheduled } && All<TrainingSession>().Any(t => t.CoachId == old.CoachId && t.Status == Status.Scheduled
                 && t.ScheduledStart < old.End && old.Start < t.ScheduledEnd
