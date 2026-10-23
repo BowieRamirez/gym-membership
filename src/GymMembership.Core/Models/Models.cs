@@ -233,6 +233,12 @@ public class ChatSearchHit : BaseModel
 { [PrimaryKey("shift_post_id")] public int Id { get; set; } [Column("coach_id", ignoreOnUpdate: true)] public string CoachId { get; set; } = ""; [Column("starts_at")] public DateTime Start { get; set; }
   [Column("ends_at")] public DateTime End { get; set; } [Column("note")] public string? Note { get; set; } [Column("status", ignoreOnInsert: true)] public string Status { get; set; } = "scheduled"; }
 
+// a coach's physical visit (0032): open while CheckedOutAt is null. Written only through coach_check_in / coach_check_out and the closing job.
+[Table("coach_visits")] public class CoachVisit : BaseModel
+{ [PrimaryKey("coach_visit_id")] public int Id { get; set; } [Column("coach_id")] public string CoachId { get; set; } = ""; [Column("checked_in_at")] public DateTime CheckedInAt { get; set; }
+  [Column("checked_in_by")] public string CheckedInBy { get; set; } = ""; [Column("checked_out_at")] public DateTime? CheckedOutAt { get; set; }
+  [Column("checked_out_by")] public string? CheckedOutBy { get; set; } [Column("auto_closed")] public bool AutoClosed { get; set; } }
+
 // one amenity booking (0029). Written only through book_slots / cancel_reservation / end_reservation / extend_reservation.
 [Table("reservations")] public class Reservation : BaseModel
 { [PrimaryKey("reservation_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("amenity_id")] public int AmenityId { get; set; }

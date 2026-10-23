@@ -10,6 +10,15 @@
         <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='20,16,20,24'}" Spacing="16">
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
+            <Border Style="{StaticResource Panel}" Padding="16,12">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                    <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                        <Label Text="At the gym" FontFamily="BarlowMedium" />
+                        <Label Text="{Binding VisitText}" Style="{StaticResource Caption}" />
+                    </VerticalStackLayout>
+                    <Button Grid.Column="1" Text="{Binding VisitButton}" Command="{Binding ToggleVisitCommand}" Style="{StaticResource SmallButton}" VerticalOptions="Center" />
+                </Grid>
+            </Border>
             <c:CoachPhotoPrompt x:DataType="vm:CoachPhotoViewModel" BindingContext="{Binding Source={RelativeSource AncestorType={x:Type vm:CoachProfileViewModel}}, Path=Photo}" IsVisible="{Binding IsCoach}" />
 
             <VerticalStackLayout Spacing="6">

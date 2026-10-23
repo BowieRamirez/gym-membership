@@ -74,6 +74,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         && All<MembershipTerm>().Any(t => t.MemberId == userId && t.CancelledAt is null && t.StartsAt <= SubscriptionNow && t.EndsAt > SubscriptionNow);
     bool CoachesMember(string coach, string? member) => All<CoachHire>().Any(h => h.CoachId == coach && h.MemberId == member && h.Status == Status.Active);
     bool IsCoach(string? userId) => All<Coach>().Any(c => c.UserId == userId);
+    CoachVisit? OpenVisit(string coachId) => All<CoachVisit>().FirstOrDefault(v => v.CoachId == coachId && v.CheckedOutAt is null);
 
     /// <summary>The demo's stand-in for the server sending someone an alert (a client cannot insert one itself, here or on the real table).</summary>
     public void Notify(string? userId, string type, string title, string? body = null)
@@ -190,6 +191,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             ChatMessage c => c.MemberId == uid || c.CoachId == uid,   // private: not even admins read chats
             ShiftPost s => s.CoachId == uid || staff || CoachesMember(s.CoachId, uid),
             GymCheckIn c => c.MemberId == uid || staff,
+            CoachVisit v => v.CheckedOutAt is null || v.CoachId == uid || staff,
             Discount => Has("discounts:manage"),   // members only learn a code is valid by using it
             Reservation r => r.MemberId == uid || r.CoachId == uid || staff,
             MembershipPackage k => k.IsActive || Has("catalog:manage"),
@@ -694,10 +696,30 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (!ActiveMember(uid)) throw Err("no_active_membership");
                 var coachId = S("p_coach_id");
                 if (!All<Coach>().Any(c => c.UserId == coachId && c.IsAvailable) || !(All<Profile>().FirstOrDefault(p => p.Id == coachId)?.IsActive ?? false)) throw Err("not_found");
+                if (OpenVisit(coachId) is null) throw Err("coach_not_in_gym");
                 if (CoachesMember(coachId, uid)) throw Err("duplicate key value violates unique constraint");
                 var hire = Add(new CoachHire { MemberId = uid, CoachId = coachId, Status = Status.Active, HiredAt = now });
                 Notify(coachId, "system", "New trainee", All<Profile>().First(p => p.Id == uid).FullName);
                 return hire.Id;
+            }
+            // 0032: the coach themselves, or check_ins:record for any coach; twice in a row is harmless
+            case "coach_check_in" or "coach_check_out":
+            {
+                var coachId = Opt("p_coach") ?? uid;
+                if (coachId == uid) RequireActive(); else Require("check_ins:record");
+                if (!IsCoach(coachId) || !(All<Profile>().FirstOrDefault(p => p.Id == coachId)?.IsActive ?? false)) throw Err("not_found");
+                var open = OpenVisit(coachId);
+                if (fn == "coach_check_out")
+                {
+                    if (open is null) return false;
+                    open.CheckedOutAt = now; open.CheckedOutBy = uid;
+                    return true;
+                }
+                if (open is not null) return open.Id;
+                var g = All<GymSettings>().First();
+                var manila = (now + Manila).TimeOfDay;
+                if (manila < g.OpensAt || manila >= g.ClosesAt) throw Err("gym_closed");
+                return Add(new CoachVisit { CoachId = coachId, CheckedInBy = uid, CheckedInAt = now }).Id;
             }
             case "end_hire":
             {
@@ -1171,6 +1193,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
         lena.Bio = "Ten years coaching powerlifting and general strength. Works with beginners and returning lifters.";
         var kai = All<Coach>().First(c => c.UserId == "u-coach2"); kai.Specialty = "Boxing and mobility"; kai.HourlyRate = 700;
         kai.Bio = "Former amateur boxer. Sessions focus on footwork, conditioning and joint mobility.";
+        // both coaches start in the gym so the coach list has someone to hire (0032); the demo has no closing-time job
+        foreach (var c in new[] { "u-coach1", "u-coach2" }) Add(new CoachVisit { CoachId = c, CheckedInBy = c, CheckedInAt = now });
 
         var monthly = Add(new MembershipPackage { Name = "Monthly", Description = "Full gym floor access for 30 days.", Price = 1500, DurationDays = 30 });
         var quarterly = Add(new MembershipPackage { Name = "Quarterly", Description = "90 days of access at a lower monthly rate.", Price = 4000, DurationDays = 90 });

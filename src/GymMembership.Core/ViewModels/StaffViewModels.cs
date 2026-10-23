@@ -234,20 +234,33 @@ public partial class VerifyAmenityUsagesViewModel(IAmenityService svc) : Loadabl
     { if (await RunAsync(() => svc.VerifyUsageAsync(row.Usage.Id, approve))) Pending.Remove(row); }
 }
 
-public partial class CheckInViewModel(IAttendanceService svc) : LoadableViewModel
+public partial class CheckInViewModel(IAttendanceService svc, ICoachService coaches) : LoadableViewModel
 {
     public ObservableCollection<MemberHit> Hits { get; } = new();
+    public ObservableCollection<CoachPresenceRow> Coaches { get; } = new();
     [ObservableProperty] private string search = "";
 
-    public override Task OnAppearingAsync() => SearchAsync();
+    public override async Task OnAppearingAsync() { await SearchAsync(); await LoadCoachesAsync(); }
 
     [RelayCommand] private Task SearchAsync() => RunAsync(() => svc.FindMembersAsync(Search), rows => Fill(Hits, rows));
+
+    Task LoadCoachesAsync() => RunAsync(coaches.PresenceAsync, rows => Fill(Coaches, rows));
 
     [RelayCommand]
     private async Task CheckInAsync(MemberHit hit)
     {
         Notice = null;
         if (await RunAsync(() => svc.CheckInAsync(hit.MemberId))) Notice = $"{hit.Username} is checked in.";
+    }
+
+    [RelayCommand]
+    private async Task ToggleCoachAsync(CoachPresenceRow row)
+    {
+        Notice = null;
+        var ok = await RunAsync(() => row.InGym ? coaches.CheckOutAsync(row.CoachId) : coaches.CheckInAsync(row.CoachId));
+        if (!ok) return;
+        Notice = row.InGym ? $"{row.Name} is checked out." : $"{row.Name} is checked in.";
+        await LoadCoachesAsync();
     }
 }
 
@@ -259,6 +272,11 @@ public partial class CoachProfileViewModel(ICoachService svc, CoachPhotoViewMode
     [ObservableProperty] private string? specialty;
     [ObservableProperty] private decimal? hourlyRate;
     [ObservableProperty] private bool isAvailable;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(InGym), nameof(VisitText), nameof(VisitButton))] private CoachVisit? visit;
+
+    public bool InGym => Visit is not null;
+    public string VisitText => Visit is { } v ? $"You are checked in since {Fmt.Time(v.CheckedInAt)}. Members can find you and hire you." : "You are not checked in. Members won't see you in the coach list until you are.";
+    public string VisitButton => InGym ? "Check out" : "Check in";
 
     public override async Task OnAppearingAsync()
     {
@@ -267,8 +285,22 @@ public partial class CoachProfileViewModel(ICoachService svc, CoachPhotoViewMode
     }
 
     [RelayCommand]
-    private Task LoadAsync() => RunAsync(svc.MyCoachAsync, c =>
-    { if (c is null) return; Bio = c.Bio; Specialty = c.Specialty; HourlyRate = c.HourlyRate; IsAvailable = c.IsAvailable; });
+    private async Task LoadAsync()
+    {
+        if (await RunAsync(svc.MyCoachAsync, c =>
+            { if (c is null) return; Bio = c.Bio; Specialty = c.Specialty; HourlyRate = c.HourlyRate; IsAvailable = c.IsAvailable; }))
+            await RunAsync(svc.MyVisitAsync, v => Visit = v);
+    }
+
+    [RelayCommand]
+    private async Task ToggleVisitAsync()
+    {
+        Notice = null;
+        var wasIn = InGym;
+        if (!await RunAsync(() => wasIn ? svc.CheckOutAsync() : svc.CheckInAsync())) return;
+        await RunAsync(svc.MyVisitAsync, v => Visit = v);
+        Notice = wasIn ? "You are checked out." : "You are checked in.";
+    }
 
     [RelayCommand]
     private async Task SaveAsync()

@@ -516,11 +516,15 @@ public sealed class AmenityService(ISupabaseGateway gw) : IAmenityService
 }
 
 // ===================== Coaches =====================
-public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId, IReadOnlyList<ShiftPost>? Shifts = null, string? PhotoUrl = null)
+/// <summary>InGym: the coach has an open physical visit (0032). The list shows only coaches in the gym, plus your own coach.</summary>
+public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId, IReadOnlyList<ShiftPost>? Shifts = null, string? PhotoUrl = null, bool InGym = true)
 {
     public string Letters => Initials.From(Name);
     /// <summary>The coach paused hiring and this member has no hire to keep: shown grayed out, Hire disabled.</summary>
     public bool Closed => !Coach.IsAvailable && !Hired;
+
+    public bool SameAs(CoachCard o) => Name == o.Name && Hired == o.Hired && HireId == o.HireId && InGym == o.InGym && PhotoUrl == o.PhotoUrl && ShiftsText == o.ShiftsText
+        && Coach.IsAvailable == o.Coach.IsAvailable && Coach.Bio == o.Coach.Bio && Coach.Specialty == o.Coach.Specialty && Coach.HourlyRate == o.Coach.HourlyRate;
 
     public string ShiftsText => Shifts is { Count: > 0 }
         ? string.Join("\n", Shifts.Take(3).Select(s => $"{Fmt.Range(s.Start, s.End)}{(string.IsNullOrWhiteSpace(s.Note) ? "" : "  " + s.Note)}"))
@@ -528,6 +532,14 @@ public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId
 }
 
 public sealed record TraineeRow(int HireId, string CoachId, string MemberId, string Name, string NextText, int Completed);
+
+/// <summary>A coach on the front desk's check-in page. InSince is null while they are not in the gym.</summary>
+public sealed record CoachPresenceRow(string CoachId, string Name, DateTime? InSince)
+{
+    public bool InGym => InSince is not null;
+    public string StateText => InSince is { } t ? $"In the gym since {Fmt.Time(t)}" : "Not in the gym";
+    public string ActionText => InGym ? "Check out" : "Check in";
+}
 
 public interface ICoachService
 {
@@ -540,6 +552,12 @@ public interface ICoachService
     Task<AppResult<IReadOnlyList<ShiftPost>>> MyShiftsAsync();
     Task<AppResult<bool>> PostShiftAsync(DateTime startUtc, DateTime endUtc, string? note);
     Task<AppResult<bool>> CancelShiftAsync(int shiftId);
+    /// <summary>The signed-in coach's open visit, or null when they are not checked in.</summary>
+    Task<AppResult<CoachVisit?>> MyVisitAsync();
+    /// <summary>Null coachId: the signed-in coach themselves. Otherwise front desk for that coach. Twice in a row is harmless.</summary>
+    Task<AppResult<bool>> CheckInAsync(string? coachId = null);
+    Task<AppResult<bool>> CheckOutAsync(string? coachId = null);
+    Task<AppResult<IReadOnlyList<CoachPresenceRow>>> PresenceAsync();
 }
 
 public sealed class CoachService(ISupabaseGateway gw) : ICoachService
@@ -554,14 +572,35 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
         var hires = await gw.ListAsync<CoachHire>(h => h.MemberId == uid && h.Status == "active");
         var now = DateTime.UtcNow;
         var shifts = await gw.ListAsync<ShiftPost>(s => s.Status == "scheduled" && s.End > now);
-        return await Task.WhenAll(coaches.Select(async c =>
+        var inGym = (await gw.ListAsync<CoachVisit>(v => v.CheckedOutAt == null)).Select(v => v.CoachId).ToHashSet();
+        // absent coaches are hidden, not grayed out; your own coach stays so Message and End hire keep working (D9)
+        var shown = coaches.Where(c => inGym.Contains(c.UserId) || hires.Any(h => h.CoachId == c.UserId));
+        return await Task.WhenAll(shown.Select(async c =>
         {
             var p = profiles.GetValueOrDefault(c.UserId);
             var name = p is null ? "Coach" : string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName;
             var photo = (await Safe.RunAsync(() => photos.UrlAsync(p?.AvatarPath))).Value;
             return new CoachCard(c, name, hires.Any(h => h.CoachId == c.UserId), hires.FirstOrDefault(h => h.CoachId == c.UserId)?.Id,
-                shifts.Where(s => s.CoachId == c.UserId).OrderBy(s => s.Start).ToList(), photo);
+                shifts.Where(s => s.CoachId == c.UserId).OrderBy(s => s.Start).ToList(), photo, inGym.Contains(c.UserId));
         }));
+    });
+
+    public Task<AppResult<CoachVisit?>> MyVisitAsync() => Safe.RunAsync<CoachVisit?>(async () =>
+    { var uid = gw.CurrentUserId; return (await gw.ListAsync<CoachVisit>(v => v.CoachId == uid && v.CheckedOutAt == null)).FirstOrDefault(); });
+
+    public Task<AppResult<bool>> CheckInAsync(string? coachId = null) => Safe.RunAsync(async () =>
+    { await gw.RpcAsync("coach_check_in", coachId is null ? new() : new() { ["p_coach"] = coachId }); return true; });
+
+    public Task<AppResult<bool>> CheckOutAsync(string? coachId = null) => Safe.RunAsync(async () =>
+    { await gw.RpcAsync("coach_check_out", coachId is null ? new() : new() { ["p_coach"] = coachId }); return true; });
+
+    public Task<AppResult<IReadOnlyList<CoachPresenceRow>>> PresenceAsync() => Safe.RunAsync<IReadOnlyList<CoachPresenceRow>>(async () =>
+    {
+        var active = (await gw.ListAsync<Profile>(p => p.IsActive == true)).ToDictionary(p => p.Id, p => string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName);
+        var open = (await gw.ListAsync<CoachVisit>(v => v.CheckedOutAt == null)).ToDictionary(v => v.CoachId, v => v.CheckedInAt);
+        return (await gw.ListAsync<Coach>()).Where(c => active.ContainsKey(c.UserId))
+            .Select(c => new CoachPresenceRow(c.UserId, active[c.UserId], open.TryGetValue(c.UserId, out var t) ? t : null))
+            .OrderByDescending(r => r.InGym).ThenBy(r => r.Name).ToList();
     });
 
     public Task<AppResult<bool>> HireAsync(string coachId) => Safe.RunAsync(async () =>

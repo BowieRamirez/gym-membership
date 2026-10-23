@@ -43,6 +43,7 @@ const desk = await user('employee');
 const pkg = (await db.query(`insert into membership_packages(name,price,duration_days) values('Request test',1000,365) returning membership_package_id`)).rows[0].membership_package_id;
 async function fixture() {
   const coach = await user('coach'), otherCoach = await user('coach'), member = await user(), otherMember = await user();
+  await db.query('insert into coach_visits(coach_id,checked_in_by) select unnest($1::uuid[]), unnest($1::uuid[])', [[coach, otherCoach]]);
   for (const uid of [member, otherMember]) {
     const pay = (await as(uid,'select * from extend_membership($1)',[pkg]))[0];
     await as(desk,'select verify_payment($1,true)',[pay.payment_id]);

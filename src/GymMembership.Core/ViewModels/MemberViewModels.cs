@@ -262,6 +262,14 @@ public partial class CoachesViewModel(ICoachService svc, IChatService messages, 
 
     [RelayCommand] private Task LoadAsync() => RunAsync(svc.ListCoachesAsync, rows => Fill(Cards, rows));
 
+    // coaches come and go as they check in and out: quiet, keeps the scroll position
+    public override async Task AutoRefreshAsync()
+    {
+        if (IsBusy) return;
+        var rows = await svc.ListCoachesAsync();
+        if (rows.Ok) Sync(Cards, rows.Value!, c => c.Coach.UserId, (a, b) => a.SameAs(b));
+    }
+
     [RelayCommand]
     private async Task HireAsync(CoachCard card)
     { if (await RunAsync(() => svc.HireAsync(card.Coach.UserId))) await LoadAsync(); }

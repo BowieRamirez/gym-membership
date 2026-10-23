@@ -203,6 +203,7 @@ await test('renewing an active plan extends from its end date', async () => {
 
 console.log('\ncoaching');
 await db.query(`update coaches set specialty='Boxing', hourly_rate=500 where user_id=$1`, [coach]);
+await db.query('insert into coach_visits(coach_id,checked_in_by) values($1,$1)', [coach]);   // a new hire needs the coach in the gym (0032)
 let hire;
 await test('an active member hires a coach; a guest cannot', async () => {
   hire = (await run(alex, `select hire_coach($1) id`, [coach])).rows[0].id;
@@ -238,6 +239,7 @@ await test('a member requests a time; the coach approves and a session is create
   assert.match(await code(run(coach, `select respond_time_request($1,true)`, [reqId])), /already_processed/);
 });
 const overlapCoach = await user('overlap-coach@t.io', 'coach', 'Coach Other');
+await db.query('insert into coach_visits(coach_id,checked_in_by) values($1,$1)', [overlapCoach]);
 await run(alex, 'select hire_coach($1)', [overlapCoach]);
 await test('overlapping sessions are refused', async () => {
   const r2 = (await run(alex, `select request_time($1,$2,$3) id`, [overlapCoach, new Date(t0.getTime() + 18e5), t2])).rows[0].id;

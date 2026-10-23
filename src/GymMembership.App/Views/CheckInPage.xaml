@@ -9,6 +9,24 @@
 
     <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
+            <Label Text="Coaches" Style="{StaticResource Heading}" />
+            <VerticalStackLayout Spacing="8" BindableLayout.ItemsSource="{Binding Coaches}">
+                <BindableLayout.EmptyView><Label Text="No coaches yet." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="svc:CoachPresenceRow">
+                        <Border Style="{StaticResource Panel}" Padding="16,10">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                                <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                                    <Label Text="{Binding Name}" FontFamily="BarlowMedium" />
+                                    <Label Text="{Binding StateText}" Style="{StaticResource Caption}" />
+                                </VerticalStackLayout>
+                                <Button Grid.Column="1" Text="{Binding ActionText}" Style="{StaticResource SmallOutlineButton}" Clicked="OnToggleCoach" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+            <Label Text="Members" Style="{StaticResource Heading}" Margin="0,6,0,0" />
             <Border Style="{StaticResource Field}"><SearchBar Placeholder="Search members by name" Text="{Binding Search}" SearchCommand="{Binding SearchCommand}" /></Border>
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
