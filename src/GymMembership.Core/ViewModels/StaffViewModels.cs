@@ -239,8 +239,34 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
     public ObservableCollection<MemberHit> Hits { get; } = new();
     public ObservableCollection<CoachPresenceRow> Coaches { get; } = new();
     [ObservableProperty] private string search = "";
+    [ObservableProperty] private string scanInput = "";   // a QR scanner device types the code here and presses Enter
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasScan))] private MemberScan? scan;
+    [ObservableProperty] private bool isScanning;          // the camera is on
+    public bool HasScan => Scan is not null;
 
     public override async Task OnAppearingAsync() { await SearchAsync(); await LoadCoachesAsync(); }
+
+    [RelayCommand] private void ToggleCamera() => IsScanning = !IsScanning;
+
+    /// <summary>D12: shows who the code belongs to and their live status. Never checks in by itself.</summary>
+    [RelayCommand]
+    private async Task ScanAsync(string? code)
+    {
+        code = (code ?? ScanInput).Trim();
+        if (code.Length == 0) return;
+        Notice = null; IsScanning = false; ScanInput = "";
+        await RunAsync(() => svc.ScanAsync(code), s => Scan = s);
+    }
+
+    [RelayCommand]
+    private async Task CheckInScannedAsync()
+    {
+        if (Scan is not { CanCheckIn: true, Member: { } id } s) return;
+        Notice = null;
+        if (await RunAsync(() => svc.CheckInAsync(id))) { Notice = $"{s.Name} is checked in."; Scan = null; }
+    }
+
+    [RelayCommand] private void ClearScan() => Scan = null;
 
     [RelayCommand] private Task SearchAsync() => RunAsync(() => svc.FindMembersAsync(Search), rows => Fill(Hits, rows));
 

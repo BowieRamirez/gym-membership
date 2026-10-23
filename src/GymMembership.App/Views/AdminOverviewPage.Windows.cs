@@ -1,5 +1,6 @@
 #if WINDOWS
 using GymMembership.Core.ViewModels;
+using GymMembership.Core.Services;
 
 namespace GymMembership.App.Views;
 
@@ -72,6 +73,23 @@ public sealed class AdminOverviewPage : BasePage
         };
         body.Children.Add(grid);
         body.Children.Add(Text("List-based counts reflect the records loaded by their admin pages; they are not guaranteed database-wide totals.", "Caption"));
+        // D12: who came in on a chosen day (member QR check-ins and name-search check-ins alike)
+        body.Children.Add(Text("Check-ins", "Heading", "AdminOverviewCheckIns"));
+        var day = new DatePicker { MaximumDate = DateTime.Today.AddDays(1), HorizontalOptions = LayoutOptions.Start, AutomationId = "AdminCheckInDay" };
+        day.SetBinding(DatePicker.DateProperty, nameof(vm.CheckInDay));
+        body.Children.Add(new Border { Style = Resource<Style>("Field"), Content = day, HorizontalOptions = LayoutOptions.Start });
+        var count = Text("", "Heading", "AdminCheckInCount");
+        count.SetBinding(Label.TextProperty, nameof(vm.CheckInsText));
+        body.Children.Add(count);
+        var list = new VerticalStackLayout { Spacing = 4 };
+        BindableLayout.SetItemsSource(list, vm.CheckIns);
+        BindableLayout.SetItemTemplate(list, new DataTemplate(() =>
+        {
+            var row = new Label { Style = Resource<Style>("Muted") };
+            row.SetBinding(Label.TextProperty, new MultiBinding { StringFormat = "{0}  {1}", Bindings = { new Binding(nameof(CheckInRow.TimeText)), new Binding(nameof(CheckInRow.Name)) } });
+            return row;
+        }));
+        body.Children.Add(list);
         body.Children.Add(Text("Recent audit activity", "Heading"));
         var activity = Text("", "Muted", "AdminOverviewActivity");
         activity.SetBinding(Label.TextProperty, nameof(vm.RecentActivity));

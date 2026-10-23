@@ -58,6 +58,9 @@ public class AttendanceViewModelTests
             return Task.FromResult(AppResult<bool>.Success(true));
         }
         public Task<AppResult<bool>> CheckInAsync(string memberId) => throw new NotSupportedException();
+        public Task<AppResult<string?>> MyCodeAsync() => throw new NotSupportedException();
+        public Task<AppResult<MemberScan>> ScanAsync(string code) => throw new NotSupportedException();
+        public Task<AppResult<IReadOnlyList<CheckInRow>>> CheckInsOnAsync(DateOnly manilaDay) => throw new NotSupportedException();
         public Task<AppResult<IReadOnlyList<MemberHit>>> FindMembersAsync(string usernameFragment) => throw new NotSupportedException();
     }
 

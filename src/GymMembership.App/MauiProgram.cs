@@ -6,6 +6,7 @@ using GymMembership.Core.Demo;
 using GymMembership.Core.Services;
 using GymMembership.Core.ViewModels;
 using Microsoft.Extensions.Logging;
+using ZXing.Net.Maui.Controls;
 
 namespace GymMembership.App;
 
@@ -17,6 +18,7 @@ public static class MauiProgram
 		builder
 			.UseMauiApp<App>()
 			.UseMauiCommunityToolkit()
+			.UseBarcodeReader()   // ZXing.Net.MAUI: member QR (Phase 10)
 			.ConfigureFonts(fonts =>
 			{
 				fonts.AddFont("Barlow-Regular.ttf", "Barlow");

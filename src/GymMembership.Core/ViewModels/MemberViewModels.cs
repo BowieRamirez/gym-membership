@@ -134,7 +134,7 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
     }
 }
 
-public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker picker, ISubscriptionService subscription) : LoadableViewModel
+public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker picker, ISubscriptionService subscription, IAttendanceService? codes = null) : LoadableViewModel
 {
     public ObservableCollection<MembershipRow> Memberships { get; } = new();
     public ObservableCollection<PaymentItem> Payments { get; } = new();
@@ -144,6 +144,9 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
 
     /// <summary>The QR payment the member still has to pay and send proof for, if any.</summary>
     [ObservableProperty] private PaymentItem? payNow;
+    /// <summary>The member's permanent QR code (D12): identification at the front desk, never payment.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasCode))] private string? myCode;
+    public bool HasCode => !string.IsNullOrEmpty(MyCode);
     [ObservableProperty] private string referenceNo = "";
     [ObservableProperty] private string? accountName;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasQr))] private string? qrUrl;
@@ -158,6 +161,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
         _loading = true;
         try
         {
+            if (codes is not null && MyCode is null) await RunAsync(codes.MyCodeAsync, c => MyCode = c);   // never changes, so read once
             if (!await RunAsync(subscription.TermsAsync, rows => Fill(Terms, rows))) return;
             var waiting = false;
             if (!await RunAsync(svc.MyPaymentsAsync, rows =>

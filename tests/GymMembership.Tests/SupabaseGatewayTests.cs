@@ -236,6 +236,18 @@ public sealed class SupabaseGatewayTests : IDisposable
     }
 
     [Fact]
+    public async Task A_member_scan_sends_the_code_and_reads_the_live_status()
+    {
+        var gw = await SignedInAsync();
+        _reply = _ => (200, """{"result":"active","member":"u-9","name":"Alex Tan","expires":"2026-11-30T16:00:00+00:00"}""");
+        var scan = (await new AttendanceService(gw).ScanAsync(" GYM1-abc ")).Value!;
+        Assert.Equal("/rest/v1/rpc/scan_member", Last.Path);
+        Assert.Contains("\"p_code\":\"GYM1-abc\"", Last.Body);
+        Assert.Equal(("active", "u-9", "Alex Tan", true), (scan.Result, scan.Member, scan.Name, scan.CanCheckIn));
+        Assert.Equal(new DateTime(2026, 11, 30, 16, 0, 0, DateTimeKind.Utc), scan.Expires!.Value.ToUniversalTime());
+    }
+
+    [Fact]
     public async Task Setting_a_status_calls_the_function_and_reads_back_who_was_alerted()
     {
         var gw = await SignedInAsync();

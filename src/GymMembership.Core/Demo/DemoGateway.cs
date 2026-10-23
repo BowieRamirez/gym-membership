@@ -54,6 +54,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             pk.SetValue(row, All<T>().Select(r => (int)pk.GetValue(r)!).DefaultIfEmpty(0).Max() + 1);
         if (row is Payment payment) SnapshotMembershipPayment(payment);
         Table(typeof(T)).Add(row);
+        if (row is Member m) Add(new MemberCode { UserId = m.UserId, Code = "GYM1-" + Guid.NewGuid().ToString("N") });   // 0034: every member gets a code
         return row;
     }
 
@@ -192,6 +193,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             ShiftPost s => s.CoachId == uid || staff || CoachesMember(s.CoachId, uid),
             GymCheckIn c => c.MemberId == uid || staff,
             CoachVisit v => v.CheckedOutAt is null || v.CoachId == uid || staff,
+            MemberCode c => c.UserId == uid,
             Discount => Has("discounts:manage"),   // members only learn a code is valid by using it
             Reservation r => r.MemberId == uid || r.CoachId == uid || staff,
             MembershipPackage k => k.IsActive || Has("catalog:manage"),
@@ -724,6 +726,27 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 var manila = (now + Manila).TimeOfDay;
                 if (manila < g.OpensAt || manila >= g.ClosesAt) throw Err("gym_closed");
                 return Add(new CoachVisit { CoachId = coachId, CheckedInBy = uid, CheckedInAt = now }).Id;
+            }
+            // 0034: inactive > active > pending > expired; the demo keeps no scan log (there is no audit screen for it)
+            case "scan_member":
+            {
+                Require("check_ins:record");
+                var code = (Opt("p_code") ?? "").Trim();
+                var member = All<MemberCode>().FirstOrDefault(c => c.Code == code)?.UserId;
+                var p = All<Profile>().FirstOrDefault(x => x.Id == member);
+                var terms = All<MembershipTerm>().Where(t => t.MemberId == member && t.CancelledAt is null).OrderBy(t => t.StartsAt).ToList();
+                string result; DateTime? expires = null;
+                if (p is null) result = "not_found";
+                else if (!p.IsActive) result = "inactive";
+                else if (ActiveMember(member))
+                {
+                    result = "active";
+                    expires = terms.First(t => t.StartsAt <= now && t.EndsAt > now).EndsAt;
+                    foreach (var t in terms) if (t.StartsAt <= expires && t.EndsAt > expires) expires = t.EndsAt;   // an unbroken run of terms
+                }
+                else if (All<Payment>().Any(x => x.MemberId == member && x.Status == Status.Pending && x.Kind is PayKind.Membership or PayKind.Renewal)) result = "pending";
+                else { result = "expired"; expires = terms.Where(t => t.EndsAt <= now).Select(t => (DateTime?)t.EndsAt).Max(); }
+                return new MemberScan { Result = result, Member = p is null ? null : member, Name = p is null ? null : (string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName), Expires = expires };
             }
             case "end_hire":
             {

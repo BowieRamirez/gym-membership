@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -14,8 +15,25 @@ public partial class AdminOverviewCard(string key, string title) : ObservableObj
     [ObservableProperty] bool isUnavailable;
 }
 
-public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionService subscriptions) : LoadableViewModel
+public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionService subscriptions, IAttendanceService? checkIns = null) : LoadableViewModel
 {
+    /// <summary>D12: who checked in on the chosen Manila day, earliest first.</summary>
+    public ObservableCollection<CheckInRow> CheckIns { get; } = new();
+    [ObservableProperty] DateTime checkInDay = DateTime.UtcNow.AddHours(8).Date;
+    [ObservableProperty] string checkInsText = "Loading check-ins…";
+    partial void OnCheckInDayChanged(DateTime value) => _ = LoadCheckInsAsync();
+
+    public async Task LoadCheckInsAsync()
+    {
+        if (checkIns is null) return;
+        CheckInsText = "Loading check-ins…";
+        var r = await checkIns.CheckInsOnAsync(DateOnly.FromDateTime(CheckInDay));
+        CheckIns.Clear();
+        if (!r.Ok) { CheckInsText = ErrorText.For(r.Error, r.Message); return; }
+        foreach (var row in r.Value!) CheckIns.Add(row);
+        CheckInsText = r.Value.Count switch { 0 => "No check-ins on this day.", 1 => "1 check-in", var n => $"{n} check-ins" };
+    }
+
     public IReadOnlyList<AdminOverviewCard> Cards { get; } = [
         new("users", "Users and roles"), new("catalog", "Packages and amenities"),
         new("discounts", "Discounts & Archive"), new("refunds", "Cancellations & refunds"),
@@ -95,6 +113,7 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
                 (failed > 0 ? $" · {failed} summar{(failed == 1 ? "y" : "ies")} unavailable" : "");
         }
         finally { IsBusy = false; }
+        await LoadCheckInsAsync();
     }
 
     async Task Load(string key, Func<Task<(string Value, string Detail)>> read)

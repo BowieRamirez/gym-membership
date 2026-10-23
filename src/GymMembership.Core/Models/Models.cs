@@ -239,6 +239,10 @@ public class ChatSearchHit : BaseModel
   [Column("checked_in_by")] public string CheckedInBy { get; set; } = ""; [Column("checked_out_at")] public DateTime? CheckedOutAt { get; set; }
   [Column("checked_out_by")] public string? CheckedOutBy { get; set; } [Column("auto_closed")] public bool AutoClosed { get; set; } }
 
+// a member's permanent QR code (0034). Each member reads only their own row; staff look codes up through scan_member.
+[Table("member_codes")] public class MemberCode : BaseModel
+{ [PrimaryKey("user_id")] public string UserId { get; set; } = ""; [Column("code")] public string Code { get; set; } = ""; }
+
 // one amenity booking (0029). Written only through book_slots / cancel_reservation / end_reservation / extend_reservation.
 [Table("reservations")] public class Reservation : BaseModel
 { [PrimaryKey("reservation_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("amenity_id")] public int AmenityId { get; set; }

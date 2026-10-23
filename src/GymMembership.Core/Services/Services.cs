@@ -936,6 +936,34 @@ public interface IAttendanceService
     Task<AppResult<bool>> RecordAsync(int sessionId, string status);
     Task<AppResult<bool>> CheckInAsync(string memberId);
     Task<AppResult<IReadOnlyList<MemberHit>>> FindMembersAsync(string usernameFragment);
+    /// <summary>The signed-in member's permanent QR code (0034), or null for anyone who is not a member.</summary>
+    Task<AppResult<string?>> MyCodeAsync();
+    /// <summary>Front desk and admins: who a scanned code belongs to and their live status. Every scan is logged by the server.</summary>
+    Task<AppResult<MemberScan>> ScanAsync(string code);
+    /// <summary>Gym check-ins on one Manila day, earliest first.</summary>
+    Task<AppResult<IReadOnlyList<CheckInRow>>> CheckInsOnAsync(DateOnly manilaDay);
+}
+
+/// <summary>What scan_member says about a code: result is active, pending, expired, inactive or not_found.</summary>
+public sealed class MemberScan
+{
+    public string Result { get; set; } = "";
+    public string? Member { get; set; }
+    public string? Name { get; set; }
+    public DateTime? Expires { get; set; }
+
+    public bool CanCheckIn => Result == "active" && Member is not null;
+    public string StatusText => Result switch
+    {
+        "active" => "Active", "pending" => "Pending: a membership payment is waiting to be verified", "expired" => "Expired: no active membership",
+        "inactive" => "Inactive: this account is archived", _ => "Not found: this code does not belong to any member"
+    };
+    public string ExpiryText => Expires is { } e ? (Result == "active" ? "Membership ends " : "Membership ended ") + RevenuePdf.Manila(e) + " (Manila)" : "No end date";
+}
+
+public sealed record CheckInRow(string Name, DateTime At)
+{
+    public string TimeText => At.AddHours(8).ToString("HH:mm", CultureInfo.InvariantCulture);   // Manila has no daylight saving
 }
 
 public sealed class AttendanceService(ISupabaseGateway gw) : IAttendanceService
@@ -957,6 +985,22 @@ public sealed class AttendanceService(ISupabaseGateway gw) : IAttendanceService
         var active = (await gw.ListAsync<UserMembershipPackage>(m => m.Status == "active")).Where(m => m.EndsAt > now).Select(m => m.MemberId).ToHashSet();
         return members.Join(profiles, m => m.UserId, p => p.Id, (m, p) => new MemberHit(m.UserId, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName, active.Contains(m.UserId)))
             .Where(h => h.Username.Contains(fragment, StringComparison.OrdinalIgnoreCase)).Take(20).ToList();
+    });
+
+    public Task<AppResult<string?>> MyCodeAsync() => Safe.RunAsync<string?>(async () =>
+    { var uid = gw.CurrentUserId; return (await gw.ListAsync<MemberCode>(c => c.UserId == uid)).FirstOrDefault()?.Code; });
+
+    public Task<AppResult<MemberScan>> ScanAsync(string code) =>
+        Safe.RunAsync(() => gw.RpcAsync<MemberScan>("scan_member", new() { ["p_code"] = code.Trim() }));
+
+    public Task<AppResult<IReadOnlyList<CheckInRow>>> CheckInsOnAsync(DateOnly manilaDay) => Safe.RunAsync<IReadOnlyList<CheckInRow>>(async () =>
+    {
+        var from = DateTime.SpecifyKind(manilaDay.ToDateTime(TimeOnly.MinValue).AddHours(-8), DateTimeKind.Utc);   // Manila has no daylight saving
+        var to = from.AddDays(1);
+        var rows = await gw.ListAsync<GymCheckIn>(c => c.CheckedInAt >= from && c.CheckedInAt < to);
+        var names = await Directory_.UserNamesAsync(gw);
+        return rows.OrderBy(c => c.CheckedInAt)
+            .Select(c => new CheckInRow(c.MemberId is { } m ? names.GetValueOrDefault(m, "Member") : "Walk-in", c.CheckedInAt)).ToList();
     });
 }
 

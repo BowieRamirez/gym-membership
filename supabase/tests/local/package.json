@@ -2,6 +2,6 @@
   "name": "gym-db-tests",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node rules.mjs && node phase7.mjs && node phase7-migration.mjs && node session-requests.mjs && node account-archive.mjs && node archive-catalog.mjs && node payment-authority.mjs && node discount-limits.mjs && node revenue-lines.mjs && node coach-availability.mjs && node reservations.mjs && node structured-requests.mjs && node coach-visits.mjs" },
+  "scripts": { "test": "node rules.mjs && node phase7.mjs && node phase7-migration.mjs && node session-requests.mjs && node account-archive.mjs && node archive-catalog.mjs && node payment-authority.mjs && node discount-limits.mjs && node revenue-lines.mjs && node coach-availability.mjs && node reservations.mjs && node structured-requests.mjs && node coach-visits.mjs && node member-qr.mjs" },
   "devDependencies": { "embedded-postgres": "^18.4.0-beta.17", "pg": "^8.13.0" }
 }

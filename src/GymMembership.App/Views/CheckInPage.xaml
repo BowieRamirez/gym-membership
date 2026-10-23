@@ -9,7 +9,31 @@
 
     <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
-            <Label Text="Coaches" Style="{StaticResource Heading}" />
+            <!-- D12: a member's QR is identification only; the result comes from live data and a scan never checks in by itself -->
+            <Label Text="Scan a member" Style="{StaticResource Heading}" />
+            <FlexLayout Wrap="Wrap" AlignItems="Center">
+                <Button Text="Scan member QR" Style="{StaticResource SmallButton}" Command="{Binding ToggleCameraCommand}" Margin="0,0,12,8" AutomationId="ScanCamera">
+                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsScanning}" Value="True"><Setter Property="Text" Value="Stop camera" /></DataTrigger></Button.Triggers>
+                </Button>
+                <Border Style="{StaticResource Field}" Margin="0,0,0,8" WidthRequest="300">
+                    <Entry Text="{Binding ScanInput}" Placeholder="Or use a QR scanner device here" ReturnCommand="{Binding ScanCommand}"
+                           AutomationId="ScanInput" SemanticProperties.Description="Member code from a QR scanner device" />
+                </Border>
+            </FlexLayout>
+            <ContentView x:Name="CameraHost" HeightRequest="300" MaximumWidthRequest="420" HorizontalOptions="Start" IsVisible="{Binding IsScanning}" />
+            <Border Style="{StaticResource Panel}" Padding="16,12" IsVisible="{Binding HasScan}">
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="{Binding Scan.Name, TargetNullValue='Unknown code'}" Style="{StaticResource Heading}" AutomationId="ScanName" />
+                    <Label Text="{Binding Scan.StatusText}" FontFamily="BarlowMedium" AutomationId="ScanStatus" />
+                    <Label Text="{Binding Scan.ExpiryText}" Style="{StaticResource Caption}" />
+                    <FlexLayout Wrap="Wrap" Margin="0,6,0,0">
+                        <Button Text="Check in" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Command="{Binding CheckInScannedCommand}" IsVisible="{Binding Scan.CanCheckIn}" />
+                        <Button Text="Done" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding ClearScanCommand}" />
+                    </FlexLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <Label Text="Coaches" Style="{StaticResource Heading}" Margin="0,6,0,0" />
             <VerticalStackLayout Spacing="8" BindableLayout.ItemsSource="{Binding Coaches}">
                 <BindableLayout.EmptyView><Label Text="No coaches yet." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
                 <BindableLayout.ItemTemplate>
