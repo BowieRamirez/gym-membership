@@ -79,6 +79,7 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 - [x] **D10 — coach dashboard and interaction count (owner approved 2026-10-23):** The dashboard ships on Windows and Android (on a phone the cards stack and the calendar opens in week view) and replaces the read-only coach Overview as the coach's first page. Three interactions = tap a calendar slot → a form opens with date/start prefilled and the default length → tap Post shift; changing the hours or adding a note adds interactions. Default length 4 hours (choices 2/4/6/8/10), cut short if it would run past closing time. Existing empty or ₱0 coach rates are left as they are (no backfill): shown as "Rate not set", and a valid positive rate is required the next time the coach saves their profile. No mockup images: designed from this plan's list in the app's current style, so no visual-parity claim.
 - [x] **D11 — revenue PDF detail (owner approved 2026-10-22):** Line items: one line per verified payment (receipt no., Manila date/time, member or walk-in name, item, method, amount) plus a negative line per approved/paid refund on its approval date, ending in the same net total as the on-screen report (voids excluded, as in `revenue_summary`). Filters stay the date range only; the PDF uses the range and rows the screen loaded. Export opens the system share sheet (MAUI `Share`) on Windows and Android. Library: PDFsharp (MIT) with an embedded font that has the ₱ glyph (check Barlow; fall back to another bundled font if it lacks U+20B1); confirm current version, license and Android behavior before adding the package.
 - [x] **D12 — QR trust boundary (owner approved 2026-10-23):** The member QR is identification only, never payment (the gym's e-wallet payment QR is unchanged). It encodes a permanent random opaque code mapped to the user (not the user ID, and no name/status/expiry/credentials), the same on every device and kept through renewal, expiry, pending payments and archive/restore. Shown at the top of My membership. Only front desk staff and admins can scan/look up a code; coaches and members get nothing. A scan shows name, status and expiry from live data with the plan's precedence (archived/deleted → Inactive; running term → Active; payment waiting for verification → Pending; otherwise Expired / no membership); unknown or damaged code → "not found"; offline → "can't check right now", never Active. A scan does not check in by itself: an Active result shows a Check in button that records the existing gym check-in (inactive results cannot). Every scan is logged (server time, scanner, member, result) and kept forever. Camera scanning uses ZXing.Net.MAUI (MIT), version and Windows/Android support confirmed before adding; if Windows camera support is poor, Windows desks use a USB/Bluetooth scanner that types the code. Fallback when a code cannot be scanned: the existing Check-in name search. Also in scope: a Check-ins section in the Windows admin Overview (pick a day, count, each member's name and time); Android admins keep today's count only.
+- [ ] **D13 — names, email confirmation and password reset (owner requested 2026-10-23):** Registration asks for first name and last name instead of one full name; members confirm a real email in Settings with a one-time code (OTP) sent to it; members can reset a forgotten password from the login page. To settle before building: (a) store first and last name as two profile columns and keep `full_name` filled from them (so every screen, receipt, PDF and chat that shows a name keeps working), or replace `full_name` everywhere; (b) how existing names are split (first word = first name, the rest = last name, editable afterwards; no guessing beyond that) and whether staff/coaches also switch to first/last; (c) whether an unconfirmed email blocks anything (e.g. paying, booking) or only shows a "Confirm your email" reminder; (d) forgotten password by a 6-digit code typed in the app (works without a website) or by an email link (needs a web page to land on); (e) who sends the emails: Supabase's built-in sender is only for testing (very low hourly limit and, on current projects, only to the team's own addresses), so real members need a custom SMTP service (for example Resend, Brevo or SendGrid; free tiers exist) set up by the owner; (f) whether the admin-only temporary password (`reset-password` function) stays for members who no longer have access to their email. Answer: ___
 
 ## 3. Phases and request coverage
 
@@ -95,7 +96,8 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 | 8 | Physical coach presence and discovery | 12 | 5; D9 | DEPLOYED (DB) 2026-10-23 — 0032 live; device check/acceptance pending |
 | 9 | Coach dashboard, shifts and profile polish | 13, 14 | 5–8; D10 | DEPLOYED (DB) 2026-10-23 — 0033 live; device check/acceptance pending |
 | 10 | Permanent member QR and scan logging | 15 | 1; D12 | DEPLOYED (DB) 2026-10-23 — 0034 live; device camera check pending |
-| 11 | Integrated regression, deployment and handoff | All | 1–10 | PLANNED |
+| 11 | First/last name registration, email confirmation by OTP, forgotten password | New 2026-10-23 | 1; D13 | PLANNED — D13 pending |
+| 12 | Integrated regression, deployment and handoff | All | 1–11 | PLANNED |
 
 Dependency order matters more than numbering. After Phase 0, independent work can be scheduled separately, but keep one phase's changes and evidence identifiable. The coach rate correction can be pulled forward as a small independent slice if desired; record that move here.
 
@@ -371,7 +373,26 @@ Acceptance / verification:
 - [x] Unauthorized lookup is denied; successful/recognized inactive scans are auditable.
 - [ ] Camera scanning works on supported Android/Windows devices; offline/denied-camera/unknown-code paths have clear messages — unknown code and denied-camera message done; real camera on Android and Windows pending on a device.
 
-## Phase 11 — Integrated regression and staged rollout
+## Phase 11 — First and last name, email confirmation and forgotten password
+
+Requested by the owner 2026-10-23. Starting points: `RegisterPage.xaml`/`RegisterViewModel`, `AccountRules` (name/email/password caps), `AuthService.RegisterAsync`/`SignUpAsync`, the sign-up trigger (`0004`/`0011`) that fills `profiles.full_name` from Auth metadata, the 0012 letters-only name rule, Settings page/ViewModel, Login page, `supabase/config.toml` `[auth.email]` (OTP length 6, expiry 1 hour, confirmations currently off), the admin `reset-password` Edge Function, DemoGateway auth.
+
+- [ ] Registration: separate First name and Last name fields (same letters-only rule and caps as today, each required), replacing Full name. Store per D13(a); keep every place that shows a name working. Admin "add user" uses the same two fields.
+- [ ] Existing accounts: split current names per D13(b) in a migration that never loses the original; let people correct their names in Settings.
+- [ ] Settings → Email: a member enters a real email, the app asks Supabase Auth to send a 6-digit code to it, the member types the code to confirm. Show the confirmed state ("Confirmed") and allow changing the email again the same way. Clear messages for a wrong/expired code, a resend wait, and an email already used by another account.
+- [ ] Apply D13(c): either a reminder only, or block the chosen actions until the email is confirmed (enforced on the server, not only in the app).
+- [ ] Login → "Forgot password?": the member enters their email, receives a code (or link per D13(d)), and sets a new password in the app. Never reveal whether an email has an account ("If an account uses this email, we sent a code").
+- [ ] Email delivery per D13(e): the owner sets up custom SMTP in the Supabase dashboard; confirm the confirmation, email-change and recovery templates show the code. Keep the admin temporary password per D13(f).
+- [ ] Demo mode mirrors names, the code flow (a fixed demo code shown on screen) and forgotten password, so the UI can be checked without sending real email.
+- [ ] Tests: name split/compose and validation, the code flows (right, wrong, expired, reused), "no account" privacy, server-side blocks from D13(c), and that names still show correctly on receipts, PDFs, chat, coach lists and the admin pages.
+
+Acceptance / verification:
+- [ ] A new member registers with first and last name and the full name shows everywhere it did before.
+- [ ] A member confirms a real email by code from Settings on Windows and Android; a wrong or expired code is refused clearly.
+- [ ] A member who forgot their password resets it from the login page and signs in with the new one; an unknown email gets the same neutral message.
+- [ ] Real emails arrive through the configured SMTP (owner check on the live project).
+
+## Phase 12 — Integrated regression and staged rollout
 
 - [ ] Run all xUnit tests, including existing account, subscription/refund, payment, request guard, calendar, chat, navigation and XAML-binding checks.
 - [ ] Run the full disposable local PostgreSQL suite, populated-history migration tests, permission/RLS denial tests and real separate-connection concurrency tests.
@@ -425,7 +446,8 @@ Fill cells with date, command/test, result and evidence location. `—` means no
 | 8 Coach presence | — | — | — | — | — | — | — |
 | 9 Coach UX/profile | — | — | — | — | — | — | — |
 | 10 Permanent QR | — | — | — | — | — | — | — |
-| 11 Integration/rollout | — | — | — | — | — | — | — |
+| 11 Names/email/password | — | — | — | — | — | — | — |
+| 12 Integration/rollout | — | — | — | — | — | — | — |
 
 ## 5. Session log — append whenever work pauses
 
