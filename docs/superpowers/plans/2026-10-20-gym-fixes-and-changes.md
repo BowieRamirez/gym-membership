@@ -100,7 +100,7 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 | 10 | Permanent member QR and scan logging | 15 | 1; D12 | DEPLOYED (DB) 2026-10-23 — 0034 live; device camera check pending |
 | 11 | First/last name registration, email confirmation by OTP, forgotten password | New 2026-10-23 | 1; D13 | VERIFIED 2026-10-24 — 0035 live; owner checked on Windows and Android |
 | 12 | "Are you sure?" confirmations and show/hide password | New 2026-10-24 | D14 | VERIFIED 2026-10-24 — commit b8cc27f; owner checked on Android, Windows demo smoke; no migration |
-| 13 | Sub-admin role under the super admin | New 2026-10-24 | D15 | IMPLEMENTED locally 2026-10-24 — 0036 push, two Edge Function deploys and device check pending |
+| 13 | Sub-admin role under the super admin | New 2026-10-24 | D15 | DEPLOYED 2026-10-24 — 0036 live, create-user and reset-password redeployed; device check pending |
 | 14 | Integrated regression, deployment and handoff | All | 1–13 | PLANNED |
 
 Dependency order matters more than numbering. After Phase 0, independent work can be scheduled separately, but keep one phase's changes and evidence identifiable. The coach rate correction can be pulled forward as a small independent slice if desired; record that move here.
@@ -504,7 +504,7 @@ Proposed split (D15):
 | Gym settings (gym name, opening hours, walk-in price, payment QR) | — | no | yes |
 | Audit log | — | no | yes |
 
-Status: IMPLEMENTED locally 2026-10-24 (uncommitted). Evidence: database checks 302/302 (`subadmin.mjs` adds 9; two older checks in `rules.mjs` updated because the sub-admin now shares the desk's amenity-status and support permissions), xUnit 713/713 (`SubAdminTests` 11, an overview test, four Windows navigation source checks updated for the new menu groups), Android and Windows build, Windows demo smoke as the sub-admin (Overview shows only Users, Packages, Discounts and Revenue; no Void, Refunds, Gym settings or Audit log anywhere in the menu; Add user offers Member and Coach only). Edge Functions not run locally (no Deno here); they are checked when deployed and with a live test sub-admin.
+Status: DEPLOYED 2026-10-24. Commit 36876be on `phase1-archive-checkpoint-2026-10-20` (pushed). Migration `0036_subadmin.sql` applied live at the owner's request (dry run showed only 0036; live roles: admin 15 permissions, subadmin 11); `create-user` and `reset-password` redeployed the same day. Evidence: database checks 302/302 (`subadmin.mjs` adds 9; two older checks in `rules.mjs` updated because the sub-admin now shares the desk's amenity-status and support permissions), xUnit 713/713 (`SubAdminTests` 11, an overview test, four Windows navigation source checks updated for the new menu groups), Android and Windows build, Windows demo smoke as the sub-admin (Overview shows only Users, Packages, Discounts and Revenue; no Void, Refunds, Gym settings or Audit log anywhere in the menu; Add user offers Member and Coach only). Edge Functions not run locally (no Deno here); they are checked when deployed and with a live test sub-admin.
 
 Rulings (2026-10-24):
 - The database role is `subadmin`; on screen it is "Sub-admin", and the admin role is shown as "Super admin". The admin role itself is unchanged, so every existing check and account keeps working.
@@ -584,7 +584,7 @@ Fill cells with date, command/test, result and evidence location. `—` means no
 | 10 Permanent QR | — | — | — | — | — | — | — |
 | 11 Names/email/password | 2026-10-24 | 651/651 | 293/293 (names-email.mjs) | demo smoke passed | owner checked live 2026-10-24 | 0035 live, create-user deployed 2026-10-24 | ponytail review done; owner accepted 2026-10-24 |
 | 12 Confirmations | 2026-10-24 | 701/701 | N/A — no database change | demo smoke passed | owner checked 2026-10-24 | none needed | ponytail review done; owner accepted 2026-10-24 |
-| 13 Sub-admin | 2026-10-24 | 713/713 | 302/302 (subadmin.mjs) | demo smoke passed | builds; device check pending | 0036 + create-user/reset-password deploy pending | ponytail review done; owner pending |
+| 13 Sub-admin | 2026-10-24 | 713/713 | 302/302 (subadmin.mjs) | demo smoke passed | builds; device check pending | 0036 live, functions deployed 2026-10-24 | ponytail review done; owner pending |
 | 14 Integration/rollout | — | — | — | — | — | — | — |
 
 ## 5. Session log — append whenever work pauses
