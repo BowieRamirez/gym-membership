@@ -51,8 +51,8 @@
                     <VerticalStackLayout Spacing="6">
                         <Label Text="Password" Style="{StaticResource Caption}" />
                         <Border Style="{StaticResource Field}">
-                            <Entry Text="{Binding Password}" IsPassword="True" ReturnType="Done"
-                                   ReturnCommand="{Binding SignInCommand}" SemanticProperties.Description="Password" />
+                            <Grid ColumnDefinitions="*,Auto"><Entry x:Name="PasswordBox" Text="{Binding Password}" IsPassword="True" ReturnType="Done"
+                                   ReturnCommand="{Binding SignInCommand}" SemanticProperties.Description="Password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference PasswordBox}" /></Grid>
                         </Border>
                         <Button Text="Forgot password?" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" Margin="0,4,0,0"
                                 Command="{Binding ForgotPasswordCommand}" />
@@ -87,13 +87,13 @@
                         <VerticalStackLayout Spacing="6">
                             <Label Text="New password (6 to 64 characters)" Style="{StaticResource Caption}" />
                             <Border Style="{StaticResource Field}">
-                                <Entry Text="{Binding NewPassword}" IsPassword="True" MaxLength="64" ReturnType="Next" SemanticProperties.Description="New password" />
+                                <Grid ColumnDefinitions="*,Auto"><Entry x:Name="NewPasswordBox" Text="{Binding NewPassword}" IsPassword="True" MaxLength="64" ReturnType="Next" SemanticProperties.Description="New password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference NewPasswordBox}" /></Grid>
                             </Border>
                         </VerticalStackLayout>
                         <VerticalStackLayout Spacing="6">
                             <Label Text="Repeat new password" Style="{StaticResource Caption}" />
                             <Border Style="{StaticResource Field}">
-                                <Entry Text="{Binding ConfirmNewPassword}" IsPassword="True" MaxLength="64" ReturnType="Done" ReturnCommand="{Binding ResetPasswordCommand}" SemanticProperties.Description="Repeat new password" />
+                                <Grid ColumnDefinitions="*,Auto"><Entry x:Name="ConfirmNewPasswordBox" Text="{Binding ConfirmNewPassword}" IsPassword="True" MaxLength="64" ReturnType="Done" ReturnCommand="{Binding ResetPasswordCommand}" SemanticProperties.Description="Repeat new password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference ConfirmNewPasswordBox}" /></Grid>
                             </Border>
                         </VerticalStackLayout>
                         <Button Text="Set new password" Command="{Binding ResetPasswordCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}" />

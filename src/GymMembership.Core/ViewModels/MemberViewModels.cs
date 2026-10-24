@@ -166,6 +166,8 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
     private async Task AvailAsync(MembershipPackage package)
     {
         Notice = null;
+        var code = string.IsNullOrWhiteSpace(DiscountCode) ? "" : $"\nDiscount code {DiscountCode.Trim()} is applied when you pay.";
+        if (!await Confirm.AskAsync($"Buy {package.Name}?", $"₱{package.Price:N2} for {package.DurationDays} days.{code}\nYou pay by QR on My membership.", "Buy membership")) return;
         if (!await RunAsync(() => subscription.ExtendAsync(package.Id, DiscountCode), _ => { })) return;
         DiscountCode = null;
         nav.GoToMembership();
@@ -246,6 +248,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
         if (PayNow is not { } pay) return;
         if (string.IsNullOrWhiteSpace(ReferenceNo)) { ErrorMessage = "Enter the reference number from your e-wallet receipt."; return; }
         if (await picker.PickAsync() is not { } file) { ErrorMessage = "Choose a screenshot of your payment to send."; return; }
+        if (!await Confirm.AskAsync("Send this payment proof?", $"{pay.What}\n₱{pay.Amount:N2}\nReference {ReferenceNo.Trim()}\nThe front desk checks it against the gym's account.", "Send proof")) return;
         if (!await RunAsync(() => svc.SubmitProofAsync(pay.Id, ReferenceNo, file.FileName, file.Data))) return;
         ReferenceNo = "";
         Notice = "Sent. The front desk will check it against the gym's account.";
@@ -256,6 +259,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
     private async Task PayAgainAsync(PaymentItem item)
     {
         Notice = null;
+        if (!await Confirm.AskAsync("Create a new payment?", $"{item.What}\n₱{item.Amount:N2}\nThe expired one stays in your history.", "Create payment")) return;
         if (!await RunAsync(() => svc.PayAgainAsync(item), _ => { })) return;
         Notice = "New payment created. Pay by QR below, then send your proof.";
         await LoadAsync();
@@ -290,6 +294,7 @@ public partial class AmenityBoardViewModel(IAmenityService svc) : LoadableViewMo
     private async Task BuyAsync(AmenityCard card)
     {
         Notice = null;
+        if (!await Confirm.AskAsync($"Buy a {card.Amenity.Name} pass?", $"{card.PassText}.\nYou pay by QR on My membership.", "Buy pass")) return;
         if (!await RunAsync(() => svc.AvailAsync(card.Amenity.Id), _ => { })) return;
         await LoadAsync();
         Notice = $"Pass for {card.Amenity.Name} ordered. Pay it from My membership; it starts when staff verify the payment.";
@@ -314,11 +319,17 @@ public partial class CoachesViewModel(ICoachService svc, IChatService messages, 
 
     [RelayCommand]
     private async Task HireAsync(CoachCard card)
-    { if (await RunAsync(() => svc.HireAsync(card.Coach.UserId))) await LoadAsync(); }
+    {
+        if (!await Confirm.AskAsync($"Hire {card.Name}?", "They become your coach. You can message them and book sessions together.", "Hire coach")) return;
+        if (await RunAsync(() => svc.HireAsync(card.Coach.UserId))) await LoadAsync();
+    }
 
     [RelayCommand]
     private async Task EndHireAsync(CoachCard card)
-    { if (card.HireId is { } id && await RunAsync(() => svc.EndHireAsync(id))) await LoadAsync(); }
+    {
+        if (card.HireId is not { } id || !await Confirm.AskAsync($"Stop working with {card.Name}?", "They will no longer be your coach.", "End hire")) return;
+        if (await RunAsync(() => svc.EndHireAsync(id))) await LoadAsync();
+    }
 
     [RelayCommand]
     private void Message(CoachCard card) { messages.Pending = (card.Coach.UserId, null); nav.GoToMessages(); }
@@ -851,13 +862,14 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
     {
         Notice = null;
         if (NewPassword != ConfirmPassword) { ErrorMessage = "The new passwords don't match."; return; }
+        if (!await Confirm.AskAsync("Change your password?", "Use the new password the next time you sign in.", "Change password")) return;
         if (!await RunAsync(() => auth.ChangePasswordAsync(CurrentPassword, NewPassword))) return;
         CurrentPassword = NewPassword = ConfirmPassword = "";
         MustChange = false;
         Notice = "Password changed.";
     }
 
-    [RelayCommand] private async Task SignOutAsync() { await auth.SignOutAsync(); nav.GoToLogin(); }
+    [RelayCommand] private async Task SignOutAsync() { if (!await Confirm.AskAsync("Sign out?", "You will need your email and password to sign in again.", "Sign out")) return; await auth.SignOutAsync(); nav.GoToLogin(); }
 
     // ---------- name ----------
     [ObservableProperty] private string firstName = "";
@@ -947,5 +959,5 @@ public partial class HeaderViewModel : LoadableViewModel, IDisposable
         if (unread.Ok) UnreadCount = unread.Value;
     }
 
-    [RelayCommand] private async Task SignOutAsync() { await auth.SignOutAsync(); Dispose(); nav.GoToLogin(); }
+    [RelayCommand] private async Task SignOutAsync() { if (!await Confirm.AskAsync("Sign out?", "You will need your email and password to sign in again.", "Sign out")) return; await auth.SignOutAsync(); Dispose(); nav.GoToLogin(); }
 }

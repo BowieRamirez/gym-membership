@@ -100,6 +100,8 @@ public partial class BookAmenityViewModel(IReservationService svc) : LoadableVie
         Notice = null;
         var picks = Selected().Select(c => (c.AmenityId, c.StartUtc)).ToList();
         if (picks.Count == 0) return;
+        var span = Fmt.Range(picks.Min(p => p.StartUtc), picks.Max(p => p.StartUtc).AddMinutes(30));
+        if (!await Confirm.AskAsync("Book these times?", $"{picks.Count} half-hour slot{(picks.Count == 1 ? "" : "s")}, {span}.", "Book")) return;
         var booked = 0;
         if (!await RunAsync(() => svc.BookAsync(picks), n => booked = n))
         {
@@ -115,9 +117,9 @@ public partial class BookAmenityViewModel(IReservationService svc) : LoadableVie
 
     [RelayCommand]
     private async Task CancelAsync(BookingRow row)
-    { Notice = null; if (await RunAsync(() => svc.CancelAsync(row.Booking.Id))) { Notice = "Booking cancelled."; await LoadAsync(); } }
+    { Notice = null; if (!await Confirm.AskAsync($"Cancel your {row.Amenity} booking?", row.When, "Cancel booking")) return; if (await RunAsync(() => svc.CancelAsync(row.Booking.Id))) { Notice = "Booking cancelled."; await LoadAsync(); } }
 
     [RelayCommand]
     private async Task EndAsync(BookingRow row)
-    { Notice = null; if (await RunAsync(() => svc.EndAsync(row.Booking.Id))) { Notice = "Ended. The amenity cools down for 30 minutes from now."; await LoadAsync(); } }
+    { Notice = null; if (!await Confirm.AskAsync($"End your {row.Amenity} booking now?", "The amenity cools down for 30 minutes from now.", "End now")) return; if (await RunAsync(() => svc.EndAsync(row.Booking.Id))) { Notice = "Ended. The amenity cools down for 30 minutes from now."; await LoadAsync(); } }
 }

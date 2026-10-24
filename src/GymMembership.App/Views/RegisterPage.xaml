@@ -37,12 +37,12 @@
             </VerticalStackLayout>
             <VerticalStackLayout Spacing="6">
                 <Label Text="Password (6 to 64 characters)" Style="{StaticResource Caption}" />
-                <Border Style="{StaticResource Field}"><Entry Text="{Binding Password}" MaxLength="{x:Static svc:AccountRules.MaxPassword}" IsPassword="True" ReturnType="Next" SemanticProperties.Description="Password" /></Border>
+                <Border Style="{StaticResource Field}"><Grid ColumnDefinitions="*,Auto"><Entry x:Name="PasswordBox" Text="{Binding Password}" MaxLength="{x:Static svc:AccountRules.MaxPassword}" IsPassword="True" ReturnType="Next" SemanticProperties.Description="Password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference PasswordBox}" /></Grid></Border>
             </VerticalStackLayout>
             <VerticalStackLayout Spacing="6">
                 <Label Text="Repeat password" Style="{StaticResource Caption}" />
                 <Border Style="{StaticResource Field}">
-                    <Entry Text="{Binding ConfirmPassword}" MaxLength="{x:Static svc:AccountRules.MaxPassword}" IsPassword="True" ReturnType="Done" ReturnCommand="{Binding RegisterCommand}" SemanticProperties.Description="Repeat password" />
+                    <Grid ColumnDefinitions="*,Auto"><Entry x:Name="ConfirmPasswordBox" Text="{Binding ConfirmPassword}" MaxLength="{x:Static svc:AccountRules.MaxPassword}" IsPassword="True" ReturnType="Done" ReturnCommand="{Binding RegisterCommand}" SemanticProperties.Description="Repeat password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference ConfirmPasswordBox}" /></Grid>
                 </Border>
             </VerticalStackLayout>
 

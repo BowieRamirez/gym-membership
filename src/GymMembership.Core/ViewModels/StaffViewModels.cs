@@ -70,6 +70,7 @@ public partial class VerifyPaymentsViewModel(IPaymentStaffService svc) : Loadabl
     private async Task ApproveAsync(PaymentRow row)
     {
         Notice = null;
+        if (!await Confirm.AskAsync($"Approve {row.Payer}'s payment?", $"{row.Item}\n₱{row.Payment.Amount:N2}", "Approve")) return;
         if (await RunAsync(() => svc.VerifyAsync(row.Payment.Id, true)))
         { Pending.Remove(row); Notice = $"Verified {row.Payer}'s payment. Receipt number assigned."; if (Viewing == row) Viewing = null; }
     }
@@ -187,6 +188,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     {
         Notice = null;
         if (!IsWalkIn && (Member is null || Item is null)) { ErrorMessage = "Choose the member and what they are paying for."; return; }
+        if (!await Confirm.AskAsync("Record this payment?", $"{OrderWho}\n{OrderWhat}\n{TotalText}\n{OrderHow}", "Record payment")) return;
         Payment? paid = null;
         if (!await RunAsync(() => svc.RecordCounterAsync(KindKey(Kind), MethodKey(Method), IsWalkIn ? null : Member!.MemberId, Item?.Id,
                 IsWalkIn ? WalkInName : null, NeedsReference ? ReferenceNo : null, IsWalkIn ? null : DiscountCode), p => paid = p)) return;
@@ -283,6 +285,8 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
     private async Task ToggleCoachAsync(CoachPresenceRow row)
     {
         Notice = null;
+        if (!await (row.InGym ? Confirm.AskAsync($"Check {row.Name} out?", "Members will no longer see them as in the gym.", "Check out")
+                              : Confirm.AskAsync($"Check {row.Name} in?", "Members will see they are here and can hire them.", "Check in"))) return;
         var ok = await RunAsync(() => row.InGym ? coaches.CheckOutAsync(row.CoachId) : coaches.CheckInAsync(row.CoachId));
         if (!ok) return;
         Notice = row.InGym ? $"{row.Name} is checked out." : $"{row.Name} is checked in.";
@@ -324,6 +328,8 @@ public partial class CoachProfileViewModel(ICoachService svc, CoachPhotoViewMode
     {
         Notice = null;
         var wasIn = InGym;
+        if (!await (wasIn ? Confirm.AskAsync("Check out of the gym?", "Members will no longer see you as in the gym.", "Check out")
+                          : Confirm.AskAsync("Check in to the gym?", "Members will see you are here and can hire you.", "Check in"))) return;
         if (!await RunAsync(() => wasIn ? svc.CheckOutAsync() : svc.CheckInAsync())) return;
         await RunAsync(svc.MyVisitAsync, v => Visit = v);
         Notice = wasIn ? "You are checked out." : "You are checked in.";
@@ -354,6 +360,7 @@ public partial class TraineesViewModel(ICoachService svc, IChatService messages,
     private async Task RemoveAsync(TraineeRow row)
     {
         Notice = null;
+        if (!await Confirm.AskAsync($"Remove {row.Name}?", "They will no longer be your trainee.", "Remove trainee")) return;
         if (await RunAsync(() => svc.EndHireAsync(row.HireId))) { Notice = $"{row.Name} is no longer your trainee."; await LoadAsync(); }
     }
 }
@@ -387,6 +394,8 @@ public partial class ShiftsViewModel(ICoachService svc) : LoadableViewModel
         var c = (await svc.MyCoachAsync()).Value;
         if (c is null) return;
         var open = !c.IsAvailable;
+        if (!await (open ? Confirm.AskAsync("Start taking new trainees?", "Members can hire you again.", "Resume hiring")
+                         : Confirm.AskAsync("Pause hiring?", "Members still see you, but they can't hire you until you resume.", "Pause hiring"))) return;
         if (await RunAsync(() => svc.UpdateProfileAsync(c.Bio, c.Specialty, c.HourlyRate, open)))
         {
             IsOpen = open;
@@ -405,7 +414,10 @@ public partial class ShiftsViewModel(ICoachService svc) : LoadableViewModel
 
     [RelayCommand]
     private async Task CancelAsync(ShiftPost shift)
-    { if (await RunAsync(() => svc.CancelShiftAsync(shift.Id))) await LoadAsync(); }
+    {
+        if (!await Confirm.AskAsync("Cancel this shift?", Fmt.Range(shift.Start, shift.End), "Cancel shift")) return;
+        if (await RunAsync(() => svc.CancelShiftAsync(shift.Id))) await LoadAsync();
+    }
 }
 
 public partial class RequestsViewModel(ISessionService svc) : LoadableViewModel
@@ -482,6 +494,9 @@ public partial class RequestsViewModel(ISessionService svc) : LoadableViewModel
         Notice = null;
         var start = (Date.Date + Time).ToUniversalTime();
         var end = start.AddMinutes(DurationMinutes);
+        var (title, button) = !IsCoach ? ($"Send this request to {SelectedCoach?.Name}?", "Send request")
+            : UseWindowsRequestForm ? ($"Invite {SelectedMember?.Name}?", "Send invitation") : ("Post this open time?", "Post");
+        if (!await Confirm.AskAsync(title, Fmt.Range(start, end), button)) return;
         var ok = IsCoach
             ? UseWindowsRequestForm
                 ? await RunAsync(() => svc.InviteMemberAsync(SelectedMember!.MemberId, start, end))
@@ -540,6 +555,13 @@ public partial class RequestsViewModel(ISessionService svc) : LoadableViewModel
         var start = (ResponseDate.Date + ResponseTime).ToUniversalTime();
         var end = start.AddMinutes(ResponseDuration);
         var id = row.Request.Id;
+        var (title, button) = ResponseMode switch
+        {
+            "propose" => ("Send this time instead?", "Send"),
+            "another" => ("Ask for this time instead?", "Send"),
+            _ => ("Decline this request?", "Decline")
+        };
+        if (!await Confirm.AskAsync(title, ResponseMode is "propose" or "another" ? $"With {row.With}, {Fmt.Range(start, end)}." : $"With {row.With}.", button)) return;
         var ok = ResponseMode switch
         {
             "propose" => await RunAsync(() => svc.ProposeAsync(id, start, end, ResponseAmenity?.Id, ResponseReason ?? "")),
@@ -560,6 +582,7 @@ public partial class RequestsViewModel(ISessionService svc) : LoadableViewModel
     private async Task AcceptAsync(RequestRow row)
     {
         Notice = null;
+        if (!await Confirm.AskAsync("Accept this time?", $"{row.ProposalText ?? $"With {row.With}"}\nThe session is booked.", "Accept")) return;
         var result = "";
         if (!await RunAsync(() => svc.AcceptProposalAsync(row.Request.Id, row.Request.Version), r => result = r)) { var error = ErrorMessage; await LoadAsync(); ErrorMessage = error; return; }
         await LoadAsync();
@@ -571,11 +594,16 @@ public partial class RequestsViewModel(ISessionService svc) : LoadableViewModel
 
     [RelayCommand]
     private async Task CancelAsync(RequestRow row)
-    { if (await RunAsync(() => svc.CancelRequestAsync(row.Request.Id))) await LoadAsync(); }
+    {
+        if (!await Confirm.AskAsync("Cancel this request?", $"With {row.With}.", "Cancel request")) return;
+        if (await RunAsync(() => svc.CancelRequestAsync(row.Request.Id))) await LoadAsync();
+    }
 
     async Task RespondAsync(RequestRow row, bool approve)
     {
         Notice = null;
+        if (!await (approve ? Confirm.AskAsync("Approve this request?", $"With {row.With}. The session goes on the calendar.", "Approve")
+                            : Confirm.AskAsync("Decline this request?", $"With {row.With}.", "Decline"))) return;
         if (await RunAsync(() => svc.RespondAsync(row.Request.Id, approve)))
         { Notice = approve ? "Approved. The session is on the calendar." : "Rejected."; await LoadAsync(); }
     }
@@ -603,6 +631,7 @@ public partial class SessionsViewModel(ISessionService svc, CoachPhotoViewModel?
     private async Task CancelAsync(SessionRow row)
     {
         Notice = null;
+        if (!await Confirm.AskAsync("Cancel this session?", $"With {row.With}, {Fmt.Range(row.Session.ScheduledStart, row.Session.ScheduledEnd)}.\nThey will be told.", "Cancel session")) return;
         if (await RunAsync(() => svc.CancelSessionAsync(row.Session.Id))) { Notice = "Session cancelled. The other person has been told."; await LoadAsync(); }
     }
 
@@ -610,7 +639,8 @@ public partial class SessionsViewModel(ISessionService svc, CoachPhotoViewModel?
     private async Task ExtendAsync(SessionRow row)
     {
         Notice = null;
-        if (row.ReservationId is { } id && await RunAsync(() => svc.ExtendAsync(id, 30))) { Notice = "Added 30 minutes. The member has been told."; await LoadAsync(); }
+        if (row.ReservationId is not { } id || !await Confirm.AskAsync("Add 30 minutes?", $"With {row.With}. The member will be told.", "Add 30 minutes")) return;
+        if (await RunAsync(() => svc.ExtendAsync(id, 30))) { Notice = "Added 30 minutes. The member has been told."; await LoadAsync(); }
     }
 
     [RelayCommand]
@@ -630,12 +660,17 @@ public partial class SessionsViewModel(ISessionService svc, CoachPhotoViewModel?
         var start = (Date.Date + Time).ToUniversalTime();
         var end = start + (row.Session.ScheduledEnd - row.Session.ScheduledStart); // keep the session length
         Notice = null;
+        if (!await Confirm.AskAsync("Ask for this new time?", $"With {row.With}, {Fmt.Range(start, end)}.\nIt moves once they approve.", "Send")) return;
         if (await RunAsync(() => svc.RescheduleAsync(row.Session.Id, start, end)))
         { Notice = "Reschedule sent. It moves once the other person approves it in Time requests."; Rescheduling = null; }
     }
 
     async Task SetAsync(SessionRow row, string status)
-    { if (await RunAsync(() => svc.SetSessionStatusAsync(row.Session.Id, status))) await LoadAsync(); }
+    {
+        var (title, button) = status == Status.NoShow ? ("Mark this session as a no-show?", "Mark no-show") : ("Mark this session completed?", "Mark completed");
+        if (!await Confirm.AskAsync(title, $"With {row.With}, {Fmt.Range(row.Session.ScheduledStart, row.Session.ScheduledEnd)}.", button)) return;
+        if (await RunAsync(() => svc.SetSessionStatusAsync(row.Session.Id, status))) await LoadAsync();
+    }
 }
 
 /// <summary>One day of the week view with its sessions inline.</summary>
@@ -736,6 +771,7 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     {
         if (coach is null) return;
         Notice = null;
+        if (!await Confirm.AskAsync("Cancel this shift?", Fmt.Range(shift.Start, shift.End), "Cancel shift")) return;
         if (await RunAsync(() => coach.CancelShiftAsync(shift.Id))) { Notice = "Shift cancelled."; await ReloadAsync(); }
     }
 
@@ -850,6 +886,7 @@ public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? a
     private async Task AddUserAsync()
     {
         Notice = null;
+        if (!await Confirm.AskAsync($"Add {NameParts.Join(NewFirstName, NewLastName)}?", $"{NewEmail.Trim()}\nRole: {NewRole}\nThey sign in with the temporary password, then pick their own.", "Add user")) return;
         if (!await RunAsync(() => svc.CreateUserAsync(NewFirstName, NewLastName, NewEmail, NewRole.ToLowerInvariant(), NewPassword))) return;
         Notice = $"{NameParts.Join(NewFirstName, NewLastName)} can sign in now with that email and password.";
         NewFirstName = NewLastName = NewEmail = NewPassword = "";
@@ -874,6 +911,9 @@ public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? a
     {
         var parts = arg.Split('|');
         var user = Users.First(u => u.UserId == parts[0]);
+        if (!await (user.Roles.Contains(parts[1])
+                ? Confirm.AskAsync($"Remove the {parts[1]} role from {user.Username}?", "They lose what that role lets them do.", "Remove role")
+                : Confirm.AskAsync($"Give {user.Username} the {parts[1]} role?", "They get everything that role lets them do.", "Give role"))) return;
         var ok = user.Roles.Contains(parts[1])
             ? await RunAsync(() => svc.RevokeRoleAsync(user.UserId, parts[1]))
             : await RunAsync(() => svc.AssignRoleAsync(user.UserId, parts[1]));
@@ -882,7 +922,11 @@ public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? a
 
     [RelayCommand]
     private async Task ToggleActiveAsync(UserRow user)
-    { if (await RunAsync(() => svc.SetActiveAsync(user.UserId, !user.IsActive))) await LoadAsync(); }
+    {
+        if (!await (user.IsActive ? Confirm.AskAsync($"Deactivate {user.Username}?", "They can't sign in until you reactivate the account.", "Deactivate")
+                                  : Confirm.AskAsync($"Reactivate {user.Username}?", "They can sign in again.", "Reactivate"))) return;
+        if (await RunAsync(() => svc.SetActiveAsync(user.UserId, !user.IsActive))) await LoadAsync();
+    }
 }
 
 public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? picker = null) : LoadableViewModel
@@ -921,6 +965,8 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     {
         if (string.IsNullOrWhiteSpace(NewPackageName)) { ErrorMessage = "Give the package a name."; return; }
         if (NewPrice <= 0 || NewDays <= 0) { ErrorMessage = "Price and days must be more than zero."; return; }
+        if (!await Confirm.AskAsync(Editing is null ? $"Add {NewPackageName.Trim()}?" : $"Save changes to {NewPackageName.Trim()}?",
+                $"₱{NewPrice:N2} for {NewDays} days.", Editing is null ? "Add package" : "Save changes")) return;
         var p = Editing ?? new MembershipPackage();
         p.Name = NewPackageName.Trim(); p.Description = string.IsNullOrWhiteSpace(NewDescription) ? null : NewDescription.Trim();
         p.Price = NewPrice; p.DurationDays = NewDays;
@@ -953,13 +999,18 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
 
     [RelayCommand]
     private async Task TogglePackageAsync(MembershipPackage p)
-    { p.IsActive = !p.IsActive; if (await RunAsync(() => svc.SavePackageAsync(p))) await LoadAsync(); else p.IsActive = !p.IsActive; }
+    {
+        if (!await (p.IsActive ? Confirm.AskAsync($"Stop selling {p.Name}?", "Members can't buy it until you turn it back on. Anyone who has it keeps it.", "Turn off")
+                               : Confirm.AskAsync($"Sell {p.Name} again?", "Members can buy it again.", "Turn on"))) return;
+        p.IsActive = !p.IsActive; if (await RunAsync(() => svc.SavePackageAsync(p))) await LoadAsync(); else p.IsActive = !p.IsActive; }
 
     [RelayCommand]
     private async Task AddAmenityAsync()
     {
         if (string.IsNullOrWhiteSpace(NewAmenityName)) { ErrorMessage = "Give the amenity a name."; return; }
         if (NewAmenityPrice < 0 || NewAmenityDays <= 0) { ErrorMessage = "Price can't be negative and days must be more than zero."; return; }
+        if (!await Confirm.AskAsync(EditingAmenity is null ? $"Add {NewAmenityName.Trim()}?" : $"Save changes to {NewAmenityName.Trim()}?",
+                $"Pass: ₱{NewAmenityPrice:N2} for {NewAmenityDays} days.", EditingAmenity is null ? "Add amenity" : "Save changes")) return;
         var a = EditingAmenity ?? new Amenity();
         a.Name = NewAmenityName.Trim(); a.Price = NewAmenityPrice; a.DurationDays = NewAmenityDays;
         a.Description = string.IsNullOrWhiteSpace(NewAmenityDescription) ? null : NewAmenityDescription.Trim();
@@ -993,7 +1044,10 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
 
     [RelayCommand]
     private async Task ToggleAmenityAsync(Amenity a)
-    { a.IsActive = !a.IsActive; if (await RunAsync(() => svc.SaveAmenityAsync(a))) await LoadAsync(); else a.IsActive = !a.IsActive; }
+    {
+        if (!await (a.IsActive ? Confirm.AskAsync($"Stop selling {a.Name} passes?", "Members can't buy a pass until you turn it back on. Passes already bought keep working.", "Turn off")
+                               : Confirm.AskAsync($"Sell {a.Name} passes again?", "Members can buy a pass again.", "Turn on"))) return;
+        a.IsActive = !a.IsActive; if (await RunAsync(() => svc.SaveAmenityAsync(a))) await LoadAsync(); else a.IsActive = !a.IsActive; }
 }
 
 public partial class DiscountsViewModel(IAdminService svc, ArchiveViewModel? archive = null) : LoadableViewModel
@@ -1028,7 +1082,10 @@ public partial class DiscountsViewModel(IAdminService svc, ArchiveViewModel? arc
     [RelayCommand]
     private async Task ToggleAsync(DiscountRow row)
     {
-        var d = row.Discount; d.IsActive = !d.IsActive;
+        var d = row.Discount;
+        if (!await (d.IsActive ? Confirm.AskAsync($"Turn off code {d.Code}?", "Members can't use it until you turn it back on.", "Turn off")
+                               : Confirm.AskAsync($"Turn on code {d.Code}?", "Members can use it again.", "Turn on"))) return;
+        d.IsActive = !d.IsActive;
         if (await RunAsync(() => svc.SaveDiscountAsync(d))) await LoadAsync(); else d.IsActive = !d.IsActive;
     }
 
@@ -1042,6 +1099,7 @@ public partial class DiscountsViewModel(IAdminService svc, ArchiveViewModel? arc
     private async Task SaveLimitAsync()
     {
         if (Editing is not { } row) return;
+        if (!await Confirm.AskAsync($"Change the limit for {row.Discount.Code}?", $"It can be used {EditLimit} times in total.", "Change limit")) return;
         var old = row.Discount.MaxUses; row.Discount.MaxUses = EditLimit;
         if (!await RunAsync(() => svc.SaveDiscountAsync(row.Discount))) { row.Discount.MaxUses = old; return; }
         Editing = null;
@@ -1140,6 +1198,8 @@ public partial class GymSettingsViewModel(IAdminService svc, IProofPicker picker
     {
         Notice = null;
         if (_loaded is null) return;
+        var qr = _newQr is null ? "" : "\nThe payment QR members scan will change.";
+        if (!await Confirm.AskAsync("Save gym settings?", $"Open {DateTime.Today.Add(OpensAt):h:mm tt} to {DateTime.Today.Add(ClosesAt):h:mm tt} every day.{qr}", "Save settings")) return;
         _loaded.GymName = GymName.Trim(); _loaded.QrAccountName = string.IsNullOrWhiteSpace(QrAccountName) ? null : QrAccountName.Trim(); _loaded.WalkInPrice = WalkInPrice;
         _loaded.OpensAt = OpensAt; _loaded.ClosesAt = ClosesAt;
         if (!await RunAsync(() => svc.SaveGymSettingsAsync(_loaded, _newQr))) return;

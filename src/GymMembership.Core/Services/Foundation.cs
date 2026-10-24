@@ -151,6 +151,23 @@ public static class RoleResolver
     }
 }
 
+/// <summary>
+/// "Are you sure?" before an action that spends money, cancels something or changes someone's account (D14). The app sets Popup to
+/// its native dialog at startup; view models call AskAsync and stop on false. Tests set Answer, which only reaches the calling test.
+/// </summary>
+public static class Confirm
+{
+    public delegate Task<bool> Asker(string title, string message, string action);
+
+    public static Asker Popup { get; set; } = (_, _, _) => Task.FromResult(true);
+
+    static readonly AsyncLocal<Asker?> _answer = new();
+    public static Asker? Answer { get => _answer.Value; set => _answer.Value = value; }
+
+    /// <param name="action">The button that goes ahead, named after the action ("Sign out"); the other button is "Go back".</param>
+    public static Task<bool> AskAsync(string title, string message, string action) => (Answer ?? Popup)(title, message, action);
+}
+
 public interface IAppNavigator
 {
     /// <summary>Opens the area for a role. changePassword sends them to Settings first, because they are still on a temporary password.</summary>

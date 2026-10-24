@@ -80,6 +80,7 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 - [x] **D11 — revenue PDF detail (owner approved 2026-10-22):** Line items: one line per verified payment (receipt no., Manila date/time, member or walk-in name, item, method, amount) plus a negative line per approved/paid refund on its approval date, ending in the same net total as the on-screen report (voids excluded, as in `revenue_summary`). Filters stay the date range only; the PDF uses the range and rows the screen loaded. Export opens the system share sheet (MAUI `Share`) on Windows and Android. Library: PDFsharp (MIT) with an embedded font that has the ₱ glyph (check Barlow; fall back to another bundled font if it lacks U+20B1); confirm current version, license and Android behavior before adding the package.
 - [x] **D12 — QR trust boundary (owner approved 2026-10-23):** The member QR is identification only, never payment (the gym's e-wallet payment QR is unchanged). It encodes a permanent random opaque code mapped to the user (not the user ID, and no name/status/expiry/credentials), the same on every device and kept through renewal, expiry, pending payments and archive/restore. Shown at the top of My membership. Only front desk staff and admins can scan/look up a code; coaches and members get nothing. A scan shows name, status and expiry from live data with the plan's precedence (archived/deleted → Inactive; running term → Active; payment waiting for verification → Pending; otherwise Expired / no membership); unknown or damaged code → "not found"; offline → "can't check right now", never Active. A scan does not check in by itself: an Active result shows a Check in button that records the existing gym check-in (inactive results cannot). Every scan is logged (server time, scanner, member, result) and kept forever. Camera scanning uses ZXing.Net.MAUI (MIT), version and Windows/Android support confirmed before adding; if Windows camera support is poor, Windows desks use a USB/Bluetooth scanner that types the code. Fallback when a code cannot be scanned: the existing Check-in name search. Also in scope: a Check-ins section in the Windows admin Overview (pick a day, count, each member's name and time); Android admins keep today's count only.
 - [x] **D13 — names, email confirmation and password reset (owner requested 2026-10-23, answered 2026-10-24):** Registration asks for first name and last name instead of one full name; members confirm a real email in Settings with a one-time code (OTP) sent to it; members can reset a forgotten password from the login page. To settle before building: (a) store first and last name as two profile columns and keep `full_name` filled from them (so every screen, receipt, PDF and chat that shows a name keeps working), or replace `full_name` everywhere; (b) how existing names are split (first word = first name, the rest = last name, editable afterwards; no guessing beyond that) and whether staff/coaches also switch to first/last; (c) whether an unconfirmed email blocks anything (e.g. paying, booking) or only shows a "Confirm your email" reminder; (d) forgotten password by a 6-digit code typed in the app (works without a website) or by an email link (needs a web page to land on); (e) who sends the emails: Supabase's built-in sender is only for testing (very low hourly limit and, on current projects, only to the team's own addresses), so real members need a custom SMTP service (for example Resend, Brevo or SendGrid; free tiers exist) set up by the owner; (f) whether the admin-only temporary password (`reset-password` function) stays for members who no longer have access to their email. Answer (owner 2026-10-24): (a) add `first_name`/`last_name` columns and keep `full_name` filled from them; (b) existing names split first word = first name, rest = last name, editable in Settings, and everyone (members, staff, coaches, admins) switches to first/last; (c) reminder only, nothing blocked; (d) 6-digit code typed in the app; (e) Brevo custom SMTP, set up by the owner in the Supabase dashboard 2026-10-24 (sender `bowieram2006@gmail.com` verified; a gym-owned domain with DKIM/DMARC is recommended before rollout, since a Gmail sender may land in spam); (f) keep the admin temporary password.
+- [x] **D14 — which actions ask "are you sure?" (owner requested 2026-10-24, approved 2026-10-24):** The owner wants a confirmation before consequential actions such as signing out and buying a membership. The proposed list is in Phase 12; the owner confirms or edits it. Also to settle: (a) one dialog style everywhere (the native popup already used for Cancel payment and refunds: a title, what will happen with names/amounts/times, a red-or-plain action button named after the action and "Go back"), or keep the existing inline two-step panels (archive, delete account, reject, void, reset password) as they are; (b) whether frequent desk actions (check-in, marking attendance) stay one tap. Answer (owner 2026-10-24): the proposed list in Phase 12 as written. Implementer's calls, not asked: (a) new confirmations use the native popup; the existing inline two-step panels stay as they are; (b) the desk actions on the "stay one tap" list stay one tap.
 
 ## 3. Phases and request coverage
 
@@ -97,7 +98,8 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 | 9 | Coach dashboard, shifts and profile polish | 13, 14 | 5–8; D10 | DEPLOYED (DB) 2026-10-23 — 0033 live; device check/acceptance pending |
 | 10 | Permanent member QR and scan logging | 15 | 1; D12 | DEPLOYED (DB) 2026-10-23 — 0034 live; device camera check pending |
 | 11 | First/last name registration, email confirmation by OTP, forgotten password | New 2026-10-23 | 1; D13 | VERIFIED 2026-10-24 — 0035 live; owner checked on Windows and Android |
-| 12 | Integrated regression, deployment and handoff | All | 1–11 | PLANNED |
+| 12 | "Are you sure?" confirmations and show/hide password | New 2026-10-24 | D14 | IMPLEMENTED locally 2026-10-24 — no migration; owner device check pending |
+| 13 | Integrated regression, deployment and handoff | All | 1–12 | PLANNED |
 
 Dependency order matters more than numbering. After Phase 0, independent work can be scheduled separately, but keep one phase's changes and evidence identifiable. The coach rate correction can be pulled forward as a small independent slice if desired; record that move here.
 
@@ -382,7 +384,7 @@ Requested by the owner 2026-10-23. Starting points: `RegisterPage.xaml`/`Registe
 - [x] Settings → Email: a member enters a real email, the app asks Supabase Auth to send a 6-digit code to it, the member types the code to confirm. Show the confirmed state ("Confirmed") and allow changing the email again the same way. Clear messages for a wrong/expired code, a resend wait, and an email already used by another account.
 - [x] Apply D13(c): either a reminder only, or block the chosen actions until the email is confirmed (enforced on the server, not only in the app).
 - [x] Login → "Forgot password?": the member enters their email, receives a code (or link per D13(d)), and sets a new password in the app. Never reveal whether an email has an account ("If an account uses this email, we sent a code").
-- [ ] Email delivery per D13(e): the owner sets up custom SMTP in the Supabase dashboard; confirm the confirmation, email-change and recovery templates show the code. Keep the admin temporary password per D13(f).
+- [x] Email delivery per D13(e): the owner sets up custom SMTP in the Supabase dashboard; confirm the confirmation, email-change and recovery templates show the code. Keep the admin temporary password per D13(f).
 - [x] Demo mode mirrors names, the code flow (a fixed demo code shown on screen) and forgotten password, so the UI can be checked without sending real email.
 - [x] Tests: name split/compose and validation, the code flows (right, wrong, expired, reused), "no account" privacy, server-side blocks from D13(c), and that names still show correctly on receipts, PDFs, chat, coach lists and the admin pages.
 
@@ -410,7 +412,74 @@ Acceptance / verification:
 - [x] A member who forgot their password resets it from the login page and signs in with the new one; an unknown email gets the same neutral message. (Owner, Windows, live, 2026-10-24.)
 - [x] Real emails arrive through the configured SMTP (owner check on the live project, 2026-10-24, Brevo).
 
-## Phase 12 — Integrated regression and staged rollout
+## Phase 12 — "Are you sure?" confirmations and show/hide password
+
+Requested by the owner 2026-10-24, before the final regression. Goal: nobody signs out, spends money, cancels something or changes another person's account by a stray tap. Each confirmation says in plain words what will happen (item, amount, person, date/time) and has a button named after the action ("Buy membership", "Sign out") plus "Go back". Going back changes nothing. Starting points: the existing popups in `MyMembershipPage.xaml.cs` (Cancel payment, cancellation request) and `RefundsPage.xaml.cs`; the inline two-step panels (Catalog/Discounts archive, account deletion, Users password reset, Verify payments reject, Void payments).
+
+Proposed list (D14; existing confirmations are kept):
+
+Everyone
+- [x] Sign out (header/Android account menu, Windows side menu, Settings)
+- [x] Change password (Settings)
+
+Members
+- [x] Buy a membership or extension (Packages → Avail): package, price, discount code if any
+- [x] Buy an amenity pass (Amenities → Buy pass): amenity, price, days
+- [x] Pay again for an expired payment (My membership)
+- [x] Send payment proof (My membership): amount and reference number, since it goes to the front desk for checking
+- [x] Book an amenity (Book an amenity → Book): amenity, date, start–end
+- [x] Cancel a booking / end a booking early
+- [x] Hire a coach / end a coach hire (Coaches)
+- [x] Send a training request; cancel a request; accept or decline a coach's proposed time (Requests)
+- [x] Cancel a session or ask for a new time (Sessions)
+
+Coaches
+- [x] Mark a session completed or no-show; cancel or extend a session (Sessions)
+- [x] Decline a request or send a proposed time (Requests)
+- [x] Cancel a posted shift (Dashboard and Shifts); stop or start taking new trainees (Shifts)
+- [x] Remove a trainee (Trainees)
+- [x] Check in / check out of the gym (Coach profile)
+
+Front desk and admins
+- [x] Record a counter payment (Cashier): member, item, amount, method
+- [x] Approve a payment (Verify payments): member, item, amount (Reject already asks)
+- [x] Coach check-in / check-out from the Check-in page
+
+Admins
+- [x] Deactivate or reactivate an account; give or remove a role (Users)
+- [x] Add a user (Users): name, email, role
+- [x] Turn a package or amenity off/on sale; save a changed price (Catalog)
+- [x] Deactivate/reactivate a discount code; change its limit (Discounts)
+- [x] Save gym settings: opening hours or payment QR (Gym settings)
+
+Proposed to stay one tap (frequent, easy to undo, or already confirmed): member check-in at the desk (a scan already shows status first), marking attendance (can be changed on the same screen), amenity status changes, sending chat messages, theme, mark alerts read, filters and refresh, posting a shift (it can be cancelled), and the actions that already ask (cancel payment, refund decisions, archive, delete account, reject, void, reset password, restore).
+
+Status: IMPLEMENTED locally 2026-10-24 (uncommitted), no database change. Evidence: xUnit 701/701 (`ConfirmationTests` 48: behaviour for sign out, buy membership, amenity pass, approve payment, deactivate account, package on sale, plus a check that all 39 approved actions ask first; `PasswordEyeTests` 2), Android and Windows build, Windows demo smoke (eye shows the typed password; "Buy Monthly?" popup, Go back changes nothing; "Sign out?" popup, side-menu button disabled while it is open).
+
+Rulings (2026-10-24):
+- `Confirm` is one static helper (`Core/Services/Foundation.cs`) instead of a constructor parameter on 20 view models; the app sets `Confirm.Popup` to the native dialog in `App.xaml.cs`, and tests answer through an `AsyncLocal`, so one test's answer never reaches another. If the app has no page to show the popup on, the answer is no.
+- Adding a package or amenity also asks (the list said "save a changed price"; the same Save button adds new ones). Coaches approving a member's request also asks, as the same act as accepting.
+- A double tap cannot run an action twice: the command is disabled while it runs, including while its popup is open.
+- The eye icons are drawn with curves (Lucide's eye uses arcs, which Windows cannot draw); the eye button is a real Button with "Show password" / "Hide password" for screen readers, and the box goes back to hidden whenever the page shows again.
+
+Tasks
+- [x] Settle D14 with the owner (list above, dialog style, desk actions). Approved 2026-10-24.
+- [x] One small confirm service in Core (`IConfirm.AskAsync(title, message, action)`) so view models ask and tests can answer yes/no; the MAUI app backs it with the native popup. Demo mode uses the same popup.
+- [x] Add the confirmation to each approved action, with the specific details in the message.
+- [x] Tests: for each action, "Go back" leaves everything unchanged and "yes" does the action once; a double tap cannot run it twice.
+- [ ] Windows and Android check of the popup text and buttons (light and dark, phone width).
+
+Show/hide password (owner request 2026-10-24; a new feature, not a confirmation): every password box gets a small eye button inside the field, on the right. Tapping it shows the typed password straight away, with no popup; tapping again hides it. It starts hidden every time the page opens, and each box has its own eye.
+- [x] One reusable password field (the existing `Field` border + Entry + eye icon drawn as a vector outline like the other icons in `Controls/Icons.cs`, eye and eye-off), with a screen-reader name "Show password" / "Hide password".
+- [x] Use it for all 10 password boxes: Login (password; forgot-password new and repeat), Register (password, repeat), Settings (current, new, repeat), Users (temporary password when adding a user; new temporary password on reset).
+- [x] Tests: the icons pass `IconTests`; the XAML binding test still passes; the eye flips the box between hidden and shown.
+
+Acceptance / verification:
+- [ ] Every action on the approved list asks first, says what will happen, and does nothing on "Go back".
+- [ ] Nothing on the "stay one tap" list gained a prompt.
+- [ ] Every password box has a working eye button on Windows and Android, and passwords start hidden.
+
+## Phase 13 — Integrated regression and staged rollout
 
 - [ ] Run all xUnit tests, including existing account, subscription/refund, payment, request guard, calendar, chat, navigation and XAML-binding checks.
 - [ ] Run the full disposable local PostgreSQL suite, populated-history migration tests, permission/RLS denial tests and real separate-connection concurrency tests.
@@ -465,7 +534,8 @@ Fill cells with date, command/test, result and evidence location. `—` means no
 | 9 Coach UX/profile | — | — | — | — | — | — | — |
 | 10 Permanent QR | — | — | — | — | — | — | — |
 | 11 Names/email/password | 2026-10-24 | 651/651 | 293/293 (names-email.mjs) | demo smoke passed | owner checked live 2026-10-24 | 0035 live, create-user deployed 2026-10-24 | ponytail review done; owner accepted 2026-10-24 |
-| 12 Integration/rollout | — | — | — | — | — | — | — |
+| 12 Confirmations | 2026-10-24 | 701/701 | N/A — no database change | demo smoke passed | builds; device check pending | none needed | ponytail review done; owner pending |
+| 13 Integration/rollout | — | — | — | — | — | — | — |
 
 ## 5. Session log — append whenever work pauses
 

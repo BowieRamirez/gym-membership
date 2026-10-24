@@ -18,7 +18,7 @@
                     <Label Text="{Binding Resetting.Username, StringFormat='Reset password for {0}'}" Style="{StaticResource Heading}" />
                     <Label Text="Set a new temporary password and share it with them. The old one stops working." Style="{StaticResource Caption}" />
                     <Border Style="{StaticResource Field}" WidthRequest="240" HorizontalOptions="Start">
-                        <Entry Text="{Binding ResetPassword}" IsPassword="True" Placeholder="At least 6 characters" SemanticProperties.Description="New temporary password" />
+                        <Grid ColumnDefinitions="*,Auto"><Entry x:Name="ResetPasswordBox" Text="{Binding ResetPassword}" IsPassword="True" Placeholder="At least 6 characters" SemanticProperties.Description="New temporary password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference ResetPasswordBox}" /></Grid>
                     </Border>
                     <HorizontalStackLayout Spacing="8">
                         <Button Text="Set password" Style="{StaticResource SmallButton}" Command="{Binding ConfirmResetCommand}" />
@@ -45,7 +45,7 @@
                         </VerticalStackLayout>
                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="180">
                             <Label Text="Temporary password" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}"><Entry Text="{Binding NewPassword}" IsPassword="True" SemanticProperties.Description="Temporary password" /></Border>
+                            <Border Style="{StaticResource Field}"><Grid ColumnDefinitions="*,Auto"><Entry x:Name="NewPasswordBox" Text="{Binding NewPassword}" IsPassword="True" SemanticProperties.Description="Temporary password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference NewPasswordBox}" /></Grid></Border>
                         </VerticalStackLayout>
                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="130">
                             <Label Text="Role" Style="{StaticResource Caption}" />

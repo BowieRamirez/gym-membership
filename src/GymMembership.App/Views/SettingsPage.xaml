@@ -82,15 +82,15 @@
             <Label Text="Change password" Style="{StaticResource Heading}" />
             <VerticalStackLayout Spacing="4">
                 <Label Text="Current password" Style="{StaticResource Caption}" />
-                <Border Style="{StaticResource Field}"><Entry Text="{Binding CurrentPassword}" IsPassword="True" SemanticProperties.Description="Current password" /></Border>
+                <Border Style="{StaticResource Field}"><Grid ColumnDefinitions="*,Auto"><Entry x:Name="CurrentPasswordBox" Text="{Binding CurrentPassword}" IsPassword="True" SemanticProperties.Description="Current password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference CurrentPasswordBox}" /></Grid></Border>
             </VerticalStackLayout>
             <VerticalStackLayout Spacing="4">
                 <Label Text="New password (at least 6 characters)" Style="{StaticResource Caption}" />
-                <Border Style="{StaticResource Field}"><Entry Text="{Binding NewPassword}" IsPassword="True" SemanticProperties.Description="New password" /></Border>
+                <Border Style="{StaticResource Field}"><Grid ColumnDefinitions="*,Auto"><Entry x:Name="NewPasswordBox" Text="{Binding NewPassword}" IsPassword="True" SemanticProperties.Description="New password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference NewPasswordBox}" /></Grid></Border>
             </VerticalStackLayout>
             <VerticalStackLayout Spacing="4">
                 <Label Text="Repeat new password" Style="{StaticResource Caption}" />
-                <Border Style="{StaticResource Field}"><Entry Text="{Binding ConfirmPassword}" IsPassword="True" ReturnCommand="{Binding ChangePasswordCommand}" SemanticProperties.Description="Repeat new password" /></Border>
+                <Border Style="{StaticResource Field}"><Grid ColumnDefinitions="*,Auto"><Entry x:Name="ConfirmPasswordBox" Text="{Binding ConfirmPassword}" IsPassword="True" ReturnCommand="{Binding ChangePasswordCommand}" SemanticProperties.Description="Repeat new password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference ConfirmPasswordBox}" /></Grid></Border>
             </VerticalStackLayout>
             <Button Text="Change password" Command="{Binding ChangePasswordCommand}" HorizontalOptions="Start" />
 
