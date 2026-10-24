@@ -123,7 +123,8 @@ try {
     assert.deepEqual(active, { archived_at: null, archived_by: null, archive_reason: null });
   });
   await test('inactive admin cannot list, restore or write gym assets', async () => {
-    const other = await user('admin'); await as(owner, 'select archive_account($1,$2)', [other, 'Departed admin']);
+    // 0037: a super admin is switched off only by the database owner (dashboard), not from the app
+    const other = await user('admin'); await db.query('update profiles set is_active=false where id=$1', [other]);
     await assert.rejects(list(other), /forbidden/); await assert.rejects(restore('plan', legacyPlan, other), /forbidden/);
     await db.query('grant select,insert,update,delete on storage.objects to authenticated');
     await assert.rejects(as(other, `insert into storage.objects(bucket_id,name) values('gym-assets','blocked.png')`), /row-level security/);

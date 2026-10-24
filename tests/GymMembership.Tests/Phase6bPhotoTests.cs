@@ -219,8 +219,8 @@ public class Phase6bPhotoTests
         var secondId = gw.CurrentUserId!;
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
         Assert.True((await admin.AssignRoleAsync(secondId, "admin")).Ok);
-        await gw.SignInAsync("second-admin@demo.io", DemoGateway.DemoPassword);
-        Assert.True((await admin.SetActiveAsync(uid, false)).Ok);
+        // 0037: a super admin can't be deactivated from the app; the database owner switches this one off
+        gw.OwnerSetActive(uid, false);
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
         Assert.False((await admin.SetAmenityPhotoAsync(id, "pool.png", [1])).Ok);
         await Assert.ThrowsAnyAsync<Exception>(() => gw.UploadAsync("gym-assets", "pool.png", [1]));

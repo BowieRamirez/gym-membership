@@ -1148,6 +1148,8 @@ public sealed record UserRow(string UserId, string Username, bool IsActive, IRea
     public string CoachActionText => IsCoach ? "Remove coach" : "Make coach";
     public string EmployeeActionText => IsEmployee ? "Remove employee" : "Make employee";
     public bool IsSubAdmin => Roles.Contains("subadmin");
+    /// <summary>Fixed from the app (0037): no role changes, no deactivating, no deleting.</summary>
+    public bool IsSuperAdmin => Roles.Contains("admin");
     public string SubAdminActionText => IsSubAdmin ? "Remove sub-admin" : "Make sub-admin";
     /// <summary>Front desk, sub-admin or super admin: only the super admin manages these accounts (D15).</summary>
     public bool IsStaff => Roles.Any(r => r is "admin" or "subadmin" or "employee");
@@ -1217,7 +1219,7 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
     public async Task<AppResult<bool>> CreateUserAsync(string firstName, string lastName, string email, string role, string password)
     {
         firstName = firstName.Trim(); lastName = lastName.Trim();
-        if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName) || !email.Contains('@') || password.Length < 6 || role is not ("member" or "coach" or "employee"))
+        if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName) || !email.Contains('@') || password.Length < 6 || role is not ("member" or "coach" or "employee" or "subadmin"))
             return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
         if (!AccountRules.IsName(firstName, lastName)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_name");   // the database refuses it too (0012, 0035)
         return await Safe.RunAsync(async () =>

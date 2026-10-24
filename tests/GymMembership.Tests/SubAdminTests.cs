@@ -101,11 +101,40 @@ public class SubAdminTests
         var gw = await As("admin@demo.io");
         var vm = new UsersViewModel(new AdminService(gw), new AccountArchiveService(gw));
         await vm.LoadCommand.ExecuteAsync(null);
-        Assert.Equal(["Member", "Coach", "Employee"], vm.Roles);
+        Assert.Equal(["Member", "Coach", "Employee", "Sub-admin"], vm.Roles);
         Assert.True(vm.IsSuperAdmin);
         Assert.True(vm.CanManage(vm.Users.First(u => u.Roles.Contains("employee"))));
         var row = vm.Users.First(u => u.Username == "Alex Tan");
         Assert.Equal("Make sub-admin", row.SubAdminActionText);
+    }
+
+    [Fact]
+    public async Task The_super_admin_adds_a_sub_admin_from_the_form()
+    {
+        var gw = await As("admin@demo.io");
+        var vm = new UsersViewModel(new AdminService(gw), new AccountArchiveService(gw));
+        await vm.LoadCommand.ExecuteAsync(null);
+        (vm.NewFirstName, vm.NewLastName, vm.NewEmail, vm.NewPassword, vm.NewRole) = ("Rina", "Cruz", "rina@demo.io", "temp1234", "Sub-admin");
+        Confirm.Answer = (_, _, _) => Task.FromResult(true);
+        await vm.AddUserCommand.ExecuteAsync(null);
+        Assert.Null(vm.ErrorMessage);
+        Assert.Equal(AppRole.SubAdmin, (await new AuthService(gw).SignInAsync("rina@demo.io", "temp1234")).Value);
+    }
+
+    [Fact]
+    public async Task A_super_admin_account_cannot_have_its_roles_changed_or_be_deactivated_or_deleted()
+    {
+        var gw = await As("admin@demo.io");
+        var admin = new AdminService(gw);
+        var bea = IdOf(gw, "bea@demo.io");
+        Assert.True((await admin.AssignRoleAsync(bea, "admin")).Ok);   // a second super admin
+        foreach (var r in new[] { await admin.AssignRoleAsync(bea, "coach"), await admin.RevokeRoleAsync(bea, "admin"), await admin.SetActiveAsync(bea, false),
+                                  await new AccountArchiveService(gw).DeleteAsync(bea, "Leaving") })
+        {
+            Assert.False(r.Ok);
+            Assert.Equal("Super admin accounts can't have their roles changed, be deactivated or be deleted.", ErrorText.For(r.Error, r.Message));
+        }
+        Assert.True((await gw.ListAsync<Profile>(p => p.Id == bea)).Single().IsActive);
     }
 
     [Fact]

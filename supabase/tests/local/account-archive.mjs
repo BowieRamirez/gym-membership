@@ -149,15 +149,12 @@ try {
     await b.query('rollback');
     assert.equal((await db.query('select is_active from profiles where id=$1', [target])).rows[0].is_active, true);
   });
-  await test('competing admins cannot archive one another and leave no admin', async () => {
-    const other = await user('admin'); const a = await connection(), b = await connection();
-    await begin(a, owner); await a.query('select archive_account($1,$2)', [other, 'Race check']);
-    await begin(b, other);
-    const pending = b.query('select archive_account($1,$2)', [owner, 'Race check']).then(value => ({ value }), error => ({ error }));
-    await waitBlocked(b); await a.query('commit');
-    const result = await pending; assert.match(result.error?.message ?? '', /forbidden/);
-    await b.query('rollback');
-    assert.equal((await db.query('select is_active from profiles where id=$1', [owner])).rows[0].is_active, true);
+  // 0037: a super admin cannot be archived from the app at all, so two admins can no longer race to remove each other
+  await test('admins cannot archive one another', async () => {
+    const other = await user('admin');
+    await assert.rejects(as(owner, 'select archive_account($1,$2)', [other, 'Race check']), /super_admin_protected/);
+    await assert.rejects(as(other, 'select archive_account($1,$2)', [owner, 'Race check']), /super_admin_protected/);
+    for (const id of [owner, other]) assert.equal((await db.query('select is_active from profiles where id=$1', [id])).rows[0].is_active, true);
   });
 } finally {
   for (const client of clients) { await client.query('rollback').catch(() => {}); await client.end(); }

@@ -35,10 +35,12 @@ public partial class UsersPage : BasePage
 				return;
 			}
 			// D15: roles and deleting are the super admin's; a deactivated account can only be switched back on
+			// a super admin account is fixed (0037): only its password can be reset here
 			var actions = !user.IsActive ? new List<string> { user.ActiveActionText }
+				: user.IsSuperAdmin ? new List<string> { "Reset password" }
 				: vm.IsSuperAdmin ? new List<string> { user.CoachActionText, user.EmployeeActionText, user.SubAdminActionText, "Reset password", user.ActiveActionText }
 				: new List<string> { "Reset password", user.ActiveActionText };
-			if (vm.CanDeleteAccounts && user.IsActive) actions.Add("Delete Account");
+			if (vm.CanDeleteAccounts && user.IsActive && !user.IsSuperAdmin) actions.Add("Delete Account");
 			var action = await ShowAccountMenuAsync(button, user.Username, actions);
 			_dismissMenu = null;
 			if (action == user.CoachActionText) await vm.ToggleRoleCommand.ExecuteAsync($"{user.UserId}|coach");

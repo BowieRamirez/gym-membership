@@ -26,6 +26,7 @@ public sealed partial class DemoGateway
         var profile = All<Profile>().FirstOrDefault(p => p.Id == userId) ?? throw Err("not_found");
         CheckAccountRemoval(profile);
         if (profile.DeletedAt is not null) throw Err("already_processed");
+        if (RolesOf(userId).Contains("admin")) throw Err("super_admin_protected");   // 0037, after the checks archive_account makes first
         if (All<TrainingSession>().Any(s => s.Status == Status.Scheduled && (s.MemberId == userId || s.CoachId == userId)) ||
             All<CoachHire>().Any(h => h.Status == Status.Active && (h.MemberId == userId || h.CoachId == userId)) ||
             All<Payment>().Any(p => p.Status == Status.Pending && p.MemberId == userId))

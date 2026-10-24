@@ -89,6 +89,21 @@ try {
     await refused(as(sub, `select decide_membership_refund(1,true,'ok')`));
     await as(sub, `select * from revenue_lines(current_date, current_date)`);
   });
+  // 0037: super admin accounts are fixed from the app; only the database owner (dashboard) can change them
+  const secondSuper = await user('admin');
+  await test('nobody can change a super admin\'s roles, deactivate or delete them from the app, not even another super admin', async () => {
+    const protectedErr = /super_admin_protected/;
+    await assert.rejects(as(superAdmin, `select assign_role($1,'coach')`, [secondSuper]), protectedErr);
+    await assert.rejects(as(superAdmin, `select revoke_role($1,'admin')`, [secondSuper]), protectedErr);
+    await assert.rejects(as(superAdmin, `select set_user_active($1,false)`, [secondSuper]), protectedErr);
+    await assert.rejects(as(superAdmin, `select archive_account($1,'gone')`, [secondSuper]), protectedErr);
+    assert.equal(await isActive(secondSuper), true);
+    assert.equal((await db.query(`select count(*)::int n from user_roles where user_id=$1`, [secondSuper])).rows[0].n, 1);
+  });
+  await test('the super admin adds a sub-admin directly', async () => {
+    const id = (await db.query(`insert into auth.users(email,raw_user_meta_data,raw_app_meta_data) values('p13-new-sub@test.io','{"full_name":"New Sub"}','{"role":"subadmin"}') returning id`)).rows[0].id;
+    assert.deepEqual((await db.query(`select name from user_roles join roles using(role_id) where user_id=$1`, [id])).rows.map(r => r.name), ['subadmin']);
+  });
 } finally {
   console.log(`\n${passed} passed, ${failed} failed`);
   await db.end(); await server.stop();

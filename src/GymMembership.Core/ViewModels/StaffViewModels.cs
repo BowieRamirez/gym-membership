@@ -888,7 +888,7 @@ public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? a
         if (archive is not null)
             await RunAsync(archive.CanManageAsync, allowed => CanDeleteAccounts = allowed);
         await RunAsync(svc.IsSuperAdminAsync, yes => IsSuperAdmin = yes);
-        Roles = IsSuperAdmin ? ["Member", "Coach", "Employee"] : ["Member", "Coach"];
+        Roles = IsSuperAdmin ? ["Member", "Coach", "Employee", "Sub-admin"] : ["Member", "Coach"];
         if (!Roles.Contains(NewRole)) NewRole = "Member";
         await RunAsync(svc.UsersAsync, rows => { Fill(Users, rows.Where(r => r.IsActive)); Fill(Deactivated, rows.Where(r => !r.IsActive)); });
     }
@@ -898,7 +898,8 @@ public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? a
     {
         Notice = null;
         if (!await Confirm.AskAsync($"Add {NameParts.Join(NewFirstName, NewLastName)}?", $"{NewEmail.Trim()}\nRole: {NewRole}\nThey sign in with the temporary password, then pick their own.", "Add user")) return;
-        if (!await RunAsync(() => svc.CreateUserAsync(NewFirstName, NewLastName, NewEmail, NewRole.ToLowerInvariant(), NewPassword))) return;
+        var role = NewRole == "Sub-admin" ? "subadmin" : NewRole.ToLowerInvariant();
+        if (!await RunAsync(() => svc.CreateUserAsync(NewFirstName, NewLastName, NewEmail, role, NewPassword))) return;
         Notice = $"{NameParts.Join(NewFirstName, NewLastName)} can sign in now with that email and password.";
         NewFirstName = NewLastName = NewEmail = NewPassword = "";
         await LoadAsync();

@@ -87,6 +87,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
     bool IsCoach(string? userId) => All<Coach>().Any(c => c.UserId == userId);
     CoachVisit? OpenVisit(string coachId) => All<CoachVisit>().FirstOrDefault(v => v.CoachId == coachId && v.CheckedOutAt is null);
 
+    /// <summary>The demo's stand-in for the database owner (Supabase dashboard) switching an account on or off, which 0037 still allows
+    /// for a super admin when nobody in the app can.</summary>
+    public void OwnerSetActive(string userId, bool active) => All<Profile>().First(p => p.Id == userId).IsActive = active;
+
     /// <summary>The demo's stand-in for the server sending someone an alert (a client cannot insert one itself, here or on the real table).</summary>
     public void Notify(string? userId, string type, string title, string? body = null)
     { if (userId is not null) Add(new UserNotification { UserId = userId, Type = type, Title = title, Body = body, CreatedAt = DateTime.UtcNow }); }
@@ -196,9 +200,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 case "create-user":
                 {
                     var email = S("email").Trim().ToLowerInvariant(); var role = S("role");
-                    if (role is not ("member" or "coach" or "employee") || string.IsNullOrWhiteSpace(S("name")) || !email.Contains('@') || S("password").Length < 6) throw Err("bad_input");
+                    if (role is not ("member" or "coach" or "employee" or "subadmin") || string.IsNullOrWhiteSpace(S("name")) || !email.Contains('@') || S("password").Length < 6) throw Err("bad_input");
                     if (_accounts.ContainsKey(email)) throw Err("email_taken");
-                    if (!super && role == "employee") throw Err("forbidden");
+                    if (!super && role is not ("member" or "coach")) throw Err("forbidden");
                     var (first, last) = S("first_name") is { Length: > 0 } f && S("last_name") is { Length: > 0 } l ? (f.Trim(), l.Trim()) : NameParts.Split(S("name"));
                     var id = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], NameParts.Join(first, last), email, role, first, last);
                     _passwords[id] = S("password");
@@ -972,6 +976,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             case "assign_role":
             {
                 Require("roles:manage");
+                if (RolesOf(S("p_user")).Contains("admin")) throw Err("super_admin_protected");   // 0037
                 var role = All<Role>().FirstOrDefault(r => r.Name == S("p_role")) ?? throw Err("bad_input");
                 if (All<Profile>().All(p => p.Id != S("p_user"))) throw Err("not_found");
                 if (!All<Profile>().Any(p => p.Id == S("p_user") && p.IsActive)) throw Err("record_archived");
@@ -984,6 +989,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             case "revoke_role":
             {
                 Require("roles:manage");
+                if (RolesOf(S("p_user")).Contains("admin")) throw Err("super_admin_protected");   // 0037
                 if (S("p_user") == uid && S("p_role") == "admin") throw Err("forbidden");
                 if (!All<Profile>().Any(p => p.Id == S("p_user") && p.IsActive)) throw Err("record_archived");
                 var role = All<Role>().First(r => r.Name == S("p_role"));
@@ -1003,6 +1009,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (S("p_user") == uid || !CanManagePerson(S("p_user"))) throw Err("forbidden");
                 var profile = All<Profile>().FirstOrDefault(p => p.Id == S("p_user")) ?? throw Err("not_found");
                 if (profile.DeletedAt is not null) throw Err("account_archived");
+                if (!B("p_active") && RolesOf(profile.Id).Contains("admin")) throw Err("super_admin_protected");   // 0037
                 if (!B("p_active")) CheckAccountRemoval(profile);
                 if (!B("p_active")) StampArchive("account", profile.Id, "Deactivated account");
                 else _archiveMetadata.Remove(("account", profile.Id));   // deleted accounts were turned away above; only a restore brings those back
