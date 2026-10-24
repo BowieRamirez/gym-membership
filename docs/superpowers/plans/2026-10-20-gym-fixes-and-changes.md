@@ -2,7 +2,7 @@
 
 Created: 2026-10-20
 Last updated: 2026-10-24
-Status: Phases 1–10 built (2–10 DB live; device/owner acceptance pending). Phase 11 DEPLOYED (DB + create-user) 2026-10-24 — Supabase email templates and device check pending.
+Status: Phases 1–10 built (2–10 DB live; device/owner acceptance pending). Phase 11 DEPLOYED 2026-10-24 — email confirm and password reset by code verified live on Windows; Android check pending.
 Branch inspected: `main`
 
 ## How to use this plan
@@ -96,7 +96,7 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 | 8 | Physical coach presence and discovery | 12 | 5; D9 | DEPLOYED (DB) 2026-10-23 — 0032 live; device check/acceptance pending |
 | 9 | Coach dashboard, shifts and profile polish | 13, 14 | 5–8; D10 | DEPLOYED (DB) 2026-10-23 — 0033 live; device check/acceptance pending |
 | 10 | Permanent member QR and scan logging | 15 | 1; D12 | DEPLOYED (DB) 2026-10-23 — 0034 live; device camera check pending |
-| 11 | First/last name registration, email confirmation by OTP, forgotten password | New 2026-10-23 | 1; D13 | DEPLOYED (DB + create-user) 2026-10-24 — 0035 live; email templates and device check pending |
+| 11 | First/last name registration, email confirmation by OTP, forgotten password | New 2026-10-23 | 1; D13 | DEPLOYED 2026-10-24 — 0035 live; confirm-email and reset codes verified live on Windows; Android check pending |
 | 12 | Integrated regression, deployment and handoff | All | 1–11 | PLANNED |
 
 Dependency order matters more than numbering. After Phase 0, independent work can be scheduled separately, but keep one phase's changes and evidence identifiable. The coach rate correction can be pulled forward as a small independent slice if desired; record that move here.
@@ -390,26 +390,25 @@ Status: DEPLOYED (DB + create-user) 2026-10-24. Commit ca24a10 on `phase1-archiv
 
 - [x] Migration `0035_names_and_email.sql`: `first_name`/`last_name` on profiles, `full_name` always built from them by trigger `profiles_name_parts` (a writer that sets only `full_name` is split at the first space, so older app builds keep working); backfill of existing names; `set_my_name`; `confirm_my_email` (accepts only a session opened by an emailed code in the last 15 minutes, read from the token's `amr`); the username follows a changed sign-in email so the old address can sign up again.
 - [x] `create-user` Edge Function accepts `first_name`/`last_name` (still accepts `name` from an older app). Admin "Add user" form has First name and Last name.
-- [x] Email confirm flow: same address → Supabase sign-in code (never creates an account); new address → becomes the sign-in email first (this project applies email changes at once because email confirmation is off), then gets a sign-in code. If a project confirms email changes, the code Supabase sends with the change mail is accepted instead. Wrong/used/expired code, "wait before resending" and "email already used" have clear messages.
+- [x] Email confirm flow: same address → Supabase sign-in code (never creates an account); new address → Supabase emails a change code to the new address and the change applies when the code is entered (verified live 2026-10-24: even with "Confirm email" off, this project confirms email changes). A project that applies changes at once gets a sign-in code to the new address instead; both paths are handled. Wrong/used/expired code, "wait before resending" and "email already used" have clear messages.
 - [x] Forgot password: Supabase recovery code, then the new password; the app then signs out and asks the person to sign in with it. The reset also clears a temporary-password prompt and confirms the email. Same neutral message whether or not the email has an account.
 - [x] D13(f): admin temporary password (`reset-password`) unchanged.
 - [x] 0035 pushed live and create-user redeployed (2026-10-24).
-- [ ] OWNER: Supabase dashboard → Authentication → Emails → Templates. Put the code in two templates (the link may stay or go):
-  - **Magic Link** (subject "Your gym confirmation code"): `<p>Your code is <strong>{{ .Token }}</strong>. It expires in 1 hour.</p>`
-  - **Reset Password** (subject "Your password reset code"): `<p>Your password reset code is <strong>{{ .Token }}</strong>. It expires in 1 hour. If you didn't ask for this, ignore this email.</p>`
+- [x] Supabase email templates show `{{ .Token }}` instead of a link (owner, 2026-10-24): **Magic link or OTP**, **Reset password** and **Change email address**.
+- [x] Live auth settings fixed while testing (owner, 2026-10-24): SMTP port 578 → 587 (the typo made sends hang until "upstream request timeout"); a new Brevo SMTP key (the first one was refused: "Error sending email change email"); Brevo IP blocking for SMTP keys deactivated (Supabase sends from changing addresses); Email OTP length 8 → 6; Secure email change off (it would also need a code from the old address, which members with made-up addresses can't receive). "Confirm email" (sign-up) is off, so new members are not blocked (D13(c)).
 - [ ] OWNER: before rollout, send from a gym-owned domain with DKIM/DMARC in Brevo (a Gmail sender may land in spam).
 
 Rulings (2026-10-24):
-- "Confirmed" is our own record (`profiles.confirmed_email`), because with email confirmation off Supabase marks every address confirmed at sign-up. It is set only from a session opened by an emailed code (`amr` method otp/magiclink/recovery/invite/email/signup/email_change within 15 minutes). Cost if wrong: if Supabase reports a different `amr` method name for a code sign-in, Confirm email says the code is wrong — check on the live project.
-- A changed email takes effect immediately and is then confirmed by code (Supabase applies email changes at once while email confirmation is off). Cost if wrong: a member who mistypes a new address must change it back in Settings (they stay signed in).
+- "Confirmed" is our own record (`profiles.confirmed_email`), because with email confirmation off Supabase marks every address confirmed at sign-up. It is set only from a session opened by an emailed code (`amr` method otp/magiclink/recovery/invite/email/signup/email_change within 15 minutes). Verified on the live project 2026-10-24 (email change and recovery sessions both accepted).
+- A changed email takes effect only after the code from the new inbox is entered (Supabase's behaviour on this project, confirmed live), so a mistyped address never replaces the sign-in email.
 - Names: each part needs at least 2 letters and the two together at most 60 characters (the existing full-name rule). Old one-word names keep an empty last name until the person edits it.
 - An archived account that resets its password gets "This record is archived" after the password changes; it still cannot sign in to the app.
 
 Acceptance / verification:
 - [ ] A new member registers with first and last name and the full name shows everywhere it did before.
-- [ ] A member confirms a real email by code from Settings on Windows and Android; a wrong or expired code is refused clearly.
-- [ ] A member who forgot their password resets it from the login page and signs in with the new one; an unknown email gets the same neutral message.
-- [ ] Real emails arrive through the configured SMTP (owner check on the live project).
+- [ ] A member confirms a real email by code from Settings on Windows and Android; a wrong or expired code is refused clearly. (Windows: confirmed live by the owner 2026-10-24 with the test account; Android pending.)
+- [x] A member who forgot their password resets it from the login page and signs in with the new one; an unknown email gets the same neutral message. (Owner, Windows, live, 2026-10-24.)
+- [x] Real emails arrive through the configured SMTP (owner check on the live project, 2026-10-24, Brevo).
 
 ## Phase 12 — Integrated regression and staged rollout
 
