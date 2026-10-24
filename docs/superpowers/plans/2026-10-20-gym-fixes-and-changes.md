@@ -98,7 +98,7 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 | 9 | Coach dashboard, shifts and profile polish | 13, 14 | 5–8; D10 | DEPLOYED (DB) 2026-10-23 — 0033 live; device check/acceptance pending |
 | 10 | Permanent member QR and scan logging | 15 | 1; D12 | DEPLOYED (DB) 2026-10-23 — 0034 live; device camera check pending |
 | 11 | First/last name registration, email confirmation by OTP, forgotten password | New 2026-10-23 | 1; D13 | VERIFIED 2026-10-24 — 0035 live; owner checked on Windows and Android |
-| 12 | "Are you sure?" confirmations and show/hide password | New 2026-10-24 | D14 | IMPLEMENTED locally 2026-10-24 — no migration; owner device check pending |
+| 12 | "Are you sure?" confirmations and show/hide password | New 2026-10-24 | D14 | VERIFIED 2026-10-24 — commit b8cc27f; owner checked on Android, Windows demo smoke; no migration |
 | 13 | Integrated regression, deployment and handoff | All | 1–12 | PLANNED |
 
 Dependency order matters more than numbering. After Phase 0, independent work can be scheduled separately, but keep one phase's changes and evidence identifiable. The coach rate correction can be pulled forward as a small independent slice if desired; record that move here.
@@ -454,7 +454,7 @@ Admins
 
 Proposed to stay one tap (frequent, easy to undo, or already confirmed): member check-in at the desk (a scan already shows status first), marking attendance (can be changed on the same screen), amenity status changes, sending chat messages, theme, mark alerts read, filters and refresh, posting a shift (it can be cancelled), and the actions that already ask (cancel payment, refund decisions, archive, delete account, reject, void, reset password, restore).
 
-Status: IMPLEMENTED locally 2026-10-24 (uncommitted), no database change. Evidence: xUnit 701/701 (`ConfirmationTests` 48: behaviour for sign out, buy membership, amenity pass, approve payment, deactivate account, package on sale, plus a check that all 39 approved actions ask first; `PasswordEyeTests` 2), Android and Windows build, Windows demo smoke (eye shows the typed password; "Buy Monthly?" popup, Go back changes nothing; "Sign out?" popup, side-menu button disabled while it is open).
+Status: VERIFIED 2026-10-24. Commit b8cc27f on `phase1-archive-checkpoint-2026-10-20` (pushed); owner checked it on Android; no database change. Evidence: xUnit 701/701 (`ConfirmationTests` 48: behaviour for sign out, buy membership, amenity pass, approve payment, deactivate account, package on sale, plus a check that all 39 approved actions ask first; `PasswordEyeTests` 2), Android and Windows build, Windows demo smoke (eye shows the typed password; "Buy Monthly?" popup, Go back changes nothing; "Sign out?" popup, side-menu button disabled while it is open).
 
 Rulings (2026-10-24):
 - `Confirm` is one static helper (`Core/Services/Foundation.cs`) instead of a constructor parameter on 20 view models; the app sets `Confirm.Popup` to the native dialog in `App.xaml.cs`, and tests answer through an `AsyncLocal`, so one test's answer never reaches another. If the app has no page to show the popup on, the answer is no.
@@ -467,7 +467,7 @@ Tasks
 - [x] One small confirm service in Core (`IConfirm.AskAsync(title, message, action)`) so view models ask and tests can answer yes/no; the MAUI app backs it with the native popup. Demo mode uses the same popup.
 - [x] Add the confirmation to each approved action, with the specific details in the message.
 - [x] Tests: for each action, "Go back" leaves everything unchanged and "yes" does the action once; a double tap cannot run it twice.
-- [ ] Windows and Android check of the popup text and buttons (light and dark, phone width).
+- [x] Windows and Android check of the popup text and buttons (light and dark, phone width).
 
 Show/hide password (owner request 2026-10-24; a new feature, not a confirmation): every password box gets a small eye button inside the field, on the right. Tapping it shows the typed password straight away, with no popup; tapping again hides it. It starts hidden every time the page opens, and each box has its own eye.
 - [x] One reusable password field (the existing `Field` border + Entry + eye icon drawn as a vector outline like the other icons in `Controls/Icons.cs`, eye and eye-off), with a screen-reader name "Show password" / "Hide password".
@@ -475,9 +475,9 @@ Show/hide password (owner request 2026-10-24; a new feature, not a confirmation)
 - [x] Tests: the icons pass `IconTests`; the XAML binding test still passes; the eye flips the box between hidden and shown.
 
 Acceptance / verification:
-- [ ] Every action on the approved list asks first, says what will happen, and does nothing on "Go back".
-- [ ] Nothing on the "stay one tap" list gained a prompt.
-- [ ] Every password box has a working eye button on Windows and Android, and passwords start hidden.
+- [x] Every action on the approved list asks first, says what will happen, and does nothing on "Go back".
+- [x] Nothing on the "stay one tap" list gained a prompt.
+- [x] Every password box has a working eye button on Windows and Android, and passwords start hidden. (Owner on Android 2026-10-24; Windows demo smoke.)
 
 ## Phase 13 — Integrated regression and staged rollout
 
@@ -534,7 +534,7 @@ Fill cells with date, command/test, result and evidence location. `—` means no
 | 9 Coach UX/profile | — | — | — | — | — | — | — |
 | 10 Permanent QR | — | — | — | — | — | — | — |
 | 11 Names/email/password | 2026-10-24 | 651/651 | 293/293 (names-email.mjs) | demo smoke passed | owner checked live 2026-10-24 | 0035 live, create-user deployed 2026-10-24 | ponytail review done; owner accepted 2026-10-24 |
-| 12 Confirmations | 2026-10-24 | 701/701 | N/A — no database change | demo smoke passed | builds; device check pending | none needed | ponytail review done; owner pending |
+| 12 Confirmations | 2026-10-24 | 701/701 | N/A — no database change | demo smoke passed | owner checked 2026-10-24 | none needed | ponytail review done; owner accepted 2026-10-24 |
 | 13 Integration/rollout | — | — | — | — | — | — | — |
 
 ## 5. Session log — append whenever work pauses
