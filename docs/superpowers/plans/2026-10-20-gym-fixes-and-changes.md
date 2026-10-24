@@ -2,7 +2,7 @@
 
 Created: 2026-10-20
 Last updated: 2026-10-24
-Status: Phases 1–10 built (2–10 DB live; device/owner acceptance pending). Phase 11 DEPLOYED 2026-10-24 — email confirm and password reset by code verified live on Windows; Android check pending.
+Status: Phases 1–10 built (2–10 DB live; device/owner acceptance pending). Phase 11 VERIFIED 2026-10-24 — email confirm and password reset by code checked live on Windows and Android by the owner.
 Branch inspected: `main`
 
 ## How to use this plan
@@ -96,7 +96,7 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 | 8 | Physical coach presence and discovery | 12 | 5; D9 | DEPLOYED (DB) 2026-10-23 — 0032 live; device check/acceptance pending |
 | 9 | Coach dashboard, shifts and profile polish | 13, 14 | 5–8; D10 | DEPLOYED (DB) 2026-10-23 — 0033 live; device check/acceptance pending |
 | 10 | Permanent member QR and scan logging | 15 | 1; D12 | DEPLOYED (DB) 2026-10-23 — 0034 live; device camera check pending |
-| 11 | First/last name registration, email confirmation by OTP, forgotten password | New 2026-10-23 | 1; D13 | DEPLOYED 2026-10-24 — 0035 live; confirm-email and reset codes verified live on Windows; Android check pending |
+| 11 | First/last name registration, email confirmation by OTP, forgotten password | New 2026-10-23 | 1; D13 | VERIFIED 2026-10-24 — 0035 live; owner checked on Windows and Android |
 | 12 | Integrated regression, deployment and handoff | All | 1–11 | PLANNED |
 
 Dependency order matters more than numbering. After Phase 0, independent work can be scheduled separately, but keep one phase's changes and evidence identifiable. The coach rate correction can be pulled forward as a small independent slice if desired; record that move here.
@@ -406,7 +406,7 @@ Rulings (2026-10-24):
 
 Acceptance / verification:
 - [ ] A new member registers with first and last name and the full name shows everywhere it did before.
-- [ ] A member confirms a real email by code from Settings on Windows and Android; a wrong or expired code is refused clearly. (Windows: confirmed live by the owner 2026-10-24 with the test account; Android pending.)
+- [x] A member confirms a real email by code from Settings on Windows and Android; a wrong or expired code is refused clearly. (Owner, live, Windows and Android, 2026-10-24.)
 - [x] A member who forgot their password resets it from the login page and signs in with the new one; an unknown email gets the same neutral message. (Owner, Windows, live, 2026-10-24.)
 - [x] Real emails arrive through the configured SMTP (owner check on the live project, 2026-10-24, Brevo).
 
@@ -464,7 +464,7 @@ Fill cells with date, command/test, result and evidence location. `—` means no
 | 8 Coach presence | — | — | — | — | — | — | — |
 | 9 Coach UX/profile | — | — | — | — | — | — | — |
 | 10 Permanent QR | — | — | — | — | — | — | — |
-| 11 Names/email/password | 2026-10-24 | 651/651 | 293/293 (names-email.mjs) | demo smoke passed | builds; device check pending | 0035 live, create-user deployed 2026-10-24 | ponytail review done; owner pending |
+| 11 Names/email/password | 2026-10-24 | 651/651 | 293/293 (names-email.mjs) | demo smoke passed | owner checked live 2026-10-24 | 0035 live, create-user deployed 2026-10-24 | ponytail review done; owner accepted 2026-10-24 |
 | 12 Integration/rollout | — | — | — | — | — | — | — |
 
 ## 5. Session log — append whenever work pauses
