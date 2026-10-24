@@ -2,7 +2,7 @@
 
 Created: 2026-10-20
 Last updated: 2026-10-24
-Status: Phases 1–10 built (2–10 DB live; device/owner acceptance pending). Phase 11 IMPLEMENTED locally 2026-10-24 — 0035 not yet live, create-user not yet redeployed, Supabase email templates not yet changed.
+Status: Phases 1–10 built (2–10 DB live; device/owner acceptance pending). Phase 11 DEPLOYED (DB + create-user) 2026-10-24 — Supabase email templates and device check pending.
 Branch inspected: `main`
 
 ## How to use this plan
@@ -96,7 +96,7 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 | 8 | Physical coach presence and discovery | 12 | 5; D9 | DEPLOYED (DB) 2026-10-23 — 0032 live; device check/acceptance pending |
 | 9 | Coach dashboard, shifts and profile polish | 13, 14 | 5–8; D10 | DEPLOYED (DB) 2026-10-23 — 0033 live; device check/acceptance pending |
 | 10 | Permanent member QR and scan logging | 15 | 1; D12 | DEPLOYED (DB) 2026-10-23 — 0034 live; device camera check pending |
-| 11 | First/last name registration, email confirmation by OTP, forgotten password | New 2026-10-23 | 1; D13 | IMPLEMENTED locally 2026-10-24 — 0035 push, create-user deploy, email templates and device check pending |
+| 11 | First/last name registration, email confirmation by OTP, forgotten password | New 2026-10-23 | 1; D13 | DEPLOYED (DB + create-user) 2026-10-24 — 0035 live; email templates and device check pending |
 | 12 | Integrated regression, deployment and handoff | All | 1–11 | PLANNED |
 
 Dependency order matters more than numbering. After Phase 0, independent work can be scheduled separately, but keep one phase's changes and evidence identifiable. The coach rate correction can be pulled forward as a small independent slice if desired; record that move here.
@@ -386,14 +386,14 @@ Requested by the owner 2026-10-23. Starting points: `RegisterPage.xaml`/`Registe
 - [x] Demo mode mirrors names, the code flow (a fixed demo code shown on screen) and forgotten password, so the UI can be checked without sending real email.
 - [x] Tests: name split/compose and validation, the code flows (right, wrong, expired, reused), "no account" privacy, server-side blocks from D13(c), and that names still show correctly on receipts, PDFs, chat, coach lists and the admin pages.
 
-Status: IMPLEMENTED locally 2026-10-24 (uncommitted). Evidence: database checks 293/293 (`names-email.mjs` adds 11), xUnit 651/651 (28 new in `NamesAndEmailTests.cs` and `SupabaseGatewayTests.cs`), Android and Windows build, Windows demo smoke (forgot password with the demo code, sign in with the new password, Settings shows the name fields and "Confirmed"). Owner/ops steps below are pending.
+Status: DEPLOYED (DB + create-user) 2026-10-24. Commit ca24a10 on `phase1-archive-checkpoint-2026-10-20` (pushed). Migration `0035_names_and_email.sql` applied live at the owner's request (dry run showed only 0035; remote history shows 0035). `create-user` Edge Function redeployed the same day. Evidence: database checks 293/293 (`names-email.mjs` adds 11), xUnit 651/651 (28 new in `NamesAndEmailTests.cs` and `SupabaseGatewayTests.cs`), Android and Windows build, Windows demo smoke (forgot password with the demo code, sign in with the new password, Settings shows the name fields and "Confirmed"). Owner/ops steps below are pending.
 
 - [x] Migration `0035_names_and_email.sql`: `first_name`/`last_name` on profiles, `full_name` always built from them by trigger `profiles_name_parts` (a writer that sets only `full_name` is split at the first space, so older app builds keep working); backfill of existing names; `set_my_name`; `confirm_my_email` (accepts only a session opened by an emailed code in the last 15 minutes, read from the token's `amr`); the username follows a changed sign-in email so the old address can sign up again.
 - [x] `create-user` Edge Function accepts `first_name`/`last_name` (still accepts `name` from an older app). Admin "Add user" form has First name and Last name.
 - [x] Email confirm flow: same address → Supabase sign-in code (never creates an account); new address → becomes the sign-in email first (this project applies email changes at once because email confirmation is off), then gets a sign-in code. If a project confirms email changes, the code Supabase sends with the change mail is accepted instead. Wrong/used/expired code, "wait before resending" and "email already used" have clear messages.
 - [x] Forgot password: Supabase recovery code, then the new password; the app then signs out and asks the person to sign in with it. The reset also clears a temporary-password prompt and confirms the email. Same neutral message whether or not the email has an account.
 - [x] D13(f): admin temporary password (`reset-password`) unchanged.
-- [ ] OWNER: push 0035 (`npx supabase db push`) and redeploy create-user (`npx supabase functions deploy create-user`) before using a build with this change. A new build against the old database fails sign-up only through the `first_name` metadata being ignored (names still split correctly) and Settings name/email calls report "needs a server update".
+- [x] 0035 pushed live and create-user redeployed (2026-10-24).
 - [ ] OWNER: Supabase dashboard → Authentication → Emails → Templates. Put the code in two templates (the link may stay or go):
   - **Magic Link** (subject "Your gym confirmation code"): `<p>Your code is <strong>{{ .Token }}</strong>. It expires in 1 hour.</p>`
   - **Reset Password** (subject "Your password reset code"): `<p>Your password reset code is <strong>{{ .Token }}</strong>. It expires in 1 hour. If you didn't ask for this, ignore this email.</p>`
@@ -465,7 +465,7 @@ Fill cells with date, command/test, result and evidence location. `—` means no
 | 8 Coach presence | — | — | — | — | — | — | — |
 | 9 Coach UX/profile | — | — | — | — | — | — | — |
 | 10 Permanent QR | — | — | — | — | — | — | — |
-| 11 Names/email/password | 2026-10-24 | 651/651 | 293/293 (names-email.mjs) | demo smoke passed | builds; device check pending | 0035 + create-user pending | ponytail review done; owner pending |
+| 11 Names/email/password | 2026-10-24 | 651/651 | 293/293 (names-email.mjs) | demo smoke passed | builds; device check pending | 0035 live, create-user deployed 2026-10-24 | ponytail review done; owner pending |
 | 12 Integration/rollout | — | — | — | — | — | — | — |
 
 ## 5. Session log — append whenever work pauses
