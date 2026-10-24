@@ -23,7 +23,15 @@ public interface IAuthService
     /// <summary>True while the person still has the temporary password the owner gave them.</summary>
     Task<AppResult<bool>> MustChangePasswordAsync();
     /// <summary>Open sign-up: creates a member account and signs it in. It stays a guest until a payment is verified.</summary>
-    Task<AppResult<bool>> RegisterAsync(string name, string email, string password);
+    Task<AppResult<bool>> RegisterAsync(string firstName, string lastName, string email, string password);
+    Task<AppResult<EmailStatus>> EmailStatusAsync();
+    /// <summary>Emails a 6-digit code to this address. A different address first becomes your sign-in email.</summary>
+    Task<AppResult<bool>> SendEmailCodeAsync(string email);
+    Task<AppResult<bool>> ConfirmEmailAsync(string email, string code);
+    /// <summary>Forgotten password: emails a code if an account uses this address. The answer is the same either way.</summary>
+    Task<AppResult<bool>> SendResetCodeAsync(string email);
+    /// <summary>Checks the code, sets the new password, then signs out so the person signs in with it.</summary>
+    Task<AppResult<bool>> ResetPasswordAsync(string email, string code, string newPassword);
 }
 
 /// <summary>What a new account may use. The entry caps on the register page read the same numbers.</summary>
@@ -37,6 +45,12 @@ public static partial class AccountRules
 
     public static bool IsName(string name) => name.Length is >= MinName and <= MaxName && NameShape().IsMatch(name);
 
+    /// <summary>Both parts are names, and "first last" fits the 60 characters the database allows for the full name.</summary>
+    public static bool IsName(string first, string last) => IsName(first) && IsName(last) && NameParts.Join(first, last).Length <= MaxName;
+
+    /// <summary>A code from the email: exactly six digits.</summary>
+    public static bool IsCode(string code) => code.Length == 6 && code.All(char.IsAsciiDigit);
+
     public static bool IsEmail(string email) =>
         email.Length <= MaxEmail && EmailShape().IsMatch(email) && email.IndexOf('@') <= MaxEmailLocal;
 
@@ -48,17 +62,85 @@ public static partial class AccountRules
         CharUnicodeInfo.GetUnicodeCategory(c) is UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark).ToArray());
 }
 
+/// <summary>First and last name, as the database keeps them (0035): the full name is "first last"; an old name splits at its first space.</summary>
+public static class NameParts
+{
+    public static string Join(string first, string last) => $"{first.Trim()} {last.Trim()}".Trim();
+
+    public static (string First, string Last) Split(string full)
+    {
+        var name = full.Trim();
+        var space = name.IndexOf(' ');
+        return space < 0 ? (name, "") : (name[..space], name[(space + 1)..].Trim());
+    }
+}
+
+/// <summary>Your sign-in email, and whether you proved it with a code since it last changed.</summary>
+public sealed record EmailStatus(string Email, bool Confirmed);
+
 public sealed class AuthService(ISupabaseGateway gw) : IAuthService
 {
     public string? UserId => gw.CurrentUserId;
 
-    public async Task<AppResult<bool>> RegisterAsync(string name, string email, string password)
+    public async Task<AppResult<bool>> RegisterAsync(string firstName, string lastName, string email, string password)
     {
-        name = name.Trim(); email = email.Trim();
-        if (!AccountRules.IsName(name)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_name");
+        firstName = firstName.Trim(); lastName = lastName.Trim(); email = email.Trim();
+        if (!AccountRules.IsName(firstName, lastName)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_name");
         if (!AccountRules.IsEmail(email)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_email");
         if (!AccountRules.IsPassword(password)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_password");
-        return await Safe.RunAsync(async () => { await gw.SignUpAsync(email, password, name); return true; });
+        return await Safe.RunAsync(async () => { await gw.SignUpAsync(email, password, firstName, lastName); return true; });
+    }
+
+    public Task<AppResult<EmailStatus>> EmailStatusAsync() => Safe.RunAsync(async () =>
+    {
+        var uid = gw.CurrentUserId;
+        var email = gw.CurrentEmail ?? throw new Exception("not authenticated");
+        var confirmed = (await gw.ListAsync<Profile>(p => p.Id == uid)).FirstOrDefault()?.ConfirmedEmail;
+        return new EmailStatus(email, string.Equals(confirmed, email, StringComparison.OrdinalIgnoreCase));
+    });
+
+    public async Task<AppResult<bool>> SendEmailCodeAsync(string email)
+    {
+        email = email.Trim();
+        if (!AccountRules.IsEmail(email)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_email");
+        return await Safe.RunAsync(async () => { await gw.SendEmailCodeAsync(email); return true; });
+    }
+
+    public async Task<AppResult<bool>> ConfirmEmailAsync(string email, string code)
+    {
+        code = code.Trim();
+        if (!AccountRules.IsCode(code)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_code");
+        return await Safe.RunAsync(async () =>
+        {
+            await gw.VerifyEmailCodeAsync(email.Trim(), code);
+            await gw.RpcAsync("confirm_my_email");
+            return true;
+        });
+    }
+
+    public async Task<AppResult<bool>> SendResetCodeAsync(string email)
+    {
+        email = email.Trim();
+        if (!AccountRules.IsEmail(email)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_email");
+        return await Safe.RunAsync(async () => { await gw.SendPasswordResetCodeAsync(email); return true; });
+    }
+
+    public async Task<AppResult<bool>> ResetPasswordAsync(string email, string code, string newPassword)
+    {
+        code = code.Trim();
+        if (!AccountRules.IsCode(code)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_code");
+        if (!AccountRules.IsPassword(newPassword)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_password");
+        return await Safe.RunAsync(async () =>
+        {
+            try
+            {
+                await gw.ResetPasswordWithCodeAsync(email.Trim(), code, newPassword);
+                await gw.RpcAsync("mark_password_changed");   // they chose this one, so no temporary-password prompt
+                await gw.RpcAsync("confirm_my_email");        // the code came to this inbox, which proves it
+            }
+            finally { if (gw.CurrentUserId is not null) await gw.SignOutAsync(); }
+            return true;
+        });
     }
 
     public async Task<AppResult<bool>> ChangePasswordAsync(string current, string next)
@@ -1080,7 +1162,7 @@ public interface IAdminService
     Task<AppResult<bool>> AssignRoleAsync(string userId, string role);
     Task<AppResult<bool>> RevokeRoleAsync(string userId, string role);
     Task<AppResult<bool>> SetActiveAsync(string userId, bool active);
-    Task<AppResult<bool>> CreateUserAsync(string name, string email, string role, string password);
+    Task<AppResult<bool>> CreateUserAsync(string firstName, string lastName, string email, string role, string password);
     Task<AppResult<bool>> ResetPasswordAsync(string userId, string password);
     Task<AppResult<bool>> DeletePackageAsync(MembershipPackage package);
     Task<AppResult<IReadOnlyList<DiscountRow>>> DiscountsAsync();
@@ -1116,14 +1198,20 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
     public Task<AppResult<bool>> SetActiveAsync(string userId, bool active) => Rpc("set_user_active", new() { ["p_user"] = userId, ["p_active"] = active });
 
     // accounts are made by an Edge Function: it holds the service-role key, which the app never has
-    public async Task<AppResult<bool>> CreateUserAsync(string name, string email, string role, string password)
+    public async Task<AppResult<bool>> CreateUserAsync(string firstName, string lastName, string email, string role, string password)
     {
-        if (string.IsNullOrWhiteSpace(name) || !email.Contains('@') || password.Length < 6 || role is not ("member" or "coach" or "employee"))
+        firstName = firstName.Trim(); lastName = lastName.Trim();
+        if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName) || !email.Contains('@') || password.Length < 6 || role is not ("member" or "coach" or "employee"))
             return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
-        if (!AccountRules.IsName(name.Trim())) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_name");   // the database refuses it too (0012)
+        if (!AccountRules.IsName(firstName, lastName)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_name");   // the database refuses it too (0012, 0035)
         return await Safe.RunAsync(async () =>
         {
-            await gw.InvokeFunctionAsync("create-user", new() { ["name"] = name.Trim(), ["email"] = email.Trim(), ["role"] = role, ["password"] = password });
+            // name goes along for a create-user function deployed before first/last name existed
+            await gw.InvokeFunctionAsync("create-user", new()
+            {
+                ["first_name"] = firstName, ["last_name"] = lastName, ["name"] = NameParts.Join(firstName, lastName),
+                ["email"] = email.Trim(), ["role"] = role, ["password"] = password
+            });
             return true;
         });
     }

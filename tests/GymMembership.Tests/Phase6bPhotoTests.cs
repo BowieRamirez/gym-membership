@@ -215,7 +215,7 @@ public class Phase6bPhotoTests
         var uid = gw.CurrentUserId!;
         var id = (await gw.ListAsync<Amenity>()).First().Id;
         var admin = new AdminService(gw);
-        await gw.SignUpAsync("second-admin@demo.io", DemoGateway.DemoPassword, "Second Admin");
+        await gw.SignUpAsync("second-admin@demo.io", DemoGateway.DemoPassword, "Second", "Admin");
         var secondId = gw.CurrentUserId!;
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
         Assert.True((await admin.AssignRoleAsync(secondId, "admin")).Ok);

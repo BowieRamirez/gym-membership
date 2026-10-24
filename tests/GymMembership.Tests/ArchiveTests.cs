@@ -29,7 +29,7 @@ public class ArchiveTests
     public async Task All_four_types_share_the_archive_with_combined_filters()
     {
         var gw = await Admin(); var admin = new AdminService(gw); var service = new ArchiveService(gw);
-        await admin.CreateUserAsync("Archive Person", "archived@demo.io", "employee", "secret12");
+        await admin.CreateUserAsync("Archive", "Person", "archived@demo.io", "employee", "secret12");
         var person = (await gw.ListAsync<Profile>()).Single(p => p.FullName == "Archive Person");
         Assert.True((await new AccountArchiveService(gw).DeleteAsync(person.Id, "Duplicate account")).Ok);
         Assert.True((await admin.DeletePackageAsync((await gw.ListAsync<MembershipPackage>()).First())).Ok);

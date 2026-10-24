@@ -87,7 +87,7 @@ public class AccountDeletionViewModelTests
     {
         var gw = new DemoGateway(); await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
         var admin = new AdminService(gw);
-        await admin.CreateUserAsync("Archive Person", "archive@demo.io", "employee", "secret12");
+        await admin.CreateUserAsync("Archive", "Person", "archive@demo.io", "employee", "secret12");
         var id = (await gw.ListAsync<Profile>()).Single(p => p.FullName == "Archive Person").Id;
         Assert.True((await new AccountArchiveService(gw).DeleteAsync(id, "  Duplicate account  ")).Ok);
         var archived = (await gw.ListAsync<Profile>()).Single(p => p.Id == id);

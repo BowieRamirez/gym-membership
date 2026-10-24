@@ -31,9 +31,13 @@
                 <VerticalStackLayout Spacing="12">
                     <Label Text="Add a member, coach or employee" Style="{StaticResource Heading}" />
                     <FlexLayout Wrap="Wrap" AlignItems="End">
-                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="220">
-                            <Label Text="Full name" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}"><Entry Text="{Binding NewName}" SemanticProperties.Description="Full name" /></Border>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="180">
+                            <Label Text="First name" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding NewFirstName}" SemanticProperties.Description="First name" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="180">
+                            <Label Text="Last name" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding NewLastName}" SemanticProperties.Description="Last name" /></Border>
                         </VerticalStackLayout>
                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="240">
                             <Label Text="Email" Style="{StaticResource Caption}" />

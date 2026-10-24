@@ -16,6 +16,8 @@ namespace GymMembership.Core.Demo;
 public sealed partial class DemoGateway : ISupabaseGateway
 {
     public const string DemoPassword = "demo1234";
+    /// <summary>The demo sends no email, so every code it "sends" is this one, and the app shows it on screen.</summary>
+    public const string DemoCode = "123456";
 
     // plan 5.2
     static readonly Dictionary<string, string[]> RolePermissions = new()
@@ -31,6 +33,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
     readonly Dictionary<string, string> _accounts = new(StringComparer.OrdinalIgnoreCase);   // email -> user id
     readonly Dictionary<string, string> _passwords = new();                                  // only accounts whose password changed; the rest use DemoPassword
     int _receiptSeq;
+    readonly HashSet<string> _codesSent = new(StringComparer.OrdinalIgnoreCase);              // addresses holding an unused code
+    bool _codeSession;   // this sign-in was opened with an emailed code (Supabase's amr), which confirm_my_email needs
 
     public string? CurrentUserId { get; private set; }
     public Exception? FailWith { get; set; }
@@ -98,17 +102,65 @@ public sealed partial class DemoGateway : ISupabaseGateway
         if (!_accounts.TryGetValue(email.Trim(), out var uid) || password != _passwords.GetValueOrDefault(uid, DemoPassword))
             return Task.FromException(Err("Invalid login credentials"));
         CurrentUserId = uid;   // like Supabase Auth, a deactivated user still signs in: the app checks profiles.is_active afterwards
+        _codeSession = false;
         return Task.CompletedTask;
     }
 
-    public Task SignUpAsync(string email, string password, string fullName)
+    public Task SignUpAsync(string email, string password, string firstName, string lastName)
     {
         email = email.Trim();
-        if (string.IsNullOrWhiteSpace(fullName) || !email.Contains('@') || password.Length < 6) return Task.FromException(Err("bad_input"));
+        if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName) || !email.Contains('@') || password.Length < 6) return Task.FromException(Err("bad_input"));
         if (_accounts.ContainsKey(email)) return Task.FromException(Err("email_taken"));
-        var id = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], fullName.Trim(), email, "member");
+        var id = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], NameParts.Join(firstName, lastName), email, "member", firstName.Trim(), lastName.Trim());
         _passwords[id] = password;
         CurrentUserId = id;
+        _codeSession = false;
+        return Task.CompletedTask;
+    }
+
+    // ---------- email codes (Phase 11): the same steps as Supabase Auth, with DemoCode ----------
+    public string? CurrentEmail => CurrentUserId is null ? null : _accounts.FirstOrDefault(a => a.Value == CurrentUserId).Key;
+
+    public Task SendEmailCodeAsync(string email)
+    {
+        try
+        {
+            email = email.Trim().ToLowerInvariant();
+            var uid = Uid;
+            if (!string.Equals(email, CurrentEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                if (_accounts.ContainsKey(email)) throw Err("email_taken");
+                _accounts.Remove(CurrentEmail!);
+                _accounts[email] = uid;
+                All<Profile>().First(p => p.Id == uid).Username = email;   // 0035 keeps the username on the sign-in email
+            }
+            _codesSent.Add(email);
+            return Task.CompletedTask;
+        }
+        catch (Exception ex) { return Task.FromException(ex); }
+    }
+
+    public Task VerifyEmailCodeAsync(string email, string code)
+    {
+        if (code != DemoCode || !_codesSent.Remove(email.Trim()) || !string.Equals(email.Trim(), CurrentEmail, StringComparison.OrdinalIgnoreCase))
+            return Task.FromException(Err("bad_code"));
+        _codeSession = true;
+        return Task.CompletedTask;
+    }
+
+    public Task SendPasswordResetCodeAsync(string email)
+    {
+        if (_accounts.ContainsKey(email.Trim())) _codesSent.Add(email.Trim());   // an unknown address gets the same quiet answer
+        return Task.CompletedTask;
+    }
+
+    public Task ResetPasswordWithCodeAsync(string email, string code, string newPassword)
+    {
+        if (code != DemoCode || !_codesSent.Remove(email.Trim()) || !_accounts.TryGetValue(email.Trim(), out var uid))
+            return Task.FromException(Err("bad_code"));
+        CurrentUserId = uid;
+        _codeSession = true;
+        _passwords[uid] = newPassword;
         return Task.CompletedTask;
     }
 
@@ -121,7 +173,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         return Task.CompletedTask;
     }
 
-    public Task SignOutAsync() { CurrentUserId = null; return Task.CompletedTask; }
+    public Task SignOutAsync() { CurrentUserId = null; _codeSession = false; return Task.CompletedTask; }
     public Task<bool> RestoreSessionAsync() => Task.FromResult(false);
 
     // ---------- Edge Functions: create-user and reset-password (plan 4.3, 4.4) ----------
@@ -139,7 +191,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     var email = S("email").Trim().ToLowerInvariant(); var role = S("role");
                     if (role is not ("member" or "coach" or "employee") || string.IsNullOrWhiteSpace(S("name")) || !email.Contains('@') || S("password").Length < 6) throw Err("bad_input");
                     if (_accounts.ContainsKey(email)) throw Err("email_taken");
-                    var id = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], S("name").Trim(), email, role);
+                    var (first, last) = S("first_name") is { Length: > 0 } f && S("last_name") is { Length: > 0 } l ? (f.Trim(), l.Trim()) : NameParts.Split(S("name"));
+                    var id = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], NameParts.Join(first, last), email, role, first, last);
                     _passwords[id] = S("password");
                     All<Profile>().First(p => p.Id == id).MustChangePassword = true;
                     Audit("user.create", "profiles", id);
@@ -1178,6 +1231,19 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 return null;
             }
             case "touch_last_seen": RequireActive(); return null;   // the demo has no one to show it to
+            case "set_my_name":
+            {
+                RequireActive();
+                string first = (Opt("p_first") ?? "").Trim(), last = (Opt("p_last") ?? "").Trim();
+                if (!AccountRules.IsName(first, last)) throw Err("bad_name");
+                var p = All<Profile>().First(x => x.Id == uid);
+                (p.FirstName, p.LastName, p.FullName) = (first, last, NameParts.Join(first, last));
+                return null;
+            }
+            case "confirm_my_email":
+                if (!_codeSession) throw Err("code_not_verified");
+                All<Profile>().First(x => x.Id == uid).ConfirmedEmail = CurrentEmail;
+                return CurrentEmail;
             case "mark_password_changed":
             {
                 RequireActive();
@@ -1190,10 +1256,11 @@ public sealed partial class DemoGateway : ISupabaseGateway
     }
 
     // ---------- seed ----------
-    string AddUser(string id, string name, string email, string role)
+    string AddUser(string id, string name, string email, string role, string? first = null, string? last = null)
     {
         _accounts[email] = id;
-        Add(new Profile { Id = id, Username = email.ToLowerInvariant(), FullName = name });
+        var split = NameParts.Split(name);
+        Add(new Profile { Id = id, Username = email.ToLowerInvariant(), FullName = name, FirstName = first ?? split.First, LastName = last ?? split.Last });
         Add(new UserSettings { UserId = id });
         Add(new UserRole { UserId = id, RoleId = All<Role>().First(x => x.Name == role).RoleId });
         if (role == "member") Add(new Member { UserId = id });

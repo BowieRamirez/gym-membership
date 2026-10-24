@@ -824,7 +824,8 @@ public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? a
     public string[] Roles { get; } = ["Member", "Coach", "Employee"];
     [ObservableProperty] private UserRow? resetting;
     [ObservableProperty] private string resetPassword = "";
-    [ObservableProperty] private string newName = "";
+    [ObservableProperty] private string newFirstName = "";
+    [ObservableProperty] private string newLastName = "";
     [ObservableProperty] private string newEmail = "";
     [ObservableProperty] private string newPassword = "";
     [ObservableProperty] private string newRole = "Member";
@@ -849,9 +850,9 @@ public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? a
     private async Task AddUserAsync()
     {
         Notice = null;
-        if (!await RunAsync(() => svc.CreateUserAsync(NewName, NewEmail, NewRole.ToLowerInvariant(), NewPassword))) return;
-        Notice = $"{NewName.Trim()} can sign in now with that email and password.";
-        NewName = NewEmail = NewPassword = "";
+        if (!await RunAsync(() => svc.CreateUserAsync(NewFirstName, NewLastName, NewEmail, NewRole.ToLowerInvariant(), NewPassword))) return;
+        Notice = $"{NameParts.Join(NewFirstName, NewLastName)} can sign in now with that email and password.";
+        NewFirstName = NewLastName = NewEmail = NewPassword = "";
         await LoadAsync();
     }
 

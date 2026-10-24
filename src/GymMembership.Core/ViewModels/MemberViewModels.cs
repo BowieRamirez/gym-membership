@@ -87,6 +87,43 @@ public partial class LoginViewModel(IAuthService auth, IAppNavigator nav, ISupab
 
     [RelayCommand] private Task DemoSignInAsync(string demoEmail) => GoAsync(demoEmail, DemoGateway.DemoPassword);
 
+    // ---------- forgotten password: email, then the code and a new password ----------
+    [ObservableProperty] private bool isResetting;
+    [ObservableProperty] private bool resetCodeSent;
+    [ObservableProperty] private string resetEmail = "";
+    [ObservableProperty] private string resetCode = "";
+    [ObservableProperty] private string newPassword = "";
+    [ObservableProperty] private string confirmNewPassword = "";
+
+    [RelayCommand]
+    private void ForgotPassword()
+    {
+        (IsResetting, ResetCodeSent, ResetEmail, ResetCode, NewPassword, ConfirmNewPassword) = (true, false, Email.Trim(), "", "", "");
+        ErrorMessage = Notice = null;
+    }
+
+    [RelayCommand] private void CancelReset() { IsResetting = false; ErrorMessage = Notice = null; }
+
+    [RelayCommand]
+    private async Task SendResetCodeAsync()
+    {
+        Notice = null;
+        if (!await RunAsync(() => auth.SendResetCodeAsync(ResetEmail))) return;
+        ResetCodeSent = true;
+        // the same words whether or not the address has an account, so nobody can use this to find out who is a member
+        Notice = $"If an account uses {ResetEmail.Trim()}, we sent a 6-digit code to it." + (IsDemo ? $" Demo code: {DemoGateway.DemoCode}" : "");
+    }
+
+    [RelayCommand]
+    private async Task ResetPasswordAsync()
+    {
+        Notice = null;
+        if (NewPassword != ConfirmNewPassword) { ErrorMessage = "The new passwords don't match."; return; }
+        if (!await RunAsync(() => auth.ResetPasswordAsync(ResetEmail, ResetCode, NewPassword))) return;
+        (IsResetting, Email, Password) = (false, ResetEmail.Trim(), "");
+        Notice = "Password changed. Sign in with your new password.";
+    }
+
     async Task GoAsync(string e, string p)
     {
         var role = AppRole.Member;
@@ -99,7 +136,8 @@ public partial class LoginViewModel(IAuthService auth, IAppNavigator nav, ISupab
 
 public partial class RegisterViewModel(IAuthService auth, IAppNavigator nav) : LoadableViewModel
 {
-    [ObservableProperty] private string fullName = "";
+    [ObservableProperty] private string firstName = "";
+    [ObservableProperty] private string lastName = "";
     [ObservableProperty] private string email = "";
     [ObservableProperty] private string password = "";
     [ObservableProperty] private string confirmPassword = "";
@@ -108,7 +146,7 @@ public partial class RegisterViewModel(IAuthService auth, IAppNavigator nav) : L
     private async Task RegisterAsync()
     {
         if (Password != ConfirmPassword) { ErrorMessage = "The passwords don't match."; return; }
-        if (await RunAsync(() => auth.RegisterAsync(FullName, Email, Password))) nav.GoTo(AppRole.Member);
+        if (await RunAsync(() => auth.RegisterAsync(FirstName, LastName, Email, Password))) nav.GoTo(AppRole.Member);
     }
 
     [RelayCommand] private void BackToSignIn() => nav.GoToLogin();
@@ -762,7 +800,7 @@ public partial class NotificationsViewModel : LoadableViewModel, IDisposable
     private Task MarkAllReadAsync() => RunAsync(svc.MarkAllReadAsync);
 }
 
-public partial class SettingsViewModel(ISettingsService settings, IAuthService auth, IAppNavigator nav, IProfileService profile, IProofPicker picker) : LoadableViewModel
+public partial class SettingsViewModel(ISettingsService settings, IAuthService auth, IAppNavigator nav, IProfileService profile, IProofPicker picker, ISupabaseGateway? gateway = null) : LoadableViewModel
 {
     public string[] Themes { get; } = ["system", "light", "dark"];
     [ObservableProperty] private string theme = "system";
@@ -774,12 +812,14 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
     {
         await LoadAsync();
         await RunAsync(auth.MustChangePasswordAsync, m => MustChange = m);
-        await LoadPhotoAsync();
+        await LoadPhotoAsync(names: true);
+        await LoadEmailAsync();
     }
 
-    async Task LoadPhotoAsync()
+    async Task LoadPhotoAsync(bool names = false)
     {
         if ((await profile.MeAsync()).Value is not { } me) return;
+        if (names) (FirstName, LastName) = (me.FirstName, me.LastName);
         Letters = Initials.From(me.Name);
         AvatarUrl = (await profile.AvatarUrlAsync(me.AvatarPath)).Value;   // no link: the initials stay
     }
@@ -818,6 +858,49 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
     }
 
     [RelayCommand] private async Task SignOutAsync() { await auth.SignOutAsync(); nav.GoToLogin(); }
+
+    // ---------- name ----------
+    [ObservableProperty] private string firstName = "";
+    [ObservableProperty] private string lastName = "";
+
+    [RelayCommand]
+    private async Task SaveNameAsync()
+    {
+        Notice = null;
+        if (!await RunAsync(() => profile.SetNameAsync(FirstName, LastName))) return;
+        await LoadPhotoAsync(names: true);
+        Notice = "Name saved.";
+    }
+
+    // ---------- email: send a code to it, then type the code ----------
+    [ObservableProperty] private string emailAddress = "";
+    [ObservableProperty] private bool emailConfirmed;
+    [ObservableProperty] private bool codeSent;
+    [ObservableProperty] private string emailCode = "";
+    string _codeEmail = "";
+
+    async Task LoadEmailAsync() => await RunAsync(auth.EmailStatusAsync, s => (EmailAddress, EmailConfirmed) = (s.Email, s.Confirmed));
+
+    [RelayCommand]
+    private async Task SendEmailCodeAsync()
+    {
+        Notice = null;
+        var email = EmailAddress.Trim();
+        if (!await RunAsync(() => auth.SendEmailCodeAsync(email))) return;
+        (_codeEmail, CodeSent, EmailCode) = (email, true, "");
+        await LoadEmailAsync();
+        Notice = $"We sent a 6-digit code to {email}. Type it below." + (gateway is DemoGateway ? $" Demo code: {DemoGateway.DemoCode}" : "");
+    }
+
+    [RelayCommand]
+    private async Task ConfirmEmailAsync()
+    {
+        Notice = null;
+        if (!await RunAsync(() => auth.ConfirmEmailAsync(_codeEmail, EmailCode))) return;
+        (CodeSent, EmailCode) = (false, "");
+        await LoadEmailAsync();
+        Notice = "Email confirmed.";
+    }
 }
 
 /// <summary>Feeds the bar at the top of every signed-in screen: your picture, the unread badge and Sign out.</summary>

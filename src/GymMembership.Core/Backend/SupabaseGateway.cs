@@ -80,7 +80,7 @@ public sealed class SupabaseGateway : ISupabaseGateway
         await c.Auth.SignIn(email.Trim(), password);
     }
 
-    public async Task SignUpAsync(string email, string password, string fullName)
+    public async Task SignUpAsync(string email, string password, string firstName, string lastName)
     {
         var c = await ReadyAsync();
         Session? session;
@@ -88,8 +88,12 @@ public sealed class SupabaseGateway : ISupabaseGateway
         {
             session = await c.Auth.SignUp(email.Trim(), password, new SignUpOptions
             {
-                // the sign-up trigger (0004) reads these; the username is the email so it is always unique
-                Data = new Dictionary<string, object> { ["full_name"] = fullName, ["username"] = email.Trim().ToLowerInvariant() }
+                // the sign-up trigger (0004, 0035) reads these; the username is the email so it is always unique
+                Data = new Dictionary<string, object>
+                {
+                    ["first_name"] = firstName, ["last_name"] = lastName, ["full_name"] = NameParts.Join(firstName, lastName),
+                    ["username"] = email.Trim().ToLowerInvariant()
+                }
             });
         }
         catch (GotrueException ex) when (Regex.IsMatch(ex.Message, "already (been )?registered|already exists", RegexOptions.IgnoreCase))
@@ -106,6 +110,64 @@ public sealed class SupabaseGateway : ISupabaseGateway
         try { await c.Auth.SignIn(email, currentPassword); }   // Supabase does not ask for the old password, so check it here
         catch (GotrueException) { throw new Exception("wrong_password"); }
         await c.Auth.Update(new UserAttributes { Password = newPassword });
+    }
+
+    public string? CurrentEmail => _client.Auth.CurrentUser?.Email;
+
+    // a new address waiting for the code Supabase sent with its email-change mail (projects that confirm email changes)
+    string? _pendingEmailChange;
+
+    public async Task SendEmailCodeAsync(string email)
+    {
+        var c = await ReadyAsync();
+        email = email.Trim().ToLowerInvariant();
+        await Codes(async () =>
+        {
+            _pendingEmailChange = null;
+            if (!string.Equals(email, c.Auth.CurrentUser?.Email, StringComparison.OrdinalIgnoreCase))
+            {
+                // with email confirmation off, Supabase switches the address at once; otherwise it emails a change code and waits
+                var user = await c.Auth.Update(new UserAttributes { Email = email });
+                if (!string.Equals(user?.Email, email, StringComparison.OrdinalIgnoreCase)) { _pendingEmailChange = email; return; }
+            }
+            await c.Auth.SignInWithOtp(new SignInWithPasswordlessEmailOptions(email) { ShouldCreateUser = false });
+        });
+    }
+
+    public async Task VerifyEmailCodeAsync(string email, string code)
+    {
+        var c = await ReadyAsync();
+        email = email.Trim().ToLowerInvariant();
+        var type = email == _pendingEmailChange ? Constants.EmailOtpType.EmailChange : Constants.EmailOtpType.MagicLink;
+        await Codes(() => c.Auth.VerifyOTP(email, code, type));
+        _pendingEmailChange = null;
+    }
+
+    public async Task SendPasswordResetCodeAsync(string email)
+    {
+        var c = await ReadyAsync();
+        await Codes(() => c.Auth.ResetPasswordForEmail(email.Trim().ToLowerInvariant()));
+    }
+
+    public async Task ResetPasswordWithCodeAsync(string email, string code, string newPassword)
+    {
+        var c = await ReadyAsync();
+        await Codes(() => c.Auth.VerifyOTP(email.Trim().ToLowerInvariant(), code, Constants.EmailOtpType.Recovery));
+        await Codes(() => c.Auth.Update(new UserAttributes { Password = newPassword }));
+    }
+
+    // Supabase's code errors, in the words ErrorText knows: a wrong, used or expired code; asking again too soon; an address in use
+    static async Task Codes(Func<Task> call)
+    {
+        try { await call(); }
+        catch (GotrueException ex) when (Regex.IsMatch(ex.Message, "otp_expired|expired or is invalid|invalid.*(otp|token)", RegexOptions.IgnoreCase))
+        { throw new Exception("bad_code", ex); }
+        catch (GotrueException ex) when (Regex.IsMatch(ex.Message, "rate_limit|only request this after|too many", RegexOptions.IgnoreCase))
+        { throw new Exception("resend_wait", ex); }
+        catch (GotrueException ex) when (Regex.IsMatch(ex.Message, "email_exists|already (been )?registered|already exists", RegexOptions.IgnoreCase))
+        { throw new Exception("email_taken", ex); }
+        catch (GotrueException ex) when (Regex.IsMatch(ex.Message, "same_password|different from the old", RegexOptions.IgnoreCase))
+        { throw new Exception("same_password", ex); }
     }
 
     public async Task SignOutAsync()

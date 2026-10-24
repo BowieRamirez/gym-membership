@@ -9,7 +9,7 @@ public class AccountArchiveTests
     {
         var gw = new DemoGateway();
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
-        Assert.True((await new AdminService(gw).CreateUserAsync("Archive Person", "archive@demo.io", "employee", "secret12")).Ok);
+        Assert.True((await new AdminService(gw).CreateUserAsync("Archive", "Person", "archive@demo.io", "employee", "secret12")).Ok);
         var target = (await gw.ListAsync<Profile>()).Single(p => p.FullName == "Archive Person").Id;
         return (gw, target);
     }

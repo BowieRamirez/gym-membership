@@ -35,7 +35,7 @@ public static class ErrorMapper
         if (Has(m, "forbidden", "42501", "jwt", "row-level security", "invalid login", "not authenticated")) return AppErrorKind.Unauthorized;
         if (Has(m, "account_has_commitments", "account_archived", "record_archived", "record_not_restorable", "code_limit_reached", "shift_has_sessions", "slot_taken", "member_busy", "stale_proposal", "coach_unavailable", "coach_busy", "already_started", "not_in_use", "amenity_unavailable", "not_archived", "already_processed", "already_availed", "renewal_pending", "already_requested", "refund_in_progress", "not_refundable", "pending_session_request", "active_coaching_session", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
         if (Has(m, "account_inactive", "bad_archive_reason", "self_archive", "last_active_admin", "no_active_membership", "self_verify", "self_decision", "not_renewable", "wrong_member", "not_found", "23514",
-                   "refund_window_closed", "payment_expired", "gym_closed", "coach_not_in_gym", "bad_rate", "invite_member_inactive", "invalid_code", "limit_required", "bad_hours", "off_grid", "outside_gym_hours", "too_long", "past_slot", "too_far_ahead", "no_pass", "limit_below_used", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "end must be after start")) return AppErrorKind.Validation;
+                   "refund_window_closed", "payment_expired", "gym_closed", "coach_not_in_gym", "bad_rate", "invite_member_inactive", "invalid_code", "limit_required", "bad_hours", "off_grid", "outside_gym_hours", "too_long", "past_slot", "too_far_ahead", "no_pass", "limit_below_used", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "bad_code", "code_not_verified", "resend_wait", "same_password", "end must be after start")) return AppErrorKind.Validation;
         return AppErrorKind.Unknown;
     }
 
@@ -93,7 +93,7 @@ public static class ErrorText
         "account_inactive" => "This account is inactive and cannot receive a new booking, coaching hire or pending payment.",
         "invalid_code" => "That discount code isn't valid, or it has expired.",
         "bad_input" => "Fill in every field. The password needs at least 6 characters.",
-        "bad_name" => "Use letters only in your name. Spaces, hyphens and apostrophes are fine. 2 to 60 characters.",
+        "bad_name" => "Enter a first and a last name in letters. Spaces, hyphens and apostrophes are fine. At least 2 letters each, 60 characters together.",
         "bad_email" => "Enter a valid email address, for example name@example.com. Up to 100 characters.",
         "bad_password" => "Use 6 to 64 characters for your password.",
         "bad_image" => "Choose a JPG, PNG or WebP picture under 5 MB.",
@@ -104,6 +104,9 @@ public static class ErrorText
         "bad_discount" => "Enter a code and a percent between 1 and 100.",
         "email_confirmation_required" => "Check your email and confirm your address, then sign in.",
         "wrong_password" => "Your current password isn't right.",
+        "bad_code" or "code_not_verified" => "That code is wrong, already used or expired. Check the latest email, or send a new code.",
+        "resend_wait" => "A code was just sent. Wait a minute before asking for another one.",
+        "same_password" => "Pick a password that's different from your old one.",
         "email_taken" =>"Someone already uses that email.",
         "in_use" => "Existing records use this, so it can't be deleted. Turn it off instead.",
         "already_availed" => "You already have this, or a payment for it is waiting. Renew it, or wait for the payment to be reviewed.",
@@ -176,7 +179,16 @@ public interface ISupabaseGateway
 {
     string? CurrentUserId { get; }
     Task SignInAsync(string email, string password);
-    Task SignUpAsync(string email, string password, string fullName);
+    Task SignUpAsync(string email, string password, string firstName, string lastName);
+    /// <summary>The signed-in person's sign-in email, or null when nobody is signed in.</summary>
+    string? CurrentEmail { get; }
+    /// <summary>Emails a 6-digit code. For a new address, it first becomes the sign-in email (or Supabase sends its change code).</summary>
+    Task SendEmailCodeAsync(string email);
+    /// <summary>Checks the code; on success the session is one opened by that code, which confirm_my_email accepts.</summary>
+    Task VerifyEmailCodeAsync(string email, string code);
+    Task SendPasswordResetCodeAsync(string email);
+    /// <summary>Checks the reset code (which signs the person in) and sets the new password.</summary>
+    Task ResetPasswordWithCodeAsync(string email, string code, string newPassword);
     /// <summary>Checks the current password, then sets the new one. The caller then runs the mark_password_changed function.</summary>
     Task ChangePasswordAsync(string currentPassword, string newPassword);
     Task SignOutAsync();

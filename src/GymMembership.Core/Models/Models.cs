@@ -25,7 +25,12 @@ public static class PayMethod { public const string Qr = "qr", Cash = "cash", Gc
   [Column("avatar_path", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? AvatarPath { get; set; }
   [Column("deleted_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? DeletedAt { get; set; }
   [Column("deleted_by", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? DeletedBy { get; set; }
-  [Column("deletion_reason", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? DeletionReason { get; set; } }
+  [Column("deletion_reason", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? DeletionReason { get; set; }
+  // full_name is built from these (0035); written only by set_my_name and sign-up
+  [Column("first_name", ignoreOnInsert: true, ignoreOnUpdate: true)] public string FirstName { get; set; } = "";
+  [Column("last_name", ignoreOnInsert: true, ignoreOnUpdate: true)] public string LastName { get; set; } = "";
+  // the sign-in email this person proved with a code; written only by confirm_my_email
+  [Column("confirmed_email", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? ConfirmedEmail { get; set; } }
 
 [Table("roles")] public class Role : BaseModel
 { [PrimaryKey("role_id")] public int RoleId { get; set; } [Column("name")] public string Name { get; set; } = ""; }

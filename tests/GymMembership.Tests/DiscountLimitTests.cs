@@ -46,7 +46,7 @@ public class DiscountLimitTests
     public async Task A_full_code_turns_people_away_while_pending_and_archives_for_good_once_verified()
     {
         var gw = await Admin();
-        await new AdminService(gw).CreateUserAsync("Ana Cruz", "ana@demo.io", "member", "temp1234");
+        await new AdminService(gw).CreateUserAsync("Ana", "Cruz", "ana@demo.io", "member", "temp1234");
         await AddCode(gw, "ONCE", 1);
 
         var held = (await Buy(gw, "carlo@demo.io", "ONCE")).Value!;
@@ -74,7 +74,7 @@ public class DiscountLimitTests
     public async Task A_rejected_payment_gives_its_place_back()
     {
         var gw = await Admin();
-        await new AdminService(gw).CreateUserAsync("Ana Cruz", "ana@demo.io", "member", "temp1234");
+        await new AdminService(gw).CreateUserAsync("Ana", "Cruz", "ana@demo.io", "member", "temp1234");
         await AddCode(gw, "ONCE", 1);
         var held = (await Buy(gw, "carlo@demo.io", "ONCE")).Value!;
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
@@ -102,7 +102,7 @@ public class DiscountLimitTests
     public async Task The_limit_can_change_but_never_below_places_in_use_or_back_to_unlimited()
     {
         var gw = await Admin();
-        await new AdminService(gw).CreateUserAsync("Ana Cruz", "ana@demo.io", "member", "temp1234");
+        await new AdminService(gw).CreateUserAsync("Ana", "Cruz", "ana@demo.io", "member", "temp1234");
         var vm = await AddCode(gw, "FIVE", 5);
         await Buy(gw, "carlo@demo.io", "FIVE");
         await Buy(gw, "ana@demo.io", "FIVE", "temp1234");
