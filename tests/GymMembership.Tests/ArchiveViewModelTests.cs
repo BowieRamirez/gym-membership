@@ -14,6 +14,35 @@ public class ArchiveViewModelTests
     }
 
     [Fact]
+    public async Task Archive_opens_under_logs_and_switching_back_reloads_audit_entries()
+    {
+        var (gw, archive) = await Setup();
+        var vm = new AuditViewModel(new AdminService(gw), archive);
+        await vm.OnAppearingAsync();
+        Assert.True(vm.ShowLogs); Assert.False(vm.ShowArchive); Assert.True(vm.HasArchive);
+        await vm.OpenArchiveCommand.ExecuteAsync(null);
+        Assert.True(vm.ShowArchive); Assert.False(vm.ShowLogs); Assert.NotEmpty(archive.Rows);
+        await vm.OnAppearingAsync();
+        Assert.True(vm.ShowArchive); Assert.NotEmpty(archive.Rows);
+        await vm.OpenLogsCommand.ExecuteAsync(null);
+        Assert.True(vm.ShowLogs); Assert.False(vm.ShowArchive); Assert.Null(vm.ErrorMessage);
+    }
+
+    [Fact]
+    public void Archive_panel_lives_in_logs_not_discounts_and_remains_super_admin_only()
+    {
+        var app = TestPaths.AppFolder();
+        var logs = System.Xml.Linq.XDocument.Load(Path.Combine(app, "Views", "AuditPage.xaml"));
+        var discounts = System.Xml.Linq.XDocument.Load(Path.Combine(app, "Views", "DiscountsPage.xaml"));
+        Assert.Single(logs.Descendants(), e => e.Name.LocalName == "ArchivePanel");
+        Assert.DoesNotContain(discounts.Descendants(), e => e.Name.LocalName == "ArchivePanel");
+        Assert.Equal("Discounts", (string?)discounts.Root!.Attribute("Title"));
+        var shell = System.Xml.Linq.XDocument.Load(Path.Combine(app, "StaffShell.xaml"));
+        var item = shell.Descendants().Single(e => (string?)e.Attribute("Title") == "Logs & Archive");
+        Assert.Equal("super", (string?)item.Attribute("ClassId"));
+    }
+
+    [Fact]
     public async Task Filters_combine_clear_in_one_action_and_empty_is_not_an_error()
     {
         var (_, vm) = await Setup();

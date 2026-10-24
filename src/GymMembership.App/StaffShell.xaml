@@ -26,12 +26,12 @@
     <!-- ClassId="admin": super admin and sub-admin; ClassId="super": super admin only (D15). The front desk gets neither. -->
     <FlyoutItem Title="Users and roles" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:UsersPage}" /></FlyoutItem>
     <FlyoutItem Title="Packages and amenities" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:CatalogAdminPage}" /></FlyoutItem>
-    <FlyoutItem Title="Discounts &amp; Archive" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:DiscountsPage}" /></FlyoutItem>
+    <FlyoutItem Title="Discounts" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:DiscountsPage}" /></FlyoutItem>
     <FlyoutItem Title="Cancellations &amp; refunds" ClassId="super"><ShellContent ContentTemplate="{DataTemplate views:RefundsPage}" /></FlyoutItem>
     <FlyoutItem Title="Void a payment" ClassId="super"><ShellContent ContentTemplate="{DataTemplate views:VoidPaymentsPage}" /></FlyoutItem>
     <FlyoutItem Title="Gym settings" ClassId="super"><ShellContent ContentTemplate="{DataTemplate views:GymSettingsPage}" /></FlyoutItem>
     <FlyoutItem Title="Revenue" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:RevenuePage}" /></FlyoutItem>
-    <FlyoutItem Title="Audit log" ClassId="super"><ShellContent ContentTemplate="{DataTemplate views:AuditPage}" /></FlyoutItem>
+    <FlyoutItem Title="Logs &amp; Archive" ClassId="super"><ShellContent ContentTemplate="{DataTemplate views:AuditPage}" /></FlyoutItem>
 
     <FlyoutItem Title="Messages" Route="messages"><ShellContent ContentTemplate="{DataTemplate views:MessagesPage}" /></FlyoutItem>
     <FlyoutItem Title="Settings" Route="settings"><ShellContent ContentTemplate="{DataTemplate views:SettingsPage}" /></FlyoutItem>

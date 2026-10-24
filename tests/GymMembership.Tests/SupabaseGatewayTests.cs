@@ -226,6 +226,8 @@ public sealed class SupabaseGatewayTests : IDisposable
         _reply = _ => (400, """{"code":400,"error_code":"invalid_credentials","msg":"Invalid login credentials"}""");
         var result = await Safe.RunAsync(async () => { await gw.SignInAsync("a@b.io", "wrong"); return true; });
         Assert.Equal(AppErrorKind.Unauthorized, result.Error);
+        Assert.Null(gw.CurrentUserId);
+        Assert.Equal("Email or password is incorrect. Try again, or use Forgot password? to reset your password.", ErrorText.For(result.Error, result.Message));
     }
 
     // ---------- reads ----------

@@ -5,17 +5,9 @@
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
-            x:Class="GymMembership.App.Views.DiscountsPage" x:DataType="vm:DiscountsViewModel" Title="Discounts &amp; Archive">
+            x:Class="GymMembership.App.Views.DiscountsPage" x:DataType="vm:DiscountsViewModel" Title="Discounts">
 
-    <Grid RowDefinitions="Auto,*">
-        <HorizontalStackLayout Padding="20,12" Spacing="10">
-            <Button Text="Discounts" Command="{Binding OpenDiscountsCommand}" Style="{StaticResource SmallOutlineButton}" />
-            <Button Text="Archive" Command="{Binding OpenArchiveCommand}" IsVisible="{Binding CanArchive}" Style="{StaticResource SmallOutlineButton}" AutomationId="OpenArchive" />
-        </HorizontalStackLayout>
-        <Grid Grid.Row="1" IsVisible="{Binding ShowArchive}">
-            <c:ArchivePanel BindingContext="{Binding Archive}" />
-        </Grid>
-    <ScrollView Grid.Row="1" IsVisible="{Binding ShowDiscounts}" MaximumWidthRequest="920">
+    <ScrollView MaximumWidthRequest="920">
         <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
             <Label Text="Percent-off codes. Members type a code when they buy or renew a package." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
@@ -104,5 +96,4 @@
             </VerticalStackLayout>
         </VerticalStackLayout>
     </ScrollView>
-    </Grid>
 </v:BasePage>

@@ -36,9 +36,9 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
 
     public IReadOnlyList<AdminOverviewCard> Cards { get; } = [
         new("users", "Users and roles"), new("catalog", "Packages and amenities"),
-        new("discounts", "Discounts & Archive"), new("refunds", "Cancellations & refunds"),
+        new("discounts", "Discounts"), new("refunds", "Cancellations & refunds"),
         new("revenue", "Revenue"), new("void", "Void a payment"),
-        new("gym", "Gym settings"), new("audit", "Audit log")];
+        new("gym", "Gym settings"), new("audit", "Logs & Archive")];
     /// <summary>False for a sub-admin (D15): the cards for super-admin pages are neither shown nor loaded.</summary>
     public bool SuperAdmin { get; set; } = true;
     static readonly string[] SuperAdminOnly = ["refunds", "void", "gym", "audit"];

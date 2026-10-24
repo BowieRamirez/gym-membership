@@ -1072,15 +1072,10 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
         a.IsActive = !a.IsActive; if (await RunAsync(() => svc.SaveAmenityAsync(a))) await LoadAsync(); else a.IsActive = !a.IsActive; }
 }
 
-public partial class DiscountsViewModel(IAdminService svc, ArchiveViewModel? archive = null) : LoadableViewModel
+public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
 {
-    public ArchiveViewModel? Archive { get; } = archive;
-    /// <summary>Only the super admin archives codes and opens Archive (D15).</summary>
+    /// <summary>Only the super admin archives codes (D15).</summary>
     [ObservableProperty] private bool canArchive;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowDiscounts))] private bool showArchive;
-    public bool ShowDiscounts => !ShowArchive;
-    [RelayCommand] private async Task OpenArchiveAsync() { if (Archive is null || !CanArchive) return; ShowArchive = true; await Archive.OnAppearingAsync(); }
-    [RelayCommand] private async Task OpenDiscountsAsync() { ShowArchive = false; await LoadAsync(); }
     public ObservableCollection<DiscountRow> Discounts { get; } = new();
     [ObservableProperty] private string newCode = "";
     [ObservableProperty] private int newPercent = 10;
@@ -1243,12 +1238,24 @@ public partial class GymSettingsViewModel(IAdminService svc, IProofPicker picker
     }
 }
 
-public partial class AuditViewModel(IAdminService svc) : LoadableViewModel
+public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive = null) : LoadableViewModel
 {
+    public ArchiveViewModel? Archive { get; } = archive;
+    public bool HasArchive => Archive is not null;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowLogs))] private bool showArchive;
+    public bool ShowLogs => !ShowArchive;
     public ObservableCollection<AuditRow> Entries { get; } = new();
 
-    public override Task OnAppearingAsync() => LoadAsync();
+    public override Task OnAppearingAsync() => ShowArchive && Archive is not null ? Archive.OnAppearingAsync() : LoadAsync();
 
+    [RelayCommand] private async Task OpenArchiveAsync()
+    {
+        if (Archive is null) return;
+        ShowArchive = true;
+        await Archive.OnAppearingAsync();
+    }
+
+    [RelayCommand] private async Task OpenLogsAsync() { ShowArchive = false; await LoadAsync(); }
     [RelayCommand] private Task LoadAsync() => RunAsync(svc.AuditAsync, rows => Fill(Entries, rows));
 }
 
