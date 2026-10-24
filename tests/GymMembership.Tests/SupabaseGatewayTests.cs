@@ -589,7 +589,17 @@ public sealed class SupabaseGatewayTests : IDisposable
         _reply = _ => (409, """{"error":"email_taken"}""");
         var result = await new AdminService(gw).CreateUserAsync("Rey", "Santos", "rey@demo.io", "coach", "temp1234");
         Assert.Equal(AppErrorKind.Validation, result.Error);
-        Assert.Equal("Someone already uses that email.", ErrorText.For(result.Error, result.Message?.Contains("email_taken") == true ? "email_taken" : result.Message));
+        Assert.Equal("Someone already uses that email.", ErrorText.For(result.Error, result.Message));   // what the page shows, no unwrapping
+    }
+
+    [Fact]
+    public async Task A_refused_account_function_says_so_in_plain_words()
+    {
+        var gw = await SignedInAsync();
+        _reply = _ => (403, """{"error":"forbidden"}""");
+        var result = await new AdminService(gw).ResetPasswordAsync("u-2", "temp1234");
+        Assert.Equal(AppErrorKind.Unauthorized, result.Error);
+        Assert.Equal("forbidden", result.Message);
     }
 
     [Fact]

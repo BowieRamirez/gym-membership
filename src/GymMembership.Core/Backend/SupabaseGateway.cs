@@ -236,7 +236,15 @@ public sealed class SupabaseGateway : ISupabaseGateway
     {
         var c = await ReadyAsync();
         // the signed-in admin's own token goes along, and the function checks it is an admin (supabase/functions/_shared/admin.ts)
-        await c.Functions.Invoke(name, c.Auth.CurrentSession?.AccessToken, new Supabase.Functions.Client.InvokeFunctionOptions { Body = body });
+        try { await c.Functions.Invoke(name, c.Auth.CurrentSession?.AccessToken, new Supabase.Functions.Client.InvokeFunctionOptions { Body = body }); }
+        catch (Exception ex) when (ErrorCode(ex.Message) is { } code) { throw new Exception(code, ex); }   // {"error":"email_taken"} -> email_taken
+    }
+
+    // the functions answer a refusal with {"error": "<code>"}; the app's messages are keyed by that code
+    static string? ErrorCode(string body)
+    {
+        try { return JsonDocument.Parse(body).RootElement.TryGetProperty("error", out var e) ? e.GetString() : null; }
+        catch (JsonException) { return null; }
     }
 
     // ---------- files ----------
