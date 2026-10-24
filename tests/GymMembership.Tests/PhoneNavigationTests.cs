@@ -79,6 +79,20 @@ public class PhoneNavigationTests
         Assert.Contains("parent.SetBackgroundColor(pageBackground.ToPlatform())", source);
     }
 
+    [Fact]
+    public void Queued_bar_styling_skips_unloaded_or_replaced_shells_and_handles_missing_colors()
+    {
+        var source = Read("Controls/PhoneNavigation.cs");
+        Assert.Contains("bool _isLoaded;", source);
+        Assert.Contains("_isLoaded = true;", source);
+        Assert.Contains("_isLoaded = false;", source);
+        var guard = source.IndexOf("if (!_isLoaded || !ReferenceEquals(_shell.Window?.Page, _shell)) return;");
+        var traversal = source.IndexOf("void Visit(Android.Views.View view)");
+        Assert.True(guard >= 0 && guard < traversal);
+        Assert.Contains("Shell.GetTabBarBackgroundColor(_shell) ??", source);
+        Assert.Contains("_shell.CurrentPage?.BackgroundColor ?? _shell.BackgroundColor ?? surface", source);
+    }
+
     [Theory]
     [InlineData("Services/AppServices.cs")]
     [InlineData("Views/LockedPage.cs")]
