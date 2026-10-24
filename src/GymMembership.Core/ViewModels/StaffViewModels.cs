@@ -857,7 +857,15 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
 public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? archive = null) : LoadableViewModel
 {
     public ObservableCollection<UserRow> Users { get; } = new();
-    public string[] Roles { get; } = ["Member", "Coach", "Employee"];
+    /// <summary>Switched off but not deleted: they can be switched back on here.</summary>
+    public ObservableCollection<UserRow> Deactivated { get; } = new();
+    /// <summary>What can be added: a sub-admin adds members and coaches only (D15).</summary>
+    [ObservableProperty] private string[] roles = ["Member", "Coach"];
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(AddTitle))] private bool isSuperAdmin;
+    public string AddTitle => IsSuperAdmin ? "Add a member, coach or employee" : "Add a member or coach";
+
+    /// <summary>The super admin manages anyone; a sub-admin manages members and coaches.</summary>
+    public bool CanManage(UserRow user) => IsSuperAdmin || !user.IsStaff;
     [ObservableProperty] private UserRow? resetting;
     [ObservableProperty] private string resetPassword = "";
     [ObservableProperty] private string newFirstName = "";
@@ -879,7 +887,10 @@ public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? a
         CanDeleteAccounts = false;
         if (archive is not null)
             await RunAsync(archive.CanManageAsync, allowed => CanDeleteAccounts = allowed);
-        await RunAsync(svc.UsersAsync, rows => Fill(Users, rows));
+        await RunAsync(svc.IsSuperAdminAsync, yes => IsSuperAdmin = yes);
+        Roles = IsSuperAdmin ? ["Member", "Coach", "Employee"] : ["Member", "Coach"];
+        if (!Roles.Contains(NewRole)) NewRole = "Member";
+        await RunAsync(svc.UsersAsync, rows => { Fill(Users, rows.Where(r => r.IsActive)); Fill(Deactivated, rows.Where(r => !r.IsActive)); });
     }
 
     [RelayCommand]
@@ -911,9 +922,10 @@ public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? a
     {
         var parts = arg.Split('|');
         var user = Users.First(u => u.UserId == parts[0]);
+        var name = UserRow.RoleName(parts[1]);
         if (!await (user.Roles.Contains(parts[1])
-                ? Confirm.AskAsync($"Remove the {parts[1]} role from {user.Username}?", "They lose what that role lets them do.", "Remove role")
-                : Confirm.AskAsync($"Give {user.Username} the {parts[1]} role?", "They get everything that role lets them do.", "Give role"))) return;
+                ? Confirm.AskAsync($"Remove the {name} role from {user.Username}?", "They lose what that role lets them do.", "Remove role")
+                : Confirm.AskAsync($"Give {user.Username} the {name} role?", "They get everything that role lets them do.", "Give role"))) return;
         var ok = user.Roles.Contains(parts[1])
             ? await RunAsync(() => svc.RevokeRoleAsync(user.UserId, parts[1]))
             : await RunAsync(() => svc.AssignRoleAsync(user.UserId, parts[1]));
@@ -931,6 +943,9 @@ public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? a
 
 public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? picker = null) : LoadableViewModel
 {
+    /// <summary>Only the super admin archives (D15); a sub-admin who tries is told so.</summary>
+    [ObservableProperty] private bool canArchive;
+
     public ObservableCollection<MembershipPackage> Packages { get; } = new();
     public ObservableCollection<Amenity> Amenities { get; } = new();
     [ObservableProperty] private string newPackageName = "";
@@ -955,6 +970,7 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     [RelayCommand]
     private async Task LoadAsync()
     {
+        await RunAsync(svc.IsSuperAdminAsync, yes => CanArchive = yes);
         await RunAsync(svc.AllPackagesAsync, r => Fill(Packages, r.Where(p => p.IsActive)));
         await RunAsync(svc.AllAmenitiesAsync, r => Fill(Amenities, r.Where(a => a.IsActive)));
     }
@@ -984,7 +1000,12 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     // delete asks first: DeletePackage picks the row, ConfirmDelete does it
     [ObservableProperty] private MembershipPackage? deleting;
 
-    [RelayCommand] private void DeletePackage(MembershipPackage p) => Deleting = p;
+    [RelayCommand]
+    private void DeletePackage(MembershipPackage p)
+    {
+        if (!CanArchive) { ErrorMessage = "Only the super admin can archive a package. Turn it off instead to stop selling it."; return; }
+        Deleting = p;
+    }
     [RelayCommand] private void KeepPackage() => Deleting = null;
 
     [RelayCommand]
@@ -1053,9 +1074,11 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
 public partial class DiscountsViewModel(IAdminService svc, ArchiveViewModel? archive = null) : LoadableViewModel
 {
     public ArchiveViewModel? Archive { get; } = archive;
+    /// <summary>Only the super admin archives codes and opens Archive (D15).</summary>
+    [ObservableProperty] private bool canArchive;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowDiscounts))] private bool showArchive;
     public bool ShowDiscounts => !ShowArchive;
-    [RelayCommand] private async Task OpenArchiveAsync() { if (Archive is null) return; ShowArchive = true; await Archive.OnAppearingAsync(); }
+    [RelayCommand] private async Task OpenArchiveAsync() { if (Archive is null || !CanArchive) return; ShowArchive = true; await Archive.OnAppearingAsync(); }
     [RelayCommand] private async Task OpenDiscountsAsync() { ShowArchive = false; await LoadAsync(); }
     public ObservableCollection<DiscountRow> Discounts { get; } = new();
     [ObservableProperty] private string newCode = "";
@@ -1065,7 +1088,12 @@ public partial class DiscountsViewModel(IAdminService svc, ArchiveViewModel? arc
 
     public override Task OnAppearingAsync() => LoadAsync();
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.DiscountsAsync, rows => Fill(Discounts, rows.Where(r => r.Discount.IsActive && r.Discount.ExpiresAt > DateTime.UtcNow)));
+    [RelayCommand]
+    private async Task LoadAsync()
+    {
+        await RunAsync(svc.IsSuperAdminAsync, yes => CanArchive = yes);
+        await RunAsync(svc.DiscountsAsync, rows => Fill(Discounts, rows.Where(r => r.Discount.IsActive && r.Discount.ExpiresAt > DateTime.UtcNow)));
+    }
 
     [RelayCommand]
     private async Task AddAsync()
@@ -1109,7 +1137,12 @@ public partial class DiscountsViewModel(IAdminService svc, ArchiveViewModel? arc
 
     [ObservableProperty] private DiscountRow? deleting;
 
-    [RelayCommand] private void Delete(DiscountRow row) => Deleting = row;
+    [RelayCommand]
+    private void Delete(DiscountRow row)
+    {
+        if (!CanArchive) { ErrorMessage = "Only the super admin can archive a code. Turn it off instead."; return; }
+        Deleting = row;
+    }
     [RelayCommand] private void Keep() => Deleting = null;
 
     [RelayCommand]

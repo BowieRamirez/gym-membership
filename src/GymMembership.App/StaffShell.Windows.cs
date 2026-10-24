@@ -41,7 +41,7 @@ public partial class StaffShell
 				deskItems.Add(item);
 				operations.Children.Add(button);
 			}
-			else if (item.ClassId == "admin")
+			else if (item.ClassId is "admin" or "super")
 			{
 				administrationPages.Children.Add(button);
 			}

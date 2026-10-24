@@ -500,7 +500,7 @@ await test('the status columns cannot be written directly, but the catalog can s
 await test('the amenity alert type and permission exist', async () => {
   assert.equal((await db.query(`select 'amenity'::notification_type as t`)).rows[0].t, 'amenity');
   const p = await db.query(`select r.name from role_permissions rp join roles r using (role_id) join permissions p using (permission_id) where p.resource = 'amenities' and p.action = 'set_status' order by r.name`);
-  assert.deepEqual(p.rows.map(r => r.name), ['admin', 'employee']);
+  assert.deepEqual(p.rows.map(r => r.name), ['admin', 'employee', 'subadmin']);   // the sub-admin works the desk too (0036)
 });
 
 console.log('\nmessenger (0015)');
@@ -625,9 +625,9 @@ await test('search finds a person by name and a conversation by message text, on
   assert.equal((await run(bea, `select * from chat_search('%')`)).rowCount, 0);
   assert.equal((await run(desk, `select * from chat_search('payment is stuck')`)).rowCount, 1);   // staff find front-desk text
 });
-await test('support permission exists for admin and front desk only', async () => {
+await test('support permission exists for admin, sub-admin and front desk only', async () => {
   const p = await db.query(`select r.name from role_permissions rp join roles r using (role_id) join permissions p using (permission_id) where p.resource = 'support' and p.action = 'reply' order by r.name`);
-  assert.deepEqual(p.rows.map(r => r.name), ['admin', 'employee']);
+  assert.deepEqual(p.rows.map(r => r.name), ['admin', 'employee', 'subadmin']);
 });
 
 console.log('\nmessenger review fixes');

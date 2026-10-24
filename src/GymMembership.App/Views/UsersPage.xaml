@@ -29,7 +29,7 @@
 
             <Border Style="{StaticResource Panel}">
                 <VerticalStackLayout Spacing="12">
-                    <Label Text="Add a member, coach or employee" Style="{StaticResource Heading}" />
+                    <Label Text="{Binding AddTitle}" Style="{StaticResource Heading}" />
                     <FlexLayout Wrap="Wrap" AlignItems="End">
                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="180">
                             <Label Text="First name" Style="{StaticResource Caption}" />
@@ -58,6 +58,29 @@
 
             <Label Text="Active accounts" Style="{StaticResource Heading}" Margin="0,8,0,0" />
             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Users}" Spacing="10">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="svc:UserRow">
+                        <Border Style="{StaticResource Panel}">
+                            <VerticalStackLayout Spacing="10">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                    <VerticalStackLayout Spacing="2">
+                                        <Label Text="{Binding Username}" Style="{StaticResource Heading}" />
+                                        <Label Text="{Binding RoleText}" Style="{StaticResource Caption}" />
+                                    </VerticalStackLayout>
+                                    <c:StatusChip Grid.Column="1" Status="{Binding ActiveStatus}" VerticalOptions="Start" />
+                                </Grid>
+                                <Button Text="⋮" Style="{StaticResource SmallOutlineButton}" FontSize="24" WidthRequest="48" MinimumHeightRequest="48"
+                                        HorizontalOptions="End" Clicked="OnAccountActions" AutomationId="UserAccountActions"
+                                        SemanticProperties.Description="Account actions" SemanticProperties.Hint="Open role, password and account actions" />
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
+            <Label Text="Deactivated accounts" Style="{StaticResource Heading}" Margin="0,8,0,0" />
+            <Label Text="Switched off, not deleted. Reactivate someone to let them sign in again." Style="{StaticResource Caption}" />
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Deactivated}" Spacing="10">
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="svc:UserRow">
                         <Border Style="{StaticResource Panel}">

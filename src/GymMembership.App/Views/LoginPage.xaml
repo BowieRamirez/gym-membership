@@ -117,6 +117,8 @@
                                     Command="{Binding DemoSignInCommand}" CommandParameter="employee@demo.io" />
                             <Button Text="Admin" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
                                     Command="{Binding DemoSignInCommand}" CommandParameter="admin@demo.io" />
+                            <Button Text="Sub-admin" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                                    Command="{Binding DemoSignInCommand}" CommandParameter="subadmin@demo.io" />
                         </FlexLayout>
                     </VerticalStackLayout>
                 </Border>

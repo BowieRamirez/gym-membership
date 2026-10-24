@@ -6,8 +6,10 @@ namespace GymMembership.App.Views;
 
 public sealed class AdminOverviewPage : BasePage
 {
-    public AdminOverviewPage(AdminOverviewViewModel vm)
+    /// <param name="superAdmin">False for a sub-admin (D15): only the cards for pages they have.</param>
+    public AdminOverviewPage(AdminOverviewViewModel vm, bool superAdmin = true)
     {
+        vm.SuperAdmin = superAdmin;
         Title = "Overview";
         BindingContext = vm;
         var body = new VerticalStackLayout { Padding = new Thickness(24, 20, 24, 32), Spacing = 16 };
@@ -28,7 +30,7 @@ public sealed class AdminOverviewPage : BasePage
         body.Children.Add(status);
 
         var grid = new Grid { ColumnSpacing = 16, RowSpacing = 16 };
-        foreach (var card in vm.Cards)
+        foreach (var card in vm.Shown)
         {
             var content = new VerticalStackLayout { Spacing = 10 };
             content.Children.Add(Text(card.Title, "Heading", "AdminOverviewHeading-" + card.Key));
@@ -64,7 +66,7 @@ public sealed class AdminOverviewPage : BasePage
             grid.ColumnDefinitions.Clear();
             grid.RowDefinitions.Clear();
             for (var i = 0; i < columns; i++) grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
-            for (var i = 0; i < (vm.Cards.Count + columns - 1) / columns; i++) grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            for (var i = 0; i < (grid.Children.Count + columns - 1) / columns; i++) grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
             for (var i = 0; i < grid.Children.Count; i++)
             {
                 grid.SetColumn(grid.Children[i], i % columns);

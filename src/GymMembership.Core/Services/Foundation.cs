@@ -137,7 +137,8 @@ public static class ErrorText
     };
 }
 
-public enum AppRole { Member, Coach, Employee, Admin }
+/// <summary>Admin is the super admin (D15); SubAdmin does desk work plus some admin pages.</summary>
+public enum AppRole { Member, Coach, Employee, Admin, SubAdmin }
 
 public static class RoleResolver
 {
@@ -145,6 +146,7 @@ public static class RoleResolver
     {
         var set = names.ToHashSet();
         if (set.Contains("admin")) return AppRole.Admin;
+        if (set.Contains("subadmin")) return AppRole.SubAdmin;
         if (set.Contains("employee")) return AppRole.Employee;
         if (set.Contains("coach")) return AppRole.Coach;
         return AppRole.Member;

@@ -81,6 +81,7 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 - [x] **D12 — QR trust boundary (owner approved 2026-10-23):** The member QR is identification only, never payment (the gym's e-wallet payment QR is unchanged). It encodes a permanent random opaque code mapped to the user (not the user ID, and no name/status/expiry/credentials), the same on every device and kept through renewal, expiry, pending payments and archive/restore. Shown at the top of My membership. Only front desk staff and admins can scan/look up a code; coaches and members get nothing. A scan shows name, status and expiry from live data with the plan's precedence (archived/deleted → Inactive; running term → Active; payment waiting for verification → Pending; otherwise Expired / no membership); unknown or damaged code → "not found"; offline → "can't check right now", never Active. A scan does not check in by itself: an Active result shows a Check in button that records the existing gym check-in (inactive results cannot). Every scan is logged (server time, scanner, member, result) and kept forever. Camera scanning uses ZXing.Net.MAUI (MIT), version and Windows/Android support confirmed before adding; if Windows camera support is poor, Windows desks use a USB/Bluetooth scanner that types the code. Fallback when a code cannot be scanned: the existing Check-in name search. Also in scope: a Check-ins section in the Windows admin Overview (pick a day, count, each member's name and time); Android admins keep today's count only.
 - [x] **D13 — names, email confirmation and password reset (owner requested 2026-10-23, answered 2026-10-24):** Registration asks for first name and last name instead of one full name; members confirm a real email in Settings with a one-time code (OTP) sent to it; members can reset a forgotten password from the login page. To settle before building: (a) store first and last name as two profile columns and keep `full_name` filled from them (so every screen, receipt, PDF and chat that shows a name keeps working), or replace `full_name` everywhere; (b) how existing names are split (first word = first name, the rest = last name, editable afterwards; no guessing beyond that) and whether staff/coaches also switch to first/last; (c) whether an unconfirmed email blocks anything (e.g. paying, booking) or only shows a "Confirm your email" reminder; (d) forgotten password by a 6-digit code typed in the app (works without a website) or by an email link (needs a web page to land on); (e) who sends the emails: Supabase's built-in sender is only for testing (very low hourly limit and, on current projects, only to the team's own addresses), so real members need a custom SMTP service (for example Resend, Brevo or SendGrid; free tiers exist) set up by the owner; (f) whether the admin-only temporary password (`reset-password` function) stays for members who no longer have access to their email. Answer (owner 2026-10-24): (a) add `first_name`/`last_name` columns and keep `full_name` filled from them; (b) existing names split first word = first name, rest = last name, editable in Settings, and everyone (members, staff, coaches, admins) switches to first/last; (c) reminder only, nothing blocked; (d) 6-digit code typed in the app; (e) Brevo custom SMTP, set up by the owner in the Supabase dashboard 2026-10-24 (sender `bowieram2006@gmail.com` verified; a gym-owned domain with DKIM/DMARC is recommended before rollout, since a Gmail sender may land in spam); (f) keep the admin temporary password.
 - [x] **D14 — which actions ask "are you sure?" (owner requested 2026-10-24, approved 2026-10-24):** The owner wants a confirmation before consequential actions such as signing out and buying a membership. The proposed list is in Phase 12; the owner confirms or edits it. Also to settle: (a) one dialog style everywhere (the native popup already used for Cancel payment and refunds: a title, what will happen with names/amounts/times, a red-or-plain action button named after the action and "Go back"), or keep the existing inline two-step panels (archive, delete account, reject, void, reset password) as they are; (b) whether frequent desk actions (check-in, marking attendance) stay one tap. Answer (owner 2026-10-24): the proposed list in Phase 12 as written. Implementer's calls, not asked: (a) new confirmations use the native popup; the existing inline two-step panels stay as they are; (b) the desk actions on the "stay one tap" list stay one tap.
+- [x] **D15 — sub-admin role (owner requested 2026-10-24, approved 2026-10-24):** Today's admin becomes the **super admin** (full control, unchanged). A new **sub-admin** role gets the front desk's work plus some admin pages, but not money reversals, gym-wide settings, roles or permanent deletion. Proposed split is in Phase 13; the owner confirms or edits it. Also to settle: (a) the name shown in the app ("Sub-admin" or another word such as "Manager"); (b) who can make someone a sub-admin (proposed: super admins only); (c) whether a sub-admin may add, deactivate or reset the password of front-desk employees, or only of members and coaches. Answer (owner 2026-10-24): the Phase 13 table as written; the name is "Sub-admin". (b) and (c) follow the proposal: only super admins appoint sub-admins, and sub-admins manage members and coaches only, not front-desk employees.
 
 ## 3. Phases and request coverage
 
@@ -99,7 +100,8 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 | 10 | Permanent member QR and scan logging | 15 | 1; D12 | DEPLOYED (DB) 2026-10-23 — 0034 live; device camera check pending |
 | 11 | First/last name registration, email confirmation by OTP, forgotten password | New 2026-10-23 | 1; D13 | VERIFIED 2026-10-24 — 0035 live; owner checked on Windows and Android |
 | 12 | "Are you sure?" confirmations and show/hide password | New 2026-10-24 | D14 | VERIFIED 2026-10-24 — commit b8cc27f; owner checked on Android, Windows demo smoke; no migration |
-| 13 | Integrated regression, deployment and handoff | All | 1–12 | PLANNED |
+| 13 | Sub-admin role under the super admin | New 2026-10-24 | D15 | IMPLEMENTED locally 2026-10-24 — 0036 push, two Edge Function deploys and device check pending |
+| 14 | Integrated regression, deployment and handoff | All | 1–13 | PLANNED |
 
 Dependency order matters more than numbering. After Phase 0, independent work can be scheduled separately, but keep one phase's changes and evidence identifiable. The coach rate correction can be pulled forward as a small independent slice if desired; record that move here.
 
@@ -479,7 +481,54 @@ Acceptance / verification:
 - [x] Nothing on the "stay one tap" list gained a prompt.
 - [x] Every password box has a working eye button on Windows and Android, and passwords start hidden. (Owner on Android 2026-10-24; Windows demo smoke.)
 
-## Phase 13 — Integrated regression and staged rollout
+## Phase 13 — Sub-admin role under the super admin
+
+Requested by the owner 2026-10-24. The current admin becomes the super admin; a sub-admin can run day-to-day work and some admin pages, but nothing that reverses money, changes the whole gym's setup, hands out power or deletes for good. Starting points: roles and `role_permissions` (0002/0005/0006), `has_role('admin')` and `require_archive_admin` checks (0003, 0006, 0015, 0018, 0023), the Edge Function check `requireAdmin` (`supabase/functions/_shared/admin.ts`), the staff menu (`StaffShell.xaml`: `ClassId="admin"` pages are removed for the front desk), `RoleResolver`, Users page role buttons, DemoGateway `RolePermissions`.
+
+Proposed split (D15):
+
+| Page / action | Front desk | Sub-admin | Super admin |
+| --- | --- | --- | --- |
+| Home, Payments to verify, Cashier, Check-in, Amenity Status, Messages | yes | yes | yes |
+| Windows admin Overview (today's numbers, check-ins by day) | — | yes | yes |
+| Packages and amenities: add, edit price/days/description, turn on or off sale, amenity photos | — | yes | yes |
+| Packages and amenities: archive | — | no | yes |
+| Discount codes: add, change limit, turn on or off | — | yes | yes |
+| Discount codes: archive | — | no | yes |
+| Revenue page and PDF export | — | yes | yes |
+| Users: see the list; add members and coaches; reset their temporary password; deactivate or reactivate them | — | yes | yes |
+| Users: add, deactivate or reset front-desk employees, sub-admins or super admins | — | no | yes |
+| Users: give or remove roles | — | no | yes |
+| Users: delete an account; Archive restore | — | no | yes |
+| Void a payment; Cancellations & refunds | — | no | yes |
+| Gym settings (gym name, opening hours, walk-in price, payment QR) | — | no | yes |
+| Audit log | — | no | yes |
+
+Status: IMPLEMENTED locally 2026-10-24 (uncommitted). Evidence: database checks 302/302 (`subadmin.mjs` adds 9; two older checks in `rules.mjs` updated because the sub-admin now shares the desk's amenity-status and support permissions), xUnit 713/713 (`SubAdminTests` 11, an overview test, four Windows navigation source checks updated for the new menu groups), Android and Windows build, Windows demo smoke as the sub-admin (Overview shows only Users, Packages, Discounts and Revenue; no Void, Refunds, Gym settings or Audit log anywhere in the menu; Add user offers Member and Coach only). Edge Functions not run locally (no Deno here); they are checked when deployed and with a live test sub-admin.
+
+Rulings (2026-10-24):
+- The database role is `subadmin`; on screen it is "Sub-admin", and the admin role is shown as "Super admin". The admin role itself is unchanged, so every existing check and account keeps working.
+- Reactivation: deactivated accounts used to leave the Users list (reachable only through Archive, which is the super admin's). The Users page now lists them under "Deactivated accounts" with Reactivate, for both the super admin and the sub-admin; reactivating a deactivated (not deleted) account checks who may manage whom instead of requiring the super admin. Restoring a deleted account is still the super admin's.
+- Catalog and discount archiving stay behind the existing super-admin check; a sub-admin who taps Archive is told to turn the item off instead, and the Archive tab is hidden for them. No delete-policy change was needed: 0024 already removed the delete right from everyone.
+- The Windows Overview hides (and does not load) the Refunds, Void, Gym settings and Audit log cards for a sub-admin.
+- A sub-admin may not act on their own account's staff role or on any front-desk, sub-admin or super-admin account: the account menu says only the super admin can change those.
+- Kept super admin only, as before: editing coach profiles for a coach, and releasing a support chat another staff member has taken.
+
+Tasks
+- [x] Settle D15 with the owner (the table, the name, who appoints sub-admins, employees). Approved 2026-10-24.
+- [x] Migration: a `subadmin` role with the approved permissions; split permissions where one permission covers both halves of a row above (for example `users:manage` covers members/coaches and staff; `catalog:manage` covers editing and archiving). Replace `has_role('admin')` checks with the permission or with an explicit super-admin check where the table says super admin only. The existing `admin` role keeps everything (shown as "Super admin").
+- [x] Edge Functions `create-user` and `reset-password`: allow a sub-admin for members and coaches only; super admin for everyone else.
+- [x] App: sign-in sends a sub-admin to the staff area with only the approved admin pages (menu and phone navigation); Users page hides role buttons, delete and staff accounts' actions for a sub-admin; super admins see a way to make someone a sub-admin.
+- [x] Demo mode: a sub-admin demo login that follows the same rules.
+- [x] Tests: database checks that a sub-admin is refused every "no" row and allowed every "yes" row, and that a super admin still has everything; app tests for the menu and the Users page; Edge Function checks.
+- [ ] Windows and Android check by the owner with a test sub-admin account.
+
+Acceptance / verification:
+- [ ] A sub-admin sees and can use only the "yes" pages and actions, on both platforms.
+- [ ] The server refuses a sub-admin on every "no" action even when called directly (not only hidden in the app).
+- [ ] The super admin can do everything they could before.
+
+## Phase 14 — Integrated regression and staged rollout
 
 - [ ] Run all xUnit tests, including existing account, subscription/refund, payment, request guard, calendar, chat, navigation and XAML-binding checks.
 - [ ] Run the full disposable local PostgreSQL suite, populated-history migration tests, permission/RLS denial tests and real separate-connection concurrency tests.
@@ -535,7 +584,8 @@ Fill cells with date, command/test, result and evidence location. `—` means no
 | 10 Permanent QR | — | — | — | — | — | — | — |
 | 11 Names/email/password | 2026-10-24 | 651/651 | 293/293 (names-email.mjs) | demo smoke passed | owner checked live 2026-10-24 | 0035 live, create-user deployed 2026-10-24 | ponytail review done; owner accepted 2026-10-24 |
 | 12 Confirmations | 2026-10-24 | 701/701 | N/A — no database change | demo smoke passed | owner checked 2026-10-24 | none needed | ponytail review done; owner accepted 2026-10-24 |
-| 13 Integration/rollout | — | — | — | — | — | — | — |
+| 13 Sub-admin | 2026-10-24 | 713/713 | 302/302 (subadmin.mjs) | demo smoke passed | builds; device check pending | 0036 + create-user/reset-password deploy pending | ponytail review done; owner pending |
+| 14 Integration/rollout | — | — | — | — | — | — | — |
 
 ## 5. Session log — append whenever work pauses
 

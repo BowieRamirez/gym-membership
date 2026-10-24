@@ -24,6 +24,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
     {
         ["admin"] = ["payments:verify", "payments:record", "payments:void", "check_ins:record", "amenity_usages:verify", "amenities:set_status", "support:reply", "users:manage", "roles:manage",
                      "catalog:manage", "discounts:manage", "gym_settings:manage", "reports:revenue", "reports:cash", "audit:read"],
+        // D15: the desk's work plus catalog, discounts, revenue and member/coach accounts (0036)
+        ["subadmin"] = ["payments:verify", "payments:record", "check_ins:record", "amenity_usages:verify", "amenities:set_status", "support:reply", "reports:cash",
+                        "reports:revenue", "catalog:manage", "discounts:manage", "users:manage"],
         ["employee"] = ["payments:verify", "payments:record", "check_ins:record", "amenity_usages:verify", "amenities:set_status", "support:reply", "reports:cash"],
         ["coach"] = ["sessions:manage", "shifts:manage", "attendance:record"],
         ["member"] = []
@@ -69,7 +72,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
     string[] RolesOf(string? user) => All<UserRole>().Where(u => u.UserId == user)
         .Select(u => All<Role>().First(r => r.RoleId == u.RoleId).Name).ToArray();
     bool Has(string permission) => RolesOf(CurrentUserId).Any(r => RolePermissions[r].Contains(permission));
-    bool IsStaff => RolesOf(CurrentUserId).Any(r => r is "admin" or "employee");
+    bool IsStaff => RolesOf(CurrentUserId).Any(r => r is "admin" or "subadmin" or "employee");
+    /// <summary>can_manage_person (0036): the super admin manages anyone; others with users:manage, members and coaches only.</summary>
+    bool CanManagePerson(string user) => IsActiveUser && Has("users:manage") &&
+        (RolesOf(CurrentUserId).Contains("admin") || !RolesOf(user).Any(r => r is "admin" or "subadmin" or "employee"));
     bool IsActiveUser => All<Profile>().FirstOrDefault(p => p.Id == CurrentUserId)?.IsActive ?? false;
     void RequireActive() { if (!IsActiveUser) throw Err("forbidden"); }
     void Require(string permission) { RequireActive(); if (!Has(permission)) throw Err("forbidden"); }
@@ -91,7 +97,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     void ClearChatAlerts(string userId, string key)
     { foreach (var n in All<UserNotification>().Where(n => n.UserId == userId && n.Type == "message" && n.ReadAt is null && _chatAlerts.GetValueOrDefault(n.Id) == key)) n.ReadAt = DateTime.UtcNow; }
 
-    void NotifyStaff(string type, string title) { foreach (var id in All<UserRole>().Where(u => RolesOf(u.UserId).Any(r => r is "admin" or "employee")).Select(u => u.UserId).Distinct().ToList()) Notify(id, type, title); }
+    void NotifyStaff(string type, string title) { foreach (var id in All<UserRole>().Where(u => RolesOf(u.UserId).Any(r => r is "admin" or "subadmin" or "employee")).Select(u => u.UserId).Distinct().ToList()) Notify(id, type, title); }
     void Audit(string action, string entity, string entityId) =>
         Add(new AuditEntry { ActorId = CurrentUserId, Action = action, Entity = entity, EntityId = entityId, CreatedAt = DateTime.UtcNow });
 
@@ -182,8 +188,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
         try
         {
             if (FailWith is not null) throw FailWith;
-            if (!RolesOf(Uid).Contains("admin") || !IsActiveUser) throw Err("forbidden");
+            if (!RolesOf(Uid).Any(r => r is "admin" or "subadmin") || !IsActiveUser) throw Err("forbidden");
             string S(string k) => Convert.ToString(body.GetValueOrDefault(k)) ?? "";
+            var super = RolesOf(Uid).Contains("admin");   // a sub-admin acts on members and coaches only
             switch (name)
             {
                 case "create-user":
@@ -191,6 +198,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     var email = S("email").Trim().ToLowerInvariant(); var role = S("role");
                     if (role is not ("member" or "coach" or "employee") || string.IsNullOrWhiteSpace(S("name")) || !email.Contains('@') || S("password").Length < 6) throw Err("bad_input");
                     if (_accounts.ContainsKey(email)) throw Err("email_taken");
+                    if (!super && role == "employee") throw Err("forbidden");
                     var (first, last) = S("first_name") is { Length: > 0 } f && S("last_name") is { Length: > 0 } l ? (f.Trim(), l.Trim()) : NameParts.Split(S("name"));
                     var id = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], NameParts.Join(first, last), email, role, first, last);
                     _passwords[id] = S("password");
@@ -203,6 +211,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     var p = All<Profile>().FirstOrDefault(x => x.Id == S("user_id")) ?? throw Err("not_found");
                     if (!p.IsActive) throw Err("record_archived");
                     if (S("password").Length < 6) throw Err("bad_input");
+                    if (!CanManagePerson(p.Id)) throw Err("forbidden");
                     _passwords[p.Id] = S("password"); p.MustChangePassword = true;
                     Notify(p.Id, "system", "Your password was reset. Sign in with the new one.");
                     Audit("user.reset_password", "profiles", p.Id);
@@ -236,7 +245,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             AmenityUsage u => staff || All<UserAmenity>().Any(a => a.Id == u.UserAmenityId && a.MemberId == uid),
             UserNotification n => n.UserId == uid,
             UserSettings s => s.UserId == uid,
-            UserRole r => r.UserId == uid || RolesOf(uid).Contains("admin"),
+            UserRole r => r.UserId == uid || Has("users:manage"),
             AuditEntry => Has("audit:read"),
             CoachHire h => h.MemberId == uid || h.CoachId == uid || staff,
             TrainingSession s => s.MemberId == uid || s.CoachId == uid || staff,
@@ -991,12 +1000,12 @@ public sealed partial class DemoGateway : ISupabaseGateway
             case "set_user_active":
             {
                 Require("users:manage");
-                if (S("p_user") == uid) throw Err("forbidden");
+                if (S("p_user") == uid || !CanManagePerson(S("p_user"))) throw Err("forbidden");
                 var profile = All<Profile>().FirstOrDefault(p => p.Id == S("p_user")) ?? throw Err("not_found");
                 if (profile.DeletedAt is not null) throw Err("account_archived");
                 if (!B("p_active")) CheckAccountRemoval(profile);
                 if (!B("p_active")) StampArchive("account", profile.Id, "Deactivated account");
-                else { RequireArchiveAdmin(); _archiveMetadata.Remove(("account", profile.Id)); }
+                else _archiveMetadata.Remove(("account", profile.Id));   // deleted accounts were turned away above; only a restore brings those back
                 profile.IsActive = B("p_active");
                 Audit(B("p_active") ? "user.activate" : "user.deactivate", "profiles", S("p_user"));
                 return null;
@@ -1174,7 +1183,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     thread.Status = "open";   // writing again reopens it
                     var title = $"New message from {All<Profile>().First(p => p.Id == uid).FullName}";
                     if (thread.ClaimedBy is { } taker && All<Profile>().Any(p => p.Id == taker && p.IsActive)) NotifyChat(taker, title, preview, key);
-                    else foreach (var id in All<UserRole>().Where(u => RolesOf(u.UserId).Any(r => r is "admin" or "employee")).Select(u => u.UserId).Distinct().ToList())
+                    else foreach (var id in All<UserRole>().Where(u => RolesOf(u.UserId).Any(r => r is "admin" or "subadmin" or "employee")).Select(u => u.UserId).Distinct().ToList())
                         if (All<Profile>().Any(p => p.Id == id && p.IsActive)) NotifyChat(id, title, preview, key);
                 }
                 else NotifyChat(member, "Message from the front desk", preview, key);
@@ -1272,11 +1281,12 @@ public sealed partial class DemoGateway : ISupabaseGateway
     {
         var now = DateTime.UtcNow;
         DateTime At(int days, double hour) => DateTime.Today.AddDays(days).AddHours(hour).ToUniversalTime(); // seed in the viewer's local time
-        foreach (var r in new[] { "admin", "employee", "coach", "member" }) Add(new Role { Name = r });
+        foreach (var r in new[] { "admin", "employee", "coach", "member", "subadmin" }) Add(new Role { Name = r });
         Add(new GymSettings { GymName = "Gym Membership", QrAccountName = "Demo Gym (GCash)", WalkInPrice = 150, PaymentExpiryHours = 48 });
 
         AddUser("u-admin", "Dana Reyes", "admin@demo.io", "admin");
         AddUser("u-emp", "Marco Santos", "employee@demo.io", "employee");
+        AddUser("u-sub", "Sam Villanueva", "subadmin@demo.io", "subadmin");
         AddUser("u-coach1", "Lena Cruz", "coach@demo.io", "coach");
         AddUser("u-coach2", "Kai Mendoza", "kai@demo.io", "coach");
         AddUser("u-alex", "Alex Tan", "member@demo.io", "member");

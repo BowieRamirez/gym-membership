@@ -21,6 +21,7 @@ Deno.serve(async (req) => {
   const role = String(body.role ?? '');
   const password = String(body.password ?? '');
   if (!name || !email.includes('@') || !ROLES.includes(role) || password.length < 6) return reply({ error: 'bad_input' }, 400);
+  if (!caller.superAdmin && role === 'employee') return reply({ error: 'forbidden' }, 403);   // sub-admins add members and coaches only
 
   const { data, error } = await admin.auth.admin.createUser({
     email,

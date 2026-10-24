@@ -7,7 +7,8 @@ public class WindowsAdminNavigationTests
     {
         var app = TestPaths.AppFolder();
         var setup = File.ReadAllText(Path.Combine(app, "StaffShell.xaml.cs")).Replace("\r\n", "\n");
-        Assert.Contains("#if WINDOWS\n\t\tif (role == AppRole.Admin)\n\t\t{\n\t\t\tSetupAdminOverview(sp);\n\t\t\tSetupAdminNavigation();\n\t\t}\n#endif", setup);
+        // D15: the sub-admin gets the overview and the grouped menu too
+        Assert.Contains("#if WINDOWS\n\t\tif (role is AppRole.Admin or AppRole.SubAdmin)\n\t\t{\n\t\t\tSetupAdminOverview(sp, role == AppRole.Admin);\n\t\t\tSetupAdminNavigation();\n\t\t}\n#endif", setup);
         var source = File.ReadAllText(Path.Combine(app, "StaffShell.Windows.cs"));
         Assert.StartsWith("#if WINDOWS", source);
         Assert.EndsWith("#endif", source.TrimEnd());
@@ -73,7 +74,7 @@ public class WindowsAdminNavigationTests
         var source = File.ReadAllText(Path.Combine(TestPaths.AppFolder(), "StaffShell.Windows.cs"));
         Assert.Contains("var administrationPages = new VerticalStackLayout { Spacing = operations.Spacing, Padding = operations.Padding };", source);
         Assert.Contains("menu.Children.Add(administrationPages)", source);
-        Assert.Contains("else if (item.ClassId == \"admin\")", source);
+        Assert.Contains("else if (item.ClassId is \"admin\" or \"super\")", source);
         Assert.Contains("administrationPages.Children.Add(button)", source);
         Assert.DoesNotContain("administrationPages.IsVisible", source);
         Assert.DoesNotContain("administration.Clicked", source);
@@ -88,13 +89,13 @@ public class WindowsAdminNavigationTests
         Assert.EndsWith("#endif", setup.TrimEnd());
         Assert.Contains("Items.Insert(0, overview)", setup);
         Assert.Contains("CurrentItem = overview", setup);
-        Assert.Contains("services.GetRequiredService<AdminOverviewPage>()", setup);
+        Assert.Contains("new AdminOverviewPage(services.GetRequiredService<Core.ViewModels.AdminOverviewViewModel>(), superAdmin)", setup);
         var view = File.ReadAllText(Path.Combine(app, "Views", "AdminOverviewPage.Windows.cs"));
         Assert.StartsWith("#if WINDOWS", view);
         Assert.EndsWith("#endif", view.TrimEnd());
         Assert.DoesNotContain("HomeViewModel", view);
         var shared = XDocument.Load(Path.Combine(app, "StaffShell.xaml")).Root!;
-        var titles = shared.Elements().Where(e => (string?)e.Attribute("ClassId") == "admin").Select(e => (string?)e.Attribute("Title")).ToArray();
+        var titles = shared.Elements().Where(e => (string?)e.Attribute("ClassId") is "admin" or "super").Select(e => (string?)e.Attribute("Title")).ToArray();
         var vm = new GymMembership.Core.ViewModels.AdminOverviewViewModel(null!, null!);
         Assert.Equal(titles.Order(), vm.Cards.Select(c => c.Title).Order());
     }
@@ -120,7 +121,8 @@ public class WindowsAdminNavigationTests
         Assert.Equal(15, items.Count);
         Assert.Equal(new[] { "home", "verify", "cashier", "checkin", "amenities" },
             items.Where(e => (string?)e.Attribute("ClassId") == "desk").Select(e => (string?)e.Attribute("Route")));
-        Assert.Equal(8, items.Count(e => (string?)e.Attribute("ClassId") == "admin"));
+        Assert.Equal(4, items.Count(e => (string?)e.Attribute("ClassId") == "admin"));   // D15: shared with the sub-admin
+        Assert.Equal(4, items.Count(e => (string?)e.Attribute("ClassId") == "super"));   // super admin only
         Assert.Single(items, e => (string?)e.Attribute("Route") == "messages");
         Assert.Single(items, e => (string?)e.Attribute("Route") == "settings");
     }

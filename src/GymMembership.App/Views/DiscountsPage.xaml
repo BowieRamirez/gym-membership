@@ -10,7 +10,7 @@
     <Grid RowDefinitions="Auto,*">
         <HorizontalStackLayout Padding="20,12" Spacing="10">
             <Button Text="Discounts" Command="{Binding OpenDiscountsCommand}" Style="{StaticResource SmallOutlineButton}" />
-            <Button Text="Archive" Command="{Binding OpenArchiveCommand}" Style="{StaticResource SmallOutlineButton}" AutomationId="OpenArchive" />
+            <Button Text="Archive" Command="{Binding OpenArchiveCommand}" IsVisible="{Binding CanArchive}" Style="{StaticResource SmallOutlineButton}" AutomationId="OpenArchive" />
         </HorizontalStackLayout>
         <Grid Grid.Row="1" IsVisible="{Binding ShowArchive}">
             <c:ArchivePanel BindingContext="{Binding Archive}" />

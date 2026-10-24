@@ -1140,11 +1140,17 @@ public sealed class NotificationService(ISupabaseGateway gw) : INotificationServ
 // ===================== Admin =====================
 public sealed record UserRow(string UserId, string Username, bool IsActive, IReadOnlyList<string> Roles)
 {
-    public string RoleText => string.Join(", ", Roles);
+    public string RoleText => string.Join(", ", Roles.Select(RoleName));
+    /// <summary>What a role is called on screen (D15: the admin is the super admin).</summary>
+    public static string RoleName(string role) => role switch { "admin" => "super admin", "subadmin" => "sub-admin", _ => role };
     public bool IsCoach => Roles.Contains("coach");
     public bool IsEmployee => Roles.Contains("employee");
     public string CoachActionText => IsCoach ? "Remove coach" : "Make coach";
     public string EmployeeActionText => IsEmployee ? "Remove employee" : "Make employee";
+    public bool IsSubAdmin => Roles.Contains("subadmin");
+    public string SubAdminActionText => IsSubAdmin ? "Remove sub-admin" : "Make sub-admin";
+    /// <summary>Front desk, sub-admin or super admin: only the super admin manages these accounts (D15).</summary>
+    public bool IsStaff => Roles.Any(r => r is "admin" or "subadmin" or "employee");
     public string ActiveActionText => IsActive ? "Deactivate" : "Reactivate";
     public string ActiveStatus => IsActive ? "active" : "inactive";
 }
@@ -1158,7 +1164,10 @@ public sealed record DiscountUse(long Id, long Used, long Pending);
 
 public interface IAdminService
 {
+    /// <summary>Everyone not deleted, active or deactivated.</summary>
     Task<AppResult<IReadOnlyList<UserRow>>> UsersAsync();
+    /// <summary>True for the super admin (the admin role); false for a sub-admin and everyone else (D15).</summary>
+    Task<AppResult<bool>> IsSuperAdminAsync();
     Task<AppResult<bool>> AssignRoleAsync(string userId, string role);
     Task<AppResult<bool>> RevokeRoleAsync(string userId, string role);
     Task<AppResult<bool>> SetActiveAsync(string userId, bool active);
@@ -1189,8 +1198,15 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         var profiles = await gw.ListAsync<Profile>();
         var roles = await gw.ListAsync<Role>();
         var links = await gw.ListAsync<UserRole>();
-        return profiles.Where(p => p.IsActive && p.DeletedAt is null).Select(p => new UserRow(p.Id, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName, p.IsActive,
+        return profiles.Where(p => p.DeletedAt is null).Select(p => new UserRow(p.Id, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName, p.IsActive,
             links.Where(l => l.UserId == p.Id).Select(l => roles.First(r => r.RoleId == l.RoleId).Name).OrderBy(n => n).ToList())).ToList();
+    });
+
+    public Task<AppResult<bool>> IsSuperAdminAsync() => Safe.RunAsync(async () =>
+    {
+        var uid = gw.CurrentUserId;
+        var mine = (await gw.ListAsync<UserRole>(u => u.UserId == uid)).Select(u => u.RoleId).ToHashSet();
+        return (await gw.ListAsync<Role>()).Any(r => r.Name == "admin" && mine.Contains(r.RoleId));
     });
 
     public Task<AppResult<bool>> AssignRoleAsync(string userId, string role) => Rpc("assign_role", new() { ["p_user"] = userId, ["p_role"] = role });
