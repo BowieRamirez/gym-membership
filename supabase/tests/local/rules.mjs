@@ -59,6 +59,16 @@ await test('anonymous gets nothing', async () => {
   await db.query('begin'); await db.query('set local role anon');
   assert.match(await code(db.query('select * from profiles')), /42501/); await db.query('rollback');
 });
+// a later migration that forgets its revoke would hand the public key a privileged function or a table
+await test('after every migration, anonymous reaches no table and no security definer function', async () => {
+  const r = await db.query(`select p.oid::regprocedure::text as name from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.prosecdef and has_function_privilege('anon', p.oid, 'execute')
+    union all
+    select c.oid::regclass::text from pg_class c join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public' and c.relkind in ('r', 'v', 'm')
+        and has_table_privilege('anon', c.oid, 'select, insert, update, delete')`);
+  assert.ok(!r.rows.length, r.rows.map(x => x.name).join(', '));
+});
 await test('a member sees only themself, plus coaches', async () => {
   const r = await run(alex, 'select id from profiles');
   assert.deepEqual(r.rows.map(x => x.id).sort(), [alex, coach].sort());

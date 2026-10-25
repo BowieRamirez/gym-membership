@@ -20,6 +20,8 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 
 ### Current work / restart here
 
+- **2026-10-25 (latest): Phase 13 VERIFIED by the owner; Phase 14 IN PROGRESS.** Automated regression green (xUnit 725/725, database 309 ok / 0 fail, both builds), new anon-privilege check in `rules.mjs`, security self-review, 0.2.0-vs-0038 compatibility check and docs update done. Live is at 0038, nothing deployed this session. Next: owner walkthrough of the Phase 14 flows on Windows and Android, then (with the owner's go-ahead) PR to main, version tag and release. The notes below this line are older history.
+
 - Phase 2 (2026-10-22): IMPLEMENTED and DEPLOYED (DB) on `phase1-archive-checkpoint-2026-10-20`, commit 6f986d7, pushed (owner asked; the temporary `phase2-payment-authority` branch was fast-forwarded in and deleted). New: `0025_refund_payment_permission.sql`, `supabase/tests/local/payment-authority.mjs`, demo parity in `DemoSubscriptions.cs`. SQL suite all green incl. 6 new checks; xUnit 574/576 (same 2 baseline failures). 0025 applied live 2026-10-22 at the owner's request (dry run showed only 0025; `migration list --linked` shows 0025 in both columns). Next: owner checks refund approve/reject as admin in the app, then accepts Phase 2.
 - Current phase: Phase 1 IMPLEMENTED; owner reports migrations 0023/0024 applied live successfully. Migration-history confirmation, reset-password Edge Function deployment, live app verification and final device/owner acceptance remain pending.
 - Current task: Implementation complete for items 1, 2 and 4; review locally before accepting the phase or starting Phase 2.
@@ -100,8 +102,8 @@ Recommendations are proposals, not owner-approved requirements. Record the answe
 | 10 | Permanent member QR and scan logging | 15 | 1; D12 | DEPLOYED (DB) 2026-10-23 — 0034 live; device camera check pending |
 | 11 | First/last name registration, email confirmation by OTP, forgotten password | New 2026-10-23 | 1; D13 | VERIFIED 2026-10-24 — 0035 live; owner checked on Windows and Android |
 | 12 | "Are you sure?" confirmations and show/hide password | New 2026-10-24 | D14 | VERIFIED 2026-10-24 — commit b8cc27f; owner checked on Android, Windows demo smoke; no migration |
-| 13 | Sub-admin role under the super admin | New 2026-10-24 | D15 | DEPLOYED 2026-10-24 — 0036 live, create-user and reset-password redeployed; device check pending |
-| 14 | Integrated regression, deployment and handoff | All | 1–13 | PLANNED |
+| 13 | Sub-admin role under the super admin | New 2026-10-24 | D15 | VERIFIED 2026-10-25 — 0036–0038 live, create-user and reset-password redeployed; owner checked on Windows and Android |
+| 14 | Integrated regression, deployment and handoff | All | 1–13 | IN PROGRESS 2026-10-25 — automated regression, security review, compatibility check and docs done; owner walkthrough, release and rollout pending |
 
 Dependency order matters more than numbering. After Phase 0, independent work can be scheduled separately, but keep one phase's changes and evidence identifiable. The coach rate correction can be pulled forward as a small independent slice if desired; record that move here.
 
@@ -526,25 +528,33 @@ Tasks
 - [x] App: sign-in sends a sub-admin to the staff area with only the approved admin pages (menu and phone navigation); Users page hides role buttons, delete and staff accounts' actions for a sub-admin; super admins see a way to make someone a sub-admin.
 - [x] Demo mode: a sub-admin demo login that follows the same rules.
 - [x] Tests: database checks that a sub-admin is refused every "no" row and allowed every "yes" row, and that a super admin still has everything; app tests for the menu and the Users page; Edge Function checks.
-- [ ] Windows and Android check by the owner with a test sub-admin account.
+- [x] Windows and Android check by the owner with a test sub-admin account. Owner reported done 2026-10-25.
 
 Acceptance / verification:
-- [ ] A sub-admin sees and can use only the "yes" pages and actions, on both platforms.
-- [ ] The server refuses a sub-admin on every "no" action even when called directly (not only hidden in the app).
-- [ ] The super admin can do everything they could before.
+- [x] A sub-admin sees and can use only the "yes" pages and actions, on both platforms (owner, 2026-10-25).
+- [x] The server refuses a sub-admin on every "no" action even when called directly (not only hidden in the app): `subadmin.mjs`, `staff-role.mjs`.
+- [x] The super admin can do everything they could before (owner, 2026-10-25; full suites green).
 
 ## Phase 14 — Integrated regression and staged rollout
 
-- [ ] Run all xUnit tests, including existing account, subscription/refund, payment, request guard, calendar, chat, navigation and XAML-binding checks.
-- [ ] Run the full disposable local PostgreSQL suite, populated-history migration tests, permission/RLS denial tests and real separate-connection concurrency tests.
-- [ ] Test fresh schema and upgrade from populated current data. Review migration lock duration/backfills and privileges; no destructive cleanup of history.
-- [ ] Build Android and Windows; run demo and staging/live-configured smoke checks without leaking project secrets or modifying the owner's config.
-- [ ] Walk through admin archive/restore, capped-code checkout, purchase-to-entitlement, coach availability, simultaneous booking, structured rescheduling, presence filtering, PDF export and QR lifecycle end to end.
-- [ ] Verify app-closed timing transitions, network failure/retry, duplicate taps, reconnect, multiple devices and timezone/day-boundary cases with an injectable/fixed clock where appropriate.
-- [ ] Review security and native-first/minimal-complexity implementation. Record actual reviewer/tool used; don't label self-review as independent review.
-- [ ] Update PRD, technical/database specs, diagrams and README to match shipped behavior and new permissions/dependencies.
-- [ ] Review backups, staging rehearsal, server-before-client compatibility, safe rollout and rollback/forward-fix plan. Apply live migrations only with separate authorization and record actual versions/results.
+Status: IN PROGRESS 2026-10-25 on `phase1-archive-checkpoint-2026-10-20` (from a77ad61). No live change, no release.
+
+- [x] Run all xUnit tests, including existing account, subscription/refund, payment, request guard, calendar, chat, navigation and XAML-binding checks. 2026-10-25: 725/725 passed.
+- [x] Run the full disposable local PostgreSQL suite, populated-history migration tests, permission/RLS denial tests and real separate-connection concurrency tests. 2026-10-25: `npm --prefix supabase/tests/local test` exit 0, 309 ok / 0 FAIL across all 17 files (populated-history upgrade in `phase7-migration.mjs`, concurrency in `session-requests.mjs`/`reservations.mjs`). New check in `rules.mjs`: after every migration, `anon` can reach no table/view and no security definer function (111/111).
+- [x] Test fresh schema and upgrade from populated current data. Review migration lock duration/backfills and privileges; no destructive cleanup of history. Every suite file builds the schema fresh from 0001–0038; `phase7-migration.mjs` and the 0023/0024/0038 checks upgrade populated data. Since 0.2.0 (0021–0038) there is no dropped/renamed table or column; the only tightening is `profiles.first_name set not null`, filled by a trigger. Backfills (0018, 0023, 0024, 0035, 0038) touch a one-gym dataset, so lock time is negligible; all already applied live.
+- [~] Build Android and Windows; run demo and staging/live-configured smoke checks without leaking project secrets or modifying the owner's config. Both Debug builds pass 2026-10-25 (0 errors). No new smoke run this session; the live-configured checks are the owner's device checks of phases 11–13. There is no staging project.
+- [ ] Walk through admin archive/restore, capped-code checkout, purchase-to-entitlement, coach availability, simultaneous booking, structured rescheduling, presence filtering, PDF export and QR lifecycle end to end. Each flow has xUnit (demo) and database tests; an owner walkthrough on one build is still needed, plus real-camera QR scanning (never tried on a device).
+- [~] Verify app-closed timing transitions, network failure/retry, duplicate taps, reconnect, multiple devices and timezone/day-boundary cases with an injectable/fixed clock where appropriate. Covered by tests: server-side expiry/auto-checkout jobs (database), Asia/Manila day boundaries (0028/0029 checks), fixed-clock xUnit cases, offline errors on QR scan. Not covered: real multi-device and reconnect behaviour; known open item: a walk-in retry can record a day pass twice (no request id).
+- [x] Review security and native-first/minimal-complexity implementation. Record actual reviewer/tool used; don't label self-review as independent review. 2026-10-25, author self-review by Claude (not independent): 149 security definer functions all pin `search_path`; RLS enabled on every table; `anon` reaches no table and no security definer function (two plain functions, `plus_cooldown` and the trigger function `sync_name_parts`, are callable by anon and harmless); Edge Functions verify the token, require an active super admin or sub-admin, limit sub-admins to members/coaches and audit; no service key or signing secret in tracked files, `supabase.json` git-ignored. Minimal-complexity review: ponytail reviews ran per phase.
+- [x] Update PRD, technical/database specs, diagrams and README to match shipped behavior and new permissions/dependencies. 2026-10-25: README (status, roles incl. sub-admin, accounts, demo logins, tables, rules, next steps, roadmap); PRD and technical spec gained "what changed / as built" sections; database plan gained a Current state section (roles, tables added, migration index 0013–0038, rules for new migrations). The ER diagram in `docs/dfd/` is marked as the original design and is NOT redrawn.
+- [~] Review backups, staging rehearsal, server-before-client compatibility, safe rollout and rollback/forward-fix plan. Apply live migrations only with separate authorization and record actual versions/results. Compatibility checked (see Rollout below); no staging project; backups not taken by this session. Rollout plan below needs the owner's go-ahead.
 - [ ] Owner verifies Windows and Android behavior; record issues as new unchecked tasks rather than declaring the entire plan done prematurely.
+
+Rollout (2026-10-25):
+- Server first is already done: live is at 0038 and the released 0.2.0 app keeps working against it. A script compared every RPC 0.2.0 calls (32) with the functions at 0038 by name and argument names: none missing or changed. Behaviour does change for 0.2.0 users (for example hiring needs the coach checked in), so the new app should follow soon.
+- Release steps, each needing the owner's go-ahead: (1) owner walkthrough on Windows and Android from this branch; (2) PR `phase1-archive-checkpoint-2026-10-20` → `main`, CI green; (3) version bump (0.3.0 suggested) and tag, which publishes the APK, MSIX and MSI; (4) install over 0.2.0 on one phone and one PC and sign in.
+- Backups: live has only test accounts, as before; take a dashboard backup or `npx supabase db dump` first if real members are added before the release.
+- Rollback: the app can roll back to the 0.2.0 installers (the database stays compatible). Migrations are not rolled back; a problem in the database is fixed forward with a new migration (0039+), never by editing an applied one.
 
 Suggested baseline commands (run individually, from repository root):
 
@@ -589,8 +599,8 @@ Fill cells with date, command/test, result and evidence location. `—` means no
 | 10 Permanent QR | — | — | — | — | — | — | — |
 | 11 Names/email/password | 2026-10-24 | 651/651 | 293/293 (names-email.mjs) | demo smoke passed | owner checked live 2026-10-24 | 0035 live, create-user deployed 2026-10-24 | ponytail review done; owner accepted 2026-10-24 |
 | 12 Confirmations | 2026-10-24 | 701/701 | N/A — no database change | demo smoke passed | owner checked 2026-10-24 | none needed | ponytail review done; owner accepted 2026-10-24 |
-| 13 Sub-admin | 2026-10-24 | 713/713 | 302/302 (subadmin.mjs) | demo smoke passed | builds; device check pending | 0036 live, functions deployed 2026-10-24 | ponytail review done; owner pending |
-| 14 Integration/rollout | — | — | — | — | — | — | — |
+| 13 Sub-admin | 2026-10-24 | 713/713 | 302/302 (subadmin.mjs) | demo smoke passed; owner checked 2026-10-25 | owner checked 2026-10-25 | 0036–0038 live, functions deployed 2026-10-24 | ponytail review done; owner accepted 2026-10-25 |
+| 14 Integration/rollout | 2026-10-25 | 725/725 | 309 ok / 0 fail; rules.mjs 111/111 with new anon check | builds; owner walkthrough pending | builds; owner walkthrough pending | none (live at 0038); 0.2.0 RPC compatibility checked | author self-review (security, compatibility); owner pending |
 
 ## 5. Session log — append whenever work pauses
 
@@ -740,6 +750,14 @@ Fill cells with date, command/test, result and evidence location. `—` means no
 - Tests: `structured-requests.mjs` 13/13 (written first; all RED before 0031); the old 0022 "date passing still blocks" check in `session-requests.mjs` was updated to the approved D7 rule. `StructuredRequestTests` 6 (written before the app code). xUnit 605/607 with the same 2 baseline failures; Windows and Android Debug builds succeed. Coach and member request screens checked by screenshot in an isolated demo copy (found and fixed a blank name in the panel title). Review: author self-review + ponytail; no independent reviewer.
 - 0030 and 0031 applied live 2026-10-22 at the owner's request; `migration list --linked` shows both in both columns.
 - Next: owner tries requests with an amenity, a proposal, accept/ask again/decline and Add 30 minutes on Windows and Android, then accepts Phase 7. Phase 8 needs D9.
+
+### 2026-10-25 — Phase 13 accepted, Phase 14 regression and docs
+
+- Owner reported the Phase 13 sub-admin check done on Windows and Android; Phase 13 marked VERIFIED.
+- Ran: `dotnet test tests/GymMembership.Tests` (725/725), `npm --prefix supabase/tests/local test` (exit 0, 309 ok, 0 FAIL), Windows and Android Debug builds (0 errors).
+- Added `rules.mjs` check: anon reaches no table/view and no security definer function after every migration. A first, stricter version (no function at all) flagged only `plus_cooldown` and the trigger function `sync_name_parts`, both harmless invoker functions, so the check targets definer functions and tables.
+- Security self-review and the 0.2.0 → 0038 RPC compatibility check (script in the session scratchpad, not committed) found no problems. Docs updated: README, PRD, technical spec, database plan, diagram note.
+- Not done: owner walkthrough, real-camera QR scan, multi-device/reconnect checks, staging rehearsal, backup, release. Nothing committed or deployed unless the owner asks.
 
 ## 6. Copyable resume prompt
 

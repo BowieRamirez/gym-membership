@@ -7,7 +7,7 @@
 
 One app for the whole gym floor. Members manage their plan, coaches run their sessions, and the front desk handles payments, all from a single .NET MAUI codebase.
 
-> **Status: alpha, [version 0.1.0a](https://github.com/BowieRamirez/gym-membership/releases/tag/v0.1.0a).** Installable on Android and Windows, running on a real Supabase backend. See [Project status](#project-status) for what works and what is still open.
+> **Status: [version 0.2.0](https://github.com/BowieRamirez/gym-membership/releases/tag/v0.2.0) is released. The fixes-and-changes work (plan phases 1 to 13) is live on the database and ships in the next release.** Installable on Android and Windows, running on a real Supabase backend. See [Project status](#project-status) for what works and what is still open.
 
 ## Contents
 
@@ -25,20 +25,20 @@ One app for the whole gym floor. Members manage their plan, coaches run their se
 
 ## Project status
 
-*Last updated 2026-10-14.* The first alpha, **[0.1.0a](https://github.com/BowieRamirez/gym-membership/releases/tag/v0.1.0a)**, is published and the Android and Windows builds are green on `main`.
+*Last updated 2026-10-25.* **[0.2.0](https://github.com/BowieRamirez/gym-membership/releases/tag/v0.2.0)** is published. Since then the [fixes and changes plan](docs/superpowers/plans/2026-10-20-gym-fixes-and-changes.md) (phases 1 to 13) was built on the branch `phase1-archive-checkpoint-2026-10-20`. Its database migrations are live; its app changes ship in the next release.
 
 | Area | Status | Notes |
 |---|---|---|
 | **App screens** | Done | Member, coach, front-desk and admin screens, including guest sign-up with locked pages, QR payments, counter and walk-in payments, messaging, sessions, shifts and attendance |
 | **Phones** | Done | Member, coach and shared pages are laid out for phone screens (full-width buttons, stacked cards, 16-unit padding) |
-| **Sign-up rules** | Done | Names accept letters only (also enforced in the database by migration `0012`, see below); email up to 100 characters; password 6 to 64 characters |
+| **Sign-up rules** | Done | First and last name, letters only (also enforced in the database); email up to 100 characters; password 6 to 64 characters; forgotten password and email confirmation by a 6-digit emailed code |
 | **Coach hiring** | Done | A coach can pause hiring; members still see them, grayed out, and cannot hire until the coach resumes |
 | **Backend** | Live | Release builds use the real Supabase project: authentication, row level security and both Edge Functions answer. The demo backend remains for builds without project settings |
-| **Database** | Needs one step | Migrations `0001` to `0012` are in the repository. **`0012` (names are letters only) still has to be run on the project** |
+| **Database** | Live | Migrations `0001` to `0038` are in the repository and applied to the project; both Edge Functions are deployed |
 | **Android** | Released | One signed APK for phones (arm64) and Android Studio emulators (x86_64), 33 MB |
 | **Windows** | Released | Signed MSIX installer (recommended) and a signed MSI, both self-contained, 66 MB and 120 MB |
 | **CI/CD** | Working | Separate Tests, Android and Windows workflows; a version tag publishes to the Releases page ([how](#builds-and-releases)) |
-| **Tests** | Passing | 143 unit tests and 57 database rule checks on every push |
+| **Tests** | Passing | 725 unit tests and 300+ database rule checks on every push |
 
 **Not done yet**
 
@@ -46,21 +46,20 @@ One app for the whole gym floor. Members manage their plan, coaches run their se
 - No dedicated smoke-test account is set up, so the release check does not yet cover a real sign-in.
 - A free Supabase project pauses after about a week without use; a paid plan or a keep-alive job is needed before testers rely on it.
 - Windows and Android warn about the self-signed test certificate the first time. A purchased certificate would remove that.
-- Not built: iOS and Mac, the Google Play and Microsoft Store listings, and [Phase 2](#roadmap) (products and sales, employees, working hours, sales reports).
-
-**Known issues**
-
-- On the Coaches page, a coach you have not hired shows "No shifts posted yet" even when they have shifts. The database only lets members see the shifts of coaches they hired.
-- The Trainees page says "1 sessions completed" (plural wording).
+- Scanning a member QR with a real camera has not been tried on a device yet.
+- Not built: iOS and Mac, the Google Play and Microsoft Store listings, products and sales, employee working hours.
 
 ## What it does
 
 | Role | Can do |
 |---|---|
-| **Member** | See days left on a membership, buy or renew a package (with a discount code), attach proof of payment, use amenities, hire a coach, message that coach, see their posted shifts, request, reschedule or cancel training sessions |
-| **Coach** | Manage trainees, message them, post shifts, offer open slots, approve requests, schedule, reschedule or cancel sessions, mark attendance, edit a public profile |
-| **Front desk** | Verify or reject payments, check members in, confirm amenity visits |
-| **Admin** | Everything above, plus adding members, coaches and front-desk staff, resetting passwords, packages (add, edit, delete) and amenities, discount codes, revenue, and an audit log |
+| **Member** | See days left on a membership; buy, extend or cancel a package (with a refund request within 24 hours of verification); use a discount code; pay by QR; buy and book amenities; show a permanent member QR at the desk; find a coach who is in the gym, hire and message them; send structured training requests and answer a coach's counter-proposal |
+| **Coach** | A Dashboard calendar of sessions and attendance; post shifts on the calendar; check in and out at the gym; open availability; answer or counter training requests; mark attendance; set a public profile and rate; message trainees |
+| **Front desk** | Home tiles; verify or reject payments; Cashier (counter and walk-in payments); check members in by scanning their QR; amenity status; check coaches in and out; member support chat |
+| **Sub-admin** | Everything the front desk does, plus the admin Overview, packages, amenities and discount codes, the revenue report (PDF), and adding, deactivating, reactivating and resetting the passwords of members and coaches |
+| **Super admin** | Everything, plus handing out roles (including sub-admin), archiving and restoring accounts and catalog records, voiding payments, deciding refunds, gym settings (opening hours, prices, QR) and the logs. Super admin accounts cannot be changed, deactivated or deleted from the app |
+
+Consequential actions ask "Are you sure?" first, and every password box has a show/hide eye.
 
 **Design:** colour is only ever used for status: yellow for pending, green for verified, red for rejected, blue for scheduled. The dashed lane on the membership screen is the one recurring motif, borrowed from court floor markings.
 
@@ -69,8 +68,10 @@ One app for the whole gym floor. Members manage their plan, coaches run their se
 - **Members sign up themselves** from the sign-in screen. A new account starts as a **guest**.
 - **Guests** can open Packages, My membership, Coaches, Alerts and Settings. Amenities, Messages, Sessions and Time requests show a "get a membership" notice.
 - **A guest becomes a full member** once a package payment is verified by the owner or front desk, and goes back to guest when the plan expires.
-- **The owner adds coaches and front-desk staff** (and can add members) on the Users page with a temporary password.
-- **Passwords:** anyone can change theirs under Settings, and the owner can reset a forgotten one.
+- **The super admin adds coaches, front-desk staff and sub-admins** (and can add members) on the Users page with a temporary password. A sub-admin can add members and coaches only.
+- **Deleting an account archives it.** Its history stays, and the super admin can restore it from Logs & Archive.
+- **Passwords:** anyone can change theirs under Settings or reset a forgotten one from the sign-in screen with an emailed code. Staff can also set a temporary one.
+- **Email:** members confirm their address in Settings with an emailed code (sent through the project's SMTP, Brevo).
 
 ## Download and install (testers)
 
@@ -133,7 +134,8 @@ The login screen has one-click buttons for each role. To type them in, the passw
 | Member | `member@demo.io` |
 | Coach | `coach@demo.io` |
 | Front desk | `employee@demo.io` |
-| Admin | `admin@demo.io` |
+| Sub-admin | `subadmin@demo.io` |
+| Super admin | `admin@demo.io` |
 
 All data is seeded in memory and resets every time the app starts.
 
@@ -208,6 +210,7 @@ gym-membership/
 ├── supabase/
 │   ├── migrations/                  Database schema, security rules, functions, jobs
 │   ├── functions/                   Edge Functions (create-user, reset-password)
+│   ├── preflight/                   Read-only checks to run before some migrations
 │   ├── scripts/                     Owner and demo account scripts
 │   └── tests/local/                 Database rule tests on a local Postgres
 ├── installer/windows/               WiX definition of the MSI installer
@@ -223,7 +226,7 @@ The app talks to the backend through a single interface, `ISupabaseGateway`. `Ma
 
 ## Database plan (Supabase)
 
-> **Applied to the connected Supabase project and used by the release builds.** This is a summary. The full build spec is [`docs/specs/database-plan.md`](docs/specs/database-plan.md). The migrations are in [`supabase/migrations/`](supabase/migrations) and pass `supabase/tests/local`. The tables, security rules and both Edge Functions answer on the project. **Migration `0012` (names are letters only) is new: run it with `npx supabase db push` after checking the query at the top of the file.**
+> **Applied to the connected Supabase project (migrations `0001` to `0038`) and used by the release builds.** This is a summary. What each migration after the original design added is listed in [`docs/specs/database-plan.md`](docs/specs/database-plan.md#current-state-2026-10-25). The migrations are in [`supabase/migrations/`](supabase/migrations) and pass `supabase/tests/local`.
 
 ### Decisions
 
@@ -240,13 +243,13 @@ The app talks to the backend through a single interface, `ISupabaseGateway`. `Ma
 
 | Group | Tables |
 |---|---|
-| Identity | `profiles`, `roles`, `permissions`, `role_permissions`, `user_roles`, `user_settings`, `gym_settings` |
-| People | `members`, `coaches` |
+| Identity | `profiles`, `roles`, `permissions`, `role_permissions`, `user_roles`, `user_settings`, `gym_settings`, `user_last_seen`, `member_codes` |
+| People | `members`, `coaches`, `coach_visits` |
 | Catalog | `membership_packages`, `amenities`, `discounts` |
-| Entitlements | `user_membership_packages`, `membership_renewals`, `user_amenities` |
-| Payments | `payments` |
-| Coaching | `coach_hires`, `training_sessions`, `time_requests`, `session_attendance`, `shift_posts`, `messages` |
-| Operations | `gym_check_ins`, `amenity_usages`, `user_notifications`, `audit_log` |
+| Entitlements | `user_membership_packages`, `membership_renewals`, `membership_terms`, `user_amenities`, `reservations` |
+| Payments | `payments`, `refund_requests` |
+| Coaching | `coach_hires`, `training_sessions`, `time_requests`, `time_request_events`, `session_attendance`, `shift_posts`, `messages` |
+| Operations | `gym_check_ins`, `member_scans`, `amenity_usages`, `amenity_follows`, `support_threads`, `support_messages`, `user_notifications`, `audit_log` |
 
 ### How payments work
 
@@ -270,23 +273,24 @@ Staff record a walk-in payment with the person's name, and a check-in is created
 
 #### Corrections
 
-Verified payments are never edited. Only an admin can void one, with a reason. Voiding reverses what the payment activated and is recorded in the audit log.
+Verified payments are never edited. Only the super admin can void one, with a reason. Voiding reverses what the payment activated and is recorded in the audit log. A member may cancel a membership within 24 hours of verification and request a refund; the super admin approves or rejects it, and an approved refund lowers revenue on the approval day.
 
 ### Rules the database enforces
 
 - One active membership per member, and one active hire per member and coach.
 - Each payment pays for exactly one thing, except walk-ins, which have a name instead of a member.
 - Staff can't verify their own payment.
-- The same e-wallet reference number can't be used twice, and a discount code works once per member.
+- The same e-wallet reference number can't be used twice, a discount code works once per member, and a code with a use limit stops once that many payments are verified.
+- Amenity reservations can't overlap, and a coach can only be hired while checked in at the gym.
 - No overlapping scheduled sessions for a coach or a member, and no overlapping shifts for a coach.
 - Messages are only between a coach and a member, sent by one of them.
 
 ### Next steps
 
-1. **Run migration `0012`** on the Supabase project (names are letters only; the file starts with a query that lists any old names that would break it).
+1. **Release** the fixes-and-changes work: merge to `main` and push a version tag. The database is already ahead of 0.2.0; see the rollout notes in Phase 14 of the plan.
 2. **Create a dedicated smoke-test member** and add it as the `SUPABASE_SMOKE_EMAIL` and `SUPABASE_SMOKE_PASSWORD` Actions secrets, so every release also checks a real sign-in.
 3. **Free-tier projects pause after about a week without use.** Use a paid plan or a small keep-alive job before testers rely on it.
-4. **Docs:** bring the PRD, technical spec and database diagram up to date with the schema.
+4. **Docs:** the database diagram in `docs/dfd/` still shows the original design, not the 0038 schema.
 
 ## Roadmap
 
@@ -301,9 +305,12 @@ Verified payments are never edited. Only an admin can void one, with a reason. V
 - [x] Register rules: letters-only names, email and password limits; coaches can pause hiring
 - [x] CI/CD: separate Android and Windows pipelines, signed APK, MSIX and MSI, Releases page
 - [x] First alpha release, [0.1.0a](https://github.com/BowieRamirez/gym-membership/releases/tag/v0.1.0a)
+- [x] Role redesign (bell, Messenger chat with photos, amenity status, Cashier, coach calendar, extensions and refunds), released as [0.2.0](https://github.com/BowieRamirez/gym-membership/releases/tag/v0.2.0)
+- [x] Fixes and changes, phases 1 to 13: archive, payment authority, capped codes, revenue PDF, amenity purchase and reservations, structured requests, coach check-in, coach dashboard, member QR, names and email codes, confirmations, sub-admin (database live; app in the next release)
+- [ ] Release the fixes and changes
 - [ ] Try the installers on a clean phone and a clean PC
 - [ ] Optional: nightly pre-release builds, keep-alive for the Supabase project
-- [ ] Phase 2: products and sales, employees, working hours, sales reports
+- [ ] Products and sales, employee working hours
 
 ## Docs
 
@@ -316,3 +323,4 @@ Verified payments are never edited. Only an admin can void one, with a reason. V
 - [Database diagram](docs/dfd/gym-membership-db-diagram.md)
 - [Data flow diagram](docs/dfd/Gym%20DFD.png)
 - [Phase 1 implementation plan](docs/superpowers/plans/2026-10-04-gym-membership-phase1.md)
+- [Fixes and changes plan (phases 1 to 14)](docs/superpowers/plans/2026-10-20-gym-fixes-and-changes.md)

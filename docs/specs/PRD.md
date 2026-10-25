@@ -1,8 +1,22 @@
 # Gym Membership & Coach Management System — PRD
 
-Status: Draft for review · Date: 2026-10-04
+Status: Phase 1 shipped (0.1.0a, 0.2.0); later changes live, see below · Original date: 2026-10-04 · Updated: 2026-10-25
 Sources: `docs/dfd/Gym DFD.png`, `docs/dfd/gym-membership-db-diagram.md`
 Companion: [technical-spec.md](technical-spec.md)
+
+## What changed since this draft (2026-10-25)
+
+Sections 1 to 8 are the original requirements. What shipped differs as follows; the details and approved decisions (D1 to D15) are in the [role redesign spec](../superpowers/specs/2026-10-15-role-redesign-design.md) and the [fixes and changes plan](../superpowers/plans/2026-10-20-gym-fixes-and-changes.md).
+
+- **Roles:** Member, Coach, Front desk (Employee), **Sub-admin** (front desk plus catalog, discounts, revenue and member/coach accounts) and **Super admin** (everything; the original Admin). All roles run on Android and Windows.
+- **Currency:** PHP only (§5 said USD). Payments are QR (GCash / Maya / QR Ph) with proof, or cash/walk-in at the Cashier; no payment gateway.
+- **Memberships:** paid terms with queued extensions; cancel with a refund request within 24 hours of verification, decided by the super admin; approved refunds lower revenue that day.
+- **Amenities:** live status (available / in use / unavailable); amenities can be bought and reserved without overlaps.
+- **Coaching:** coaches check in and out at the gym and are only listed and hireable while in; structured training requests with counter-proposals; coach Dashboard calendar with shift posting and attendance.
+- **Front desk:** permanent member QR scanned at check-in (identification only, never payment); Messenger-style chat with members, with photos.
+- **Accounts:** first and last name; email confirmation and forgotten password by a 6-digit emailed code; deleting archives (restorable by the super admin); super admin accounts are protected from the app.
+- **Reports:** revenue export as PDF; capped discount codes; the audit log and archive under "Logs & Archive".
+- Phase 2 extras (§3) are still not built: products and inventory, product sales, working hours.
 
 ## 1. Purpose
 

@@ -1,4 +1,7 @@
-w# Untitled diagram documentation
+# Untitled diagram documentation
+
+> **Original design (2026-10-04), not the live schema.** The live schema is the migrations in `supabase/migrations/` (0001 to 0038); the tables added since are listed in [the database plan](../specs/database-plan.md#current-state-2026-10-25). This diagram has not been redrawn.
+
 ## Summary
 
 - [Introduction](#introduction)
