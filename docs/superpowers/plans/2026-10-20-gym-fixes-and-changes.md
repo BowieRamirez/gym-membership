@@ -1,0 +1,764 @@
+# Gym management fixes and changes — implementation and progress plan
+
+Created: 2026-10-20
+Last updated: 2026-10-24
+Status: Phases 1–10 built (2–10 DB live; device/owner acceptance pending). Phase 11 VERIFIED 2026-10-24 — email confirm and password reset by code checked live on Windows and Android by the owner.
+Branch inspected: `main`
+
+## How to use this plan
+
+This is the restartable checklist for the owner's requested fixes. Original request numbers are preserved; there was no item 3. There are 14 requested items, numbered 1, 2, and 4–15.
+
+1. Work on one phase at a time, in dependency order. Before starting, read `CLAUDE.md` and the current implementation; paths below are starting points, not a requirement to keep growing large files.
+2. Change the phase status to `IN PROGRESS`, fill in the current-work block, and check tasks only after they are actually finished.
+3. Keep implementation, automated tests, device verification, and live deployment separate. Code written is not the same as verified or deployed.
+4. Before stopping, update the current-work block, checklist, and session log. Record exact failing tests, uncommitted files, and the next concrete action.
+5. Before resuming, read this file, inspect `git status --short`, check the recorded branch/commit, and continue from the next action. Do not overwrite unfamiliar changes.
+6. No live database migration, real account deletion/deactivation, real payment operation, commit, push, or release is authorized merely by this plan. Schedule those separately with the owner.
+
+Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED`, `DEPLOYED`. Use `N/A` for genuinely inapplicable verification, with a reason. A checked implementation task does not imply phase acceptance.
+
+### Current work / restart here
+
+- **2026-10-25 (latest): Phase 13 VERIFIED by the owner; Phase 14 IN PROGRESS.** Automated regression green (xUnit 725/725, database 309 ok / 0 fail, both builds), new anon-privilege check in `rules.mjs`, security self-review, 0.2.0-vs-0038 compatibility check and docs update done. Live is at 0038, nothing deployed this session. Owner walkthrough done 2026-10-25; PR to main opened. Next: merge after CI, then (with the owner's go-ahead) version tag and release. The notes below this line are older history.
+
+- Phase 2 (2026-10-22): IMPLEMENTED and DEPLOYED (DB) on `phase1-archive-checkpoint-2026-10-20`, commit 6f986d7, pushed (owner asked; the temporary `phase2-payment-authority` branch was fast-forwarded in and deleted). New: `0025_refund_payment_permission.sql`, `supabase/tests/local/payment-authority.mjs`, demo parity in `DemoSubscriptions.cs`. SQL suite all green incl. 6 new checks; xUnit 574/576 (same 2 baseline failures). 0025 applied live 2026-10-22 at the owner's request (dry run showed only 0025; `migration list --linked` shows 0025 in both columns). Next: owner checks refund approve/reject as admin in the app, then accepts Phase 2.
+- Current phase: Phase 1 IMPLEMENTED; owner reports migrations 0023/0024 applied live successfully. Migration-history confirmation, reset-password Edge Function deployment, live app verification and final device/owner acceptance remain pending.
+- Current task: Implementation complete for items 1, 2 and 4; review locally before accepting the phase or starting Phase 2.
+- Working branch / original base HEAD: `phase1-archive-checkpoint-2026-10-20` / `9f6ecb097ded65b59e3c6427924dd90d288e908a`. Created from the prior local `phase1-archive-accounts` branch with the Phase 1 work intact; main is not being merged or pushed.
+- Checkpoint authorization: Owner explicitly requested a NEW branch and a Git commit/push to save progress before continuing other phases tomorrow. This supersedes the earlier no-push instruction for this checkpoint only; it does not authorize a merge, app release, further live deployment or Phase 2 changes. The checkpoint commit is the commit containing this handoff (inspect `git log -1 --oneline` and upstream status for its actual hash/publication). Owner separately reports 0023/0024 applied live; reset-password deployed 2026-10-22.
+- Files changed so far: Account and catalog archive services/models/demo/ViewModels; Users native menu/deletion popup; Discounts & Archive UI; catalog actions/navigation; migrations 0023/0024; reset-password archived-target guard; regression tests and Windows smoke script. Use `git status --short` for the exact uncommitted file list.
+- Last command/test and result: 39 focused Phase 1 tests pass. Full xUnit: 574 passed, same 2 pre-existing failures / 576. SQL: 110 rules + 31 Phase 7 + 26 session + 22 account + 16 catalog/archive checks pass; populated-history upgrade checks pass. Windows and Android Debug builds pass. Windows isolated-demo smoke passes.
+- Database migrations added/applied for this plan: `0023_account_archive.sql` and `0024_archive_catalog.sql` passed disposable tests; owner now reports both APPLIED LIVE via successful `supabase db push --linked` output. Remote history confirmed 2026-10-22: `migration list --linked` shows 0001–0024 in both Local and Remote. The reset-password Edge Function change is NOT yet reported deployed.
+- Remaining verification: live-backed app smoke checks using designated test records; Android touch/device interaction (adb not on PATH); Windows keyboard/screen-reader/narrow/light-dark checks and owner acceptance. No claim that old signed URLs or Supabase Auth sessions are revoked by profile deactivation.
+- Next concrete action: (0023/0024 remote history confirmed 2026-10-22; `reset-password` deployed 2026-10-22 to project `avxcitoddadbblxuhiik`, the linked project the app uses.) Verify the updated live-backed app. Do not reapply migrations, start another phase, commit or Git-push automatically. D3 resolved 2026-10-22; Phase 2 is unblocked.
+- Safe stopping point: Phase 1 implementation/evidence and this restart plan are included in the owner-authorized checkpoint on `phase1-archive-checkpoint-2026-10-20`. Verify `git status -sb` and `git log -1 --oneline` when resuming to confirm commit/upstream state. No further phase work is started. Optional project skill/review integrations were unavailable; review was author self-review only.
+
+## 1. Repository findings and guardrails
+
+The README is older than several current changes. Use the code, current migrations, and newer specs as the implementation baseline; do not use old README test counts as current evidence.
+
+| Area | Existing baseline inspected | Planning consequence |
+| --- | --- | --- |
+| Architecture | .NET 10 MAUI/XAML with shared Core models, services, ViewModels; `ISupabaseGateway` selects live or demo behavior in `MauiProgram.cs` | Implement business rules in the database and mirror them in DemoGateway; UI hiding alone is insufficient. |
+| Accounts | `UsersPage.xaml` has four inline actions; `AdminService` has `SetActiveAsync`, role management, password reset | Add the overflow menu and audited soft-delete lifecycle; do not delete Supabase Auth identities or physically relocate linked rows. |
+| Archive/catalog | `DeletePackageAsync` and `DeleteDiscountAsync` currently call physical delete | Reconcile these paths with archive behavior so history is not lost. |
+| Payments | `void_payment` already requires `payments:void` and stores actor, timestamp, reason. Initial role grants reserve it to admin | Verify current effective policies and latest function definitions, then fix capability-driven UI and any bypasses rather than assuming the server has no authorization. |
+| Member cancellation | Migration `0019` allows withdrawal of one's own pending membership/renewal payment; Phase 7 adds cancellation/refunds | Clarify admin cancellation versus member withdrawal/refund before changing permissions. |
+| Revenue | `RevenueAsync` returns grouped day/kind/method summaries, not individual receipts. `0020` deducts refunds on approval in Asia/Manila dates | A receipt-level PDF needs a matching authorized detail query and reconciliation, not just a screenshot of summary rows. |
+| Amenities | Catalog/purchase services and `avail_amenity` exist; board/status/usage flows also exist | Diagnose UI discoverability, data, entitlements and RLS first. New scheduled reservations must not remain dependent on manual amenity usage confirmation. |
+| Scheduling | Requests/sessions, shift posts, calendar, and open availability exist. Latest local migration is `0022_active_session_request_guard.sql` | Extend current workflows. New migration numbers must follow the actual latest migration when work starts; never rewrite applied migrations. |
+| Booking guard | `2026-10-18-active-session-request-guard.md` protects one active scheduled booking per coach/member pair until explicitly resolved | Multiple time slots and automatic ending need an explicit compatibility decision before changing the guard. |
+| Coach Overview | `2026-10-18-coach-overview.md` specifies a read-only Windows Overview; Android has different navigation | New calendar shift posting revises that design. Confirm the replacement and platform scope rather than silently mixing designs. |
+| Coach profile | Hourly-rate value, hiring toggle, and a `Profile saved.` notice already exist | Correct parsing/formatting/validation and make existing feedback clear; do not duplicate profile storage. |
+| Presence | Chat last-seen / online state exists | Physical gym check-in is a separate concept; never use chat presence or a posted shift as proof the coach is in the gym. |
+
+Primary existing files:
+
+- `src/GymMembership.Core/Models/Models.cs`, `Models/SubscriptionModels.cs`
+- `src/GymMembership.Core/Services/Services.cs`, `Services/Foundation.cs`, `Services/SubscriptionService.cs`, `Services/AttendanceCalendar.cs`
+- `src/GymMembership.Core/ViewModels/StaffViewModels.cs`, `ViewModels/MemberViewModels.cs`, `ViewModels/CoachOverviewViewModel.cs`
+- `src/GymMembership.Core/Backend/SupabaseGateway.cs`, `Demo/DemoGateway.cs`, `Demo/DemoSubscriptions.cs`
+- `src/GymMembership.App/Views/`, role Shells, `MauiProgram.cs`, platform services
+- `supabase/migrations/`, `supabase/functions/`, `supabase/tests/local/`
+- `tests/GymMembership.Tests/`
+
+Follow the project's minimal-diff/native-first workflow. Use available project skills for design, UI, debugging and review as directed by `CLAUDE.md`; if a named integration is unavailable, record that limitation instead of pretending it ran. Keep new services/models small and feature-specific; do not build a generic archive or scheduling framework.
+
+## 2. Decisions to settle before dependent implementation
+
+Recommendations are proposals, not owner-approved requirements. Record the answer and date beside each decision; block only phases affected by an unresolved answer.
+
+- [x] **D1 — deletion reason and safeguards (owner approved 2026-10-20):** Admin-only deletion with a mandatory trimmed reason of 1–500 characters. Block self-deletion and loss of the last active admin. Block deletion while the target has any scheduled sessions (including overdue unresolved sessions), active coaching hires, or pending payments; staff must resolve these first. Preserve history; no automatic refunds/cancellations. Owner confirmed admin-only behavior and explicitly requested no push.
+- [x] **D2 — archive location and types (owner approved 2026-10-20):** Use separate Discounts and Archive tabs in the admin area. Initial archive types: inactive/deleted accounts, discount codes, gym-plan catalog entries, and amenities. Expired member subscription terms remain in membership history, not this archive. Combined Archive UI and catalog lifecycle are now implemented locally. Future archive types are not invented; expired membership terms stay in membership history.
+- [x] **D3 — payment authority (owner approved 2026-10-22):** All admins may void/cancel; authority stays role-based via the existing `payments:void` grant (no per-user grants, no new role). No separate admin-cancel capability: void covers verified payments with reason/actor/timestamp; pending payments keep the existing Reject in the verification queue (reason + audit), per Phase 2 ruling 2026-10-22. Refund decisions (`decide_membership_refund`, `record_membership_refund_paid`) move from `has_role('admin')` to the same `payments:void` check. Members keep self-withdrawal of their own unverified payment (0019) and 24h refund requests (Phase 7). Employees, coaches, members and archived accounts cannot void.
+- [x] **D4 — access-code meaning and activation (owner approved 2026-10-22):** These are the existing discount codes; add a max-uses limit, no new code system. A place is used by a payment with that code in status pending or verified (pending reserves, verification keeps it; rejection, expiry and member cancellation release it), the same rule as the existing once-per-member check (`apply_discount`, `payments_discount_once_per_member`). Voided and refunded uses stay counted and are not released; this also changes today's behavior where a void lets the same member reuse the code.
+- [x] **D5 — limits and restoration (owner approved 2026-10-22):** New codes require a positive integer limit. Existing codes stay unlimited (null) until an admin edits them; no backfill of a number, and pending payments are untouched. A limit cannot be set below places already used. When the last place is used the code is deactivated and archived with reason `limit reached`; it cannot be restored or reopened by raising the limit — issue a new code instead.
+- [x] **D6 — slot and payment contract (owner approved 2026-10-22):** 30-minute slots; one booking lasts 30 minutes to 2 hours. One opening and closing time for every day, set by an admin in Gym settings (Asia/Manila); no booking may cross closing time (no overnight). Members book up to 14 days ahead. One unit per amenity, so each grid column is a different amenity. Booking right = an active, verified pass for that amenity (today's amenity purchase); booking itself costs nothing extra; pending, rejected, voided or expired passes give no right. A coach is optional: a member may book an amenity alone, or a coach session that uses an amenity, which also needs the coach free and inside their opened availability. Details settled 2026-10-22: a coach session that uses an amenity does not need the member's own pass (hiring the coach covers it; passes are only for solo bookings); an active pass with no end date (older passes only, since new amenities require days) counts as active until it is ended.
+- [x] **D7 — slot grouping and same-pair guard (owner approved 2026-10-22):** Touching selected slots become one booking (up to the 2-hour maximum) with the 30-minute cooldown only after it ends; slots with a gap become separate bookings, each checked on its own. Multi-selection is all or nothing: if any booking cannot be made, none are, and the grid refreshes showing the taken slot. The `0022` one-active-booking rule stays for coach sessions only (one scheduled coach session per coach/member pair); solo amenity bookings are not limited by it. Change from 0022: a coach session stops counting as active once its booked end time passes, even before attendance is marked; attendance stays a separate mark.
+- [x] **D8 — training lifecycle (owner approved 2026-10-22):** A coach counter-proposal expires 24 hours after it is made or when the proposed time starts, whichever is first; an expired proposal cannot be accepted and the request returns to waiting for the coach. Request Another Time goes back to the same coach as a new pending request (same coach; same or different amenity) and closes the old proposal. A coach may only propose for themselves but may suggest a different amenity. Booking occupancy (in use / ended) comes from the clock with no check-in; attendance (present / no-show) stays the coach's separate mark on the attendance calendar; solo amenity bookings have no attendance.
+- [x] **D9 — coach availability and presence (owner approved 2026-10-23):** Both the coach (self-service in their app) and the front desk can check a coach in/out; every change records the actor. A visit still open at the gym's closing time (Gym settings, Asia/Manila) is closed automatically and marked as an auto checkout. Freshness target: within 30 seconds (Realtime when connected, 30 s safety refresh). Presence matters only for new discovery/booking lists: absent coaches are hidden there, while current hires, chats and confirmed bookings are untouched, and future bookings inside the coach's posted availability stay allowed without presence; no same-day presence requirement. Clarified 2026-10-23 (option A): presence hides absent coaches only from the "find a coach" discovery list; the booking screen keeps every coach with opened availability, so members can book any coach for later.
+- [x] **D10 — coach dashboard and interaction count (owner approved 2026-10-23):** The dashboard ships on Windows and Android (on a phone the cards stack and the calendar opens in week view) and replaces the read-only coach Overview as the coach's first page. Three interactions = tap a calendar slot → a form opens with date/start prefilled and the default length → tap Post shift; changing the hours or adding a note adds interactions. Default length 4 hours (choices 2/4/6/8/10), cut short if it would run past closing time. Existing empty or ₱0 coach rates are left as they are (no backfill): shown as "Rate not set", and a valid positive rate is required the next time the coach saves their profile. No mockup images: designed from this plan's list in the app's current style, so no visual-parity claim.
+- [x] **D11 — revenue PDF detail (owner approved 2026-10-22):** Line items: one line per verified payment (receipt no., Manila date/time, member or walk-in name, item, method, amount) plus a negative line per approved/paid refund on its approval date, ending in the same net total as the on-screen report (voids excluded, as in `revenue_summary`). Filters stay the date range only; the PDF uses the range and rows the screen loaded. Export opens the system share sheet (MAUI `Share`) on Windows and Android. Library: PDFsharp (MIT) with an embedded font that has the ₱ glyph (check Barlow; fall back to another bundled font if it lacks U+20B1); confirm current version, license and Android behavior before adding the package.
+- [x] **D12 — QR trust boundary (owner approved 2026-10-23):** The member QR is identification only, never payment (the gym's e-wallet payment QR is unchanged). It encodes a permanent random opaque code mapped to the user (not the user ID, and no name/status/expiry/credentials), the same on every device and kept through renewal, expiry, pending payments and archive/restore. Shown at the top of My membership. Only front desk staff and admins can scan/look up a code; coaches and members get nothing. A scan shows name, status and expiry from live data with the plan's precedence (archived/deleted → Inactive; running term → Active; payment waiting for verification → Pending; otherwise Expired / no membership); unknown or damaged code → "not found"; offline → "can't check right now", never Active. A scan does not check in by itself: an Active result shows a Check in button that records the existing gym check-in (inactive results cannot). Every scan is logged (server time, scanner, member, result) and kept forever. Camera scanning uses ZXing.Net.MAUI (MIT), version and Windows/Android support confirmed before adding; if Windows camera support is poor, Windows desks use a USB/Bluetooth scanner that types the code. Fallback when a code cannot be scanned: the existing Check-in name search. Also in scope: a Check-ins section in the Windows admin Overview (pick a day, count, each member's name and time); Android admins keep today's count only.
+- [x] **D13 — names, email confirmation and password reset (owner requested 2026-10-23, answered 2026-10-24):** Registration asks for first name and last name instead of one full name; members confirm a real email in Settings with a one-time code (OTP) sent to it; members can reset a forgotten password from the login page. To settle before building: (a) store first and last name as two profile columns and keep `full_name` filled from them (so every screen, receipt, PDF and chat that shows a name keeps working), or replace `full_name` everywhere; (b) how existing names are split (first word = first name, the rest = last name, editable afterwards; no guessing beyond that) and whether staff/coaches also switch to first/last; (c) whether an unconfirmed email blocks anything (e.g. paying, booking) or only shows a "Confirm your email" reminder; (d) forgotten password by a 6-digit code typed in the app (works without a website) or by an email link (needs a web page to land on); (e) who sends the emails: Supabase's built-in sender is only for testing (very low hourly limit and, on current projects, only to the team's own addresses), so real members need a custom SMTP service (for example Resend, Brevo or SendGrid; free tiers exist) set up by the owner; (f) whether the admin-only temporary password (`reset-password` function) stays for members who no longer have access to their email. Answer (owner 2026-10-24): (a) add `first_name`/`last_name` columns and keep `full_name` filled from them; (b) existing names split first word = first name, rest = last name, editable in Settings, and everyone (members, staff, coaches, admins) switches to first/last; (c) reminder only, nothing blocked; (d) 6-digit code typed in the app; (e) Brevo custom SMTP, set up by the owner in the Supabase dashboard 2026-10-24 (sender `bowieram2006@gmail.com` verified; a gym-owned domain with DKIM/DMARC is recommended before rollout, since a Gmail sender may land in spam); (f) keep the admin temporary password.
+- [x] **D14 — which actions ask "are you sure?" (owner requested 2026-10-24, approved 2026-10-24):** The owner wants a confirmation before consequential actions such as signing out and buying a membership. The proposed list is in Phase 12; the owner confirms or edits it. Also to settle: (a) one dialog style everywhere (the native popup already used for Cancel payment and refunds: a title, what will happen with names/amounts/times, a red-or-plain action button named after the action and "Go back"), or keep the existing inline two-step panels (archive, delete account, reject, void, reset password) as they are; (b) whether frequent desk actions (check-in, marking attendance) stay one tap. Answer (owner 2026-10-24): the proposed list in Phase 12 as written. Implementer's calls, not asked: (a) new confirmations use the native popup; the existing inline two-step panels stay as they are; (b) the desk actions on the "stay one tap" list stay one tap.
+- [x] **D15 — sub-admin role (owner requested 2026-10-24, approved 2026-10-24):** Today's admin becomes the **super admin** (full control, unchanged). A new **sub-admin** role gets the front desk's work plus some admin pages, but not money reversals, gym-wide settings, roles or permanent deletion. Proposed split is in Phase 13; the owner confirms or edits it. Also to settle: (a) the name shown in the app ("Sub-admin" or another word such as "Manager"); (b) who can make someone a sub-admin (proposed: super admins only); (c) whether a sub-admin may add, deactivate or reset the password of front-desk employees, or only of members and coaches. Answer (owner 2026-10-24): the Phase 13 table as written; the name is "Sub-admin". (b) and (c) follow the proposal: only super admins appoint sub-admins, and sub-admins manage members and coaches only, not front-desk employees.
+
+## 3. Phases and request coverage
+
+| Phase | Scope | Original items | Dependencies | Status |
+| --- | --- | --- | --- | --- |
+| 0 | Decisions and verified baseline | All | None | IN PROGRESS — D1/D2 approved, baseline recorded; other phase decisions pending |
+| 1 | Archive foundation, account deletion, overflow menu | 1, 2, 4 | 0; D1–D2 | IMPLEMENTED locally — automated checks + Windows demo smoke verified; remaining device/owner acceptance pending |
+| 2 | Payment authorization and history | 5 | 0; D3 | DEPLOYED (DB) 2026-10-22 — 0025 live; owner app check/acceptance pending |
+| 3 | Code activation caps and archive integration | 7 | 1; D4–D5 | DEPLOYED (DB) 2026-10-22 — 0026 live; device check/acceptance pending |
+| 4 | Revenue PDF export | 6 | 2; D11 | DEPLOYED (DB) 2026-10-22 — 0027 live; device check/acceptance pending |
+| 5 | Purchasable amenity catalog and coach availability | 10, 11 | 0; archive integration from 1; D6 | DEPLOYED (DB) 2026-10-22 — 0028 live; device check/acceptance pending |
+| 6 | Reservation engine and booking grid | 8 | 5; D6–D8 | DEPLOYED (DB) 2026-10-22 — 0029 live; device check/acceptance pending |
+| 7 | Structured training requests and rescheduling | 9 | 6; D7–D8 | DEPLOYED (DB) 2026-10-22 — 0030/0031 live; device check/acceptance pending |
+| 8 | Physical coach presence and discovery | 12 | 5; D9 | DEPLOYED (DB) 2026-10-23 — 0032 live; device check/acceptance pending |
+| 9 | Coach dashboard, shifts and profile polish | 13, 14 | 5–8; D10 | DEPLOYED (DB) 2026-10-23 — 0033 live; device check/acceptance pending |
+| 10 | Permanent member QR and scan logging | 15 | 1; D12 | DEPLOYED (DB) 2026-10-23 — 0034 live; device camera check pending |
+| 11 | First/last name registration, email confirmation by OTP, forgotten password | New 2026-10-23 | 1; D13 | VERIFIED 2026-10-24 — 0035 live; owner checked on Windows and Android |
+| 12 | "Are you sure?" confirmations and show/hide password | New 2026-10-24 | D14 | VERIFIED 2026-10-24 — commit b8cc27f; owner checked on Android, Windows demo smoke; no migration |
+| 13 | Sub-admin role under the super admin | New 2026-10-24 | D15 | VERIFIED 2026-10-25 — 0036–0038 live, create-user and reset-password redeployed; owner checked on Windows and Android |
+| 14 | Integrated regression, deployment and handoff | All | 1–13 | IN PROGRESS 2026-10-25 — regression, docs and owner walkthrough done; PR to main opened 2026-10-25; version tag/release pending |
+
+Dependency order matters more than numbering. After Phase 0, independent work can be scheduled separately, but keep one phase's changes and evidence identifiable. The coach rate correction can be pulled forward as a small independent slice if desired; record that move here.
+
+## Phase 0 — Resolve policy and capture the baseline
+
+- [x] Inspect account UI, admin services, payment authorization, revenue summary, scheduling specs and local migration list for planning.
+- [x] Resolve decisions needed by the first implementation slice: D1/D2 approved. Other decisions remain pending for their dependent phases.
+- [ ] Complete all design/reference checks. Current project instructions and relevant account/scheduling code were read; optional project skill loads failed and reference images were not supplied.
+- [ ] Complete SDK/workload inventory. Feature branch `phase1-archive-accounts` created from HEAD `9f6ecb097ded65b59e3c6427924dd90d288e908a`; initial dirty state was only this untracked plan. Both platforms build with installed tooling; explicit SDK/workload listing still pending.
+- [x] Run baseline full xUnit and disposable local database suites: 533 passed/2 failed of 535 xUnit; 110 rules + 31 Phase 7 + 26 session checks and populated-history migration checks passed.
+- [x] Build baseline Windows and Android successfully; existing media-picker deprecation warning and unrelated xUnit1031 analyzer warning recorded.
+- [ ] Audit current migration/deployment state with the owner. Local files up to `0022` do not by themselves prove live state.
+- [ ] List migration backfills and compatibility risks: pending payments/codes, active accounts, existing reservations and sessions, existing catalog prices.
+
+Exit: baseline evidence recorded, first-slice decisions approved, no accidental production changes.
+
+## Phase 1 — Archive, soft-delete accounts and simplify account actions
+
+Status: IMPLEMENTED locally for items 1, 2 and 4. Account deletion/menu and the complete four-type Archive/filter/restore lifecycle are implemented and locally tested. Windows demo smoke checks pass. This is not a deployment claim: Android interaction, full accessibility/layout checks and owner acceptance remain unchecked below.
+
+Starting points: `UsersPage.xaml` and its code-behind; `UsersViewModel`; `IAdminService`/`AdminService`; Profile/catalog models; role Shell navigation; `DiscountsPage.xaml`; migrations for helpers, RLS and functions.
+
+- [x] Add archive lifecycle metadata for all supported types. Deleted accounts retain deletion actor/time/reason; ordinary inactive accounts use existing deactivation audit evidence. Catalog records have server-stamped `archived_at`, `archived_by`, `archive_reason`. Canonical rows and foreign keys remain intact.
+- [x] Implement authorized archive/restore for accounts, codes, plans and amenities. Admin-only list/restore RPCs recheck current state; expired codes cannot restore or have expiry edited to bypass Archive. Direct catalog deletion is revoked and stale edits/reactivation of archived rows are rejected.
+- [x] Review protected archived-identity entry points: app sign-in, existing-session table/RPC denial, profile/role/coach writes, reset-password target guard, gym assets/storage policies and demo notification writes. Own profile status remains readable by design. No service-role credentials were added. Existing Auth identities/sessions and previously issued signed file URLs are retained, not falsely claimed revoked; live Edge Function/session behavior needs deployment verification.
+- [x] Resolve account deletion commitments according to owner-approved D1: reject deletion while scheduled sessions, active coaching hires or pending payments exist. No automatic cancellation/refund. Test both payment/deletion race directions.
+- [x] Replace the four account buttons with a row-scoped native three-dot dropdown on Windows/Android. Preserve existing role/password/activation actions; include Delete Account only for admin access.
+- [x] Implement the confirmation popup with target account, multiline required reason, red Confirm and No, Cancel. Disable invalid/busy confirmation and preserve reason/target on server error. Physical device checks remain unchecked below.
+- [x] Add Discounts and Archive tabs under admin Discounts & Archive. Users and catalog management show active records; inactive/deleted accounts and inactive/expired catalog records have a destination Archive.
+- [x] Add combined type/status/date/reason filters, one-action Clear filters, no-results/loading/error states and bounded server-side pagination (30 rows + look-ahead). Date filtering uses Asia/Manila; edits to filters do not silently alter next/previous page queries until Apply.
+- [x] Add read-only details and explicitly confirmed admin Restore UI. Records have labels only, not editable fields. Failed restore retains selection and error; successful restore refreshes results. Expired codes have no restore control and the server independently refuses them.
+- [x] Replace package/code physical deletion with soft-archive RPCs; preserve used-plan and payment history. Catalog deactivation receives server metadata; active lists remove archived records. Labels no longer promise irreversible deletion.
+- [x] Preserve honest legacy data. Existing inactive catalog records keep unknown dates/actors/reasons rather than invented timestamps. Existing deleted accounts use saved deletion metadata; ordinary deactivation uses known audit history where available. Expired codes derive archive status/date from actual expiry. New inactive records are server-stamped. Disposable pre-0023/pre-0024 data tests pass.
+- [x] Complete demo parity and regression tests for all four types, immutable archived rows, permission loss, filters/pagination, restore confirmations/errors, history retention and RPC JSON mapping.
+
+### Slice 1 implementation and evidence — 2026-10-20
+
+- [x] Owner approved D1/D2 and confirmed admin-only deletion. Explicit no-push instruction recorded.
+- [x] Added `AccountArchiveService`, `AccountDeletionViewModel`, `DeleteAccountPopup` and `DemoAccountArchive` using existing MAUI/toolkit/native menu patterns.
+- [x] Added local migration `0023_account_archive.sql`: admin-plus-permission authorization; required trimmed reason; self/last-admin protection; commitment checks; audit-preserving soft delete/restore; ordinary reactivation cannot bypass restore.
+- [x] Added profile-lock commitment guards so new pending payments, active hires and scheduled sessions cannot be attached after deletion wins a concurrent transaction. Serialized admin lifecycle operations recheck the caller after waiting.
+- [x] Added 23 focused account/ViewModel tests, all passing. The initial 11 account RPC tests failed before implementation, then passed.
+- [x] Added 22 disposable PostgreSQL checks, all passing, including populated pre-0023 inactive data, permission bypass attempts and separate-connection concurrency. Included the suite in `supabase/tests/local/package.json`.
+- [x] Full xUnit run: 557 passed, 2 failed, 559 total. Both failing test names match the baseline failures recorded in the session log; no newly failing tests remain. New XAML also adds automatic binding coverage.
+- [x] Existing SQL regression suites pass: 110 rules, 31 Phase 7, 26 request checks, plus the populated-history migration suite. The account suite also passes after the final whitespace-normalization change.
+- [x] Windows and Android compile checks run; see evidence tracker/session log for final status and existing warnings.
+- [ ] Perform physical Windows/Android interaction, keyboard, screen-reader, narrow-screen and light/dark checks. Builds and source assertions are not device verification.
+
+### Remaining slice implementation and evidence — 2026-10-20
+
+- [x] Implemented `ArchiveRecord`, `ArchiveService`, `ArchiveViewModel`, `ArchivePanel`, Discounts/Archive tabs and admin navigation/overview labels.
+- [x] Added `0024_archive_catalog.sql`: immutable archived catalog, no physical authenticated catalog deletes, server-stamped lifecycle metadata, admin restore/list, combined server filters/pagination, expired-code restrictions, archived role/profile guards and restrictive active-account storage policy.
+- [x] Replaced package/code hard-delete service paths; active catalog/user lists exclude archived records. Historical entitlement/payment rows remain intact. Mirrored behavior in `DemoArchive` and DemoGateway.
+- [x] Added archived-target guard to reset-password Edge Function; code saved but not deployed. Auth password reset is an external Auth operation, not claimed transactionally atomic with an independent concurrent archive.
+- [x] 39 focused account/archive/ViewModel/transport tests pass. Full xUnit: 574 passed / 576, only the same two baseline failures below. Updated former hard-delete expectations to retained soft-archive behavior.
+- [x] Final complete SQL chain passes: 110 rules, 31 Phase 7, populated-history migration checks, 26 session request, 22 account archive and 16 catalog archive checks.
+- [x] Final Windows/Android Debug builds pass. Existing PickPhotoAsync deprecation and chat-test xUnit1031 warnings remain.
+- [x] `scripts/Test-WindowsArchive.ps1` passes in an isolated copied demo without backend configuration: native row menu; blank-reason disabled Confirm; entered-reason enabled Confirm; Cancel; catalog archive; archive no-results and Clear; read-only details/confirmed restore/removal from Archive; hidden front-desk archive navigation.
+- [ ] Android actual UI and broader accessibility/keyboard/narrow/light-dark verification. No adb was found on PATH; a successful Android build is not a touch/device test.
+- [ ] Independent review and owner acceptance; optional project skill integrations remain unavailable.
+
+Acceptance / verification for the COMPLETE phase:
+- [x] Windows smoke confirms Cancel closes without executing deletion, and required reason controls Confirm. Unit tests cover busy/error retention and command safeguards.
+- [x] Reviewed current protected access paths and tested historical retention. Keep explicit limitations: retained Auth identities/sessions, previously issued signed URLs and undeployed Edge Function behavior are not instantaneous credential revocation.
+- [x] Account invalid restore, self-deletion and loss-of-last-admin attempts fail server-side; restore bypass is denied.
+- [x] Combined type/status/date/reason behavior verified in SQL/demo tests; Clear/empty/restore verified in Windows demo UI.
+- [ ] Repeat combined-filter/dropdown interaction on Android and keyboard/touch/narrow/accessibility checks on both platforms.
+- [ ] Full-phase owner acceptance recorded; live deployment remains separately authorized.
+
+## Phase 2 — Permission-gated payment void/cancel
+
+Starting points: `VoidPaymentsPage.xaml`, payment pages/Shell routes, `VoidPaymentsViewModel`, `PaymentStaffService`, subscription cancellation/refund code, latest definitions of `void_payment` and `cancel_pending_payment`, permission helpers/grants.
+
+Status: DEPLOYED (DB) 2026-10-22. Commit 6f986d7 on `phase1-archive-checkpoint-2026-10-20` (pushed). Migration `0025_refund_payment_permission.sql` applied live and confirmed in remote history. No app release needed: current builds behave the same because every admin holds `payments:void`.
+
+- [x] Inventory: `void_payment` (0018 wrapper → 0005 legacy, `payments:void`); pending-payment Reject in `verify_payment` (`payments:verify`, reason + `payment.reject` audit + notification); member `cancel_pending_payment` (own unverified only, 0019); `request/decide/record` refund RPCs (0018). Direct writes to payments/refund_requests are denied (phase7 test). UI: Void + Cancellations & refunds pages are `ClassId="admin"` and removed for front desk. Demo mirrors each RPC.
+- [x] `payments:void` is the single capability. `0025` switches `decide_membership_refund` and `record_membership_refund_paid` from `has_role('admin')` to `require_permission('payments:void')` (bodies otherwise identical). Demo `RequireRefundAdmin` replaced with `Require("payments:void")`. Pending payments are cancelled through the existing Reject, not by extending void (ruling, see session log).
+- [x] Unauthorized navigation is already removed (not greyed) by role; per D3 every admin holds the grant, so role == permission. Revocation while a page is open is enforced server-side and surfaces the standard "You don't have permission" message.
+- [x] Member withdrawal (0019) and 24h refund requests (Phase 7) unchanged; covered by existing phase7 tests.
+- [x] Void and refund decisions record actor, server time, reason and an audit row (new test asserts these).
+- [x] Member payment history lists every status, so voided rows stay visible. Existing race protection (void ↔ refund mutual exclusion, simultaneous approve/void) unchanged and still passing.
+- [x] `payment-authority.mjs` (6 checks): front desk, coach, member and archived admin cannot void/decide/repay; an admin without the grant cannot; a permitted admin's actions record who/when/why and a second void fails. RED before 0025 (admin without grant could decide), GREEN after.
+
+Acceptance / verification:
+- [x] Unauthorized controls are absent, not greyed out; forged requests are rejected (SQL matrix).
+- [x] Each permitted operation records who/when/why and remains visible in history.
+- [x] Repeating/racing void, refund and cancellation cannot reverse a payment twice (phase7 race tests + double-void check).
+- [ ] Member cancellation/refund behavior matches the explicitly approved policy — automated tests pass; 0025 live; owner confirmation in the app pending.
+
+## Phase 3 — Capped access/discount-code activation
+
+Starting points: Discount model, `DiscountsViewModel`, `DiscountsPage.xaml`, checkout/payment RPCs, DemoGateway, Phase 1 archive.
+
+Status: DEPLOYED (DB) 2026-10-22. Commit c45b83f on `phase1-archive-checkpoint-2026-10-20` (pushed). Migration `0026_discount_limits.sql` applied live at the owner's request (dry run showed only 0026; remote history shows 0026). App builds with this change need 0026, which is now live.
+
+- [x] D4 limit as `discounts.max_uses` (null = code made before limits, unlimited). Usage is counted from payments, not stored: held = pending + verified + voided, consumed = verified + voided (`discount_held`/`discount_consumed`). No separate ledger table: payments already are the durable record and nothing can drift.
+- [x] Discounts tab: required "Max uses" field on new codes (default 100), per-row usage text such as `3 of 100 used, 1 pending` / `3 used, no limit`, and a "Change limit" panel (also gives old unlimited codes a limit).
+- [x] `apply_discount` locks the code row (`for update`), so concurrent checkouts serialize; a full code fails with `code_limit_reached`. Voided payments now also count as the member's one use. SQL race test: two members, last place, exactly one succeeds.
+- [x] Pending payments reserve; rejection, cron expiry and member cancellation release automatically because they change the payment status. Verification keeps the place.
+- [x] When consumed reaches the limit (payment verified at the desk, recorded verified at the counter, or the limit lowered to the consumed count) the code is deactivated and archived with reason `Limit reached`. Manual deactivation keeps `Deactivated code`; expiry keeps `Expired code`.
+- [x] Used-up codes refuse restore (`record_not_restorable`) and `archive_records` offers no Restore for them; archived rows are read-only, so the limit cannot be raised either. Limit edits: required on insert, never back to null, never below held places (`limit_required`, `limit_below_used`). Enforced by trigger `discounts_limit_guard` for app writes and RPCs.
+- [x] No backfill: existing codes keep `max_uses` null and existing payments/amounts are untouched.
+- [x] Row buttons now wrap (FlexLayout) so Deactivate/Archive/Change limit are not cut off on narrow screens. Visual check on devices still pending.
+- [x] Tests: `supabase/tests/local/discount-limits.mjs` (9 checks, all RED before 0026); `DiscountLimitTests` (5 demo/ViewModel tests, RED before). Older SQL fixtures (`rules`, `phase7`, `archive-catalog`) now give their seed codes a limit; one xUnit payload got `MaxUses = 1` so it still reaches the permission check.
+
+Acceptance / verification:
+- [x] Last-place race yields only one success and no count above cap (SQL race test).
+- [x] Usage matches payments after verification, rejection, void and counter payment (SQL + demo tests); expiry uses the same status path via the existing cron.
+- [x] Exhausted codes are inactive, archived and not restorable; manual nonexhausted deactivation remains reversible (unchanged 0024 path).
+- [ ] Admin cap editing validates correctly (tests pass) and button text is legible on both platforms — device/visual check by the owner pending.
+
+## Phase 4 — Revenue export as PDF
+
+Starting points: `RevenuePage.xaml`, `RevenueViewModel`, `AdminService.RevenueAsync`, `RevenueRow`, latest `revenue_summary` (`0020`), platform save/share services.
+
+Status: DEPLOYED (DB) 2026-10-22. Commit 1cef4f3 on `phase1-archive-checkpoint-2026-10-20` (pushed). Migration `0027_revenue_lines.sql` applied live at the owner's request (dry run showed only 0027; remote history shows 0027).
+
+- [x] The screen keeps the range and total it actually loaded; Export PDF uses that, not dates edited since. If the receipt lines no longer add up to the loaded total, the screen refreshes and asks to export again instead of exporting different figures.
+- [x] `revenue_lines(p_from,p_to,p_offset,p_limit)` (0027): `reports:revenue` only, same accounting as `revenue_summary` (verified on Manila verification day, minus approved/paid refunds on Manila approval day, voids excluded), deterministic order, pages of 1–1000. The app reads 500-row pages until a short page, so nothing is silently cut off.
+- [x] Library: PDFsharp pinned to 6.2.4 (MIT, January 2026, supports net10). PDFsharp 6.5+ is AGPL-3.0, so the csproj warns against upgrading without a license review. 6.2.4 pulled in `System.Security.Cryptography.Pkcs` 8.0.1 (GHSA-846f-f764-76mx, high), so Core references the patched 10.0.13 directly.
+- [x] `RevenuePdf` (Core, testable) builds the PDF; `IReportFiles` (App: `MauiReportFiles`) supplies the font and opens the system share sheet from the cache folder. No platform code in Core.
+- [x] A4 report: title, range with timezone, generated time (Asia/Manila), one-line accounting note, receipts/refunds/net totals, then a table (date and time, receipt, paid by, item, method, amount) with the header repeated on every page, long text cut with "…", a Net row, and "Page n of m".
+- [x] Money as `₱1,234.56` / `-₱1,000.00` (decimal, invariant culture). Barlow has no ₱ glyph, so the PDF embeds Noto Sans Regular (SIL OFL, `Resources/Raw/NotoSans-Regular.ttf` + `NotoSans-OFL.txt`); bold is simulated.
+- [x] Export is disabled until a report has loaded; empty periods export a one-page "No receipts or approved refunds" report; invalid range and permission errors use the normal error banner; a failed share shows an error and no success message. The share sheet cannot report whether the user actually saved or sent the file, so the notice says only that the PDF was created.
+- [x] Tests: `revenue-lines.mjs` (6 SQL checks, RED before 0027: permission, reconciliation with revenue_summary, labels, paging, bad input, Manila day boundaries); `RevenuePdfTests` (6 tests: reconciliation in demo, multi-page/empty PDFs, money/date formats, loaded-range export, failed share, changed-figures refresh). A 71-line sample was rendered through Windows' PDF renderer and checked by eye: ₱ glyphs, repeated header, truncation, page numbers.
+
+Acceptance / verification:
+- [x] PDF totals reconcile to the filtered on-screen report, including refund approval dates and void treatment (SQL + demo tests; export refuses to proceed when they differ).
+- [x] Empty, one-page and multi-page exports have readable peso symbols and no clipped rows (rendered sample; tests for page counts).
+- [ ] Export/save/open or share works on Windows and Android — owner device check pending (share sheet and a Release/trimmed Android build not yet tried).
+
+## Phase 5 — Purchasable amenities and coach-opened availability
+
+Starting points: `AmenitiesPage.xaml`, `CatalogAdminPage.xaml`, `CoachesPage.xaml`, amenity/catalog ViewModels and services, `avail_amenity`, `ShiftPost`, request/open-slot code, catalog/RLS policies.
+
+Status: DEPLOYED (DB) 2026-10-22. Commit 7c01591 on `phase1-archive-checkpoint-2026-10-20` (pushed). Migration `0028_gym_hours_and_coach_availability.sql` applied live at the owner's request (dry run showed only 0028; remote history shows 0028).
+
+- [x] Root cause: the role redesign replaced the member Amenities page with the status board (`AmenityBoardViewModel`), which only shows status and Notify me. `IAmenityService.CatalogAsync`/`AvailAsync` and the database `avail_amenity` still worked but nothing in the app called them, so there was no Buy button anywhere. Catalog data, RLS and payment flow were fine. (Buying also needs an active membership, which `avail_amenity` already enforces with a clear message.)
+- [x] Admin: the existing amenity form (name, price, days of access) gains a description and an Edit button that loads the amenity into the same form ("Save changes" / "Cancel edit"), like packages. Ruling: one amenity row is both the physical resource (status board, photo) and its pass product (price, days); no separate product table. No service/coach mapping: D6 makes the coach optional, so nothing needs it before Phase 6.
+- [x] Members see each amenity card with the pass price ("₱300.00 for 30 days"), or "Waiting for your payment to be verified", or "Pass active until …", and a Buy pass button when they have no pending/active pass. Buying reuses `avail_amenity` (pending QR payment, paid from My membership). Coaches and staff see no price or button. The page shows the existing empty state, and load errors use the error banner.
+- [x] Booking right (D6): only an active, verified pass. Pending, rejected, voided and expired passes give none; existing purchases are never erased (passes keep their history).
+- [x] Coach availability = the coach's posted shifts (one calendar; no second availability table). `0028` adds gym hours (`opens_at`/`closes_at`, default 06:00–22:00, half-hour grid, closing after opening) to Gym settings, and a `shift_posts` trigger: new or moved shifts must sit on the 30-minute grid inside gym hours on one Manila day (`off_grid`, `outside_gym_hours`). Overlapping shifts were already refused by the existing exclusion constraint.
+- [x] A shift cannot be cancelled, deleted, or shortened/moved so that a scheduled session of that coach inside it ends up outside (`shift_has_sessions`). Cancelled sessions do not block. Existing shifts are not re-checked until changed.
+- [x] Only the coach can open or change their availability (existing RLS); members see shifts only for coaches they hire, staff see all (unchanged).
+- [x] Demo mirrors all of it (Buy pass, amenity edit, gym hours, shift grid/hours and session protection).
+
+Acceptance / verification:
+- [x] Admin creates a product, a member sees and buys it, and the verified payment turns the pass on (`AmenityPassTests`, `coach-availability.mjs`).
+- [x] Zero items shows the existing empty state; load failure shows the error banner.
+- [x] Nobody else can open a coach's hours; shifts outside hours or off the grid are refused; changes cannot strand a scheduled session (SQL checks). Device check by the owner still pending.
+
+## Phase 6 — Atomic reservations, cooldowns and slot grid
+
+Starting points: Phase 5 contracts, training/amenity models and RPCs, member amenity UI, existing cron approach. Schema/service names below are design responsibilities, not preexisting files.
+
+Status: DEPLOYED (DB) 2026-10-22. Commit 42ebeae on `phase1-archive-checkpoint-2026-10-20` (pushed). Migration `0029_reservations.sql` applied live at the owner's request (dry run showed only 0029; remote history shows 0029).
+
+- [x] `reservations` (0029): member, amenity, optional coach and training session link, UTC start/end, `confirmed`/`cancelled`, creator, cancellation actor/time/reason, extension actor/time; every change is audited. Occupancy is separate from attendance (D8): no attendance columns here.
+- [x] One unit per amenity. Exclusion constraints: amenity `[start, end + 30 min)` (cooldown after use, exact boundary allowed, first use has no pre-cooldown), member `[start, end)` and coach `[start, end)` among confirmed bookings, so different amenities run together but nobody is in two places. `book_slots` also refuses overlap with the member's scheduled training sessions.
+- [x] Server validation: future start, 30-minute grid, inside gym hours on one Manila day, at most 2 hours (`too_long`), at most 14 days ahead, active amenity not closed at that time, active membership, and an active pass covering the whole booking for solo bookings (`no_pass`).
+- [x] Atomic: the constraints decide at insert/update time, so concurrent requests cannot both win (SQL race test). No direct writes: authenticated users have SELECT only (own, coach's, or staff), and all changes go through the functions.
+- [x] Cancellation before the start frees the time and its cooldown (member without reason; coach or staff with a reason, which notifies the member). Once started it cannot be cancelled; End now sets the end to the real time, so the 30-minute cooldown follows actual use.
+- [x] In use / ended is derived from timestamps against the server clock (`amenity_grid` returns `now`), so nothing waits for a job or an open app; no persisted transitions were needed.
+- [x] `extend_reservation`: owning coach only, 30-minute steps up to 2 hours, inside gym hours, rejected atomically if it would run into the next booking or its cooldown, or into the member's/coach's other sessions; notifies the member. Ruling: there is no extension button yet because coach-linked bookings are created by Phase 7's request flow; the operation is built and tested now.
+- [x] Member page "Book an amenity" (members-only; More menu on phones): a dated grid, one column per active amenity, rows every 30 minutes across gym hours; cells show Open, Selected, Yours, Booked, Cooldown, Too close (its own cooldown would hit the next booking), Closed, or past. Touching picks become one booking; "Book selected slots" is all or nothing (D7). On a conflict nothing is booked, the grid refreshes, the reason stays on screen, and picks that are still open stay selected. Bookings list with Cancel / End now. Refreshes every 30 seconds.
+- [x] Notifications go to the member only when someone else changes their booking (staff/coach cancel, coach extension); a member's own booking is shown on screen instead. Other members' bookings appear as time only, with no id or name.
+
+Acceptance / verification:
+- [x] Two clients confirming the same amenity/time produce one booking; different amenities run together for different people (SQL).
+- [x] No reservation can start inside another's cooldown; the exact 30-minute boundary succeeds (SQL + demo).
+- [x] First use, long idle and pre-start cancellation impose no phantom cooldown (SQL + demo).
+- [x] Start/end needs no check-in or job; in use is computed from the clock.
+- [x] Extension-vs-booking clashes are rejected by the same constraints; coach/member conflicts are rejected (SQL).
+- [x] Booked/cooldown cells cannot be picked; multi-slot booking is all or nothing (SQL + `ReservationTests`).
+- [ ] Owner checks the grid on Windows and Android (layout, horizontal scrolling on a phone, keyboard use).
+
+## Phase 7 — Structured training requests, proposals and reschedules
+
+Starting points: `RequestsPage.xaml`, `SessionsPage.xaml`, related ViewModels, `ISessionService`, `TimeRequest`/`TrainingSession`, migrations `0021`/`0022`, Phase 6 reservation operations.
+
+Status: DEPLOYED (DB) 2026-10-22 on `phase1-archive-checkpoint-2026-10-20`. Migrations `0030_request_proposed_status.sql` and `0031_structured_requests.sql` applied live at the owner's request after the full local SQL suite passed (dry run showed only 0030 and 0031; remote history shows both).
+
+- [x] Built on the existing `time_requests` (no second request system). New columns: `amenity_id`, the current proposal (`proposed_start/end`, `proposed_amenity_id`, `proposal_reason`, `proposed_at`, `proposal_expires_at`), `decline_reason`, `version`. New status `proposed` (0030 on its own, because a new enum value cannot be used in the transaction that adds it). Pending requests still hold no reservation capacity. "Training service" is the coach session itself; no separate service catalogue (none exists).
+- [x] Transitions, each enforced in the database with the actor checked:
+  - Pending → Confirmed: coach approves (`respond_time_request`), all checks pass.
+  - Pending → Awaiting member (`proposed`): coach `propose_time` with time, optional amenity and a required reason. Expires 24 h after it is made or when it starts, whichever is first (D8).
+  - Awaiting member → Confirmed: member `accept_proposal(id, version)`; a stale version is refused (`stale_proposal`); an expired one returns `expired` and the request goes back to the coach.
+  - Awaiting member → Pending: member `request_another_time` (same coach; same or different amenity), proposal cleared, version bumped.
+  - Declined with a reason (`decline_time_request`): coach on a member request, member on a proposal or a coach invitation. Cancelled: the requester withdraws (now also while a proposal waits).
+  - Confirmed reschedules keep using `request_reschedule` + approval, which moves the existing session (no new booking).
+- [x] Confirming a request or proposal that names an amenity reserves it in the same transaction (`place_session_amenity`): inside one of the coach's posted shifts (`coach_unavailable` otherwise), amenity not closed, and the 0029 constraints (cooldown, member/coach busy). On any clash nothing is created and the request stays open with the error shown. Requests without an amenity keep their previous rules.
+- [x] Reschedule approval moves the session and its reservation together, or neither (SQL test with a blocked slot). Cancelling a session frees its reservation.
+- [x] D7: the same-pair guard (`assert_no_active_coaching_session`, app and demo) now only counts sessions whose booked end has not passed. A waiting proposal still counts as the member's one open request to that coach (0021 index widened to `pending`/`proposed`).
+- [x] Chat is untouched: messages never change a request.
+- [x] `time_request_events`: append-only history written by a trigger on every status/version change (actor, time, from/to, version, reason, times and amenity), readable by the two people and staff only, no write grants.
+- [x] Notifications to the other person on propose, accept, ask again and decline, inside the same transaction (a failed step sends nothing).
+- [x] App: the member request form has an Amenity choice; request rows show the amenity and the live proposal ("Proposed: …, reason, Answer by …"); one answer panel for Propose another time (coach), Ask for another time (member) and Decline with a reason (either); Accept on a live proposal. Coach Sessions show the session's amenity and an "Add 30 minutes" button: `extend_reservation` now moves the training session's end with its reservation (redefined in 0031).
+- [x] Demo mirrors all of it (DemoRequests plus the existing request functions).
+
+Acceptance / verification:
+- [x] Approval, counter-proposal acceptance, Request Another Time, decline, cancellation and stale/expired acceptance (SQL `structured-requests.mjs`, xUnit `StructuredRequestTests`).
+- [x] No pending request or chat message alone becomes a reservation.
+- [x] A slot taken meanwhile leaves the proposal open and books nothing (SQL); competing approvals are still serialized by the 0022 pair lock.
+- [x] Rescheduling keeps the original until the move succeeds (SQL).
+- [x] History records the right actor and time; both people get notified (SQL). Owner device check still pending.
+
+## Phase 8 — Physical coach check-in and live discovery
+
+Starting points: `CheckInPage.xaml`, `IAttendanceService`, `CoachService.ListCoachesAsync`, coach discovery/request pickers, existing realtime lifecycle patterns. Member check-in and messenger presence are not automatically coach attendance.
+
+Status: DEPLOYED (DB) 2026-10-23 on `phase1-archive-checkpoint-2026-10-20`. Migration `0032_coach_visits.sql` applied live at the owner's request (dry run showed only 0032; `migration list --linked` shows 0032 in both columns). App builds with this change need 0032, which is now live.
+
+- [x] New table `coach_visits` (check-in/out times, `checked_in_by`/`checked_out_by`, `auto_closed`) with a unique open visit per coach. `coach_check_in(p_coach)` / `coach_check_out(p_coach)`: null = the coach themselves, otherwise staff with `check_ins:record`. Direct writes are denied.
+- [x] Idempotent: a second check-in returns the open visit, a second checkout returns false. The row keeps the actor of each change (that is the audit). Missed checkout: `close_coach_visits()` runs every 5 minutes (pg_cron) and closes a visit at its day's closing time (Gym settings, Manila), `auto_closed = true`. Check-in is refused while the gym is closed (`gym_closed`).
+- [x] Coaches page (find a coach) lists only coaches with an open visit, plus your own coach (kept and marked "Not in the gym right now" so Message / End hire keep working). Option A: the booking screen and session requests do not filter on presence.
+- [x] Presence, the "Taking new members" flag and posted shifts stay separate; existing hires, chats, sessions and bookings are untouched. RLS: everyone sees open visits; past visits only the coach and staff.
+- [x] Freshness target 30 s: the Coaches page refreshes itself every 20 s (quiet in-place sync). Realtime deliberately skipped: polling meets the target. Unknown/offline state shows nothing new (failed refresh keeps the list).
+- [x] `hire_coach` now refuses an absent coach (`coach_not_in_gym`), so a stale list cannot hire someone who left.
+- [x] UI: "At the gym" panel with Check in / Check out on My coach profile (coach, both platforms); a Coaches section with Check in / Check out per coach on the front desk Check-in page.
+- [x] Demo parity: same RPCs, rules and visibility; both demo coaches start checked in. The demo has no closing-time job (like payment expiry).
+
+Evidence 2026-10-23: SQL suite all green incl. 9 new `coach-visits.mjs` checks (existing tests now check coaches in before hiring). xUnit 610/612 (same 2 baseline failures; 5 new `CoachPresenceTests`). Windows and Android Debug builds pass. Windows isolated-demo UI check (scratchpad script, not committed): coach checks out from profile, member still sees own coach marked away, front desk checks Kai out, Kai disappears from the member list.
+
+Acceptance / verification:
+- [ ] A coach appears after check-in and disappears after checkout within the agreed freshness target on a second client — passes in demo on one Windows client; second real device check pending.
+- [x] Chat online/last-seen and posted shifts do not make an absent coach appear (the list reads only `coach_visits`).
+- [ ] Existing conversations and confirmed bookings remain accessible; reconnect and duplicate check-in/out behave safely — automated tests pass; owner device check pending.
+
+## Phase 9 — Coach dashboard, shift posting and profile rate
+
+Starting points: `CoachOverviewViewModel`, coach Overview view/navigation, `AttendancePage.xaml` and calendar helpers, `ShiftsPage.xaml`, `ShiftsViewModel`, `CoachProfilePage.xaml`, `CoachProfileViewModel`, `CoachService`.
+
+Status: DEPLOYED (DB) 2026-10-23 on `phase1-archive-checkpoint-2026-10-20`. Migration `0033_shift_past_and_coach_rate.sql` applied live at the owner's request (dry run showed only 0033; `migration list --linked` shows 0033 in both columns). The app does not depend on 0033 (it only adds server-side checks).
+
+- [x] The Attendance page became the coach **Dashboard**: first page on Windows (flyout) and Android (first tab, "Dashboard"), month view on Windows and week view on phones. It keeps the Sessions this month / Attendance rate / Upcoming cards (same denominator rules; no data shows "—", not 0%), the month/week calendar and session marks. The read-only Overview (view model, page, shell hook, its tests and smoke script) was removed.
+- [x] Calendar shift posting: tapping a day (month cell or week-row heading) opens "Post a shift" for that day with Starts filled in (opening time, or the next half hour still ahead today), Hours 4 (2/4/6/8/10), optional Note "What you will be running" and Post shift. A shift that would run past closing ends at closing (the notice says so); no gym time left disables Post shift. The day's shifts are listed under the form with Cancel shift. "My shifts" stays as it was, now also defaulting to 4 hours.
+- [x] Validation: hours/grid already server-side (0028); overlap already refused by `shift_posts_no_overlap` (0002), now with its own message; 0033 adds a trigger refusing a start in the past (`past_slot`). Demo mirrors all three. Existing session guard (0028) still protects confirmed sessions/reservations.
+- [x] `No shifts posted. Add one above.` kept on My shifts and used as the empty state under the dashboard form. Load errors use the error banner, not the empty state.
+- [x] Interaction count (D10 default): tap a day (1) → review the filled-in form → Post shift (2). Changing hours or adding a note adds one each. Counted in the Windows demo; Android not yet counted on a device.
+- [x] Rates: `CoachRate` parses typed text with either `.` or `,` as the decimal mark and no thousands separators, at most two decimals, above 0; shown as `₱800.00 per hour` with invariant formatting, or "Rate not set". Profile field "Hourly rate (₱ per hour)" with a ₱ prefix.
+- [x] Validation in view model (required on every profile save, typed text kept on error, "Profile saved." only after the save succeeds), service (`bad_rate`) and database (0033 `coaches_rate_positive`). Backfill per D10: no number invented; 0033 turns existing ₱0 rates into empty (both meant "not set").
+- [x] "Taking new members: On/Off" shown next to the switch with a note that it is separate from checking in.
+- [ ] Light/dark, keyboard and narrow layouts: built only from existing styles; Windows demo checked in light theme only. Dark theme, keyboard pass and Android layout pending on a device.
+
+Evidence 2026-10-23: SQL suite all green incl. 2 new checks in `coach-availability.mjs` (past/overlap shifts, rate > 0). xUnit 614/616 (same 2 baseline failures; 15 new `CoachDashboardTests` cases; old Overview tests removed with the Overview). Windows and Android Debug builds pass. Windows isolated-demo UI check (scratchpad script, not committed): coach lands on Dashboard with cards and the Post a shift form, Week/Month toggle, profile shows the ₱ rate field and "Taking new members: On", member sees "₱800.00 per hour".
+
+Acceptance / verification:
+- [ ] Cards, month/week toggle, session list and calendar shift posting work under the approved platform scope — Windows demo and unit tests pass; Android device check pending.
+- [x] Default shift posting meets the counted interaction target and rejects invalid times/overlap (unit + SQL tests).
+- [x] Rates render and persist correctly regardless of device culture (invariant parse/format, tests with `.` and `,`), with a visible peso symbol and positive-value validation.
+- [ ] Profile On/Off and save confirmation are unambiguous, including server-failure handling — tests pass; owner device check pending.
+
+## Phase 10 — Fixed member identity QR and audited scan result
+
+Starting points: member profile/membership views, check-in UI/services, Profile and membership-term models, Phase 1 archive, database RLS/RPCs, platform camera integration.
+
+Status: DEPLOYED (DB) 2026-10-23 on `phase1-archive-checkpoint-2026-10-20`. Migration `0034_member_qr.sql` applied live at the owner's request (dry run showed only 0034; `migration list --linked` shows 0034 in both columns), after the owner saw no QR card while running against the live project before 0034 was pushed. App builds with this change need 0034, which is now live.
+
+- [x] `member_codes` (locked table, own row only): a random `GYM1-` + 32-hex code per member, backfilled for existing members and given at sign-up by a trigger on `members`; never regenerated. Deleted with the members row when a role switch drops it (0011), so staff/coaches made through the Admin API do not keep a member row; scan history keeps scanned members.
+- [x] My membership shows "Your member QR" at the top (ZXing `BarcodeGeneratorView`, black on a white frame), separate from the pay-by-QR panel, with "it is not for paying".
+- [x] `scan_member(code)` (check_ins:record = front desk and admins only) reads live data: archived → inactive; running term → active with the end of the unbroken run of terms; membership/renewal payment pending → pending; otherwise expired with the last term's end. Unknown/damaged → not_found (no error). The app shows name, status and expiry; offline shows the usual connection error, never Active.
+- [x] `member_scans` logs every scan (server time, scanner, member or null, code seen, result), kept forever; readable only with audit:read (admins); no direct writes.
+- [x] Check-in page: "Scan member QR" turns the camera on (created only while scanning, camera permission asked first, denial explained), plus a box a USB/Bluetooth QR scanner types into. The result card has Check in (Active only), which calls the existing `record_check_in`; a scan alone never checks in. Fallback: the existing member search on the same page.
+- [x] Windows admin Overview: a Check-ins section with a date picker, the count and each check-in's time and name (walk-ins shown as "Walk-in").
+- [x] ZXing.Net.Maui.Controls 0.10.4 (2026-08-14, MIT, targets net10.0 Windows and Android) with `UseBarcodeReader()`, Android CAMERA permission and the Windows `webcam` capability. The README still says Windows scanning is unsupported, but 0.9.0+ ships a Windows camera implementation; real-camera scanning is unverified until tried on a device.
+- [x] Tests: copied-code limits (members/coaches refused), fixed code across pending → active → extension → archive → restore, scan-log completeness.
+
+Evidence 2026-10-23: SQL suite all green incl. 8 new `member-qr.mjs` checks (one existing rules check first failed because the new code row blocked the 0011 role switch; fixed with on delete cascade). xUnit 623/623 (6 new `MemberQrTests`, 1 transport test for the `scan_member` reply). Windows and Android Debug builds pass. Windows isolated-demo UI check (scratchpad script, not committed): member sees the QR card (screenshot checked: the QR first drew at ~40 px, fixed by sizing its white frame), front desk looks up a code from the scanner box and an unknown code says Not found, admin Overview shows Check-ins. The camera button was not pressed in the automated check (it would switch on this PC's webcam).
+
+Acceptance / verification:
+- [x] QR content stays identical while its live lookup changes Active → Expired/Pending and archive → Inactive (SQL + demo tests).
+- [x] Scan result includes name/status/expiry appropriately; archived accounts do not throw an error.
+- [x] Unauthorized lookup is denied; successful/recognized inactive scans are auditable.
+- [ ] Camera scanning works on supported Android/Windows devices; offline/denied-camera/unknown-code paths have clear messages — unknown code and denied-camera message done; real camera on Android and Windows pending on a device.
+
+## Phase 11 — First and last name, email confirmation and forgotten password
+
+Requested by the owner 2026-10-23. Starting points: `RegisterPage.xaml`/`RegisterViewModel`, `AccountRules` (name/email/password caps), `AuthService.RegisterAsync`/`SignUpAsync`, the sign-up trigger (`0004`/`0011`) that fills `profiles.full_name` from Auth metadata, the 0012 letters-only name rule, Settings page/ViewModel, Login page, `supabase/config.toml` `[auth.email]` (OTP length 6, expiry 1 hour, confirmations currently off), the admin `reset-password` Edge Function, DemoGateway auth.
+
+- [x] Registration: separate First name and Last name fields (same letters-only rule and caps as today, each required), replacing Full name. Store per D13(a); keep every place that shows a name working. Admin "add user" uses the same two fields.
+- [x] Existing accounts: split current names per D13(b) in a migration that never loses the original; let people correct their names in Settings.
+- [x] Settings → Email: a member enters a real email, the app asks Supabase Auth to send a 6-digit code to it, the member types the code to confirm. Show the confirmed state ("Confirmed") and allow changing the email again the same way. Clear messages for a wrong/expired code, a resend wait, and an email already used by another account.
+- [x] Apply D13(c): either a reminder only, or block the chosen actions until the email is confirmed (enforced on the server, not only in the app).
+- [x] Login → "Forgot password?": the member enters their email, receives a code (or link per D13(d)), and sets a new password in the app. Never reveal whether an email has an account ("If an account uses this email, we sent a code").
+- [x] Email delivery per D13(e): the owner sets up custom SMTP in the Supabase dashboard; confirm the confirmation, email-change and recovery templates show the code. Keep the admin temporary password per D13(f).
+- [x] Demo mode mirrors names, the code flow (a fixed demo code shown on screen) and forgotten password, so the UI can be checked without sending real email.
+- [x] Tests: name split/compose and validation, the code flows (right, wrong, expired, reused), "no account" privacy, server-side blocks from D13(c), and that names still show correctly on receipts, PDFs, chat, coach lists and the admin pages.
+
+Status: DEPLOYED (DB + create-user) 2026-10-24. Commit ca24a10 on `phase1-archive-checkpoint-2026-10-20` (pushed). Migration `0035_names_and_email.sql` applied live at the owner's request (dry run showed only 0035; remote history shows 0035). `create-user` Edge Function redeployed the same day. Evidence: database checks 293/293 (`names-email.mjs` adds 11), xUnit 651/651 (28 new in `NamesAndEmailTests.cs` and `SupabaseGatewayTests.cs`), Android and Windows build, Windows demo smoke (forgot password with the demo code, sign in with the new password, Settings shows the name fields and "Confirmed"). Owner/ops steps below are pending.
+
+- [x] Migration `0035_names_and_email.sql`: `first_name`/`last_name` on profiles, `full_name` always built from them by trigger `profiles_name_parts` (a writer that sets only `full_name` is split at the first space, so older app builds keep working); backfill of existing names; `set_my_name`; `confirm_my_email` (accepts only a session opened by an emailed code in the last 15 minutes, read from the token's `amr`); the username follows a changed sign-in email so the old address can sign up again.
+- [x] `create-user` Edge Function accepts `first_name`/`last_name` (still accepts `name` from an older app). Admin "Add user" form has First name and Last name.
+- [x] Email confirm flow: same address → Supabase sign-in code (never creates an account); new address → Supabase emails a change code to the new address and the change applies when the code is entered (verified live 2026-10-24: even with "Confirm email" off, this project confirms email changes). A project that applies changes at once gets a sign-in code to the new address instead; both paths are handled. Wrong/used/expired code, "wait before resending" and "email already used" have clear messages.
+- [x] Forgot password: Supabase recovery code, then the new password; the app then signs out and asks the person to sign in with it. The reset also clears a temporary-password prompt and confirms the email. Same neutral message whether or not the email has an account.
+- [x] D13(f): admin temporary password (`reset-password`) unchanged.
+- [x] 0035 pushed live and create-user redeployed (2026-10-24).
+- [x] Supabase email templates show `{{ .Token }}` instead of a link (owner, 2026-10-24): **Magic link or OTP**, **Reset password** and **Change email address**.
+- [x] Live auth settings fixed while testing (owner, 2026-10-24): SMTP port 578 → 587 (the typo made sends hang until "upstream request timeout"); a new Brevo SMTP key (the first one was refused: "Error sending email change email"); Brevo IP blocking for SMTP keys deactivated (Supabase sends from changing addresses); Email OTP length 8 → 6; Secure email change off (it would also need a code from the old address, which members with made-up addresses can't receive). "Confirm email" (sign-up) is off, so new members are not blocked (D13(c)).
+- [ ] OWNER: before rollout, send from a gym-owned domain with DKIM/DMARC in Brevo (a Gmail sender may land in spam).
+
+Rulings (2026-10-24):
+- "Confirmed" is our own record (`profiles.confirmed_email`), because with email confirmation off Supabase marks every address confirmed at sign-up. It is set only from a session opened by an emailed code (`amr` method otp/magiclink/recovery/invite/email/signup/email_change within 15 minutes). Verified on the live project 2026-10-24 (email change and recovery sessions both accepted).
+- A changed email takes effect only after the code from the new inbox is entered (Supabase's behaviour on this project, confirmed live), so a mistyped address never replaces the sign-in email.
+- Names: each part needs at least 2 letters and the two together at most 60 characters (the existing full-name rule). Old one-word names keep an empty last name until the person edits it.
+- An archived account that resets its password gets "This record is archived" after the password changes; it still cannot sign in to the app.
+
+Acceptance / verification:
+- [ ] A new member registers with first and last name and the full name shows everywhere it did before.
+- [x] A member confirms a real email by code from Settings on Windows and Android; a wrong or expired code is refused clearly. (Owner, live, Windows and Android, 2026-10-24.)
+- [x] A member who forgot their password resets it from the login page and signs in with the new one; an unknown email gets the same neutral message. (Owner, Windows, live, 2026-10-24.)
+- [x] Real emails arrive through the configured SMTP (owner check on the live project, 2026-10-24, Brevo).
+
+## Phase 12 — "Are you sure?" confirmations and show/hide password
+
+Requested by the owner 2026-10-24, before the final regression. Goal: nobody signs out, spends money, cancels something or changes another person's account by a stray tap. Each confirmation says in plain words what will happen (item, amount, person, date/time) and has a button named after the action ("Buy membership", "Sign out") plus "Go back". Going back changes nothing. Starting points: the existing popups in `MyMembershipPage.xaml.cs` (Cancel payment, cancellation request) and `RefundsPage.xaml.cs`; the inline two-step panels (Catalog/Discounts archive, account deletion, Users password reset, Verify payments reject, Void payments).
+
+Proposed list (D14; existing confirmations are kept):
+
+Everyone
+- [x] Sign out (header/Android account menu, Windows side menu, Settings)
+- [x] Change password (Settings)
+
+Members
+- [x] Buy a membership or extension (Packages → Avail): package, price, discount code if any
+- [x] Buy an amenity pass (Amenities → Buy pass): amenity, price, days
+- [x] Pay again for an expired payment (My membership)
+- [x] Send payment proof (My membership): amount and reference number, since it goes to the front desk for checking
+- [x] Book an amenity (Book an amenity → Book): amenity, date, start–end
+- [x] Cancel a booking / end a booking early
+- [x] Hire a coach / end a coach hire (Coaches)
+- [x] Send a training request; cancel a request; accept or decline a coach's proposed time (Requests)
+- [x] Cancel a session or ask for a new time (Sessions)
+
+Coaches
+- [x] Mark a session completed or no-show; cancel or extend a session (Sessions)
+- [x] Decline a request or send a proposed time (Requests)
+- [x] Cancel a posted shift (Dashboard and Shifts); stop or start taking new trainees (Shifts)
+- [x] Remove a trainee (Trainees)
+- [x] Check in / check out of the gym (Coach profile)
+
+Front desk and admins
+- [x] Record a counter payment (Cashier): member, item, amount, method
+- [x] Approve a payment (Verify payments): member, item, amount (Reject already asks)
+- [x] Coach check-in / check-out from the Check-in page
+
+Admins
+- [x] Deactivate or reactivate an account; give or remove a role (Users)
+- [x] Add a user (Users): name, email, role
+- [x] Turn a package or amenity off/on sale; save a changed price (Catalog)
+- [x] Deactivate/reactivate a discount code; change its limit (Discounts)
+- [x] Save gym settings: opening hours or payment QR (Gym settings)
+
+Proposed to stay one tap (frequent, easy to undo, or already confirmed): member check-in at the desk (a scan already shows status first), marking attendance (can be changed on the same screen), amenity status changes, sending chat messages, theme, mark alerts read, filters and refresh, posting a shift (it can be cancelled), and the actions that already ask (cancel payment, refund decisions, archive, delete account, reject, void, reset password, restore).
+
+Status: VERIFIED 2026-10-24. Commit b8cc27f on `phase1-archive-checkpoint-2026-10-20` (pushed); owner checked it on Android; no database change. Evidence: xUnit 701/701 (`ConfirmationTests` 48: behaviour for sign out, buy membership, amenity pass, approve payment, deactivate account, package on sale, plus a check that all 39 approved actions ask first; `PasswordEyeTests` 2), Android and Windows build, Windows demo smoke (eye shows the typed password; "Buy Monthly?" popup, Go back changes nothing; "Sign out?" popup, side-menu button disabled while it is open).
+
+Rulings (2026-10-24):
+- `Confirm` is one static helper (`Core/Services/Foundation.cs`) instead of a constructor parameter on 20 view models; the app sets `Confirm.Popup` to the native dialog in `App.xaml.cs`, and tests answer through an `AsyncLocal`, so one test's answer never reaches another. If the app has no page to show the popup on, the answer is no.
+- Adding a package or amenity also asks (the list said "save a changed price"; the same Save button adds new ones). Coaches approving a member's request also asks, as the same act as accepting.
+- A double tap cannot run an action twice: the command is disabled while it runs, including while its popup is open.
+- The eye icons are drawn with curves (Lucide's eye uses arcs, which Windows cannot draw); the eye button is a real Button with "Show password" / "Hide password" for screen readers, and the box goes back to hidden whenever the page shows again.
+
+Tasks
+- [x] Settle D14 with the owner (list above, dialog style, desk actions). Approved 2026-10-24.
+- [x] One small confirm service in Core (`IConfirm.AskAsync(title, message, action)`) so view models ask and tests can answer yes/no; the MAUI app backs it with the native popup. Demo mode uses the same popup.
+- [x] Add the confirmation to each approved action, with the specific details in the message.
+- [x] Tests: for each action, "Go back" leaves everything unchanged and "yes" does the action once; a double tap cannot run it twice.
+- [x] Windows and Android check of the popup text and buttons (light and dark, phone width).
+
+Show/hide password (owner request 2026-10-24; a new feature, not a confirmation): every password box gets a small eye button inside the field, on the right. Tapping it shows the typed password straight away, with no popup; tapping again hides it. It starts hidden every time the page opens, and each box has its own eye.
+- [x] One reusable password field (the existing `Field` border + Entry + eye icon drawn as a vector outline like the other icons in `Controls/Icons.cs`, eye and eye-off), with a screen-reader name "Show password" / "Hide password".
+- [x] Use it for all 10 password boxes: Login (password; forgot-password new and repeat), Register (password, repeat), Settings (current, new, repeat), Users (temporary password when adding a user; new temporary password on reset).
+- [x] Tests: the icons pass `IconTests`; the XAML binding test still passes; the eye flips the box between hidden and shown.
+
+Acceptance / verification:
+- [x] Every action on the approved list asks first, says what will happen, and does nothing on "Go back".
+- [x] Nothing on the "stay one tap" list gained a prompt.
+- [x] Every password box has a working eye button on Windows and Android, and passwords start hidden. (Owner on Android 2026-10-24; Windows demo smoke.)
+
+## Phase 13 — Sub-admin role under the super admin
+
+Requested by the owner 2026-10-24. The current admin becomes the super admin; a sub-admin can run day-to-day work and some admin pages, but nothing that reverses money, changes the whole gym's setup, hands out power or deletes for good. Starting points: roles and `role_permissions` (0002/0005/0006), `has_role('admin')` and `require_archive_admin` checks (0003, 0006, 0015, 0018, 0023), the Edge Function check `requireAdmin` (`supabase/functions/_shared/admin.ts`), the staff menu (`StaffShell.xaml`: `ClassId="admin"` pages are removed for the front desk), `RoleResolver`, Users page role buttons, DemoGateway `RolePermissions`.
+
+Proposed split (D15):
+
+| Page / action | Front desk | Sub-admin | Super admin |
+| --- | --- | --- | --- |
+| Home, Payments to verify, Cashier, Check-in, Amenity Status, Messages | yes | yes | yes |
+| Windows admin Overview (today's numbers, check-ins by day) | — | yes | yes |
+| Packages and amenities: add, edit price/days/description, turn on or off sale, amenity photos | — | yes | yes |
+| Packages and amenities: archive | — | no | yes |
+| Discount codes: add, change limit, turn on or off | — | yes | yes |
+| Discount codes: archive | — | no | yes |
+| Revenue page and PDF export | — | yes | yes |
+| Users: see the list; add members and coaches; reset their temporary password; deactivate or reactivate them | — | yes | yes |
+| Users: add, deactivate or reset front-desk employees, sub-admins or super admins | — | no | yes |
+| Users: give or remove roles | — | no | yes |
+| Users: delete an account; Archive restore | — | no | yes |
+| Void a payment; Cancellations & refunds | — | no | yes |
+| Gym settings (gym name, opening hours, walk-in price, payment QR) | — | no | yes |
+| Audit log | — | no | yes |
+
+Status: DEPLOYED 2026-10-24. Commit 36876be on `phase1-archive-checkpoint-2026-10-20` (pushed). Migration `0036_subadmin.sql` applied live at the owner's request (dry run showed only 0036; live roles: admin 15 permissions, subadmin 11); `create-user` and `reset-password` redeployed the same day. Evidence: database checks 302/302 (`subadmin.mjs` adds 9; two older checks in `rules.mjs` updated because the sub-admin now shares the desk's amenity-status and support permissions), xUnit 713/713 (`SubAdminTests` 11, an overview test, four Windows navigation source checks updated for the new menu groups), Android and Windows build, Windows demo smoke as the sub-admin (Overview shows only Users, Packages, Discounts and Revenue; no Void, Refunds, Gym settings or Audit log anywhere in the menu; Add user offers Member and Coach only). Edge Functions not run locally (no Deno here); they are checked when deployed and with a live test sub-admin.
+
+Rulings (2026-10-24):
+- The database role is `subadmin`; on screen it is "Sub-admin", and the admin role is shown as "Super admin". The admin role itself is unchanged, so every existing check and account keeps working.
+- Reactivation: deactivated accounts used to leave the Users list (reachable only through Archive, which is the super admin's). The Users page now lists them under "Deactivated accounts" with Reactivate, for both the super admin and the sub-admin; reactivating a deactivated (not deleted) account checks who may manage whom instead of requiring the super admin. Restoring a deleted account is still the super admin's.
+- Catalog and discount archiving stay behind the existing super-admin check; a sub-admin who taps Archive is told to turn the item off instead, and the Archive tab is hidden for them. No delete-policy change was needed: 0024 already removed the delete right from everyone.
+- The Windows Overview hides (and does not load) the Refunds, Void, Gym settings and Audit log cards for a sub-admin.
+- A sub-admin may not act on their own account's staff role or on any front-desk, sub-admin or super-admin account: the account menu says only the super admin can change those.
+- Kept super admin only, as before: editing coach profiles for a coach, and releasing a support chat another staff member has taken.
+
+Owner follow-up 2026-10-24 (DEPLOYED: commit 72f0a08, pushed; `0037_protect_super_admin.sql` applied live at the owner's request after a dry run showing only 0037, both guard triggers confirmed live; `create-user` redeployed): (1) the super admin can pick "Sub-admin" directly in Add user (the ⋮ menu's Make sub-admin also stays); (2) super admin accounts are fixed from the app: nobody signed in (not even another super admin) can change their roles, deactivate or delete them; their ⋮ menu offers Reset password only. Enforced by migration `0037_protect_super_admin.sql` (table triggers, so every path is covered; the database owner/dashboard can still change a super admin) and the sign-up trigger now accepts the subadmin role; `create-user` accepts role `subadmin` from a super admin only. Evidence: database checks 304/304 (2 new; two older archive checks changed because archiving a super admin from the app is now refused: the "competing admins" race check became "admins cannot archive one another", and the inactive-admin check switches that admin off as the database owner); xUnit 715/715 (2 new; one photo test now switches the admin off through the demo's database-owner stand-in `OwnerSetActive`); both apps build.
+Ruling: deleting a super admin is blocked too, since it is stronger than deactivating. Cost if wrong: the owner removes a super admin from the Supabase dashboard instead of the app.
+
+Bug found in the owner's live test 2026-10-24 (FIXED and DEPLOYED: commit 000caa0, pushed; `0038` applied live after a dry run showing only 0038; live check: test3@gmail.com and admintwo@gmail.com are now sub-admin only with no member row; the deleted admin2@gmail.com was left as it is): a sub-admin added through Add user came out as a member. Supabase Auth saves the role (app_metadata) a moment after inserting the user, and 0011's trigger applies it then; 0036 added the subadmin role but not to that trigger's list. Migration `0038_subadmin_from_metadata.sql` adds it and repairs the active accounts created that way (on the live project: admintwo@gmail.com and test3@gmail.com). New check `staff-role.mjs` (5) creates sub-admin, employee, coach and member accounts the two-step way. Also fixed (commit 4186344): account-function refusals now show their real message (the first attempt was refused because admin2@gmail.com belongs to a deleted account).
+
+Tasks
+- [x] Settle D15 with the owner (the table, the name, who appoints sub-admins, employees). Approved 2026-10-24.
+- [x] Migration: a `subadmin` role with the approved permissions; split permissions where one permission covers both halves of a row above (for example `users:manage` covers members/coaches and staff; `catalog:manage` covers editing and archiving). Replace `has_role('admin')` checks with the permission or with an explicit super-admin check where the table says super admin only. The existing `admin` role keeps everything (shown as "Super admin").
+- [x] Edge Functions `create-user` and `reset-password`: allow a sub-admin for members and coaches only; super admin for everyone else.
+- [x] App: sign-in sends a sub-admin to the staff area with only the approved admin pages (menu and phone navigation); Users page hides role buttons, delete and staff accounts' actions for a sub-admin; super admins see a way to make someone a sub-admin.
+- [x] Demo mode: a sub-admin demo login that follows the same rules.
+- [x] Tests: database checks that a sub-admin is refused every "no" row and allowed every "yes" row, and that a super admin still has everything; app tests for the menu and the Users page; Edge Function checks.
+- [x] Windows and Android check by the owner with a test sub-admin account. Owner reported done 2026-10-25.
+
+Acceptance / verification:
+- [x] A sub-admin sees and can use only the "yes" pages and actions, on both platforms (owner, 2026-10-25).
+- [x] The server refuses a sub-admin on every "no" action even when called directly (not only hidden in the app): `subadmin.mjs`, `staff-role.mjs`.
+- [x] The super admin can do everything they could before (owner, 2026-10-25; full suites green).
+
+## Phase 14 — Integrated regression and staged rollout
+
+Status: IN PROGRESS 2026-10-25 on `phase1-archive-checkpoint-2026-10-20` (from a77ad61). No live change, no release.
+
+- [x] Run all xUnit tests, including existing account, subscription/refund, payment, request guard, calendar, chat, navigation and XAML-binding checks. 2026-10-25: 725/725 passed.
+- [x] Run the full disposable local PostgreSQL suite, populated-history migration tests, permission/RLS denial tests and real separate-connection concurrency tests. 2026-10-25: `npm --prefix supabase/tests/local test` exit 0, 309 ok / 0 FAIL across all 17 files (populated-history upgrade in `phase7-migration.mjs`, concurrency in `session-requests.mjs`/`reservations.mjs`). New check in `rules.mjs`: after every migration, `anon` can reach no table/view and no security definer function (111/111).
+- [x] Test fresh schema and upgrade from populated current data. Review migration lock duration/backfills and privileges; no destructive cleanup of history. Every suite file builds the schema fresh from 0001–0038; `phase7-migration.mjs` and the 0023/0024/0038 checks upgrade populated data. Since 0.2.0 (0021–0038) there is no dropped/renamed table or column; the only tightening is `profiles.first_name set not null`, filled by a trigger. Backfills (0018, 0023, 0024, 0035, 0038) touch a one-gym dataset, so lock time is negligible; all already applied live.
+- [~] Build Android and Windows; run demo and staging/live-configured smoke checks without leaking project secrets or modifying the owner's config. Both Debug builds pass 2026-10-25 (0 errors). No new smoke run this session; the live-configured checks are the owner's device checks of phases 11–13. There is no staging project.
+- [x] Walk through admin archive/restore, capped-code checkout, purchase-to-entitlement, coach availability, simultaneous booking, structured rescheduling, presence filtering, PDF export and QR lifecycle end to end. Each flow has xUnit (demo) and database tests; Owner reported checking everything on Windows and Android 2026-10-25.
+- [~] Verify app-closed timing transitions, network failure/retry, duplicate taps, reconnect, multiple devices and timezone/day-boundary cases with an injectable/fixed clock where appropriate. Covered by tests: server-side expiry/auto-checkout jobs (database), Asia/Manila day boundaries (0028/0029 checks), fixed-clock xUnit cases, offline errors on QR scan. Not covered: real multi-device and reconnect behaviour; known open item: a walk-in retry can record a day pass twice (no request id).
+- [x] Review security and native-first/minimal-complexity implementation. Record actual reviewer/tool used; don't label self-review as independent review. 2026-10-25, author self-review by Claude (not independent): 149 security definer functions all pin `search_path`; RLS enabled on every table; `anon` reaches no table and no security definer function (two plain functions, `plus_cooldown` and the trigger function `sync_name_parts`, are callable by anon and harmless); Edge Functions verify the token, require an active super admin or sub-admin, limit sub-admins to members/coaches and audit; no service key or signing secret in tracked files, `supabase.json` git-ignored. Minimal-complexity review: ponytail reviews ran per phase.
+- [x] Update PRD, technical/database specs, diagrams and README to match shipped behavior and new permissions/dependencies. 2026-10-25: README (status, roles incl. sub-admin, accounts, demo logins, tables, rules, next steps, roadmap); PRD and technical spec gained "what changed / as built" sections; database plan gained a Current state section (roles, tables added, migration index 0013–0038, rules for new migrations). The ER diagram in `docs/dfd/` is marked as the original design and is NOT redrawn.
+- [~] Review backups, staging rehearsal, server-before-client compatibility, safe rollout and rollback/forward-fix plan. Apply live migrations only with separate authorization and record actual versions/results. Compatibility checked (see Rollout below); no staging project; backups not taken by this session. Rollout plan below needs the owner's go-ahead.
+- [x] Owner verifies Windows and Android behavior; record issues as new unchecked tasks rather than declaring the entire plan done prematurely. Owner reported everything checked 2026-10-25; PR to main opened at the owner's request.
+
+Rollout (2026-10-25):
+- Server first is already done: live is at 0038 and the released 0.2.0 app keeps working against it. A script compared every RPC 0.2.0 calls (32) with the functions at 0038 by name and argument names: none missing or changed. Behaviour does change for 0.2.0 users (for example hiring needs the coach checked in), so the new app should follow soon.
+- Release steps, each needing the owner's go-ahead: (1) owner walkthrough on Windows and Android from this branch; (2) PR `phase1-archive-checkpoint-2026-10-20` → `main`, CI green; (3) version bump (0.3.0 suggested) and tag, which publishes the APK, MSIX and MSI; (4) install over 0.2.0 on one phone and one PC and sign in.
+- Backups: live has only test accounts, as before; take a dashboard backup or `npx supabase db dump` first if real members are added before the release.
+- Rollback: the app can roll back to the 0.2.0 installers (the database stays compatible). Migrations are not rolled back; a problem in the database is fixed forward with a new migration (0039+), never by editing an applied one.
+
+Suggested baseline commands (run individually, from repository root):
+
+```powershell
+git status --short
+```
+
+```powershell
+dotnet test tests/GymMembership.Tests
+```
+
+```powershell
+npm --prefix supabase/tests/local test
+```
+
+```powershell
+dotnet build src/GymMembership.App/GymMembership.App.csproj -f net10.0-windows10.0.19041.0 -p:PlatformOnly=windows
+```
+
+```powershell
+dotnet build src/GymMembership.App/GymMembership.App.csproj -f net10.0-android -p:PlatformOnly=android
+```
+
+Check local test prerequisites/package scripts before running the database suite. Use disposable/local data, never production tests. These commands are planned checks, not evidence that they have run.
+
+## 4. Phase evidence tracker
+
+Fill cells with date, command/test, result and evidence location. `—` means not done, not passed.
+
+| Phase | Implemented | Unit tests | SQL/RLS/race tests | Windows/device | Android/device | Migration/deployment | Review/owner acceptance |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 Baseline | D1/D2 approved 2026-10-20 | 533 pass, 2 pre-existing failures / 535 | 110 + 31 + 26 pass; populated history pass | Build passed; device N/A for baseline | Build passed; device N/A for baseline | No live changes | Other decisions pending |
+| 1 Archive/accounts | IMPLEMENTED: items 1/2/4, four-type archive and restore | 39 focused pass; full 574 pass, same 2 fail / 576 | 22 account + 16 catalog pass; 110/31/26 + populated history pass | Build + isolated Windows demo smoke pass; full accessibility/layout checks pending | Build passes; actual device interaction pending (adb not on PATH) | 0023/0024 live push succeeded per owner output; post-push history confirmation pending; Edge Function deployment pending | Author self-review only; owner/device acceptance pending; NO commit/push |
+| 2 Payment authority | — | — | — | — | — | — | — |
+| 3 Code caps | — | — | — | — | — | — | — |
+| 4 Revenue PDF | — | — | — | — | — | — | — |
+| 5 Products/availability | — | — | — | — | — | — | — |
+| 6 Reservations/grid | — | — | — | — | — | — | — |
+| 7 Request workflow | — | — | — | — | — | — | — |
+| 8 Coach presence | — | — | — | — | — | — | — |
+| 9 Coach UX/profile | — | — | — | — | — | — | — |
+| 10 Permanent QR | — | — | — | — | — | — | — |
+| 11 Names/email/password | 2026-10-24 | 651/651 | 293/293 (names-email.mjs) | demo smoke passed | owner checked live 2026-10-24 | 0035 live, create-user deployed 2026-10-24 | ponytail review done; owner accepted 2026-10-24 |
+| 12 Confirmations | 2026-10-24 | 701/701 | N/A — no database change | demo smoke passed | owner checked 2026-10-24 | none needed | ponytail review done; owner accepted 2026-10-24 |
+| 13 Sub-admin | 2026-10-24 | 713/713 | 302/302 (subadmin.mjs) | demo smoke passed; owner checked 2026-10-25 | owner checked 2026-10-25 | 0036–0038 live, functions deployed 2026-10-24 | ponytail review done; owner accepted 2026-10-25 |
+| 14 Integration/rollout | 2026-10-25 | 725/725 | 309 ok / 0 fail; rules.mjs 111/111 with new anon check | builds; owner walkthrough pending | builds; owner walkthrough pending | none (live at 0038); 0.2.0 RPC compatibility checked | author self-review (security, compatibility); owner pending |
+
+## 5. Session log — append whenever work pauses
+
+### 2026-10-20 — Planning
+
+- Completed: inspected current repository entry points and existing related rules; wrote phased implementation/acceptance checklists and restart tracking.
+- Application changes: none. Tests/builds/live database operations: none.
+- Important findings: payment void authorization already exists; member withdrawal/refund rules and `0022` booking guard must be reconciled; referenced mockup images not supplied.
+- Next: resolve Phase 0 decisions with the owner, establish baseline, then begin Phase 1.
+
+### 2026-10-20 — Phase 1, account deletion/menu slice (local only)
+
+- Owner decisions: D1/D2 approved through the question tool; admin-only deletion reaffirmed in chat. Owner explicitly instructed not to push. No commit, push, release or live migration was performed.
+- Branch / base HEAD: `phase1-archive-accounts` / `9f6ecb097ded65b59e3c6427924dd90d288e908a`. All work remains uncommitted. Initial untracked plan was preserved.
+- Implemented: native Windows/Android account overflow menu, required-reason deletion popup, admin-only soft-delete/restore service/RPCs, deletion metadata and preserved history, active-list filtering, commitment/last-admin/self-deletion checks, ordinary-reactivation restore bypass prevention, and demo parity for this account slice.
+- Added files: `Controls/DeleteAccountPopup.xaml` and `.xaml.cs`, `Services/AccountArchiveService.cs`, `ViewModels/AccountDeletionViewModel.cs`, `Demo/DemoAccountArchive.cs`, `supabase/migrations/0023_account_archive.sql`, `supabase/tests/local/account-archive.mjs`, `AccountArchiveTests.cs`, and `AccountDeletionViewModelTests.cs` (under their existing App/Core/test project roots).
+- Updated existing files: app DI, UsersPage XAML/code-behind, UsersViewModel, Profile model, AdminService active-user listing, error messages, DemoGateway RPC routing/active checks, local SQL test script list and this plan.
+- Baseline: 535 xUnit tests, 533 pass and 2 fail before changes; SQL rules 110, Phase 7 31, requests 26 and populated-history checks pass. Windows and Android baseline builds pass.
+- Test-first evidence: 11 new account RPC tests initially failed because archive operations did not exist. Final focused account/ViewModel run: 23 pass, 0 fail. Full final xUnit: 559 total, 557 pass, 2 existing failures (new popup adds automatic XAML binding coverage too).
+- Existing failures deliberately left untouched: `SubscriptionTests.The_membership_page_drops_the_pay_by_QR_panel_after_a_cancel` at line 211 (null PaymentItem), and `SupabaseGatewayTests.Setting_a_status_calls_the_function_and_reads_back_who_was_alerted` at line 222 (NullReferenceException). FIXED 2026-10-23: both were stale fixed dates in the tests, not app bugs (a payment expiry from a 2026-10-17 test clock judged by the real clock; a "back at" time of 2026-10-20 that had passed). Full xUnit now 616/616.
+- SQL evidence: 22 new account checks pass, including admin-only enforcement even with delegated users:manage, required whitespace-trimmed reason, populated pre-0023 inactive data, inactive identity denial, direct-write/helper denial, preserved history/audit evidence, restore constraints, payment-vs-delete in both lock orders and competing admins. Existing full SQL suites also pass. Final account suite re-run after whitespace normalization passes.
+- Logs: `C:\Users\bowie\AppData\Local\Temp\opencode\gym-phase1-db-baseline.log`, `gym-phase1-db-regression.log`, and `gym-account-archive-tests.log` in the same directory. These logs include expected permission-denial SQL errors; use suite pass/fail summaries, not raw ERROR-line counts.
+- Builds: final Windows and Android Debug compile checks passed. Existing obsolete PickPhotoAsync warning and unrelated chat-test xUnit1031 warning remain. `git diff --check` passed.
+- Migration: 0023 tested on disposable local Postgres only. NO live schema/Auth/account/payment changes. Existing inactive profiles retain unknown deletion metadata rather than invented archive dates.
+- Review: author security/correctness/complexity review only, not independent. Named ponytail, frontend-design and superpowers skills could not load via this connection; no claim those reviews ran.
+- Not verified: physical device UI, keyboard/accessibility/light/dark/narrow layouts, full archived-user storage/session-surface audit. Existing signed file URLs are not claimed to be revoked by profile deactivation.
+- NOT implemented yet: combined Discounts & Archive tab, all-type filters/pagination/read-only details/restore UI, catalog/code soft-archive paths and legacy archive backfill. Do not deploy or count Phase 1 complete yet; deleted accounts have a backend restore path but no destination Archive screen yet.
+- Next concrete action: build the agreed combined Archive screen and remaining account/catalog/code archive lifecycle, keeping its records read-only and restore admin-only; start with current archive model/service contracts and server-side pagination/filter design. Then run actual device interaction checks.
+
+### 2026-10-20 — Phase 1 remaining Archive implementation (local only)
+
+- Request: finish the remaining Phase 1 work. Preserved prior slice and the owner's no-push instruction. No other phase started.
+- Completed: admin Discounts/Archive tabs; all four record types; combined type/status/Asia-Manila date/reason filters; one-click clear; bounded server pagination; loading/error/empty states; read-only details and explicit restore confirmation; state/expiry rechecks and error retention.
+- Lifecycle: used and unused plans/codes are retained instead of physically deleted; inactive catalogs leave active management lists. Expired codes appear automatically and cannot be edited/restored into validity. Archive metadata is server-stamped and legacy unknowns stay unknown. Member subscription expiration remains membership history.
+- Access review: existing inactive-session RLS/RPC checks retained; inactive admin storage gap closed with a restrictive policy; inactive account role/coach/profile edits blocked; archived-target password reset blocked before the external Auth call; demo mirrors catalog immutability, notifications and restore checks. No promise of revoking old signed URLs/Auth tokens or atomicity across the Auth API and a concurrent database archive.
+- New files: `Models/ArchiveModels.cs`, `Services/ArchiveService.cs`, `ViewModels/ArchiveViewModel.cs`, `Demo/DemoArchive.cs`, `Controls/ArchivePanel.xaml` and code-behind, `0024_archive_catalog.sql`, `archive-catalog.mjs`, `ArchiveTests.cs`, `ArchiveViewModelTests.cs`, `scripts/Test-WindowsArchive.ps1` (within their existing project folders).
+- Updated: catalog and Users active lists; archive-backed package/code actions; Discounts UI; shell/overview labels; demo guards; archived-target reset-password check; RPC transport test; intentional old hard-delete test expectations; this checklist/evidence tracker.
+- Test-first evidence: the 8 new archive behavior cases initially failed against the prior slice and passed after implementation. Final focused Phase 1 suite: 39 passed. Full xUnit: 576 total / 574 passed / 2 failed, both pre-existing: `SubscriptionTests.The_membership_page_drops_the_pay_by_QR_panel_after_a_cancel` and `SupabaseGatewayTests.Setting_a_status_calls_the_function_and_reads_back_who_was_alerted`. Transport JSON mapping/filter/paging/restore test passes.
+- Final disposable SQL chain: 110 rules + 31 Phase 7 + populated-history migration suite + 26 session requests + 22 account checks + 16 archive/catalog checks all pass. Tests cover nonadmin and inactive-admin denial, legacy metadata, all-type combined filters, retained history, stale edit/restore bypasses, direct deletes, metadata spoofing, expired codes, archived-role/coach edits and storage writes. Account concurrency tests from the first slice still pass.
+- Builds: Windows and Android Debug pass, with existing media-picker deprecation warning; unrelated xUnit1031 warning remains. `git diff --check` passes (only a Git CRLF normalization warning for the Edge Function file). A transient DLL-copy retry in an intermediate build resolved; the final Windows build had no copy failure.
+- Windows actual demo smoke: `Test-WindowsArchive.ps1` passes. Confirm disabled for blank reason, enabled for entered reason, cancellation closes popup; archive filter empty/Clear works; a catalog plan is archived then restored from read-only details and no longer matches Archive; front desk has no archive navigation. Test uses a separate build copy with only its copied supabase.json removed; original backend configuration was untouched. Intermediate automation checks failed on an offscreen filter after restore and on a native menu lookup in the main-window tree; the script now handles offscreen filter access and includes a process-scoped popup lookup fallback. The smoke test passes again on the final rebuilt isolated demo.
+- Evidence logs: `C:\Users\bowie\AppData\Local\Temp\opencode\gym-phase1-db-regression.log`, `gym-catalog-db.log`, `gym-phase1-final-tests.log`, `gym-archive-transport.log`. SQL logs intentionally contain permission-denial ERROR lines; use pass/fail summaries.
+- Unverified: Android actual UI (adb absent from PATH), screen-reader/keyboard/narrow/light-dark matrix, independent review and owner acceptance. Existing optional project skills could not be loaded; do not claim they ran.
+- Branch/base HEAD unchanged: `phase1-archive-accounts` / `9f6ecb097ded65b59e3c6427924dd90d288e908a`. All changes remain local/uncommitted. No push, commit, deployment, live migration or real-account operation performed.
+- Restart: implementation is complete; review local UI and finish unchecked device acceptance. For any next phase, resolve its decisions first (Phase 2: D3). Do not deploy merely because local checks pass.
+
+### Live database migration — owner-reported success after Phase 1
+
+- Owner supplied linked migration history showing 0001–0022 applied remotely and only 0023/0024 pending.
+- Owner supplied dry-run output listing exactly `0023_account_archive.sql` and `0024_archive_catalog.sql`; no other pending migrations were listed.
+- Owner then approved and ran the live database push; shared output reports both migrations applied and `Finished supabase db push.` This supersedes earlier session notes stating neither migration was live.
+- [x] Owner-reported live database application of 0023 and 0024 recorded.
+- [ ] Confirm post-push `npx supabase migration list --linked` shows both versions in Local and Remote columns.
+- [ ] Deploy the changed `reset-password` Edge Function separately to the confirmed gym project.
+- [ ] Verify the updated app against the live project with designated test records; retain outstanding Android/accessibility/owner acceptance checks.
+- Backup status was not provided; do not claim one was created. Do not rerun or repair successfully applied migrations automatically.
+- Agent action this turn: progress documentation only. No remote commands, Git commit/push, function deployment, app release or real-account test performed by the agent. Owner's no-Git-push instruction remains active.
+
+### Owner-authorized checkpoint — pause before other phases
+
+- Owner explicitly requested a new branch and push to save the current Phase 1 work, with other phases to continue tomorrow. The earlier no-push restriction is superseded only for this checkpoint.
+- Created `phase1-archive-checkpoint-2026-10-20` from `phase1-archive-accounts`, preserving all 38 reviewed Phase 1 files. No unrelated working-tree files were found; no tracked backend configuration or credentials are being added.
+- Intended checkpoint commit message: `feat: complete phase 1 account and catalog archive`. Resolve its actual hash from `git log`; confirm publication using the upstream branch and clean status rather than assuming a push succeeded from this prepared handoff alone.
+- Last implementation checks remain: 39 focused pass; full xUnit 574/576 with the same 2 baseline failures; full SQL chain 110 + 31 + populated-history + 26 + 22 + 16 pass; Windows/Android builds and Windows isolated-demo smoke pass. Checkpoint preparation changes only this handoff, not application behavior. `git diff --check` and a limited common-credential-pattern scan passed; the scan is not a comprehensive security audit.
+- Live state: owner reported 0023 and 0024 applied successfully. Post-push migration-list confirmation, `reset-password` Edge Function deployment, live-backed test records and Android/accessibility/owner acceptance remain pending. No deployment or real-record tests are part of this Git checkpoint.
+- Tomorrow: read this current-work section, inspect branch/upstream/dirty state, confirm outstanding Phase 1 rollout checks, then settle D3 before starting Phase 2 payment authorization. Other phases remain planned; no automatic merge, app release or further live operations are authorized.
+
+### YYYY-MM-DD — Phase __ / session __
+
+- Start state (branch / commit / dirty files):
+- Tasks completed (phase and checklist labels):
+- Files changed:
+- Tests/builds run and exact results:
+- Device checks actually performed:
+- Migrations added / locally tested / live-applied (separate each):
+- Decisions made and owner approval:
+- Remaining failures / blockers:
+- Last known working point:
+- Next concrete action (file, function, test or command):
+- Commit / PR reference, if separately requested:
+
+### 2026-10-22 — D3 and Phase 2
+
+- Phase 1: `migration list --linked` confirmed 0001–0024 in both columns; `reset-password` Edge Function deployed to `avxcitoddadbblxuhiik` (the linked project the app uses). Live app smoke, Android and owner acceptance still pending.
+- D3 approved by the owner: all admins via role grant `payments:void`; no separate cancel capability; members keep withdrawal and 24h refund requests.
+- Ruling: pending payments are cancelled through the existing Reject in the verification queue (reason + `payment.reject` audit + notification), not by extending `void_payment`, to avoid two ways to cancel one payment. If the owner wants Void on pending rows, add it in a new migration.
+- Ruling: Void/Refunds page visibility stays role-based (`ClassId="admin"`); with D3 every admin holds the grant. An admin whose grant is removed would see the pages but get the server's permission error.
+- Implemented `0025_refund_payment_permission.sql`, demo parity, `payment-authority.mjs` (6 checks, RED before 0025, GREEN after). Full local SQL suites 0 failed; xUnit 574/576 with the same 2 baseline failures. Review: author self-review + ponytail review (one duplicate test removed); no independent reviewer.
+- Commit 6f986d7 pushed on `phase1-archive-checkpoint-2026-10-20`; 0025 applied live at the owner's request.
+- Next: owner verifies refund approve/reject as admin, the Phase 1 live smoke and Android checks, then records acceptance for Phases 1 and 2. Phase 3 needs D4/D5.
+
+### 2026-10-22 — D4/D5 and Phase 3
+
+- D4/D5 approved by the owner (see section 2). Phase 3 implemented on `phase1-archive-checkpoint-2026-10-20`.
+- Ruling: a code is archived when consumed (verified + voided) reaches the limit, not when a pending payment takes the last place, because a rejected payment must be able to give the place back and an archived code can never be restored.
+- Ruling: usage is counted from payments under a row lock instead of stored counters, so there is no ledger to drift or protect from direct writes.
+- Ruling: the demo archives used-up codes when codes are read or used rather than at the moment of verification; the database does it at verification.
+- Tests: SQL suites all 0 failed (discount-limits 9/9 RED before 0026); xUnit 579/581 with the same 2 baseline failures; Windows and Android Debug builds succeed. Review: author self-review + ponytail; no independent reviewer.
+- Deferred minor: setting the limit exactly to the consumed count archives the code immediately, but the success notice still says "can now be used N times".
+- 0026 applied live 2026-10-22 at the owner's request; `migration list --linked` shows 0026 in both columns.
+- Next: owner checks the Discounts tab on Windows/Android, then accepts Phase 3. Phase 4 needs D11.
+
+### 2026-10-22 — D11 and Phase 4
+
+- D11 approved by the owner (section 2). Phase 4 implemented on `phase1-archive-checkpoint-2026-10-20`.
+- Ruling: PDFsharp pinned to 6.2.4 because the latest (6.5.0) changed to AGPL-3.0; the owner approved an MIT library. Cost if wrong: no PDFsharp updates past 6.2.x without a license decision.
+- Ruling: Pkcs lifted to 10.0.13 to clear GHSA-846f-f764-76mx brought in by PDFsharp 6.2.4.
+- Ruling: Noto Sans (OFL) embedded for the PDF because Barlow lacks ₱; the app's on-screen font is unchanged.
+- Ruling: when the receipt lines no longer match the loaded total, export stops and the screen refreshes rather than exporting figures that differ from what is shown.
+- Tests: SQL suites 0 failed (revenue-lines 6/6 RED before 0027); xUnit 585/587 with the same 2 baseline failures; Windows and Android Debug builds succeed with no NU1903. Review: author self-review + ponytail; no independent reviewer.
+- 0027 applied live 2026-10-22 at the owner's request; `migration list --linked` shows 0027 in both columns.
+- Next: owner tries Export PDF on Windows and Android (and a Release Android build, since trimming was not tested), then accepts Phase 4. Phase 5 needs D6.
+
+### 2026-10-22 — D6 and Phase 5
+
+- D6 approved by the owner (section 2). Phase 5 implemented on `phase1-archive-checkpoint-2026-10-20`.
+- Root cause of "members cannot buy amenities": no screen called the still-working purchase code after the amenity status redesign.
+- Ruling: an amenity row is both the resource and its pass product; no product table and no coach mapping until Phase 6 needs one.
+- Ruling: coach shifts are the opened availability; no second calendar.
+- Ruling: existing shifts are not re-validated against the new hours until they are changed, so the migration cannot fail on old data.
+- Known limit: the coach shift form takes time in the device's timezone (unchanged); off-grid or out-of-hours picks get a clear error instead of being snapped.
+- Tests: `coach-availability.mjs` 6/6 (3 RED before 0028; the other 3 cover existing behavior); `AmenityPassTests` 7 (RED before); `rules.mjs` shift fixture moved onto the grid; one older xUnit shift test moved to 10:00 Manila. xUnit 592/594 with the same 2 baseline failures; Windows and Android Debug builds succeed. Review: author self-review + ponytail; no independent reviewer.
+- 0028 applied live 2026-10-22 at the owner's request; `migration list --linked` shows 0028 in both columns.
+- Next: owner checks Buy pass, amenity edit, gym hours and shift posting on Windows/Android, then accepts Phase 5. Phase 6 needs D7, D8 and the two open D6 details.
+
+### 2026-10-22 — D7/D8 and Phase 6
+
+- D7, D8 and the two open D6 details approved by the owner (section 2). Phase 6 implemented on `phase1-archive-checkpoint-2026-10-20`.
+- Ruling: the grid books solo amenity time; coach-linked bookings come from Phase 7's request/approval flow. `extend_reservation` exists and is tested; its button arrives with Phase 7.
+- Ruling: the D7 change to `0022` (a coach session stops counting as active once its end passes) is left to Phase 7, where the plan enforces D7 on the same-pair guard; it concerns request flows, not the grid.
+- Ruling: overlap between a new reservation and a training session being created at the same moment by the old session RPCs is checked but not locked across tables; Phase 7 moves coach sessions onto reservations.
+- Ruling: grid cells are always-enabled buttons (keyboard reachable) so the disabled style cannot hide their status; taps on cells that cannot be picked are ignored.
+- Process note: the app-side code for Phase 6 was written before its xUnit tests (the SQL tests were written first and seen failing). As a check, breaking the "too close" rule made 2 of the 6 tests fail.
+- Tests: `reservations.mjs` 14/14 (all RED before 0029); `ReservationTests` 6/6; xUnit 599/601 with the same 2 baseline failures; Windows and Android Debug builds succeed. The page was not run on a device. Review: author self-review + ponytail; no independent reviewer.
+- 0029 applied live 2026-10-22 at the owner's request; `migration list --linked` shows 0029 in both columns.
+- Next: owner tries Book an amenity on Windows and Android, then accepts Phase 6. Phase 7 (structured requests and reschedules) is next.
+
+### 2026-10-22 — Phase 7
+
+- Phase 7 implemented on `phase1-archive-checkpoint-2026-10-20` (D7/D8 approved earlier today).
+- Ruling: built on `time_requests` instead of a new request table, so old app builds keep working with `request_time`/`respond_time_request` (they will not show proposals until updated).
+- Ruling: a coach's posted shift is required only for sessions that name an amenity; plain coaching requests keep their previous rules, so existing flows do not break.
+- Ruling: a failed confirmation (for example a taken slot) rolls the whole transaction back, so it is shown to the user but not written to the history; only committed changes are history.
+- Ruling: the screen judges whether a proposal is still live by the device clock; the server decides, so a late Accept returns "expired" and the request goes back to the coach.
+- Ruling: a coach answers a member's reschedule by approving or declining it; counter-proposals apply to new requests only.
+- `extend_reservation` redefined in 0031 so the coach's extension also moves the training session's end; the coach now has an "Add 30 minutes" button.
+- Tests: `structured-requests.mjs` 13/13 (written first; all RED before 0031); the old 0022 "date passing still blocks" check in `session-requests.mjs` was updated to the approved D7 rule. `StructuredRequestTests` 6 (written before the app code). xUnit 605/607 with the same 2 baseline failures; Windows and Android Debug builds succeed. Coach and member request screens checked by screenshot in an isolated demo copy (found and fixed a blank name in the panel title). Review: author self-review + ponytail; no independent reviewer.
+- 0030 and 0031 applied live 2026-10-22 at the owner's request; `migration list --linked` shows both in both columns.
+- Next: owner tries requests with an amenity, a proposal, accept/ask again/decline and Add 30 minutes on Windows and Android, then accepts Phase 7. Phase 8 needs D9.
+
+### 2026-10-25 — Phase 13 accepted, Phase 14 regression and docs
+
+- Owner reported the Phase 13 sub-admin check done on Windows and Android; Phase 13 marked VERIFIED.
+- Ran: `dotnet test tests/GymMembership.Tests` (725/725), `npm --prefix supabase/tests/local test` (exit 0, 309 ok, 0 FAIL), Windows and Android Debug builds (0 errors).
+- Added `rules.mjs` check: anon reaches no table/view and no security definer function after every migration. A first, stricter version (no function at all) flagged only `plus_cooldown` and the trigger function `sync_name_parts`, both harmless invoker functions, so the check targets definer functions and tables.
+- Security self-review and the 0.2.0 → 0038 RPC compatibility check (script in the session scratchpad, not committed) found no problems. Docs updated: README, PRD, technical spec, database plan, diagram note.
+- Not done: owner walkthrough, real-camera QR scan, multi-device/reconnect checks, staging rehearsal, backup, release. Nothing committed or deployed unless the owner asks.
+
+## 6. Copyable resume prompt
+
+> Read `CLAUDE.md` and `docs/superpowers/plans/2026-10-20-gym-fixes-and-changes.md`. Inspect the current-work block, latest session log, git status and relevant code. Summarize what is actually done versus pending, then continue only the next approved phase/task. Preserve existing user work and previously approved payment/refund/session rules unless this plan records an explicit replacement decision. Add regression tests and verify each implementation slice. Before stopping, update the current-work block, phase status, task checkboxes, evidence tracker and session log. Do not deploy migrations, operate on real accounts/payments, commit, push or release without separate authorization.

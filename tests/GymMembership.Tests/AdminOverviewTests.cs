@@ -171,6 +171,18 @@ public class AdminOverviewTests
     }
 
     [Fact]
+    public async Task A_sub_admin_sees_only_the_cards_for_their_pages_and_none_of_them_fail()
+    {
+        var gateway = new GymMembership.Core.Demo.DemoGateway();
+        await gateway.SignInAsync("subadmin@demo.io", GymMembership.Core.Demo.DemoGateway.DemoPassword);
+        var vm = new AdminOverviewViewModel(new AdminService(gateway), new SubscriptionService(gateway)) { SuperAdmin = false };
+        Assert.Equal(["users", "catalog", "discounts", "revenue"], vm.Shown.Select(c => c.Key));
+        await vm.OnAppearingAsync();
+        Assert.All(vm.Shown, c => Assert.False(c.IsUnavailable, c.Title + ": " + c.Detail));
+        Assert.DoesNotContain("unavailable", vm.UpdatedText);
+    }
+
+    [Fact]
     public async Task A_second_refresh_is_ignored_until_the_current_one_finishes()
     {
         var (vm, a, _) = Create();

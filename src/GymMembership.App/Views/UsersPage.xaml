@@ -18,7 +18,7 @@
                     <Label Text="{Binding Resetting.Username, StringFormat='Reset password for {0}'}" Style="{StaticResource Heading}" />
                     <Label Text="Set a new temporary password and share it with them. The old one stops working." Style="{StaticResource Caption}" />
                     <Border Style="{StaticResource Field}" WidthRequest="240" HorizontalOptions="Start">
-                        <Entry Text="{Binding ResetPassword}" IsPassword="True" Placeholder="At least 6 characters" SemanticProperties.Description="New temporary password" />
+                        <Grid ColumnDefinitions="*,Auto"><Entry x:Name="ResetPasswordBox" Text="{Binding ResetPassword}" IsPassword="True" Placeholder="At least 6 characters" SemanticProperties.Description="New temporary password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference ResetPasswordBox}" /></Grid>
                     </Border>
                     <HorizontalStackLayout Spacing="8">
                         <Button Text="Set password" Style="{StaticResource SmallButton}" Command="{Binding ConfirmResetCommand}" />
@@ -29,11 +29,15 @@
 
             <Border Style="{StaticResource Panel}">
                 <VerticalStackLayout Spacing="12">
-                    <Label Text="Add a member, coach or employee" Style="{StaticResource Heading}" />
+                    <Label Text="{Binding AddTitle}" Style="{StaticResource Heading}" />
                     <FlexLayout Wrap="Wrap" AlignItems="End">
-                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="220">
-                            <Label Text="Full name" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}"><Entry Text="{Binding NewName}" SemanticProperties.Description="Full name" /></Border>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="180">
+                            <Label Text="First name" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding NewFirstName}" SemanticProperties.Description="First name" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="180">
+                            <Label Text="Last name" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding NewLastName}" SemanticProperties.Description="Last name" /></Border>
                         </VerticalStackLayout>
                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="240">
                             <Label Text="Email" Style="{StaticResource Caption}" />
@@ -41,7 +45,7 @@
                         </VerticalStackLayout>
                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="180">
                             <Label Text="Temporary password" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}"><Entry Text="{Binding NewPassword}" IsPassword="True" SemanticProperties.Description="Temporary password" /></Border>
+                            <Border Style="{StaticResource Field}"><Grid ColumnDefinitions="*,Auto"><Entry x:Name="NewPasswordBox" Text="{Binding NewPassword}" IsPassword="True" SemanticProperties.Description="Temporary password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference NewPasswordBox}" /></Grid></Border>
                         </VerticalStackLayout>
                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="130">
                             <Label Text="Role" Style="{StaticResource Caption}" />
@@ -52,7 +56,7 @@
                 </VerticalStackLayout>
             </Border>
 
-            <Label Text="Everyone" Style="{StaticResource Heading}" Margin="0,8,0,0" />
+            <Label Text="Active accounts" Style="{StaticResource Heading}" Margin="0,8,0,0" />
             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Users}" Spacing="10">
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="svc:UserRow">
@@ -65,16 +69,32 @@
                                     </VerticalStackLayout>
                                     <c:StatusChip Grid.Column="1" Status="{Binding ActiveStatus}" VerticalOptions="Start" />
                                 </Grid>
-                                <FlexLayout Wrap="Wrap">
-                                    <Button Text="{Binding CoachActionText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                            Clicked="OnToggleRoleCoach" />
-                                    <Button Text="{Binding EmployeeActionText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                            Clicked="OnToggleRoleEmployee" />
-                                    <Button Text="Reset password" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                            Clicked="OnStartReset" />
-                                    <Button Text="{Binding ActiveActionText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                            Clicked="OnToggleActive" />
-                                </FlexLayout>
+                                <Button Text="⋮" Style="{StaticResource SmallOutlineButton}" FontSize="24" WidthRequest="48" MinimumHeightRequest="48"
+                                        HorizontalOptions="End" Clicked="OnAccountActions" AutomationId="UserAccountActions"
+                                        SemanticProperties.Description="Account actions" SemanticProperties.Hint="Open role, password and account actions" />
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
+            <Label Text="Deactivated accounts" Style="{StaticResource Heading}" Margin="0,8,0,0" />
+            <Label Text="Switched off, not deleted. Reactivate someone to let them sign in again." Style="{StaticResource Caption}" />
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Deactivated}" Spacing="10">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="svc:UserRow">
+                        <Border Style="{StaticResource Panel}">
+                            <VerticalStackLayout Spacing="10">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                    <VerticalStackLayout Spacing="2">
+                                        <Label Text="{Binding Username}" Style="{StaticResource Heading}" />
+                                        <Label Text="{Binding RoleText}" Style="{StaticResource Caption}" />
+                                    </VerticalStackLayout>
+                                    <c:StatusChip Grid.Column="1" Status="{Binding ActiveStatus}" VerticalOptions="Start" />
+                                </Grid>
+                                <Button Text="⋮" Style="{StaticResource SmallOutlineButton}" FontSize="24" WidthRequest="48" MinimumHeightRequest="48"
+                                        HorizontalOptions="End" Clicked="OnAccountActions" AutomationId="UserAccountActions"
+                                        SemanticProperties.Description="Account actions" SemanticProperties.Hint="Open role, password and account actions" />
                             </VerticalStackLayout>
                         </Border>
                     </DataTemplate>

@@ -1,12 +1,15 @@
 #if WINDOWS
 using GymMembership.Core.ViewModels;
+using GymMembership.Core.Services;
 
 namespace GymMembership.App.Views;
 
 public sealed class AdminOverviewPage : BasePage
 {
-    public AdminOverviewPage(AdminOverviewViewModel vm)
+    /// <param name="superAdmin">False for a sub-admin (D15): only the cards for pages they have.</param>
+    public AdminOverviewPage(AdminOverviewViewModel vm, bool superAdmin = true)
     {
+        vm.SuperAdmin = superAdmin;
         Title = "Overview";
         BindingContext = vm;
         var body = new VerticalStackLayout { Padding = new Thickness(24, 20, 24, 32), Spacing = 16 };
@@ -27,7 +30,7 @@ public sealed class AdminOverviewPage : BasePage
         body.Children.Add(status);
 
         var grid = new Grid { ColumnSpacing = 16, RowSpacing = 16 };
-        foreach (var card in vm.Cards)
+        foreach (var card in vm.Shown)
         {
             var content = new VerticalStackLayout { Spacing = 10 };
             content.Children.Add(Text(card.Title, "Heading", "AdminOverviewHeading-" + card.Key));
@@ -63,7 +66,7 @@ public sealed class AdminOverviewPage : BasePage
             grid.ColumnDefinitions.Clear();
             grid.RowDefinitions.Clear();
             for (var i = 0; i < columns; i++) grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
-            for (var i = 0; i < (vm.Cards.Count + columns - 1) / columns; i++) grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            for (var i = 0; i < (grid.Children.Count + columns - 1) / columns; i++) grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
             for (var i = 0; i < grid.Children.Count; i++)
             {
                 grid.SetColumn(grid.Children[i], i % columns);
@@ -72,6 +75,23 @@ public sealed class AdminOverviewPage : BasePage
         };
         body.Children.Add(grid);
         body.Children.Add(Text("List-based counts reflect the records loaded by their admin pages; they are not guaranteed database-wide totals.", "Caption"));
+        // D12: who came in on a chosen day (member QR check-ins and name-search check-ins alike)
+        body.Children.Add(Text("Check-ins", "Heading", "AdminOverviewCheckIns"));
+        var day = new DatePicker { MaximumDate = DateTime.Today.AddDays(1), HorizontalOptions = LayoutOptions.Start, AutomationId = "AdminCheckInDay" };
+        day.SetBinding(DatePicker.DateProperty, nameof(vm.CheckInDay));
+        body.Children.Add(new Border { Style = Resource<Style>("Field"), Content = day, HorizontalOptions = LayoutOptions.Start });
+        var count = Text("", "Heading", "AdminCheckInCount");
+        count.SetBinding(Label.TextProperty, nameof(vm.CheckInsText));
+        body.Children.Add(count);
+        var list = new VerticalStackLayout { Spacing = 4 };
+        BindableLayout.SetItemsSource(list, vm.CheckIns);
+        BindableLayout.SetItemTemplate(list, new DataTemplate(() =>
+        {
+            var row = new Label { Style = Resource<Style>("Muted") };
+            row.SetBinding(Label.TextProperty, new MultiBinding { StringFormat = "{0}  {1}", Bindings = { new Binding(nameof(CheckInRow.TimeText)), new Binding(nameof(CheckInRow.Name)) } });
+            return row;
+        }));
+        body.Children.Add(list);
         body.Children.Add(Text("Recent audit activity", "Heading"));
         var activity = Text("", "Muted", "AdminOverviewActivity");
         activity.SetBinding(Label.TextProperty, nameof(vm.RecentActivity));

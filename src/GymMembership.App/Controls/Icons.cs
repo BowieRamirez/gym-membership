@@ -25,6 +25,9 @@ public static class Icons
         ["check"] = "M 20 6 L 9 17 L 4 12",
         ["x"] = "M 18 6 L 6 18 M 6 6 L 18 18",
         ["chevron-left"] = "M 15 18 L 9 12 L 15 6",
+        // eye and eye-off: drawn here with curves only (Lucide's own eye uses arcs)
+        ["eye"] = "M 2 12 C 4.5 7.333 7.833 5 12 5 C 16.167 5 19.5 7.333 22 12 C 19.5 16.667 16.167 19 12 19 C 7.833 19 4.5 16.667 2 12 Z M 9 12 C 9 10.343 10.343 9 12 9 C 13.657 9 15 10.343 15 12 C 15 13.657 13.657 15 12 15 C 10.343 15 9 13.657 9 12 Z",
+        ["eye-off"] = "M 2 12 C 4.5 7.333 7.833 5 12 5 C 16.167 5 19.5 7.333 22 12 C 19.5 16.667 16.167 19 12 19 C 7.833 19 4.5 16.667 2 12 Z M 9 12 C 9 10.343 10.343 9 12 9 C 13.657 9 15 10.343 15 12 C 15 13.657 13.657 15 12 15 C 10.343 15 9 13.657 9 12 Z M 3 3 L 21 21",
         ["chevron-right"] = "M 9 18 L 15 12 L 9 6",
         ["landmark"] = "M10 18 L 10 11 M 11.119 2.205 C 11.675 1.932 12.325 1.932 12.881 2.205 L 20.721 6.051 C 20.93 6.153 21.041 6.387 20.988 6.613 C 20.935 6.84 20.733 7 20.5 7 L 3.5 7 C 3.267 7 3.065 6.84 3.013 6.613 C 2.96 6.386 3.071 6.153 3.28 6.051 Z M 14 18 L 14 11 M 18 18 L 18 11 M 3 22 L 21 22 M 6 18 L 6 11",
     };
@@ -64,6 +67,36 @@ public class IconView : ContentView
         var light = OnInk ? Pick("White", Colors.White) : Pick("InkLight", Colors.Black);
         var dark = OnInk ? Pick("ChalkDark", Colors.Black) : Pick("InkDark", Colors.White);
         _path.SetAppTheme<Brush>(Shape.StrokeProperty, new SolidColorBrush(light), new SolidColorBrush(dark));
+    }
+}
+
+/// <summary>
+/// The eye inside a password box: tap to show what was typed, tap again to hide it. It is a real Button underneath (touch, keyboard,
+/// screen reader: "Show password" / "Hide password") and puts the box back to hidden whenever the page shows again.
+/// </summary>
+public class EyeButton : Grid
+{
+    public static readonly BindableProperty EntryProperty = BindableProperty.Create(nameof(Entry), typeof(Entry), typeof(EyeButton), null,
+        propertyChanged: (b, _, _) => ((EyeButton)b).Show(false));
+    public Entry? Entry { get => (Entry?)GetValue(EntryProperty); set => SetValue(EntryProperty, value); }
+
+    readonly IconView _icon = new() { HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center };
+    readonly Button _button = new() { BackgroundColor = Colors.Transparent, BorderWidth = 0, Padding = 0, WidthRequest = 40, MinimumHeightRequest = 40 };
+
+    public EyeButton()
+    {
+        VerticalOptions = LayoutOptions.Center;
+        _button.Clicked += (_, _) => Show(Entry?.IsPassword == true);
+        Children.Add(_button);
+        Children.Add(_icon);
+        Loaded += (_, _) => Show(false);
+    }
+
+    void Show(bool visible)
+    {
+        if (Entry is not null) Entry.IsPassword = !visible;
+        _icon.Icon = visible ? "eye-off" : "eye";
+        SemanticProperties.SetDescription(_button, visible ? "Hide password" : "Show password");
     }
 }
 

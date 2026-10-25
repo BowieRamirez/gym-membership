@@ -24,6 +24,24 @@ public class BehaviorTests
     public void Error_messages_map_to_kinds(string message, AppErrorKind expected) =>
         Assert.Equal(expected, ErrorMapper.Map(new Exception(message)));
 
+    [Theory]
+    [InlineData("Invalid login credentials")]
+    [InlineData("invalid_credentials")]
+    [InlineData("{\"code\":400,\"error_code\":\"invalid_credentials\",\"msg\":\"Invalid login credentials\"}")]
+    public void Invalid_credentials_explain_how_to_sign_in_instead_of_claiming_a_permission_problem(string raw)
+    {
+        var kind = ErrorMapper.Map(new Exception(raw));
+        Assert.Equal(AppErrorKind.Unauthorized, kind);
+        Assert.Equal("Email or password is incorrect. Try again, or use Forgot password? to reset your password.", ErrorText.For(kind, raw));
+    }
+
+    [Theory]
+    [InlineData("forbidden")]
+    [InlineData("JWT expired")]
+    [InlineData("42501")]
+    public void Other_authorization_errors_keep_the_permission_message(string raw) =>
+        Assert.Equal(ErrorText.For(AppErrorKind.Unauthorized), ErrorText.For(AppErrorKind.Unauthorized, raw));
+
     [Fact] public void Network_failure_is_offline() => Assert.Equal(AppErrorKind.Offline, ErrorMapper.Map(new HttpRequestException()));
 
     [Theory]

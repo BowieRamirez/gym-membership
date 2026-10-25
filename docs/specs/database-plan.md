@@ -1,6 +1,38 @@
 # Database implementation plan (Supabase)
 
-> **Status:** planned, not built. This document and [`docs/dfd/GYM_TABLES.sql`](../dfd/GYM_TABLES.sql) are the source of truth for the Supabase backend. `GYM_TABLES.sql` has not been run against Postgres yet, so expect to fix small errors the first time it runs.
+> **Status (2026-10-25): built and live.** Sections 1 to 17 are the original hand-off spec (migrations `0001` to `0012`) and are kept as written. The migrations in [`supabase/migrations/`](../../supabase/migrations) are now the source of truth; [Current state](#current-state-2026-10-25) lists what each later migration changed. `GYM_TABLES.sql` is the original design only.
+
+## Current state (2026-10-25)
+
+Live project: migrations `0001` to `0038` applied; Edge Functions `create-user` and `reset-password` deployed. Every migration passes `supabase/tests/local` (309 checks, plus the populated-history upgrade checks in `phase7-migration.mjs`). Each file starts with a comment that explains it.
+
+**Roles.** `member`, `coach`, `employee` (front desk), `subadmin` and `admin` (shown as "Super admin"). The sub-admin has the front desk's permissions plus `catalog:manage`, `discounts:manage`, `reports:revenue` and `users:manage` for members and coaches only. Only the super admin hands out roles, archives, restores, voids payments (`payments:void`, also needed for refund decisions), changes gym settings and reads the audit log. From the app, nobody can change, deactivate or delete a super admin (0037 triggers). Role lists live in three places that must agree: `handle_new_user` (latest in 0037), `apply_role_from_metadata` (0011, 0038) and the `create-user` function.
+
+**Tables added since the original design:** `user_last_seen`, `support_threads`, `support_messages` (0015, 0017), `amenity_follows` (0014), `membership_terms`, `refund_requests` (0018), `time_request_events` (0031), `reservations` (0029), `coach_visits` (0032), `member_codes`, `member_scans` (0034).
+
+| Migration | What it adds or changes |
+|---|---|
+| 0013 | Profile pictures (`avatars` bucket, `profiles.avatar_path`) |
+| 0014 | Amenity status (available / in use / unavailable) through `set_amenity_status`, with alerts to followers |
+| 0015–0017 | Messenger: delivery tracking, front-desk support chat, photos (`chat-attachments` bucket), Realtime and last seen |
+| 0018–0020 | Paid membership terms and queued extensions; cancel and refund within 24 hours of verification; members can withdraw an unverified payment; approved refunds lower revenue on the approval day |
+| 0021–0022 | Session-request limits per coach, coach invitations, and one active booking per coach and member pair |
+| 0023–0024 | Archive instead of delete for accounts and catalog records (packages, amenities, discount codes), restore by the super admin |
+| 0025 | Refund decisions need `payments:void` |
+| 0026 | Discount codes with a use limit |
+| 0027 | Receipt-level `revenue_lines` for the revenue PDF |
+| 0028 | Gym opening hours (Asia/Manila) and coach shift rules |
+| 0029 | Amenity reservations without overlaps, with a 30-minute cooldown |
+| 0030–0031 | Structured training requests with coach counter-proposals and an event history |
+| 0032 | Coach visits: check in and out at the gym, automatic checkout at closing; hiring needs the coach checked in |
+| 0033 | Shifts cannot be posted in the past; coach rate on the profile |
+| 0034 | A permanent member QR code (identification only) and an audited `scan_member` |
+| 0035 | First and last name columns; `confirm_my_email` sets `profiles.confirmed_email` from an emailed-code session |
+| 0036 | The `subadmin` role and the permission split above |
+| 0037 | Super admin accounts are protected from the app |
+| 0038 | Sub-admins created through `create-user` get their role (and repairs accounts made before the fix) |
+
+**Rules for new migrations:** never edit an applied migration; add the next number. Revoke execute on new functions from `public, anon` (the check "anonymous reaches no table and no security definer function" in `rules.mjs` fails otherwise). Some migrations have a read-only preflight in `supabase/preflight/` to run on the live project first.
 
 ## How to use this document
 

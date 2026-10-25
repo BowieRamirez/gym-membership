@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -14,13 +15,34 @@ public partial class AdminOverviewCard(string key, string title) : ObservableObj
     [ObservableProperty] bool isUnavailable;
 }
 
-public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionService subscriptions) : LoadableViewModel
+public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionService subscriptions, IAttendanceService? checkIns = null) : LoadableViewModel
 {
+    /// <summary>D12: who checked in on the chosen Manila day, earliest first.</summary>
+    public ObservableCollection<CheckInRow> CheckIns { get; } = new();
+    [ObservableProperty] DateTime checkInDay = DateTime.UtcNow.AddHours(8).Date;
+    [ObservableProperty] string checkInsText = "Loading check-ins…";
+    partial void OnCheckInDayChanged(DateTime value) => _ = LoadCheckInsAsync();
+
+    public async Task LoadCheckInsAsync()
+    {
+        if (checkIns is null) return;
+        CheckInsText = "Loading check-ins…";
+        var r = await checkIns.CheckInsOnAsync(DateOnly.FromDateTime(CheckInDay));
+        CheckIns.Clear();
+        if (!r.Ok) { CheckInsText = ErrorText.For(r.Error, r.Message); return; }
+        foreach (var row in r.Value!) CheckIns.Add(row);
+        CheckInsText = r.Value.Count switch { 0 => "No check-ins on this day.", 1 => "1 check-in", var n => $"{n} check-ins" };
+    }
+
     public IReadOnlyList<AdminOverviewCard> Cards { get; } = [
         new("users", "Users and roles"), new("catalog", "Packages and amenities"),
         new("discounts", "Discounts"), new("refunds", "Cancellations & refunds"),
         new("revenue", "Revenue"), new("void", "Void a payment"),
-        new("gym", "Gym settings"), new("audit", "Audit log")];
+        new("gym", "Gym settings"), new("audit", "Logs & Archive")];
+    /// <summary>False for a sub-admin (D15): the cards for super-admin pages are neither shown nor loaded.</summary>
+    public bool SuperAdmin { get; set; } = true;
+    static readonly string[] SuperAdminOnly = ["refunds", "void", "gym", "audit"];
+    public IEnumerable<AdminOverviewCard> Shown => Cards.Where(c => SuperAdmin || !SuperAdminOnly.Contains(c.Key));
     public Func<DateTimeOffset> Clock { get; set; } = () => DateTimeOffset.UtcNow;
     [ObservableProperty] string updatedText = "Loading admin summaries…";
     [ObservableProperty] string recentActivity = "Loading activity…";
@@ -48,7 +70,7 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
                     var rows = Require(await admin.UsersAsync());
                     return ($"{rows.Count} account{Plural(rows.Count)} listed",
                         $"{rows.Count(r => r.IsActive)} active · {rows.Count(r => !r.IsActive)} inactive\n" +
-                        $"Roles: {rows.Count(r => r.Roles.Contains("member"))} member · {rows.Count(r => r.Roles.Contains("coach"))} coach · {rows.Count(r => r.Roles.Contains("employee"))} front desk · {rows.Count(r => r.Roles.Contains("admin"))} admin. Accounts may have multiple roles.");
+                        $"Roles: {rows.Count(r => r.Roles.Contains("member"))} member · {rows.Count(r => r.Roles.Contains("coach"))} coach · {rows.Count(r => r.Roles.Contains("employee"))} front desk · {rows.Count(r => r.Roles.Contains("subadmin"))} sub-admin · {rows.Count(r => r.Roles.Contains("admin"))} super admin. Accounts may have multiple roles.");
                 }),
                 Load("catalog", async () =>
                 {
@@ -88,18 +110,21 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
                         $"{r.Entry.Action} · {r.Actor}\n{Manila(r.Entry.CreatedAt):dd MMM yyyy, HH:mm} Manila"));
                     return (latest.Count == 0 ? "No activity listed" : latest[0].Entry.Action, "Five newest events from the loaded audit list appear below. Open the audit log for details.");
                 }));
-            if (Cards.Single(c => c.Key == "audit").IsUnavailable)
+            if (!SuperAdmin) RecentActivity = "Recent activity is in the super admin's Audit log.";
+            else if (Cards.Single(c => c.Key == "audit").IsUnavailable)
                 RecentActivity = "Activity unavailable. Retry the Audit log summary or open the full page.";
-            var failed = Cards.Count(c => c.IsUnavailable);
+            var failed = Shown.Count(c => c.IsUnavailable);
             UpdatedText = $"{today:dddd, dd MMM yyyy} · Checked {Clock().ToOffset(TimeSpan.FromHours(8)):HH:mm} Manila" +
                 (failed > 0 ? $" · {failed} summar{(failed == 1 ? "y" : "ies")} unavailable" : "");
         }
         finally { IsBusy = false; }
+        await LoadCheckInsAsync();
     }
 
     async Task Load(string key, Func<Task<(string Value, string Detail)>> read)
     {
         var card = Cards.Single(c => c.Key == key);
+        if (!Shown.Contains(card)) return;
         card.Value = "Loading…";
         card.Detail = "";
         card.IsUnavailable = false;

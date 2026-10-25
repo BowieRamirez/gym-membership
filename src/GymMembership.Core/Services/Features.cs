@@ -8,6 +8,9 @@ static class Fmt
 
     /// <summary>"Mon 12 Oct, 6:00 AM to 2:00 PM"</summary>
     public static string Range(DateTime start, DateTime end) => $"{Local(start):ddd d MMM, h:mm tt} to {Local(end):h:mm tt}";
+
+    /// <summary>"6:05 PM"</summary>
+    public static string Time(DateTime d) => $"{Local(d):h:mm tt}";
 }
 
 // ===================== Messenger =====================

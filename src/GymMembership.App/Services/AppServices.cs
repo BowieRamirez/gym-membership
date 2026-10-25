@@ -78,6 +78,25 @@ public static class SupabaseConfig
     }
 }
 
+// the PDF font ships in Resources/Raw (Barlow has no peso sign); the file goes to the cache folder, then the system share sheet
+public sealed class MauiReportFiles : IReportFiles
+{
+    public async Task<byte[]> FontAsync()
+    {
+        await using var stream = await FileSystem.Current.OpenAppPackageFileAsync("NotoSans-Regular.ttf");
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        return ms.ToArray();
+    }
+
+    public async Task ShareAsync(string fileName, byte[] pdf)
+    {
+        var path = Path.Combine(FileSystem.Current.CacheDirectory, fileName);
+        await File.WriteAllBytesAsync(path, pdf);
+        await Share.Default.RequestAsync(new ShareFileRequest { Title = "Revenue report", File = new ShareFile(path, "application/pdf") });
+    }
+}
+
 public sealed class MauiProofPicker : IProofPicker
 {
     public async Task<(string FileName, byte[] Data)?> PickAsync()

@@ -48,6 +48,27 @@ public sealed class SupabaseGatewayTests : IDisposable
 
     public void Dispose() => _http.Close();
 
+    [Fact]
+    public async Task Archive_RPC_maps_database_columns_and_passes_combined_filters_and_restore_identity()
+    {
+        var gw = await SignedInAsync();
+        _reply = _ => (200, """[{"record_type":"plan","record_id":"17","name":"Retired plan","status":"inactive","archived_at":"2026-10-20T12:00:00Z","archived_by":"u-1","reason":"Retired","details":"PHP 1000.00","can_restore":true}]""");
+        var service = new ArchiveService(gw);
+        var result = await service.ListAsync(new("plan", "inactive", new(2026, 10, 1), new(2026, 10, 20), " Retired "), 2);
+        Assert.True(result.Ok);
+        var row = Assert.Single(result.Value!.Rows);
+        Assert.Equal("plan", row.Type); Assert.Equal("17", row.RecordId); Assert.True(row.CanRestore);
+        Assert.Equal("u-1", row.ArchivedBy); Assert.NotNull(row.ArchivedAt); Assert.Equal("Retired", row.Reason);
+        var request = JsonDocument.Parse(Last.Body).RootElement;
+        Assert.Equal("2026-10-01", request.GetProperty("p_from").GetString());
+        Assert.Equal("Retired", request.GetProperty("p_reason").GetString());
+        Assert.Equal(60, request.GetProperty("p_offset").GetInt32()); Assert.Equal(31, request.GetProperty("p_limit").GetInt32());
+        _reply = _ => (200, "null");
+        Assert.True((await service.RestoreAsync(row)).Ok);
+        Assert.EndsWith("/rpc/restore_archived_record", Last.Path);
+        Assert.Equal("17", JsonDocument.Parse(Last.Body).RootElement.GetProperty("p_id").GetString());
+    }
+
     Seen Last { get { lock (_seen) return _seen.Last(); } }
 
     static string Jwt() // header.payload.signature, with an expiry far away so the client keeps it
@@ -101,12 +122,91 @@ public sealed class SupabaseGatewayTests : IDisposable
     {
         var gw = new SupabaseGateway(new SupabaseSettings(_url, "anon-key"));
         _reply = _ => (200, SessionJson("new@demo.io"));
-        await gw.SignUpAsync(" New@Demo.io ", "secret12", "New Person");
+        await gw.SignUpAsync(" New@Demo.io ", "secret12", "Mary Ann", "Santos");
         var signUp = _seen.First(s => s.Path.EndsWith("/auth/v1/signup"));
         var root = JsonDocument.Parse(signUp.Body).RootElement;
         Assert.Equal("new@demo.io", root.GetProperty("email").GetString()!.ToLowerInvariant());
-        Assert.Equal("New Person", root.GetProperty("data").GetProperty("full_name").GetString());
+        Assert.Equal("Mary Ann Santos", root.GetProperty("data").GetProperty("full_name").GetString());
+        Assert.Equal("Mary Ann", root.GetProperty("data").GetProperty("first_name").GetString());
+        Assert.Equal("Santos", root.GetProperty("data").GetProperty("last_name").GetString());
         Assert.Equal("new@demo.io", root.GetProperty("data").GetProperty("username").GetString());
+    }
+
+    // ---------- email codes (Phase 11) ----------
+    static string UserJson(string email) =>
+        """{"id":"u-1","email":"__EMAIL__","aud":"authenticated","role":"authenticated","app_metadata":{},"user_metadata":{}}""".Replace("__EMAIL__", email);
+
+    [Fact]
+    public async Task Confirming_the_current_email_sends_a_sign_in_code_that_never_creates_an_account()
+    {
+        var gw = await SignedInAsync();
+        Assert.Equal("ana@demo.io", gw.CurrentEmail);
+        _reply = _ => (200, "{}");
+        await gw.SendEmailCodeAsync("Ana@Demo.io");
+        var otp = _seen.Last(s => s.Path.EndsWith("/auth/v1/otp"));
+        var root = JsonDocument.Parse(otp.Body).RootElement;
+        Assert.Equal("ana@demo.io", root.GetProperty("email").GetString());
+        Assert.False(root.GetProperty("create_user").GetBoolean());
+        Assert.DoesNotContain(_seen, s => s.Path.EndsWith("/auth/v1/user"));
+
+        _reply = s => s.Path.EndsWith("/auth/v1/verify") ? (200, SessionJson()) : (200, "[]");
+        await gw.VerifyEmailCodeAsync("ana@demo.io", "123456");
+        var verify = JsonDocument.Parse(_seen.Last(s => s.Path.EndsWith("/auth/v1/verify")).Body).RootElement;
+        Assert.Equal(("magiclink", "123456", "ana@demo.io"), (verify.GetProperty("type").GetString(), verify.GetProperty("token").GetString(), verify.GetProperty("email").GetString()));
+    }
+
+    [Fact]
+    public async Task A_new_email_is_set_first_and_then_gets_a_sign_in_code_when_the_project_applies_it_at_once()
+    {
+        var gw = await SignedInAsync();
+        _reply = s => s.Path.EndsWith("/auth/v1/user") ? (200, UserJson("new@mail.com")) : (200, "{}");
+        await gw.SendEmailCodeAsync("new@mail.com");
+        var put = _seen.Last(s => s.Path.EndsWith("/auth/v1/user"));
+        Assert.Equal("PUT", put.Method);
+        Assert.Equal("new@mail.com", JsonDocument.Parse(put.Body).RootElement.GetProperty("email").GetString());
+        Assert.Equal("new@mail.com", JsonDocument.Parse(_seen.Last(s => s.Path.EndsWith("/auth/v1/otp")).Body).RootElement.GetProperty("email").GetString());
+    }
+
+    [Fact]
+    public async Task A_new_email_waiting_for_its_change_code_is_verified_as_an_email_change()
+    {
+        var gw = await SignedInAsync();
+        _reply = s => s.Path.EndsWith("/auth/v1/user") ? (200, UserJson("ana@demo.io")) : (200, "{}");   // Supabase sent the change code itself
+        await gw.SendEmailCodeAsync("new@mail.com");
+        Assert.DoesNotContain(_seen, s => s.Path.EndsWith("/auth/v1/otp"));
+        _reply = s => s.Path.EndsWith("/auth/v1/verify") ? (200, SessionJson("new@mail.com")) : (200, "[]");
+        await gw.VerifyEmailCodeAsync("new@mail.com", "123456");
+        Assert.Equal("email_change", JsonDocument.Parse(_seen.Last(s => s.Path.EndsWith("/auth/v1/verify")).Body).RootElement.GetProperty("type").GetString());
+    }
+
+    [Fact]
+    public async Task A_forgotten_password_asks_for_a_recovery_code_then_verifies_it_and_sets_the_password()
+    {
+        var gw = new SupabaseGateway(new SupabaseSettings(_url, "anon-key"));
+        _reply = _ => (200, "{}");
+        await gw.SendPasswordResetCodeAsync(" Ana@Demo.io ");
+        Assert.Equal("ana@demo.io", JsonDocument.Parse(_seen.Last(s => s.Path.EndsWith("/auth/v1/recover")).Body).RootElement.GetProperty("email").GetString());
+
+        _reply = s => s.Path.EndsWith("/auth/v1/verify") ? (200, SessionJson()) : s.Path.EndsWith("/auth/v1/user") ? (200, UserJson("ana@demo.io")) : (200, "{}");
+        await gw.ResetPasswordWithCodeAsync("ana@demo.io", "654321", "fresh123");
+        var verify = JsonDocument.Parse(_seen.Last(s => s.Path.EndsWith("/auth/v1/verify")).Body).RootElement;
+        Assert.Equal(("recovery", "654321"), (verify.GetProperty("type").GetString(), verify.GetProperty("token").GetString()));
+        Assert.Equal("fresh123", JsonDocument.Parse(_seen.Last(s => s.Path.EndsWith("/auth/v1/user")).Body).RootElement.GetProperty("password").GetString());
+        Assert.Equal("u-1", gw.CurrentUserId);
+    }
+
+    [Theory]
+    [InlineData(403, """{"code":403,"error_code":"otp_expired","msg":"Token has expired or is invalid"}""", "bad_code")]
+    [InlineData(429, """{"code":429,"error_code":"over_email_send_rate_limit","msg":"For security purposes, you can only request this after 42 seconds."}""", "resend_wait")]
+    [InlineData(422, """{"code":422,"error_code":"email_exists","msg":"A user with this email address has already been registered"}""", "email_taken")]
+    public async Task Code_errors_come_back_as_plain_reasons(int status, string json, string expected)
+    {
+        var gw = await SignedInAsync();
+        _reply = _ => (status, json);
+        var send = await Safe.RunAsync(async () => { await gw.SendEmailCodeAsync("new@mail.com"); return true; });
+        var verify = await Safe.RunAsync(async () => { await gw.VerifyEmailCodeAsync("ana@demo.io", "123456"); return true; });
+        Assert.Contains(expected, new[] { send.Message, verify.Message });
+        Assert.Equal(AppErrorKind.Validation, expected == send.Message ? send.Error : verify.Error);
     }
 
     [Fact]
@@ -114,7 +214,7 @@ public sealed class SupabaseGatewayTests : IDisposable
     {
         var gw = new SupabaseGateway(new SupabaseSettings(_url, "anon-key"));
         _reply = _ => (422, """{"code":422,"error_code":"user_already_exists","msg":"User already registered"}""");
-        var result = await Safe.RunAsync(async () => { await gw.SignUpAsync("a@b.io", "secret12", "A"); return true; });
+        var result = await Safe.RunAsync(async () => { await gw.SignUpAsync("a@b.io", "secret12", "Ana", "Reyes"); return true; });
         Assert.Equal(AppErrorKind.Validation, result.Error);
         Assert.Equal("email_taken", result.Message);
     }
@@ -126,6 +226,8 @@ public sealed class SupabaseGatewayTests : IDisposable
         _reply = _ => (400, """{"code":400,"error_code":"invalid_credentials","msg":"Invalid login credentials"}""");
         var result = await Safe.RunAsync(async () => { await gw.SignInAsync("a@b.io", "wrong"); return true; });
         Assert.Equal(AppErrorKind.Unauthorized, result.Error);
+        Assert.Null(gw.CurrentUserId);
+        Assert.Equal("Email or password is incorrect. Try again, or use Forgot password? to reset your password.", ErrorText.For(result.Error, result.Message));
     }
 
     // ---------- reads ----------
@@ -215,18 +317,31 @@ public sealed class SupabaseGatewayTests : IDisposable
     }
 
     [Fact]
+    public async Task A_member_scan_sends_the_code_and_reads_the_live_status()
+    {
+        var gw = await SignedInAsync();
+        _reply = _ => (200, """{"result":"active","member":"u-9","name":"Alex Tan","expires":"2026-11-30T16:00:00+00:00"}""");
+        var scan = (await new AttendanceService(gw).ScanAsync(" GYM1-abc ")).Value!;
+        Assert.Equal("/rest/v1/rpc/scan_member", Last.Path);
+        Assert.Contains("\"p_code\":\"GYM1-abc\"", Last.Body);
+        Assert.Equal(("active", "u-9", "Alex Tan", true), (scan.Result, scan.Member, scan.Name, scan.CanCheckIn));
+        Assert.Equal(new DateTime(2026, 11, 30, 16, 0, 0, DateTimeKind.Utc), scan.Expires!.Value.ToUniversalTime());
+    }
+
+    [Fact]
     public async Task Setting_a_status_calls_the_function_and_reads_back_who_was_alerted()
     {
         var gw = await SignedInAsync();
         _reply = _ => (200, """[{"member_id":"u-9","full_name":"Alex Tan"}]""");
-        var told = (await new AmenityService(gw).SetStatusAsync(4, "unavailable", "Cleaning", new DateTime(2026, 10, 20, 2, 0, 0, DateTimeKind.Utc))).Value!.Told;
+        var back = DateTime.UtcNow.Date.AddDays(1).AddHours(2);   // a return time must still be ahead, so not a fixed date
+        var told = (await new AmenityService(gw).SetStatusAsync(4, "unavailable", "Cleaning", back)).Value!.Told;
 
         Assert.Equal("/rest/v1/rpc/set_amenity_status", Last.Path);
         var body = Last.Body;
         Assert.Contains("\"p_amenity_id\":4", body);
         Assert.Contains("\"p_status\":\"unavailable\"", body);
         Assert.Contains("\"p_reason\":\"Cleaning\"", body);
-        Assert.Contains("2026-10-20T02:00:00", body);
+        Assert.Contains(back.ToString("yyyy-MM-ddTHH:mm:ss"), body);
         Assert.Equal("u-9", told[0].MemberId);
         Assert.Equal("Alex Tan", told[0].Name);
     }
@@ -474,9 +589,19 @@ public sealed class SupabaseGatewayTests : IDisposable
     {
         var gw = await SignedInAsync();
         _reply = _ => (409, """{"error":"email_taken"}""");
-        var result = await new AdminService(gw).CreateUserAsync("Rey", "rey@demo.io", "coach", "temp1234");
+        var result = await new AdminService(gw).CreateUserAsync("Rey", "Santos", "rey@demo.io", "coach", "temp1234");
         Assert.Equal(AppErrorKind.Validation, result.Error);
-        Assert.Equal("Someone already uses that email.", ErrorText.For(result.Error, result.Message?.Contains("email_taken") == true ? "email_taken" : result.Message));
+        Assert.Equal("Someone already uses that email.", ErrorText.For(result.Error, result.Message));   // what the page shows, no unwrapping
+    }
+
+    [Fact]
+    public async Task A_refused_account_function_says_so_in_plain_words()
+    {
+        var gw = await SignedInAsync();
+        _reply = _ => (403, """{"error":"forbidden"}""");
+        var result = await new AdminService(gw).ResetPasswordAsync("u-2", "temp1234");
+        Assert.Equal(AppErrorKind.Unauthorized, result.Error);
+        Assert.Equal("forbidden", result.Message);
     }
 
     [Fact]
@@ -514,6 +639,7 @@ public sealed class SupabaseGatewayTests : IDisposable
         var gw = await SignedInAsync();
         _reply = s => s.Path.StartsWith("/storage/") ? (500, """{"error":"boom"}""")
             : s.Path.EndsWith("/coaches") ? (200, """[{"user_id":"c-1","is_available":true}]""")
+            : s.Path.EndsWith("/coach_visits") ? (200, """[{"coach_visit_id":1,"coach_id":"c-1","checked_in_at":"2026-10-23T02:00:00Z","checked_in_by":"c-1"}]""")
             : s.Path.EndsWith("/profiles") ? (200, """[{"id":"c-1","full_name":"Coach One","avatar_path":"c-1/a.png"}]""")
             : s.Path.EndsWith("/amenities") ? (200, """[{"amenity_id":7,"name":"Pool","image_path":"pool.png","is_active":true}]""") : (200, "[]");
         if (coach)

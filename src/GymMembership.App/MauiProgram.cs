@@ -6,6 +6,7 @@ using GymMembership.Core.Demo;
 using GymMembership.Core.Services;
 using GymMembership.Core.ViewModels;
 using Microsoft.Extensions.Logging;
+using ZXing.Net.Maui.Controls;
 
 namespace GymMembership.App;
 
@@ -17,6 +18,7 @@ public static class MauiProgram
 		builder
 			.UseMauiApp<App>()
 			.UseMauiCommunityToolkit()
+			.UseBarcodeReader()   // ZXing.Net.MAUI: member QR (Phase 10)
 			.ConfigureFonts(fonts =>
 			{
 				fonts.AddFont("Barlow-Regular.ttf", "Barlow");
@@ -36,11 +38,13 @@ public static class MauiProgram
 		s.AddSingleton<IAppNavigator, AppNavigator>();
 		// the real photo library on a device; in demo mode a generated picture, so the screens can be tried without choosing a file
 		s.AddSingleton<IProofPicker>(sp => sp.GetRequiredService<ISupabaseGateway>() is DemoGateway ? new DemoPhotoPicker() : new MauiProofPicker());
+		s.AddSingleton<IReportFiles, MauiReportFiles>();
 		s.AddSingleton<IAuthService, AuthService>();
 		s.AddSingleton<IMembershipService, MembershipService>();
 		s.AddSingleton<ISubscriptionService, SubscriptionService>();
 		s.AddSingleton<IPaymentStaffService, PaymentStaffService>();
 		s.AddSingleton<IAmenityService, AmenityService>();
+		s.AddSingleton<IReservationService, ReservationService>();
 		s.AddSingleton<ICoachService, CoachService>();
 		s.AddSingleton<ISessionService, SessionService>();
 		s.AddSingleton<IAttendanceService, AttendanceService>();
@@ -50,6 +54,8 @@ public static class MauiProgram
 		s.AddSingleton<IRealtimeChat>(sp => sp.GetRequiredService<ISupabaseGateway>() is SupabaseGateway g ? new SupabaseRealtimeChat(g) : NoRealtime.Instance);
 		s.AddSingleton<IDeskHomeService, DeskHomeService>();
 		s.AddSingleton<IAdminService, AdminService>();
+		s.AddSingleton<IAccountArchiveService, AccountArchiveService>();
+		s.AddSingleton<IArchiveService, ArchiveService>();
 		s.AddSingleton<IProfileService, ProfileService>();
 		s.AddSingleton<ISettingsService, SettingsService>();
 

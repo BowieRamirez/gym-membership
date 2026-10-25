@@ -1,6 +1,6 @@
 // POST { user_id, password }
 // The owner sets a new temporary password for someone who forgot theirs (plan 4.4).
-import { adminClient, cors, reply, requireAdmin } from '../_shared/admin.ts';
+import { adminClient, cors, reply, requireAdmin, STAFF_ROLES } from '../_shared/admin.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -14,6 +14,15 @@ Deno.serve(async (req) => {
   const userId = String(body.user_id ?? '');
   const password = String(body.password ?? '');
   if (!userId || password.length < 6) return reply({ error: 'bad_input' }, 400);
+
+  const { data: target, error: targetError } = await admin.from('profiles').select('is_active').eq('id', userId).maybeSingle();
+  if (targetError) return reply({ error: 'bad_input' }, 400);
+  if (!target) return reply({ error: 'not_found' }, 404);
+  if (!target.is_active) return reply({ error: 'record_archived' }, 409);
+  if (!caller.superAdmin) {   // sub-admins reset members and coaches only
+    const { data: staff } = await admin.from('user_roles').select('roles!inner(name)').eq('user_id', userId).in('roles.name', STAFF_ROLES);
+    if (staff?.length) return reply({ error: 'forbidden' }, 403);
+  }
 
   const { error } = await admin.auth.admin.updateUserById(userId, { password });
   if (error) return reply({ error: /not found/i.test(error.message) ? 'not_found' : 'bad_input', detail: error.message }, 400);

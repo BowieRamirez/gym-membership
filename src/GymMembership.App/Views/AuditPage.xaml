@@ -5,9 +5,17 @@
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
-            x:Class="GymMembership.App.Views.AuditPage" x:DataType="vm:AuditViewModel" Title="Audit log">
+            x:Class="GymMembership.App.Views.AuditPage" x:DataType="vm:AuditViewModel" Title="Logs &amp; Archive">
 
-    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
+    <Grid RowDefinitions="Auto,*">
+        <HorizontalStackLayout Padding="20,12" Spacing="10">
+            <Button Text="Audit log" Command="{Binding OpenLogsCommand}" Style="{StaticResource SmallOutlineButton}" AutomationId="OpenLogs" />
+            <Button Text="Archive" Command="{Binding OpenArchiveCommand}" IsVisible="{Binding HasArchive}" Style="{StaticResource SmallOutlineButton}" AutomationId="OpenArchive" />
+        </HorizontalStackLayout>
+        <Grid Grid.Row="1" IsVisible="{Binding ShowArchive}">
+            <c:ArchivePanel BindingContext="{Binding Archive}" />
+        </Grid>
+    <Grid Grid.Row="1" IsVisible="{Binding ShowLogs}" RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
             <Label Text="Sensitive actions, newest first. Entries can't be edited." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
@@ -36,5 +44,6 @@
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
+    </Grid>
     </Grid>
 </v:BasePage>

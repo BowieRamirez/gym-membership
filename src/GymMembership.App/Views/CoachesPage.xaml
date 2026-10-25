@@ -9,13 +9,13 @@
 
     <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='20,16,20,0'}" MaximumWidthRequest="920">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
-            <Label Text="Hire a coach to request one-to-one sessions. You need an active membership." Style="{StaticResource Muted}" />
+            <Label Text="Coaches in the gym right now. Hire one to request one-to-one sessions. You need an active membership." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
         </VerticalStackLayout>
 
         <CollectionView Grid.Row="1" ItemsSource="{Binding Cards}">
             <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
-            <CollectionView.EmptyView><Label Text="No coaches are taking new members right now." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
+            <CollectionView.EmptyView><Label Text="No coaches are in the gym right now. This list updates by itself." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="svc:CoachCard">
                     <Border Style="{StaticResource Panel}">
@@ -31,12 +31,13 @@
                                     <Label Text="{Binding Coach.Specialty}" FontFamily="BarlowMedium" />
                                     <Label Text="Not taking new members right now." Style="{StaticResource Caption}" IsVisible="{Binding Closed}" />
                                     <Label Text="Your coach" Style="{StaticResource Caption}" IsVisible="{Binding Hired}" />
+                                    <Label Text="Not in the gym right now." Style="{StaticResource Caption}" IsVisible="{Binding InGym, Converter={StaticResource Not}}" />
                                 </VerticalStackLayout>
                             </Grid>
                             <Label Text="{Binding Coach.Bio}" Style="{StaticResource Muted}" />
                             <Label Text="On the floor" FontFamily="BarlowMedium" />
                             <Label Text="{Binding ShiftsText}" Style="{StaticResource Caption}" />
-                            <Label Text="{Binding Coach.HourlyRate, StringFormat='₱{0:N0} per hour'}" FontFamily="BarlowSemiBold" />
+                            <Label Text="{Binding RateText}" FontFamily="BarlowSemiBold" />
                             <FlexLayout Wrap="Wrap">
                                 <Button Text="Hire" Style="{StaticResource SmallButton}" Margin="0,0,8,8"
                                         IsVisible="{Binding Hired, Converter={StaticResource Not}}" IsEnabled="{Binding Closed, Converter={StaticResource Not}}" Clicked="OnHire" />

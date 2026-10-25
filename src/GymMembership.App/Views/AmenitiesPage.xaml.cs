@@ -13,4 +13,5 @@ public partial class AmenitiesPage : BasePage
 	protected override TimeSpan? AutoRefresh => TimeSpan.FromSeconds(30);
 
 	void OnFollow(object? sender, EventArgs e) => Row<AmenityBoardViewModel>(sender, v => v.ToggleFollowCommand);
+	void OnBuy(object? sender, EventArgs e) => Row<AmenityBoardViewModel>(sender, v => v.BuyCommand);
 }

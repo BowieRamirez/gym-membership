@@ -3,6 +3,7 @@
             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
             xmlns:v="clr-namespace:GymMembership.App.Views"
             xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.SettingsPage" x:DataType="vm:SettingsViewModel" Title="Settings">
 
@@ -18,6 +19,47 @@
                     <Button Text="Change picture" Style="{StaticResource SmallOutlineButton}" Command="{Binding ChangePhotoCommand}" HorizontalOptions="Start" />
                 </VerticalStackLayout>
             </HorizontalStackLayout>
+
+            <c:LaneView Margin="0,12"
+                        DashColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}"
+                        TrackColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+
+            <Label Text="Your name" Style="{StaticResource Heading}" />
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="First name" Style="{StaticResource Caption}" />
+                    <Border Style="{StaticResource Field}"><Entry Text="{Binding FirstName}" TextChanged="OnNameChanged" MaxLength="{x:Static svc:AccountRules.MaxName}" SemanticProperties.Description="First name" /></Border>
+                </VerticalStackLayout>
+                <VerticalStackLayout Grid.Column="1" Spacing="4">
+                    <Label Text="Last name" Style="{StaticResource Caption}" />
+                    <Border Style="{StaticResource Field}"><Entry Text="{Binding LastName}" TextChanged="OnNameChanged" MaxLength="{x:Static svc:AccountRules.MaxName}" ReturnCommand="{Binding SaveNameCommand}" SemanticProperties.Description="Last name" /></Border>
+                </VerticalStackLayout>
+            </Grid>
+            <Button Text="Save name" Command="{Binding SaveNameCommand}" HorizontalOptions="Start" />
+
+            <c:LaneView Margin="0,12"
+                        DashColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}"
+                        TrackColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+
+            <!-- Email: send a code to the address, then type it. A new address becomes the sign-in email. -->
+            <VerticalStackLayout Spacing="2">
+                <Label Text="Email" Style="{StaticResource Heading}" />
+                <Label Text="Confirmed" Style="{StaticResource Caption}" IsVisible="{Binding EmailConfirmed}" />
+                <Label Text="Not confirmed yet. Send a code to this address to confirm it." Style="{StaticResource Caption}" IsVisible="{Binding EmailConfirmed, Converter={StaticResource Not}}" />
+            </VerticalStackLayout>
+            <VerticalStackLayout Spacing="4">
+                <Label Text="Sign-in email" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}"><Entry Text="{Binding EmailAddress}" Keyboard="Email" MaxLength="{x:Static svc:AccountRules.MaxEmail}" SemanticProperties.Description="Sign-in email" /></Border>
+                <Label Text="Changing it also changes the email you sign in with." Style="{StaticResource Caption}" />
+            </VerticalStackLayout>
+            <Button Text="Send code" Command="{Binding SendEmailCodeCommand}" HorizontalOptions="Start" />
+            <VerticalStackLayout Spacing="12" IsVisible="{Binding CodeSent}">
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="Code from the email" Style="{StaticResource Caption}" />
+                    <Border Style="{StaticResource Field}"><Entry Text="{Binding EmailCode}" Keyboard="Numeric" MaxLength="6" ReturnCommand="{Binding ConfirmEmailCommand}" SemanticProperties.Description="6-digit code" /></Border>
+                </VerticalStackLayout>
+                <Button Text="Confirm email" Command="{Binding ConfirmEmailCommand}" HorizontalOptions="Start" />
+            </VerticalStackLayout>
 
             <c:LaneView Margin="0,12"
                         DashColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}"
@@ -40,15 +82,15 @@
             <Label Text="Change password" Style="{StaticResource Heading}" />
             <VerticalStackLayout Spacing="4">
                 <Label Text="Current password" Style="{StaticResource Caption}" />
-                <Border Style="{StaticResource Field}"><Entry Text="{Binding CurrentPassword}" IsPassword="True" SemanticProperties.Description="Current password" /></Border>
+                <Border Style="{StaticResource Field}"><Grid ColumnDefinitions="*,Auto"><Entry x:Name="CurrentPasswordBox" Text="{Binding CurrentPassword}" IsPassword="True" SemanticProperties.Description="Current password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference CurrentPasswordBox}" /></Grid></Border>
             </VerticalStackLayout>
             <VerticalStackLayout Spacing="4">
                 <Label Text="New password (at least 6 characters)" Style="{StaticResource Caption}" />
-                <Border Style="{StaticResource Field}"><Entry Text="{Binding NewPassword}" IsPassword="True" SemanticProperties.Description="New password" /></Border>
+                <Border Style="{StaticResource Field}"><Grid ColumnDefinitions="*,Auto"><Entry x:Name="NewPasswordBox" Text="{Binding NewPassword}" IsPassword="True" SemanticProperties.Description="New password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference NewPasswordBox}" /></Grid></Border>
             </VerticalStackLayout>
             <VerticalStackLayout Spacing="4">
                 <Label Text="Repeat new password" Style="{StaticResource Caption}" />
-                <Border Style="{StaticResource Field}"><Entry Text="{Binding ConfirmPassword}" IsPassword="True" ReturnCommand="{Binding ChangePasswordCommand}" SemanticProperties.Description="Repeat new password" /></Border>
+                <Border Style="{StaticResource Field}"><Grid ColumnDefinitions="*,Auto"><Entry x:Name="ConfirmPasswordBox" Text="{Binding ConfirmPassword}" IsPassword="True" ReturnCommand="{Binding ChangePasswordCommand}" SemanticProperties.Description="Repeat new password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference ConfirmPasswordBox}" /></Grid></Border>
             </VerticalStackLayout>
             <Button Text="Change password" Command="{Binding ChangePasswordCommand}" HorizontalOptions="Start" />
 

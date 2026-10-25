@@ -37,25 +37,71 @@
                 </VerticalStackLayout>
 
                 <c:Banner Message="{Binding ErrorMessage}" />
+                <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-                <VerticalStackLayout Spacing="6">
-                    <Label Text="Email" Style="{StaticResource Caption}" />
-                    <Border Style="{StaticResource Field}">
-                        <Entry Text="{Binding Email}" Keyboard="Email" ReturnType="Next" SemanticProperties.Description="Email address" />
-                    </Border>
+                <!-- Sign in -->
+                <VerticalStackLayout Spacing="18" IsVisible="{Binding IsResetting, Converter={StaticResource Not}}">
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="Email" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}">
+                            <Entry Text="{Binding Email}" Keyboard="Email" ReturnType="Next" SemanticProperties.Description="Email address" />
+                        </Border>
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="Password" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}">
+                            <Grid ColumnDefinitions="*,Auto"><Entry x:Name="PasswordBox" Text="{Binding Password}" IsPassword="True" ReturnType="Done"
+                                   ReturnCommand="{Binding SignInCommand}" SemanticProperties.Description="Password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference PasswordBox}" /></Grid>
+                        </Border>
+                        <Button Text="Forgot password?" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" Margin="0,4,0,0"
+                                Command="{Binding ForgotPasswordCommand}" />
+                    </VerticalStackLayout>
+
+                    <Button Text="Sign in" Margin="0,6,0,0" Command="{Binding SignInCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}" />
+
+                    <Button Text="Create an account" Style="{StaticResource OutlineButton}" Command="{Binding CreateAccountCommand}" />
                 </VerticalStackLayout>
 
-                <VerticalStackLayout Spacing="6">
-                    <Label Text="Password" Style="{StaticResource Caption}" />
-                    <Border Style="{StaticResource Field}">
-                        <Entry Text="{Binding Password}" IsPassword="True" ReturnType="Done"
-                               ReturnCommand="{Binding SignInCommand}" SemanticProperties.Description="Password" />
-                    </Border>
+                <!-- Forgotten password: the email first, then the code from it and a new password -->
+                <VerticalStackLayout Spacing="18" IsVisible="{Binding IsResetting}">
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="Reset your password" Style="{StaticResource Heading}" SemanticProperties.HeadingLevel="Level2" />
+                        <Label Text="We'll email you a 6-digit code. Type it here with your new password." Style="{StaticResource Muted}" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="Email" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}">
+                            <Entry Text="{Binding ResetEmail}" Keyboard="Email" ReturnType="Send" ReturnCommand="{Binding SendResetCodeCommand}" SemanticProperties.Description="Email address" />
+                        </Border>
+                    </VerticalStackLayout>
+                    <Button Text="Send code" Command="{Binding SendResetCodeCommand}" IsVisible="{Binding ResetCodeSent, Converter={StaticResource Not}}" IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}" />
+
+                    <VerticalStackLayout Spacing="18" IsVisible="{Binding ResetCodeSent}">
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="Code from the email" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}">
+                                <Entry Text="{Binding ResetCode}" Keyboard="Numeric" MaxLength="6" ReturnType="Next" SemanticProperties.Description="6-digit code" />
+                            </Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="New password (6 to 64 characters)" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}">
+                                <Grid ColumnDefinitions="*,Auto"><Entry x:Name="NewPasswordBox" Text="{Binding NewPassword}" IsPassword="True" MaxLength="64" ReturnType="Next" SemanticProperties.Description="New password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference NewPasswordBox}" /></Grid>
+                            </Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="Repeat new password" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}">
+                                <Grid ColumnDefinitions="*,Auto"><Entry x:Name="ConfirmNewPasswordBox" Text="{Binding ConfirmNewPassword}" IsPassword="True" MaxLength="64" ReturnType="Done" ReturnCommand="{Binding ResetPasswordCommand}" SemanticProperties.Description="Repeat new password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference ConfirmNewPasswordBox}" /></Grid>
+                            </Border>
+                        </VerticalStackLayout>
+                        <Button Text="Set new password" Command="{Binding ResetPasswordCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}" />
+                        <Button Text="Send a new code" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" Command="{Binding SendResetCodeCommand}" />
+                    </VerticalStackLayout>
+
+                    <Button Text="Back to sign in" Style="{StaticResource OutlineButton}" Command="{Binding CancelResetCommand}" />
                 </VerticalStackLayout>
-
-                <Button Text="Sign in" Margin="0,6,0,0" Command="{Binding SignInCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}" />
-
-                <Button Text="Create an account" Style="{StaticResource OutlineButton}" Command="{Binding CreateAccountCommand}" />
 
                 <!-- Demo mode: shown only when no Supabase project is configured -->
                 <Border Style="{StaticResource Panel}" Margin="0,16,0,0" IsVisible="{Binding IsDemo}">
@@ -71,6 +117,8 @@
                                     Command="{Binding DemoSignInCommand}" CommandParameter="employee@demo.io" />
                             <Button Text="Admin" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
                                     Command="{Binding DemoSignInCommand}" CommandParameter="admin@demo.io" />
+                            <Button Text="Sub-admin" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                                    Command="{Binding DemoSignInCommand}" CommandParameter="subadmin@demo.io" />
                         </FlexLayout>
                     </VerticalStackLayout>
                 </Border>

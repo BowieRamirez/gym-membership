@@ -87,6 +87,43 @@ public partial class LoginViewModel(IAuthService auth, IAppNavigator nav, ISupab
 
     [RelayCommand] private Task DemoSignInAsync(string demoEmail) => GoAsync(demoEmail, DemoGateway.DemoPassword);
 
+    // ---------- forgotten password: email, then the code and a new password ----------
+    [ObservableProperty] private bool isResetting;
+    [ObservableProperty] private bool resetCodeSent;
+    [ObservableProperty] private string resetEmail = "";
+    [ObservableProperty] private string resetCode = "";
+    [ObservableProperty] private string newPassword = "";
+    [ObservableProperty] private string confirmNewPassword = "";
+
+    [RelayCommand]
+    private void ForgotPassword()
+    {
+        (IsResetting, ResetCodeSent, ResetEmail, ResetCode, NewPassword, ConfirmNewPassword) = (true, false, Email.Trim(), "", "", "");
+        ErrorMessage = Notice = null;
+    }
+
+    [RelayCommand] private void CancelReset() { IsResetting = false; ErrorMessage = Notice = null; }
+
+    [RelayCommand]
+    private async Task SendResetCodeAsync()
+    {
+        Notice = null;
+        if (!await RunAsync(() => auth.SendResetCodeAsync(ResetEmail))) return;
+        ResetCodeSent = true;
+        // the same words whether or not the address has an account, so nobody can use this to find out who is a member
+        Notice = $"If an account uses {ResetEmail.Trim()}, we sent a 6-digit code to it." + (IsDemo ? $" Demo code: {DemoGateway.DemoCode}" : "");
+    }
+
+    [RelayCommand]
+    private async Task ResetPasswordAsync()
+    {
+        Notice = null;
+        if (NewPassword != ConfirmNewPassword) { ErrorMessage = "The new passwords don't match."; return; }
+        if (!await RunAsync(() => auth.ResetPasswordAsync(ResetEmail, ResetCode, NewPassword))) return;
+        (IsResetting, Email, Password) = (false, ResetEmail.Trim(), "");
+        Notice = "Password changed. Sign in with your new password.";
+    }
+
     async Task GoAsync(string e, string p)
     {
         var role = AppRole.Member;
@@ -99,7 +136,8 @@ public partial class LoginViewModel(IAuthService auth, IAppNavigator nav, ISupab
 
 public partial class RegisterViewModel(IAuthService auth, IAppNavigator nav) : LoadableViewModel
 {
-    [ObservableProperty] private string fullName = "";
+    [ObservableProperty] private string firstName = "";
+    [ObservableProperty] private string lastName = "";
     [ObservableProperty] private string email = "";
     [ObservableProperty] private string password = "";
     [ObservableProperty] private string confirmPassword = "";
@@ -108,7 +146,7 @@ public partial class RegisterViewModel(IAuthService auth, IAppNavigator nav) : L
     private async Task RegisterAsync()
     {
         if (Password != ConfirmPassword) { ErrorMessage = "The passwords don't match."; return; }
-        if (await RunAsync(() => auth.RegisterAsync(FullName, Email, Password))) nav.GoTo(AppRole.Member);
+        if (await RunAsync(() => auth.RegisterAsync(FirstName, LastName, Email, Password))) nav.GoTo(AppRole.Member);
     }
 
     [RelayCommand] private void BackToSignIn() => nav.GoToLogin();
@@ -128,13 +166,15 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
     private async Task AvailAsync(MembershipPackage package)
     {
         Notice = null;
+        var code = string.IsNullOrWhiteSpace(DiscountCode) ? "" : $"\nDiscount code {DiscountCode.Trim()} is applied when you pay.";
+        if (!await Confirm.AskAsync($"Buy {package.Name}?", $"₱{package.Price:N2} for {package.DurationDays} days.{code}\nYou pay by QR on My membership.", "Buy membership")) return;
         if (!await RunAsync(() => subscription.ExtendAsync(package.Id, DiscountCode), _ => { })) return;
         DiscountCode = null;
         nav.GoToMembership();
     }
 }
 
-public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker picker, ISubscriptionService subscription) : LoadableViewModel
+public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker picker, ISubscriptionService subscription, IAttendanceService? codes = null) : LoadableViewModel
 {
     public ObservableCollection<MembershipRow> Memberships { get; } = new();
     public ObservableCollection<PaymentItem> Payments { get; } = new();
@@ -144,6 +184,9 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
 
     /// <summary>The QR payment the member still has to pay and send proof for, if any.</summary>
     [ObservableProperty] private PaymentItem? payNow;
+    /// <summary>The member's permanent QR code (D12): identification at the front desk, never payment.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasCode))] private string? myCode;
+    public bool HasCode => !string.IsNullOrEmpty(MyCode);
     [ObservableProperty] private string referenceNo = "";
     [ObservableProperty] private string? accountName;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasQr))] private string? qrUrl;
@@ -158,6 +201,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
         _loading = true;
         try
         {
+            if (codes is not null && MyCode is null) await RunAsync(codes.MyCodeAsync, c => MyCode = c);   // never changes, so read once
             if (!await RunAsync(subscription.TermsAsync, rows => Fill(Terms, rows))) return;
             var waiting = false;
             if (!await RunAsync(svc.MyPaymentsAsync, rows =>
@@ -204,6 +248,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
         if (PayNow is not { } pay) return;
         if (string.IsNullOrWhiteSpace(ReferenceNo)) { ErrorMessage = "Enter the reference number from your e-wallet receipt."; return; }
         if (await picker.PickAsync() is not { } file) { ErrorMessage = "Choose a screenshot of your payment to send."; return; }
+        if (!await Confirm.AskAsync("Send this payment proof?", $"{pay.What}\n₱{pay.Amount:N2}\nReference {ReferenceNo.Trim()}\nThe front desk checks it against the gym's account.", "Send proof")) return;
         if (!await RunAsync(() => svc.SubmitProofAsync(pay.Id, ReferenceNo, file.FileName, file.Data))) return;
         ReferenceNo = "";
         Notice = "Sent. The front desk will check it against the gym's account.";
@@ -214,6 +259,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
     private async Task PayAgainAsync(PaymentItem item)
     {
         Notice = null;
+        if (!await Confirm.AskAsync("Create a new payment?", $"{item.What}\n₱{item.Amount:N2}\nThe expired one stays in your history.", "Create payment")) return;
         if (!await RunAsync(() => svc.PayAgainAsync(item), _ => { })) return;
         Notice = "New payment created. Pay by QR below, then send your proof.";
         await LoadAsync();
@@ -242,6 +288,17 @@ public partial class AmenityBoardViewModel(IAmenityService svc) : LoadableViewMo
     [RelayCommand]
     private async Task ToggleFollowAsync(AmenityCard card)
     { if (await RunAsync(() => svc.SetFollowedAsync(card.Amenity.Id, !card.Followed))) await LoadAsync(); }
+
+    // the existing purchase: a pending QR payment that turns the pass on when staff verify it
+    [RelayCommand]
+    private async Task BuyAsync(AmenityCard card)
+    {
+        Notice = null;
+        if (!await Confirm.AskAsync($"Buy a {card.Amenity.Name} pass?", $"{card.PassText}.\nYou pay by QR on My membership.", "Buy pass")) return;
+        if (!await RunAsync(() => svc.AvailAsync(card.Amenity.Id), _ => { })) return;
+        await LoadAsync();
+        Notice = $"Pass for {card.Amenity.Name} ordered. Pay it from My membership; it starts when staff verify the payment.";
+    }
 }
 
 public partial class CoachesViewModel(ICoachService svc, IChatService messages, IAppNavigator nav) : LoadableViewModel
@@ -252,13 +309,27 @@ public partial class CoachesViewModel(ICoachService svc, IChatService messages, 
 
     [RelayCommand] private Task LoadAsync() => RunAsync(svc.ListCoachesAsync, rows => Fill(Cards, rows));
 
+    // coaches come and go as they check in and out: quiet, keeps the scroll position
+    public override async Task AutoRefreshAsync()
+    {
+        if (IsBusy) return;
+        var rows = await svc.ListCoachesAsync();
+        if (rows.Ok) Sync(Cards, rows.Value!, c => c.Coach.UserId, (a, b) => a.SameAs(b));
+    }
+
     [RelayCommand]
     private async Task HireAsync(CoachCard card)
-    { if (await RunAsync(() => svc.HireAsync(card.Coach.UserId))) await LoadAsync(); }
+    {
+        if (!await Confirm.AskAsync($"Hire {card.Name}?", "They become your coach. You can message them and book sessions together.", "Hire coach")) return;
+        if (await RunAsync(() => svc.HireAsync(card.Coach.UserId))) await LoadAsync();
+    }
 
     [RelayCommand]
     private async Task EndHireAsync(CoachCard card)
-    { if (card.HireId is { } id && await RunAsync(() => svc.EndHireAsync(id))) await LoadAsync(); }
+    {
+        if (card.HireId is not { } id || !await Confirm.AskAsync($"Stop working with {card.Name}?", "They will no longer be your coach.", "End hire")) return;
+        if (await RunAsync(() => svc.EndHireAsync(id))) await LoadAsync();
+    }
 
     [RelayCommand]
     private void Message(CoachCard card) { messages.Pending = (card.Coach.UserId, null); nav.GoToMessages(); }
@@ -740,7 +811,7 @@ public partial class NotificationsViewModel : LoadableViewModel, IDisposable
     private Task MarkAllReadAsync() => RunAsync(svc.MarkAllReadAsync);
 }
 
-public partial class SettingsViewModel(ISettingsService settings, IAuthService auth, IAppNavigator nav, IProfileService profile, IProofPicker picker) : LoadableViewModel
+public partial class SettingsViewModel(ISettingsService settings, IAuthService auth, IAppNavigator nav, IProfileService profile, IProofPicker picker, ISupabaseGateway? gateway = null) : LoadableViewModel
 {
     public string[] Themes { get; } = ["system", "light", "dark"];
     [ObservableProperty] private string theme = "system";
@@ -752,12 +823,14 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
     {
         await LoadAsync();
         await RunAsync(auth.MustChangePasswordAsync, m => MustChange = m);
-        await LoadPhotoAsync();
+        await LoadPhotoAsync(names: true);
+        await LoadEmailAsync();
     }
 
-    async Task LoadPhotoAsync()
+    async Task LoadPhotoAsync(bool names = false)
     {
         if ((await profile.MeAsync()).Value is not { } me) return;
+        if (names) (FirstName, LastName) = (me.FirstName, me.LastName);
         Letters = Initials.From(me.Name);
         AvatarUrl = (await profile.AvatarUrlAsync(me.AvatarPath)).Value;   // no link: the initials stay
     }
@@ -789,13 +862,57 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
     {
         Notice = null;
         if (NewPassword != ConfirmPassword) { ErrorMessage = "The new passwords don't match."; return; }
+        if (!await Confirm.AskAsync("Change your password?", "Use the new password the next time you sign in.", "Change password")) return;
         if (!await RunAsync(() => auth.ChangePasswordAsync(CurrentPassword, NewPassword))) return;
         CurrentPassword = NewPassword = ConfirmPassword = "";
         MustChange = false;
         Notice = "Password changed.";
     }
 
-    [RelayCommand] private async Task SignOutAsync() { await auth.SignOutAsync(); nav.GoToLogin(); }
+    [RelayCommand] private async Task SignOutAsync() { if (!await Confirm.AskAsync("Sign out?", "You will need your email and password to sign in again.", "Sign out")) return; await auth.SignOutAsync(); nav.GoToLogin(); }
+
+    // ---------- name ----------
+    [ObservableProperty] private string firstName = "";
+    [ObservableProperty] private string lastName = "";
+
+    [RelayCommand]
+    private async Task SaveNameAsync()
+    {
+        Notice = null;
+        if (!await RunAsync(() => profile.SetNameAsync(FirstName, LastName))) return;
+        await LoadPhotoAsync(names: true);
+        Notice = "Name saved.";
+    }
+
+    // ---------- email: send a code to it, then type the code ----------
+    [ObservableProperty] private string emailAddress = "";
+    [ObservableProperty] private bool emailConfirmed;
+    [ObservableProperty] private bool codeSent;
+    [ObservableProperty] private string emailCode = "";
+    string _codeEmail = "";
+
+    async Task LoadEmailAsync() => await RunAsync(auth.EmailStatusAsync, s => (EmailAddress, EmailConfirmed) = (s.Email, s.Confirmed));
+
+    [RelayCommand]
+    private async Task SendEmailCodeAsync()
+    {
+        Notice = null;
+        var email = EmailAddress.Trim();
+        if (!await RunAsync(() => auth.SendEmailCodeAsync(email))) return;
+        (_codeEmail, CodeSent, EmailCode) = (email, true, "");
+        await LoadEmailAsync();
+        Notice = $"We sent a 6-digit code to {email}. Type it below." + (gateway is DemoGateway ? $" Demo code: {DemoGateway.DemoCode}" : "");
+    }
+
+    [RelayCommand]
+    private async Task ConfirmEmailAsync()
+    {
+        Notice = null;
+        if (!await RunAsync(() => auth.ConfirmEmailAsync(_codeEmail, EmailCode))) return;
+        (CodeSent, EmailCode) = (false, "");
+        await LoadEmailAsync();
+        Notice = "Email confirmed.";
+    }
 }
 
 /// <summary>Feeds the bar at the top of every signed-in screen: your picture, the unread badge and Sign out.</summary>
@@ -842,5 +959,5 @@ public partial class HeaderViewModel : LoadableViewModel, IDisposable
         if (unread.Ok) UnreadCount = unread.Value;
     }
 
-    [RelayCommand] private async Task SignOutAsync() { await auth.SignOutAsync(); Dispose(); nav.GoToLogin(); }
+    [RelayCommand] private async Task SignOutAsync() { if (!await Confirm.AskAsync("Sign out?", "You will need your email and password to sign in again.", "Sign out")) return; await auth.SignOutAsync(); Dispose(); nav.GoToLogin(); }
 }

@@ -1,7 +1,23 @@
 # Gym Membership System — Technical Spec
 
-Status: Draft for review · Date: 2026-10-04
-Companion: [PRD.md](PRD.md) · Schema source: `docs/dfd/gym-membership-db-diagram.md`
+Status: Built · Original date: 2026-10-04 · Updated: 2026-10-25
+Companion: [PRD.md](PRD.md) · Schema source: the migrations in `supabase/migrations/` (summary in [database-plan.md](database-plan.md#current-state-2026-10-25))
+
+## As built (2026-10-25)
+
+Sections 1 to 10 are the original design. Where they differ, this wins:
+
+| Topic | As built |
+|---|---|
+| Packages | MAUI 10, `CommunityToolkit.Maui` 15.0.1, `CommunityToolkit.Mvvm` 8.4.2, `Supabase` 8.3.1, `PDFsharp` 6.2.4 (revenue PDF), `ZXing.Net.Maui.Controls` 0.10.4 (member QR show and scan) |
+| Targets | Android and Windows are built and released; iOS is in the project file but not built or tested |
+| Layers | Views → ViewModels → Services → `ISupabaseGateway`, as planned. `SupabaseGateway` is the real backend; `DemoGateway` is an in-memory stand-in with the same rules, used when `Resources/Raw/supabase.json` is absent |
+| Shells | `MemberShell`, `CoachShell` and `StaffShell` (front desk, sub-admin, super admin; pages hidden by role). Phones use a bottom navigation bar |
+| Roles | member, coach, employee, subadmin, admin (shown as "Super admin"); see the database plan |
+| Tests | xUnit against `DemoGateway` (725 tests), and the database rules on a throwaway local Postgres in `supabase/tests/local` (Node + `embedded-postgres`, not pgTAP; 309 checks) |
+| Realtime | Chat uses Realtime change signals with a safety refresh; the bell and amenity pages poll |
+| Email | Supabase Auth with Brevo SMTP; 6-digit codes for email confirmation and password reset |
+| Edge Functions | `create-user` and `reset-password` (super admin; sub-admin for members and coaches only) |
 
 ## 1. Stack (versions confirmed via Context7, 2026-10-04)
 

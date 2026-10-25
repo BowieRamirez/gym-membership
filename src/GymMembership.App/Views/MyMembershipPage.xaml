@@ -5,6 +5,7 @@
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            xmlns:zxing="clr-namespace:ZXing.Net.Maui.Controls;assembly=ZXing.Net.MAUI.Controls"
             x:Class="GymMembership.App.Views.MyMembershipPage" x:DataType="vm:MyMembershipViewModel" Title="My membership">
 
     <ScrollView MaximumWidthRequest="920">
@@ -12,6 +13,22 @@
 
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+            <!-- D12: the member's permanent ID code, kept apart from the gym's pay-by-QR panel below. Always dark on white so any scanner reads it. -->
+            <Border Style="{StaticResource Panel}" Padding="16,14" IsVisible="{Binding HasCode}">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="18">
+                    <!-- the generator ignores its own size on Windows, so the white frame sets it and the code fills the frame -->
+                    <Border BackgroundColor="White" StrokeThickness="0" Padding="8" WidthRequest="166" HeightRequest="166" VerticalOptions="Center"
+                            AutomationId="MemberQr" SemanticProperties.Description="Your member QR code">
+                        <zxing:BarcodeGeneratorView Format="QrCode" Value="{Binding MyCode}" HorizontalOptions="Fill" VerticalOptions="Fill"
+                                                    ForegroundColor="Black" BackgroundColor="White" />
+                    </Border>
+                    <VerticalStackLayout Grid.Column="1" Spacing="6" VerticalOptions="Center">
+                        <Label Text="Your member QR" Style="{StaticResource Heading}" />
+                        <Label Text="Show this at the front desk when you arrive. It only identifies you; it is not for paying." Style="{StaticResource Muted}" />
+                    </VerticalStackLayout>
+                </Grid>
+            </Border>
 
             <!-- The one memorable moment: days left, shown as a lane that runs out -->
             <Border Style="{StaticResource Panel}" Padding="{OnIdiom Phone='16,16', Default='24,22'}">

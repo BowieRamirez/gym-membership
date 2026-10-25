@@ -22,7 +22,7 @@ public class PaymentTests
     {
         var gw = new DemoGateway();
         var auth = new AuthService(gw);
-        Assert.True((await auth.RegisterAsync("Ana Reyes", "ana@demo.io", "secret12")).Ok);
+        Assert.True((await auth.RegisterAsync("Ana", "Reyes", "ana@demo.io", "secret12")).Ok);
         var member = new MembershipService(gw);
 
         // 1. a pending payment with a code to type into the e-wallet message and a deadline
@@ -194,7 +194,7 @@ public class PaymentTests
     public async Task A_guest_cannot_buy_amenities_hire_coaches_book_sessions_or_chat()
     {
         var gw = new DemoGateway();
-        await new AuthService(gw).RegisterAsync("Guest User", "guest@demo.io", "secret12");
+        await new AuthService(gw).RegisterAsync("Guest", "User", "guest@demo.io", "secret12");
 
         Assert.Equal(AppErrorKind.Validation, (await new AmenityService(gw).AvailAsync(1)).Error);
         Assert.Equal(AppErrorKind.Validation, (await new CoachService(gw).HireAsync("u-coach1")).Error);

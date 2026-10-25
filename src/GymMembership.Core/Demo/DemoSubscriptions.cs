@@ -80,7 +80,6 @@ public sealed partial class DemoGateway
         return pay;
     }
 
-    void RequireRefundAdmin() {RequireActive();if(!RolesOf(Uid).Contains("admin")) throw Err("forbidden");}
 
     bool SubscriptionCall(string fn,Dictionary<string,object> a,out object? result)
     {
@@ -113,7 +112,7 @@ public sealed partial class DemoGateway
             }
             case "decide_membership_refund":
             {
-                RequireRefundAdmin();var reason=Reason();var approve=Convert.ToBoolean(a["p_approve"]);
+                Require("payments:void");var reason=Reason();var approve=Convert.ToBoolean(a["p_approve"]);
                 var r=All<RefundRequest>().FirstOrDefault(r=>r.Id==I("p_request_id"))??throw Err("not_found");
                 if(r.MemberId==Uid) throw Err("self_decision");
                 if(r.Status!="pending") throw Err("already_processed");
@@ -128,7 +127,7 @@ public sealed partial class DemoGateway
             }
             case "record_membership_refund_paid":
             {
-                RequireRefundAdmin();var method=Text("p_method");var reference=Text("p_reference");
+                Require("payments:void");var method=Text("p_method");var reference=Text("p_reference");
                 if(method is not (PayMethod.Cash or PayMethod.Gcash or PayMethod.BankTransfer) || method!=PayMethod.Cash&&string.IsNullOrWhiteSpace(reference)) throw Err("bad_input");
                 var r=All<RefundRequest>().FirstOrDefault(r=>r.Id==I("p_request_id"))??throw Err("not_found");
                 if(r.MemberId==Uid) throw Err("self_decision");
@@ -149,6 +148,22 @@ public sealed partial class DemoGateway
                 foreach(var t in All<MembershipTerm>().Where(t=>t.PaymentId==p.Id)) {t.CancelledAt=now;t.CancelledBy=Uid;t.CancellationReason=reason;}
                 foreach(var r in All<MembershipRenewal>().Where(r=>r.Id==p.RenewalId)) r.Status=Status.Cancelled;
                 ProjectTerms(p.MemberId!);Notify(p.MemberId,"payment","Payment voided",reason);Audit("payment.void","payments",p.Id.ToString());return true;
+            }
+            case "revenue_lines":
+            {
+                Require("reports:revenue");
+                var from=DateTime.Parse(Text("p_from")!).Date;var to=DateTime.Parse(Text("p_to")!).Date;
+                var offset=Convert.ToInt32(a["p_offset"]);var limit=Convert.ToInt32(a["p_limit"]);
+                if(from>to||offset<0||limit is < 1 or > 1000) throw Err("bad_input");
+                string Payer(Payment p)=>All<Profile>().FirstOrDefault(x=>x.Id==p.MemberId)?.FullName??p.WalkInName??"Walk-in";
+                string Item(Payment p)=>p.Kind switch{PayKind.Membership=>"Membership",PayKind.Renewal=>"Extension",PayKind.Amenity=>"Amenity",_=>"Walk-in"};
+                var receipts=All<Payment>().Where(p=>p.Status==Status.Verified && p.VerifiedAt is not null)
+                    .Select(p=>new RevenueLine(p.VerifiedAt!.Value,p.ReceiptNo,Payer(p),Item(p),p.Kind,p.Method,p.Amount,false,p.Id));
+                var back=All<RefundRequest>().Where(r=>r.Status is "approved" or "paid").Select(r=>(r,p:All<Payment>().First(p=>p.Id==r.PaymentId)))
+                    .Select(x=>new RevenueLine(x.r.DecidedAt!.Value,x.p.ReceiptNo,Payer(x.p),Item(x.p),x.p.Kind,x.p.Method,-x.r.Amount,true,x.p.Id));
+                result=receipts.Concat(back).Where(l=>l.At.AddHours(8).Date>=from&&l.At.AddHours(8).Date<=to)
+                    .OrderBy(l=>l.At).ThenBy(l=>l.Payment).ThenBy(l=>l.Refund).Skip(offset).Take(limit).ToList();
+                return true;
             }
             case "revenue_summary":
             case "daily_cash_summary":

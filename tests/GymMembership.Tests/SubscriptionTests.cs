@@ -14,7 +14,7 @@ public class SubscriptionTests
     static async Task<(DemoGateway Gw, Clock Clock, SubscriptionService Svc, MembershipPackage Monthly, MembershipPackage Annual)> Setup()
     {
         var clock = new Clock(); var gw = new DemoGateway(clock: clock);
-        await gw.SignUpAsync("phase7@demo.io", "secret12", "Ana Reyes");
+        await gw.SignUpAsync("phase7@demo.io", "secret12", "Ana", "Reyes");
         var packages = await gw.ListAsync<MembershipPackage>();
         return (gw, clock, new SubscriptionService(gw), packages.First(p => p.Name == "Monthly"), packages.First(p => p.Name == "Annual"));
     }
@@ -195,7 +195,7 @@ public class SubscriptionTests
         var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
         Assert.False((await new MembershipService(gw).MyPaymentsAsync()).Value!.Single().CanCancel);
         Assert.False((await svc.CancelPendingPaymentAsync(p.Id)).Ok);
-        await gw.SignUpAsync("other7@demo.io","secret12","Other Person");
+        await gw.SignUpAsync("other7@demo.io","secret12","Other","Person");
         var mine=(await svc.ExtendAsync(monthly.Id)).Value!;
         await gw.SignInAsync("phase7@demo.io","secret12");
         Assert.False((await svc.CancelPendingPaymentAsync(mine.Id)).Ok);
@@ -204,7 +204,8 @@ public class SubscriptionTests
     [Fact]
     public async Task The_membership_page_drops_the_pay_by_QR_panel_after_a_cancel()
     {
-        var (gw, _, svc, monthly, _) = await Setup();
+        var (gw, clock, svc, monthly, _) = await Setup();
+        clock.Now = DateTimeOffset.UtcNow;   // the page judges a payment's expiry by the real clock, so a fixed date here expires it
         var p=(await svc.ExtendAsync(monthly.Id)).Value!;
         var vm=new GymMembership.Core.ViewModels.MyMembershipViewModel(new MembershipService(gw),new NoPicker(),svc);
         await vm.OnAppearingAsync();

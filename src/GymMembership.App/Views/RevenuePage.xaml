@@ -11,6 +11,7 @@
         <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
             <Label Text="Net receipts: verified payments minus approved refunds, grouped by Manila day, item and payment method. A refund counts on the day it was approved, and is shown against the method the member paid with. The cash drawer on the Cashier page drops only when the repayment is recorded. Payment counts count receipts, not refunds. Voids are excluded." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
 
             <FlexLayout Wrap="Wrap" AlignItems="End">
                 <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
@@ -21,7 +22,10 @@
                     <Label Text="To" Style="{StaticResource Caption}" />
                     <Border Style="{StaticResource Field}"><DatePicker Date="{Binding To}" /></Border>
                 </VerticalStackLayout>
-                <Button Text="Show revenue" Style="{StaticResource SmallButton}" Margin="0,0,0,8" Command="{Binding LoadCommand}" />
+                <Button Text="Show revenue" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Command="{Binding LoadCommand}" />
+                <!-- exports the period shown below, even if the dates above were changed since -->
+                <Button Text="Export PDF" Style="{StaticResource SmallOutlineButton}" Margin="0,0,0,8" Command="{Binding ExportPdfCommand}"
+                        SemanticProperties.Hint="Creates a PDF of the receipts and refunds shown and opens the share sheet" />
             </FlexLayout>
 
             <Border Style="{StaticResource Panel}" Padding="24,20">

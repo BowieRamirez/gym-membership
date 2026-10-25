@@ -10,6 +10,15 @@
         <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='20,16,20,24'}" Spacing="16">
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
+            <Border Style="{StaticResource Panel}" Padding="16,12">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                    <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                        <Label Text="At the gym" FontFamily="BarlowMedium" />
+                        <Label Text="{Binding VisitText}" Style="{StaticResource Caption}" />
+                    </VerticalStackLayout>
+                    <Button Grid.Column="1" Text="{Binding VisitButton}" Command="{Binding ToggleVisitCommand}" Style="{StaticResource SmallButton}" VerticalOptions="Center" />
+                </Grid>
+            </Border>
             <c:CoachPhotoPrompt x:DataType="vm:CoachPhotoViewModel" BindingContext="{Binding Source={RelativeSource AncestorType={x:Type vm:CoachProfileViewModel}}, Path=Photo}" IsVisible="{Binding IsCoach}" />
 
             <VerticalStackLayout Spacing="6">
@@ -17,8 +26,13 @@
                 <Border Style="{StaticResource Field}"><Entry Text="{Binding Specialty}" /></Border>
             </VerticalStackLayout>
             <VerticalStackLayout Spacing="6">
-                <Label Text="Hourly rate" Style="{StaticResource Caption}" />
-                <Border Style="{StaticResource Field}"><Entry Text="{Binding HourlyRate}" Keyboard="Numeric" /></Border>
+                <Label Text="Hourly rate (₱ per hour)" Style="{StaticResource Caption}" />
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                    <Label Text="₱" FontFamily="BarlowSemiBold" FontSize="18" VerticalOptions="Center" />
+                    <Border Grid.Column="1" Style="{StaticResource Field}">
+                        <Entry Text="{Binding RateInput}" Keyboard="Numeric" Placeholder="For example 350.00" SemanticProperties.Description="Hourly rate in pesos" />
+                    </Border>
+                </Grid>
             </VerticalStackLayout>
             <VerticalStackLayout Spacing="6">
                 <Label Text="About you" Style="{StaticResource Caption}" />
@@ -27,8 +41,16 @@
 
             <HorizontalStackLayout Spacing="12">
                 <Switch IsToggled="{Binding IsAvailable}" SemanticProperties.Description="Taking new members" VerticalOptions="Center" />
-                <Label Text="Taking new members" VerticalOptions="Center" />
+                <Label VerticalOptions="Center">
+                    <Label.FormattedText>
+                        <FormattedString>
+                            <Span Text="Taking new members: " />
+                            <Span Text="{Binding HiringText}" FontFamily="BarlowSemiBold" />
+                        </FormattedString>
+                    </Label.FormattedText>
+                </Label>
             </HorizontalStackLayout>
+            <Label Text="Separate from checking in: Off keeps you listed while you are in the gym, but members can't hire you." Style="{StaticResource Caption}" />
 
             <Button Text="Save profile" Command="{Binding SaveCommand}" HorizontalOptions="Start" />
         </VerticalStackLayout>

@@ -35,8 +35,8 @@ const alex = await user('alex@t.io', 'member', 'Alex');
 const bea = await user('bea@t.io', 'member', 'Bea');
 await db.query(`insert into membership_packages (name, price, duration_days) values ('Monthly', 1000, 30), ('Annual', 10000, 365)`);
 await db.query(`insert into amenities (name, price, duration_days) values ('Boxing', 300, 30)`);
-await db.query(`insert into discounts (code, percent, starts_at, expires_at) values ('WELCOME10', 10, now() - interval '1 day', now() + interval '30 days'),
-                ('OLD20', 20, now() - interval '10 days', now() - interval '1 day')`);
+await db.query(`insert into discounts (code, percent, starts_at, expires_at, max_uses) values ('WELCOME10', 10, now() - interval '1 day', now() + interval '30 days', 100),
+                ('OLD20', 20, now() - interval '10 days', now() - interval '1 day', 100)`);
 const monthly = 1;
 
 console.log('\nsign-up trigger');
@@ -58,6 +58,16 @@ console.log('\nrow level security');
 await test('anonymous gets nothing', async () => {
   await db.query('begin'); await db.query('set local role anon');
   assert.match(await code(db.query('select * from profiles')), /42501/); await db.query('rollback');
+});
+// a later migration that forgets its revoke would hand the public key a privileged function or a table
+await test('after every migration, anonymous reaches no table and no security definer function', async () => {
+  const r = await db.query(`select p.oid::regprocedure::text as name from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.prosecdef and has_function_privilege('anon', p.oid, 'execute')
+    union all
+    select c.oid::regclass::text from pg_class c join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public' and c.relkind in ('r', 'v', 'm')
+        and has_table_privilege('anon', c.oid, 'select, insert, update, delete')`);
+  assert.ok(!r.rows.length, r.rows.map(x => x.name).join(', '));
 });
 await test('a member sees only themself, plus coaches', async () => {
   const r = await run(alex, 'select id from profiles');
@@ -203,6 +213,7 @@ await test('renewing an active plan extends from its end date', async () => {
 
 console.log('\ncoaching');
 await db.query(`update coaches set specialty='Boxing', hourly_rate=500 where user_id=$1`, [coach]);
+await db.query('insert into coach_visits(coach_id,checked_in_by) values($1,$1)', [coach]);   // a new hire needs the coach in the gym (0032)
 let hire;
 await test('an active member hires a coach; a guest cannot', async () => {
   hire = (await run(alex, `select hire_coach($1) id`, [coach])).rows[0].id;
@@ -226,7 +237,9 @@ await test('you cannot send as someone else or to a coach you have not hired', a
   assert.match(await code(run(alex, `insert into messages (coach_id, member_id, sender_id, body) values ($1,$2,$1,'spoof')`, [coach, alex])), /42501/);
   assert.match(await code(run(eve, `insert into messages (coach_id, member_id, sender_id, body) values ($1,$2,$2,'hey')`, [coach, eve])), /42501/);
 });
-const t0 = new Date(Date.now() + 2 * 864e5), t1 = new Date(t0.getTime() + 36e5), t2 = new Date(t0.getTime() + 72e5), t3 = new Date(t0.getTime() + 108e5);
+// 08:00 Manila (00:00 UTC) two days ahead: shifts must sit on the half-hour grid inside gym hours (0028)
+const ahead = new Date(Date.now() + 2 * 864e5 + 8 * 36e5);
+const t0 = new Date(Date.UTC(ahead.getUTCFullYear(), ahead.getUTCMonth(), ahead.getUTCDate())), t1 = new Date(t0.getTime() + 36e5), t2 = new Date(t0.getTime() + 72e5), t3 = new Date(t0.getTime() + 108e5);
 let reqId;
 await test('a member requests a time; the coach approves and a session is created', async () => {
   reqId = (await run(alex, `select request_time($1,$2,$3,'Leg day') id`, [coach, t0, t1])).rows[0].id;
@@ -236,6 +249,7 @@ await test('a member requests a time; the coach approves and a session is create
   assert.match(await code(run(coach, `select respond_time_request($1,true)`, [reqId])), /already_processed/);
 });
 const overlapCoach = await user('overlap-coach@t.io', 'coach', 'Coach Other');
+await db.query('insert into coach_visits(coach_id,checked_in_by) values($1,$1)', [overlapCoach]);
 await run(alex, 'select hire_coach($1)', [overlapCoach]);
 await test('overlapping sessions are refused', async () => {
   const r2 = (await run(alex, `select request_time($1,$2,$3) id`, [overlapCoach, new Date(t0.getTime() + 18e5), t2])).rows[0].id;
@@ -301,9 +315,8 @@ await test('mark_password_changed clears the flag', async () => {
   await run(id, `select mark_password_changed()`);
   assert.equal((await db.query(`select must_change_password m from profiles where id=$1`, [id])).rows[0].m, false);
 });
-await test('delete rules: a used package cannot be deleted, an unused one can', async () => {
-  assert.equal((await run(admin, `delete from membership_packages where name='Monthly'`).catch(e => e.code)), '23503');
-  assert.equal((await run(admin, `delete from membership_packages where name='Weekly'`)).rowCount, 1);
+await test('catalog history cannot be physically deleted, even when unused', async () => {
+  for (const name of ['Monthly','Weekly']) assert.equal((await run(admin, `delete from membership_packages where name=$1`, [name]).catch(e => e.code)), '42501');
 });
 
 console.log('\nexpiry jobs');
@@ -497,7 +510,7 @@ await test('the status columns cannot be written directly, but the catalog can s
 await test('the amenity alert type and permission exist', async () => {
   assert.equal((await db.query(`select 'amenity'::notification_type as t`)).rows[0].t, 'amenity');
   const p = await db.query(`select r.name from role_permissions rp join roles r using (role_id) join permissions p using (permission_id) where p.resource = 'amenities' and p.action = 'set_status' order by r.name`);
-  assert.deepEqual(p.rows.map(r => r.name), ['admin', 'employee']);
+  assert.deepEqual(p.rows.map(r => r.name), ['admin', 'employee', 'subadmin']);   // the sub-admin works the desk too (0036)
 });
 
 console.log('\nmessenger (0015)');
@@ -622,9 +635,9 @@ await test('search finds a person by name and a conversation by message text, on
   assert.equal((await run(bea, `select * from chat_search('%')`)).rowCount, 0);
   assert.equal((await run(desk, `select * from chat_search('payment is stuck')`)).rowCount, 1);   // staff find front-desk text
 });
-await test('support permission exists for admin and front desk only', async () => {
+await test('support permission exists for admin, sub-admin and front desk only', async () => {
   const p = await db.query(`select r.name from role_permissions rp join roles r using (role_id) join permissions p using (permission_id) where p.resource = 'support' and p.action = 'reply' order by r.name`);
-  assert.deepEqual(p.rows.map(r => r.name), ['admin', 'employee']);
+  assert.deepEqual(p.rows.map(r => r.name), ['admin', 'employee', 'subadmin']);
 });
 
 console.log('\nmessenger review fixes');

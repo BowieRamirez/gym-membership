@@ -16,12 +16,17 @@ namespace GymMembership.Core.Demo;
 public sealed partial class DemoGateway : ISupabaseGateway
 {
     public const string DemoPassword = "demo1234";
+    /// <summary>The demo sends no email, so every code it "sends" is this one, and the app shows it on screen.</summary>
+    public const string DemoCode = "123456";
 
     // plan 5.2
     static readonly Dictionary<string, string[]> RolePermissions = new()
     {
         ["admin"] = ["payments:verify", "payments:record", "payments:void", "check_ins:record", "amenity_usages:verify", "amenities:set_status", "support:reply", "users:manage", "roles:manage",
                      "catalog:manage", "discounts:manage", "gym_settings:manage", "reports:revenue", "reports:cash", "audit:read"],
+        // D15: the desk's work plus catalog, discounts, revenue and member/coach accounts (0036)
+        ["subadmin"] = ["payments:verify", "payments:record", "check_ins:record", "amenity_usages:verify", "amenities:set_status", "support:reply", "reports:cash",
+                        "reports:revenue", "catalog:manage", "discounts:manage", "users:manage"],
         ["employee"] = ["payments:verify", "payments:record", "check_ins:record", "amenity_usages:verify", "amenities:set_status", "support:reply", "reports:cash"],
         ["coach"] = ["sessions:manage", "shifts:manage", "attendance:record"],
         ["member"] = []
@@ -31,6 +36,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
     readonly Dictionary<string, string> _accounts = new(StringComparer.OrdinalIgnoreCase);   // email -> user id
     readonly Dictionary<string, string> _passwords = new();                                  // only accounts whose password changed; the rest use DemoPassword
     int _receiptSeq;
+    readonly HashSet<string> _codesSent = new(StringComparer.OrdinalIgnoreCase);              // addresses holding an unused code
+    bool _codeSession;   // this sign-in was opened with an emailed code (Supabase's amr), which confirm_my_email needs
 
     public string? CurrentUserId { get; private set; }
     public Exception? FailWith { get; set; }
@@ -54,6 +61,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             pk.SetValue(row, All<T>().Select(r => (int)pk.GetValue(r)!).DefaultIfEmpty(0).Max() + 1);
         if (row is Payment payment) SnapshotMembershipPayment(payment);
         Table(typeof(T)).Add(row);
+        if (row is Member m) Add(new MemberCode { UserId = m.UserId, Code = "GYM1-" + Guid.NewGuid().ToString("N") });   // 0034: every member gets a code
         return row;
     }
 
@@ -64,7 +72,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
     string[] RolesOf(string? user) => All<UserRole>().Where(u => u.UserId == user)
         .Select(u => All<Role>().First(r => r.RoleId == u.RoleId).Name).ToArray();
     bool Has(string permission) => RolesOf(CurrentUserId).Any(r => RolePermissions[r].Contains(permission));
-    bool IsStaff => RolesOf(CurrentUserId).Any(r => r is "admin" or "employee");
+    bool IsStaff => RolesOf(CurrentUserId).Any(r => r is "admin" or "subadmin" or "employee");
+    /// <summary>can_manage_person (0036): the super admin manages anyone; others with users:manage, members and coaches only.</summary>
+    bool CanManagePerson(string user) => IsActiveUser && Has("users:manage") &&
+        (RolesOf(CurrentUserId).Contains("admin") || !RolesOf(user).Any(r => r is "admin" or "subadmin" or "employee"));
     bool IsActiveUser => All<Profile>().FirstOrDefault(p => p.Id == CurrentUserId)?.IsActive ?? false;
     void RequireActive() { if (!IsActiveUser) throw Err("forbidden"); }
     void Require(string permission) { RequireActive(); if (!Has(permission)) throw Err("forbidden"); }
@@ -74,6 +85,11 @@ public sealed partial class DemoGateway : ISupabaseGateway
         && All<MembershipTerm>().Any(t => t.MemberId == userId && t.CancelledAt is null && t.StartsAt <= SubscriptionNow && t.EndsAt > SubscriptionNow);
     bool CoachesMember(string coach, string? member) => All<CoachHire>().Any(h => h.CoachId == coach && h.MemberId == member && h.Status == Status.Active);
     bool IsCoach(string? userId) => All<Coach>().Any(c => c.UserId == userId);
+    CoachVisit? OpenVisit(string coachId) => All<CoachVisit>().FirstOrDefault(v => v.CoachId == coachId && v.CheckedOutAt is null);
+
+    /// <summary>The demo's stand-in for the database owner (Supabase dashboard) switching an account on or off, which 0037 still allows
+    /// for a super admin when nobody in the app can.</summary>
+    public void OwnerSetActive(string userId, bool active) => All<Profile>().First(p => p.Id == userId).IsActive = active;
 
     /// <summary>The demo's stand-in for the server sending someone an alert (a client cannot insert one itself, here or on the real table).</summary>
     public void Notify(string? userId, string type, string title, string? body = null)
@@ -85,7 +101,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     void ClearChatAlerts(string userId, string key)
     { foreach (var n in All<UserNotification>().Where(n => n.UserId == userId && n.Type == "message" && n.ReadAt is null && _chatAlerts.GetValueOrDefault(n.Id) == key)) n.ReadAt = DateTime.UtcNow; }
 
-    void NotifyStaff(string type, string title) { foreach (var id in All<UserRole>().Where(u => RolesOf(u.UserId).Any(r => r is "admin" or "employee")).Select(u => u.UserId).Distinct().ToList()) Notify(id, type, title); }
+    void NotifyStaff(string type, string title) { foreach (var id in All<UserRole>().Where(u => RolesOf(u.UserId).Any(r => r is "admin" or "subadmin" or "employee")).Select(u => u.UserId).Distinct().ToList()) Notify(id, type, title); }
     void Audit(string action, string entity, string entityId) =>
         Add(new AuditEntry { ActorId = CurrentUserId, Action = action, Entity = entity, EntityId = entityId, CreatedAt = DateTime.UtcNow });
 
@@ -96,17 +112,65 @@ public sealed partial class DemoGateway : ISupabaseGateway
         if (!_accounts.TryGetValue(email.Trim(), out var uid) || password != _passwords.GetValueOrDefault(uid, DemoPassword))
             return Task.FromException(Err("Invalid login credentials"));
         CurrentUserId = uid;   // like Supabase Auth, a deactivated user still signs in: the app checks profiles.is_active afterwards
+        _codeSession = false;
         return Task.CompletedTask;
     }
 
-    public Task SignUpAsync(string email, string password, string fullName)
+    public Task SignUpAsync(string email, string password, string firstName, string lastName)
     {
         email = email.Trim();
-        if (string.IsNullOrWhiteSpace(fullName) || !email.Contains('@') || password.Length < 6) return Task.FromException(Err("bad_input"));
+        if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName) || !email.Contains('@') || password.Length < 6) return Task.FromException(Err("bad_input"));
         if (_accounts.ContainsKey(email)) return Task.FromException(Err("email_taken"));
-        var id = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], fullName.Trim(), email, "member");
+        var id = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], NameParts.Join(firstName, lastName), email, "member", firstName.Trim(), lastName.Trim());
         _passwords[id] = password;
         CurrentUserId = id;
+        _codeSession = false;
+        return Task.CompletedTask;
+    }
+
+    // ---------- email codes (Phase 11): the same steps as Supabase Auth, with DemoCode ----------
+    public string? CurrentEmail => CurrentUserId is null ? null : _accounts.FirstOrDefault(a => a.Value == CurrentUserId).Key;
+
+    public Task SendEmailCodeAsync(string email)
+    {
+        try
+        {
+            email = email.Trim().ToLowerInvariant();
+            var uid = Uid;
+            if (!string.Equals(email, CurrentEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                if (_accounts.ContainsKey(email)) throw Err("email_taken");
+                _accounts.Remove(CurrentEmail!);
+                _accounts[email] = uid;
+                All<Profile>().First(p => p.Id == uid).Username = email;   // 0035 keeps the username on the sign-in email
+            }
+            _codesSent.Add(email);
+            return Task.CompletedTask;
+        }
+        catch (Exception ex) { return Task.FromException(ex); }
+    }
+
+    public Task VerifyEmailCodeAsync(string email, string code)
+    {
+        if (code != DemoCode || !_codesSent.Remove(email.Trim()) || !string.Equals(email.Trim(), CurrentEmail, StringComparison.OrdinalIgnoreCase))
+            return Task.FromException(Err("bad_code"));
+        _codeSession = true;
+        return Task.CompletedTask;
+    }
+
+    public Task SendPasswordResetCodeAsync(string email)
+    {
+        if (_accounts.ContainsKey(email.Trim())) _codesSent.Add(email.Trim());   // an unknown address gets the same quiet answer
+        return Task.CompletedTask;
+    }
+
+    public Task ResetPasswordWithCodeAsync(string email, string code, string newPassword)
+    {
+        if (code != DemoCode || !_codesSent.Remove(email.Trim()) || !_accounts.TryGetValue(email.Trim(), out var uid))
+            return Task.FromException(Err("bad_code"));
+        CurrentUserId = uid;
+        _codeSession = true;
+        _passwords[uid] = newPassword;
         return Task.CompletedTask;
     }
 
@@ -119,7 +183,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         return Task.CompletedTask;
     }
 
-    public Task SignOutAsync() { CurrentUserId = null; return Task.CompletedTask; }
+    public Task SignOutAsync() { CurrentUserId = null; _codeSession = false; return Task.CompletedTask; }
     public Task<bool> RestoreSessionAsync() => Task.FromResult(false);
 
     // ---------- Edge Functions: create-user and reset-password (plan 4.3, 4.4) ----------
@@ -128,16 +192,19 @@ public sealed partial class DemoGateway : ISupabaseGateway
         try
         {
             if (FailWith is not null) throw FailWith;
-            if (!RolesOf(Uid).Contains("admin") || !IsActiveUser) throw Err("forbidden");
+            if (!RolesOf(Uid).Any(r => r is "admin" or "subadmin") || !IsActiveUser) throw Err("forbidden");
             string S(string k) => Convert.ToString(body.GetValueOrDefault(k)) ?? "";
+            var super = RolesOf(Uid).Contains("admin");   // a sub-admin acts on members and coaches only
             switch (name)
             {
                 case "create-user":
                 {
                     var email = S("email").Trim().ToLowerInvariant(); var role = S("role");
-                    if (role is not ("member" or "coach" or "employee") || string.IsNullOrWhiteSpace(S("name")) || !email.Contains('@') || S("password").Length < 6) throw Err("bad_input");
+                    if (role is not ("member" or "coach" or "employee" or "subadmin") || string.IsNullOrWhiteSpace(S("name")) || !email.Contains('@') || S("password").Length < 6) throw Err("bad_input");
                     if (_accounts.ContainsKey(email)) throw Err("email_taken");
-                    var id = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], S("name").Trim(), email, role);
+                    if (!super && role is not ("member" or "coach")) throw Err("forbidden");
+                    var (first, last) = S("first_name") is { Length: > 0 } f && S("last_name") is { Length: > 0 } l ? (f.Trim(), l.Trim()) : NameParts.Split(S("name"));
+                    var id = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], NameParts.Join(first, last), email, role, first, last);
                     _passwords[id] = S("password");
                     All<Profile>().First(p => p.Id == id).MustChangePassword = true;
                     Audit("user.create", "profiles", id);
@@ -146,7 +213,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 case "reset-password":
                 {
                     var p = All<Profile>().FirstOrDefault(x => x.Id == S("user_id")) ?? throw Err("not_found");
+                    if (!p.IsActive) throw Err("record_archived");
                     if (S("password").Length < 6) throw Err("bad_input");
+                    if (!CanManagePerson(p.Id)) throw Err("forbidden");
                     _passwords[p.Id] = S("password"); p.MustChangePassword = true;
                     Notify(p.Id, "system", "Your password was reset. Sign in with the new one.");
                     Audit("user.reset_password", "profiles", p.Id);
@@ -180,7 +249,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             AmenityUsage u => staff || All<UserAmenity>().Any(a => a.Id == u.UserAmenityId && a.MemberId == uid),
             UserNotification n => n.UserId == uid,
             UserSettings s => s.UserId == uid,
-            UserRole r => r.UserId == uid || RolesOf(uid).Contains("admin"),
+            UserRole r => r.UserId == uid || Has("users:manage"),
             AuditEntry => Has("audit:read"),
             CoachHire h => h.MemberId == uid || h.CoachId == uid || staff,
             TrainingSession s => s.MemberId == uid || s.CoachId == uid || staff,
@@ -189,7 +258,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
             ChatMessage c => c.MemberId == uid || c.CoachId == uid,   // private: not even admins read chats
             ShiftPost s => s.CoachId == uid || staff || CoachesMember(s.CoachId, uid),
             GymCheckIn c => c.MemberId == uid || staff,
+            CoachVisit v => v.CheckedOutAt is null || v.CoachId == uid || staff,
+            MemberCode c => c.UserId == uid,
             Discount => Has("discounts:manage"),   // members only learn a code is valid by using it
+            Reservation r => r.MemberId == uid || r.CoachId == uid || staff,
             MembershipPackage k => k.IsActive || Has("catalog:manage"),
             Amenity a => a.IsActive || Has("catalog:manage"),
             AmenityFollow f => f.MemberId == uid,
@@ -219,9 +291,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
             switch (row)
             {
                 case MembershipPackage or Amenity: if (!Has("catalog:manage")) throw Err(Rls); break;
-                case Discount: if (!Has("discounts:manage")) throw Err(Rls); break;
+                case Discount d: if (!Has("discounts:manage")) throw Err(Rls); GuardDiscountLimit(null, d); break;
                 case ShiftPost s:
                     if (s.CoachId != Uid || !IsCoach(Uid)) throw Err(Rls);
+                    GuardShift(null, s);
                     if (All<ShiftPost>().Any(x => x.CoachId == s.CoachId && x.Status == Status.Scheduled && x.Start < s.End && s.Start < x.End)) throw Err("overlap");
                     break;
                 case ChatMessage c:
@@ -241,6 +314,12 @@ public sealed partial class DemoGateway : ISupabaseGateway
         catch (Exception ex) { return Task.FromException<T>(ex); }
 
         var added = Add(row);
+        switch (added)
+        {
+            case MembershipPackage { IsActive: false } p: StampArchive("plan", p.Id.ToString(), "Created inactive"); break;
+            case Amenity { IsActive: false } a: StampArchive("amenity", a.Id.ToString(), "Created inactive"); break;
+            case Discount { IsActive: false } d: StampArchive("code", d.Id.ToString(), "Created inactive"); break;
+        }
         switch (added)
         {
             case ShiftPost s:
@@ -268,6 +347,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
             var index = list.FindIndex(r => Equals(pk.GetValue(r), key));
             if (index < 0 || !Allowed(list[index])) throw Err("not_found");
 
+            if (row is MembershipPackage or Amenity && !Has("catalog:manage") || row is Discount && !Has("discounts:manage")) throw Err(Rls);
+            if (row is MembershipPackage or Amenity or Discount) GuardCatalogEdit(list[index], row);
             switch (row, list[index])
             {
                 case (MembershipPackage, _): if (!Has("catalog:manage")) throw Err(Rls); list[index] = Clone(row); break;
@@ -276,14 +357,20 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     var edited = Clone(a); edited.Availability = old.Availability; edited.StatusReason = old.StatusReason; edited.BackAt = old.BackAt; edited.ImagePath = old.ImagePath;
                     list[index] = edited;
                     break;
-                case (Discount, _): if (!Has("discounts:manage")) throw Err(Rls); list[index] = Clone(row); break;
+                case (Discount d, Discount old):
+                    if (!Has("discounts:manage")) throw Err(Rls);
+                    GuardDiscountLimit(old, d); list[index] = Clone(d); ArchiveUsedUpCodes();
+                    break;
                 case (GymSettings, _): if (!Has("gym_settings:manage")) throw Err(Rls); list[index] = Clone(row); break;
                 case (ShiftPost s, ShiftPost old):   // a coach changes times, note and status, never the owner
                     if (old.CoachId != Uid) throw Err(Rls);
+                    GuardShift(old, s);
                     old.Start = s.Start; old.End = s.End; old.Note = s.Note; old.Status = s.Status;
                     break;
                 case (Coach c, Coach old):           // bio, specialty, rate, availability
                     if (old.UserId != Uid && !RolesOf(Uid).Contains("admin")) throw Err(Rls);
+                    if (!All<Profile>().Any(p => p.Id == old.UserId && p.IsActive)) throw Err("record_archived");
+                    if (c.HourlyRate is <= 0) throw Err("new row violates check constraint \"coaches_rate_positive\"");   // 0033
                     old.Bio = c.Bio; old.Specialty = c.Specialty; old.HourlyRate = c.HourlyRate; old.IsAvailable = c.IsAvailable;
                     break;
                 case (UserSettings s, UserSettings old):
@@ -319,13 +406,16 @@ public sealed partial class DemoGateway : ISupabaseGateway
             {
                 Require("catalog:manage");
                 var filter = where.Compile();
-                foreach (var a in All<Amenity>().Where(a => filter((T)(object)a))) a.ImagePath = (string?)(object?)value;
+                var amenities = All<Amenity>().Where(a => filter((T)(object)a)).ToList();
+                if (amenities.Any(a => !a.IsActive)) throw Err("record_archived");
+                foreach (var a in amenities) a.ImagePath = (string?)(object?)value;
                 return Task.CompletedTask;
             }
             catch (Exception ex) { return Task.FromException(ex); }
         }
         if (typeof(T) != typeof(UserNotification) || column.Body is not MemberExpression { Member.Name: nameof(UserNotification.ReadAt) })
             return Task.FromException(new NotSupportedException("unsupported filtered column write"));
+        if (!IsActiveUser) return Task.FromException(Err(Rls));
         var matches = where.Compile();
         foreach (var n in All<UserNotification>().Where(n => n.UserId == Uid && matches((T)(object)n)).ToList())
             n.ReadAt = (DateTime?)(object?)value;
@@ -338,22 +428,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
         try
         {
             RequireActive();
-            const string fk = "violates foreign key constraint";   // what the database says when something still points at the row
             switch (row)
             {
-                case MembershipPackage p:
-                    if (!Has("catalog:manage")) throw Err(Rls);
-                    if (All<UserMembershipPackage>().Any(m => m.MembershipPackageId == p.Id)) throw Err($"update or delete on membership_packages {fk}");
-                    break;
-                case Amenity a:
-                    if (!Has("catalog:manage")) throw Err(Rls);
-                    if (All<UserAmenity>().Any(x => x.AmenityId == a.Id)) throw Err($"update or delete on amenities {fk}");
-                    break;
-                case Discount d:
-                    if (!Has("discounts:manage")) throw Err(Rls);
-                    if (All<Payment>().Any(x => x.DiscountId == d.Id)) throw Err($"update or delete on discounts {fk}");
-                    break;
-                case ShiftPost s when s.CoachId == Uid: break;
+                case MembershipPackage or Amenity or Discount: throw Err(Rls);
+                case ShiftPost s when s.CoachId == Uid: GuardShift(All<ShiftPost>().FirstOrDefault(x => x.Id == s.Id) ?? s, null); break;
                 case UserNotification n when n.UserId == Uid: break;
                 default: throw Err(Rls);
             }
@@ -448,14 +526,36 @@ public sealed partial class DemoGateway : ISupabaseGateway
         return $"{prefix}-{DateTime.UtcNow.AddHours(8).Year}-{++_receiptSeq:D6}";
     }
 
+    /// <summary>0028: a shift sits on the half-hour grid inside gym hours on one Manila day, and never leaves a scheduled session of its coach outside it.</summary>
+    void GuardShift(ShiftPost? old, ShiftPost? next)
+    {
+        if (next is { Status: Status.Scheduled } && (old is null || old.Start != next.Start || old.End != next.End || old.Status != Status.Scheduled))
+        {
+            static bool OffGrid(DateTime t) => (t.ToUniversalTime() - DateTime.UnixEpoch).Ticks % (30 * TimeSpan.TicksPerMinute) != 0;
+            if (OffGrid(next.Start) || OffGrid(next.End)) throw Err("off_grid");
+            var g = All<GymSettings>().First();
+            var day = next.Start.ToUniversalTime().AddHours(8).Date;   // Manila has no daylight saving
+            if (next.Start.ToUniversalTime() < day + g.OpensAt - TimeSpan.FromHours(8) || next.End.ToUniversalTime() > day + g.ClosesAt - TimeSpan.FromHours(8)) throw Err("outside_gym_hours");
+            if ((old is null || old.Start != next.Start || old.Status != Status.Scheduled) && next.Start.ToUniversalTime() < SubscriptionNow) throw Err("past_slot");   // 0033
+            if (All<ShiftPost>().Any(s => !ReferenceEquals(s, old) && s.CoachId == next.CoachId && s.Status == Status.Scheduled && s.Start < next.End && next.Start < s.End))
+                throw Err("conflicting key value violates exclusion constraint \"shift_posts_no_overlap\"");
+        }
+        if (old is { Status: Status.Scheduled } && All<TrainingSession>().Any(t => t.CoachId == old.CoachId && t.Status == Status.Scheduled
+                && t.ScheduledStart < old.End && old.Start < t.ScheduledEnd
+                && (next is not { Status: Status.Scheduled } || t.ScheduledStart < next.Start || t.ScheduledEnd > next.End)))
+            throw Err("shift_has_sessions");
+    }
+
     /// <summary>No code: full price. A bad, expired or already-used code is an error, never a silent full price.</summary>
     (int? Id, decimal Cut, decimal Amount) Discounted(string member, Dictionary<string, object> a, decimal price)
     {
         if (!a.TryGetValue("p_discount_code", out var raw) || string.IsNullOrWhiteSpace(raw as string)) return (null, 0, price);
         var code = ((string)raw).Trim();
         var now = DateTime.UtcNow;
+        ArchiveUsedUpCodes();
         var d = All<Discount>().FirstOrDefault(x => x.IsActive && x.StartsAt <= now && x.ExpiresAt > now && string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase));
-        if (d is null || All<Payment>().Any(p => p.MemberId == member && p.DiscountId == d.Id && p.Status is Status.Pending or Status.Verified)) throw Err("invalid_code");
+        if (d is null || All<Payment>().Any(p => p.MemberId == member && p.DiscountId == d.Id && p.Status is Status.Pending or Status.Verified or Status.Voided)) throw Err("invalid_code");
+        if (d.MaxUses is { } max && Held(d) >= max) throw Err("code_limit_reached");
         var cut = Math.Round(price * d.Percent / 100m, 2);
         return (d.Id, cut, price - cut);
     }
@@ -505,6 +605,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
     object? CallLocked(string fn, Dictionary<string, object> a)
     {
         if (SubscriptionCall(fn, a, out var subscriptionResult)) return subscriptionResult;
+        if (ReservationCall(fn, a, out var reservationResult)) return reservationResult;
+        if (RequestCall(fn, a, out var requestResult)) return requestResult;
         var now = SubscriptionNow;
         int I(string k) => Convert.ToInt32(a[k]);
         bool B(string k) => Convert.ToBoolean(a[k]);
@@ -515,6 +617,12 @@ public sealed partial class DemoGateway : ISupabaseGateway
 
         switch (fn)
         {
+            case "archive_records": return ArchiveRecords(a);
+            case "discount_usage":
+                Require("discounts:manage"); ArchiveUsedUpCodes();
+                return All<Discount>().Select(d => new DiscountUse(d.Id, Consumed(d), All<Payment>().Count(p => p.DiscountId == d.Id && p.Status == Status.Pending))).ToList();
+            case "archive_catalog_record": ArchiveCatalog(S("p_type"), I("p_id"), S("p_reason")); return null;
+            case "restore_archived_record": RestoreArchived(S("p_type"), S("p_id")); return null;
             case "avail_membership":
             {
                 RequireActive();
@@ -660,10 +768,51 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (!ActiveMember(uid)) throw Err("no_active_membership");
                 var coachId = S("p_coach_id");
                 if (!All<Coach>().Any(c => c.UserId == coachId && c.IsAvailable) || !(All<Profile>().FirstOrDefault(p => p.Id == coachId)?.IsActive ?? false)) throw Err("not_found");
+                if (OpenVisit(coachId) is null) throw Err("coach_not_in_gym");
                 if (CoachesMember(coachId, uid)) throw Err("duplicate key value violates unique constraint");
                 var hire = Add(new CoachHire { MemberId = uid, CoachId = coachId, Status = Status.Active, HiredAt = now });
                 Notify(coachId, "system", "New trainee", All<Profile>().First(p => p.Id == uid).FullName);
                 return hire.Id;
+            }
+            // 0032: the coach themselves, or check_ins:record for any coach; twice in a row is harmless
+            case "coach_check_in" or "coach_check_out":
+            {
+                var coachId = Opt("p_coach") ?? uid;
+                if (coachId == uid) RequireActive(); else Require("check_ins:record");
+                if (!IsCoach(coachId) || !(All<Profile>().FirstOrDefault(p => p.Id == coachId)?.IsActive ?? false)) throw Err("not_found");
+                var open = OpenVisit(coachId);
+                if (fn == "coach_check_out")
+                {
+                    if (open is null) return false;
+                    open.CheckedOutAt = now; open.CheckedOutBy = uid;
+                    return true;
+                }
+                if (open is not null) return open.Id;
+                var g = All<GymSettings>().First();
+                var manila = (now + Manila).TimeOfDay;
+                if (manila < g.OpensAt || manila >= g.ClosesAt) throw Err("gym_closed");
+                return Add(new CoachVisit { CoachId = coachId, CheckedInBy = uid, CheckedInAt = now }).Id;
+            }
+            // 0034: inactive > active > pending > expired; the demo keeps no scan log (there is no audit screen for it)
+            case "scan_member":
+            {
+                Require("check_ins:record");
+                var code = (Opt("p_code") ?? "").Trim();
+                var member = All<MemberCode>().FirstOrDefault(c => c.Code == code)?.UserId;
+                var p = All<Profile>().FirstOrDefault(x => x.Id == member);
+                var terms = All<MembershipTerm>().Where(t => t.MemberId == member && t.CancelledAt is null).OrderBy(t => t.StartsAt).ToList();
+                string result; DateTime? expires = null;
+                if (p is null) result = "not_found";
+                else if (!p.IsActive) result = "inactive";
+                else if (ActiveMember(member))
+                {
+                    result = "active";
+                    expires = terms.First(t => t.StartsAt <= now && t.EndsAt > now).EndsAt;
+                    foreach (var t in terms) if (t.StartsAt <= expires && t.EndsAt > expires) expires = t.EndsAt;   // an unbroken run of terms
+                }
+                else if (All<Payment>().Any(x => x.MemberId == member && x.Status == Status.Pending && x.Kind is PayKind.Membership or PayKind.Renewal)) result = "pending";
+                else { result = "expired"; expires = terms.Where(t => t.EndsAt <= now).Select(t => (DateTime?)t.EndsAt).Max(); }
+                return new MemberScan { Result = result, Member = p is null ? null : member, Name = p is null ? null : (string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName), Expires = expires };
             }
             case "end_hire":
             {
@@ -692,8 +841,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 {
                     if (!ActiveMember(uid)) throw Err("no_active_membership");
                     if (!CoachesMember(coachId, uid)) throw Err("no_active_hire");
-                    if (All<TrainingSession>().Any(s => s.CoachId == coachId && s.MemberId == uid && s.Status == Status.Scheduled)) throw Err("active_coaching_session");
-                    if (All<TimeRequest>().Any(r => r.CoachId == coachId && r.MemberId == uid && r.RequestedBy == "member" && r.SessionId is null && r.Status == Status.Pending)) throw Err("pending_session_request");
+                    if (All<TrainingSession>().Any(s => s.CoachId == coachId && s.MemberId == uid && s.Status == Status.Scheduled && s.ScheduledEnd > now)) throw Err("active_coaching_session");
+                    if (All<TimeRequest>().Any(r => r.CoachId == coachId && r.MemberId == uid && r.RequestedBy == "member" && r.SessionId is null && r.Status is Status.Pending or "proposed")) throw Err("pending_session_request");
                     req = Add(new TimeRequest { CoachId = coachId, MemberId = uid, RequestedBy = "member", RequestedStart = start, RequestedEnd = end, Message = Opt("p_message") });
                     Notify(coachId, "time_request", "New time request");
                 }
@@ -707,7 +856,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (end <= start) throw Err("end must be after start");
                 if (!CoachesMember(uid, member)) throw Err("no_active_hire");
                 if (!ActiveMember(member)) throw Err("invite_member_inactive");
-                if (All<TrainingSession>().Any(s => s.CoachId == uid && s.MemberId == member && s.Status == Status.Scheduled)) throw Err("active_coaching_session");
+                if (All<TrainingSession>().Any(s => s.CoachId == uid && s.MemberId == member && s.Status == Status.Scheduled && s.ScheduledEnd > now)) throw Err("active_coaching_session");
                 var invitation = Add(new TimeRequest { CoachId = uid, MemberId = member, RequestedBy = "coach", RequestedStart = start, RequestedEnd = end });
                 Notify(member, "time_request", "Your coach invited you to a session");
                 return invitation.Id;
@@ -729,7 +878,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             {
                 RequireActive();
                 var r = All<TimeRequest>().FirstOrDefault(x => x.Id == I("p_request_id")) ?? throw Err("not_found");
-                if (r.Status != Status.Pending) throw Err("already_processed");
+                if (!CoachTurn(r, now)) throw Err("already_processed");
                 var approve = B("p_approve");
                 string member;
                 if (r.MemberId is null)
@@ -744,16 +893,25 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (approve)
                 {
                     if (r.SessionId is null && !ActiveMember(member)) throw Err("no_active_membership");
-                    if (r.SessionId is null && All<TrainingSession>().Any(s => s.CoachId == r.CoachId && s.MemberId == member && s.Status == Status.Scheduled)) throw Err("active_coaching_session");
+                    if (r.SessionId is null && All<TrainingSession>().Any(s => s.CoachId == r.CoachId && s.MemberId == member && s.Status == Status.Scheduled && s.ScheduledEnd > now)) throw Err("active_coaching_session");
                     var ignore = r.SessionId ?? 0;
                     if (Overlap(r.CoachId, true, r.RequestedStart, r.RequestedEnd, ignore) || Overlap(member, false, r.RequestedStart, r.RequestedEnd, ignore)) throw Err("overlap");
+                    // the session's amenity (0031) is checked before anything changes, so a clash leaves the request waiting
+                    var amenity = r.SessionId is { } held ? Confirmed.FirstOrDefault(x => x.TrainingSessionId == held)?.AmenityId : r.AmenityId;
+                    if (amenity is { } am)
+                    {
+                        if (r.SessionId is not null) CheckSessionTime(r.RequestedStart, r.RequestedEnd, am, now);
+                        CheckSessionAmenity(r.CoachId, member, r.SessionId, am, r.RequestedStart, r.RequestedEnd);
+                    }
+                    TrainingSession session;
                     if (r.SessionId is { } sid)
                     {   // a reschedule moves the booked session instead of creating a second one
-                        var moved = All<TrainingSession>().First(s => s.Id == sid);
-                        if (moved.Status != Status.Scheduled) throw Err("already_processed");
-                        moved.ScheduledStart = r.RequestedStart; moved.ScheduledEnd = r.RequestedEnd;
+                        session = All<TrainingSession>().First(s => s.Id == sid);
+                        if (session.Status != Status.Scheduled) throw Err("already_processed");
+                        session.ScheduledStart = r.RequestedStart; session.ScheduledEnd = r.RequestedEnd;
                     }
-                    else Add(new TrainingSession { CoachId = r.CoachId, MemberId = member, Title = "Training session", ScheduledStart = r.RequestedStart, ScheduledEnd = r.RequestedEnd });
+                    else session = Add(new TrainingSession { CoachId = r.CoachId, MemberId = member, Title = "Training session", ScheduledStart = r.RequestedStart, ScheduledEnd = r.RequestedEnd });
+                    if (amenity is { } placed) PlaceSessionAmenity(session, placed, r.RequestedStart, r.RequestedEnd);
                     r.Status = Status.Approved; r.MemberId = member;
                 }
                 else r.Status = Status.Rejected;
@@ -766,7 +924,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 var r = All<TimeRequest>().FirstOrDefault(x => x.Id == I("p_request_id")) ?? throw Err("not_found");
                 var mine = (r.RequestedBy == "member" && r.MemberId == uid) || (r.RequestedBy == "coach" && r.CoachId == uid);
                 if (!mine) throw Err("forbidden");
-                if (r.Status != Status.Pending) throw Err("already_processed");
+                if (r.Status is not (Status.Pending or "proposed")) throw Err("already_processed");
                 r.Status = Status.Cancelled;
                 return null;
             }
@@ -777,6 +935,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (s.Status != Status.Scheduled) throw Err("already_processed");
                 s.Status = Status.Cancelled;
                 foreach (var req in All<TimeRequest>().Where(x => x.SessionId == s.Id && x.Status == Status.Pending)) req.Status = Status.Cancelled;
+                foreach (var held in Confirmed.Where(x => x.TrainingSessionId == s.Id).ToList())   // frees the session's amenity
+                { held.Status = "cancelled"; held.CancelledAt = now; held.CancelledBy = uid; held.CancelReason = Opt("p_reason") ?? "Session cancelled"; }
                 Notify(uid == s.CoachId ? s.MemberId : s.CoachId, "system", "A training session was cancelled", Opt("p_reason"));
                 return null;
             }
@@ -816,8 +976,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
             case "assign_role":
             {
                 Require("roles:manage");
+                if (RolesOf(S("p_user")).Contains("admin")) throw Err("super_admin_protected");   // 0037
                 var role = All<Role>().FirstOrDefault(r => r.Name == S("p_role")) ?? throw Err("bad_input");
                 if (All<Profile>().All(p => p.Id != S("p_user"))) throw Err("not_found");
+                if (!All<Profile>().Any(p => p.Id == S("p_user") && p.IsActive)) throw Err("record_archived");
                 if (!All<UserRole>().Any(u => u.UserId == S("p_user") && u.RoleId == role.RoleId)) Add(new UserRole { UserId = S("p_user"), RoleId = role.RoleId });
                 if (role.Name == "coach" && All<Coach>().All(c => c.UserId != S("p_user"))) Add(new Coach { UserId = S("p_user") });
                 if (role.Name == "member" && All<Member>().All(m => m.UserId != S("p_user"))) Add(new Member { UserId = S("p_user") });
@@ -827,17 +989,31 @@ public sealed partial class DemoGateway : ISupabaseGateway
             case "revoke_role":
             {
                 Require("roles:manage");
+                if (RolesOf(S("p_user")).Contains("admin")) throw Err("super_admin_protected");   // 0037
                 if (S("p_user") == uid && S("p_role") == "admin") throw Err("forbidden");
+                if (!All<Profile>().Any(p => p.Id == S("p_user") && p.IsActive)) throw Err("record_archived");
                 var role = All<Role>().First(r => r.Name == S("p_role"));
                 Table(typeof(UserRole)).RemoveAll(u => ((UserRole)u).UserId == S("p_user") && ((UserRole)u).RoleId == role.RoleId);
                 Audit("role.revoke", "user_roles", S("p_user"));
                 return null;
             }
+            case "archive_account":
+                ArchiveAccount(S("p_user"), Opt("p_reason") ?? "");
+                return null;
+            case "restore_account":
+                RestoreAccount(S("p_user"));
+                return null;
             case "set_user_active":
             {
                 Require("users:manage");
-                if (S("p_user") == uid) throw Err("forbidden");
-                (All<Profile>().FirstOrDefault(p => p.Id == S("p_user")) ?? throw Err("not_found")).IsActive = B("p_active");
+                if (S("p_user") == uid || !CanManagePerson(S("p_user"))) throw Err("forbidden");
+                var profile = All<Profile>().FirstOrDefault(p => p.Id == S("p_user")) ?? throw Err("not_found");
+                if (profile.DeletedAt is not null) throw Err("account_archived");
+                if (!B("p_active") && RolesOf(profile.Id).Contains("admin")) throw Err("super_admin_protected");   // 0037
+                if (!B("p_active")) CheckAccountRemoval(profile);
+                if (!B("p_active")) StampArchive("account", profile.Id, "Deactivated account");
+                else _archiveMetadata.Remove(("account", profile.Id));   // deleted accounts were turned away above; only a restore brings those back
+                profile.IsActive = B("p_active");
                 Audit(B("p_active") ? "user.activate" : "user.deactivate", "profiles", S("p_user"));
                 return null;
             }
@@ -858,6 +1034,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             {
                 Require("amenities:set_status");
                 var amenity = All<Amenity>().FirstOrDefault(x => x.Id == I("p_amenity_id")) ?? throw Err("not_found");
+                if (!amenity.IsActive) throw Err("record_archived");
                 var status = S("p_status");
                 var unavailable = status == "unavailable";
                 var reason = unavailable ? Opt("p_reason") : null;
@@ -1013,7 +1190,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     thread.Status = "open";   // writing again reopens it
                     var title = $"New message from {All<Profile>().First(p => p.Id == uid).FullName}";
                     if (thread.ClaimedBy is { } taker && All<Profile>().Any(p => p.Id == taker && p.IsActive)) NotifyChat(taker, title, preview, key);
-                    else foreach (var id in All<UserRole>().Where(u => RolesOf(u.UserId).Any(r => r is "admin" or "employee")).Select(u => u.UserId).Distinct().ToList())
+                    else foreach (var id in All<UserRole>().Where(u => RolesOf(u.UserId).Any(r => r is "admin" or "subadmin" or "employee")).Select(u => u.UserId).Distinct().ToList())
                         if (All<Profile>().Any(p => p.Id == id && p.IsActive)) NotifyChat(id, title, preview, key);
                 }
                 else NotifyChat(member, "Message from the front desk", preview, key);
@@ -1069,9 +1246,23 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 (All<Profile>().FirstOrDefault(x => x.Id == uid) ?? throw Err("not_found")).AvatarPath = path;
                 return null;
             }
-            case "touch_last_seen": return null;   // the demo has no one to show it to
+            case "touch_last_seen": RequireActive(); return null;   // the demo has no one to show it to
+            case "set_my_name":
+            {
+                RequireActive();
+                string first = (Opt("p_first") ?? "").Trim(), last = (Opt("p_last") ?? "").Trim();
+                if (!AccountRules.IsName(first, last)) throw Err("bad_name");
+                var p = All<Profile>().First(x => x.Id == uid);
+                (p.FirstName, p.LastName, p.FullName) = (first, last, NameParts.Join(first, last));
+                return null;
+            }
+            case "confirm_my_email":
+                if (!_codeSession) throw Err("code_not_verified");
+                All<Profile>().First(x => x.Id == uid).ConfirmedEmail = CurrentEmail;
+                return CurrentEmail;
             case "mark_password_changed":
             {
+                RequireActive();
                 var p = All<Profile>().FirstOrDefault(x => x.Id == uid);
                 if (p is not null) p.MustChangePassword = false;
                 return null;
@@ -1081,10 +1272,11 @@ public sealed partial class DemoGateway : ISupabaseGateway
     }
 
     // ---------- seed ----------
-    string AddUser(string id, string name, string email, string role)
+    string AddUser(string id, string name, string email, string role, string? first = null, string? last = null)
     {
         _accounts[email] = id;
-        Add(new Profile { Id = id, Username = email.ToLowerInvariant(), FullName = name });
+        var split = NameParts.Split(name);
+        Add(new Profile { Id = id, Username = email.ToLowerInvariant(), FullName = name, FirstName = first ?? split.First, LastName = last ?? split.Last });
         Add(new UserSettings { UserId = id });
         Add(new UserRole { UserId = id, RoleId = All<Role>().First(x => x.Name == role).RoleId });
         if (role == "member") Add(new Member { UserId = id });
@@ -1096,11 +1288,12 @@ public sealed partial class DemoGateway : ISupabaseGateway
     {
         var now = DateTime.UtcNow;
         DateTime At(int days, double hour) => DateTime.Today.AddDays(days).AddHours(hour).ToUniversalTime(); // seed in the viewer's local time
-        foreach (var r in new[] { "admin", "employee", "coach", "member" }) Add(new Role { Name = r });
+        foreach (var r in new[] { "admin", "employee", "coach", "member", "subadmin" }) Add(new Role { Name = r });
         Add(new GymSettings { GymName = "Gym Membership", QrAccountName = "Demo Gym (GCash)", WalkInPrice = 150, PaymentExpiryHours = 48 });
 
         AddUser("u-admin", "Dana Reyes", "admin@demo.io", "admin");
         AddUser("u-emp", "Marco Santos", "employee@demo.io", "employee");
+        AddUser("u-sub", "Sam Villanueva", "subadmin@demo.io", "subadmin");
         AddUser("u-coach1", "Lena Cruz", "coach@demo.io", "coach");
         AddUser("u-coach2", "Kai Mendoza", "kai@demo.io", "coach");
         AddUser("u-alex", "Alex Tan", "member@demo.io", "member");
@@ -1111,6 +1304,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
         lena.Bio = "Ten years coaching powerlifting and general strength. Works with beginners and returning lifters.";
         var kai = All<Coach>().First(c => c.UserId == "u-coach2"); kai.Specialty = "Boxing and mobility"; kai.HourlyRate = 700;
         kai.Bio = "Former amateur boxer. Sessions focus on footwork, conditioning and joint mobility.";
+        // both coaches start in the gym so the coach list has someone to hire (0032); the demo has no closing-time job
+        foreach (var c in new[] { "u-coach1", "u-coach2" }) Add(new CoachVisit { CoachId = c, CheckedInBy = c, CheckedInAt = now });
 
         var monthly = Add(new MembershipPackage { Name = "Monthly", Description = "Full gym floor access for 30 days.", Price = 1500, DurationDays = 30 });
         var quarterly = Add(new MembershipPackage { Name = "Quarterly", Description = "90 days of access at a lower monthly rate.", Price = 4000, DurationDays = 90 });

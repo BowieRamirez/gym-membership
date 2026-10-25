@@ -58,6 +58,9 @@
                                 </VerticalStackLayout>
                                 <c:StatusChip Grid.Column="1" Status="{Binding Session.Status}" VerticalOptions="Start" />
                             </Grid>
+                            <Label Text="{Binding Amenity, StringFormat='At {0}'}" FontFamily="BarlowMedium" IsVisible="{Binding Amenity, Converter={StaticResource HasText}}" />
+                            <Button Text="Add 30 minutes" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" IsVisible="{Binding CanExtend}" Clicked="OnExtend"
+                                    SemanticProperties.Hint="Extends this session and its amenity booking by 30 minutes" />
                             <FlexLayout Wrap="Wrap" IsVisible="{Binding CanManage}">
                                 <Button Text="Mark complete" Style="{StaticResource SmallButton}" Margin="0,0,8,8"
                                         Clicked="OnComplete" />

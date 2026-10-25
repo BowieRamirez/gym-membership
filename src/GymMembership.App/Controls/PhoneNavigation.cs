@@ -17,6 +17,7 @@ public sealed class PhoneNavigation
     readonly Dictionary<string, ShellContent> _secondary = new();
     readonly Dictionary<string, Page> _pages = new();
     bool _opening;
+    bool _isLoaded;
 
     public static bool IsSupported
     {
@@ -42,24 +43,13 @@ public sealed class PhoneNavigation
         _shell = shell;
         var original = shell.Items.ToList();
         var primary = coach
-            ? new[] { ("Sessions", "Sessions", "sessions"), ("Time requests", "Requests", "requests"), ("Trainees", "Trainees", "trainees"), ("Messages", "Messages", "messages") }
+            ? new[] { ("Dashboard", "Dashboard", "overview"), ("Sessions", "Sessions", "sessions"), ("Trainees", "Trainees", "trainees"), ("Messages", "Messages", "messages") }
             : new[] { ("My membership", "Membership", "membership"), ("Packages", "Packages", "packages"), ("Sessions", "Sessions", "sessions"), ("Messages", "Messages", "messages") };
-#if ANDROID
-        if (coach)
-        {
-            original.Insert(0, new FlyoutItem
-            {
-                Title = "Overview", Route = "overview",
-                Items = { new ShellContent { ContentTemplate = PhonePageTemplates.ForService(services, typeof(CoachOverviewPage)) } }
-            });
-            primary = new[] { ("Overview", "Overview", "overview"), ("Sessions", "Sessions", "sessions"), ("Trainees", "Trainees", "trainees"), ("Messages", "Messages", "messages") };
-        }
-#endif
         var pageTypes = new Dictionary<string, Type>
         {
-            ["Amenities"] = typeof(AmenitiesPage), ["Coaches"] = typeof(CoachesPage),
+            ["Amenities"] = typeof(AmenitiesPage), ["Book an amenity"] = typeof(BookAmenityPage), ["Coaches"] = typeof(CoachesPage),
             ["Time requests"] = typeof(RequestsPage), ["My shifts"] = typeof(ShiftsPage),
-            ["Attendance"] = typeof(AttendancePage), ["My coach profile"] = typeof(CoachProfilePage),
+            ["My coach profile"] = typeof(CoachProfilePage),
             ["Settings"] = typeof(SettingsPage)
         };
         var secondary = original.Where(item => !primary.Any(p => p.Item1 == item.Title)).ToList();
@@ -107,6 +97,7 @@ public sealed class PhoneNavigation
         void ThemeChanged(object? sender, AppThemeChangedEventArgs e) => shell.Dispatcher.Dispatch(StyleBar);
         shell.Loaded += (_, _) =>
         {
+            _isLoaded = true;
             if (app is not null)
             {
                 app.RequestedThemeChanged -= ThemeChanged;
@@ -114,7 +105,11 @@ public sealed class PhoneNavigation
             }
             shell.Dispatcher.Dispatch(StyleBar);
         };
-        shell.Unloaded += (_, _) => { if (app is not null) app.RequestedThemeChanged -= ThemeChanged; };
+        shell.Unloaded += (_, _) =>
+        {
+            _isLoaded = false;
+            if (app is not null) app.RequestedThemeChanged -= ThemeChanged;
+        };
         shell.Navigated += (_, _) => shell.Dispatcher.Dispatch(StyleBar);
     }
 
@@ -153,6 +148,7 @@ public sealed class PhoneNavigation
 
     void StyleBar()
     {
+        if (!_isLoaded || !ReferenceEquals(_shell.Window?.Page, _shell)) return;
 #if ANDROID
         if (_shell.Handler?.PlatformView is not Android.Views.View root) return;
         void Visit(Android.Views.View view)
@@ -160,8 +156,9 @@ public sealed class PhoneNavigation
             if (view is Google.Android.Material.BottomNavigation.BottomNavigationView bar)
             {
                 var background = new Android.Graphics.Drawables.GradientDrawable();
-                var surface = Shell.GetTabBarBackgroundColor(_shell);
-                var pageBackground = _shell.CurrentPage?.BackgroundColor ?? _shell.BackgroundColor;
+                var surface = Shell.GetTabBarBackgroundColor(_shell) ??
+                    Color.FromArgb(Application.Current?.RequestedTheme == AppTheme.Dark ? "#24282C" : "#FFFFFF");
+                var pageBackground = _shell.CurrentPage?.BackgroundColor ?? _shell.BackgroundColor ?? surface;
                 background.SetColor(surface.ToPlatform());
                 background.SetCornerRadius(0);
                 bar.BackgroundTintList = null;

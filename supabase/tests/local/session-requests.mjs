@@ -43,6 +43,7 @@ const desk = await user('employee');
 const pkg = (await db.query(`insert into membership_packages(name,price,duration_days) values('Request test',1000,365) returning membership_package_id`)).rows[0].membership_package_id;
 async function fixture() {
   const coach = await user('coach'), otherCoach = await user('coach'), member = await user(), otherMember = await user();
+  await db.query('insert into coach_visits(coach_id,checked_in_by) select unnest($1::uuid[]), unnest($1::uuid[])', [[coach, otherCoach]]);
   for (const uid of [member, otherMember]) {
     const pay = (await as(uid,'select * from extend_membership($1)',[pkg]))[0];
     await as(desk,'select verify_payment($1,true)',[pay.payment_id]);
@@ -214,11 +215,13 @@ try {
     assert.equal(rows[0].scheduled_start.getTime(),moved.getTime());
     await assert.rejects(invite(f.coach,f.member),/active_coaching_session/);
   });
-  await test('a scheduled session still blocks requests after its date passes until explicitly resolved',async()=>{
+  // D7 (owner, 2026-10-22) replaced the 0022 rule: a session stops blocking once its booked end has passed
+  await test('a scheduled session stops blocking requests once its end time has passed',async()=>{
     const f=await fixture(), id=await request(f.member,f.coach);
     await as(f.coach,'select respond_time_request($1,true)',[id]);
-    await db.query(`update training_sessions set scheduled_start=now()-interval '2 days',scheduled_end=now()-interval '1 day' where coach_id=$1`,[f.coach]);
     await assert.rejects(invite(f.coach,f.member),/active_coaching_session/);
+    await db.query(`update training_sessions set scheduled_start=now()-interval '2 days',scheduled_end=now()-interval '1 day' where coach_id=$1`,[f.coach]);
+    assert.ok(await invite(f.coach,f.member));
   });
   await test('simultaneous approvals of different requests cannot create two bookings',async()=>{
     const f=await fixture(), id=await request(f.member,f.coach);

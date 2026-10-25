@@ -15,10 +15,24 @@
 
             <Border Style="{StaticResource Panel}" IsVisible="{Binding Deleting, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="10">
-                    <Label Text="{Binding Deleting.Discount.Code, StringFormat='Delete code {0}? This can’t be undone.'}" Style="{StaticResource Heading}" />
+                    <Label Text="{Binding Deleting.Discount.Code, StringFormat='Archive code {0}? History will be retained.'}" Style="{StaticResource Heading}" />
                     <HorizontalStackLayout Spacing="8">
-                        <Button Text="Yes, delete" Style="{StaticResource SmallButton}" Command="{Binding ConfirmDeleteCommand}" />
+                        <Button Text="Yes, archive" Style="{StaticResource SmallButton}" Command="{Binding ConfirmDeleteCommand}" />
                         <Button Text="Keep it" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepCommand}" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding Editing, Converter={StaticResource IsNotNull}}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="{Binding Editing.Discount.Code, StringFormat='Change the limit for {0}'}" Style="{StaticResource Heading}" />
+                    <Label Text="{Binding Editing.Usage}" Style="{StaticResource Caption}" />
+                    <Border Style="{StaticResource Field}" WidthRequest="110" HorizontalOptions="Start">
+                        <Entry Text="{Binding EditLimit}" Keyboard="Numeric" SemanticProperties.Description="New limit" />
+                    </Border>
+                    <HorizontalStackLayout Spacing="8">
+                        <Button Text="Save limit" Style="{StaticResource SmallButton}" Command="{Binding SaveLimitCommand}" />
+                        <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelEditCommand}" />
                     </HorizontalStackLayout>
                 </VerticalStackLayout>
             </Border>
@@ -32,6 +46,10 @@
                     <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="110">
                         <Label Text="Percent off" Style="{StaticResource Caption}" />
                         <Border Style="{StaticResource Field}"><Entry Text="{Binding NewPercent}" Keyboard="Numeric" /></Border>
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="110">
+                        <Label Text="Max uses" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><Entry Text="{Binding NewLimit}" Keyboard="Numeric" SemanticProperties.Description="How many times the code can be used" /></Border>
                     </VerticalStackLayout>
                     <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
                         <Label Text="Valid until" Style="{StaticResource Caption}" />
@@ -58,15 +76,19 @@
                                                 </MultiBinding>
                                             </Label.Text>
                                         </Label>
+                                        <Label Text="{Binding Usage}" Style="{StaticResource Caption}" />
                                     </VerticalStackLayout>
                                     <c:StatusChip Grid.Column="1" Status="{Binding State}" VerticalOptions="Start" />
                                 </Grid>
-                                <HorizontalStackLayout Spacing="8">
-                                    <Button Text="Turn on or off" Style="{StaticResource SmallOutlineButton}"
+                                <!-- wraps on narrow screens so no label is cut off -->
+                                <FlexLayout Wrap="Wrap">
+                                    <Button Text="Change limit" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                                            Clicked="OnChangeLimit" />
+                                    <Button Text="Deactivate" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
                                             Clicked="OnToggle" />
-                                    <Button Text="Delete" Style="{StaticResource SmallOutlineButton}"
+                                    <Button Text="Archive" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
                                             Clicked="OnDelete" />
-                                </HorizontalStackLayout>
+                                </FlexLayout>
                             </VerticalStackLayout>
                         </Border>
                     </DataTemplate>

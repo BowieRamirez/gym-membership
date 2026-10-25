@@ -1,9 +1,9 @@
-// POST { name, email, role: 'member' | 'coach' | 'employee', password }
+// POST { first_name, last_name, email, role: 'member' | 'coach' | 'employee' | 'subadmin', password } (or { name, ... } from an older app)
 // The owner creates an account with a temporary password (plan 4.3). The handle_new_user trigger
 // builds the profile, settings, role and member/coach row from the metadata set here.
 import { adminClient, cors, reply, requireAdmin } from '../_shared/admin.ts';
 
-const ROLES = ['member', 'coach', 'employee'];
+const ROLES = ['member', 'coach', 'employee', 'subadmin'];
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -14,17 +14,20 @@ Deno.serve(async (req) => {
   if (caller instanceof Response) return caller;
 
   const body = await req.json().catch(() => ({}));
-  const name = String(body.name ?? '').trim();
+  const first = String(body.first_name ?? '').trim();
+  const last = String(body.last_name ?? '').trim();
+  const name = first && last ? `${first} ${last}` : String(body.name ?? '').trim();
   const email = String(body.email ?? '').trim().toLowerCase();
   const role = String(body.role ?? '');
   const password = String(body.password ?? '');
   if (!name || !email.includes('@') || !ROLES.includes(role) || password.length < 6) return reply({ error: 'bad_input' }, 400);
+  if (!caller.superAdmin && !['member', 'coach'].includes(role)) return reply({ error: 'forbidden' }, 403);   // sub-admins add members and coaches only
 
   const { data, error } = await admin.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
-    user_metadata: { username: email, full_name: name, must_change_password: true },
+    user_metadata: { username: email, full_name: name, ...(first && last ? { first_name: first, last_name: last } : {}), must_change_password: true },
     app_metadata: { role },
   });
   if (error || !data.user) {

@@ -23,7 +23,15 @@ public interface IAuthService
     /// <summary>True while the person still has the temporary password the owner gave them.</summary>
     Task<AppResult<bool>> MustChangePasswordAsync();
     /// <summary>Open sign-up: creates a member account and signs it in. It stays a guest until a payment is verified.</summary>
-    Task<AppResult<bool>> RegisterAsync(string name, string email, string password);
+    Task<AppResult<bool>> RegisterAsync(string firstName, string lastName, string email, string password);
+    Task<AppResult<EmailStatus>> EmailStatusAsync();
+    /// <summary>Emails a 6-digit code to this address. A different address first becomes your sign-in email.</summary>
+    Task<AppResult<bool>> SendEmailCodeAsync(string email);
+    Task<AppResult<bool>> ConfirmEmailAsync(string email, string code);
+    /// <summary>Forgotten password: emails a code if an account uses this address. The answer is the same either way.</summary>
+    Task<AppResult<bool>> SendResetCodeAsync(string email);
+    /// <summary>Checks the code, sets the new password, then signs out so the person signs in with it.</summary>
+    Task<AppResult<bool>> ResetPasswordAsync(string email, string code, string newPassword);
 }
 
 /// <summary>What a new account may use. The entry caps on the register page read the same numbers.</summary>
@@ -37,6 +45,12 @@ public static partial class AccountRules
 
     public static bool IsName(string name) => name.Length is >= MinName and <= MaxName && NameShape().IsMatch(name);
 
+    /// <summary>Both parts are names, and "first last" fits the 60 characters the database allows for the full name.</summary>
+    public static bool IsName(string first, string last) => IsName(first) && IsName(last) && NameParts.Join(first, last).Length <= MaxName;
+
+    /// <summary>A code from the email: exactly six digits.</summary>
+    public static bool IsCode(string code) => code.Length == 6 && code.All(char.IsAsciiDigit);
+
     public static bool IsEmail(string email) =>
         email.Length <= MaxEmail && EmailShape().IsMatch(email) && email.IndexOf('@') <= MaxEmailLocal;
 
@@ -48,17 +62,85 @@ public static partial class AccountRules
         CharUnicodeInfo.GetUnicodeCategory(c) is UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark).ToArray());
 }
 
+/// <summary>First and last name, as the database keeps them (0035): the full name is "first last"; an old name splits at its first space.</summary>
+public static class NameParts
+{
+    public static string Join(string first, string last) => $"{first.Trim()} {last.Trim()}".Trim();
+
+    public static (string First, string Last) Split(string full)
+    {
+        var name = full.Trim();
+        var space = name.IndexOf(' ');
+        return space < 0 ? (name, "") : (name[..space], name[(space + 1)..].Trim());
+    }
+}
+
+/// <summary>Your sign-in email, and whether you proved it with a code since it last changed.</summary>
+public sealed record EmailStatus(string Email, bool Confirmed);
+
 public sealed class AuthService(ISupabaseGateway gw) : IAuthService
 {
     public string? UserId => gw.CurrentUserId;
 
-    public async Task<AppResult<bool>> RegisterAsync(string name, string email, string password)
+    public async Task<AppResult<bool>> RegisterAsync(string firstName, string lastName, string email, string password)
     {
-        name = name.Trim(); email = email.Trim();
-        if (!AccountRules.IsName(name)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_name");
+        firstName = firstName.Trim(); lastName = lastName.Trim(); email = email.Trim();
+        if (!AccountRules.IsName(firstName, lastName)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_name");
         if (!AccountRules.IsEmail(email)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_email");
         if (!AccountRules.IsPassword(password)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_password");
-        return await Safe.RunAsync(async () => { await gw.SignUpAsync(email, password, name); return true; });
+        return await Safe.RunAsync(async () => { await gw.SignUpAsync(email, password, firstName, lastName); return true; });
+    }
+
+    public Task<AppResult<EmailStatus>> EmailStatusAsync() => Safe.RunAsync(async () =>
+    {
+        var uid = gw.CurrentUserId;
+        var email = gw.CurrentEmail ?? throw new Exception("not authenticated");
+        var confirmed = (await gw.ListAsync<Profile>(p => p.Id == uid)).FirstOrDefault()?.ConfirmedEmail;
+        return new EmailStatus(email, string.Equals(confirmed, email, StringComparison.OrdinalIgnoreCase));
+    });
+
+    public async Task<AppResult<bool>> SendEmailCodeAsync(string email)
+    {
+        email = email.Trim();
+        if (!AccountRules.IsEmail(email)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_email");
+        return await Safe.RunAsync(async () => { await gw.SendEmailCodeAsync(email); return true; });
+    }
+
+    public async Task<AppResult<bool>> ConfirmEmailAsync(string email, string code)
+    {
+        code = code.Trim();
+        if (!AccountRules.IsCode(code)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_code");
+        return await Safe.RunAsync(async () =>
+        {
+            await gw.VerifyEmailCodeAsync(email.Trim(), code);
+            await gw.RpcAsync("confirm_my_email");
+            return true;
+        });
+    }
+
+    public async Task<AppResult<bool>> SendResetCodeAsync(string email)
+    {
+        email = email.Trim();
+        if (!AccountRules.IsEmail(email)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_email");
+        return await Safe.RunAsync(async () => { await gw.SendPasswordResetCodeAsync(email); return true; });
+    }
+
+    public async Task<AppResult<bool>> ResetPasswordAsync(string email, string code, string newPassword)
+    {
+        code = code.Trim();
+        if (!AccountRules.IsCode(code)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_code");
+        if (!AccountRules.IsPassword(newPassword)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_password");
+        return await Safe.RunAsync(async () =>
+        {
+            try
+            {
+                await gw.ResetPasswordWithCodeAsync(email.Trim(), code, newPassword);
+                await gw.RpcAsync("mark_password_changed");   // they chose this one, so no temporary-password prompt
+                await gw.RpcAsync("confirm_my_email");        // the code came to this inbox, which proves it
+            }
+            finally { if (gw.CurrentUserId is not null) await gw.SignOutAsync(); }
+            return true;
+        });
     }
 
     public async Task<AppResult<bool>> ChangePasswordAsync(string current, string next)
@@ -368,8 +450,18 @@ public sealed record AmenityRow(Amenity Amenity, int? UserAmenityId, string? Sta
 }
 public sealed record UsageRow(AmenityUsage Usage, string Member, string Amenity);
 
-public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow, string? PhotoUrl = null)
+public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow, string? PhotoUrl = null, string? PassStatus = null, DateTime? PassUntil = null)
 {
+    // members only (CanFollow): what a pass costs, or where theirs stands; empty hides it for coaches and staff
+    public string PassText => !CanFollow ? "" : PassStatus switch
+    {
+        Models.Status.Pending => "Waiting for your payment to be verified",
+        Models.Status.Active => PassUntil is { } until ? $"Pass active until {until.ToLocalTime():d MMM yyyy}" : "Pass active",
+        _ => Amenity.DurationDays is { } days ? $"₱{Amenity.Price:N2} for {days} days" : $"₱{Amenity.Price:N2}"
+    };
+    public string BuyText => CanFollow && PassStatus is not (Models.Status.Pending or Models.Status.Active) ? "Buy pass" : "";
+    public bool CanBuy => BuyText.Length > 0;
+
     public string Availability => Amenity.Availability;
     public bool IsUnavailable => Amenity.Availability == "unavailable";
     public string? Reason => Amenity.StatusReason;
@@ -382,7 +474,7 @@ public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow,
     /// <summary>Everything the card shows is the same, so a refresh can leave it alone.</summary>
     public bool SameAs(AmenityCard o) => Followed == o.Followed && CanFollow == o.CanFollow && Amenity.Name == o.Amenity.Name && Amenity.Description == o.Amenity.Description
         && Availability == o.Availability && Reason == o.Reason && BackAt == o.BackAt
-        && Amenity.ImagePath == o.Amenity.ImagePath && PhotoUrl == o.PhotoUrl;
+        && Amenity.ImagePath == o.Amenity.ImagePath && PhotoUrl == o.PhotoUrl && PassText == o.PassText && BuyText == o.BuyText;
 }
 
 /// <summary>What a status change did: whether the amenity really changed, and the members who were alerted.</summary>
@@ -416,8 +508,10 @@ public sealed class AmenityService(ISupabaseGateway gw) : IAmenityService
         var amenities = (await gw.ListAsync<Amenity>(a => a.IsActive == true)).OrderBy(a => a.Name).ToList();
         var saved = (await gw.ListAsync<AmenityFollow>(f => f.MemberId == uid)).Select(f => f.AmenityId).ToHashSet();
         var isMember = (await gw.ListAsync<Member>(m => m.UserId == uid)).Count > 0;
+        var passes = isMember ? (await CatalogAsync()).Value?.ToDictionary(r => r.Amenity.Id) ?? [] : [];
         var cards = await Task.WhenAll(amenities.Select(async a =>
-            new AmenityCard(a, saved.Contains(a.Id), isMember, (await Safe.RunAsync(() => photos.UrlAsync(a.ImagePath))).Value)));
+            new AmenityCard(a, saved.Contains(a.Id), isMember, (await Safe.RunAsync(() => photos.UrlAsync(a.ImagePath))).Value,
+                passes.GetValueOrDefault(a.Id)?.Status, passes.GetValueOrDefault(a.Id)?.ExpiresAt)));
         return new AmenityBoard(cards, isMember);
     });
 
@@ -504,11 +598,34 @@ public sealed class AmenityService(ISupabaseGateway gw) : IAmenityService
 }
 
 // ===================== Coaches =====================
-public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId, IReadOnlyList<ShiftPost>? Shifts = null, string? PhotoUrl = null)
+/// <summary>An hourly rate is a peso amount above 0 with at most two decimals. Never parsed or shown with the device's own separators.</summary>
+public static partial class CoachRate
+{
+    [GeneratedRegex(@"^\d{1,10}([.,]\d{1,2})?$")] private static partial Regex Shape();
+
+    /// <summary>"350", "350.5", "350,50" are fine; "0", "-1", "350.505", "1,000.00" are not.</summary>
+    public static bool TryParse(string? text, out decimal rate)
+    {
+        rate = 0;
+        var t = text?.Trim() ?? "";
+        return Shape().IsMatch(t) && decimal.TryParse(t.Replace(',', '.'), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out rate) && rate > 0;
+    }
+
+    public static bool IsValid(decimal rate) => rate > 0 && decimal.Round(rate, 2) == rate;
+    public static string Input(decimal? rate) => rate is > 0 ? rate.Value.ToString("0.00", CultureInfo.InvariantCulture) : "";
+    public static string Text(decimal? rate) => rate is > 0 ? $"₱{rate.Value.ToString("N2", CultureInfo.InvariantCulture)} per hour" : "Rate not set";
+}
+
+/// <summary>InGym: the coach has an open physical visit (0032). The list shows only coaches in the gym, plus your own coach.</summary>
+public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId, IReadOnlyList<ShiftPost>? Shifts = null, string? PhotoUrl = null, bool InGym = true)
 {
     public string Letters => Initials.From(Name);
     /// <summary>The coach paused hiring and this member has no hire to keep: shown grayed out, Hire disabled.</summary>
     public bool Closed => !Coach.IsAvailable && !Hired;
+    public string RateText => CoachRate.Text(Coach.HourlyRate);
+
+    public bool SameAs(CoachCard o) => Name == o.Name && Hired == o.Hired && HireId == o.HireId && InGym == o.InGym && PhotoUrl == o.PhotoUrl && ShiftsText == o.ShiftsText
+        && Coach.IsAvailable == o.Coach.IsAvailable && Coach.Bio == o.Coach.Bio && Coach.Specialty == o.Coach.Specialty && Coach.HourlyRate == o.Coach.HourlyRate;
 
     public string ShiftsText => Shifts is { Count: > 0 }
         ? string.Join("\n", Shifts.Take(3).Select(s => $"{Fmt.Range(s.Start, s.End)}{(string.IsNullOrWhiteSpace(s.Note) ? "" : "  " + s.Note)}"))
@@ -516,6 +633,14 @@ public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId
 }
 
 public sealed record TraineeRow(int HireId, string CoachId, string MemberId, string Name, string NextText, int Completed);
+
+/// <summary>A coach on the front desk's check-in page. InSince is null while they are not in the gym.</summary>
+public sealed record CoachPresenceRow(string CoachId, string Name, DateTime? InSince)
+{
+    public bool InGym => InSince is not null;
+    public string StateText => InSince is { } t ? $"In the gym since {Fmt.Time(t)}" : "Not in the gym";
+    public string ActionText => InGym ? "Check out" : "Check in";
+}
 
 public interface ICoachService
 {
@@ -528,6 +653,12 @@ public interface ICoachService
     Task<AppResult<IReadOnlyList<ShiftPost>>> MyShiftsAsync();
     Task<AppResult<bool>> PostShiftAsync(DateTime startUtc, DateTime endUtc, string? note);
     Task<AppResult<bool>> CancelShiftAsync(int shiftId);
+    /// <summary>The signed-in coach's open visit, or null when they are not checked in.</summary>
+    Task<AppResult<CoachVisit?>> MyVisitAsync();
+    /// <summary>Null coachId: the signed-in coach themselves. Otherwise front desk for that coach. Twice in a row is harmless.</summary>
+    Task<AppResult<bool>> CheckInAsync(string? coachId = null);
+    Task<AppResult<bool>> CheckOutAsync(string? coachId = null);
+    Task<AppResult<IReadOnlyList<CoachPresenceRow>>> PresenceAsync();
 }
 
 public sealed class CoachService(ISupabaseGateway gw) : ICoachService
@@ -542,14 +673,35 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
         var hires = await gw.ListAsync<CoachHire>(h => h.MemberId == uid && h.Status == "active");
         var now = DateTime.UtcNow;
         var shifts = await gw.ListAsync<ShiftPost>(s => s.Status == "scheduled" && s.End > now);
-        return await Task.WhenAll(coaches.Select(async c =>
+        var inGym = (await gw.ListAsync<CoachVisit>(v => v.CheckedOutAt == null)).Select(v => v.CoachId).ToHashSet();
+        // absent coaches are hidden, not grayed out; your own coach stays so Message and End hire keep working (D9)
+        var shown = coaches.Where(c => inGym.Contains(c.UserId) || hires.Any(h => h.CoachId == c.UserId));
+        return await Task.WhenAll(shown.Select(async c =>
         {
             var p = profiles.GetValueOrDefault(c.UserId);
             var name = p is null ? "Coach" : string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName;
             var photo = (await Safe.RunAsync(() => photos.UrlAsync(p?.AvatarPath))).Value;
             return new CoachCard(c, name, hires.Any(h => h.CoachId == c.UserId), hires.FirstOrDefault(h => h.CoachId == c.UserId)?.Id,
-                shifts.Where(s => s.CoachId == c.UserId).OrderBy(s => s.Start).ToList(), photo);
+                shifts.Where(s => s.CoachId == c.UserId).OrderBy(s => s.Start).ToList(), photo, inGym.Contains(c.UserId));
         }));
+    });
+
+    public Task<AppResult<CoachVisit?>> MyVisitAsync() => Safe.RunAsync<CoachVisit?>(async () =>
+    { var uid = gw.CurrentUserId; return (await gw.ListAsync<CoachVisit>(v => v.CoachId == uid && v.CheckedOutAt == null)).FirstOrDefault(); });
+
+    public Task<AppResult<bool>> CheckInAsync(string? coachId = null) => Safe.RunAsync(async () =>
+    { await gw.RpcAsync("coach_check_in", coachId is null ? new() : new() { ["p_coach"] = coachId }); return true; });
+
+    public Task<AppResult<bool>> CheckOutAsync(string? coachId = null) => Safe.RunAsync(async () =>
+    { await gw.RpcAsync("coach_check_out", coachId is null ? new() : new() { ["p_coach"] = coachId }); return true; });
+
+    public Task<AppResult<IReadOnlyList<CoachPresenceRow>>> PresenceAsync() => Safe.RunAsync<IReadOnlyList<CoachPresenceRow>>(async () =>
+    {
+        var active = (await gw.ListAsync<Profile>(p => p.IsActive == true)).ToDictionary(p => p.Id, p => string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName);
+        var open = (await gw.ListAsync<CoachVisit>(v => v.CheckedOutAt == null)).ToDictionary(v => v.CoachId, v => v.CheckedInAt);
+        return (await gw.ListAsync<Coach>()).Where(c => active.ContainsKey(c.UserId))
+            .Select(c => new CoachPresenceRow(c.UserId, active[c.UserId], open.TryGetValue(c.UserId, out var t) ? t : null))
+            .OrderByDescending(r => r.InGym).ThenBy(r => r.Name).ToList();
     });
 
     public Task<AppResult<bool>> HireAsync(string coachId) => Safe.RunAsync(async () =>
@@ -561,7 +713,8 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
     public Task<AppResult<Coach?>> MyCoachAsync() => Safe.RunAsync<Coach?>(async () =>
     { var uid = gw.CurrentUserId; return (await gw.ListAsync<Coach>(c => c.UserId == uid)).FirstOrDefault(); });
 
-    public Task<AppResult<bool>> UpdateProfileAsync(string? bio, string? specialty, decimal? rate, bool available) => Safe.RunAsync(async () =>
+    public async Task<AppResult<bool>> UpdateProfileAsync(string? bio, string? specialty, decimal? rate, bool available) =>
+        rate is { } r && !CoachRate.IsValid(r) ? AppResult<bool>.Fail(AppErrorKind.Validation, "bad_rate") : await Safe.RunAsync(async () =>
     {
         var c = (await MyCoachAsync()).Value ?? throw new Exception("not_found");
         c.Bio = bio; c.Specialty = specialty; c.HourlyRate = rate; c.IsAvailable = available;
@@ -614,15 +767,36 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
 }
 
 // ===================== Time requests and sessions =====================
-public sealed record RequestRow(TimeRequest Request, string With, string Kind, bool CanRespond, bool CanCancel);
-public sealed record SessionRow(TrainingSession Session, string With, bool IsMine, bool CanManage, bool CanChange);
+/// <summary>CanPropose: the coach may suggest another time. CanAccept: the member may accept the coach's live proposal (or ask again / decline).</summary>
+public sealed record RequestRow(TimeRequest Request, string With, string Kind, bool CanRespond, bool CanCancel,
+    string? Amenity = null, bool CanPropose = false, bool CanAccept = false, string? ProposalText = null)
+{
+    // declining always takes a reason; open slots are simply left alone
+    public bool CanDecline => (CanRespond && Request.MemberId is not null) || CanAccept;
+    public bool HasProposal => ProposalText is not null;
+}
+public sealed record AmenityChoice(int? Id, string Name);
+public sealed record SessionRow(TrainingSession Session, string With, bool IsMine, bool CanManage, bool CanChange, int? ReservationId = null, string? Amenity = null)
+{
+    // the coach running a session on an amenity can add time until it ends (extend_reservation)
+    public bool CanExtend => IsMine && ReservationId is not null && Session.Status == Status.Scheduled && Session.ScheduledEnd.ToUniversalTime() > DateTime.UtcNow;
+}
 public sealed record RequestMember(string MemberId, string Name);
-public sealed record RequestsView(IReadOnlyList<RequestRow> Rows, bool IsCoach, IReadOnlyList<CoachCard> HiredCoaches, IReadOnlyList<RequestMember>? Trainees = null, IReadOnlyList<TrainingSession>? ActiveSessions = null);
+public sealed record RequestsView(IReadOnlyList<RequestRow> Rows, bool IsCoach, IReadOnlyList<CoachCard> HiredCoaches, IReadOnlyList<RequestMember>? Trainees = null,
+    IReadOnlyList<TrainingSession>? ActiveSessions = null, IReadOnlyList<Amenity>? Amenities = null);
 
 public interface ISessionService
 {
     Task<AppResult<RequestsView>> RequestsAsync();
-    Task<AppResult<bool>> RequestAsync(string coachId, DateTime startUtc, DateTime endUtc, string? message);
+    /// <summary>A member asks a hired coach for a session, optionally on an amenity (then it follows the booking grid and hours).</summary>
+    Task<AppResult<bool>> RequestAsync(string coachId, DateTime startUtc, DateTime endUtc, string? message, int? amenityId = null);
+    /// <summary>The coach suggests another time (and amenity) for a member's request, with a reason. Valid 24 h or until it starts.</summary>
+    Task<AppResult<bool>> ProposeAsync(int requestId, DateTime startUtc, DateTime endUtc, int? amenityId, string reason);
+    /// <summary>The member accepts the proposal they saw (by version): "confirmed", or "expired" when it ran out and went back to the coach.</summary>
+    Task<AppResult<string>> AcceptProposalAsync(int requestId, int version);
+    Task<AppResult<bool>> RequestAnotherTimeAsync(int requestId, DateTime startUtc, DateTime endUtc, int? amenityId, string? message);
+    /// <summary>Declines with a reason: the coach a member's request, the member a proposal or an invitation.</summary>
+    Task<AppResult<bool>> DeclineAsync(int requestId, string reason);
     Task<AppResult<bool>> PostAvailabilityAsync(DateTime startUtc, DateTime endUtc);
     Task<AppResult<bool>> InviteMemberAsync(string memberId, DateTime startUtc, DateTime endUtc);
     Task<AppResult<bool>> RespondAsync(int requestId, bool approve);
@@ -632,6 +806,8 @@ public interface ISessionService
     Task<AppResult<bool>> SetSessionStatusAsync(int sessionId, string status);
     Task<AppResult<bool>> RescheduleAsync(int sessionId, DateTime startUtc, DateTime endUtc);
     Task<AppResult<bool>> CancelSessionAsync(int sessionId);
+    /// <summary>The coach adds minutes (30-minute steps) to a session on an amenity; the session and its reservation move together.</summary>
+    Task<AppResult<bool>> ExtendAsync(int reservationId, int minutes);
     /// <summary>The signed-in coach's sessions that start in [fromUtc, toUtc), oldest first, each with how it went (Mark is null until marked).</summary>
     Task<AppResult<IReadOnlyList<CalendarSession>>> CalendarAsync(DateTime fromUtc, DateTime toUtc);
     /// <summary>The signed-in coach's scheduled sessions from now on, nearest first.</summary>
@@ -646,7 +822,10 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
         var coaches = await gw.ListAsync<Coach>();
         var iAmCoach = coaches.Any(c => c.UserId == uid);
         var names = await Directory_.UserNamesAsync(gw);
-        var requests = await gw.ListAsync<TimeRequest>(r => r.Status == "pending");
+        var now = DateTime.UtcNow;
+        var requests = (await gw.ListAsync<TimeRequest>(r => r.Status == "pending")).Concat(await gw.ListAsync<TimeRequest>(r => r.Status == "proposed")).ToList();
+        var amenities = await gw.ListAsync<Amenity>();
+        string? AmenityName(int? id) => id is null ? null : amenities.FirstOrDefault(a => a.Id == id)?.Name ?? "Amenity";
 
         string CoachName(string id) => names.GetValueOrDefault(id, "Coach");
         string MemberName(string? id) => id is null ? "Open slot" : names.GetValueOrDefault(id, "Member");
@@ -655,10 +834,21 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
         {
             var iAmCoachOfThis = r.CoachId == uid;
             var mine = (r.RequestedBy == "member" && r.MemberId == uid) || (r.RequestedBy == "coach" && iAmCoachOfThis);
-            var canRespond = !mine && (r.RequestedBy == "member" ? iAmCoachOfThis : !iAmCoachOfThis);
+            // a proposal that ran out is the coach's turn again (D8)
+            var live = r.Status == "proposed" && r.ProposalExpiresAt?.ToUniversalTime() > now;
+            var coachTurn = r.Status == "pending" || (r.Status == "proposed" && !live);
+            var canRespond = !mine && (r.RequestedBy == "member" ? iAmCoachOfThis : !iAmCoachOfThis) && coachTurn;
             var kind = r.SessionId is not null ? (r.RequestedBy == "member" ? "Reschedule asked by member" : "Reschedule asked by coach")
+                : live ? (iAmCoachOfThis ? "You proposed another time" : "Your coach proposed another time")
+                : r.Status == "proposed" ? "Proposal expired"
                 : r.RequestedBy == "member" ? "Requested by member" : r.MemberId is null ? "Open availability" : "Offered by coach";
-            return new RequestRow(r, iAmCoachOfThis ? MemberName(r.MemberId) : CoachName(r.CoachId), kind, canRespond, mine);
+            string? proposal = r.Status == "proposed" && r.ProposedStart is { } ps && r.ProposedEnd is { } pe
+                ? $"{ps.ToLocalTime():ddd d MMM, h:mm tt}–{pe.ToLocalTime():h:mm tt}" + (AmenityName(r.ProposedAmenityId) is { } pa ? $" at {pa}" : "")
+                  + $". {r.ProposalReason}" + (live ? $" Answer by {r.ProposalExpiresAt!.Value.ToLocalTime():ddd h:mm tt}." : " This proposal has expired.")
+                : null;
+            return new RequestRow(r, iAmCoachOfThis ? MemberName(r.MemberId) : CoachName(r.CoachId), kind, canRespond, mine, AmenityName(r.AmenityId),
+                CanPropose: iAmCoachOfThis && r.RequestedBy == "member" && r.SessionId is null && coachTurn,
+                CanAccept: r.MemberId == uid && r.RequestedBy == "member" && live, ProposalText: proposal);
         }).ToList();
 
         var hires = await gw.ListAsync<CoachHire>(h => h.MemberId == uid && h.Status == "active");
@@ -673,13 +863,49 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
                 .Select(p => new RequestMember(p.Id, MemberName(p.Id))).OrderBy(m => m.Name).ToList();
         }
         var active = await gw.ListAsync<TrainingSession>(s => s.Status == Status.Scheduled);
-        return new RequestsView(rows, iAmCoach, hired, trainees, active.Where(s => s.CoachId == uid || s.MemberId == uid).ToList());
+        // D7: a session only blocks new requests until its booked end has passed
+        return new RequestsView(rows, iAmCoach, hired, trainees, active.Where(s => (s.CoachId == uid || s.MemberId == uid) && s.ScheduledEnd.ToUniversalTime() > now).ToList(),
+            amenities.Where(a => a.IsActive).OrderBy(a => a.Name).ToList());
     });
 
-    public async Task<AppResult<bool>> RequestAsync(string coachId, DateTime startUtc, DateTime endUtc, string? message)
+    public async Task<AppResult<bool>> RequestAsync(string coachId, DateTime startUtc, DateTime endUtc, string? message, int? amenityId = null)
     {
         if (endUtc <= startUtc) return AppResult<bool>.Fail(AppErrorKind.Validation, "end must be after start");
-        return await Safe.RunAsync(async () => { await gw.RpcAsync<int>("request_time", TimeArgs(coachId, startUtc, endUtc, message)); return true; });
+        var args = TimeArgs(coachId, startUtc, endUtc, message);
+        if (amenityId is null) return await Safe.RunAsync(async () => { await gw.RpcAsync<int>("request_time", args); return true; });
+        args["p_amenity_id"] = amenityId.Value;
+        if (!args.ContainsKey("p_message")) args["p_message"] = null!;
+        return await Safe.RunAsync(async () => { await gw.RpcAsync<int>("request_session", args); return true; });
+    }
+
+    public async Task<AppResult<bool>> ProposeAsync(int requestId, DateTime startUtc, DateTime endUtc, int? amenityId, string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_reason");
+        return await Safe.RunAsync(async () =>
+        {
+            await gw.RpcAsync("propose_time", new() { ["p_request_id"] = requestId, ["p_start"] = startUtc.ToString("O"), ["p_end"] = endUtc.ToString("O"),
+                ["p_amenity_id"] = amenityId!, ["p_reason"] = reason.Trim() });
+            return true;
+        });
+    }
+
+    public Task<AppResult<string>> AcceptProposalAsync(int requestId, int version) =>
+        Safe.RunAsync(() => gw.RpcAsync<string>("accept_proposal", new() { ["p_request_id"] = requestId, ["p_version"] = version }));
+
+    public Task<AppResult<bool>> RequestAnotherTimeAsync(int requestId, DateTime startUtc, DateTime endUtc, int? amenityId, string? message) => Safe.RunAsync(async () =>
+    {
+        await gw.RpcAsync("request_another_time", new() { ["p_request_id"] = requestId, ["p_start"] = startUtc.ToString("O"), ["p_end"] = endUtc.ToString("O"),
+            ["p_amenity_id"] = amenityId!, ["p_message"] = (string.IsNullOrWhiteSpace(message) ? null : message.Trim())! });
+        return true;
+    });
+
+    public Task<AppResult<bool>> ExtendAsync(int reservationId, int minutes) => Safe.RunAsync(async () =>
+    { await gw.RpcAsync("extend_reservation", new() { ["p_id"] = reservationId, ["p_minutes"] = minutes }); return true; });
+
+    public async Task<AppResult<bool>> DeclineAsync(int requestId, string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_reason");
+        return await Safe.RunAsync(async () => { await gw.RpcAsync("decline_time_request", new() { ["p_request_id"] = requestId, ["p_reason"] = reason.Trim() }); return true; });
     }
 
     public async Task<AppResult<bool>> PostAvailabilityAsync(DateTime startUtc, DateTime endUtc)
@@ -728,11 +954,15 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
         var uid = gw.CurrentUserId;
         var names = await Directory_.UserNamesAsync(gw);
         var sessions = await gw.ListAsync<TrainingSession>();
+        var held = (await gw.ListAsync<Reservation>(r => r.Status == "confirmed")).Where(r => r.TrainingSessionId is not null).ToDictionary(r => r.TrainingSessionId!.Value);
+        var amenities = held.Count == 0 ? [] : await gw.ListAsync<Amenity>();
         return sessions.OrderBy(s => s.ScheduledStart).Select(s =>
         {
             var isMine = s.CoachId == uid;
             var with = isMine ? s.MemberId : s.CoachId;
-            return new SessionRow(s, names.GetValueOrDefault(with, "Unknown"), isMine, isMine && s.Status == Status.Scheduled, s.Status == Status.Scheduled);
+            var r = held.GetValueOrDefault(s.Id);
+            return new SessionRow(s, names.GetValueOrDefault(with, "Unknown"), isMine, isMine && s.Status == Status.Scheduled, s.Status == Status.Scheduled,
+                r?.Id, r is null ? null : amenities.FirstOrDefault(a => a.Id == r.AmenityId)?.Name ?? "Amenity");
         }).ToList();
     });
 
@@ -788,6 +1018,34 @@ public interface IAttendanceService
     Task<AppResult<bool>> RecordAsync(int sessionId, string status);
     Task<AppResult<bool>> CheckInAsync(string memberId);
     Task<AppResult<IReadOnlyList<MemberHit>>> FindMembersAsync(string usernameFragment);
+    /// <summary>The signed-in member's permanent QR code (0034), or null for anyone who is not a member.</summary>
+    Task<AppResult<string?>> MyCodeAsync();
+    /// <summary>Front desk and admins: who a scanned code belongs to and their live status. Every scan is logged by the server.</summary>
+    Task<AppResult<MemberScan>> ScanAsync(string code);
+    /// <summary>Gym check-ins on one Manila day, earliest first.</summary>
+    Task<AppResult<IReadOnlyList<CheckInRow>>> CheckInsOnAsync(DateOnly manilaDay);
+}
+
+/// <summary>What scan_member says about a code: result is active, pending, expired, inactive or not_found.</summary>
+public sealed class MemberScan
+{
+    public string Result { get; set; } = "";
+    public string? Member { get; set; }
+    public string? Name { get; set; }
+    public DateTime? Expires { get; set; }
+
+    public bool CanCheckIn => Result == "active" && Member is not null;
+    public string StatusText => Result switch
+    {
+        "active" => "Active", "pending" => "Pending: a membership payment is waiting to be verified", "expired" => "Expired: no active membership",
+        "inactive" => "Inactive: this account is archived", _ => "Not found: this code does not belong to any member"
+    };
+    public string ExpiryText => Expires is { } e ? (Result == "active" ? "Membership ends " : "Membership ended ") + RevenuePdf.Manila(e) + " (Manila)" : "No end date";
+}
+
+public sealed record CheckInRow(string Name, DateTime At)
+{
+    public string TimeText => At.AddHours(8).ToString("HH:mm", CultureInfo.InvariantCulture);   // Manila has no daylight saving
 }
 
 public sealed class AttendanceService(ISupabaseGateway gw) : IAttendanceService
@@ -809,6 +1067,22 @@ public sealed class AttendanceService(ISupabaseGateway gw) : IAttendanceService
         var active = (await gw.ListAsync<UserMembershipPackage>(m => m.Status == "active")).Where(m => m.EndsAt > now).Select(m => m.MemberId).ToHashSet();
         return members.Join(profiles, m => m.UserId, p => p.Id, (m, p) => new MemberHit(m.UserId, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName, active.Contains(m.UserId)))
             .Where(h => h.Username.Contains(fragment, StringComparison.OrdinalIgnoreCase)).Take(20).ToList();
+    });
+
+    public Task<AppResult<string?>> MyCodeAsync() => Safe.RunAsync<string?>(async () =>
+    { var uid = gw.CurrentUserId; return (await gw.ListAsync<MemberCode>(c => c.UserId == uid)).FirstOrDefault()?.Code; });
+
+    public Task<AppResult<MemberScan>> ScanAsync(string code) =>
+        Safe.RunAsync(() => gw.RpcAsync<MemberScan>("scan_member", new() { ["p_code"] = code.Trim() }));
+
+    public Task<AppResult<IReadOnlyList<CheckInRow>>> CheckInsOnAsync(DateOnly manilaDay) => Safe.RunAsync<IReadOnlyList<CheckInRow>>(async () =>
+    {
+        var from = DateTime.SpecifyKind(manilaDay.ToDateTime(TimeOnly.MinValue).AddHours(-8), DateTimeKind.Utc);   // Manila has no daylight saving
+        var to = from.AddDays(1);
+        var rows = await gw.ListAsync<GymCheckIn>(c => c.CheckedInAt >= from && c.CheckedInAt < to);
+        var names = await Directory_.UserNamesAsync(gw);
+        return rows.OrderBy(c => c.CheckedInAt)
+            .Select(c => new CheckInRow(c.MemberId is { } m ? names.GetValueOrDefault(m, "Member") : "Walk-in", c.CheckedInAt)).ToList();
     });
 }
 
@@ -866,24 +1140,40 @@ public sealed class NotificationService(ISupabaseGateway gw) : INotificationServ
 // ===================== Admin =====================
 public sealed record UserRow(string UserId, string Username, bool IsActive, IReadOnlyList<string> Roles)
 {
-    public string RoleText => string.Join(", ", Roles);
+    public string RoleText => string.Join(", ", Roles.Select(RoleName));
+    /// <summary>What a role is called on screen (D15: the admin is the super admin).</summary>
+    public static string RoleName(string role) => role switch { "admin" => "super admin", "subadmin" => "sub-admin", _ => role };
     public bool IsCoach => Roles.Contains("coach");
     public bool IsEmployee => Roles.Contains("employee");
     public string CoachActionText => IsCoach ? "Remove coach" : "Make coach";
     public string EmployeeActionText => IsEmployee ? "Remove employee" : "Make employee";
+    public bool IsSubAdmin => Roles.Contains("subadmin");
+    /// <summary>Fixed from the app (0037): no role changes, no deactivating, no deleting.</summary>
+    public bool IsSuperAdmin => Roles.Contains("admin");
+    public string SubAdminActionText => IsSubAdmin ? "Remove sub-admin" : "Make sub-admin";
+    /// <summary>Front desk, sub-admin or super admin: only the super admin manages these accounts (D15).</summary>
+    public bool IsStaff => Roles.Any(r => r is "admin" or "subadmin" or "employee");
     public string ActiveActionText => IsActive ? "Deactivate" : "Reactivate";
     public string ActiveStatus => IsActive ? "active" : "inactive";
 }
 public sealed record AuditRow(AuditEntry Entry, string Actor);
-public sealed record DiscountRow(Discount Discount, string State);
+public sealed record DiscountRow(Discount Discount, string State, long Used = 0, long Pending = 0)
+{
+    // used = verified + voided; pending payments hold a place too
+    public string Usage => (Discount.MaxUses is { } max ? $"{Used} of {max} used" : $"{Used} used, no limit") + (Pending > 0 ? $", {Pending} pending" : "");
+}
+public sealed record DiscountUse(long Id, long Used, long Pending);
 
 public interface IAdminService
 {
+    /// <summary>Everyone not deleted, active or deactivated.</summary>
     Task<AppResult<IReadOnlyList<UserRow>>> UsersAsync();
+    /// <summary>True for the super admin (the admin role); false for a sub-admin and everyone else (D15).</summary>
+    Task<AppResult<bool>> IsSuperAdminAsync();
     Task<AppResult<bool>> AssignRoleAsync(string userId, string role);
     Task<AppResult<bool>> RevokeRoleAsync(string userId, string role);
     Task<AppResult<bool>> SetActiveAsync(string userId, bool active);
-    Task<AppResult<bool>> CreateUserAsync(string name, string email, string role, string password);
+    Task<AppResult<bool>> CreateUserAsync(string firstName, string lastName, string email, string role, string password);
     Task<AppResult<bool>> ResetPasswordAsync(string userId, string password);
     Task<AppResult<bool>> DeletePackageAsync(MembershipPackage package);
     Task<AppResult<IReadOnlyList<DiscountRow>>> DiscountsAsync();
@@ -895,6 +1185,8 @@ public interface IAdminService
     Task<AppResult<IReadOnlyList<MembershipPackage>>> AllPackagesAsync();
     Task<AppResult<IReadOnlyList<Amenity>>> AllAmenitiesAsync();
     Task<AppResult<IReadOnlyList<RevenueRow>>> RevenueAsync(DateOnly from, DateOnly to);
+    /// <summary>Every receipt and approved refund in the range, all pages, for the PDF export.</summary>
+    Task<AppResult<IReadOnlyList<RevenueLine>>> RevenueLinesAsync(DateOnly from, DateOnly to);
     Task<AppResult<IReadOnlyList<AuditRow>>> AuditAsync();
     Task<AppResult<GymSettings>> GymSettingsAsync();
     /// <summary>Saves the gym name, QR account name and walk-in price, and uploads a new payment QR image when one is given.</summary>
@@ -908,8 +1200,15 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         var profiles = await gw.ListAsync<Profile>();
         var roles = await gw.ListAsync<Role>();
         var links = await gw.ListAsync<UserRole>();
-        return profiles.Select(p => new UserRow(p.Id, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName, p.IsActive,
+        return profiles.Where(p => p.DeletedAt is null).Select(p => new UserRow(p.Id, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName, p.IsActive,
             links.Where(l => l.UserId == p.Id).Select(l => roles.First(r => r.RoleId == l.RoleId).Name).OrderBy(n => n).ToList())).ToList();
+    });
+
+    public Task<AppResult<bool>> IsSuperAdminAsync() => Safe.RunAsync(async () =>
+    {
+        var uid = gw.CurrentUserId;
+        var mine = (await gw.ListAsync<UserRole>(u => u.UserId == uid)).Select(u => u.RoleId).ToHashSet();
+        return (await gw.ListAsync<Role>()).Any(r => r.Name == "admin" && mine.Contains(r.RoleId));
     });
 
     public Task<AppResult<bool>> AssignRoleAsync(string userId, string role) => Rpc("assign_role", new() { ["p_user"] = userId, ["p_role"] = role });
@@ -917,14 +1216,20 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
     public Task<AppResult<bool>> SetActiveAsync(string userId, bool active) => Rpc("set_user_active", new() { ["p_user"] = userId, ["p_active"] = active });
 
     // accounts are made by an Edge Function: it holds the service-role key, which the app never has
-    public async Task<AppResult<bool>> CreateUserAsync(string name, string email, string role, string password)
+    public async Task<AppResult<bool>> CreateUserAsync(string firstName, string lastName, string email, string role, string password)
     {
-        if (string.IsNullOrWhiteSpace(name) || !email.Contains('@') || password.Length < 6 || role is not ("member" or "coach" or "employee"))
+        firstName = firstName.Trim(); lastName = lastName.Trim();
+        if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName) || !email.Contains('@') || password.Length < 6 || role is not ("member" or "coach" or "employee" or "subadmin"))
             return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
-        if (!AccountRules.IsName(name.Trim())) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_name");   // the database refuses it too (0012)
+        if (!AccountRules.IsName(firstName, lastName)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_name");   // the database refuses it too (0012, 0035)
         return await Safe.RunAsync(async () =>
         {
-            await gw.InvokeFunctionAsync("create-user", new() { ["name"] = name.Trim(), ["email"] = email.Trim(), ["role"] = role, ["password"] = password });
+            // name goes along for a create-user function deployed before first/last name existed
+            await gw.InvokeFunctionAsync("create-user", new()
+            {
+                ["first_name"] = firstName, ["last_name"] = lastName, ["name"] = NameParts.Join(firstName, lastName),
+                ["email"] = email.Trim(), ["role"] = role, ["password"] = password
+            });
             return true;
         });
     }
@@ -935,23 +1240,26 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         return await Safe.RunAsync(async () => { await gw.InvokeFunctionAsync("reset-password", new() { ["user_id"] = userId, ["password"] = password }); return true; });
     }
 
-    public Task<AppResult<bool>> DeletePackageAsync(MembershipPackage p) => Safe.RunAsync(async () => { await gw.DeleteAsync(p); return true; });
+    public Task<AppResult<bool>> DeletePackageAsync(MembershipPackage p) => Rpc("archive_catalog_record", new() { ["p_type"] = "plan", ["p_id"] = p.Id, ["p_reason"] = "Deactivated gym plan" });
 
     public Task<AppResult<IReadOnlyList<DiscountRow>>> DiscountsAsync() => Safe.RunAsync<IReadOnlyList<DiscountRow>>(async () =>
     {
         var now = DateTime.UtcNow;
+        var uses = (await gw.RpcAsync<List<DiscountUse>>("discount_usage", new()) ?? []).ToDictionary(u => u.Id);
         return (await gw.ListAsync<Discount>()).OrderByDescending(d => d.ExpiresAt)
-            .Select(d => new DiscountRow(d, !d.IsActive ? "inactive" : d.ExpiresAt <= now ? "expired" : "active")).ToList();
+            .Select(d => new DiscountRow(d, !d.IsActive ? "inactive" : d.ExpiresAt <= now ? "expired" : "active",
+                uses.GetValueOrDefault(d.Id)?.Used ?? 0, uses.GetValueOrDefault(d.Id)?.Pending ?? 0)).ToList();
     });
 
     public async Task<AppResult<bool>> SaveDiscountAsync(Discount d)
     {
         if (string.IsNullOrWhiteSpace(d.Code) || d.Percent is < 1 or > 100) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_discount");
+        if (d.MaxUses < 1 || d.Id == 0 && d.MaxUses is null) return AppResult<bool>.Fail(AppErrorKind.Validation, "limit_required");
         d.Code = d.Code.Trim().ToUpperInvariant();
         return await Safe.RunAsync(async () => { if (d.Id == 0) await gw.InsertAsync(d); else await gw.UpdateAsync(d); return true; });
     }
 
-    public Task<AppResult<bool>> DeleteDiscountAsync(Discount d) => Safe.RunAsync(async () => { await gw.DeleteAsync(d); return true; });
+    public Task<AppResult<bool>> DeleteDiscountAsync(Discount d) => Rpc("archive_catalog_record", new() { ["p_type"] = "code", ["p_id"] = d.Id, ["p_reason"] = "Deactivated code" });
 
     public Task<AppResult<bool>> SavePackageAsync(MembershipPackage p) =>
         Safe.RunAsync(async () => { if (p.Id == 0) await gw.InsertAsync(p); else await gw.UpdateAsync(p); return true; });
@@ -963,7 +1271,8 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         if (!ProfileService.IsAcceptableImage(fileName, data)) return Task.FromResult(AppResult<string>.Fail(AppErrorKind.Validation, "bad_image"));
         return Safe.RunAsync(async () =>
         {
-            if (!(await gw.ListAsync<Amenity>(a => a.Id == amenityId)).Any()) throw new Exception("not_found");
+            var amenity = (await gw.ListAsync<Amenity>(a => a.Id == amenityId)).FirstOrDefault() ?? throw new Exception("not_found");
+            if (!amenity.IsActive) throw new Exception("record_archived");
             var path = await gw.UploadAsync("gym-assets", $"amenities/{amenityId}/{Guid.NewGuid():N}{Path.GetExtension(fileName).ToLowerInvariant()}", data);
             // Only the image changes: a catalog row on another screen may already have newer details or status.
             await gw.UpdateWhereAsync<Amenity, string?>(a => a.Id == amenityId, a => a.ImagePath, path);
@@ -981,6 +1290,23 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
             new() { ["p_from"] = from.ToString("yyyy-MM-dd"), ["p_to"] = to.ToString("yyyy-MM-dd") }) ?? []));
     }
 
+    public async Task<AppResult<IReadOnlyList<RevenueLine>>> RevenueLinesAsync(DateOnly from, DateOnly to)
+    {
+        if (to < from) return AppResult<IReadOnlyList<RevenueLine>>.Fail(AppErrorKind.Validation, "to before from");
+        return await Safe.RunAsync(async () =>
+        {
+            const int page = 500;   // the server caps rows per request, so read until a short page
+            var all = new List<RevenueLine>();
+            while (true)
+            {
+                var rows = await gw.RpcAsync<List<RevenueLine>>("revenue_lines", new()
+                    { ["p_from"] = from.ToString("yyyy-MM-dd"), ["p_to"] = to.ToString("yyyy-MM-dd"), ["p_offset"] = all.Count, ["p_limit"] = page }) ?? [];
+                all.AddRange(rows);
+                if (rows.Count < page) return (IReadOnlyList<RevenueLine>)all;
+            }
+        });
+    }
+
     public Task<AppResult<IReadOnlyList<AuditRow>>> AuditAsync() => Safe.RunAsync<IReadOnlyList<AuditRow>>(async () =>
     {
         var names = await Directory_.UserNamesAsync(gw);
@@ -993,6 +1319,8 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
     public async Task<AppResult<bool>> SaveGymSettingsAsync(GymSettings s, (string FileName, byte[] Data)? qrImage)
     {
         if (string.IsNullOrWhiteSpace(s.GymName) || s.WalkInPrice < 0) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
+        static bool OnGrid(TimeSpan t) => t.Seconds == 0 && t.Minutes is 0 or 30 && t >= TimeSpan.Zero && t < TimeSpan.FromDays(1);
+        if (!OnGrid(s.OpensAt) || !OnGrid(s.ClosesAt) || s.ClosesAt <= s.OpensAt) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_hours");
         return await Safe.RunAsync(async () =>
         {
             if (qrImage is { } img) s.QrImagePath = await gw.UploadAsync("gym-assets", $"qr-{DateTime.UtcNow:yyyyMMddHHmmss}-{img.FileName}", img.Data);

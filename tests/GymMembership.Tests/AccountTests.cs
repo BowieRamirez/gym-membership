@@ -16,7 +16,7 @@ public class AccountTests
     public async Task Admin_adds_an_employee_who_lands_in_the_front_desk_area()
     {
         var gw = await As("admin@demo.io");
-        Assert.True((await new AdminService(gw).CreateUserAsync("Dana Cruz", "dana@demo.io", "employee", "desk1234")).Ok);
+        Assert.True((await new AdminService(gw).CreateUserAsync("Dana", "Cruz", "dana@demo.io", "employee", "desk1234")).Ok);
         Assert.Equal(AppRole.Employee, (await new AuthService(gw).SignInAsync("dana@demo.io", "desk1234")).Value);
     }
 
@@ -55,10 +55,10 @@ public class AccountTests
     {
         var gw = new DemoGateway();
         var auth = new AuthService(gw);
-        Assert.Equal(AppErrorKind.Validation, (await auth.RegisterAsync("", "new@demo.io", "secret12")).Error);
-        Assert.Equal(AppErrorKind.Validation, (await auth.RegisterAsync("New Person", "new@demo.io", "123")).Error);
-        Assert.Equal(AppErrorKind.Validation, (await auth.RegisterAsync("Dupe", "member@demo.io", "secret12")).Error);
-        Assert.True((await auth.RegisterAsync("New Person", "new@demo.io", "secret12")).Ok);
+        Assert.Equal(AppErrorKind.Validation, (await auth.RegisterAsync("", "", "new@demo.io", "secret12")).Error);
+        Assert.Equal(AppErrorKind.Validation, (await auth.RegisterAsync("New", "Person", "new@demo.io", "123")).Error);
+        Assert.Equal(AppErrorKind.Validation, (await auth.RegisterAsync("Dupe", "Person", "member@demo.io", "secret12")).Error);
+        Assert.True((await auth.RegisterAsync("New", "Person", "new@demo.io", "secret12")).Ok);
         Assert.False((await auth.MustChangePasswordAsync()).Value);   // they chose their own password
 
         var plans = new MembershipService(gw);
@@ -83,7 +83,7 @@ public class AccountTests
     public async Task Register_refuses_names_that_are_not_letters(string name)
     {
         var auth = new AuthService(new DemoGateway());
-        var r = await auth.RegisterAsync(name, "new@demo.io", "secret12");
+        var r = await auth.RegisterAsync(name, "Santos", "new@demo.io", "secret12");
         Assert.Equal(AppErrorKind.Validation, r.Error);
         Assert.Equal("bad_name", r.Message);
     }
@@ -93,7 +93,7 @@ public class AccountTests
     {
         var gw = new DemoGateway();
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
-        var r = await new AdminService(gw).CreateUserAsync("Rey 99", "rey@demo.io", "coach", "temp1234");
+        var r = await new AdminService(gw).CreateUserAsync("Rey", "99", "rey@demo.io", "coach", "temp1234");
         Assert.Equal("bad_name", r.Message);
     }
 
@@ -101,16 +101,16 @@ public class AccountTests
     public async Task Register_refuses_a_name_over_60_characters()
     {
         var auth = new AuthService(new DemoGateway());
-        Assert.Equal("bad_name", (await auth.RegisterAsync(new string('a', 61), "new@demo.io", "secret12")).Message);
-        Assert.True((await auth.RegisterAsync(new string('a', 60), "new@demo.io", "secret12")).Ok);
+        Assert.Equal("bad_name", (await auth.RegisterAsync(new string('a', 61), "Santos", "new@demo.io", "secret12")).Message);
+        Assert.True((await auth.RegisterAsync(new string('a', 53), "Santos", "new@demo.io", "secret12")).Ok);   // 60 with the space
     }
 
     [Theory]
-    [InlineData("Mary-Ann O'Brien")]
-    [InlineData("Juan dela Cruz")]
-    [InlineData("José Peña")]
-    public async Task Register_accepts_real_names(string name) =>
-        Assert.True((await new AuthService(new DemoGateway()).RegisterAsync(name, "new@demo.io", "secret12")).Ok);
+    [InlineData("Mary-Ann", "O'Brien")]
+    [InlineData("Juan", "dela Cruz")]
+    [InlineData("José", "Peña")]
+    public async Task Register_accepts_real_names(string first, string last) =>
+        Assert.True((await new AuthService(new DemoGateway()).RegisterAsync(first, last, "new@demo.io", "secret12")).Ok);
 
     [Theory]
     [InlineData("nobody")]
@@ -118,25 +118,25 @@ public class AccountTests
     [InlineData("a b@c.com")]
     [InlineData("a@@c.com")]
     public async Task Register_refuses_malformed_emails(string email) =>
-        Assert.Equal("bad_email", (await new AuthService(new DemoGateway()).RegisterAsync("New Person", email, "secret12")).Message);
+        Assert.Equal("bad_email", (await new AuthService(new DemoGateway()).RegisterAsync("New", "Person", email, "secret12")).Message);
 
     [Fact]
     public async Task Register_caps_the_email_at_100_characters_and_the_part_before_the_at_at_64()
     {
         var auth = new AuthService(new DemoGateway());
-        Assert.Equal("bad_email", (await auth.RegisterAsync("New Person", new string('a', 65) + "@demo.io", "secret12")).Message);
-        Assert.Equal("bad_email", (await auth.RegisterAsync("New Person", "a@" + new string('b', 95) + ".com", "secret12")).Message);   // 101 characters
-        Assert.True((await auth.RegisterAsync("New Person", "a@" + new string('b', 94) + ".com", "secret12")).Ok);                    // 100 characters
-        Assert.True((await auth.RegisterAsync("Other Person", new string('a', 64) + "@demo.io", "secret12")).Ok);
+        Assert.Equal("bad_email", (await auth.RegisterAsync("New", "Person", new string('a', 65) + "@demo.io", "secret12")).Message);
+        Assert.Equal("bad_email", (await auth.RegisterAsync("New", "Person", "a@" + new string('b', 95) + ".com", "secret12")).Message);   // 101 characters
+        Assert.True((await auth.RegisterAsync("New", "Person", "a@" + new string('b', 94) + ".com", "secret12")).Ok);                    // 100 characters
+        Assert.True((await auth.RegisterAsync("Other", "Person", new string('a', 64) + "@demo.io", "secret12")).Ok);
     }
 
     [Fact]
     public async Task Register_keeps_the_password_between_6_and_64_characters()
     {
         var auth = new AuthService(new DemoGateway());
-        Assert.Equal("bad_password", (await auth.RegisterAsync("New Person", "new@demo.io", "12345")).Message);
-        Assert.Equal("bad_password", (await auth.RegisterAsync("New Person", "new@demo.io", new string('x', 65))).Message);
-        Assert.True((await auth.RegisterAsync("New Person", "new@demo.io", new string('x', 64))).Ok);
+        Assert.Equal("bad_password", (await auth.RegisterAsync("New", "Person", "new@demo.io", "12345")).Message);
+        Assert.Equal("bad_password", (await auth.RegisterAsync("New", "Person", "new@demo.io", new string('x', 65))).Message);
+        Assert.True((await auth.RegisterAsync("New", "Person", "new@demo.io", new string('x', 64))).Ok);
     }
 
     [Theory]

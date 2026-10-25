@@ -17,7 +17,7 @@ public class NewFeatureTests
     public async Task Admin_adds_a_coach_who_signs_in_with_the_temporary_password_and_must_change_it()
     {
         var gw = await As("admin@demo.io");
-        Assert.True((await new AdminService(gw).CreateUserAsync("Rey Santos", "rey@demo.io", "coach", "temp1234")).Ok);
+        Assert.True((await new AdminService(gw).CreateUserAsync("Rey", "Santos", "rey@demo.io", "coach", "temp1234")).Ok);
 
         var auth = new AuthService(gw);
         Assert.Equal(AppErrorKind.Unauthorized, (await auth.SignInAsync("rey@demo.io", DemoGateway.DemoPassword)).Error);
@@ -34,14 +34,14 @@ public class NewFeatureTests
     {
         var gw = await As("admin@demo.io");
         var svc = new AdminService(gw);
-        Assert.Equal(AppErrorKind.Validation, (await svc.CreateUserAsync("", "x@demo.io", "member", "temp1234")).Error);
-        Assert.Equal(AppErrorKind.Validation, (await svc.CreateUserAsync("Xena", "no-at-sign", "member", "temp1234")).Error);
-        Assert.Equal(AppErrorKind.Validation, (await svc.CreateUserAsync("Xena", "x@demo.io", "member", "123")).Error);
-        Assert.Equal(AppErrorKind.Validation, (await svc.CreateUserAsync("Xena", "x@demo.io", "admin", "temp1234")).Error);
-        Assert.Equal(AppErrorKind.Validation, (await svc.CreateUserAsync("Dupe", "member@demo.io", "member", "temp1234")).Error);
+        Assert.Equal(AppErrorKind.Validation, (await svc.CreateUserAsync("", "", "x@demo.io", "member", "temp1234")).Error);
+        Assert.Equal(AppErrorKind.Validation, (await svc.CreateUserAsync("Xena", "Cruz", "no-at-sign", "member", "temp1234")).Error);
+        Assert.Equal(AppErrorKind.Validation, (await svc.CreateUserAsync("Xena", "Cruz", "x@demo.io", "member", "123")).Error);
+        Assert.Equal(AppErrorKind.Validation, (await svc.CreateUserAsync("Xena", "Cruz", "x@demo.io", "admin", "temp1234")).Error);
+        Assert.Equal(AppErrorKind.Validation, (await svc.CreateUserAsync("Dupe", "Cruz", "member@demo.io", "member", "temp1234")).Error);
 
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
-        Assert.Equal(AppErrorKind.Unauthorized, (await svc.CreateUserAsync("Yara", "y@demo.io", "member", "temp1234")).Error);
+        Assert.Equal(AppErrorKind.Unauthorized, (await svc.CreateUserAsync("Yara", "Cruz", "y@demo.io", "member", "temp1234")).Error);
     }
 
     // ---------- discounts ----------
@@ -80,11 +80,11 @@ public class NewFeatureTests
     }
 
     [Fact]
-    public async Task Members_cannot_manage_or_read_discounts_and_admins_can_delete_them()
+    public async Task Members_cannot_manage_or_read_discounts_and_admins_can_archive_them()
     {
         var gw = await As("member@demo.io");
         Assert.Empty(await gw.ListAsync<Discount>());
-        Assert.Equal(AppErrorKind.Unauthorized, (await new AdminService(gw).SaveDiscountAsync(new Discount { Code = "HACK", Percent = 100, ExpiresAt = DateTime.UtcNow.AddDays(1) })).Error);
+        Assert.Equal(AppErrorKind.Unauthorized, (await new AdminService(gw).SaveDiscountAsync(new Discount { Code = "HACK", Percent = 100, MaxUses = 1, ExpiresAt = DateTime.UtcNow.AddDays(1) })).Error);
 
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
         var admin = new AdminService(gw);
@@ -93,19 +93,26 @@ public class NewFeatureTests
 
         var rows = (await admin.DiscountsAsync()).Value!;
         Assert.Equal("expired", rows.First(r => r.Discount.Code == "NEWYEAR20").State);
-        Assert.True((await admin.DeleteDiscountAsync(rows.First(r => r.Discount.Code == "NEWYEAR20").Discount)).Ok);
-        Assert.DoesNotContain((await admin.DiscountsAsync()).Value!, r => r.Discount.Code == "NEWYEAR20");
+        var expired = rows.First(r => r.Discount.Code == "NEWYEAR20").Discount;
+        Assert.Equal("record_archived", (await admin.DeleteDiscountAsync(expired)).Message);
+        var live = rows.First(r => r.State == "active").Discount;
+        Assert.True((await admin.DeleteDiscountAsync(live)).Ok);
+        Assert.False((await admin.DiscountsAsync()).Value!.Single(r => r.Discount.Id == live.Id).Discount.IsActive);
+        Assert.Contains((await new ArchiveService(gw).ListAsync(new("code"), 0)).Value!.Rows, r => r.RecordId == live.Id.ToString());
     }
 
     // ---------- plans: edit and delete ----------
     [Fact]
-    public async Task A_plan_in_use_cannot_be_deleted_but_an_unused_one_can()
+    public async Task Used_and_unused_plans_can_be_archived_without_losing_history()
     {
         var gw = await As("admin@demo.io");
         var admin = new AdminService(gw);
         var plans = (await admin.AllPackagesAsync()).Value!;
 
-        Assert.Equal(AppErrorKind.Conflict, (await admin.DeletePackageAsync(plans.First(p => p.Name == "Monthly"))).Error); // Alex has it
+        var history = (await gw.ListAsync<UserMembershipPackage>()).Count;
+        Assert.True((await admin.DeletePackageAsync(plans.First(p => p.Name == "Monthly"))).Ok);
+        Assert.Equal(history, (await gw.ListAsync<UserMembershipPackage>()).Count);
+        Assert.False((await admin.AllPackagesAsync()).Value!.Single(p => p.Name == "Monthly").IsActive);
         Assert.True((await admin.DeletePackageAsync(plans.First(p => p.Name == "Annual"))).Ok);
 
         var quarterly = plans.First(p => p.Name == "Quarterly");
@@ -159,7 +166,7 @@ public class NewFeatureTests
     {
         var gw = await As("coach@demo.io");
         var coaches = new CoachService(gw);
-        var start = DateTime.UtcNow.AddDays(5);
+        var start = DateTime.SpecifyKind(DateTime.UtcNow.AddHours(8).Date.AddDays(5).AddHours(2), DateTimeKind.Utc);   // 10:00 Manila: on the grid, inside gym hours
         Assert.Equal(AppErrorKind.Validation, (await coaches.PostShiftAsync(start, start.AddHours(-1), null)).Error);
         Assert.True((await coaches.PostShiftAsync(start, start.AddHours(4), "Late shift")).Ok);
         Assert.Equal(AppErrorKind.Conflict, (await coaches.PostShiftAsync(start.AddHours(1), start.AddHours(3), null)).Error);   // no overlapping shifts

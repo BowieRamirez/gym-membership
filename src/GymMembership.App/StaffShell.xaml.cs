@@ -8,15 +8,16 @@ public partial class StaffShell : Shell
 	{
 		InitializeComponent();
 		((Controls.HeaderBar)GetTitleView(this)).Attach(this, sp);
-		RoleLabel.Text = role == AppRole.Admin ? "Admin" : "Front desk";
-		if (role != AppRole.Admin)
-			foreach (var item in Items.Where(i => i.ClassId == "admin").ToList())
-				Items.Remove(item);
+		RoleLabel.Text = role switch { AppRole.Admin => "Super admin", AppRole.SubAdmin => "Sub-admin", _ => "Front desk" };
+		// D15: "super" pages are the super admin's; "admin" pages are shared with the sub-admin; the front desk gets neither
+		string[] hidden = role switch { AppRole.Admin => [], AppRole.SubAdmin => ["super"], _ => ["admin", "super"] };
+		foreach (var item in Items.Where(i => hidden.Contains(i.ClassId)).ToList())
+			Items.Remove(item);
 		if (DeviceInfo.Idiom == DeviceIdiom.Phone) MoveDeskItemsToBottomBar();
 #if WINDOWS
-		if (role == AppRole.Admin)
+		if (role is AppRole.Admin or AppRole.SubAdmin)
 		{
-			SetupAdminOverview(sp);
+			SetupAdminOverview(sp, role == AppRole.Admin);
 			SetupAdminNavigation();
 		}
 #endif

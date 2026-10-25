@@ -22,7 +22,15 @@ public static class PayMethod { public const string Qr = "qr", Cash = "cash", Gc
 { [PrimaryKey("id")] public string Id { get; set; } = ""; [Column("username")] public string Username { get; set; } = ""; [Column("full_name")] public string FullName { get; set; } = "";
   [Column("phone")] public string? Phone { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true; [Column("must_change_password")] public bool MustChangePassword { get; set; }
   // written only by the set_my_avatar function
-  [Column("avatar_path", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? AvatarPath { get; set; } }
+  [Column("avatar_path", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? AvatarPath { get; set; }
+  [Column("deleted_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? DeletedAt { get; set; }
+  [Column("deleted_by", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? DeletedBy { get; set; }
+  [Column("deletion_reason", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? DeletionReason { get; set; }
+  // full_name is built from these (0035); written only by set_my_name and sign-up
+  [Column("first_name", ignoreOnInsert: true, ignoreOnUpdate: true)] public string FirstName { get; set; } = "";
+  [Column("last_name", ignoreOnInsert: true, ignoreOnUpdate: true)] public string LastName { get; set; } = "";
+  // the sign-in email this person proved with a code; written only by confirm_my_email
+  [Column("confirmed_email", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? ConfirmedEmail { get; set; } }
 
 [Table("roles")] public class Role : BaseModel
 { [PrimaryKey("role_id")] public int RoleId { get; set; } [Column("name")] public string Name { get; set; } = ""; }
@@ -38,7 +46,9 @@ public static class PayMethod { public const string Qr = "qr", Cash = "cash", Gc
 [Table("gym_settings")] public class GymSettings : BaseModel
 { [PrimaryKey("id")] public int Id { get; set; } = 1; [Column("gym_name")] public string GymName { get; set; } = ""; [Column("qr_image_path")] public string? QrImagePath { get; set; }
   [Column("qr_account_name")] public string? QrAccountName { get; set; } [Column("walk_in_price")] public decimal WalkInPrice { get; set; }
-  [Column("payment_expiry_hours")] public int PaymentExpiryHours { get; set; } = 48; [Column("receipt_prefix")] public string ReceiptPrefix { get; set; } = "OR"; }
+  [Column("payment_expiry_hours")] public int PaymentExpiryHours { get; set; } = 48; [Column("receipt_prefix")] public string ReceiptPrefix { get; set; } = "OR";
+  // one opening and closing time for every day, Manila wall-clock (0028)
+  [Column("opens_at")] public TimeSpan OpensAt { get; set; } = TimeSpan.FromHours(6); [Column("closes_at")] public TimeSpan ClosesAt { get; set; } = TimeSpan.FromHours(22); }
 
 [Table("membership_packages")] public class MembershipPackage : BaseModel
 { [PrimaryKey("membership_package_id")] public int Id { get; set; } [Column("name")] public string Name { get; set; } = ""; [Column("description")] public string? Description { get; set; }
@@ -115,7 +125,12 @@ public class NotifiedMember : BaseModel
 { [PrimaryKey("time_request_id")] public int Id { get; set; } [Column("coach_id")] public string CoachId { get; set; } = ""; [Column("member_id")] public string? MemberId { get; set; }
   [Column("requested_by")] public string RequestedBy { get; set; } = ""; [Column("requested_start")] public DateTime RequestedStart { get; set; } [Column("requested_end")] public DateTime RequestedEnd { get; set; }
   [Column("status")] public string Status { get; set; } = "pending"; [Column("message")] public string? Message { get; set; }
-  [Column("training_session_id")] public int? SessionId { get; set; } } // set when the request moves an existing session
+  [Column("training_session_id")] public int? SessionId { get; set; }  // set when the request moves an existing session
+  // 0031: optional amenity, and the coach's current counter-proposal (version guards against accepting a stale one)
+  [Column("amenity_id")] public int? AmenityId { get; set; } [Column("proposed_start")] public DateTime? ProposedStart { get; set; } [Column("proposed_end")] public DateTime? ProposedEnd { get; set; }
+  [Column("proposed_amenity_id")] public int? ProposedAmenityId { get; set; } [Column("proposal_reason")] public string? ProposalReason { get; set; }
+  [Column("proposal_expires_at")] public DateTime? ProposalExpiresAt { get; set; } [Column("decline_reason")] public string? DeclineReason { get; set; }
+  [Column("version")] public int Version { get; set; } }
 
 [Table("training_sessions")] public class TrainingSession : BaseModel
 { [PrimaryKey("training_session_id")] public int Id { get; set; } [Column("coach_id")] public string CoachId { get; set; } = ""; [Column("member_id")] public string MemberId { get; set; } = "";
@@ -143,7 +158,8 @@ public class NotifiedMember : BaseModel
 
 [Table("discounts")] public class Discount : BaseModel
 { [PrimaryKey("discount_id")] public int Id { get; set; } [Column("code")] public string Code { get; set; } = ""; [Column("percent")] public int Percent { get; set; }
-  [Column("starts_at")] public DateTime StartsAt { get; set; } = DateTime.UtcNow; [Column("expires_at")] public DateTime ExpiresAt { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true; }
+  [Column("starts_at")] public DateTime StartsAt { get; set; } = DateTime.UtcNow; [Column("expires_at")] public DateTime ExpiresAt { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true;
+  [Column("max_uses")] public int? MaxUses { get; set; } }   // null: a code from before limits existed, unlimited
 
 // one conversation = one coach + one member. A message is sent as one of the two (sender_id) and only read_at changes afterwards
 [Table("messages")] public class ChatMessage : BaseModel
@@ -221,5 +237,22 @@ public class ChatSearchHit : BaseModel
 [Table("shift_posts")] public class ShiftPost : BaseModel
 { [PrimaryKey("shift_post_id")] public int Id { get; set; } [Column("coach_id", ignoreOnUpdate: true)] public string CoachId { get; set; } = ""; [Column("starts_at")] public DateTime Start { get; set; }
   [Column("ends_at")] public DateTime End { get; set; } [Column("note")] public string? Note { get; set; } [Column("status", ignoreOnInsert: true)] public string Status { get; set; } = "scheduled"; }
+
+// a coach's physical visit (0032): open while CheckedOutAt is null. Written only through coach_check_in / coach_check_out and the closing job.
+[Table("coach_visits")] public class CoachVisit : BaseModel
+{ [PrimaryKey("coach_visit_id")] public int Id { get; set; } [Column("coach_id")] public string CoachId { get; set; } = ""; [Column("checked_in_at")] public DateTime CheckedInAt { get; set; }
+  [Column("checked_in_by")] public string CheckedInBy { get; set; } = ""; [Column("checked_out_at")] public DateTime? CheckedOutAt { get; set; }
+  [Column("checked_out_by")] public string? CheckedOutBy { get; set; } [Column("auto_closed")] public bool AutoClosed { get; set; } }
+
+// a member's permanent QR code (0034). Each member reads only their own row; staff look codes up through scan_member.
+[Table("member_codes")] public class MemberCode : BaseModel
+{ [PrimaryKey("user_id")] public string UserId { get; set; } = ""; [Column("code")] public string Code { get; set; } = ""; }
+
+// one amenity booking (0029). Written only through book_slots / cancel_reservation / end_reservation / extend_reservation.
+[Table("reservations")] public class Reservation : BaseModel
+{ [PrimaryKey("reservation_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("amenity_id")] public int AmenityId { get; set; }
+  [Column("coach_id")] public string? CoachId { get; set; } [Column("training_session_id")] public int? TrainingSessionId { get; set; }
+  [Column("starts_at")] public DateTime StartsAt { get; set; } [Column("ends_at")] public DateTime EndsAt { get; set; } [Column("status")] public string Status { get; set; } = "confirmed";
+  [Column("cancelled_at")] public DateTime? CancelledAt { get; set; } [Column("cancelled_by")] public string? CancelledBy { get; set; } [Column("cancel_reason")] public string? CancelReason { get; set; } }
 
 public record RevenueRow(DateTime Day, string Kind, string Method, long Payments, decimal Total);
