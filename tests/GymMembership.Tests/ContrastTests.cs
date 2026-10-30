@@ -24,11 +24,15 @@ public class ContrastTests
 
     public static IEnumerable<object[]> TextPairs()
     {
-        foreach (var (theme, ink, muted, inverse, inverseOn) in new[] { ("Light", "InkLight", "MutedLight", "White", "InkLight"), ("Dark", "InkDark", "MutedDark", "ChalkDark", "InkDark") })
+        foreach (var (theme, ink, muted, inverse, inverseOn) in new[] { ("Light", "InkLight", "MutedLight", "White", "InkLight"), ("Dark", "InkDark", "MutedDark", "Black", "Lime") })
         {
-            foreach (var bg in new[] { "Chalk" + theme, "Surface" + theme }) { yield return new object[] { ink, bg }; yield return new object[] { muted, bg }; }
-            yield return new object[] { inverse, inverseOn };   // button text, avatar letters
+            foreach (var bg in new[] { "Chalk" + theme, "Surface" + theme, "Card" + theme }) { yield return new object[] { ink, bg }; yield return new object[] { muted, bg }; }
+            yield return new object[] { inverse, inverseOn };   // button text: white on black (light), black on lime (dark)
         }
+        yield return new object[] { "White", "InkLight" };            // avatar letters
+        yield return new object[] { "Black", "Lime" };                // lime highlight, lime buttons
+        yield return new object[] { "IconInk", "IconChipLight" };     // icons sit on a light chip in both themes
+        yield return new object[] { "IconInk", "IconChipDark" };
         yield return new object[] { "White", "PlateRedLight" };       // unread badge, light
         yield return new object[] { "ChalkDark", "PlateRedDark" };    // unread badge, dark
     }
@@ -36,7 +40,7 @@ public class ContrastTests
     public static IEnumerable<object[]> IndicatorPairs() =>
         from theme in new[] { "Light", "Dark" }
         from plate in new[] { "PlateBlue", "PlateYellow", "PlateGreen", "PlateRed" }
-        from bg in new[] { "Chalk", "Surface" }
+        from bg in new[] { "Chalk", "Surface", "Card" }
         select new object[] { plate + theme, bg + theme };
 
     [Theory, MemberData(nameof(TextPairs))]

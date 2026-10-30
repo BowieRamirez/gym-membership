@@ -19,7 +19,7 @@
     </Style>
 
     <Style TargetType="Shell" ApplyToDerivedTypes="True">
-        <Setter Property="Shell.BackgroundColor" Value="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}" />
+        <Setter Property="Shell.BackgroundColor" Value="{AppThemeBinding Light={StaticResource BackdropLight}, Dark={StaticResource BackdropDark}}" />
         <Setter Property="Shell.ForegroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
         <Setter Property="Shell.TitleColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
         <Setter Property="Shell.TabBarBackgroundColor" Value="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}" />
@@ -37,8 +37,15 @@
     </Style>
     <Style TargetType="Label" BasedOn="{StaticResource BaseLabel}" />
     <Style x:Key="Display" TargetType="Label" BasedOn="{StaticResource BaseLabel}">
-        <Setter Property="FontFamily" Value="BarlowSemiBold" />
+        <Setter Property="FontFamily" Value="BarlowMedium" />
         <Setter Property="FontSize" Value="{StaticResource TextDisplay}" />
+        <Setter Property="LineHeight" Value="1.05" />
+        <Setter Property="CharacterSpacing" Value="-0.6" />
+    </Style>
+    <!-- Page titles: big and light, like the reference dashboard -->
+    <Style x:Key="PageTitle" TargetType="Label" BasedOn="{StaticResource BaseLabel}">
+        <Setter Property="FontFamily" Value="BarlowMedium" />
+        <Setter Property="FontSize" Value="{OnIdiom Phone=20, Default=34}" />
         <Setter Property="LineHeight" Value="1.05" />
         <Setter Property="CharacterSpacing" Value="-0.4" />
     </Style>
@@ -87,20 +94,20 @@
 
     <!-- A field is an entry framed by a hairline; the frame turns Plate Blue while focused (see FieldFrame in pages) -->
     <Style x:Key="Field" TargetType="Border">
-        <Setter Property="StrokeShape" Value="RoundRectangle 10" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 14" />
         <Setter Property="StrokeThickness" Value="1.5" />
         <Setter Property="Padding" Value="14,0" />
         <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}" />
         <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
     </Style>
 
-    <!-- ===== Buttons: Rubber is the primary action; outline is secondary ===== -->
+    <!-- ===== Buttons: pills. Primary is black (light) or lime (dark); outline is secondary ===== -->
     <Style x:Key="BaseButton" TargetType="Button">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Lime}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
         <Setter Property="FontFamily" Value="BarlowSemiBold" />
         <Setter Property="FontSize" Value="{StaticResource TextBody}" />
-        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="CornerRadius" Value="24" />
         <Setter Property="MinimumHeightRequest" Value="48" />
         <Setter Property="Padding" Value="20,0" />
         <Setter Property="VisualStateManager.VisualStateGroups">
@@ -128,24 +135,29 @@
         <Setter Property="BorderWidth" Value="1.5" />
         <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
     </Style>
+    <!-- Lime: a selected choice, or the one action a lime card leads to -->
+    <Style x:Key="LimeButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+        <Setter Property="BackgroundColor" Value="{StaticResource Lime}" />
+        <Setter Property="TextColor" Value="{StaticResource Black}" />
+    </Style>
 
-    <!-- ===== Surfaces: flat panels with a hairline, no shadows ===== -->
+    <!-- ===== Surfaces: big rounded cards, flat, no border, no shadow ===== -->
     <Style x:Key="Panel" TargetType="Border">
-        <Setter Property="StrokeShape" Value="RoundRectangle 6" />
-        <Setter Property="StrokeThickness" Value="1" />
-        <Setter Property="Padding" Value="16" />
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 22" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="Padding" Value="18" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource CardLight}, Dark={StaticResource CardDark}}" />
         <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
     </Style>
 
 
     <!-- ===== Status chips: a coloured dot AND a word, so colour is never the only signal ===== -->
     <Style x:Key="Chip" TargetType="Border">
-        <Setter Property="StrokeShape" Value="RoundRectangle 6" />
-        <Setter Property="StrokeThickness" Value="1" />
-        <Setter Property="Padding" Value="8,3" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 12" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="Padding" Value="10,4" />
         <Setter Property="HorizontalOptions" Value="Start" />
-        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}" />
     </Style>
     <Style x:Key="DotPending" TargetType="Ellipse">
         <Setter Property="WidthRequest" Value="8" /><Setter Property="HeightRequest" Value="8" /><Setter Property="VerticalOptions" Value="Center" />
@@ -179,13 +191,20 @@
     <!-- Compact buttons for actions inside list rows -->
     <Style x:Key="SmallButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
         <Setter Property="MinimumHeightRequest" Value="{OnPlatform Android=48, iOS=48, Default=40}" />
+        <Setter Property="CornerRadius" Value="{OnPlatform Android=24, iOS=24, Default=20}" />
         <Setter Property="Padding" Value="14,0" />
         <Setter Property="FontSize" Value="14" />
     </Style>
     <Style x:Key="SmallOutlineButton" TargetType="Button" BasedOn="{StaticResource OutlineButton}">
         <Setter Property="MinimumHeightRequest" Value="{OnPlatform Android=48, iOS=48, Default=40}" />
+        <Setter Property="CornerRadius" Value="{OnPlatform Android=24, iOS=24, Default=20}" />
         <Setter Property="Padding" Value="14,0" />
         <Setter Property="FontSize" Value="14" />
+    </Style>
+
+    <Style x:Key="LimeSmallButton" TargetType="Button" BasedOn="{StaticResource SmallButton}">
+        <Setter Property="BackgroundColor" Value="{StaticResource Lime}" />
+        <Setter Property="TextColor" Value="{StaticResource Black}" />
     </Style>
 
     <!-- Card action cells: beside the text on wide screens, under it (full width) on phones. Parent Grid needs RowDefinitions="Auto,Auto". -->

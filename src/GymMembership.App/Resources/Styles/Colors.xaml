@@ -4,18 +4,35 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
 
-    <!-- Surfaces: cool concrete (light) / rubber flooring (dark) -->
-    <Color x:Key="ChalkLight">#EDEFF1</Color>
+    <!-- Surfaces: sage canvas, lime highlight. Chalk = page, Card = panels, Surface = fields and rows inside cards. -->
+    <Color x:Key="ChalkLight">#F2F4F0</Color>
     <Color x:Key="SurfaceLight">#FFFFFF</Color>
-    <Color x:Key="InkLight">#1F2226</Color>
-    <Color x:Key="MutedLight">#5C646C</Color>
-    <Color x:Key="LineLight">#CDD3D9</Color>
+    <Color x:Key="CardLight">#E7EBE4</Color>
+    <Color x:Key="InkLight">#000000</Color>
+    <Color x:Key="MutedLight">#5A6159</Color>
+    <Color x:Key="LineLight">#D4DAD0</Color>
 
-    <Color x:Key="ChalkDark">#1A1D20</Color>
-    <Color x:Key="SurfaceDark">#24282C</Color>
-    <Color x:Key="InkDark">#ECEEF0</Color>
-    <Color x:Key="MutedDark">#9AA3AB</Color>
-    <Color x:Key="LineDark">#3A4047</Color>
+    <Color x:Key="ChalkDark">#161816</Color>
+    <Color x:Key="SurfaceDark">#2C302B</Color>
+    <Color x:Key="CardDark">#212521</Color>
+    <Color x:Key="InkDark">#EEF1EC</Color>
+    <Color x:Key="MutedDark">#A3AAA1</Color>
+    <Color x:Key="LineDark">#3A3F39</Color>
+
+    <!-- Behind the side menu and title bar -->
+    <Color x:Key="BackdropLight">#DDE3DA</Color>
+    <Color x:Key="BackdropDark">#0E100E</Color>
+    <!-- Windows side menu -->
+    <Color x:Key="RailLight">#FFFFFF</Color>
+    <Color x:Key="RailDark">#212521</Color>
+
+    <!-- Highlight: the current item, selected choices, the dark-mode primary button. Not a status. -->
+    <Color x:Key="Lime">#E4F58A</Color>
+
+    <!-- Icons are black in both themes and always sit on a light chip -->
+    <Color x:Key="IconInk">#000000</Color>
+    <Color x:Key="IconChipLight">#FFFFFF</Color>
+    <Color x:Key="IconChipDark">#E7EBE4</Color>
 
     <!-- Plate colours: colour only ever means status. Never decoration. -->
     <Color x:Key="PlateBlueLight">#2F62D9</Color>    <!-- scheduled, focus -->
@@ -28,7 +45,7 @@
     <Color x:Key="PlateRedDark">#FF7B70</Color>
 
     <!-- Theme-aware brushes/colours used by styles and pages -->
-    <Color x:Key="Chalk"       >#EDEFF1</Color>
+    <Color x:Key="Chalk"       >#F2F4F0</Color>
     <Color x:Key="White">#FFFFFF</Color>
     <Color x:Key="Black">#000000</Color>
 </ResourceDictionary>
