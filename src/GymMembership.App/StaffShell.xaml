@@ -12,8 +12,7 @@
     <Shell.FlyoutHeader>
         <VerticalStackLayout Padding="20,28,20,16" Spacing="14">
             <Label x:Name="RoleLabel" Text="Front desk" Style="{StaticResource Heading}" />
-            <c:LaneView DashColor="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}"
-                        TrackColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+            <c:DumbbellLogo Size="36" Inverted="True" HorizontalOptions="Start" />
         </VerticalStackLayout>
     </Shell.FlyoutHeader>
 

@@ -47,6 +47,24 @@ public class ContrastTests
     [Theory, MemberData(nameof(TextPairs))]
     public void Text_pairs_reach_4_5_to_1(string fg, string bg) => Assert.True(Ratio(fg, bg) >= 4.5, $"{fg} on {bg} is {Ratio(fg, bg):0.00}:1");
 
+    // The redesign: pages carry no colours from the old palette, selected choices are lime, and dashed lines only show progress.
+    [Fact]
+    public void No_page_uses_the_old_palette()
+    {
+        var app = TestPaths.AppFolder();
+        var files = new[] { "Views", "Controls" }.SelectMany(d => Directory.GetFiles(Path.Combine(app, d)))
+            .Concat(Directory.GetFiles(app, "*Shell*")).Where(f => f.EndsWith(".xaml") || f.EndsWith(".cs"));
+        var old = new[] { "#1F2226", "#24282C", "#EDEFF1", "#ECEEF0", "#5C646C", "#9AA3AB", "#CDD3D9", "#3A4047", "#1A1D20" };
+        foreach (var file in files)
+        {
+            var text = File.ReadAllText(file);
+            Assert.All(old, hex => Assert.DoesNotContain(hex, text, StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain("Value=\"{StaticResource SmallButton}\"", text);   // a selected toggle is lime, not black
+        }
+        foreach (var page in new[] { "Views/SettingsPage.xaml", "MemberShell.xaml", "CoachShell.xaml", "StaffShell.xaml" })
+            Assert.DoesNotContain("<c:LaneView", File.ReadAllText(Path.Combine(app, page)));
+    }
+
     [Theory, MemberData(nameof(IndicatorPairs))]
     public void Status_colors_reach_3_to_1(string fg, string bg) => Assert.True(Ratio(fg, bg) >= 3.0, $"{fg} on {bg} is {Ratio(fg, bg):0.00}:1");
 }

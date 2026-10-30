@@ -24,14 +24,14 @@
                 <Button Text="{Binding CoachTabText}" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowTabCommand}" CommandParameter="coach">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Tab}" Value="coach">
-                            <Setter Property="Style" Value="{StaticResource SmallButton}" />
+                            <Setter Property="Style" Value="{StaticResource LimeSmallButton}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
                 <Button Grid.Column="1" Text="{Binding StaffTabText}" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowTabCommand}" CommandParameter="support">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Tab}" Value="support">
-                            <Setter Property="Style" Value="{StaticResource SmallButton}" />
+                            <Setter Property="Style" Value="{StaticResource LimeSmallButton}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
@@ -42,21 +42,21 @@
                 <Button Text="Open" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowFilterCommand}" CommandParameter="open">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="open">
-                            <Setter Property="Style" Value="{StaticResource SmallButton}" />
+                            <Setter Property="Style" Value="{StaticResource LimeSmallButton}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
                 <Button Grid.Column="1" Text="Mine" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowFilterCommand}" CommandParameter="mine">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="mine">
-                            <Setter Property="Style" Value="{StaticResource SmallButton}" />
+                            <Setter Property="Style" Value="{StaticResource LimeSmallButton}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
                 <Button Grid.Column="2" Text="Closed" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowFilterCommand}" CommandParameter="closed">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="closed">
-                            <Setter Property="Style" Value="{StaticResource SmallButton}" />
+                            <Setter Property="Style" Value="{StaticResource LimeSmallButton}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>

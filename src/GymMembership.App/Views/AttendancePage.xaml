@@ -18,16 +18,16 @@
                     <Label Text="Cancelled" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold" IsVisible="{Binding Cancelled}" />
                     <FlexLayout Wrap="Wrap" IsVisible="{Binding CanMark}">
                         <Button Text="Present" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnMarkPresent">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="present"><Setter Property="Style" Value="{StaticResource SmallButton}" /></DataTrigger></Button.Triggers>
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="present"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
                         </Button>
                         <Button Text="Late" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnMarkLate">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="late"><Setter Property="Style" Value="{StaticResource SmallButton}" /></DataTrigger></Button.Triggers>
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="late"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
                         </Button>
                         <Button Text="Absent" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnMarkAbsent">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="absent"><Setter Property="Style" Value="{StaticResource SmallButton}" /></DataTrigger></Button.Triggers>
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="absent"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
                         </Button>
                         <Button Text="Excused" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnMarkExcused">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="excused"><Setter Property="Style" Value="{StaticResource SmallButton}" /></DataTrigger></Button.Triggers>
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="excused"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
                         </Button>
                     </FlexLayout>
                 </VerticalStackLayout>
@@ -66,10 +66,10 @@
             <!-- Month | Week, then back, the period, forward, Today -->
             <FlexLayout Wrap="Wrap" AlignItems="Center">
                 <Button Text="Month" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding ShowMonthCommand}">
-                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsMonth}" Value="True"><Setter Property="Style" Value="{StaticResource SmallButton}" /></DataTrigger></Button.Triggers>
+                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsMonth}" Value="True"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
                 </Button>
                 <Button Text="Week" Style="{StaticResource SmallOutlineButton}" Margin="0,0,20,8" Command="{Binding ShowWeekCommand}">
-                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsWeek}" Value="True"><Setter Property="Style" Value="{StaticResource SmallButton}" /></DataTrigger></Button.Triggers>
+                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsWeek}" Value="True"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
                 </Button>
                 <Grid WidthRequest="44" HeightRequest="44" Margin="0,0,4,8">
                     <Button Style="{StaticResource SmallOutlineButton}" Padding="0" Command="{Binding PreviousCommand}" SemanticProperties.Description="Previous" />
@@ -97,7 +97,7 @@
                 <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Days}">
                     <BindableLayout.ItemTemplate>
                         <DataTemplate x:DataType="svc:CalendarDay">
-                            <Border Style="{StaticResource Panel}" FlexLayout.Basis="14.2857%" Padding="2,8" HeightRequest="58"
+                            <Border Style="{StaticResource Panel}" FlexLayout.Basis="14.2857%" Padding="2,8" HeightRequest="58" Margin="2" StrokeShape="RoundRectangle 12"
                                     SemanticProperties.Description="{Binding Description}">
                                 <Border.Triggers>
                                     <DataTrigger TargetType="Border" Binding="{Binding Dimmed}" Value="True"><Setter Property="Opacity" Value="0.45" /></DataTrigger>
