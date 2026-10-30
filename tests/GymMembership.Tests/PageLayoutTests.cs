@@ -15,6 +15,25 @@ public class PageLayoutTests
             Assert.Contains(key, styles);
     }
 
+    // a narrow Windows window gets one column instead of two squeezed ones (the column count is a maximum, not a promise)
+    [Fact]
+    public void Card_grid_drops_columns_that_would_be_too_narrow()
+    {
+        var controls = File.ReadAllText(AppFile("Controls", "Controls.cs"));
+        var grid = controls[controls.IndexOf("public class CardGrid", StringComparison.Ordinal)..controls.IndexOf("public class CardTitle", StringComparison.Ordinal)];
+        Assert.Contains("MinColumnWidth", grid);
+        Assert.Contains("int Fit(double width)", grid);
+        Assert.Equal(2, grid.Split("Fit(").Length - 2);   // used by both Measure and ArrangeChildren
+    }
+
+    // UI scripts find card headings by AutomationId; the id has to reach the text the automation tree exposes
+    [Fact]
+    public void Card_title_passes_its_automation_id_to_its_text()
+    {
+        var controls = File.ReadAllText(AppFile("Controls", "Controls.cs"));
+        Assert.Contains("_label.AutomationId = AutomationId", controls);
+    }
+
     [Fact]
     public void Lane_is_drawn_as_pills()
     {

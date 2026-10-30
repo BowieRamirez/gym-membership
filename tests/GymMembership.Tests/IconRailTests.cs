@@ -39,6 +39,15 @@ public class IconRailTests
             Assert.DoesNotContain(banned, source);
     }
 
+    // scripts/Test-WindowsAdminNavigation.ps1 drives the menu by these ids
+    [Fact]
+    public void Rail_keeps_the_ids_the_windows_ui_script_uses()
+    {
+        var source = Rail();
+        Assert.Contains("\"AdminNavigation-\" + item.Route", source);
+        Assert.Contains("\"AdminFrontDeskGroup\"", source);
+    }
+
     [Fact]
     public void Front_desk_group_starts_folded_and_marks_the_briefcase_when_a_desk_page_is_current()
     {

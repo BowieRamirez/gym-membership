@@ -61,27 +61,38 @@ public class CardGrid : Layout
         propertyChanged: (b, _, _) => ((CardGrid)b).InvalidateMeasure());
     public int Columns { get => (int)GetValue(ColumnsProperty); set => SetValue(ColumnsProperty, value); }
     public double Spacing { get; set; } = 12;
+    /// <summary>Columns is a most: a narrow window gets fewer, so no card is squeezed below this width.</summary>
+    public double MinColumnWidth { get; set; } = 320;
+
+    int Fit(double width)
+    {
+        var room = width - Padding.HorizontalThickness;
+        var fit = double.IsFinite(room) ? (int)((room + Spacing) / (MinColumnWidth + Spacing)) : Columns;
+        return Math.Clamp(fit, 1, Math.Max(1, Columns));
+    }
 
     protected override Microsoft.Maui.Layouts.ILayoutManager CreateLayoutManager() => new Manager(this);
 
     sealed class Manager(CardGrid grid) : Microsoft.Maui.Layouts.ILayoutManager
     {
         List<IView> Visible() => grid.Where(v => v.Visibility != Visibility.Collapsed).ToList();
-        double ColumnWidth(double width) { var n = Math.Max(1, grid.Columns); return Math.Max(0, (width - grid.Padding.HorizontalThickness - grid.Spacing * (n - 1)) / n); }
+        double ColumnWidth(double width, int n) => Math.Max(0, (width - grid.Padding.HorizontalThickness - grid.Spacing * (n - 1)) / n);
 
         public Size Measure(double widthConstraint, double heightConstraint)
         {
-            var w = ColumnWidth(widthConstraint);
-            var rows = Visible().Chunk(Math.Max(1, grid.Columns)).Select(r => r.Max(v => v.Measure(w, double.PositiveInfinity).Height)).ToList();
+            var n = grid.Fit(widthConstraint);
+            var w = ColumnWidth(widthConstraint, n);
+            var rows = Visible().Chunk(n).Select(r => r.Max(v => v.Measure(w, double.PositiveInfinity).Height)).ToList();
             var height = rows.Sum() + grid.Spacing * Math.Max(0, rows.Count - 1) + grid.Padding.VerticalThickness;
             return new Size(widthConstraint, height);
         }
 
         public Size ArrangeChildren(Rect bounds)
         {
-            var w = ColumnWidth(bounds.Width);
+            var n = grid.Fit(bounds.Width);
+            var w = ColumnWidth(bounds.Width, n);
             var y = bounds.Top + grid.Padding.Top;
-            foreach (var row in Visible().Chunk(Math.Max(1, grid.Columns)))
+            foreach (var row in Visible().Chunk(n))
             {
                 var h = row.Max(v => v.DesiredSize.Height);
                 for (var i = 0; i < row.Length; i++)
@@ -115,6 +126,7 @@ public class CardTitle : ContentView
         if (Application.Current?.Resources.TryGetValue("Heading", out var style) == true) _label.Style = (Style)style;
         _label.FontSize = 18;
         SemanticProperties.SetHeadingLevel(_label, SemanticHeadingLevel.Level2);
+        PropertyChanged += (_, e) => { if (e.PropertyName == nameof(AutomationId) && _label.AutomationId is null) _label.AutomationId = AutomationId; };
         Content = new Grid { ColumnDefinitions = [new(GridLength.Auto), new(GridLength.Star)], ColumnSpacing = 10, Children = { _icon, _label } };
         Grid.SetColumn(_label, 1);
     }

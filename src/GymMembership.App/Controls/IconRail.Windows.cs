@@ -51,6 +51,7 @@ public static class IconRail
         View Link(ShellItem item)
         {
             var (cell, button, icon) = IconCell(PageIcons.GetValueOrDefault(item.Title, "layout-dashboard"), item.Title);
+            button.AutomationId = "AdminNavigation-" + item.Route;   // scripts/Test-WindowsAdminNavigation.ps1 drives the menu by these ids
             button.Clicked += (_, _) => shell.CurrentItem = item;
             links.Add((item, button, icon));
             return cell;
@@ -76,6 +77,7 @@ public static class IconRail
             if (desk.Count > 0)
             {
                 var (cell, button, icon) = IconCell("briefcase", "Front desk operations");
+                button.AutomationId = "AdminFrontDeskGroup";
                 var deskPages = new VerticalStackLayout { Spacing = 6, Padding = new Thickness(0, 6) };
                 foreach (var item in desk) deskPages.Children.Add(Link(item));
                 group = new Border { StrokeThickness = 0, StrokeShape = new RoundRectangle { CornerRadius = 16 }, Padding = new Thickness(4, 0), IsVisible = false, Content = deskPages };

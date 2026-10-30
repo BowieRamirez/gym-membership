@@ -13,7 +13,7 @@
             <c:Banner Message="{Binding ErrorMessage}" />
 
             <!-- A tile with something to do turns lime AND says what in words, so colour is never the only signal -->
-            <c:CardGrid Columns="{OnIdiom Phone=2, Default=4}" BindableLayout.ItemsSource="{Binding Tiles}">
+            <c:CardGrid Columns="{OnIdiom Phone=2, Default=4}" MinColumnWidth="150" BindableLayout.ItemsSource="{Binding Tiles}">
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="vm:HomeTile">
                         <Border Style="{StaticResource Panel}"

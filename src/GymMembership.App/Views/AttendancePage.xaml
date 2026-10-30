@@ -41,7 +41,7 @@
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
             <!-- this month at a glance: three cards, the first one lime -->
-            <c:CardGrid Columns="{OnIdiom Phone=1, Default=3}">
+            <c:CardGrid Columns="{OnIdiom Phone=1, Default=3}" MinColumnWidth="180">
                 <Border Style="{StaticResource HeroPanel}">
                     <VerticalStackLayout Spacing="8">
                         <c:CardTitle Icon="calendar-days" Text="Sessions this month" TextColor="{StaticResource Black}" />
