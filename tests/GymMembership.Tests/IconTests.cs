@@ -13,7 +13,7 @@ public class IconTests
     internal static HashSet<string> Drawn() =>
         Regex.Matches(File.ReadAllText(AppFile("Controls", "Icons.cs")), "\\[\"([a-z-]+)\"\\]\\s*=").Select(m => m.Groups[1].Value).ToHashSet();
 
-    static readonly string[] Pages = ["HomePage.xaml", "CashierPage.xaml", "AttendancePage.xaml"];
+    static readonly string[] Pages = Directory.GetFiles(Path.Combine(TestPaths.AppFolder(), "Views"), "*.xaml").Select(Path.GetFileName).ToArray()!;
 
     [Fact]
     public void Every_icon_the_home_tiles_name_is_drawn()

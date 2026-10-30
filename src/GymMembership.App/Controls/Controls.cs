@@ -5,8 +5,7 @@ using Microsoft.Maui.Controls.Shapes;
 namespace GymMembership.App.Controls;
 
 /// <summary>
-/// The court-floor lane marking: a dashed line. Dashes up to Fraction are solid, the rest are faded.
-/// Used as a divider (Fraction=1) and as the "days left" meter on the membership screen.
+/// A row of upright pills: filled up to Fraction, dashed outlines after. The "days left" meter on the membership screen.
 /// </summary>
 public class LaneView : GraphicsView
 {
@@ -35,17 +34,89 @@ public class LaneView : GraphicsView
     {
         public void Draw(ICanvas canvas, RectF rect)
         {
-            var t = (float)v.Thickness;
-            float dash = t * 3.5f, gap = t * 2.5f, y = rect.Height / 2;
-            var solidUntil = rect.Width * (float)Math.Clamp(v.Fraction, 0, 1);
-            canvas.StrokeSize = t;
-            canvas.StrokeLineCap = LineCap.Butt;
-            for (var x = 0f; x < rect.Width; x += dash + gap)
+            float h = rect.Height - 2, w = h * 0.62f, gap = 6;
+            var count = Math.Max(1, (int)((rect.Width + gap) / (w + gap)));
+            var filled = (int)Math.Round(count * Math.Clamp(v.Fraction, 0, 1));
+            canvas.StrokeSize = 1.5f;
+            canvas.StrokeDashPattern = [4, 3];
+            canvas.StrokeColor = v.TrackColor;
+            canvas.FillColor = v.DashColor;
+            for (var i = 0; i < count; i++)
             {
-                canvas.StrokeColor = x < solidUntil ? v.DashColor : v.TrackColor;
-                canvas.DrawLine(x, y, Math.Min(x + dash, rect.Width), y);
+                var x = i * (w + gap) + 1;
+                if (i < filled) canvas.FillRoundedRectangle(x, 1, w, h, w / 2);
+                else canvas.DrawRoundedRectangle(x, 1, w, h, w / 2);
             }
         }
+    }
+}
+
+/// <summary>
+/// Cards in equal columns, filled row by row; each row is as tall as its tallest card. Unlike FlexLayout it gives every card a fixed
+/// width before measuring, so long text wraps inside the card instead of running past it. Works with BindableLayout.
+/// </summary>
+public class CardGrid : Layout
+{
+    public static readonly BindableProperty ColumnsProperty = BindableProperty.Create(nameof(Columns), typeof(int), typeof(CardGrid), 2,
+        propertyChanged: (b, _, _) => ((CardGrid)b).InvalidateMeasure());
+    public int Columns { get => (int)GetValue(ColumnsProperty); set => SetValue(ColumnsProperty, value); }
+    public double Spacing { get; set; } = 12;
+
+    protected override Microsoft.Maui.Layouts.ILayoutManager CreateLayoutManager() => new Manager(this);
+
+    sealed class Manager(CardGrid grid) : Microsoft.Maui.Layouts.ILayoutManager
+    {
+        List<IView> Visible() => grid.Where(v => v.Visibility != Visibility.Collapsed).ToList();
+        double ColumnWidth(double width) { var n = Math.Max(1, grid.Columns); return Math.Max(0, (width - grid.Padding.HorizontalThickness - grid.Spacing * (n - 1)) / n); }
+
+        public Size Measure(double widthConstraint, double heightConstraint)
+        {
+            var w = ColumnWidth(widthConstraint);
+            var rows = Visible().Chunk(Math.Max(1, grid.Columns)).Select(r => r.Max(v => v.Measure(w, double.PositiveInfinity).Height)).ToList();
+            var height = rows.Sum() + grid.Spacing * Math.Max(0, rows.Count - 1) + grid.Padding.VerticalThickness;
+            return new Size(widthConstraint, height);
+        }
+
+        public Size ArrangeChildren(Rect bounds)
+        {
+            var w = ColumnWidth(bounds.Width);
+            var y = bounds.Top + grid.Padding.Top;
+            foreach (var row in Visible().Chunk(Math.Max(1, grid.Columns)))
+            {
+                var h = row.Max(v => v.DesiredSize.Height);
+                for (var i = 0; i < row.Length; i++)
+                    row[i].Arrange(new Rect(bounds.Left + grid.Padding.Left + i * (w + grid.Spacing), y, w, h));
+                y += h + grid.Spacing;
+            }
+            return bounds.Size;
+        }
+    }
+}
+
+/// <summary>A card's header: one of the Icons on its chip, then the title. TextColor is for lime cards, which keep black words.</summary>
+public class CardTitle : ContentView
+{
+    public static readonly BindableProperty IconProperty = BindableProperty.Create(nameof(Icon), typeof(string), typeof(CardTitle), "",
+        propertyChanged: (b, _, n) => ((CardTitle)b)._icon.Icon = (string)n);
+    public static readonly BindableProperty TextProperty = BindableProperty.Create(nameof(Text), typeof(string), typeof(CardTitle), "",
+        propertyChanged: (b, _, n) => ((CardTitle)b)._label.Text = (string)n);
+    public static readonly BindableProperty TextColorProperty = BindableProperty.Create(nameof(TextColor), typeof(Color), typeof(CardTitle), null,
+        propertyChanged: (b, _, n) => { if (n is Color c) ((CardTitle)b)._label.TextColor = c; });
+
+    public string Icon { get => (string)GetValue(IconProperty); set => SetValue(IconProperty, value); }
+    public string Text { get => (string)GetValue(TextProperty); set => SetValue(TextProperty, value); }
+    public Color? TextColor { get => (Color?)GetValue(TextColorProperty); set => SetValue(TextColorProperty, value); }
+
+    readonly IconView _icon = new() { Size = 17, ChipSize = 34, VerticalOptions = LayoutOptions.Center };
+    readonly Label _label = new() { FontFamily = "BarlowSemiBold", FontSize = 18, VerticalOptions = LayoutOptions.Center, LineBreakMode = LineBreakMode.WordWrap };
+
+    public CardTitle()
+    {
+        if (Application.Current?.Resources.TryGetValue("Heading", out var style) == true) _label.Style = (Style)style;
+        _label.FontSize = 18;
+        SemanticProperties.SetHeadingLevel(_label, SemanticHeadingLevel.Level2);
+        Content = new Grid { ColumnDefinitions = [new(GridLength.Auto), new(GridLength.Star)], ColumnSpacing = 10, Children = { _icon, _label } };
+        Grid.SetColumn(_label, 1);
     }
 }
 
