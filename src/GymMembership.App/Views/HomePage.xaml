@@ -28,7 +28,7 @@
                                 <TapGestureRecognizer Tapped="OnTile" />
                             </Border.GestureRecognizers>
                             <VerticalStackLayout Spacing="6">
-                                <c:IconView Icon="{Binding Icon}" WidthRequest="28" HeightRequest="28" HorizontalOptions="Start" />
+                                <c:IconView Icon="{Binding Icon}" Size="22" ChipSize="44" HorizontalOptions="Start" />
                                 <Label Text="{Binding Count}" Style="{StaticResource Numeral}" />
                                 <Label Text="{Binding Title}" FontFamily="BarlowSemiBold" />
                                 <Label Text="{Binding Detail}" Style="{StaticResource Caption}" />

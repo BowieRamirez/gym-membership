@@ -73,12 +73,12 @@
                 </Button>
                 <Grid WidthRequest="44" HeightRequest="44" Margin="0,0,4,8">
                     <Button Style="{StaticResource SmallOutlineButton}" Padding="0" Command="{Binding PreviousCommand}" SemanticProperties.Description="Previous" />
-                    <c:IconView Icon="chevron-left" HorizontalOptions="Center" VerticalOptions="Center" />
+                    <c:IconView Icon="chevron-left" Size="18" ChipSize="32" HorizontalOptions="Center" VerticalOptions="Center" />
                 </Grid>
                 <Label Text="{Binding PeriodTitle}" Style="{StaticResource Heading}" VerticalOptions="Center" Margin="8,0,8,8" />
                 <Grid WidthRequest="44" HeightRequest="44" Margin="0,0,12,8">
                     <Button Style="{StaticResource SmallOutlineButton}" Padding="0" Command="{Binding NextCommand}" SemanticProperties.Description="Next" />
-                    <c:IconView Icon="chevron-right" HorizontalOptions="Center" VerticalOptions="Center" />
+                    <c:IconView Icon="chevron-right" Size="18" ChipSize="32" HorizontalOptions="Center" VerticalOptions="Center" />
                 </Grid>
                 <Button Text="Today" Style="{StaticResource SmallOutlineButton}" Margin="0,0,0,8" Command="{Binding TodayCommand}" />
             </FlexLayout>
@@ -113,8 +113,8 @@
                                 <VerticalStackLayout Spacing="4" HorizontalOptions="Center">
                                     <Label Text="{Binding Number}" FontFamily="BarlowSemiBold" HorizontalOptions="Center" />
                                     <HorizontalStackLayout Spacing="3" HorizontalOptions="Center" HeightRequest="14">
-                                        <c:IconView Icon="check" WidthRequest="12" HeightRequest="12" IsVisible="{Binding HasCheck}" />
-                                        <c:IconView Icon="x" WidthRequest="12" HeightRequest="12" IsVisible="{Binding HasX}" />
+                                        <c:IconView Icon="check" Size="10" ChipSize="16" IsVisible="{Binding HasCheck}" />
+                                        <c:IconView Icon="x" Size="10" ChipSize="16" IsVisible="{Binding HasX}" />
                                     </HorizontalStackLayout>
                                 </VerticalStackLayout>
                             </Border>
@@ -188,8 +188,8 @@
                             <HorizontalStackLayout Spacing="8" SemanticProperties.Description="{Binding Day.Description}">
                                 <HorizontalStackLayout.GestureRecognizers><TapGestureRecognizer Tapped="OnWeekDay" /></HorizontalStackLayout.GestureRecognizers>
                                 <Label Text="{Binding Title}" Style="{StaticResource Heading}" VerticalOptions="Center" />
-                                <c:IconView Icon="check" WidthRequest="14" HeightRequest="14" IsVisible="{Binding Day.HasCheck}" />
-                                <c:IconView Icon="x" WidthRequest="14" HeightRequest="14" IsVisible="{Binding Day.HasX}" />
+                                <c:IconView Icon="check" Size="12" ChipSize="20" IsVisible="{Binding Day.HasCheck}" />
+                                <c:IconView Icon="x" Size="12" ChipSize="20" IsVisible="{Binding Day.HasX}" />
                             </HorizontalStackLayout>
                             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Sessions}" BindableLayout.ItemTemplate="{StaticResource SessionTemplate}">
                                 <BindableLayout.EmptyView><Label Text="No sessions." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>

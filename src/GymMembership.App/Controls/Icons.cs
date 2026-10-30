@@ -22,6 +22,7 @@ public static class Icons
         ["footprints"] = "M 4 16 L 4 13.62 C 4 11.5 2.97 10.5 3 8 C 3.03 5.28 4.49 2 7.5 2 C 9.37 2 10 3.8 10 5.5 C 10 8.61 8 11.16 8 14.18 L 8 16 C 8 17.105 7.105 18 6 18 C 4.895 18 4 17.105 4 16 Z M 20 20 L 20 17.62 C 20 15.5 21.03 14.5 21 12 C 20.97 9.28 19.51 6 16.5 6 C 14.63 6 14 7.8 14 9.5 C 14 12.61 16 15.16 16 18.18 L 16 20 C 16 21.105 16.895 22 18 22 C 19.105 22 20 21.105 20 20 Z M 16 17 L 20 17 M 4 13 L 8 13",
         ["banknote"] = "M 4 6 L 20 6 C 21.105 6 22 6.895 22 8 L 22 16 C 22 17.105 21.105 18 20 18 L 4 18 C 2.895 18 2 17.105 2 16 L 2 8 C 2 6.895 2.895 6 4 6 Z M 10 12 C 10 13.105 10.895 14 12 14 C 13.105 14 14 13.105 14 12 C 14 10.895 13.105 10 12 10 C 10.895 10 10 10.895 10 12 Z M 6 12 L 6.01 12 M 18 12 L 18.01 12",
         ["smartphone"] = "M 7 2 L 17 2 C 18.105 2 19 2.895 19 4 L 19 20 C 19 21.105 18.105 22 17 22 L 7 22 C 5.895 22 5 21.105 5 20 L 5 4 C 5 2.895 5.895 2 7 2 Z M 12 18 L 12.01 18",
+        ["bell"] = "M 6 8 C 6 4.686 8.686 2 12 2 C 15.314 2 18 4.686 18 8 C 18 15 21 17 21 17 L 3 17 C 3 17 6 15 6 8 Z M 10.3 21 C 10.646 21.598 11.29 22 12 22 C 12.71 22 13.354 21.598 13.7 21",
         ["check"] = "M 20 6 L 9 17 L 4 12",
         ["x"] = "M 18 6 L 6 18 M 6 6 L 18 18",
         ["chevron-left"] = "M 15 18 L 9 12 L 15 6",
@@ -34,39 +35,61 @@ public static class Icons
 }
 
 /// <summary>
-/// One of the Icons, drawn in the theme's ink. OnInk flips it to the colour of text on a filled button, so it never vanishes on one.
-/// It is decorative (the words beside it say the same) and lets touches through to whatever it sits on.
+/// One of the Icons: drawn black in both themes on a light rounded chip (lime when Selected), so it reads on any surface.
+/// Size is the drawing, ChipSize the chip around it. It is decorative (the words beside it say the same) and lets touches through.
 /// </summary>
 public class IconView : ContentView
 {
     public static readonly BindableProperty IconProperty = BindableProperty.Create(nameof(Icon), typeof(string), typeof(IconView), "",
         propertyChanged: (b, _, _) => ((IconView)b).Redraw());
-    public static readonly BindableProperty OnInkProperty = BindableProperty.Create(nameof(OnInk), typeof(bool), typeof(IconView), false,
+    public static readonly BindableProperty SelectedProperty = BindableProperty.Create(nameof(Selected), typeof(bool), typeof(IconView), false,
         propertyChanged: (b, _, _) => ((IconView)b).Recolour());
+    public static readonly BindableProperty SizeProperty = BindableProperty.Create(nameof(Size), typeof(double), typeof(IconView), 18.0,
+        propertyChanged: (b, _, _) => ((IconView)b).Resize());
+    public static readonly BindableProperty ChipSizeProperty = BindableProperty.Create(nameof(ChipSize), typeof(double), typeof(IconView), 36.0,
+        propertyChanged: (b, _, _) => ((IconView)b).Resize());
 
     public string Icon { get => (string)GetValue(IconProperty); set => SetValue(IconProperty, value); }
-    public bool OnInk { get => (bool)GetValue(OnInkProperty); set => SetValue(OnInkProperty, value); }
+    public bool Selected { get => (bool)GetValue(SelectedProperty); set => SetValue(SelectedProperty, value); }
+    public double Size { get => (double)GetValue(SizeProperty); set => SetValue(SizeProperty, value); }
+    public double ChipSize { get => (double)GetValue(ChipSizeProperty); set => SetValue(ChipSizeProperty, value); }
 
-    readonly Microsoft.Maui.Controls.Shapes.Path _path = new() { Aspect = Stretch.Uniform, StrokeThickness = 2, StrokeLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round };
+    readonly Microsoft.Maui.Controls.Shapes.Path _path = new()
+    {
+        Aspect = Stretch.Uniform, StrokeThickness = 2, StrokeLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round,
+        HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center
+    };
+    readonly Border _chip = new() { StrokeThickness = 0, Padding = 0 };
 
     public IconView()
     {
-        WidthRequest = 22; HeightRequest = 22;
         InputTransparent = true;
         AutomationProperties.SetIsInAccessibleTree(this, false);
-        Content = _path;
+        _path.Stroke = new SolidColorBrush(Pick("IconInk", Colors.Black));
+        _chip.Content = _path;
+        Content = _chip;
+        Resize();
         Recolour();
     }
+
+    static Color Pick(string key, Color fallback) => Application.Current?.Resources.TryGetValue(key, out var v) == true && v is Color c ? c : fallback;
 
     void Redraw() =>
         _path.Data = Icons.Data.TryGetValue(Icon ?? "", out var d) ? new PathGeometryConverter().ConvertFromInvariantString(d) as Geometry : null;
 
+    void Resize()
+    {
+        WidthRequest = HeightRequest = ChipSize;
+        _path.WidthRequest = _path.HeightRequest = Size;
+        _path.StrokeThickness = Size < 14 ? 2.5 : 2;   // tiny marks need a heavier line to stay visible
+        _chip.StrokeShape = new RoundRectangle { CornerRadius = ChipSize / 3 };
+    }
+
     void Recolour()
     {
-        static Color Pick(string key, Color fallback) => Application.Current?.Resources.TryGetValue(key, out var v) == true && v is Color c ? c : fallback;
-        var light = OnInk ? Pick("White", Colors.White) : Pick("InkLight", Colors.Black);
-        var dark = OnInk ? Pick("ChalkDark", Colors.Black) : Pick("InkDark", Colors.White);
-        _path.SetAppTheme<Brush>(Shape.StrokeProperty, new SolidColorBrush(light), new SolidColorBrush(dark));
+        var lime = Pick("Lime", Colors.YellowGreen);
+        _chip.SetAppThemeColor(BackgroundColorProperty,
+            Selected ? lime : Pick("IconChipLight", Colors.White), Selected ? lime : Pick("IconChipDark", Colors.LightGray));
     }
 }
 
@@ -80,7 +103,7 @@ public class EyeButton : Grid
         propertyChanged: (b, _, _) => ((EyeButton)b).Show(false));
     public Entry? Entry { get => (Entry?)GetValue(EntryProperty); set => SetValue(EntryProperty, value); }
 
-    readonly IconView _icon = new() { HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center };
+    readonly IconView _icon = new() { Size = 18, ChipSize = 32, HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center };
     readonly Button _button = new() { BackgroundColor = Colors.Transparent, BorderWidth = 0, Padding = 0, WidthRequest = 40, MinimumHeightRequest = 40 };
 
     public EyeButton()
@@ -101,8 +124,8 @@ public class EyeButton : Grid
 }
 
 /// <summary>
-/// A choice button with an icon on its left. It stays a real Button (touch, keyboard, screen reader); IsSelected fills it, flips the icon to
-/// match, and is announced as "selected".
+/// A choice button with an icon on its left. It stays a real Button (touch, keyboard, screen reader); IsSelected fills it lime (the icon
+/// stays black) and is announced as "selected".
 /// </summary>
 public class IconButton : ContentView
 {
@@ -121,8 +144,8 @@ public class IconButton : ContentView
     public object? CommandParameter { get => GetValue(CommandParameterProperty); set => SetValue(CommandParameterProperty, value); }
     public bool IsSelected { get => (bool)GetValue(IsSelectedProperty); set => SetValue(IsSelectedProperty, value); }
 
-    readonly Button _button = new() { Padding = new Thickness(40, 0, 16, 0) };   // room on the left for the icon
-    readonly IconView _icon = new() { HorizontalOptions = LayoutOptions.Start, VerticalOptions = LayoutOptions.Center, Margin = new Thickness(14, 0, 0, 0) };
+    readonly Button _button = new() { Padding = new Thickness(44, 0, 16, 0) };   // room on the left for the icon
+    readonly IconView _icon = new() { Size = 16, ChipSize = 28, HorizontalOptions = LayoutOptions.Start, VerticalOptions = LayoutOptions.Center, Margin = new Thickness(8, 0, 0, 0) };
 
     public IconButton()
     {
@@ -133,8 +156,8 @@ public class IconButton : ContentView
     void Refresh()
     {
         _button.Text = Text; _button.Command = Command; _button.CommandParameter = CommandParameter;
-        _icon.Icon = Icon; _icon.OnInk = IsSelected;
-        if (Application.Current!.Resources.TryGetValue(IsSelected ? "SmallButton" : "SmallOutlineButton", out var style)) _button.Style = (Style)style;
+        _icon.Icon = Icon;
+        if (Application.Current!.Resources.TryGetValue(IsSelected ? "LimeSmallButton" : "SmallOutlineButton", out var style)) _button.Style = (Style)style;
         SemanticProperties.SetDescription(_button, IsSelected ? $"{Text}, selected" : Text);
     }
 }

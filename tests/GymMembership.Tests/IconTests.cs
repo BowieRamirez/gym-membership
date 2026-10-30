@@ -67,6 +67,33 @@ public class IconTests
         foreach (var name in new[] { "check", "x", "chevron-left", "chevron-right" }) Assert.Contains(name, drawn);
     }
 
+    // The redesign: every icon is black in both themes and sits on a light chip, so dark mode never draws black on black.
+    [Fact]
+    public void Icon_view_is_black_in_both_themes()
+    {
+        var source = File.ReadAllText(AppFile("Controls", "Icons.cs"));
+        Assert.Contains("\"IconInk\"", source);
+        Assert.Contains("\"IconChipDark\"", source);
+        Assert.DoesNotContain("InkDark", source);
+        Assert.DoesNotContain("OnInk", source);
+    }
+
+    [Fact]
+    public void Bell_is_drawn_by_the_shared_icon_view()
+    {
+        var header = File.ReadAllText(AppFile("Controls", "HeaderBar.xaml"));
+        Assert.Contains("Icon=\"bell\"", header);
+        Assert.DoesNotContain("<Path", header);
+        Assert.Contains("bell", Drawn());
+    }
+
+    [Fact]
+    public void Selected_choice_buttons_are_lime_not_black()
+    {
+        var source = File.ReadAllText(AppFile("Controls", "Icons.cs"));
+        Assert.Contains("\"LimeSmallButton\"", source);
+    }
+
     [Fact]
     public void Each_drawn_icon_is_a_real_path_of_numbers_and_commands()
     {
