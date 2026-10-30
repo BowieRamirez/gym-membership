@@ -10,7 +10,7 @@ public class IconTests
 {
     static string AppFile(params string[] parts) => Path.Combine(new[] { TestPaths.AppFolder() }.Concat(parts).ToArray());
 
-    static HashSet<string> Drawn() =>
+    internal static HashSet<string> Drawn() =>
         Regex.Matches(File.ReadAllText(AppFile("Controls", "Icons.cs")), "\\[\"([a-z-]+)\"\\]\\s*=").Select(m => m.Groups[1].Value).ToHashSet();
 
     static readonly string[] Pages = ["HomePage.xaml", "CashierPage.xaml", "AttendancePage.xaml"];

@@ -8,20 +8,19 @@ public partial class StaffShell : Shell
 	{
 		InitializeComponent();
 		((Controls.HeaderBar)GetTitleView(this)).Attach(this, sp);
-		RoleLabel.Text = role switch { AppRole.Admin => "Super admin", AppRole.SubAdmin => "Sub-admin", _ => "Front desk" };
+		RoleLabel.Text = RoleName(role);
 		// D15: "super" pages are the super admin's; "admin" pages are shared with the sub-admin; the front desk gets neither
 		string[] hidden = role switch { AppRole.Admin => [], AppRole.SubAdmin => ["super"], _ => ["admin", "super"] };
 		foreach (var item in Items.Where(i => hidden.Contains(i.ClassId)).ToList())
 			Items.Remove(item);
 		if (DeviceInfo.Idiom == DeviceIdiom.Phone) MoveDeskItemsToBottomBar();
 #if WINDOWS
-		if (role is AppRole.Admin or AppRole.SubAdmin)
-		{
-			SetupAdminOverview(sp, role == AppRole.Admin);
-			SetupAdminNavigation();
-		}
+		if (role is AppRole.Admin or AppRole.SubAdmin) SetupAdminOverview(sp, role == AppRole.Admin);
+		Controls.IconRail.Install(this, RoleName(role), (Core.ViewModels.HeaderViewModel)GetTitleView(this).BindingContext, groupFrontDesk: role is AppRole.Admin or AppRole.SubAdmin);
 #endif
 	}
+
+	static string RoleName(AppRole role) => role switch { AppRole.Admin => "Super admin", AppRole.SubAdmin => "Sub-admin", _ => "Front desk" };
 
 	// short names fit under a bottom-bar slot; the pages themselves keep their full titles
 	static readonly Dictionary<string, string> ShortNames = new()

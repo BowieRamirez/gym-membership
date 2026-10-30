@@ -5,79 +5,11 @@ public class WindowsAdminNavigationTests
     [Fact]
     public void Grouping_is_Windows_only_and_admin_only()
     {
-        var app = TestPaths.AppFolder();
-        var setup = File.ReadAllText(Path.Combine(app, "StaffShell.xaml.cs")).Replace("\r\n", "\n");
-        // D15: the sub-admin gets the overview and the grouped menu too
-        Assert.Contains("#if WINDOWS\n\t\tif (role is AppRole.Admin or AppRole.SubAdmin)\n\t\t{\n\t\t\tSetupAdminOverview(sp, role == AppRole.Admin);\n\t\t\tSetupAdminNavigation();\n\t\t}\n#endif", setup);
-        var source = File.ReadAllText(Path.Combine(app, "StaffShell.Windows.cs"));
-        Assert.StartsWith("#if WINDOWS", source);
-        Assert.EndsWith("#endif", source.TrimEnd());
-    }
-
-    [Fact]
-    public void Operations_group_starts_collapsed_and_uses_supported_Shell_flyout_content()
-    {
-        var source = File.ReadAllText(Path.Combine(TestPaths.AppFolder(), "StaffShell.Windows.cs"));
-        foreach (var required in new[] { "Front desk operations", "Administration", "IsVisible = false", "FlyoutContent =", "CurrentItem = item", "Navigated", "SemanticProperties.SetDescription" })
-            Assert.Contains(required, source);
-        Assert.DoesNotContain("Items.Remove", source);
-        Assert.DoesNotContain("new ShellContent", source);
-        Assert.Contains("item.ClassId == \"desk\" || item.Route == \"messages\"", source);
-    }
-
-    [Fact]
-    public void Custom_sidebar_never_replaces_native_Shell_items_or_forces_native_selection()
-    {
-        var source = File.ReadAllText(Path.Combine(TestPaths.AppFolder(), "StaffShell.Windows.cs"));
-        Assert.DoesNotContain("MenuItemsSource", source);
-        Assert.DoesNotContain("SelectedItem", source);
-        Assert.DoesNotContain("Microsoft.UI.Xaml.Controls.NavigationView", source);
-    }
-
-    [Fact]
-    public void Navigation_button_content_is_left_aligned_without_shrinking_the_click_target()
-    {
-        var source = File.ReadAllText(Path.Combine(TestPaths.AppFolder(), "StaffShell.Windows.cs"));
-        Assert.Contains("HorizontalContentAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Left", source);
-        Assert.Contains("HorizontalOptions = LayoutOptions.Fill", source);
-        Assert.Contains("new Thickness(16, 0, 0, 0)", source);
-        var footer = File.ReadAllText(Path.Combine(TestPaths.AppFolder(), "Controls", "SignOutFooter.xaml.cs"));
-        Assert.Contains("#if WINDOWS", footer);
-        Assert.Contains("HorizontalContentAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Left", footer);
-    }
-
-    [Fact]
-    public void Section_headings_share_typography_and_do_not_change_weight_with_selection()
-    {
-        var source = File.ReadAllText(Path.Combine(TestPaths.AppFolder(), "StaffShell.Windows.cs"));
-        Assert.Contains("toggle.FontFamily = \"BarlowSemiBold\"", source);
-        Assert.Contains("FontFamily = toggle.FontFamily, FontSize = toggle.FontSize", source);
-        Assert.Contains("administration.SetAppThemeColor(Label.TextColorProperty, ThemeColor(\"InkLight\"), ThemeColor(\"InkDark\"))", source);
-        Assert.DoesNotContain("toggle.FontFamily = current.Length", source);
-    }
-
-    [Fact]
-    public void Sidebar_has_uniform_row_spacing_and_section_headings_larger_than_page_links()
-    {
-        var source = File.ReadAllText(Path.Combine(TestPaths.AppFolder(), "StaffShell.Windows.cs"));
-        Assert.Contains("toggle.FontSize = 18", source);
-        Assert.Contains("FontFamily = \"Barlow\", FontSize = 16", source);
-        Assert.Contains("Margin = new Thickness(12, 0, 0, 0)", source);
-        Assert.DoesNotContain("new Thickness(12, 16, 0, 0)", source);
-        Assert.DoesNotContain("button.Margin =", source);
-        Assert.Contains("Spacing = 4", source);
-    }
-
-    [Fact]
-    public void Administration_pages_match_the_operations_layout_without_a_collapse_action()
-    {
-        var source = File.ReadAllText(Path.Combine(TestPaths.AppFolder(), "StaffShell.Windows.cs"));
-        Assert.Contains("var administrationPages = new VerticalStackLayout { Spacing = operations.Spacing, Padding = operations.Padding };", source);
-        Assert.Contains("menu.Children.Add(administrationPages)", source);
-        Assert.Contains("else if (item.ClassId is \"admin\" or \"super\")", source);
-        Assert.Contains("administrationPages.Children.Add(button)", source);
-        Assert.DoesNotContain("administrationPages.IsVisible", source);
-        Assert.DoesNotContain("administration.Clicked", source);
+        var setup = File.ReadAllText(Path.Combine(TestPaths.AppFolder(), "StaffShell.xaml.cs")).Replace("\r\n", "\n");
+        // D15: the sub-admin gets the overview and the grouped menu too; everyone else gets the plain icon rail
+        Assert.Contains("#if WINDOWS\n\t\tif (role is AppRole.Admin or AppRole.SubAdmin) SetupAdminOverview(sp, role == AppRole.Admin);\n"
+            + "\t\tControls.IconRail.Install(this, RoleName(role), (Core.ViewModels.HeaderViewModel)GetTitleView(this).BindingContext, groupFrontDesk: role is AppRole.Admin or AppRole.SubAdmin);\n#endif", setup);
+        Assert.False(File.Exists(Path.Combine(TestPaths.AppFolder(), "StaffShell.Windows.cs")));   // the old text menu is gone
     }
 
     [Fact]

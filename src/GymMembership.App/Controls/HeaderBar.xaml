@@ -8,7 +8,7 @@
     <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8" HeightRequest="56"
           Padding="{OnIdiom Phone='4,0,8,0', Default='8,0,16,0'}">
 
-        <c:Avatar Letters="{Binding Letters}" Url="{Binding AvatarUrl}" Diameter="36" VerticalOptions="Center"
+        <c:Avatar Letters="{Binding Letters}" Url="{Binding AvatarUrl}" Diameter="36" VerticalOptions="Center" IsVisible="{OnPlatform WinUI=False, Default=True}"
                   SemanticProperties.Description="Your profile picture. Opens Settings.">
             <c:Avatar.GestureRecognizers><TapGestureRecognizer Tapped="OnAvatarTapped" /></c:Avatar.GestureRecognizers>
         </c:Avatar>

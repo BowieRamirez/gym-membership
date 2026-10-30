@@ -45,7 +45,7 @@
     <!-- Page titles: big and light, like the reference dashboard -->
     <Style x:Key="PageTitle" TargetType="Label" BasedOn="{StaticResource BaseLabel}">
         <Setter Property="FontFamily" Value="BarlowMedium" />
-        <Setter Property="FontSize" Value="{OnIdiom Phone=20, Default=34}" />
+        <Setter Property="FontSize" Value="{OnIdiom Phone=20, Default=28}" />
         <Setter Property="LineHeight" Value="1.05" />
         <Setter Property="CharacterSpacing" Value="-0.4" />
     </Style>

@@ -21,6 +21,9 @@ public partial class MemberShell : Shell
 				((ShellContent)item.Items[0].Items[0]).ContentTemplate = new DataTemplate(() => new LockedPage(title, access.PaymentPending));
 			}
 		Controls.PhoneNavigation.Attach(this, coach: false, services: sp, access: access);
+#if WINDOWS
+		Controls.IconRail.Install(this, "Member", (Core.ViewModels.HeaderViewModel)GetTitleView(this).BindingContext, groupFrontDesk: false);
+#endif
 		Navigated += async (_, _) => await RecheckAsync();
 	}
 
