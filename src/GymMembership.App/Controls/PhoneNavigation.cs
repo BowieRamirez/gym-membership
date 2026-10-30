@@ -89,10 +89,11 @@ public sealed class PhoneNavigation
         shell.Items.Add(_bar);
         shell.CurrentItem = _bar;
         _bar.CurrentItem = _bar.Items[0];
-        shell.SetAppThemeColor(Shell.TabBarBackgroundColorProperty, Color.FromArgb("#FFFFFF"), Color.FromArgb("#24282C"));
-        shell.SetAppThemeColor(Shell.TabBarForegroundColorProperty, Color.FromArgb("#1F2226"), Color.FromArgb("#ECEEF0"));
-        shell.SetAppThemeColor(Shell.TabBarTitleColorProperty, Color.FromArgb("#1F2226"), Color.FromArgb("#ECEEF0"));
-        shell.SetAppThemeColor(Shell.TabBarUnselectedColorProperty, Color.FromArgb("#5C646C"), Color.FromArgb("#9AA3AB"));
+        // light in both themes so the icons stay black (the redesign's rule: black icons on light chips); the selected tab sits on lime
+        shell.SetAppThemeColor(Shell.TabBarBackgroundColorProperty, Color.FromArgb("#FFFFFF"), Color.FromArgb("#E7EBE4"));
+        shell.SetAppThemeColor(Shell.TabBarForegroundColorProperty, Color.FromArgb("#000000"), Color.FromArgb("#000000"));
+        shell.SetAppThemeColor(Shell.TabBarTitleColorProperty, Color.FromArgb("#000000"), Color.FromArgb("#000000"));
+        shell.SetAppThemeColor(Shell.TabBarUnselectedColorProperty, Color.FromArgb("#5A6159"), Color.FromArgb("#5A6159"));
         var app = Application.Current;
         void ThemeChanged(object? sender, AppThemeChangedEventArgs e) => shell.Dispatcher.Dispatch(StyleBar);
         shell.Loaded += (_, _) =>
@@ -157,7 +158,7 @@ public sealed class PhoneNavigation
             {
                 var background = new Android.Graphics.Drawables.GradientDrawable();
                 var surface = Shell.GetTabBarBackgroundColor(_shell) ??
-                    Color.FromArgb(Application.Current?.RequestedTheme == AppTheme.Dark ? "#24282C" : "#FFFFFF");
+                    Color.FromArgb(Application.Current?.RequestedTheme == AppTheme.Dark ? "#E7EBE4" : "#FFFFFF");
                 var pageBackground = _shell.CurrentPage?.BackgroundColor ?? _shell.BackgroundColor ?? surface;
                 background.SetColor(surface.ToPlatform());
                 background.SetCornerRadius(0);
@@ -167,6 +168,8 @@ public sealed class PhoneNavigation
                     parent.SetBackgroundColor(pageBackground.ToPlatform());
                 bar.LabelVisibilityMode = Google.Android.Material.Navigation.NavigationBarView.LabelVisibilityLabeled;
                 bar.ItemHorizontalTranslationEnabled = false;
+                bar.ItemActiveIndicatorEnabled = true;
+                bar.ItemActiveIndicatorColor = Android.Content.Res.ColorStateList.ValueOf(Color.FromArgb("#E4F58A").ToPlatform());
             }
             if (view is Android.Views.ViewGroup group)
                 for (var i = 0; i < group.ChildCount; i++)

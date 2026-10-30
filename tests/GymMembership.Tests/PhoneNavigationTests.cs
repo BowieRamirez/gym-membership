@@ -131,4 +131,21 @@ public class PhoneNavigationTests
         Assert.Equal("0 0 24 24", svg.Root!.Attribute("viewBox")!.Value);
         Assert.NotEmpty(svg.Root.Elements());
     }
+
+    // The redesign: the bar stays light in both themes so its icons can stay black, and the selected tab sits on lime.
+    [Fact]
+    public void Bottom_bar_is_light_in_both_themes_with_black_icons_and_lime_selection()
+    {
+        var source = Read("Controls/PhoneNavigation.cs");
+        Assert.Contains("TabBarBackgroundColorProperty, Color.FromArgb(\"#FFFFFF\"), Color.FromArgb(\"#E7EBE4\")", source);
+        Assert.Contains("TabBarForegroundColorProperty, Color.FromArgb(\"#000000\"), Color.FromArgb(\"#000000\")", source);
+        Assert.Contains("TabBarTitleColorProperty, Color.FromArgb(\"#000000\"), Color.FromArgb(\"#000000\")", source);
+        Assert.Contains("ItemActiveIndicatorColor", source);
+        Assert.Contains("#E4F58A", source);
+        foreach (var old in new[] { "#24282C", "#1F2226", "#ECEEF0", "#5C646C", "#9AA3AB" })
+        {
+            Assert.DoesNotContain(old, source);
+            Assert.DoesNotContain(old, Read("Views/PhoneMorePage.cs"));
+        }
+    }
 }
