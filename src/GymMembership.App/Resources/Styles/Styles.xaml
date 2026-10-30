@@ -43,10 +43,10 @@
         <Setter Property="LineHeight" Value="1.05" />
         <Setter Property="CharacterSpacing" Value="-0.6" />
     </Style>
-    <!-- Page titles: big and light, like the reference dashboard -->
+    <!-- Windows page titles: big and light, like the reference dashboard -->
     <Style x:Key="PageTitle" TargetType="Label" BasedOn="{StaticResource BaseLabel}">
         <Setter Property="FontFamily" Value="BarlowMedium" />
-        <Setter Property="FontSize" Value="{OnIdiom Phone=20, Default=28}" />
+        <Setter Property="FontSize" Value="28" />
         <Setter Property="LineHeight" Value="1.05" />
         <Setter Property="CharacterSpacing" Value="-0.4" />
     </Style>
@@ -136,11 +136,6 @@
         <Setter Property="BorderWidth" Value="1.5" />
         <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
     </Style>
-    <!-- Lime: a selected choice, or the one action a lime card leads to -->
-    <Style x:Key="LimeButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
-        <Setter Property="BackgroundColor" Value="{StaticResource Lime}" />
-        <Setter Property="TextColor" Value="{StaticResource Black}" />
-    </Style>
 
     <!-- ===== Surfaces: big rounded cards, flat, no border, no shadow ===== -->
     <Style x:Key="Panel" TargetType="Border">
@@ -203,6 +198,7 @@
         <Setter Property="FontSize" Value="14" />
     </Style>
 
+    <!-- Lime: a selected choice -->
     <Style x:Key="LimeSmallButton" TargetType="Button" BasedOn="{StaticResource SmallButton}">
         <Setter Property="BackgroundColor" Value="{StaticResource Lime}" />
         <Setter Property="TextColor" Value="{StaticResource Black}" />
