@@ -7,7 +7,7 @@
             xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.PackagesPage" x:DataType="vm:PackagesViewModel" Title="Packages">
 
-    <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='20,16,20,0'}" MaximumWidthRequest="920">
+    <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='20,16,20,0'}" MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
             <Label Text="Choose your next package. Pay by QR and send proof on My membership. After verification, a paid extension starts after your last paid term, or immediately if it has ended. No upgrades, automatic charges or unused-time credits." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
@@ -18,17 +18,16 @@
             </VerticalStackLayout>
         </VerticalStackLayout>
 
-        <CollectionView Grid.Row="1" ItemsSource="{Binding Packages}">
-            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
-            <CollectionView.EmptyView>
+        <ScrollView Grid.Row="1"><c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" Padding="0,0,0,16" BindableLayout.ItemsSource="{Binding Packages}">
+            <BindableLayout.EmptyView>
                 <Label Text="No packages are on sale right now. Check back soon." Style="{StaticResource Muted}" />
-            </CollectionView.EmptyView>
-            <CollectionView.ItemTemplate>
+            </BindableLayout.EmptyView>
+            <BindableLayout.ItemTemplate>
                 <DataTemplate x:DataType="m:MembershipPackage">
                     <Border Style="{StaticResource Panel}">
                         <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="16">
                             <VerticalStackLayout Spacing="4">
-                                <Label Text="{Binding Name}" Style="{StaticResource Heading}" />
+                                <c:CardTitle Icon="package" Text="{Binding Name}" />
                                 <Label Text="{Binding Description}" Style="{StaticResource Muted}" />
                                 <Label Text="{Binding DurationDays, StringFormat='{0} days of access'}" Style="{StaticResource Caption}" />
                             </VerticalStackLayout>
@@ -40,7 +39,7 @@
                         </Grid>
                     </Border>
                 </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+            </BindableLayout.ItemTemplate>
+        </c:CardGrid></ScrollView>
     </Grid>
 </v:BasePage>

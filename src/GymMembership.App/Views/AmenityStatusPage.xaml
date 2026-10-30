@@ -7,7 +7,7 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.AmenityStatusPage" x:DataType="vm:AmenityStatusViewModel" Title="Amenity Status">
 
-    <ScrollView MaximumWidthRequest="920">
+    <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='20,16,20,24'}" Spacing="12">
             <Label Text="Mark an amenity available, in use or unavailable. Members who saved an amenity are alerted when it becomes available or unavailable, and you see who." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
@@ -16,7 +16,7 @@
             <!-- the editor for the amenity you chose -->
             <Border Style="{StaticResource Panel}" IsVisible="{Binding IsEditing}">
                 <VerticalStackLayout Spacing="10">
-                    <Label Text="{Binding Editing.Amenity.Name, StringFormat='Change {0}'}" Style="{StaticResource Heading}" />
+                    <c:CardTitle Icon="waves" Text="{Binding Editing.Amenity.Name, StringFormat='Change {0}'}" />
                     <Border Style="{StaticResource Field}">
                         <Picker ItemsSource="{Binding Choices}" ItemDisplayBinding="{Binding Label}" SelectedItem="{Binding Choice}" SemanticProperties.Description="Status" />
                     </Border>
@@ -48,15 +48,14 @@
                 </VerticalStackLayout>
             </Border>
 
-            <CollectionView ItemsSource="{Binding Cards}" HeightRequest="{OnIdiom Phone=900, Default=700}">
-                <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
-                <CollectionView.EmptyView><Label Text="No amenities are listed yet." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
-                <CollectionView.ItemTemplate>
+            <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" BindableLayout.ItemsSource="{Binding Cards}">
+                <BindableLayout.EmptyView><Label Text="No amenities are listed yet." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+                <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="svc:AmenityCard">
                         <c:AmenityCardView ActionText="Change status" ActionClicked="OnChange" />
                     </DataTemplate>
-                </CollectionView.ItemTemplate>
-            </CollectionView>
+                </BindableLayout.ItemTemplate>
+            </c:CardGrid>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

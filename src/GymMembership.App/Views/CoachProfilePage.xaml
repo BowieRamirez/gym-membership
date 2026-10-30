@@ -6,20 +6,26 @@
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.CoachProfilePage" x:DataType="vm:CoachProfileViewModel" Title="My coach profile">
 
-    <ScrollView MaximumWidthRequest="560">
+    <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='20,16,20,24'}" Spacing="16">
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
-            <Border Style="{StaticResource Panel}" Padding="16,12">
+            <!-- check-in and photo side by side, then the profile form in one card -->
+            <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}">
+            <Border Style="{StaticResource Panel}">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
-                    <VerticalStackLayout Spacing="2" VerticalOptions="Center">
-                        <Label Text="At the gym" FontFamily="BarlowMedium" />
+                    <VerticalStackLayout Spacing="8" VerticalOptions="Center">
+                        <c:CardTitle Icon="dumbbell" Text="At the gym" />
                         <Label Text="{Binding VisitText}" Style="{StaticResource Caption}" />
                     </VerticalStackLayout>
                     <Button Grid.Column="1" Text="{Binding VisitButton}" Command="{Binding ToggleVisitCommand}" Style="{StaticResource SmallButton}" VerticalOptions="Center" />
                 </Grid>
             </Border>
             <c:CoachPhotoPrompt x:DataType="vm:CoachPhotoViewModel" BindingContext="{Binding Source={RelativeSource AncestorType={x:Type vm:CoachProfileViewModel}}, Path=Photo}" IsVisible="{Binding IsCoach}" />
+            </c:CardGrid>
+
+            <Border Style="{StaticResource Panel}">
+            <VerticalStackLayout Spacing="16">
 
             <VerticalStackLayout Spacing="6">
                 <Label Text="Specialty" Style="{StaticResource Caption}" />
@@ -53,6 +59,8 @@
             <Label Text="Separate from checking in: Off keeps you listed while you are in the gym, but members can't hire you." Style="{StaticResource Caption}" />
 
             <Button Text="Save profile" Command="{Binding SaveCommand}" HorizontalOptions="Start" />
+            </VerticalStackLayout>
+            </Border>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

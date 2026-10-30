@@ -7,7 +7,7 @@
             xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.ShiftsPage" x:DataType="vm:ShiftsViewModel" Title="My shifts">
 
-    <ScrollView MaximumWidthRequest="920">
+    <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='20,16,20,24'}" Spacing="14">
             <Label Text="Post when you are on the gym floor. Your trainees are notified and members can see it on the Coaches page." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
@@ -18,7 +18,7 @@
 
             <Border Style="{StaticResource Panel}">
                 <VerticalStackLayout Spacing="12">
-                    <Label Text="Post a shift" Style="{StaticResource Heading}" />
+                    <c:CardTitle Icon="calendar-clock" Text="Post a shift" />
                     <FlexLayout Wrap="Wrap" AlignItems="End">
                         <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
                             <Label Text="Date" Style="{StaticResource Caption}" />
@@ -43,8 +43,8 @@
                 </VerticalStackLayout>
             </Border>
 
-            <Label Text="Upcoming shifts" Style="{StaticResource Heading}" Margin="0,8,0,0" />
-            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Shifts}" Spacing="10">
+            <Label Text="Upcoming shifts" Style="{StaticResource SectionTitle}" />
+            <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" BindableLayout.ItemsSource="{Binding Shifts}">
                 <BindableLayout.EmptyView><Label Text="No shifts posted. Add one above." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="m:ShiftPost">
@@ -74,7 +74,7 @@
                         </Border>
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
-            </VerticalStackLayout>
+            </c:CardGrid>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

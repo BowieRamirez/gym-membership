@@ -6,12 +6,16 @@
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.GymSettingsPage" x:DataType="vm:GymSettingsViewModel" Title="Gym settings">
 
-    <ScrollView MaximumWidthRequest="620">
+    <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="20,16,20,24" Spacing="16">
             <Label Text="What members see when they pay, and the price of a day pass at the desk." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
+            <!-- the gym's details and its payment QR, side by side -->
+            <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}">
+            <Border Style="{StaticResource Panel}">
+            <VerticalStackLayout Spacing="16">
             <VerticalStackLayout Spacing="6">
                 <Label Text="Gym name" Style="{StaticResource Caption}" />
                 <Border Style="{StaticResource Field}"><Entry Text="{Binding GymName}" SemanticProperties.Description="Gym name" /></Border>
@@ -26,10 +30,12 @@
                     <Border Style="{StaticResource Field}" Margin="0,0,8,8"><TimePicker Time="{Binding ClosesAt}" SemanticProperties.Description="Closing time" /></Border>
                 </FlexLayout>
             </VerticalStackLayout>
+            </VerticalStackLayout>
+            </Border>
 
             <Border Style="{StaticResource Panel}">
                 <VerticalStackLayout Spacing="10">
-                    <Label Text="Payment QR" Style="{StaticResource Heading}" />
+                    <c:CardTitle Icon="scan-line" Text="Payment QR" />
                     <Label Text="The GCash, Maya or QR Ph code members scan. Upload a clear image of it." Style="{StaticResource Caption}" />
                     <VerticalStackLayout Spacing="6">
                         <Label Text="Name shown on the QR" Style="{StaticResource Caption}" />
@@ -39,6 +45,7 @@
                     <Button Text="Choose QR image" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" Command="{Binding ChooseQrCommand}" />
                 </VerticalStackLayout>
             </Border>
+            </c:CardGrid>
 
             <Button Text="Save settings" HorizontalOptions="Start" Command="{Binding SaveCommand}" />
         </VerticalStackLayout>

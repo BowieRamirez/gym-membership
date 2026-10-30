@@ -6,22 +6,21 @@
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.RefundsPage" x:DataType="vm:RefundsViewModel" Title="Cancellations &amp; refunds">
-    <CollectionView ItemsSource="{Binding Requests}" MaximumWidthRequest="920" Margin="{OnIdiom Phone='16,12', Default='20,16'}">
-        <CollectionView.Header>
+    <ScrollView MaximumWidthRequest="{StaticResource PageWidth}" Padding="{OnIdiom Phone='16,12', Default='20,16'}"><VerticalStackLayout>
+        
             <VerticalStackLayout Spacing="10" Padding="0,0,0,16">
                 <Label Text="Cancellations &amp; refunds" Style="{StaticResource Heading}" />
                 <Label Text="A timely request remains reviewable after 24 hours. Approving cancels only its selected term; other paid dates stay fixed. Return the actual paid amount manually, then record repayment. This app does not send money." Style="{StaticResource Muted}" />
                 <c:Banner Message="{Binding ErrorMessage}" />
                 <c:Banner Kind="notice" Message="{Binding Notice}" />
             </VerticalStackLayout>
-        </CollectionView.Header>
-        <CollectionView.EmptyView><Label Text="No cancellation or refund requests." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
-        <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="12" /></CollectionView.ItemsLayout>
-        <CollectionView.ItemTemplate>
+        
+        <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" BindableLayout.ItemsSource="{Binding Requests}"><BindableLayout.EmptyView><Label Text="No cancellation or refund requests." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+        <BindableLayout.ItemTemplate>
             <DataTemplate x:DataType="svc:RefundCard">
                 <Border Style="{StaticResource Panel}">
                     <VerticalStackLayout Spacing="8">
-                        <Label Text="{Binding Member}" Style="{StaticResource Heading}" />
+                        <c:CardTitle Icon="undo" Text="{Binding Member}" />
                         <Label Text="{Binding PackageName}" />
                         <Label Text="{Binding Dates}" Style="{StaticResource Caption}" />
                         <Label Text="{Binding Request.Amount, StringFormat='Full refund: ₱{0:N2}'}" Style="{StaticResource PriceNumeral}" />
@@ -36,6 +35,6 @@
                     </VerticalStackLayout>
                 </Border>
             </DataTemplate>
-        </CollectionView.ItemTemplate>
-    </CollectionView>
+        </BindableLayout.ItemTemplate>
+    </c:CardGrid></VerticalStackLayout></ScrollView>
 </v:BasePage>

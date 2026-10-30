@@ -14,7 +14,9 @@
         <c:Banner Grid.ColumnSpan="2" Message="{Binding ErrorMessage}" Margin="16,12,16,0" />
 
         <!-- ===== conversations ===== -->
-        <Grid x:Name="ListPane" Grid.Row="1" RowDefinitions="Auto,Auto,Auto,Auto,*" RowSpacing="10" Padding="16,12" IsVisible="{Binding ShowList}">
+        <!-- the conversation list sits in a card beside the chat -->
+        <Border Grid.Row="1" Style="{StaticResource Panel}" Padding="0" Margin="12,12,0,12" IsVisible="{Binding ShowList}">
+        <Grid x:Name="ListPane" RowDefinitions="Auto,Auto,Auto,Auto,*" RowSpacing="10" Padding="14,12">
             <Border Style="{StaticResource Field}">
                 <Entry Text="{Binding SearchText}" Placeholder="Search people and messages" ClearButtonVisibility="WhileEditing" SemanticProperties.Description="Search" />
             </Border>
@@ -69,7 +71,7 @@
                     <VerticalStackLayout Spacing="8" BindableLayout.ItemsSource="{Binding Hits}">
                         <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="m:ChatSearchHit">
-                                <Border Style="{StaticResource Panel}" Padding="12,10">
+                                <Border Style="{StaticResource Row}" Padding="12,10">
                                     <Border.GestureRecognizers>
                                         <TapGestureRecognizer Tapped="OnOpenHit" />
                                     </Border.GestureRecognizers>
@@ -99,6 +101,7 @@
                 </CollectionView.ItemTemplate>
             </CollectionView>
         </Grid>
+        </Border>
 
         <!-- ===== the open conversation ===== -->
         <Grid x:Name="ChatPane" Grid.Row="1" Grid.Column="1" IsVisible="{Binding ShowChat}">

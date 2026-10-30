@@ -137,12 +137,12 @@
                 </ScrollView>
 
                 <VerticalStackLayout Grid.Column="{OnIdiom Phone=0, Default=1}" Grid.Row="{OnIdiom Phone=1, Default=0}" Spacing="8">
-                    <Label Text="Your bookings" Style="{StaticResource Heading}" />
+                    <c:CardTitle Icon="calendar-days" Text="Your bookings" />
                     <VerticalStackLayout BindableLayout.ItemsSource="{Binding Bookings}" Spacing="8">
                         <BindableLayout.EmptyView><Label Text="No upcoming bookings. Pick open slots to book one." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
                         <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="svc:BookingRow">
-                                <Border Style="{StaticResource Panel}" Padding="12,10">
+                                <Border Style="{StaticResource Row}" Padding="12,10">
                                     <VerticalStackLayout Spacing="6">
                                         <Label Text="{Binding Amenity}" FontFamily="BarlowMedium" />
                                         <Label Text="{Binding When}" Style="{StaticResource Caption}" />

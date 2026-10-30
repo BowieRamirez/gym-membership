@@ -7,7 +7,7 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.SessionsPage" x:DataType="vm:SessionsViewModel" Title="Sessions">
 
-    <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='20,16,20,0'}" MaximumWidthRequest="920">
+    <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='20,16,20,0'}" MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
             <Label Text="Your booked training sessions, soonest first." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
@@ -16,7 +16,7 @@
 
             <Border Style="{StaticResource Panel}" IsVisible="{Binding Rescheduling, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="12">
-                    <Label Text="{Binding Rescheduling.Session.Title, StringFormat='Move “{0}” to a new time'}" Style="{StaticResource Heading}" />
+                    <c:CardTitle Icon="calendar-clock" Text="{Binding Rescheduling.Session.Title, StringFormat='Move “{0}” to a new time'}" />
                     <FlexLayout Wrap="Wrap" AlignItems="End">
                         <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
                             <Label Text="New date" Style="{StaticResource Caption}" />
@@ -36,16 +36,15 @@
             </Border>
         </VerticalStackLayout>
 
-        <CollectionView Grid.Row="1" ItemsSource="{Binding Sessions}">
-            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
-            <CollectionView.EmptyView><Label Text="No sessions yet. Send a time request to book one." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
-            <CollectionView.ItemTemplate>
+        <ScrollView Grid.Row="1"><c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" Padding="0,0,0,16" BindableLayout.ItemsSource="{Binding Sessions}">
+            <BindableLayout.EmptyView><Label Text="No sessions yet. Send a time request to book one." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+            <BindableLayout.ItemTemplate>
                 <DataTemplate x:DataType="svc:SessionRow">
                     <Border Style="{StaticResource Panel}">
                         <VerticalStackLayout Spacing="8">
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                                 <VerticalStackLayout Spacing="2">
-                                    <Label Text="{Binding Session.Title}" Style="{StaticResource Heading}" />
+                                    <c:CardTitle Icon="calendar-days" Text="{Binding Session.Title}" />
                                     <Label Text="{Binding With, StringFormat='With {0}'}" />
                                     <Label Style="{StaticResource Caption}">
                                         <Label.Text>
@@ -77,7 +76,7 @@
                         </VerticalStackLayout>
                     </Border>
                 </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+            </BindableLayout.ItemTemplate>
+        </c:CardGrid></ScrollView>
     </Grid>
 </v:BasePage>

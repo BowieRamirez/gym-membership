@@ -13,7 +13,7 @@
         <DataTemplate x:Key="SessionTemplate" x:DataType="svc:CalendarSession">
             <Border Style="{StaticResource Panel}" Padding="14,12" Margin="0,0,0,8">
                 <VerticalStackLayout Spacing="8">
-                    <Label Text="{Binding With}" Style="{StaticResource Heading}" />
+                    <c:CardTitle Icon="user-round" Text="{Binding With}" />
                     <Label Text="{Binding Session.ScheduledStart, Converter={StaticResource LocalDate}, ConverterParameter='h:mm tt'}" Style="{StaticResource Caption}" />
                     <Label Text="Cancelled" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold" IsVisible="{Binding Cancelled}" />
                     <FlexLayout Wrap="Wrap" IsVisible="{Binding CanMark}">
@@ -35,33 +35,33 @@
         </DataTemplate>
     </v:BasePage.Resources>
 
-    <ScrollView MaximumWidthRequest="920">
+    <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <!-- this month at a glance -->
-            <FlexLayout Wrap="Wrap">
-                <Border Style="{StaticResource Panel}" WidthRequest="{OnIdiom Phone=148, Default=200}" Margin="0,0,12,12">
-                    <VerticalStackLayout Spacing="4">
-                        <Label Text="{Binding SessionsText}" Style="{StaticResource Numeral}" />
-                        <Label Text="Sessions this month" Style="{StaticResource Caption}" />
+            <!-- this month at a glance: three cards, the first one lime -->
+            <c:CardGrid Columns="{OnIdiom Phone=1, Default=3}">
+                <Border Style="{StaticResource HeroPanel}">
+                    <VerticalStackLayout Spacing="8">
+                        <c:CardTitle Icon="calendar-days" Text="Sessions this month" TextColor="{StaticResource Black}" />
+                        <Label Text="{Binding SessionsText}" Style="{StaticResource Numeral}" TextColor="{StaticResource Black}" />
                     </VerticalStackLayout>
                 </Border>
-                <Border Style="{StaticResource Panel}" WidthRequest="{OnIdiom Phone=148, Default=200}" Margin="0,0,12,12">
-                    <VerticalStackLayout Spacing="4">
+                <Border Style="{StaticResource Panel}">
+                    <VerticalStackLayout Spacing="8">
+                        <c:CardTitle Icon="badge-check" Text="Attendance rate" />
                         <Label Text="{Binding RateText}" Style="{StaticResource Numeral}" />
-                        <Label Text="Attendance rate" Style="{StaticResource Caption}" />
                     </VerticalStackLayout>
                 </Border>
-                <Border Style="{StaticResource Panel}" WidthRequest="{OnIdiom Phone=148, Default=260}" Margin="0,0,12,12">
-                    <VerticalStackLayout Spacing="4">
+                <Border Style="{StaticResource Panel}">
+                    <VerticalStackLayout Spacing="8">
+                        <c:CardTitle Icon="clock" Text="Upcoming" />
                         <Label Text="{Binding UpcomingText}" Style="{StaticResource Numeral}" />
-                        <Label Text="Upcoming" Style="{StaticResource Caption}" />
                         <Label Text="{Binding NextText}" Style="{StaticResource Caption}" />
                     </VerticalStackLayout>
                 </Border>
-            </FlexLayout>
+            </c:CardGrid>
 
             <!-- Month | Week, then back, the period, forward, Today -->
             <FlexLayout Wrap="Wrap" AlignItems="Center">
@@ -84,7 +84,8 @@
             </FlexLayout>
 
             <!-- the month: a check for attended, an X for missed, both on a mixed day, nothing otherwise; every mark is also in the cell's spoken description -->
-            <VerticalStackLayout IsVisible="{Binding IsMonth}" Spacing="6">
+            <Border Style="{StaticResource Panel}" Padding="12" IsVisible="{Binding IsMonth}">
+            <VerticalStackLayout Spacing="6">
                 <Grid ColumnDefinitions="*,*,*,*,*,*,*">
                     <Label Grid.Column="0" Text="Mon" Style="{StaticResource Caption}" HorizontalOptions="Center" />
                     <Label Grid.Column="1" Text="Tue" Style="{StaticResource Caption}" HorizontalOptions="Center" />
@@ -97,7 +98,7 @@
                 <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Days}">
                     <BindableLayout.ItemTemplate>
                         <DataTemplate x:DataType="svc:CalendarDay">
-                            <Border Style="{StaticResource Panel}" FlexLayout.Basis="14.2857%" Padding="2,8" HeightRequest="58" Margin="2" StrokeShape="RoundRectangle 12"
+                            <Border Style="{StaticResource Row}" FlexLayout.Basis="14.2857%" Padding="2,8" HeightRequest="58" Margin="2" StrokeShape="RoundRectangle 12"
                                     SemanticProperties.Description="{Binding Description}">
                                 <Border.Triggers>
                                     <DataTrigger TargetType="Border" Binding="{Binding Dimmed}" Value="True"><Setter Property="Opacity" Value="0.45" /></DataTrigger>
@@ -122,11 +123,12 @@
                     </BindableLayout.ItemTemplate>
                 </FlexLayout>
             </VerticalStackLayout>
+            </Border>
 
             <!-- the selected day: post a shift (date and start filled in, 4 hours), that day's shifts, and in the month view its sessions -->
             <Label Text="Tap a day to post a shift or see its sessions." Style="{StaticResource Muted}" IsVisible="{Binding HasDay, Converter={StaticResource Not}}" />
             <VerticalStackLayout IsVisible="{Binding HasDay}" Spacing="10">
-                <Label Text="{Binding DayTitle}" Style="{StaticResource Heading}" AutomationId="DashboardDayTitle" />
+                <Label Text="{Binding DayTitle}" Style="{StaticResource SectionTitle}" AutomationId="DashboardDayTitle" />
                 <Border Style="{StaticResource Panel}" IsVisible="{Binding HasShifts}">
                     <VerticalStackLayout Spacing="12">
                         <Label Text="Post a shift" FontFamily="BarlowSemiBold" />

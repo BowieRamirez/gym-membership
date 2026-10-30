@@ -7,7 +7,7 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.AmenitiesPage" x:DataType="vm:AmenityBoardViewModel" Title="Amenities">
 
-    <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='20,16,20,0'}" MaximumWidthRequest="920">
+    <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='20,16,20,0'}" MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
             <Label Text="What is open right now." Style="{StaticResource Muted}" />
             <Label Text="Tap Notify me on an amenity to get an alert when it becomes available or unavailable." Style="{StaticResource Muted}" IsVisible="{Binding CanFollow}" />
@@ -15,15 +15,14 @@
             <c:Banner Kind="notice" Message="{Binding Notice}" />
         </VerticalStackLayout>
 
-        <CollectionView Grid.Row="1" ItemsSource="{Binding Cards}">
-            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
-            <CollectionView.EmptyView><Label Text="No amenities are listed yet." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
-            <CollectionView.ItemTemplate>
+        <ScrollView Grid.Row="1"><c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" Padding="0,0,0,16" BindableLayout.ItemsSource="{Binding Cards}">
+            <BindableLayout.EmptyView><Label Text="No amenities are listed yet." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+            <BindableLayout.ItemTemplate>
                 <DataTemplate x:DataType="svc:AmenityCard">
                     <!-- the button text is empty for coaches, which hides the button -->
                     <c:AmenityCardView ActionText="{Binding FollowText}" ActionClicked="OnFollow" BuyClicked="OnBuy" />
                 </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+            </BindableLayout.ItemTemplate>
+        </c:CardGrid></ScrollView>
     </Grid>
 </v:BasePage>

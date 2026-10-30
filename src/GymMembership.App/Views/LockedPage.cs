@@ -10,12 +10,16 @@ public class LockedPage : ContentPage
 		action.Clicked += async (_, _) => await Controls.PhoneNavigation.GoToAsync(Shell.Current, paymentPending ? "//memberships" : "//packages");
 
 		var res = Application.Current!.Resources;
-		Content = new VerticalStackLayout
+		// one card with the lock and what to do next
+		Content = new Border
 		{
-			Padding = new Thickness(20, 24), Spacing = 14, MaximumWidthRequest = 520, HorizontalOptions = LayoutOptions.Start,
+			Style = (Style)res["Panel"], Margin = new Thickness(20, 24), MaximumWidthRequest = 560, HorizontalOptions = LayoutOptions.Start, VerticalOptions = LayoutOptions.Start,
+			Content = new VerticalStackLayout
+			{
+			Spacing = 14,
 			Children =
 			{
-				new Label { Text = $"{feature} is for members", Style = (Style)res["Heading"] },
+				new Controls.CardTitle { Icon = "id-card", Text = $"{feature} is for members" },
 				new Label
 				{
 					Style = (Style)res["Muted"],
@@ -24,6 +28,7 @@ public class LockedPage : ContentPage
 						: "Get a membership to use this page. Pick a package, pay at the desk or attach your receipt, and it opens once your payment is verified."
 				},
 				action
+			}
 			}
 		};
 	}

@@ -7,13 +7,13 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.CashierPage" x:DataType="vm:CashierViewModel" Title="Cashier">
 
-    <ScrollView MaximumWidthRequest="920">
+    <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
             <Label Text="Take cash, GCash or a bank transfer. It is verified at once and gets a receipt number to write on the paper receipt." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <Label Text="What are they paying for?" Style="{StaticResource Heading}" />
+            <Label Text="What are they paying for?" Style="{StaticResource SectionTitle}" />
             <FlexLayout Wrap="Wrap">
                 <c:IconButton Text="Membership" Icon="ticket" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Membership">
                     <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Kind}" Value="Membership"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
@@ -48,7 +48,7 @@
                     </VerticalStackLayout>
                 </FlexLayout>
 
-                <Label Text="Choose one" Style="{StaticResource Heading}" />
+                <Label Text="Choose one" Style="{StaticResource SectionTitle}" />
                 <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Options}">
                     <BindableLayout.EmptyView>
                         <Label Text="{Binding ItemsEmptyText}" Style="{StaticResource Muted}" />
@@ -81,7 +81,7 @@
             <!-- the order: what the cashier is about to charge, how, and the one button that does it -->
             <Border Style="{StaticResource Panel}">
                 <VerticalStackLayout Spacing="12">
-                    <Label Text="Order" Style="{StaticResource Heading}" />
+                    <c:CardTitle Icon="receipt" Text="Order" />
                     <Label Text="{Binding OrderWho}" FontFamily="BarlowSemiBold" />
                     <Label Text="{Binding OrderWhat}" Style="{StaticResource Muted}" />
                     <Label Text="{Binding OrderHow}" Style="{StaticResource Caption}" />
@@ -118,18 +118,19 @@
                 </VerticalStackLayout>
             </Border>
 
-            <Label Text="Net cash today" Style="{StaticResource Heading}" Margin="0,8,0,0" />
+            <Label Text="Net cash today" Style="{StaticResource SectionTitle}" />
             <Border Style="{StaticResource Panel}" Padding="24,18">
                 <VerticalStackLayout Spacing="4">
                     <Label Text="Cash receipts minus cash refunds actually repaid today (Manila). Compare the net amount with the drawer; approval alone does not remove cash." Style="{StaticResource Caption}" />
                     <Label Text="{Binding CashTotal}" Style="{StaticResource Numeral}" />
                 </VerticalStackLayout>
             </Border>
+            <Border Style="{StaticResource Panel}" Padding="12">
             <VerticalStackLayout BindableLayout.ItemsSource="{Binding CashToday}" Spacing="8">
                 <BindableLayout.EmptyView><Label Text="No cash receipts or repaid cash refunds recorded today." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="svc:CashRow">
-                        <Border Style="{StaticResource Panel}" Padding="16,12">
+                        <Border Style="{StaticResource Row}" Padding="16,12">
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                                 <Label Style="{StaticResource BaseLabel}" VerticalOptions="Center">
                                     <Label.Text>
@@ -142,6 +143,7 @@
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
             </VerticalStackLayout>
+            </Border>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

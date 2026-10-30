@@ -7,7 +7,7 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.VerifyPaymentsPage" x:DataType="vm:VerifyPaymentsViewModel" Title="Payments to verify">
 
-    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
+    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
             <Label Text="Oldest first. Find the transfer in the gym's e-wallet by its payment code and amount, then verify or reject. Verifying switches the membership on and gives a receipt number." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
@@ -16,7 +16,7 @@
             <!-- the screenshot the member sent -->
             <Border Style="{StaticResource Panel}" IsVisible="{Binding Viewing, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="10">
-                    <Label Text="{Binding Viewing.Payer, StringFormat='Screenshot from {0}'}" Style="{StaticResource Heading}" />
+                    <c:CardTitle Icon="receipt" Text="{Binding Viewing.Payer, StringFormat='Screenshot from {0}'}" />
                     <Image Source="{Binding ProofUrl}" MaximumHeightRequest="360" Aspect="AspectFit" HorizontalOptions="Start"
                            IsVisible="{Binding ProofUrl, Converter={StaticResource IsNotNull}}" SemanticProperties.Description="Payment screenshot" />
                     <Label Text="No screenshot to show." Style="{StaticResource Caption}" IsVisible="{Binding ProofUrl, Converter={StaticResource IsNull}}" />
@@ -27,7 +27,7 @@
             <!-- a rejection is final, so it needs a reason the member will read -->
             <Border Style="{StaticResource Panel}" IsVisible="{Binding Rejecting, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="10">
-                    <Label Text="{Binding Rejecting.Payer, StringFormat='Reject {0}’s payment'}" Style="{StaticResource Heading}" />
+                    <c:CardTitle Icon="ban" Text="{Binding Rejecting.Payer, StringFormat='Reject {0}’s payment'}" />
                     <Label Text="Say why, so they know what to fix. They can pay again with a new payment." Style="{StaticResource Caption}" />
                     <Border Style="{StaticResource Field}" WidthRequest="360" HorizontalOptions="Start">
                         <Entry Text="{Binding RejectReason}" Placeholder="Amount does not match" SemanticProperties.Description="Reason for rejecting" />
@@ -40,15 +40,14 @@
             </Border>
         </VerticalStackLayout>
 
-        <CollectionView Grid.Row="1" ItemsSource="{Binding Pending}">
-            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
-            <CollectionView.EmptyView><Label Text="No payments are waiting." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
-            <CollectionView.ItemTemplate>
+        <ScrollView Grid.Row="1"><c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" Padding="0,0,0,16" BindableLayout.ItemsSource="{Binding Pending}">
+            <BindableLayout.EmptyView><Label Text="No payments are waiting." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+            <BindableLayout.ItemTemplate>
                 <DataTemplate x:DataType="svc:PaymentRow">
                     <Border Style="{StaticResource Panel}">
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                             <VerticalStackLayout Spacing="4">
-                                <Label Text="{Binding Payer}" Style="{StaticResource Heading}" />
+                                <c:CardTitle Icon="badge-check" Text="{Binding Payer}" />
                                 <Label Text="{Binding Item}" />
                                 <Label Text="{Binding Payment.PaymentCode}" FontFamily="BarlowSemiBold" />
                                 <Label Text="{Binding Payment.ReferenceNo, StringFormat='Reference {0}'}" Style="{StaticResource Caption}" IsVisible="{Binding HasProof}" />
@@ -69,7 +68,7 @@
                         </Grid>
                     </Border>
                 </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+            </BindableLayout.ItemTemplate>
+        </c:CardGrid></ScrollView>
     </Grid>
 </v:BasePage>

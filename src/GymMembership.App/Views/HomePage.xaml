@@ -6,37 +6,42 @@
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.HomePage" x:DataType="vm:HomeViewModel" Title="Home">
 
-    <ScrollView MaximumWidthRequest="920">
+    <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
             <Label Text="Today at the desk" Style="{StaticResource Title}" />
             <Label Text="Tap a number to open the screen that handles it." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
 
-            <!-- A tile with something to do carries an outline AND says what in words, so weight is never the only signal -->
-            <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Tiles}">
+            <!-- A tile with something to do turns lime AND says what in words, so colour is never the only signal -->
+            <c:CardGrid Columns="{OnIdiom Phone=2, Default=4}" BindableLayout.ItemsSource="{Binding Tiles}">
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="vm:HomeTile">
-                        <Border Style="{StaticResource Panel}" WidthRequest="{OnIdiom Phone=156, Default=210}" Margin="0,0,12,12"
+                        <Border Style="{StaticResource Panel}"
                                 SemanticProperties.Description="{Binding Description}" SemanticProperties.Hint="{Binding Detail}">
                             <Border.Triggers>
                                 <DataTrigger TargetType="Border" Binding="{Binding NeedsAttention}" Value="True">
-                                    <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
-                                    <Setter Property="StrokeThickness" Value="2" />
+                                    <Setter Property="BackgroundColor" Value="{StaticResource Lime}" />
                                 </DataTrigger>
                             </Border.Triggers>
                             <Border.GestureRecognizers>
                                 <TapGestureRecognizer Tapped="OnTile" />
                             </Border.GestureRecognizers>
-                            <VerticalStackLayout Spacing="6">
-                                <c:IconView Icon="{Binding Icon}" Size="22" ChipSize="44" HorizontalOptions="Start" />
-                                <Label Text="{Binding Count}" Style="{StaticResource Numeral}" />
-                                <Label Text="{Binding Title}" FontFamily="BarlowSemiBold" />
-                                <Label Text="{Binding Detail}" Style="{StaticResource Caption}" />
+                            <!-- on lime every word is black, in both themes -->
+                            <VerticalStackLayout Spacing="8">
+                                <c:CardTitle Icon="{Binding Icon}" Text="{Binding Title}">
+                                    <c:CardTitle.Triggers><DataTrigger TargetType="c:CardTitle" Binding="{Binding NeedsAttention}" Value="True"><Setter Property="TextColor" Value="{StaticResource Black}" /></DataTrigger></c:CardTitle.Triggers>
+                                </c:CardTitle>
+                                <Label Text="{Binding Count}" Style="{StaticResource Numeral}">
+                                    <Label.Triggers><DataTrigger TargetType="Label" Binding="{Binding NeedsAttention}" Value="True"><Setter Property="TextColor" Value="{StaticResource Black}" /></DataTrigger></Label.Triggers>
+                                </Label>
+                                <Label Text="{Binding Detail}" Style="{StaticResource Caption}">
+                                    <Label.Triggers><DataTrigger TargetType="Label" Binding="{Binding NeedsAttention}" Value="True"><Setter Property="TextColor" Value="{StaticResource Black}" /></DataTrigger></Label.Triggers>
+                                </Label>
                             </VerticalStackLayout>
                         </Border>
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
-            </FlexLayout>
+            </c:CardGrid>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

@@ -8,25 +8,26 @@
             x:Class="GymMembership.App.Views.AuditPage" x:DataType="vm:AuditViewModel" Title="Logs &amp; Archive">
 
     <Grid RowDefinitions="Auto,*">
-        <HorizontalStackLayout Padding="20,12" Spacing="10">
+        <HorizontalStackLayout Padding="20,12,20,0" Spacing="10" MaximumWidthRequest="{StaticResource PageWidth}">
             <Button Text="Audit log" Command="{Binding OpenLogsCommand}" Style="{StaticResource SmallOutlineButton}" AutomationId="OpenLogs" />
             <Button Text="Archive" Command="{Binding OpenArchiveCommand}" IsVisible="{Binding HasArchive}" Style="{StaticResource SmallOutlineButton}" AutomationId="OpenArchive" />
         </HorizontalStackLayout>
         <Grid Grid.Row="1" IsVisible="{Binding ShowArchive}">
             <c:ArchivePanel BindingContext="{Binding Archive}" />
         </Grid>
-    <Grid Grid.Row="1" IsVisible="{Binding ShowLogs}" RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
+    <Grid Grid.Row="1" IsVisible="{Binding ShowLogs}" RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
             <Label Text="Sensitive actions, newest first. Entries can't be edited." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
         </VerticalStackLayout>
 
-        <CollectionView Grid.Row="1" ItemsSource="{Binding Entries}">
-            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
+        <Border Grid.Row="1" Style="{StaticResource Panel}" Padding="12" Margin="0,0,0,16">
+        <CollectionView ItemsSource="{Binding Entries}">
+            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="8" /></CollectionView.ItemsLayout>
             <CollectionView.EmptyView><Label Text="Nothing has been logged yet." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="svc:AuditRow">
-                    <Border Style="{StaticResource Panel}" Padding="16,12">
+                    <Border Style="{StaticResource Row}">
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                             <VerticalStackLayout Spacing="2">
                                 <Label Text="{Binding Entry.Action}" FontFamily="BarlowSemiBold" />
@@ -44,6 +45,7 @@
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
+        </Border>
     </Grid>
     </Grid>
 </v:BasePage>

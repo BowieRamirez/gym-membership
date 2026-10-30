@@ -7,14 +7,14 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.RequestsPage" x:DataType="vm:RequestsViewModel" Title="Time requests">
 
-    <ScrollView MaximumWidthRequest="920">
+    <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='20,16,20,24'}" Spacing="14">
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
             <Border Style="{StaticResource Panel}" IsVisible="{Binding IsResponding}">
                 <VerticalStackLayout Spacing="10">
-                    <Label Text="{Binding ResponseTitle}" Style="{StaticResource Heading}" />
+                    <c:CardTitle Icon="clock" Text="{Binding ResponseTitle}" />
                     <FlexLayout Wrap="Wrap" AlignItems="End" IsVisible="{Binding ResponseNeedsTime}">
                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
                             <Label Text="Date" Style="{StaticResource Caption}" />
@@ -47,7 +47,7 @@
             <!-- Compose -->
             <Border Style="{StaticResource Panel}" IsVisible="{Binding CanCompose}">
                 <VerticalStackLayout Spacing="12">
-                    <Label Text="{Binding ComposeTitle}" Style="{StaticResource Heading}" />
+                    <c:CardTitle Icon="calendar-plus" Text="{Binding ComposeTitle}" />
                     <VerticalStackLayout Spacing="4" IsVisible="{Binding ShowMemberPicker}">
                         <Label Text="Member" Style="{StaticResource Caption}" />
                         <Border Style="{StaticResource Field}">
@@ -108,8 +108,8 @@
 
             <Button Text="Refresh requests" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start"
                     Command="{Binding LoadCommand}" IsVisible="{Binding UseWindowsRequestForm}" AutomationId="RefreshSessionRequests" />
-            <Label Text="Waiting for a reply" Style="{StaticResource Heading}" Margin="0,8,0,0" />
-            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Requests}" Spacing="10">
+            <Label Text="Waiting for a reply" Style="{StaticResource SectionTitle}" />
+            <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" BindableLayout.ItemsSource="{Binding Requests}">
                 <BindableLayout.EmptyView><Label Text="Nothing pending." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="svc:RequestRow">
@@ -117,7 +117,7 @@
                             <VerticalStackLayout Spacing="8">
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                                     <VerticalStackLayout Spacing="2">
-                                        <Label Text="{Binding With}" Style="{StaticResource Heading}" />
+                                        <c:CardTitle Icon="user-round" Text="{Binding With}" />
                                         <Label Text="{Binding Request.RequestedStart, Converter={StaticResource LocalDate}, ConverterParameter='dddd d MMM, h:mm tt'}" />
                                         <Label Text="{Binding Kind}" Style="{StaticResource Caption}" />
                                     </VerticalStackLayout>
@@ -125,7 +125,7 @@
                                 </Grid>
                                 <Label Text="{Binding Amenity, StringFormat='At {0}'}" FontFamily="BarlowMedium" IsVisible="{Binding Amenity, Converter={StaticResource HasText}}" />
                                 <Label Text="{Binding Request.Message}" Style="{StaticResource Muted}" IsVisible="{Binding Request.Message, Converter={StaticResource HasText}}" />
-                                <Border Style="{StaticResource Panel}" Padding="12,10" IsVisible="{Binding HasProposal}">
+                                <Border Style="{StaticResource Row}" Padding="12,10" IsVisible="{Binding HasProposal}">
                                     <Label Text="{Binding ProposalText, StringFormat='Proposed: {0}'}" />
                                 </Border>
                                 <FlexLayout Wrap="Wrap">
@@ -146,7 +146,7 @@
                         </Border>
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
-            </VerticalStackLayout>
+            </c:CardGrid>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

@@ -7,7 +7,7 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.VoidPaymentsPage" x:DataType="vm:VoidPaymentsViewModel" Title="Void a payment">
 
-    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
+    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
             <Label Text="A payment that was entered wrongly is never edited. Void it with a reason, which switches off what it paid for, then record it again correctly. Every void is kept in the audit log." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
@@ -15,7 +15,7 @@
 
             <Border Style="{StaticResource Panel}" IsVisible="{Binding Voiding, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="10">
-                    <Label Text="{Binding Voiding.Payment.ReceiptNo, StringFormat='Void receipt {0}?'}" Style="{StaticResource Heading}" />
+                    <c:CardTitle Icon="ban" Text="{Binding Voiding.Payment.ReceiptNo, StringFormat='Void receipt {0}?'}" />
                     <Label Text="This can't be undone." Style="{StaticResource Caption}" />
                     <Border Style="{StaticResource Field}" WidthRequest="360" HorizontalOptions="Start">
                         <Entry Text="{Binding Reason}" Placeholder="Why is it being voided?" SemanticProperties.Description="Reason for voiding" />
@@ -28,15 +28,14 @@
             </Border>
         </VerticalStackLayout>
 
-        <CollectionView Grid.Row="1" ItemsSource="{Binding Recent}">
-            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
-            <CollectionView.EmptyView><Label Text="No verified payments yet." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
-            <CollectionView.ItemTemplate>
+        <ScrollView Grid.Row="1"><c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" Padding="0,0,0,16" BindableLayout.ItemsSource="{Binding Recent}">
+            <BindableLayout.EmptyView><Label Text="No verified payments yet." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+            <BindableLayout.ItemTemplate>
                 <DataTemplate x:DataType="svc:PaymentRow">
                     <Border Style="{StaticResource Panel}">
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                             <VerticalStackLayout Spacing="4">
-                                <Label Text="{Binding Payer}" Style="{StaticResource Heading}" />
+                                <c:CardTitle Icon="receipt" Text="{Binding Payer}" />
                                 <Label Text="{Binding Item}" />
                                 <Label Style="{StaticResource Caption}">
                                     <Label.Text>
@@ -56,7 +55,7 @@
                         </Grid>
                     </Border>
                 </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+            </BindableLayout.ItemTemplate>
+        </c:CardGrid></ScrollView>
     </Grid>
 </v:BasePage>

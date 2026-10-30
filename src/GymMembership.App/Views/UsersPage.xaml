@@ -7,7 +7,7 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.UsersPage" x:DataType="vm:UsersViewModel" Title="Users and roles">
 
-    <ScrollView MaximumWidthRequest="980">
+    <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
             <Label Text="You create every account here. Share the email and temporary password with the person, and they can sign in." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
@@ -15,7 +15,7 @@
 
             <Border Style="{StaticResource Panel}" IsVisible="{Binding Resetting, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="10">
-                    <Label Text="{Binding Resetting.Username, StringFormat='Reset password for {0}'}" Style="{StaticResource Heading}" />
+                    <c:CardTitle Icon="eye" Text="{Binding Resetting.Username, StringFormat='Reset password for {0}'}" />
                     <Label Text="Set a new temporary password and share it with them. The old one stops working." Style="{StaticResource Caption}" />
                     <Border Style="{StaticResource Field}" WidthRequest="240" HorizontalOptions="Start">
                         <Grid ColumnDefinitions="*,Auto"><Entry x:Name="ResetPasswordBox" Text="{Binding ResetPassword}" IsPassword="True" Placeholder="At least 6 characters" SemanticProperties.Description="New temporary password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference ResetPasswordBox}" /></Grid>
@@ -29,7 +29,7 @@
 
             <Border Style="{StaticResource Panel}">
                 <VerticalStackLayout Spacing="12">
-                    <Label Text="{Binding AddTitle}" Style="{StaticResource Heading}" />
+                    <c:CardTitle Icon="users" Text="{Binding AddTitle}" />
                     <FlexLayout Wrap="Wrap" AlignItems="End">
                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="180">
                             <Label Text="First name" Style="{StaticResource Caption}" />
@@ -56,50 +56,50 @@
                 </VerticalStackLayout>
             </Border>
 
-            <Label Text="Active accounts" Style="{StaticResource Heading}" Margin="0,8,0,0" />
-            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Users}" Spacing="10">
+            <Label Text="Active accounts" Style="{StaticResource SectionTitle}" />
+            <Border Style="{StaticResource Panel}" Padding="12">
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Users}" Spacing="8">
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="svc:UserRow">
-                        <Border Style="{StaticResource Panel}">
-                            <VerticalStackLayout Spacing="10">
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                    <VerticalStackLayout Spacing="2">
-                                        <Label Text="{Binding Username}" Style="{StaticResource Heading}" />
-                                        <Label Text="{Binding RoleText}" Style="{StaticResource Caption}" />
-                                    </VerticalStackLayout>
-                                    <c:StatusChip Grid.Column="1" Status="{Binding ActiveStatus}" VerticalOptions="Start" />
-                                </Grid>
-                                <Button Text="⋮" Style="{StaticResource SmallOutlineButton}" FontSize="24" WidthRequest="48" MinimumHeightRequest="48"
-                                        HorizontalOptions="End" Clicked="OnAccountActions" AutomationId="UserAccountActions"
+                        <Border Style="{StaticResource Row}">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
+                                <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                                    <Label Text="{Binding Username}" Style="{StaticResource Heading}" />
+                                    <Label Text="{Binding RoleText}" Style="{StaticResource Caption}" />
+                                </VerticalStackLayout>
+                                <c:StatusChip Grid.Column="1" Status="{Binding ActiveStatus}" VerticalOptions="Center" />
+                                <Button Grid.Column="2" Text="⋮" Style="{StaticResource SmallOutlineButton}" FontSize="24" WidthRequest="48" MinimumHeightRequest="48"
+                                        VerticalOptions="Center" Clicked="OnAccountActions" AutomationId="UserAccountActions"
                                         SemanticProperties.Description="Account actions" SemanticProperties.Hint="Open role, password and account actions" />
-                            </VerticalStackLayout>
+                            </Grid>
                         </Border>
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
             </VerticalStackLayout>
+            </Border>
 
-            <Label Text="Deactivated accounts" Style="{StaticResource Heading}" Margin="0,8,0,0" />
+            <Label Text="Deactivated accounts" Style="{StaticResource SectionTitle}" />
             <Label Text="Switched off, not deleted. Reactivate someone to let them sign in again." Style="{StaticResource Caption}" />
-            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Deactivated}" Spacing="10">
+            <Border Style="{StaticResource Panel}" Padding="12">
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Deactivated}" Spacing="8">
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="svc:UserRow">
-                        <Border Style="{StaticResource Panel}">
-                            <VerticalStackLayout Spacing="10">
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                    <VerticalStackLayout Spacing="2">
-                                        <Label Text="{Binding Username}" Style="{StaticResource Heading}" />
-                                        <Label Text="{Binding RoleText}" Style="{StaticResource Caption}" />
-                                    </VerticalStackLayout>
-                                    <c:StatusChip Grid.Column="1" Status="{Binding ActiveStatus}" VerticalOptions="Start" />
-                                </Grid>
-                                <Button Text="⋮" Style="{StaticResource SmallOutlineButton}" FontSize="24" WidthRequest="48" MinimumHeightRequest="48"
-                                        HorizontalOptions="End" Clicked="OnAccountActions" AutomationId="UserAccountActions"
+                        <Border Style="{StaticResource Row}">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
+                                <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                                    <Label Text="{Binding Username}" Style="{StaticResource Heading}" />
+                                    <Label Text="{Binding RoleText}" Style="{StaticResource Caption}" />
+                                </VerticalStackLayout>
+                                <c:StatusChip Grid.Column="1" Status="{Binding ActiveStatus}" VerticalOptions="Center" />
+                                <Button Grid.Column="2" Text="⋮" Style="{StaticResource SmallOutlineButton}" FontSize="24" WidthRequest="48" MinimumHeightRequest="48"
+                                        VerticalOptions="Center" Clicked="OnAccountActions" AutomationId="UserAccountActions"
                                         SemanticProperties.Description="Account actions" SemanticProperties.Hint="Open role, password and account actions" />
-                            </VerticalStackLayout>
+                            </Grid>
                         </Border>
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
             </VerticalStackLayout>
+            </Border>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

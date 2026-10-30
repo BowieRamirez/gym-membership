@@ -7,10 +7,12 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.CheckInPage" x:DataType="vm:CheckInViewModel" Title="Check-in">
 
-    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="920">
+    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
             <!-- D12: a member's QR is identification only; the result comes from live data and a scan never checks in by itself -->
-            <Label Text="Scan a member" Style="{StaticResource Heading}" />
+            <Border Style="{StaticResource Panel}">
+            <VerticalStackLayout Spacing="12">
+            <c:CardTitle Icon="scan-line" Text="Scan a member" />
             <FlexLayout Wrap="Wrap" AlignItems="Center">
                 <Button Text="Scan member QR" Style="{StaticResource SmallButton}" Command="{Binding ToggleCameraCommand}" Margin="0,0,12,8" AutomationId="ScanCamera">
                     <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsScanning}" Value="True"><Setter Property="Text" Value="Stop camera" /></DataTrigger></Button.Triggers>
@@ -21,7 +23,7 @@
                 </Border>
             </FlexLayout>
             <ContentView x:Name="CameraHost" HeightRequest="300" MaximumWidthRequest="420" HorizontalOptions="Start" IsVisible="{Binding IsScanning}" />
-            <Border Style="{StaticResource Panel}" Padding="16,12" IsVisible="{Binding HasScan}">
+            <Border Style="{StaticResource Row}" Padding="16,12" IsVisible="{Binding HasScan}">
                 <VerticalStackLayout Spacing="6">
                     <Label Text="{Binding Scan.Name, TargetNullValue='Unknown code'}" Style="{StaticResource Heading}" AutomationId="ScanName" />
                     <Label Text="{Binding Scan.StatusText}" FontFamily="BarlowMedium" AutomationId="ScanStatus" />
@@ -32,13 +34,17 @@
                     </FlexLayout>
                 </VerticalStackLayout>
             </Border>
+            </VerticalStackLayout>
+            </Border>
 
-            <Label Text="Coaches" Style="{StaticResource Heading}" Margin="0,6,0,0" />
+            <!-- coaches and members: white rows inside one card each -->
+            <Label Text="Coaches" Style="{StaticResource SectionTitle}" />
+            <Border Style="{StaticResource Panel}" Padding="12">
             <VerticalStackLayout Spacing="8" BindableLayout.ItemsSource="{Binding Coaches}">
                 <BindableLayout.EmptyView><Label Text="No coaches yet." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="svc:CoachPresenceRow">
-                        <Border Style="{StaticResource Panel}" Padding="16,10">
+                        <Border Style="{StaticResource Row}">
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
                                 <VerticalStackLayout Spacing="2" VerticalOptions="Center">
                                     <Label Text="{Binding Name}" FontFamily="BarlowMedium" />
@@ -50,18 +56,20 @@
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
             </VerticalStackLayout>
-            <Label Text="Members" Style="{StaticResource Heading}" Margin="0,6,0,0" />
+            </Border>
+            <Label Text="Members" Style="{StaticResource SectionTitle}" />
             <Border Style="{StaticResource Field}"><SearchBar Placeholder="Search members by name" Text="{Binding Search}" SearchCommand="{Binding SearchCommand}" /></Border>
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
         </VerticalStackLayout>
 
-        <CollectionView Grid.Row="1" ItemsSource="{Binding Hits}">
-            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="10" /></CollectionView.ItemsLayout>
+        <Border Grid.Row="1" Style="{StaticResource Panel}" Padding="12" Margin="0,0,0,16">
+        <CollectionView ItemsSource="{Binding Hits}">
+            <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="8" /></CollectionView.ItemsLayout>
             <CollectionView.EmptyView><Label Text="No members match that name." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="svc:MemberHit">
-                    <Border Style="{StaticResource Panel}" Padding="16,12">
+                    <Border Style="{StaticResource Row}">
                         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="14">
                             <Label Text="{Binding Username}" Style="{StaticResource Heading}" VerticalOptions="Center" />
                             <c:StatusChip Grid.Column="1" Status="{Binding PlanStatus}" VerticalOptions="Center" />
@@ -72,5 +80,6 @@
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
+        </Border>
     </Grid>
 </v:BasePage>

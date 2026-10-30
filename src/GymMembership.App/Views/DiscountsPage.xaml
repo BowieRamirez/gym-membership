@@ -7,7 +7,7 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.DiscountsPage" x:DataType="vm:DiscountsViewModel" Title="Discounts">
 
-    <ScrollView MaximumWidthRequest="920">
+    <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
             <Label Text="Percent-off codes. Members type a code when they buy or renew a package." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
@@ -15,7 +15,7 @@
 
             <Border Style="{StaticResource Panel}" IsVisible="{Binding Deleting, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="10">
-                    <Label Text="{Binding Deleting.Discount.Code, StringFormat='Archive code {0}? History will be retained.'}" Style="{StaticResource Heading}" />
+                    <c:CardTitle Icon="archive" Text="{Binding Deleting.Discount.Code, StringFormat='Archive code {0}? History will be retained.'}" />
                     <HorizontalStackLayout Spacing="8">
                         <Button Text="Yes, archive" Style="{StaticResource SmallButton}" Command="{Binding ConfirmDeleteCommand}" />
                         <Button Text="Keep it" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepCommand}" />
@@ -25,7 +25,7 @@
 
             <Border Style="{StaticResource Panel}" IsVisible="{Binding Editing, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="10">
-                    <Label Text="{Binding Editing.Discount.Code, StringFormat='Change the limit for {0}'}" Style="{StaticResource Heading}" />
+                    <c:CardTitle Icon="tag" Text="{Binding Editing.Discount.Code, StringFormat='Change the limit for {0}'}" />
                     <Label Text="{Binding Editing.Usage}" Style="{StaticResource Caption}" />
                     <Border Style="{StaticResource Field}" WidthRequest="110" HorizontalOptions="Start">
                         <Entry Text="{Binding EditLimit}" Keyboard="Numeric" SemanticProperties.Description="New limit" />
@@ -59,7 +59,7 @@
                 </FlexLayout>
             </Border>
 
-            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Discounts}" Spacing="10">
+            <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" BindableLayout.ItemsSource="{Binding Discounts}">
                 <BindableLayout.EmptyView><Label Text="No discount codes yet." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="svc:DiscountRow">
@@ -67,7 +67,7 @@
                             <VerticalStackLayout Spacing="10">
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                                     <VerticalStackLayout Spacing="2">
-                                        <Label Text="{Binding Discount.Code}" Style="{StaticResource Heading}" />
+                                        <c:CardTitle Icon="tag" Text="{Binding Discount.Code}" />
                                         <Label Style="{StaticResource Caption}">
                                             <Label.Text>
                                                 <MultiBinding StringFormat="{}{0}% off, valid until {1}">
@@ -93,7 +93,7 @@
                         </Border>
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
-            </VerticalStackLayout>
+            </c:CardGrid>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

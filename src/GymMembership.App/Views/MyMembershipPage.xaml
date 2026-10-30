@@ -8,14 +8,24 @@
             xmlns:zxing="clr-namespace:ZXing.Net.Maui.Controls;assembly=ZXing.Net.MAUI.Controls"
             x:Class="GymMembership.App.Views.MyMembershipPage" x:DataType="vm:MyMembershipViewModel" Title="My membership">
 
-    <ScrollView MaximumWidthRequest="920">
+    <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='20,16,20,24'}" Spacing="14">
 
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
             <!-- D12: the member's permanent ID code, kept apart from the gym's pay-by-QR panel below. Always dark on white so any scanner reads it. -->
-            <Border Style="{StaticResource Panel}" Padding="16,14" IsVisible="{Binding HasCode}">
+            <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}">
+            <!-- The one memorable moment: days left, a lime card with a pill bar that runs out -->
+            <Border Style="{StaticResource HeroPanel}" Padding="{OnIdiom Phone='16,16', Default='22,20'}">
+                <VerticalStackLayout Spacing="12">
+                    <c:CardTitle Icon="clock" Text="{Binding HeroCaption}" TextColor="{StaticResource Black}" />
+                    <Label Text="{Binding HeroNumber}" Style="{StaticResource Numeral}" FontSize="84" TextColor="{StaticResource Black}"
+                           SemanticProperties.Description="Days left on your membership" />
+                    <c:LaneView Fraction="{Binding LaneFraction}" HeightRequest="34" DashColor="{StaticResource Black}" TrackColor="#5A6159" />
+                </VerticalStackLayout>
+            </Border>
+            <Border Style="{StaticResource Panel}" Padding="18" IsVisible="{Binding HasCode}">
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="18">
                     <!-- the generator ignores its own size on Windows, so the white frame sets it and the code fills the frame -->
                     <Border BackgroundColor="White" StrokeThickness="0" Padding="8" WidthRequest="166" HeightRequest="166" VerticalOptions="Center"
@@ -23,29 +33,19 @@
                         <zxing:BarcodeGeneratorView Format="QrCode" Value="{Binding MyCode}" HorizontalOptions="Fill" VerticalOptions="Fill"
                                                     ForegroundColor="Black" BackgroundColor="White" />
                     </Border>
-                    <VerticalStackLayout Grid.Column="1" Spacing="6" VerticalOptions="Center">
-                        <Label Text="Your member QR" Style="{StaticResource Heading}" />
+                    <VerticalStackLayout Grid.Column="1" Spacing="8" VerticalOptions="Center">
+                        <c:CardTitle Icon="scan-line" Text="Your member QR" />
                         <Label Text="Show this at the front desk when you arrive. It only identifies you; it is not for paying." Style="{StaticResource Muted}" />
                     </VerticalStackLayout>
                 </Grid>
             </Border>
 
-            <!-- The one memorable moment: days left, shown as a lane that runs out -->
-            <Border Style="{StaticResource Panel}" Padding="{OnIdiom Phone='16,16', Default='24,22'}">
-                <VerticalStackLayout Spacing="12">
-                    <Label Text="{Binding HeroNumber}" Style="{StaticResource Numeral}" FontSize="84"
-                           SemanticProperties.Description="Days left on your membership" />
-                    <c:LaneView Fraction="{Binding LaneFraction}" Thickness="6" HeightRequest="14"
-                                DashColor="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}"
-                                TrackColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
-                    <Label Text="{Binding HeroCaption}" />
-                </VerticalStackLayout>
-            </Border>
+            </c:CardGrid>
 
             <!-- Pay by QR: the code is what the front desk matches your transfer against, so it is the biggest thing here -->
             <Border Style="{StaticResource Panel}" Padding="{OnIdiom Phone='16,16', Default='24,22'}" IsVisible="{Binding PayNow, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="14">
-                    <Label Text="{Binding PayNow.Amount, StringFormat='Pay ₱{0:N2} by QR'}" Style="{StaticResource Heading}" />
+                    <c:CardTitle Icon="banknote" Text="{Binding PayNow.Amount, StringFormat='Pay ₱{0:N2} by QR'}" />
                     <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="20">
                         <Image Source="{Binding QrUrl}" IsVisible="{Binding HasQr}" WidthRequest="168" HeightRequest="168" VerticalOptions="Start"
                                Grid.ColumnSpan="{OnIdiom Phone=2, Default=1}" HorizontalOptions="{OnIdiom Phone=Center, Default=Start}"
@@ -75,10 +75,10 @@
                 </VerticalStackLayout>
             </Border>
 
-            <Label Text="Your paid terms" Style="{StaticResource Heading}" Margin="0,8,0,0" />
+            <Label Text="Your paid terms" Style="{StaticResource SectionTitle}" />
             <Label Text="Extensions start after your last paid term. No upgrades or unused-time credits. Other paid terms keep their dates if one is cancelled, so a gap may remain." Style="{StaticResource Muted}" />
             <Button Text="Choose a package / extend" Style="{StaticResource SmallButton}" HorizontalOptions="Start" Clicked="OnChoosePackage" />
-            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Terms}" Spacing="10">
+            <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" BindableLayout.ItemsSource="{Binding Terms}">
                 <BindableLayout.EmptyView>
                     <Label Text="No paid terms yet. Choose a package, pay and wait for verification." Style="{StaticResource Muted}" />
                 </BindableLayout.EmptyView>
@@ -86,7 +86,7 @@
                     <DataTemplate x:DataType="svc:TermCard">
                         <Border Style="{StaticResource Panel}">
                             <VerticalStackLayout Spacing="8">
-                                <Label Text="{Binding Term.PackageName}" Style="{StaticResource Heading}" />
+                                <c:CardTitle Icon="id-card" Text="{Binding Term.PackageName}" />
                                 <c:StatusChip Status="{Binding State}" />
                                 <Label Text="{Binding Dates}" Style="{StaticResource Caption}" />
                                 <Label Text="{Binding Term.AmountPaid, StringFormat='Actually paid: ₱{0:N2}'}" />
@@ -98,16 +98,18 @@
                         </Border>
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
-            </VerticalStackLayout>
+            </c:CardGrid>
 
-            <Label Text="Payments" Style="{StaticResource Heading}" Margin="0,8,0,0" />
-            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Payments}" Spacing="10">
+            <!-- payments: white rows inside one card -->
+            <Label Text="Payments" Style="{StaticResource SectionTitle}" />
+            <Border Style="{StaticResource Panel}" Padding="12">
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Payments}" Spacing="8">
                 <BindableLayout.EmptyView>
                     <Label Text="No payments yet." Style="{StaticResource Muted}" />
                 </BindableLayout.EmptyView>
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="svc:PaymentItem">
-                        <Border Style="{StaticResource Panel}">
+                        <Border Style="{StaticResource Row}">
                             <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12">
                                 <VerticalStackLayout Spacing="6">
                                     <Label Text="{Binding What}" Style="{StaticResource Heading}" />
@@ -134,6 +136,7 @@
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
             </VerticalStackLayout>
+            </Border>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

@@ -7,7 +7,7 @@
             xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.RevenuePage" x:DataType="vm:RevenueViewModel" Title="Revenue">
 
-    <ScrollView MaximumWidthRequest="720">
+    <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
             <Label Text="Net receipts: verified payments minus approved refunds, grouped by Manila day, item and payment method. A refund counts on the day it was approved, and is shown against the method the member paid with. The cash drawer on the Cashier page drops only when the repayment is recorded. Payment counts count receipts, not refunds. Voids are excluded." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
@@ -28,18 +28,19 @@
                         SemanticProperties.Hint="Creates a PDF of the receipts and refunds shown and opens the share sheet" />
             </FlexLayout>
 
-            <Border Style="{StaticResource Panel}" Padding="24,20">
-                <VerticalStackLayout Spacing="4">
-                    <Label Text="Net in this period" Style="{StaticResource Caption}" />
-                    <Label Text="{Binding TotalText}" Style="{StaticResource Numeral}" />
+            <Border Style="{StaticResource HeroPanel}" Padding="24,20">
+                <VerticalStackLayout Spacing="8">
+                    <c:CardTitle Icon="chart-line" Text="Net in this period" TextColor="{StaticResource Black}" />
+                    <Label Text="{Binding TotalText}" Style="{StaticResource Numeral}" TextColor="{StaticResource Black}" />
                 </VerticalStackLayout>
             </Border>
 
+            <Border Style="{StaticResource Panel}" Padding="12">
             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Rows}" Spacing="8">
                 <BindableLayout.EmptyView><Label Text="No receipts or approved refunds in this period." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="m:RevenueRow">
-                        <Border Style="{StaticResource Panel}" Padding="16,12">
+                        <Border Style="{StaticResource Row}" Padding="16,12">
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                                 <VerticalStackLayout Spacing="2">
                                     <Label Text="{Binding Day, StringFormat='{0:ddd d MMM}'}" />
@@ -57,6 +58,7 @@
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
             </VerticalStackLayout>
+            </Border>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>
