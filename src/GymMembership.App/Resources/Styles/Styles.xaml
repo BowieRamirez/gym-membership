@@ -22,10 +22,11 @@
         <Setter Property="Shell.BackgroundColor" Value="{AppThemeBinding Light={StaticResource BackdropLight}, Dark={StaticResource BackdropDark}}" />
         <Setter Property="Shell.ForegroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
         <Setter Property="Shell.TitleColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
-        <Setter Property="Shell.TabBarBackgroundColor" Value="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}" />
-        <Setter Property="Shell.TabBarForegroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
-        <Setter Property="Shell.TabBarTitleColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
-        <Setter Property="Shell.TabBarUnselectedColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+        <!-- phone bottom bars stay light in both themes so their icons can stay black -->
+        <Setter Property="Shell.TabBarBackgroundColor" Value="{AppThemeBinding Light={StaticResource IconChipLight}, Dark={StaticResource IconChipDark}}" />
+        <Setter Property="Shell.TabBarForegroundColor" Value="{StaticResource IconInk}" />
+        <Setter Property="Shell.TabBarTitleColor" Value="{StaticResource IconInk}" />
+        <Setter Property="Shell.TabBarUnselectedColor" Value="{StaticResource MutedLight}" />
     </Style>
 
     <!-- ===== Text ===== -->

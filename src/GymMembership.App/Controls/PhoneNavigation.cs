@@ -168,8 +168,13 @@ public sealed class PhoneNavigation
                     parent.SetBackgroundColor(pageBackground.ToPlatform());
                 bar.LabelVisibilityMode = Google.Android.Material.Navigation.NavigationBarView.LabelVisibilityLabeled;
                 bar.ItemHorizontalTranslationEnabled = false;
+                // MAUI's MaterialComponents theme gives the indicator no shape or size, so it is drawn only once both are set here
+                var density = bar.Resources?.DisplayMetrics?.Density ?? 1f;
                 bar.ItemActiveIndicatorEnabled = true;
                 bar.ItemActiveIndicatorColor = Android.Content.Res.ColorStateList.ValueOf(Color.FromArgb("#E4F58A").ToPlatform());
+                bar.ItemActiveIndicatorShapeAppearance = Google.Android.Material.Shape.ShapeAppearanceModel.InvokeBuilder().SetAllCornerSizes(16 * density).Build();
+                bar.ItemActiveIndicatorWidth = (int)(64 * density);
+                bar.ItemActiveIndicatorHeight = (int)(32 * density);
             }
             if (view is Android.Views.ViewGroup group)
                 for (var i = 0; i < group.ChildCount; i++)
