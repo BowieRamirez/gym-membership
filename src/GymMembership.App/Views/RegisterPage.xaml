@@ -11,8 +11,7 @@
     <ScrollView>
         <VerticalStackLayout Padding="{OnIdiom Phone='24,48,24,24', Default='64,40'}" Spacing="18" MaximumWidthRequest="480"
                              VerticalOptions="{OnIdiom Phone=Start, Default=Center}" HorizontalOptions="Fill">
-            <c:LaneView DashColor="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}"
-                        TrackColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+            <c:DumbbellLogo Size="48" Inverted="True" HorizontalOptions="Start" />
 
             <VerticalStackLayout Spacing="6">
                 <Label Text="Create an account" Style="{StaticResource Display}" SemanticProperties.HeadingLevel="Level1" />

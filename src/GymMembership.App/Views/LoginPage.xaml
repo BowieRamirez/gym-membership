@@ -7,19 +7,20 @@
             x:Class="GymMembership.App.Views.LoginPage" x:DataType="vm:LoginViewModel"
             Title="Sign in">
 
-    <!-- Desktop: a rubber-floor panel on the left, the form on the right. Phone: form only. -->
+    <!-- Desktop: a black rounded panel with the logo on the left, the form on the right. Phone: form only. -->
     <Grid ColumnDefinitions="*,*">
 
-        <Grid Grid.Column="0" IsVisible="{OnIdiom Phone=False, Default=True}"
-              BackgroundColor="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}"
-              RowDefinitions="*,Auto,*" Padding="48">
-            <VerticalStackLayout Grid.Row="1" Spacing="28">
-                <c:LaneView DashColor="{StaticResource White}" TrackColor="#55FFFFFF" />
-                <Label Text="Front desk, coaches and members in one place."
-                       Style="{StaticResource Title}" TextColor="{StaticResource White}" MaximumWidthRequest="360" HorizontalOptions="Start" />
-                <c:LaneView DashColor="#66FFFFFF" TrackColor="#33FFFFFF" />
-            </VerticalStackLayout>
-        </Grid>
+        <Border Grid.Column="0" IsVisible="{OnIdiom Phone=False, Default=True}" Margin="14" Padding="48" StrokeThickness="0" StrokeShape="RoundRectangle 26"
+                BackgroundColor="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource CardDark}}">
+            <Grid RowDefinitions="Auto,*,Auto">
+                <HorizontalStackLayout Spacing="12">
+                    <c:DumbbellLogo Size="44" Inverted="True" VerticalOptions="Center" />
+                    <Label Text="Gym Membership" Style="{StaticResource Heading}" TextColor="{StaticResource White}" VerticalOptions="Center" />
+                </HorizontalStackLayout>
+                <Label Grid.Row="2" Text="Front desk, coaches and members in one place."
+                       Style="{StaticResource Display}" TextColor="{StaticResource White}" MaximumWidthRequest="420" HorizontalOptions="Start" />
+            </Grid>
+        </Border>
 
         <ScrollView Grid.Column="{OnIdiom Phone=0, Default=1}" Grid.ColumnSpan="{OnIdiom Phone=2, Default=1}">
             <VerticalStackLayout Padding="{OnIdiom Phone='24,48,24,24', Default='64,40'}"
@@ -27,9 +28,7 @@
                                  VerticalOptions="{OnIdiom Phone=Start, Default=Center}"
                                  HorizontalOptions="Fill">
 
-                <c:LaneView IsVisible="{OnIdiom Phone=True, Default=False}"
-                            DashColor="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}"
-                            TrackColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+                <c:DumbbellLogo IsVisible="{OnIdiom Phone=True, Default=False}" Size="52" Inverted="True" HorizontalOptions="Start" />
 
                 <VerticalStackLayout Spacing="6">
                     <Label Text="Gym Membership" Style="{StaticResource Display}" SemanticProperties.HeadingLevel="Level1" />

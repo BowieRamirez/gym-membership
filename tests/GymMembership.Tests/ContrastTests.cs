@@ -29,7 +29,8 @@ public class ContrastTests
             foreach (var bg in new[] { "Chalk" + theme, "Surface" + theme, "Card" + theme }) { yield return new object[] { ink, bg }; yield return new object[] { muted, bg }; }
             yield return new object[] { inverse, inverseOn };   // button text: white on black (light), black on lime (dark)
         }
-        yield return new object[] { "White", "InkLight" };            // avatar letters
+        yield return new object[] { "White", "InkLight" };            // avatar letters, light
+        yield return new object[] { "ChalkDark", "InkDark" };         // avatar letters, dark
         yield return new object[] { "Black", "Lime" };                // lime highlight, lime buttons
         yield return new object[] { "IconInk", "IconChipLight" };     // icons sit on a light chip in both themes
         yield return new object[] { "IconInk", "IconChipDark" };
