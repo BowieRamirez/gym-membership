@@ -10,7 +10,6 @@ namespace GymMembership.App.Controls;
 public class LaneView : GraphicsView
 {
     public static readonly BindableProperty FractionProperty = Prop(nameof(Fraction), 1d);
-    public static readonly BindableProperty ThicknessProperty = Prop(nameof(Thickness), 4d);
     public static readonly BindableProperty DashColorProperty = Prop(nameof(DashColor), Colors.Black);
     public static readonly BindableProperty TrackColorProperty = Prop(nameof(TrackColor), Colors.Gray);
 
@@ -18,7 +17,6 @@ public class LaneView : GraphicsView
         BindableProperty.Create(name, typeof(T), typeof(LaneView), def, propertyChanged: (b, _, _) => ((LaneView)b).Invalidate());
 
     public double Fraction { get => (double)GetValue(FractionProperty); set => SetValue(FractionProperty, value); }
-    public double Thickness { get => (double)GetValue(ThicknessProperty); set => SetValue(ThicknessProperty, value); }
     public Color DashColor { get => (Color)GetValue(DashColorProperty); set => SetValue(DashColorProperty, value); }
     public Color TrackColor { get => (Color)GetValue(TrackColorProperty); set => SetValue(TrackColorProperty, value); }
 
