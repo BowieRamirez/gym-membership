@@ -1,6 +1,6 @@
 # Visual redesign: sage, lime and black (Windows and Android)
 
-Date: 2026-10-30. Status: for owner approval.
+Date: 2026-10-30. Status: approved by the owner and built (branch `visual-redesign-2026-10-30`). The page layouts follow the later page mockup, see `docs/superpowers/plans/2026-10-30-visual-redesign-pages.md`.
 
 ## Intent
 

@@ -1,5 +1,8 @@
 # Visual Redesign Implementation Plan
 
+> **Status (2026-10-30): built.** Tasks 1-7 are done and committed (b975c80..6527604), reviewed by a fresh reviewer (no critical findings; its two important points fixed in e654113). Work is on branch `visual-redesign-2026-10-30` on GitHub, not merged into main. Part 2, the page layouts, is in `2026-10-30-visual-redesign-pages.md`.
+> **Still open:** the owner's device checks in Task 7 step 4 (unticked below). Deferred small items are listed in `docs/progress-2026-10-16.md` section 8.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Restyle every page of the Windows and Android app (sign-in to the last admin page, light and dark) in the approved sage / lime / black look, with an icon-only Windows side menu and a new dumbbell logo, without adding or removing any feature.
@@ -52,17 +55,17 @@ Commands used throughout:
   - `Plate*` keys keep their names; retune values only if a contrast test fails.
   - New style keys: `PageTitle` (Label: `BarlowMedium`, size 34 on Windows / `TextTitle2` on phones, `CharacterSpacing -0.4`, `LineHeight 1.05`), `LimeButton` and `LimeSmallButton` (lime background, black text, based on `BaseButton` / `SmallButton`).
 
-- [ ] **Step 1: Extend `ContrastTests` with the new pairs**
+- [x] **Step 1: Extend `ContrastTests` with the new pairs**
 
 Add to `TextPairs()`: `InkLight`/`MutedLight` on `CardLight`, `InkDark`/`MutedDark` on `CardDark` and `SurfaceDark`; `Black` on `Lime` (lime buttons, lime highlight); `IconInk` on `IconChipLight` and `IconChipDark`. Change the dark inverse pair to `("Black", "Lime")` since the dark primary button is lime with black text. Add `Card` to the backgrounds in `IndicatorPairs()` (`from bg in new[] { "Chalk", "Surface", "Card" }`).
 
-- [ ] **Step 2: Run, expect FAIL** (`CardLight` etc. not found)
+- [x] **Step 2: Run, expect FAIL** (`CardLight` etc. not found)
 
 Run: `dotnet test tests/GymMembership.Tests --filter ContrastTests`
 
-- [ ] **Step 3: Set the token values above in `Colors.xaml`** (keep the comments short; replace the "cool concrete / rubber flooring" comment with "sage canvas, lime highlight").
+- [x] **Step 3: Set the token values above in `Colors.xaml`** (keep the comments short; replace the "cool concrete / rubber flooring" comment with "sage canvas, lime highlight").
 
-- [ ] **Step 4: Restyle the shared styles in `Styles.xaml`**
+- [x] **Step 4: Restyle the shared styles in `Styles.xaml`**
 
 - `Shell`: `BackgroundColor` → Backdrop; `TabBar*` left to Task 5.
 - `BaseButton`: background Ink light / `Lime` dark; text `White` light / `Black` dark; `CornerRadius 24`.
@@ -74,11 +77,11 @@ Run: `dotnet test tests/GymMembership.Tests --filter ContrastTests`
 - `Chip`: `RoundRectangle 12`, `StrokeThickness 0`, background `Surface`, padding `10,4`.
 - `Display`: `BarlowMedium`, `CharacterSpacing -0.6`. Add `PageTitle`.
 
-- [ ] **Step 5: Run tests, expect PASS.** If a `Plate*` pair fails, darken (light) or lighten (dark) that plate value until it passes, and note the old value in the comment as the file already does.
+- [x] **Step 5: Run tests, expect PASS.** If a `Plate*` pair fails, darken (light) or lighten (dark) that plate value until it passes, and note the old value in the comment as the file already does.
 
 Run: `dotnet test tests/GymMembership.Tests` → 0 failed.
 
-- [ ] **Step 6: Build Windows, then commit**
+- [x] **Step 6: Build Windows, then commit**
 
 ```bash
 git add src/GymMembership.App/Resources/Styles/Colors.xaml src/GymMembership.App/Resources/Styles/Styles.xaml tests/GymMembership.Tests/ContrastTests.cs
@@ -98,15 +101,15 @@ git commit -m "style: sage, lime and black colour tokens and pill/rounded shared
 - Consumes: `IconInk`, `IconChipLight`, `IconChipDark`, `LimeSmallButton` (Task 1).
 - Produces: `IconView` with `Icon` (string), new `Size` (double, icon size, default 18) and `ChipSize` (double, default 36); it draws a rounded chip (`RoundRectangle` radius = ChipSize / 3, `#FFFFFF` light / `#E7EBE4` dark) with the black path centred. `OnInk` is removed. `IconView.Selected` (bool, default false): chip becomes `Lime`. Later tasks use `new IconView { Icon = "...", Selected = true }`.
 
-- [ ] **Step 1: Add tests to `IconTests`**
+- [x] **Step 1: Add tests to `IconTests`**
 
 - `Icon_view_is_black_in_both_themes`: source of `Controls/Icons.cs` contains `"IconInk"` and does not contain `"InkDark"` or `OnInk`.
 - `Bell_is_drawn_by_the_shared_icon_view`: `Controls/HeaderBar.xaml` contains `Icon="bell"` and no `<Path`.
 - `Selected_choice_buttons_are_lime_not_black`: `Icons.cs` contains `"LimeSmallButton"`.
 
-- [ ] **Step 2: Run, expect FAIL.** `dotnet test tests/GymMembership.Tests --filter IconTests`
+- [x] **Step 2: Run, expect FAIL.** `dotnet test tests/GymMembership.Tests --filter IconTests`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 - `IconView`: content becomes a `Border` (the chip) holding the `Path`; stroke from `IconInk` (one colour, no `SetAppTheme` on the stroke); chip background `SetAppThemeColor(IconChipLight, IconChipDark)`, or `Lime` when `Selected`. `WidthRequest`/`HeightRequest` = `ChipSize`, path size = `Size`.
 - Add `["bell"]` to `Icons.Data` (Lucide bell, arc-free: `M 6 8 C 6 4.686 8.686 2 12 2 C 15.314 2 18 4.686 18 8 C 18 15 21 17 21 17 L 3 17 C 3 17 6 15 6 8 Z M 10.3 21 C 10.646 21.598 11.29 22 12 22 C 12.71 22 13.354 21.598 13.7 21`).
@@ -114,9 +117,9 @@ git commit -m "style: sage, lime and black colour tokens and pill/rounded shared
 - `EyeButton`: `_icon` gets `ChipSize = 32, Size = 18`.
 - `IconButton.Refresh`: selected uses `LimeSmallButton`, unselected `SmallOutlineButton`; drop `_icon.OnInk`.
 
-- [ ] **Step 4: Run all tests, expect PASS; build Windows.**
+- [x] **Step 4: Run all tests, expect PASS; build Windows.**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/GymMembership.App/Controls/Icons.cs src/GymMembership.App/Controls/HeaderBar.xaml tests/GymMembership.Tests/IconTests.cs
@@ -136,30 +139,30 @@ git commit -m "style: icons drawn black on a light chip, lime when selected"
 **Interfaces:**
 - Produces: `DumbbellLogo : ContentView` with `Size` (double, default 40) and `Inverted` (bool: false = lime dumbbell on black square, true = black dumbbell on lime square). Drawn with MAUI shapes (a `Border` square radius Size·0.28 and three `RoundRectangle`/`Rectangle` shapes), no image file. Geometry on a 64-unit grid: square 64 radius 18; plates `x 12, y 22, w 8, h 20, r 3` and `x 44, y 22, w 8, h 20, r 3`; bar `x 20, y 29, w 24, h 6, r 2`. `AutomationProperties.IsInAccessibleTree = false` (decorative; the app name sits beside it).
 
-- [ ] **Step 1: Write `LogoTests`**
+- [x] **Step 1: Write `LogoTests`**
 
 - `App_icon_is_the_dumbbell_not_the_template`: `appiconfg.svg` contains `#E4F58A` and no `#ffffff`; csproj `MauiIcon` and `MauiSplashScreen` have `Color="#000000"` (no `#512BD4`).
 - `Sign_in_and_create_account_show_the_logo`: `LoginPage.xaml` and `RegisterPage.xaml` contain `<c:DumbbellLogo`.
 
-- [ ] **Step 2: Run, expect FAIL.**
+- [x] **Step 2: Run, expect FAIL.**
 
-- [ ] **Step 3: Logo assets**
+- [x] **Step 3: Logo assets**
 
 - `appicon.svg`: a 456×456 black (`#000000`) square (Android masks the shape).
 - `appiconfg.svg`: 456×456, the lime dumbbell from the geometry above scaled into the centre 60% (safe zone), no background.
 - `splash.svg`: the lime dumbbell alone, 456×456, transparent background; csproj `MauiSplashScreen Color="#000000"`, `MauiIcon Color="#000000"`.
 
-- [ ] **Step 4: `DumbbellLogo` control** (as Interfaces).
+- [x] **Step 4: `DumbbellLogo` control** (as Interfaces).
 
-- [ ] **Step 5: Sign-in page**
+- [x] **Step 5: Sign-in page**
 
 Left panel (desktop): background `InkLight` light / `CardDark` dark, corner radius 24 inside a 12-unit margin on a `Backdrop` page, `Padding 48`; top: `DumbbellLogo Size=48` + "Gym Membership" (`Heading`, white); bottom: the existing tagline in `Display`, white. Remove both `LaneView`s from the panel. Right side: same controls and texts as now; heading "Gym Membership" stays (`Display`); phone gets the `DumbbellLogo` in place of its `LaneView`. Buttons keep their current styles (now pills from Task 1).
 
-- [ ] **Step 6: Create-account page**: replace its `LaneView` with `DumbbellLogo Size=40`; nothing else changes beyond what the shared styles do.
+- [x] **Step 6: Create-account page**: replace its `LaneView` with `DumbbellLogo Size=40`; nothing else changes beyond what the shared styles do.
 
-- [ ] **Step 7: Tests PASS, Windows and Android builds succeed. Demo-mode check of sign-in and create-account in light and dark (screenshots).**
+- [x] **Step 7: Tests PASS, Windows and Android builds succeed. Demo-mode check of sign-in and create-account in light and dark (screenshots).**
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/GymMembership.App/Controls/DumbbellLogo.cs src/GymMembership.App/Resources/AppIcon/appicon.svg src/GymMembership.App/Resources/AppIcon/appiconfg.svg src/GymMembership.App/Resources/Splash/splash.svg src/GymMembership.App/GymMembership.App.csproj src/GymMembership.App/Views/LoginPage.xaml src/GymMembership.App/Views/RegisterPage.xaml tests/GymMembership.Tests/LogoTests.cs
@@ -201,7 +204,7 @@ Shell setup on Windows: `shell.FlyoutContent = rail`, `shell.FlyoutHeader = null
 `PageIcons` (all must exist in `Icons.Data`; add the missing ones as arc-free Lucide outlines: convert circles/arcs to cubic curves with a throwaway script outside the repo, then paste):
 Overview `layout-dashboard`, Home `house`, Payments to verify `badge-check`, Cashier `banknote`, Check-in `scan-line`, Amenity Status `waves`, Users and roles `users`, Packages and amenities `package`, Discounts `tag`, Cancellations & refunds `undo-2`, Void a payment `ban`, Gym settings `sliders-horizontal`, Revenue `chart-line`, Logs & Archive `archive`, Messages `message-square`, Settings `settings`, My membership `id-card`, Packages `package`, Amenities `waves`, Book an amenity `calendar-plus`, Coaches `dumbbell`, Sessions `calendar-days`, Time requests `clock`, Dashboard `layout-dashboard`, Trainees `users`, My shifts `calendar-clock`, My coach profile `user-round`. Plus `briefcase`, `log-out`.
 
-- [ ] **Step 1: Write `IconRailTests`**
+- [x] **Step 1: Write `IconRailTests`**
 
 - `Every_page_in_every_shell_has_a_drawn_icon`: titles from the three `*Shell.xaml` files (`FlyoutItem Title`, unescaped `&amp;`) plus "Overview" are all keys of `PageIcons` (regex `\["([^"]+)"\]\s*=\s*"([a-z-]+)"` over `IconRail.Windows.cs`), and every value is in `IconTests.Drawn()` (make `Drawn` `internal static`).
 - `Rail_is_Windows_only_and_scrolls`: source starts `#if WINDOWS`, ends `#endif`, contains `new ScrollView`, `ToolTipProperties.SetText`, `FlyoutWidth = 88`, and not `Items.Remove`, `new ShellContent`, `MenuItemsSource`, `SelectedItem`.
@@ -211,19 +214,19 @@ Overview `layout-dashboard`, Home `house`, Payments to verify `badge-check`, Cas
 
 Rewrite `WindowsAdminNavigationTests`: keep `Overview_is_a_Windows_only_landing_item...` and `All_existing_pages_and_routes_remain_in_the_shared_shell` (they are still true); drop the text-menu typography tests; change `Grouping_is_Windows_only_and_admin_only` to expect `SetupAdminOverview(...)` then `IconRail.Install(...)`.
 
-- [ ] **Step 2: Run, expect FAIL.**
+- [x] **Step 2: Run, expect FAIL.**
 
-- [ ] **Step 3: Add the missing icons to `Icons.Data`; run `IconTests`, expect PASS.**
+- [x] **Step 3: Add the missing icons to `Icons.Data`; run `IconTests`, expect PASS.**
 
-- [ ] **Step 4: Implement `IconRail.Install`** (as Interfaces / Layout / Grouping).
+- [x] **Step 4: Implement `IconRail.Install`** (as Interfaces / Layout / Grouping).
 
-- [ ] **Step 5: Wire the shells**; delete `StaffShell.Windows.cs`; `HeaderBar` on Windows: hide `Avatar`, stop setting `FlyoutFooter`, `TitleLabel.Style = PageTitle`, `HeightRequest 72`. Delete `SignOutFooter.xaml(.cs)` if nothing else uses it (grep first).
+- [x] **Step 5: Wire the shells**; delete `StaffShell.Windows.cs`; `HeaderBar` on Windows: hide `Avatar`, stop setting `FlyoutFooter`, `TitleLabel.Style = PageTitle`, `HeightRequest 72`. Delete `SignOutFooter.xaml(.cs)` if nothing else uses it (grep first).
 
-- [ ] **Step 6: Tests PASS; Windows build succeeds.**
+- [x] **Step 6: Tests PASS; Windows build succeeds.**
 
-- [ ] **Step 7: Demo-mode walkthrough on Windows**: sign in as each demo role (Member, Coach, Front desk, Admin), hover three icons (tooltips), open/close the briefcase, open a desk page then fold the group (briefcase lime), shrink the window to ~720 px tall (rail scrolls, Sign out visible), sign out from the rail. Light and dark. Screenshots.
+- [x] **Step 7: Demo-mode walkthrough on Windows**: sign in as each demo role (Member, Coach, Front desk, Admin), hover three icons (tooltips), open/close the briefcase, open a desk page then fold the group (briefcase lime), shrink the window to ~720 px tall (rail scrolls, Sign out visible), sign out from the rail. Light and dark. Screenshots.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/GymMembership.App/Controls/IconRail.Windows.cs src/GymMembership.App/StaffShell.xaml.cs src/GymMembership.App/MemberShell.xaml.cs src/GymMembership.App/CoachShell.xaml.cs src/GymMembership.App/Controls/HeaderBar.xaml src/GymMembership.App/Controls/HeaderBar.xaml.cs src/GymMembership.App/Controls/Icons.cs tests/GymMembership.Tests/IconRailTests.cs tests/GymMembership.Tests/WindowsAdminNavigationTests.cs tests/GymMembership.Tests/IconTests.cs
@@ -244,15 +247,15 @@ git commit -m "feat(windows): icon-only side menu with hover names and folding f
 **Interfaces:**
 - Consumes: Task 1 tokens. Produces nothing new.
 
-- [ ] **Step 1: Test** `Bottom_bar_is_light_in_both_themes_with_black_icons`: `PhoneNavigation.cs` contains `"#E7EBE4"` (dark bar) and `TabBarForegroundColorProperty, Color.FromArgb("#000000"), Color.FromArgb("#000000")`, and `ItemActiveIndicatorColor` (lime `#E4F58A`); no `#24282C`, `#1F2226`, `#ECEEF0`. `PhoneMorePage.cs` has no `#24282C` / `#1F2226`.
+- [x] **Step 1: Test** `Bottom_bar_is_light_in_both_themes_with_black_icons`: `PhoneNavigation.cs` contains `"#E7EBE4"` (dark bar) and `TabBarForegroundColorProperty, Color.FromArgb("#000000"), Color.FromArgb("#000000")`, and `ItemActiveIndicatorColor` (lime `#E4F58A`); no `#24282C`, `#1F2226`, `#ECEEF0`. `PhoneMorePage.cs` has no `#24282C` / `#1F2226`.
 
-- [ ] **Step 2: Run, expect FAIL.**
+- [x] **Step 2: Run, expect FAIL.**
 
-- [ ] **Step 3: Implement**: bar background `#FFFFFF` / `#E7EBE4`; foreground and title `#000000` both themes; unselected `#5A6159` both themes; in the existing native hook, when the platform view is a `Google.Android.Material.BottomNavigation.BottomNavigationView`, set `ItemActiveIndicatorEnabled = true` and `ItemActiveIndicatorColor` to lime. If the Material version in the build has no active indicator, set the selected item's title/icon black and unselected muted only, and say so in the commit message. `PhoneMorePage.cs`: replace the old hex values with the Task 1 token values (via `Application.Current.Resources[...]` like `StaffShell.ThemeColor` did).
+- [x] **Step 3: Implement**: bar background `#FFFFFF` / `#E7EBE4`; foreground and title `#000000` both themes; unselected `#5A6159` both themes; in the existing native hook, when the platform view is a `Google.Android.Material.BottomNavigation.BottomNavigationView`, set `ItemActiveIndicatorEnabled = true` and `ItemActiveIndicatorColor` to lime. If the Material version in the build has no active indicator, set the selected item's title/icon black and unselected muted only, and say so in the commit message. `PhoneMorePage.cs`: replace the old hex values with the Task 1 token values (via `Application.Current.Resources[...]` like `StaffShell.ThemeColor` did).
 
-- [ ] **Step 4: Tests PASS, Android build succeeds.** Check on an emulator or the owner's phone in light and dark (owner checks if no emulator).
+- [x] **Step 4: Tests PASS, Android build succeeds.** Check on an emulator or the owner's phone in light and dark (owner checks if no emulator).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/GymMembership.App/Controls/PhoneNavigation.cs src/GymMembership.App/Views/PhoneMorePage.cs tests/GymMembership.Tests/PhoneNavigationTests.cs
@@ -278,22 +281,22 @@ Rules for each page (no content added or removed):
 - Toggle / filter button rows that switch views (e.g. month/week on the coach Dashboard, Today/All lists) use `LimeSmallButton` for the selected one and `SmallOutlineButton` for the rest.
 - Overview cards (`AdminOverviewPage.Windows.cs`): the first card (the one that already leads the page) uses `Lime` background; the rest `Card`. No new cards or numbers.
 
-- [ ] **Step 1: Test** `No_page_uses_the_old_palette`: no file under `Views` or `Controls` (`*.xaml`, `*.cs`) contains any of the old hex values listed above (case-insensitive).
+- [x] **Step 1: Test** `No_page_uses_the_old_palette`: no file under `Views` or `Controls` (`*.xaml`, `*.cs`) contains any of the old hex values listed above (case-insensitive).
 
-- [ ] **Step 2: Run, expect FAIL** (lists the files).
+- [x] **Step 2: Run, expect FAIL** (lists the files).
 
-- [ ] **Step 3: Fix each listed file** per the rules.
+- [x] **Step 3: Fix each listed file** per the rules.
 
-- [ ] **Step 4: Tests PASS; Windows and Android builds succeed.**
+- [x] **Step 4: Tests PASS; Windows and Android builds succeed.**
 
-- [ ] **Step 5: Demo-mode screenshots of every page, light and dark, Windows**, by role:
+- [x] **Step 5: Demo-mode screenshots of every page, light and dark, Windows**, by role:
   - Member: My membership, Packages, Amenities, Book an amenity, Coaches, Messages, Sessions, Time requests, Settings (also as a guest: locked pages).
   - Coach: Dashboard (month and week), Sessions, Time requests, Trainees, Messages, My shifts, My coach profile, Amenities, Settings.
   - Front desk: Home, Payments to verify, Cashier, Check-in, Amenity Status, Messages, Settings.
   - Admin: Overview, Users and roles, Packages and amenities, Discounts, Cancellations & refunds, Void a payment, Gym settings, Revenue, Logs & Archive; bell panel open; one confirmation popup; one error banner.
   Fix anything unreadable or off-style, re-run tests.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add <each changed file by path> tests/GymMembership.Tests/ContrastTests.cs
@@ -307,7 +310,7 @@ git commit -m "style: every page on the new palette in light and dark"
 **Files:**
 - Modify: `docs/progress-2026-10-16.md` (one short section: visual redesign, what changed, what the owner still checks on devices)
 
-- [ ] **Step 1:** `dotnet test tests/GymMembership.Tests` → 0 failed; both builds succeed.
-- [ ] **Step 2:** Confirm `supabase.json` is back and no `.bak` exists: `ls src/GymMembership.App/Resources/Raw`.
-- [ ] **Step 3:** Update the progress doc; commit it by path.
+- [x] **Step 1:** `dotnet test tests/GymMembership.Tests` → 0 failed; both builds succeed.
+- [x] **Step 2:** Confirm `supabase.json` is back and no `.bak` exists: `ls src/GymMembership.App/Resources/Raw`.
+- [x] **Step 3:** Update the progress doc; commit it by path.
 - [ ] **Step 4:** Owner checks Windows and Android on their devices (real project); push and PR only when the owner asks.

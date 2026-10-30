@@ -1,5 +1,8 @@
 # Visual Redesign, Part 2: Page Layouts — Implementation Plan
 
+> **Status (2026-10-30): built.** Tasks 1-5 are done and committed (564a9c8..cdd7782), reviewed by a fresh reviewer (no critical findings; both important points fixed in 2b676b9). Every page for every role was checked on screen in demo mode; `scripts/Test-WindowsAdminNavigation.ps1` passes. Branch `visual-redesign-2026-10-30` on GitHub, not merged into main.
+> **Still open:** the owner's check on a Windows PC and an Android phone, then deciding whether to open a PR. Deferred small items are in `docs/progress-2026-10-16.md` section 8.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans (owner chose native execution for this redesign). Steps use checkbox (`- [ ]`) syntax.
 
 **Goal:** Lay every page out like the approved reference: wide canvas, cards in a grid with an icon-chip header, big numbers with pill bars, one lime card per page, lists as white rows inside one card. Content, text and behaviour stay exactly as they are.
@@ -39,9 +42,9 @@
 - Styles: `Row` (Border: Surface background, `RoundRectangle 14`, no stroke, padding `14,11`); `HeroPanel` (BasedOn `Panel`, background `Lime`); `InkButton` / `InkSmallButton` (black background, white text, both themes); `x:Double PageWidth` = 1240; `SectionTitle` (Label: BarlowMedium 22).
 - `LaneView` draws pills: rounded rectangles (width ≈ 2.2 × height... height = control height, radius = width/2), filled ink up to `Fraction`, dashed outline after; existing bindable properties unchanged.
 
-- [ ] Tests: `IconTests.Pages` widened to every `Views/*.xaml`; `PageLayoutTests.No_page_keeps_the_old_narrow_column` (no `MaximumWidthRequest="920"` in Views), `Lane_is_drawn_as_pills` (Controls.cs contains `FillRoundedRectangle` in `LaneDrawable`), `Card_title_is_shared` (Controls.cs has `class CardTitle`, Styles.xaml has `x:Key="Row"`, `x:Key="HeroPanel"`, `x:Key="InkButton"`). Run: FAIL.
-- [ ] Implement the pieces. Run tests: the narrow-column test still fails until Tasks 2-4; the others PASS.
-- [ ] Commit.
+- [x] Tests: `IconTests.Pages` widened to every `Views/*.xaml`; `PageLayoutTests.No_page_keeps_the_old_narrow_column` (no `MaximumWidthRequest="920"` in Views), `Lane_is_drawn_as_pills` (Controls.cs contains `FillRoundedRectangle` in `LaneDrawable`), `Card_title_is_shared` (Controls.cs has `class CardTitle`, Styles.xaml has `x:Key="Row"`, `x:Key="HeroPanel"`, `x:Key="InkButton"`). Run: FAIL.
+- [x] Implement the pieces. Run tests: the narrow-column test still fails until Tasks 2-4; the others PASS.
+- [x] Commit.
 
 ### Task 2: Member pages
 My membership (hero lime days-left card with pill lane; QR, pay card beside it in a 3-column grid on wide windows; terms as 2-column cards with `CardTitle`; payments as `Row`s in one Panel), Packages (grid of package cards, price as numeral), Amenities (grid), Book an amenity (cards around the day grid and bookings), Coaches (grid of coach cards), Sessions (rows in one card), Time requests (form card + rows), Messages (thread list in a card), Settings (sections as cards in a 2-column grid), locked page. Screenshots dark + light. Commit.
