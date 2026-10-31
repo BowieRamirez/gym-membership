@@ -7,7 +7,7 @@
             x:Class="GymMembership.App.Views.HomePage" x:DataType="vm:HomeViewModel" Title="Home">
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
-        <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
+        <VerticalStackLayout Padding="{OnIdiom Phone='20,16,20,24', Default='16,12,16,20'}" Spacing="14">
             <Label Text="Today at the desk" Style="{StaticResource Title}" />
             <Label Text="Tap a number to open the screen that handles it." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />

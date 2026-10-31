@@ -8,50 +8,156 @@
             xmlns:zxing="clr-namespace:ZXing.Net.Maui.Controls;assembly=ZXing.Net.MAUI.Controls"
             x:Class="GymMembership.App.Views.MyMembershipPage" x:DataType="vm:MyMembershipViewModel" Title="My membership">
 
-    <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
-        <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='20,16,20,24'}" Spacing="14">
+    <v:BasePage.Resources>
+        <!-- desktop: one table row per paid term -->
+        <DataTemplate x:Key="TermRow" x:DataType="svc:TermCard">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="160,*,110,130,210">
+                    <Label Text="{Binding Term.PackageName}" FontFamily="BarlowMedium" VerticalOptions="Center" />
+                    <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                        <Label Text="{Binding Dates}" />
+                        <Label Text="{Binding RefundText}" Style="{StaticResource Caption}" />
+                        <Label Text="{Binding Refund.DecisionReason}" Style="{StaticResource Caption}" IsVisible="{Binding Refund.DecisionReason, Converter={StaticResource IsNotNull}}" />
+                    </VerticalStackLayout>
+                    <c:StatusChip Grid.Column="2" Status="{Binding State}" VerticalOptions="Center" />
+                    <Label Grid.Column="3" Text="{Binding Term.AmountPaid, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center" />
+                    <Button Grid.Column="4" Text="Cancel &amp; request refund" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" HorizontalOptions="End"
+                            IsVisible="{Binding CanRequestRefund}" Clicked="OnRequestRefund" />
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+        <!-- phone: the same facts stacked -->
+        <DataTemplate x:Key="TermCard" x:DataType="svc:TermCard">
+            <VerticalStackLayout>
+                <VerticalStackLayout Spacing="6" Padding="14,10">
+                    <Grid ColumnDefinitions="*,Auto"><Label Text="{Binding Term.PackageName}" FontFamily="BarlowSemiBold" /><c:StatusChip Grid.Column="1" Status="{Binding State}" /></Grid>
+                    <Label Text="{Binding Dates}" Style="{StaticResource Caption}" />
+                    <Label Text="{Binding Term.AmountPaid, StringFormat='Actually paid: ₱{0:N2}'}" />
+                    <Label Text="{Binding RefundText}" Style="{StaticResource Muted}" />
+                    <Label Text="{Binding Refund.DecisionReason}" IsVisible="{Binding Refund.DecisionReason, Converter={StaticResource IsNotNull}}" />
+                    <Button Text="Cancel &amp; request refund" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start"
+                            IsVisible="{Binding CanRequestRefund}" Clicked="OnRequestRefund" />
+                </VerticalStackLayout>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
 
+        <DataTemplate x:Key="PaymentRow" x:DataType="svc:PaymentItem">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,110,*,130,170,120,240">
+                    <Label Text="{Binding What}" FontFamily="BarlowMedium" VerticalOptions="Center" />
+                    <c:StatusChip Grid.Column="1" Status="{Binding Status}" VerticalOptions="Center" />
+                    <Label Grid.Column="2" Text="{Binding Detail}" VerticalOptions="Center" />
+                    <Label Grid.Column="3" Text="{Binding PaymentCode}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                    <Label Grid.Column="4" Text="{Binding CreatedAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM yyyy, h:mm tt'}" VerticalOptions="Center" />
+                    <Label Grid.Column="5" Text="{Binding Amount, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center" />
+                    <HorizontalStackLayout Grid.Column="6" Spacing="6" VerticalOptions="Center" HorizontalOptions="End">
+                        <Button Text="Pay again" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanPayAgain}" Clicked="OnPayAgain" />
+                        <Button Text="Cancel payment" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanCancel}" Clicked="OnCancelPayment" />
+                    </HorizontalStackLayout>
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+        <DataTemplate x:Key="PaymentCard" x:DataType="svc:PaymentItem">
+            <VerticalStackLayout>
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="14,10">
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="{Binding What}" FontFamily="BarlowSemiBold" />
+                        <c:StatusChip Status="{Binding Status}" />
+                        <Label Text="{Binding Detail}" IsVisible="{Binding Detail, Converter={StaticResource IsNotNull}}" />
+                        <Label Style="{StaticResource Caption}">
+                            <Label.Text>
+                                <MultiBinding StringFormat="{}{0} · {1}">
+                                    <Binding Path="PaymentCode" />
+                                    <Binding Path="CreatedAt" Converter="{StaticResource LocalDate}" ConverterParameter="d MMM yyyy, h:mm tt" />
+                                </MultiBinding>
+                            </Label.Text>
+                        </Label>
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Column="1" Spacing="6">
+                        <Label Text="{Binding Amount, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" HorizontalOptions="End" />
+                        <Button Text="Pay again" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanPayAgain}" Clicked="OnPayAgain" />
+                        <Button Text="Cancel payment" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanCancel}" Clicked="OnCancelPayment" />
+                    </VerticalStackLayout>
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+    </v:BasePage.Resources>
+
+    <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
+        <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="12">
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <!-- D12: the member's permanent ID code, kept apart from the gym's pay-by-QR panel below. Always dark on white so any scanner reads it. -->
-            <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}">
-            <!-- The one memorable moment: days left, a lime card with a pill bar that runs out -->
-            <Border Style="{StaticResource HeroPanel}" Padding="{OnIdiom Phone='16,16', Default='22,20'}">
+            <c:SideLayout>
+                <!-- main: days left, paid terms, payments -->
                 <VerticalStackLayout Spacing="12">
-                    <c:CardTitle Icon="clock" Text="{Binding HeroCaption}" TextColor="{StaticResource Black}" />
-                    <Label Text="{Binding HeroNumber}" Style="{StaticResource Numeral}" FontSize="84" TextColor="{StaticResource Black}"
-                           SemanticProperties.Description="Days left on your membership" />
-                    <c:LaneView Fraction="{Binding LaneFraction}" HeightRequest="34" DashColor="{StaticResource Black}" TrackColor="#5A6159" />
-                </VerticalStackLayout>
-            </Border>
-            <Border Style="{StaticResource Panel}" Padding="18" IsVisible="{Binding HasCode}">
-                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="18">
-                    <!-- the generator ignores its own size on Windows, so the white frame sets it and the code fills the frame -->
-                    <Border BackgroundColor="White" StrokeThickness="0" Padding="8" WidthRequest="166" HeightRequest="166" VerticalOptions="Center"
-                            AutomationId="MemberQr" SemanticProperties.Description="Your member QR code">
-                        <zxing:BarcodeGeneratorView Format="QrCode" Value="{Binding MyCode}" HorizontalOptions="Fill" VerticalOptions="Fill"
-                                                    ForegroundColor="Black" BackgroundColor="White" />
+                    <!-- The one memorable moment: days left, a lime card with a pill bar that runs out -->
+                    <Border Style="{StaticResource HeroPanel}" Padding="{OnIdiom Phone='16,16', Default='18,14'}">
+                        <VerticalStackLayout Spacing="8">
+                            <c:CardTitle Icon="clock" Text="{Binding HeroCaption}" TextColor="{StaticResource Black}" />
+                            <Label Text="{Binding HeroNumber}" Style="{StaticResource Numeral}" FontSize="{OnIdiom Phone=84, Default=60}" TextColor="{StaticResource Black}"
+                                   SemanticProperties.Description="Days left on your membership" />
+                            <c:LaneView Fraction="{Binding LaneFraction}" HeightRequest="26" DashColor="{StaticResource Black}" TrackColor="#5A6159" />
+                        </VerticalStackLayout>
                     </Border>
-                    <VerticalStackLayout Grid.Column="1" Spacing="8" VerticalOptions="Center">
-                        <c:CardTitle Icon="scan-line" Text="Your member QR" />
-                        <Label Text="Show this at the front desk when you arrive. It only identifies you; it is not for paying." Style="{StaticResource Muted}" />
-                    </VerticalStackLayout>
-                </Grid>
-            </Border>
 
-            </c:CardGrid>
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <VerticalStackLayout Spacing="2">
+                            <Label Text="Your paid terms" Style="{StaticResource SectionTitle}" Margin="0" />
+                            <Label Text="Extensions start after your last paid term. No upgrades or unused-time credits. Other paid terms keep their dates if one is cancelled, so a gap may remain." Style="{StaticResource Caption}" />
+                        </VerticalStackLayout>
+                        <Button Grid.Column="1" Text="Choose a package / extend" Style="{StaticResource SmallButton}" VerticalOptions="Center" Clicked="OnChoosePackage" />
+                    </Grid>
+                    <Border Style="{StaticResource TablePanel}">
+                        <VerticalStackLayout>
+                            <Grid Style="{StaticResource TableHead}" ColumnDefinitions="160,*,110,130,210" IsVisible="{OnIdiom Phone=False, Default=True}">
+                                <Label Text="Package" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="1" Text="Dates (Manila)" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="2" Text="Status" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="3" Text="Actually paid" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                            </Grid>
+                            <BoxView Style="{StaticResource Hairline}" IsVisible="{OnIdiom Phone=False, Default=True}" />
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Terms}"
+                                                 BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource TermCard}, Default={StaticResource TermRow}}">
+                                <BindableLayout.EmptyView>
+                                    <Label Text="No paid terms yet. Choose a package, pay and wait for verification." Style="{StaticResource Muted}" Margin="14" />
+                                </BindableLayout.EmptyView>
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </Border>
 
-            <!-- Pay by QR: the code is what the front desk matches your transfer against, so it is the biggest thing here -->
-            <Border Style="{StaticResource Panel}" Padding="{OnIdiom Phone='16,16', Default='24,22'}" IsVisible="{Binding PayNow, Converter={StaticResource IsNotNull}}">
-                <VerticalStackLayout Spacing="14">
-                    <c:CardTitle Icon="banknote" Text="{Binding PayNow.Amount, StringFormat='Pay ₱{0:N2} by QR'}" />
-                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="20">
-                        <Image Source="{Binding QrUrl}" IsVisible="{Binding HasQr}" WidthRequest="168" HeightRequest="168" VerticalOptions="Start"
-                               Grid.ColumnSpan="{OnIdiom Phone=2, Default=1}" HorizontalOptions="{OnIdiom Phone=Center, Default=Start}"
-                               SemanticProperties.Description="The gym's payment QR code" />
-                        <VerticalStackLayout Grid.Row="{OnIdiom Phone=1, Default=0}" Grid.Column="{OnIdiom Phone=0, Default=1}" Grid.ColumnSpan="{OnIdiom Phone=2, Default=1}"
-                                             Margin="{OnIdiom Phone='0,14,0,0', Default=0}" Spacing="10">
+                    <Label Text="Payments" Style="{StaticResource SectionTitle}" Margin="0" />
+                    <Border Style="{StaticResource TablePanel}">
+                        <VerticalStackLayout>
+                            <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,110,*,130,170,120,240" IsVisible="{OnIdiom Phone=False, Default=True}">
+                                <Label Text="Item" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="1" Text="Status" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="2" Text="Details" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="3" Text="Payment code" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="4" Text="Date" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="5" Text="Amount" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                            </Grid>
+                            <BoxView Style="{StaticResource Hairline}" IsVisible="{OnIdiom Phone=False, Default=True}" />
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Payments}"
+                                                 BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource PaymentCard}, Default={StaticResource PaymentRow}}">
+                                <BindableLayout.EmptyView><Label Text="No payments yet." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </Border>
+                </VerticalStackLayout>
+
+                <!-- side: what to pay now (if anything), then the member QR -->
+                <VerticalStackLayout Spacing="12">
+                    <!-- Pay by QR: the code is what the front desk matches your transfer against, so it is the biggest thing here -->
+                    <Border Style="{StaticResource SidePanel}" IsVisible="{Binding PayNow, Converter={StaticResource IsNotNull}}">
+                        <VerticalStackLayout Spacing="12">
+                            <c:CardTitle Icon="banknote" Text="{Binding PayNow.Amount, StringFormat='Pay ₱{0:N2} by QR'}" />
+                            <Image Source="{Binding QrUrl}" IsVisible="{Binding HasQr}" WidthRequest="168" HeightRequest="168" HorizontalOptions="Center"
+                                   SemanticProperties.Description="The gym's payment QR code" />
                             <Label Text="{Binding AccountName, StringFormat='Pay to {0}'}" IsVisible="{Binding AccountName, Converter={StaticResource IsNotNull}}" />
                             <Label Text="Ask the gym for its QR if none shows here." Style="{StaticResource Caption}" IsVisible="{Binding HasQr, Converter={StaticResource Not}}" />
                             <VerticalStackLayout Spacing="2">
@@ -60,83 +166,31 @@
                             </VerticalStackLayout>
                             <Label Text="{Binding PayNow.ExpiresAt, Converter={StaticResource LocalDate}, ConverterParameter='ddd d MMM, h:mm tt', StringFormat='Pay before {0}, or this payment expires.'}"
                                    Style="{StaticResource Caption}" IsVisible="{Binding PayNow.ExpiresAt, Converter={StaticResource IsNotNull}}" />
-                        </VerticalStackLayout>
-                    </Grid>
-
-                    <Label Text="After you pay, enter the reference number from your receipt and send a screenshot of it." Style="{StaticResource Muted}" />
-                    <VerticalStackLayout Spacing="10">
-                        <VerticalStackLayout Spacing="4" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" WidthRequest="{OnIdiom Phone=-1, Default=240}">
-                            <Label Text="Reference number" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}"><Entry Text="{Binding ReferenceNo}" SemanticProperties.Description="Reference number from your receipt" /></Border>
-                        </VerticalStackLayout>
-                        <Button Text="Choose screenshot and send" Style="{StaticResource SmallButton}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" Command="{Binding SendProofCommand}" />
-                        <Button Text="Cancel this payment" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" Clicked="OnCancelPayment" />
-                    </VerticalStackLayout>
-                </VerticalStackLayout>
-            </Border>
-
-            <Label Text="Your paid terms" Style="{StaticResource SectionTitle}" />
-            <Label Text="Extensions start after your last paid term. No upgrades or unused-time credits. Other paid terms keep their dates if one is cancelled, so a gap may remain." Style="{StaticResource Muted}" />
-            <Button Text="Choose a package / extend" Style="{StaticResource SmallButton}" HorizontalOptions="Start" Clicked="OnChoosePackage" />
-            <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" BindableLayout.ItemsSource="{Binding Terms}">
-                <BindableLayout.EmptyView>
-                    <Label Text="No paid terms yet. Choose a package, pay and wait for verification." Style="{StaticResource Muted}" />
-                </BindableLayout.EmptyView>
-                <BindableLayout.ItemTemplate>
-                    <DataTemplate x:DataType="svc:TermCard">
-                        <Border Style="{StaticResource Panel}">
-                            <VerticalStackLayout Spacing="8">
-                                <c:CardTitle Icon="id-card" Text="{Binding Term.PackageName}" />
-                                <c:StatusChip Status="{Binding State}" />
-                                <Label Text="{Binding Dates}" Style="{StaticResource Caption}" />
-                                <Label Text="{Binding Term.AmountPaid, StringFormat='Actually paid: ₱{0:N2}'}" />
-                                <Label Text="{Binding RefundText}" Style="{StaticResource Muted}" />
-                                <Label Text="{Binding Refund.DecisionReason}" IsVisible="{Binding Refund.DecisionReason, Converter={StaticResource IsNotNull}}" />
-                                <Button Text="Cancel &amp; request refund" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start"
-                                        IsVisible="{Binding CanRequestRefund}" Clicked="OnRequestRefund" />
+                            <Label Text="After you pay, enter the reference number from your receipt and send a screenshot of it." Style="{StaticResource Muted}" />
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="Reference number" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><Entry Text="{Binding ReferenceNo}" SemanticProperties.Description="Reference number from your receipt" /></Border>
                             </VerticalStackLayout>
-                        </Border>
-                    </DataTemplate>
-                </BindableLayout.ItemTemplate>
-            </c:CardGrid>
+                            <Button Text="Choose screenshot and send" Style="{StaticResource SmallButton}" Command="{Binding SendProofCommand}" />
+                            <Button Text="Cancel this payment" Style="{StaticResource SmallOutlineButton}" Clicked="OnCancelPayment" />
+                        </VerticalStackLayout>
+                    </Border>
 
-            <!-- payments: white rows inside one card -->
-            <Label Text="Payments" Style="{StaticResource SectionTitle}" />
-            <Border Style="{StaticResource Panel}" Padding="12">
-            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Payments}" Spacing="8">
-                <BindableLayout.EmptyView>
-                    <Label Text="No payments yet." Style="{StaticResource Muted}" />
-                </BindableLayout.EmptyView>
-                <BindableLayout.ItemTemplate>
-                    <DataTemplate x:DataType="svc:PaymentItem">
-                        <Border Style="{StaticResource Row}">
-                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12">
-                                <VerticalStackLayout Spacing="6">
-                                    <Label Text="{Binding What}" Style="{StaticResource Heading}" />
-                                    <c:StatusChip Status="{Binding Status}" />
-                                    <Label Text="{Binding Detail}" IsVisible="{Binding Detail, Converter={StaticResource IsNotNull}}" />
-                                    <Label Style="{StaticResource Caption}">
-                                        <Label.Text>
-                                            <MultiBinding StringFormat="{}{0} · {1}">
-                                                <Binding Path="PaymentCode" />
-                                                <Binding Path="CreatedAt" Converter="{StaticResource LocalDate}" ConverterParameter="d MMM yyyy, h:mm tt" />
-                                            </MultiBinding>
-                                        </Label.Text>
-                                    </Label>
-                                </VerticalStackLayout>
-                                <VerticalStackLayout Style="{StaticResource CardActions}" Spacing="6">
-                                    <Label Text="{Binding Amount, StringFormat='₱{0:N2}'}" Style="{StaticResource Heading}" HorizontalOptions="{OnIdiom Phone=Start, Default=End}" />
-                                    <Button Text="Pay again" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanPayAgain}"
-                                            Clicked="OnPayAgain" />
-                                    <Button Text="Cancel payment" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanCancel}"
-                                            Clicked="OnCancelPayment" />
-                                </VerticalStackLayout>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </BindableLayout.ItemTemplate>
-            </VerticalStackLayout>
-            </Border>
+                    <!-- D12: the member's permanent ID code, kept apart from the gym's pay-by-QR panel. Always dark on white so any scanner reads it. -->
+                    <Border Style="{StaticResource SidePanel}" IsVisible="{Binding HasCode}">
+                        <VerticalStackLayout Spacing="10">
+                            <c:CardTitle Icon="scan-line" Text="Your member QR" />
+                            <!-- the generator ignores its own size on Windows, so the white frame sets it and the code fills the frame -->
+                            <Border BackgroundColor="White" StrokeThickness="0" Padding="8" WidthRequest="180" HeightRequest="180" HorizontalOptions="Center"
+                                    AutomationId="MemberQr" SemanticProperties.Description="Your member QR code">
+                                <zxing:BarcodeGeneratorView Format="QrCode" Value="{Binding MyCode}" HorizontalOptions="Fill" VerticalOptions="Fill"
+                                                            ForegroundColor="Black" BackgroundColor="White" />
+                            </Border>
+                            <Label Text="Show this at the front desk when you arrive. It only identifies you; it is not for paying." Style="{StaticResource Muted}" />
+                        </VerticalStackLayout>
+                    </Border>
+                </VerticalStackLayout>
+            </c:SideLayout>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

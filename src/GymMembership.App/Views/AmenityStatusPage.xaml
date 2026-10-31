@@ -8,7 +8,7 @@
             x:Class="GymMembership.App.Views.AmenityStatusPage" x:DataType="vm:AmenityStatusViewModel" Title="Amenity Status">
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
-        <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='20,16,20,24'}" Spacing="12">
+        <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="12">
             <Label Text="Mark an amenity available, in use or unavailable. Members who saved an amenity are alerted when it becomes available or unavailable, and you see who." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
@@ -48,7 +48,7 @@
                 </VerticalStackLayout>
             </Border>
 
-            <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" BindableLayout.ItemsSource="{Binding Cards}">
+            <c:CardGrid Columns="{OnIdiom Phone=1, Default=4}" BindableLayout.ItemsSource="{Binding Cards}">
                 <BindableLayout.EmptyView><Label Text="No amenities are listed yet." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="svc:AmenityCard">

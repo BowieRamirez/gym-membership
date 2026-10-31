@@ -8,7 +8,7 @@
             x:Class="GymMembership.App.Views.DiscountsPage" x:DataType="vm:DiscountsViewModel" Title="Discounts">
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
-        <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
+        <VerticalStackLayout Padding="{OnIdiom Phone='20,16,20,24', Default='16,12,16,20'}" Spacing="14">
             <Label Text="Percent-off codes. Members type a code when they buy or renew a package." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
@@ -59,7 +59,7 @@
                 </FlexLayout>
             </Border>
 
-            <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" BindableLayout.ItemsSource="{Binding Discounts}">
+            <c:CardGrid Columns="{OnIdiom Phone=1, Default=4}" BindableLayout.ItemsSource="{Binding Discounts}">
                 <BindableLayout.EmptyView><Label Text="No discount codes yet." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="svc:DiscountRow">

@@ -8,11 +8,11 @@
             x:Class="GymMembership.App.Views.SettingsPage" x:DataType="vm:SettingsViewModel" Title="Settings">
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
-        <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='20,16,20,24'}" Spacing="16">
+        <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="16">
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
             <!-- each setting is a card, two across on wide windows -->
-            <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}">
+            <c:CardGrid Columns="{OnIdiom Phone=1, Default=3}">
             <Border Style="{StaticResource Panel}">
                 <VerticalStackLayout Spacing="14">
 

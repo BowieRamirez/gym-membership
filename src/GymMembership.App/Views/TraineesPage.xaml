@@ -7,14 +7,14 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.TraineesPage" x:DataType="vm:TraineesViewModel" Title="Trainees">
 
-    <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='20,16,20,0'}" MaximumWidthRequest="{StaticResource PageWidth}">
+    <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='16,12,16,0'}" MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
             <Label Text="Members who have hired you. Message them, or remove them when you stop training together." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
         </VerticalStackLayout>
 
-        <ScrollView Grid.Row="1"><c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" Padding="0,0,0,16" BindableLayout.ItemsSource="{Binding Trainees}">
+        <ScrollView Grid.Row="1"><c:CardGrid Columns="{OnIdiom Phone=1, Default=4}" Padding="0,0,0,16" BindableLayout.ItemsSource="{Binding Trainees}">
             <BindableLayout.EmptyView><Label Text="No trainees yet. Members appear here when they hire you." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
             <BindableLayout.ItemTemplate>
                 <DataTemplate x:DataType="svc:TraineeRow">

@@ -7,13 +7,13 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.CoachesPage" x:DataType="vm:CoachesViewModel" Title="Coaches">
 
-    <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='20,16,20,0'}" MaximumWidthRequest="{StaticResource PageWidth}">
+    <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='16,12,16,0'}" MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
             <Label Text="Coaches in the gym right now. Hire one to request one-to-one sessions. You need an active membership." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
         </VerticalStackLayout>
 
-        <ScrollView Grid.Row="1"><c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" Padding="0,0,0,16" BindableLayout.ItemsSource="{Binding Cards}">
+        <ScrollView Grid.Row="1"><c:CardGrid Columns="{OnIdiom Phone=1, Default=4}" Padding="0,0,0,16" BindableLayout.ItemsSource="{Binding Cards}">
             <BindableLayout.EmptyView><Label Text="No coaches are in the gym right now. This list updates by itself." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
             <BindableLayout.ItemTemplate>
                 <DataTemplate x:DataType="svc:CoachCard">

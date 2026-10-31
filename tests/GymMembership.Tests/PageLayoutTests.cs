@@ -26,6 +26,31 @@ public class PageLayoutTests
         Assert.Equal(2, grid.Split("Fit(").Length - 2);   // used by both Measure and ArrangeChildren
     }
 
+    // full-page layout: the side panel sits on the right only when there is room; narrower, it stacks above the main area (form first, as before)
+    [Fact]
+    public void Side_layout_stacks_side_first_when_narrow()
+    {
+        var controls = File.ReadAllText(AppFile("Controls", "Controls.cs"));
+        var side = controls[controls.IndexOf("public class SideLayout", StringComparison.Ordinal)..controls.IndexOf("public class CardGrid", StringComparison.Ordinal)];
+        Assert.Contains("WideFrom", side);
+        Assert.Equal(2, side.Split("new[] { side, main }").Length - 1);   // Measure and ArrangeChildren both put the side first
+        var styles = File.ReadAllText(AppFile("Resources", "Styles", "Styles.xaml"));
+        foreach (var key in new[] { "x:Key=\"Kpi\"", "x:Key=\"TablePanel\"", "x:Key=\"TableRow\"", "x:Key=\"SidePanel\"", "x:Key=\"Toolbar\"" })
+            Assert.Contains(key, styles);
+    }
+
+    // a style based on one defined further down the file fails at runtime and closes the app at start-up (it builds fine)
+    [Fact]
+    public void Styles_are_based_only_on_styles_defined_above_them()
+    {
+        var styles = File.ReadAllText(AppFile("Resources", "Styles", "Styles.xaml"));
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(styles, "BasedOn=\"\\{StaticResource (\\w+)\\}\""))
+        {
+            var defined = styles.IndexOf($"x:Key=\"{m.Groups[1].Value}\"", StringComparison.Ordinal);
+            Assert.True(defined >= 0 && defined < m.Index, $"BasedOn {m.Groups[1].Value} is used before it is defined");
+        }
+    }
+
     // UI scripts find card headings by AutomationId; the id has to reach the text the automation tree exposes
     [Fact]
     public void Card_title_passes_its_automation_id_to_its_text()

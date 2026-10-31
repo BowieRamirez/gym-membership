@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Full Page Layouts</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600&display=swap" rel="stylesheet">
+<style>
+  /* Tokens from src/GymMembership.App/Resources/Styles/Colors.xaml (dark) */
+  :root {
+    --backdrop: #0E100E; --chalk: #161816; --card: #1C1F1C; --raise: #232723; --surface: #2C302B; --line: #2F342E; --line2: #3A3F39;
+    --ink: #EEF1EC; --muted: #A3AAA1; --lime: #E4F58A; --chip: #E7EBE4;
+    --green: #4CC585; --red: #FF7B70; --yellow: #F2C230; --blue: #7AA2FF;
+    --r: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--backdrop); color: var(--ink); font: 14px/1.4 Barlow, system-ui, sans-serif; }
+  button { font: inherit; cursor: pointer; color: inherit; }
+
+  .app { display: grid; grid-template-columns: 64px 1fr; height: 100vh; }
+  .rail { margin: 10px 0 10px 10px; background: var(--card); border: 1px solid var(--line); border-radius: 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 0; }
+  .rail .logo { width: 36px; height: 36px; border-radius: 10px; background: #000; display: grid; place-items: center; margin-bottom: 4px; }
+  .rail .ico { width: 34px; height: 34px; border-radius: 10px; background: var(--chip); display: grid; place-items: center; }
+  .rail .ico.on { background: var(--lime); }
+  .rail .sep { width: 24px; height: 1px; background: var(--line2); margin: 2px 0; }
+  .rail .end { margin-top: auto; }
+  svg.i { width: 17px; height: 17px; fill: none; stroke: #000; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  svg.m { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* ---- page frame: header bar, toolbar, then content that fills the window ---- */
+  .page { display: none; flex-direction: column; min-width: 0; height: 100vh; }
+  .page.on { display: flex; }
+  .bar { display: flex; align-items: center; gap: 10px; padding: 12px 16px 10px; border-bottom: 1px solid var(--line); }
+  .crumb { color: var(--muted); }
+  .crumb b { color: var(--ink); font-weight: 600; }
+  .bar .right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .iconbtn { width: 32px; height: 32px; border-radius: 8px; background: var(--chip); border: 0; display: grid; place-items: center; }
+  .tools { display: flex; align-items: center; gap: 8px; padding: 10px 16px; flex-wrap: wrap; }
+  .tools .right { margin-left: auto; display: flex; gap: 8px; }
+
+  .ctl { height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border: 1px solid var(--line2); background: var(--card); border-radius: 8px; color: var(--ink); font-weight: 500; white-space: nowrap; }
+  .seg { display: inline-flex; border: 1px solid var(--line2); border-radius: 8px; overflow: hidden; background: var(--card); }
+  .seg button { height: 30px; padding: 0 12px; border: 0; background: none; color: var(--muted); font-weight: 500; border-right: 1px solid var(--line2); }
+  .seg button:last-child { border-right: 0; }
+  .seg button.on { background: var(--surface); color: var(--ink); }
+  .btn { height: 32px; padding: 0 14px; border-radius: 8px; border: 0; background: var(--lime); color: #000; font-weight: 600; white-space: nowrap; }
+  .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line2); }
+  .btn.sm { height: 26px; padding: 0 10px; font-size: 13px; }
+  .btn.full { width: 100%; }
+
+  .content { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 340px; gap: 12px; padding: 0 16px 14px; }
+  .content.noside { grid-template-columns: 1fr; }
+  .main { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto; }
+  .side { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+
+  /* KPI strip */
+  .kpis { display: grid; gap: 12px; grid-template-columns: repeat(4, 1fr); }
+  .kpi { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 14px; }
+  .kpi .l { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 13px; }
+  .kpi .l i { width: 7px; height: 7px; border-radius: 2px; display: inline-block; }
+  .kpi .v { font: 600 30px/1.1 "Barlow Condensed"; margin-top: 4px; }
+  .kpi .v small { font: 500 13px Barlow; color: var(--green); margin-left: 6px; }
+  .kpi.lime { background: var(--lime); color: #000; border-color: var(--lime); }
+  .kpi.lime .l { color: #000; }
+
+  /* panels */
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); display: flex; flex-direction: column; min-height: 0; }
+  .panel.grow { flex: 1; }
+  .ph { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .ph h3 { margin: 0; font-size: 15px; font-weight: 600; }
+  .ph .right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .pb { padding: 12px 14px; }
+  .row2 { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+
+  /* tables */
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-weight: 500; color: var(--muted); font-size: 13px; padding: 9px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 9px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  tbody tr:hover td { background: var(--raise); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .who { display: flex; align-items: center; gap: 9px; }
+  .av { width: 24px; height: 24px; border-radius: 50%; background: var(--chip); color: #000; font-size: 11px; font-weight: 600; display: grid; place-items: center; flex: none; }
+  .st { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  .st i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+
+  /* side panel */
+  .tabs { display: flex; border-bottom: 1px solid var(--line); }
+  .tabs button { flex: 1; height: 38px; border: 0; background: none; color: var(--muted); font-weight: 500; border-bottom: 2px solid transparent; }
+  .tabs button.on { color: var(--ink); border-bottom-color: var(--lime); }
+  .sec { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .sec:last-child { border-bottom: 0; }
+  .sec h4 { margin: 0 0 8px; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  label { display: block; font-size: 12.5px; font-weight: 500; color: var(--muted); margin: 9px 0 4px; }
+  .f { height: 34px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line2); display: flex; align-items: center; justify-content: space-between; padding: 0 10px; }
+  .f.ph { color: var(--muted); }
+  .f.area { height: 58px; align-items: flex-start; padding-top: 8px; }
+  .fr { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }
+  .fr3 { display: grid; gap: 8px; grid-template-columns: 1.2fr 1.3fr .9fr; }
+  .item { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border: 1px solid var(--line2); border-radius: 8px; margin-bottom: 6px; background: var(--raise); }
+  .item .right { margin-left: auto; color: var(--muted); }
+
+  /* membership */
+  .lane { display: flex; gap: 3px; margin: 8px 0 2px; }
+  .lane i { flex: 1; height: 16px; border-radius: 5px; background: var(--lime); }
+  .lane i.off { background: transparent; border: 1px dashed var(--line2); }
+  .qr { width: 150px; height: 150px; background: #fff; border-radius: 6px; padding: 10px; margin: 4px auto 8px;
+        background-image: repeating-conic-gradient(#000 0 25%, #fff 0 50%); background-size: 15px 15px; background-origin: content-box; background-clip: content-box; }
+
+  /* calendar */
+  .cal { display: grid; grid-template-columns: repeat(7, 1fr); grid-template-rows: auto repeat(6, 1fr); gap: 6px; padding: 12px 14px; flex: 1; min-height: 300px; }
+  .cal .dow { color: var(--muted); font-size: 12px; text-align: left; padding-left: 4px; align-self: end; }
+  .cal .d { border-radius: 8px; background: var(--raise); border: 1px solid var(--line); padding: 6px 8px; font-weight: 600; font-size: 13px; display: flex; flex-direction: column; gap: 3px; min-height: 58px; }
+  .cal .d.out { opacity: .35; }
+  .cal .d.sel { border-color: var(--lime); }
+  .cal .ev { font-size: 11.5px; font-weight: 500; border-radius: 4px; padding: 1px 5px; background: rgba(122,162,255,.18); color: var(--blue); }
+  .cal .ev.ok { background: rgba(76,197,133,.16); color: var(--green); }
+  .cal .ev.no { background: rgba(255,123,112,.16); color: var(--red); }
+  .cal .ev.sh { background: rgba(228,245,138,.14); color: var(--lime); }
+
+  .switch { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; background: #000; border: 1px solid var(--line2); padding: 4px; border-radius: 999px; font-size: 13px; z-index: 5; }
+  .switch button { background: none; border: 0; color: var(--muted); padding: 6px 12px; border-radius: 999px; }
+  .switch button.on { background: var(--surface); color: var(--ink); }
+  .note { color: var(--muted); font-size: 12px; padding: 0 16px 10px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="card" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 16c.6-1.2 1.7-2 3-2s2.4.8 3 2M15 10h3M15 14h3"/></symbol>
+  <symbol id="box" viewBox="0 0 24 24"><path d="M12 22 3 17V7l9-5 9 5v10z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></symbol>
+  <symbol id="waves" viewBox="0 0 24 24"><path d="M2 6q2.5 2 5 0t5 0 5 0 5 0M2 12q2.5 2 5 0t5 0 5 0 5 0M2 18q2.5 2 5 0t5 0 5 0 5 0"/></symbol>
+  <symbol id="calp" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M12 14v4M10 16h4"/></symbol>
+  <symbol id="db" viewBox="0 0 24 24"><path d="M3 9h2v6H3zM6 6h2v12H6zM16 6h2v12h-2zM19 9h2v6h-2zM8 12h8"/></symbol>
+  <symbol id="cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="msg" viewBox="0 0 24 24"><path d="M22 17a2 2 0 0 1-2 2H7l-5 3V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="set" viewBox="0 0 24 24"><path d="m12 2 3.8.8 1.6 3.8 1.6 2.5L22 12l-.8 3.8-3.8 1.6-2.5 1.6L12 22l-3.8-.8-1.6-3.8-1.6-2.5L2 12l.8-3.8 3.8-1.6 2.5-1.6z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></symbol>
+  <symbol id="users" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M16 3.1a4 4 0 0 1 0 7.8M22 21v-2a4 4 0 0 0-3-3.9"/></symbol>
+  <symbol id="user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></symbol>
+  <symbol id="bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/></symbol>
+  <symbol id="out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></symbol>
+  <symbol id="scan" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/></symbol>
+  <symbol id="home" viewBox="0 0 24 24"><path d="M3 10 12 3l9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="cash" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/></symbol>
+  <symbol id="brief" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></symbol>
+  <symbol id="tag" viewBox="0 0 24 24"><path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.3 0l6.7-6.7a2.4 2.4 0 0 0 0-3.3z"/></symbol>
+  <symbol id="undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
+  <symbol id="ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></symbol>
+  <symbol id="sl" viewBox="0 0 24 24"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/></symbol>
+  <symbol id="chart" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16M7 16l4-4 4 3 5-6"/></symbol>
+  <symbol id="arch" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="dl" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+  <symbol id="filter" viewBox="0 0 24 24"><path d="M3 6h18M7 12h10M10 18h4"/></symbol>
+</svg>
+
+<div class="app">
+  <nav class="rail" id="rail"></nav>
+  <div>
+
+  <!-- ===================== MEMBER · MY MEMBERSHIP ===================== -->
+  <section class="page" id="membership" data-rail="member" data-on="1">
+    <div class="bar"><span class="crumb">Member / <b>My membership</b></span><div class="right"><button class="iconbtn"><svg class="i"><use href="#bell"/></svg></button></div></div>
+    <div class="tools"><div class="seg"><button class="on">All payments</button><button>Verified</button><button>Pending</button><button>Expired</button></div>
+      <div class="right"><button class="btn">Choose a package / extend</button></div></div>
+    <div class="content">
+      <div class="main">
+        <div class="kpis">
+          <div class="kpi lime"><div class="l">Days left on Monthly</div><div class="v">5</div></div>
+          <div class="kpi"><div class="l"><i style="background:var(--green)"></i>Current term</div><div class="v">Monthly</div></div>
+          <div class="kpi"><div class="l"><i style="background:var(--blue)"></i>Ends</div><div class="v">5 Nov</div></div>
+          <div class="kpi"><div class="l"><i style="background:var(--yellow)"></i>Payments waiting</div><div class="v">0</div></div>
+        </div>
+        <div class="panel">
+          <div class="ph"><h3>Your paid terms</h3><span class="muted small">Extensions start after your last paid term. No upgrades or unused-time credits.</span></div>
+          <div class="pb"><div class="lane" id="lane"></div><div class="muted small">6 Oct – 5 Nov 2026 (Manila) · 25 of 30 days used</div></div>
+          <table><thead><tr><th>Package</th><th>Dates (Manila)</th><th>Status</th><th>Cancel requests until</th><th class="num">Actually paid</th></tr></thead>
+            <tbody><tr><td>Monthly</td><td>06 Oct 2026, 20:35 – 05 Nov 2026, 20:35</td><td><span class="st"><i style="background:var(--green)"></i>Active</span></td><td class="muted">07 Oct 2026, 20:35 (closed)</td><td class="num">₱1,500.00</td></tr></tbody></table>
+        </div>
+        <div class="panel grow">
+          <div class="ph"><h3>Payments</h3><div class="right"><span class="muted small">5 payments</span></div></div>
+          <table><thead><tr><th>Item</th><th>Status</th><th>Receipt</th><th>Payment code</th><th>Date</th><th class="num">Amount</th><th></th></tr></thead>
+            <tbody id="pays"></tbody></table>
+        </div>
+      </div>
+      <aside class="side">
+        <div class="sec" style="text-align:center"><h4 style="justify-content:center"><svg class="m"><use href="#scan"/></svg>Your member QR</h4>
+          <div class="qr"></div><div class="muted small">Show this at the front desk when you arrive. It only identifies you; it is not for paying.</div></div>
+        <div class="sec"><h4>Pay now</h4><div class="muted small">Nothing to pay. Choose a package to extend, then pay by QR here and send the proof.</div></div>
+        <div class="sec"><h4>Amenity passes</h4>
+          <div class="item"><svg class="m"><use href="#waves"/></svg>Pool<span class="right small">until 26 Nov</span></div>
+          <div class="item"><svg class="m"><use href="#waves"/></svg>Group classes<span class="right small">no pass</span></div></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== MEMBER · TIME REQUESTS ===================== -->
+  <section class="page" id="requests" data-rail="member" data-on="7">
+    <div class="bar"><span class="crumb">Member / <b>Time requests</b></span><div class="right"><button class="iconbtn"><svg class="i"><use href="#bell"/></svg></button></div></div>
+    <div class="tools"><div class="seg"><button class="on">Waiting</button><button>Sessions booked</button></div>
+      <div class="right"><button class="btn ghost">Refresh requests</button></div></div>
+    <div class="content">
+      <div class="main">
+        <div class="kpis">
+          <div class="kpi"><div class="l"><i style="background:var(--yellow)"></i>Waiting for a reply</div><div class="v">2</div></div>
+          <div class="kpi"><div class="l"><i style="background:var(--blue)"></i>Next session</div><div class="v">Mon 2 Nov</div></div>
+          <div class="kpi"><div class="l"><i style="background:var(--green)"></i>Completed this month</div><div class="v">5</div></div>
+          <div class="kpi"><div class="l"><i style="background:var(--lime)"></i>Your coach</div><div class="v">Lena Cruz</div></div>
+        </div>
+        <div class="panel grow">
+          <div class="ph"><h3>Waiting for a reply</h3></div>
+          <table><thead><tr><th>Coach</th><th>When</th><th>Minutes</th><th>Type</th><th>Message</th><th>Status</th><th></th></tr></thead><tbody>
+            <tr><td><span class="who"><span class="av">LC</span>Lena Cruz</span></td><td>Sunday 1 Nov, 10:00 AM</td><td>60</td><td class="muted">Open availability</td><td class="muted">Open slot, strength session</td><td><span class="st"><i style="background:var(--yellow)"></i>Pending</span></td><td class="num"><button class="btn sm">Approve</button></td></tr>
+            <tr><td><span class="who"><span class="av">LC</span>Lena Cruz</span></td><td>Monday 2 Nov, 5:00 PM</td><td>60</td><td class="muted">Requested by you</td><td class="muted">Evening session after work?</td><td><span class="st"><i style="background:var(--yellow)"></i>Pending</span></td><td class="num"><button class="btn ghost sm">Cancel request</button></td></tr>
+          </tbody></table>
+        </div>
+      </div>
+      <aside class="side">
+        <div class="sec"><h4><svg class="m"><use href="#calp"/></svg>Request a session</h4>
+          <label>Coach</label><div class="f">Lena Cruz <span>⌄</span></div>
+          <div class="fr3"><div><label>Date</label><div class="f">11/1/2026</div></div><div><label>Start</label><div class="f">9 : 00 AM</div></div><div><label>Minutes</label><div class="f">60 ⌄</div></div></div>
+          <label>Amenity</label><div class="f">No amenity <span>⌄</span></div>
+          <label>Message (optional)</label><div class="f area ph">Anything your coach should know</div>
+          <div class="muted small" style="margin:10px 0">You already have a session booked together. Open Sessions to reschedule or cancel it.</div>
+          <button class="btn full" style="opacity:.45">Send request</button></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== COACH · DASHBOARD ===================== -->
+  <section class="page" id="dashboard" data-rail="coach" data-on="1">
+    <div class="bar"><span class="crumb">Coach / <b>Dashboard</b></span><div class="right"><button class="iconbtn"><svg class="i"><use href="#bell"/></svg></button></div></div>
+    <div class="tools"><div class="seg"><button class="on">Month</button><button>Week</button></div>
+      <div class="seg"><button>‹</button><button class="on" style="color:var(--ink)">October 2026</button><button>›</button></div><button class="ctl">Today</button>
+      <div class="right"><button class="btn">Post a shift</button></div></div>
+    <div class="content">
+      <div class="main">
+        <div class="kpis">
+          <div class="kpi lime"><div class="l">Sessions this month</div><div class="v">9</div></div>
+          <div class="kpi"><div class="l"><i style="background:var(--green)"></i>Attendance rate</div><div class="v">71%</div></div>
+          <div class="kpi"><div class="l"><i style="background:var(--blue)"></i>Upcoming</div><div class="v">2 <small style="color:var(--muted)">next Mon 2 Nov, 9:00 AM</small></div></div>
+          <div class="kpi"><div class="l"><i style="background:var(--yellow)"></i>Trainees</div><div class="v">2</div></div>
+        </div>
+        <div class="panel grow"><div class="cal" id="calgrid"></div></div>
+      </div>
+      <aside class="side">
+        <div class="tabs"><button class="on">Saturday 31 Oct</button><button>Week ahead</button></div>
+        <div class="sec"><h4>Sessions</h4><div class="muted small">No sessions on this day.</div></div>
+        <div class="sec"><h4>Shifts</h4><div class="muted small">No shift posted.</div></div>
+        <div class="sec"><h4><svg class="m"><use href="#calp"/></svg>Post a shift</h4>
+          <div class="fr"><div><label>Starts</label><div class="f">9 : 00 PM</div></div><div><label>Hours</label><div class="f">4 ⌄</div></div></div>
+          <label>Note (optional)</label><div class="f ph">What you will be running</div>
+          <button class="btn full" style="margin-top:12px">Post shift</button></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== COACH · SESSIONS ===================== -->
+  <section class="page" id="sessions" data-rail="coach" data-on="2">
+    <div class="bar"><span class="crumb">Coach / <b>Sessions</b></span><div class="right"><button class="iconbtn"><svg class="i"><use href="#bell"/></svg></button></div></div>
+    <div class="tools"><div class="seg"><button class="on">All</button><button>Scheduled</button><button>Completed</button><button>Cancelled / no show</button></div>
+      <button class="ctl"><svg class="m"><use href="#search"/></svg><span class="muted">Search members</span></button></div>
+    <div class="content">
+      <div class="main">
+        <div class="panel grow">
+          <div class="ph"><h3>Your booked training sessions, soonest first</h3><div class="right"><span class="muted small">13 sessions</span></div></div>
+          <table><thead><tr><th>Session</th><th>Member</th><th>Date</th><th>Time</th><th>Status</th><th></th></tr></thead><tbody id="sess"></tbody></table>
+        </div>
+      </div>
+      <aside class="side">
+        <div class="sec"><h4>Your coach photo</h4><div class="who"><span class="av" style="width:44px;height:44px;font-size:15px">LC</span><span class="muted small">Add a photo so members can recognise you. You can still accept hires and run sessions without one.</span></div>
+          <button class="btn ghost full" style="margin-top:10px">Add photo</button></div>
+        <div class="sec"><h4>Squat technique · Alex Tan</h4><div class="muted small">Monday 2 Nov, 9:00 AM to 10:00 AM</div>
+          <div class="fr" style="margin-top:10px"><button class="btn">Mark completed</button><button class="btn ghost">No show</button></div>
+          <div class="fr" style="margin-top:8px"><button class="btn ghost">Reschedule</button><button class="btn ghost">Cancel session</button></div></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== FRONT DESK · HOME ===================== -->
+  <section class="page" id="desk" data-rail="desk" data-on="1">
+    <div class="bar"><span class="crumb">Front desk / <b>Today at the desk</b></span><div class="right"><button class="iconbtn"><svg class="i"><use href="#bell"/></svg></button></div></div>
+    <div class="tools"><span class="muted">Saturday 31 October 2026</span><div class="right"><button class="btn ghost">Cashier</button><button class="btn">Scan member QR</button></div></div>
+    <div class="content">
+      <div class="main">
+        <div class="kpis">
+          <div class="kpi"><div class="l"><i style="background:var(--green)"></i>Check-ins today</div><div class="v">0</div></div>
+          <div class="kpi lime"><div class="l">Payments to verify</div><div class="v">1</div></div>
+          <div class="kpi lime"><div class="l">Amenities available</div><div class="v">2 of 3</div></div>
+          <div class="kpi"><div class="l"><i style="background:var(--blue)"></i>Unread messages</div><div class="v">0</div></div>
+        </div>
+        <div class="row2" style="flex:1">
+          <div class="panel"><div class="ph"><h3>Payments to verify</h3><div class="right"><span class="muted small">oldest first</span></div></div>
+            <table><thead><tr><th>Member</th><th>Item</th><th>Code</th><th class="num">Amount</th><th></th></tr></thead><tbody>
+              <tr><td><span class="who"><span class="av">BL</span>Bea Lim</span></td><td>Quarterly</td><td class="muted">GYM-7F3K2</td><td class="num">₱4,000.00</td><td class="num"><button class="btn sm">Verify</button></td></tr></tbody></table></div>
+          <div class="panel"><div class="ph"><h3>In the gym now</h3></div>
+            <table><thead><tr><th>Name</th><th>Role</th><th>Since</th><th></th></tr></thead><tbody>
+              <tr><td><span class="who"><span class="av">KM</span>Kai Mendoza</span></td><td class="muted">Coach</td><td>8:35 PM</td><td class="num"><button class="btn ghost sm">Check out</button></td></tr>
+              <tr><td><span class="who"><span class="av">LC</span>Lena Cruz</span></td><td class="muted">Coach</td><td>8:35 PM</td><td class="num"><button class="btn ghost sm">Check out</button></td></tr></tbody></table></div>
+        </div>
+      </div>
+      <aside class="side">
+        <div class="sec"><h4><svg class="m"><use href="#scan"/></svg>Check in a member</h4><div class="f ph"><span>Search members by name</span><svg class="m"><use href="#search"/></svg></div></div>
+        <div class="sec" style="padding-top:4px">
+          <div class="item"><span class="av">AT</span>Alex Tan<span class="right small"><span class="st"><i style="background:var(--green)"></i>Active</span></span></div>
+          <div class="item"><span class="av">BL</span>Bea Lim<span class="right small"><span class="st"><i style="background:var(--red)"></i>Inactive</span></span></div>
+          <div class="item"><span class="av">CD</span>Carlo Diaz<span class="right small"><span class="st"><i style="background:var(--red)"></i>Inactive</span></span></div></div>
+        <div class="sec"><h4>Amenities</h4>
+          <div class="item">Group classes<span class="right small"><span class="st"><i style="background:var(--green)"></i>Available</span></span></div>
+          <div class="item">Pool<span class="right small"><span class="st"><i style="background:var(--green)"></i>Available</span></span></div>
+          <div class="item">Sauna<span class="right small"><span class="st"><i style="background:var(--red)"></i>Cleaning</span></span></div></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== ADMIN · VOID A PAYMENT ===================== -->
+  <section class="page" id="void" data-rail="admin" data-on="7">
+    <div class="bar"><span class="crumb">Admin / <b>Void a payment</b></span><div class="right"><button class="iconbtn"><svg class="i"><use href="#bell"/></svg></button></div></div>
+    <div class="tools"><button class="ctl"><svg class="m"><use href="#cal"/></svg>Sep 1, 2026 – Oct 31, 2026</button>
+      <div class="seg"><button class="on">All</button><button>Cash</button><button>QR</button></div>
+      <button class="ctl"><svg class="m"><use href="#search"/></svg><span class="muted">Receipt or member</span></button></div>
+    <div class="content">
+      <div class="main">
+        <div class="panel grow">
+          <div class="ph"><h3>Verified payments</h3><span class="muted small">A payment entered wrongly is never edited. Void it with a reason, then record it again correctly.</span></div>
+          <table><thead><tr><th>Receipt</th><th>Member</th><th>Item</th><th>Method</th><th>Date</th><th class="num">Amount</th></tr></thead><tbody id="voids"></tbody></table>
+        </div>
+      </div>
+      <aside class="side">
+        <div class="sec"><h4>OR-2026-000006</h4>
+          <div class="muted small">Carlo Diaz · Monthly · cash · 30 Oct, 8:35 PM</div>
+          <div style="font:600 30px 'Barlow Condensed';margin:8px 0">₱4,000.00</div>
+          <label>Reason (required)</label><div class="f area ph">Why this payment is being voided</div>
+          <div class="muted small" style="margin:10px 0">Voiding switches off what it paid for. Every void is kept in the audit log.</div>
+          <button class="btn full" style="background:var(--red)">Void payment</button></div>
+      </aside>
+    </div>
+  </section>
+
+  </div>
+</div>
+
+<nav class="switch">
+  <button data-p="membership" class="on">Member: My membership</button>
+  <button data-p="requests">Member: Time requests</button>
+  <button data-p="dashboard">Coach: Dashboard</button>
+  <button data-p="sessions">Coach: Sessions</button>
+  <button data-p="desk">Front desk: Home</button>
+  <button data-p="void">Admin: Void a payment</button>
+</nav>
+
+<script>
+const rails = {
+  member: ['card','box','waves','calp','db','cal','clock','|','msg','set'],
+  coach:  ['grid','cal','clock','users','calp','user','waves','|','msg','set'],
+  desk:   ['home','check','cash','scan','waves','|','msg','set'],
+  admin:  ['grid','brief','|','users','box','tag','undo','ban','sl','chart','arch','|','msg','set']
+};
+function rail(kind, on) {
+  let n = 0, h = '<span class="logo"><svg class="i" style="stroke:#E4F58A"><use href="#db"/></svg></span>';
+  for (const r of rails[kind]) h += r === '|' ? '<span class="sep"></span>' : `<span class="ico${++n == on ? ' on' : ''}"><svg class="i"><use href="#${r}"/></svg></span>`;
+  h += '<span class="ico end"><svg class="i"><use href="#out"/></svg></span><span class="ico" style="border-radius:50%;font-weight:600;font-size:12px;color:#000">AT</span>';
+  document.getElementById('rail').innerHTML = h;
+}
+function show(id) {
+  document.querySelectorAll('.page').forEach(s => s.classList.toggle('on', s.id === id));
+  document.querySelectorAll('.switch button').forEach(b => b.classList.toggle('on', b.dataset.p === id));
+  const s = document.getElementById(id); rail(s.dataset.rail, +s.dataset.on);
+}
+document.querySelectorAll('.switch button').forEach(b => b.onclick = () => show(b.dataset.p));
+
+document.getElementById('lane').innerHTML = Array.from({length: 30}, (_, i) => `<i${i >= 25 ? ' class="off"' : ''}></i>`).join('');
+const st = (c, t) => `<span class="st"><i style="background:var(--${c})"></i>${t}</span>`;
+document.getElementById('pays').innerHTML = [
+  ['Monthly', st('green','Verified'), 'OR-2026-000005', 'GYM-64EUR', '28 Oct 2026, 8:35 PM', '₱1,500.00', ''],
+  ['Pool', st('green','Verified'), 'OR-2026-000004', 'GYM-3SVAY', '27 Oct 2026, 11:00 PM', '₱300.00', ''],
+  ['Pool', st('red','Expired'), '—', 'GYM-QHMWA', '26 Oct 2026, 2:27 PM', '₱300.00', '<button class="btn ghost sm">Pay again</button>'],
+  ['Quarterly', st('green','Verified'), 'OR-2026-000003', 'GYM-MA2OA', '22 Oct 2026, 8:35 PM', '₱4,000.00', ''],
+  ['Monthly', st('green','Verified'), 'OR-2026-000001', 'GYM-8KD2P', '06 Oct 2026, 8:35 PM', '₱1,500.00', '']
+].map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td class="muted">${r[3]}</td><td>${r[4]}</td><td class="num">${r[5]}</td><td class="num">${r[6]}</td></tr>`).join('');
+
+// calendar: Oct 2026 starts Thursday
+const ev = {1:['ok','Bea · done'],11:['ok','Alex · done'],19:['no','Alex · cancelled'],23:['ok','Alex · done'],26:['no','Alex · no show'],29:['ok','Bea · done'],30:['ok','Alex · done'],28:['ok','Alex · done']};
+let c = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => `<div class="dow">${d}</div>`).join('');
+[28,29,30, ...Array.from({length:31},(_, i) => i + 1), 1,2,3,4,5,6,7,8].forEach((d, i) => {
+  const out = i < 3 || i > 33, e = !out && ev[d];
+  c += `<div class="d${out ? ' out' : ''}${!out && d === 31 ? ' sel' : ''}">${d}${e ? `<span class="ev ${e[0]}">${e[1]}</span>` : ''}${!out && d === 23 ? '<span class="ev no">Bea · no show</span>' : ''}${out && d === 1 ? '<span class="ev sh">Shift 6 AM</span>' : ''}${out && d === 2 ? '<span class="ev">Alex · 9 AM</span>' : ''}</div>`;
+});
+document.getElementById('calgrid').innerHTML = c;
+
+const sess = [['Squat technique','Alex Tan','Mon 2 Nov','9:00 – 10:00 AM','blue','Scheduled'],['Mobility','Bea Lim','Thu 5 Nov','9:00 – 10:00 AM','blue','Scheduled'],
+  ['Training session','Alex Tan','Fri 30 Oct','9:00 – 10:00 AM','green','Completed'],['Training session','Bea Lim','Thu 29 Oct','5:00 – 6:00 PM','green','Completed'],
+  ['Upper body','Alex Tan','Wed 28 Oct','9:00 – 10:00 AM','green','Completed'],['Training session','Alex Tan','Mon 26 Oct','9:00 – 10:00 AM','red','No show'],
+  ['Training session','Bea Lim','Sun 25 Oct','10:00 – 11:00 AM','green','Completed'],['Training session','Bea Lim','Fri 23 Oct','11:00 AM – 12:00 PM','red','No show'],
+  ['Training session','Alex Tan','Fri 23 Oct','9:00 – 10:00 AM','green','Completed'],['Training session','Alex Tan','Mon 19 Oct','9:00 – 10:00 AM','red','Cancelled'],
+  ['Training session','Alex Tan','Sun 11 Oct','9:00 – 10:00 AM','green','Completed'],['Training session','Bea Lim','Thu 1 Oct','9:00 – 10:00 AM','green','Completed']];
+document.getElementById('sess').innerHTML = sess.map((s, i) =>
+  `<tr${i === 0 ? ' style="background:var(--raise)"' : ''}><td>${s[0]}</td><td><span class="who"><span class="av">${s[1].split(' ').map(w => w[0]).join('')}</span>${s[1]}</span></td><td>${s[2]}</td><td>${s[3]}</td><td>${st(s[4], s[5])}</td><td class="num">${s[4] === 'blue' ? '<button class="btn ghost sm">Open</button>' : ''}</td></tr>`).join('');
+
+document.getElementById('voids').innerHTML = [
+  ['OR-2026-000006','Carlo Diaz','Monthly','Cash','30 Oct, 8:35 PM','₱4,000.00'],['OR-2026-000007','Juan Dela Cruz','Walk-in','Cash','29 Oct, 8:35 PM','₱150.00'],
+  ['OR-2026-000005','Alex Tan','Monthly','QR','28 Oct, 8:35 PM','₱1,500.00'],['OR-2026-000004','Carlo Diaz','Annual','Cash','25 Oct, 8:35 PM','₱14,000.00'],
+  ['OR-2026-000003','Alex Tan','Quarterly','QR','22 Oct, 8:35 PM','₱4,000.00'],['OR-2026-000001','Alex Tan','Monthly','QR','6 Oct, 8:35 PM','₱1,500.00'],
+  ['OR-2026-000002','Carlo Diaz','Monthly','Cash','19 Sep, 8:35 PM','₱1,500.00']
+].map((r, i) => `<tr${i === 0 ? ' style="background:var(--raise);box-shadow:inset 3px 0 0 var(--lime)"' : ''}><td>${r[0]}</td><td><span class="who"><span class="av">${r[1].split(' ').map(w => w[0]).slice(0,2).join('')}</span>${r[1]}</span></td><td>${r[2]}</td><td class="muted">${r[3]}</td><td>${r[4]}</td><td class="num">${r[5]}</td></tr>`).join('');
+
+show('membership');
+</script>
+</body>
+</html>

@@ -8,7 +8,7 @@
             x:Class="GymMembership.App.Views.RevenuePage" x:DataType="vm:RevenueViewModel" Title="Revenue">
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
-        <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
+        <VerticalStackLayout Padding="{OnIdiom Phone='20,16,20,24', Default='16,12,16,20'}" Spacing="14">
             <Label Text="Net receipts: verified payments minus approved refunds, grouped by Manila day, item and payment method. A refund counts on the day it was approved, and is shown against the method the member paid with. The cash drawer on the Cashier page drops only when the repayment is recorded. Payment counts count receipts, not refunds. Voids are excluded." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />

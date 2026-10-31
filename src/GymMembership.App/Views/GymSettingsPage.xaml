@@ -7,7 +7,7 @@
             x:Class="GymMembership.App.Views.GymSettingsPage" x:DataType="vm:GymSettingsViewModel" Title="Gym settings">
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
-        <VerticalStackLayout Padding="20,16,20,24" Spacing="16">
+        <VerticalStackLayout Padding="{OnIdiom Phone='20,16,20,24', Default='16,12,16,20'}" Spacing="16">
             <Label Text="What members see when they pay, and the price of a day pass at the desk." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />

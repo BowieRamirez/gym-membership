@@ -51,6 +51,59 @@ public class LaneView : GraphicsView
 }
 
 /// <summary>
+/// A page's main area and its side panel (the page's form or the selected item): side on the right, SideWidth wide, when the layout is at
+/// least WideFrom wide. Narrower windows and phones stack them, side first, so a form stays above its list as before.
+/// Children: the main area, then the side. A hidden side gives the main area the full width.
+/// </summary>
+public class SideLayout : Layout
+{
+    public double SideWidth { get; set; } = 340;
+    public double Spacing { get; set; } = 12;
+    public double WideFrom { get; set; } = 1100;
+    /// <summary>Stacked order: the side above the main area (a form above its list), or below it (a calendar above the chosen day).</summary>
+    public bool SideFirst { get; set; } = true;
+
+    bool IsWide(double width) => double.IsFinite(width) && width >= WideFrom;
+
+    protected override Microsoft.Maui.Layouts.ILayoutManager CreateLayoutManager() => new Manager(this);
+
+    sealed class Manager(SideLayout layout) : Microsoft.Maui.Layouts.ILayoutManager
+    {
+        IView? Part(int i) => layout.Count > i && layout[i].Visibility != Visibility.Collapsed ? layout[i] : null;
+
+        public Size Measure(double widthConstraint, double heightConstraint)
+        {
+            IView? main = Part(0), side = Part(1);
+            if (layout.IsWide(widthConstraint) && main is not null && side is not null)
+            {
+                var mainHeight = main.Measure(widthConstraint - layout.SideWidth - layout.Spacing, double.PositiveInfinity).Height;
+                return new Size(widthConstraint, Math.Max(mainHeight, side.Measure(layout.SideWidth, double.PositiveInfinity).Height));
+            }
+            var heights = (layout.SideFirst ? new[] { side, main } : new[] { main, side }).Where(v => v is not null).Select(v => v!.Measure(widthConstraint, double.PositiveInfinity).Height).ToList();
+            return new Size(widthConstraint, heights.Sum() + layout.Spacing * Math.Max(0, heights.Count - 1));
+        }
+
+        public Size ArrangeChildren(Rect bounds)
+        {
+            IView? main = Part(0), side = Part(1);
+            if (layout.IsWide(bounds.Width) && main is not null && side is not null)
+            {
+                main.Arrange(new Rect(bounds.Left, bounds.Top, bounds.Width - layout.SideWidth - layout.Spacing, main.DesiredSize.Height));
+                side.Arrange(new Rect(bounds.Right - layout.SideWidth, bounds.Top, layout.SideWidth, side.DesiredSize.Height));
+                return bounds.Size;
+            }
+            var y = bounds.Top;
+            foreach (var view in (layout.SideFirst ? new[] { side, main } : new[] { main, side }).Where(v => v is not null))
+            {
+                view!.Arrange(new Rect(bounds.Left, y, bounds.Width, view.DesiredSize.Height));
+                y += view.DesiredSize.Height + layout.Spacing;
+            }
+            return bounds.Size;
+        }
+    }
+}
+
+/// <summary>
 /// Cards in equal columns, filled row by row; each row is as tall as its tallest card. Unlike FlexLayout it gives every card a fixed
 /// width before measuring, so long text wraps inside the card instead of running past it. Works with BindableLayout.
 /// </summary>

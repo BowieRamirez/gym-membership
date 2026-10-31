@@ -7,76 +7,127 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.SessionsPage" x:DataType="vm:SessionsViewModel" Title="Sessions">
 
-    <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='20,16,20,0'}" MaximumWidthRequest="{StaticResource PageWidth}">
-        <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
+    <v:BasePage.Resources>
+        <!-- desktop: one table row per session, its buttons at the end -->
+        <DataTemplate x:Key="SessionRow" x:DataType="svc:SessionRow">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,*,230,120,120,470">
+                    <Label Text="{Binding Session.Title}" FontFamily="BarlowMedium" VerticalOptions="Center" />
+                    <Label Grid.Column="1" Text="{Binding With}" VerticalOptions="Center" />
+                    <Label Grid.Column="2" VerticalOptions="Center">
+                        <Label.Text>
+                            <MultiBinding StringFormat="{}{0} to {1}">
+                                <Binding Path="Session.ScheduledStart" Converter="{StaticResource LocalDate}" ConverterParameter="ddd d MMM, h:mm tt" />
+                                <Binding Path="Session.ScheduledEnd" Converter="{StaticResource LocalDate}" ConverterParameter="h:mm tt" />
+                            </MultiBinding>
+                        </Label.Text>
+                    </Label>
+                    <Label Grid.Column="3" Text="{Binding Amenity}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                    <c:StatusChip Grid.Column="4" Status="{Binding Session.Status}" VerticalOptions="Center" />
+                    <HorizontalStackLayout Grid.Column="5" Spacing="6" VerticalOptions="Center" HorizontalOptions="End">
+                        <Button Text="Add 30 minutes" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanExtend}" Clicked="OnExtend"
+                                SemanticProperties.Hint="Extends this session and its amenity booking by 30 minutes" />
+                        <Button Text="Mark complete" Style="{StaticResource SmallButton}" IsVisible="{Binding CanManage}" Clicked="OnComplete" />
+                        <Button Text="No-show" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanManage}" Clicked="OnNoShow" />
+                        <Button Text="Reschedule" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanChange}" Clicked="OnStartReschedule" />
+                        <Button Text="Cancel session" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanChange}" Clicked="OnCancel" />
+                    </HorizontalStackLayout>
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+        <!-- phone: the same facts stacked, buttons wrapping underneath -->
+        <DataTemplate x:Key="SessionCard" x:DataType="svc:SessionRow">
+            <VerticalStackLayout>
+                <VerticalStackLayout Spacing="6" Padding="14,10">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <VerticalStackLayout Spacing="2">
+                            <Label Text="{Binding Session.Title}" FontFamily="BarlowSemiBold" />
+                            <Label Text="{Binding With, StringFormat='With {0}'}" />
+                            <Label Style="{StaticResource Caption}">
+                                <Label.Text>
+                                    <MultiBinding StringFormat="{}{0} to {1}">
+                                        <Binding Path="Session.ScheduledStart" Converter="{StaticResource LocalDate}" ConverterParameter="dddd d MMM, h:mm tt" />
+                                        <Binding Path="Session.ScheduledEnd" Converter="{StaticResource LocalDate}" ConverterParameter="h:mm tt" />
+                                    </MultiBinding>
+                                </Label.Text>
+                            </Label>
+                        </VerticalStackLayout>
+                        <c:StatusChip Grid.Column="1" Status="{Binding Session.Status}" VerticalOptions="Start" />
+                    </Grid>
+                    <Label Text="{Binding Amenity, StringFormat='At {0}'}" FontFamily="BarlowMedium" IsVisible="{Binding Amenity, Converter={StaticResource HasText}}" />
+                    <FlexLayout Wrap="Wrap">
+                        <Button Text="Add 30 minutes" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanExtend}" Clicked="OnExtend"
+                                SemanticProperties.Hint="Extends this session and its amenity booking by 30 minutes" />
+                        <Button Text="Mark complete" Style="{StaticResource SmallButton}" Margin="0,0,8,8" IsVisible="{Binding CanManage}" Clicked="OnComplete" />
+                        <Button Text="No-show" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanManage}" Clicked="OnNoShow" />
+                        <Button Text="Reschedule" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanChange}" Clicked="OnStartReschedule" />
+                        <Button Text="Cancel session" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanChange}" Clicked="OnCancel" />
+                    </FlexLayout>
+                </VerticalStackLayout>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+    </v:BasePage.Resources>
+
+    <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
+        <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="12">
             <Label Text="Your booked training sessions, soonest first." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
-            <c:CoachPhotoPrompt x:DataType="vm:CoachPhotoViewModel" BindingContext="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=Photo}" IsVisible="{Binding NeedsPhoto}" />
 
-            <Border Style="{StaticResource Panel}" IsVisible="{Binding Rescheduling, Converter={StaticResource IsNotNull}}">
+            <c:SideLayout>
+                <Border Style="{StaticResource TablePanel}">
+                    <VerticalStackLayout>
+                        <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,*,230,120,120,470" IsVisible="{OnIdiom Phone=False, Default=True}">
+                            <Label Text="Session" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="1" Text="With" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="2" Text="When" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="3" Text="Amenity" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="4" Text="Status" Style="{StaticResource Caption}" />
+                        </Grid>
+                        <BoxView Style="{StaticResource Hairline}" IsVisible="{OnIdiom Phone=False, Default=True}" />
+                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Sessions}"
+                                             BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource SessionCard}, Default={StaticResource SessionRow}}">
+                            <BindableLayout.EmptyView><Label Text="No sessions yet. Send a time request to book one." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- the side panel: the coach photo prompt, then the session being moved (or how to move one) -->
                 <VerticalStackLayout Spacing="12">
-                    <c:CardTitle Icon="calendar-clock" Text="{Binding Rescheduling.Session.Title, StringFormat='Move “{0}” to a new time'}" />
-                    <FlexLayout Wrap="Wrap" AlignItems="End">
-                        <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
-                            <Label Text="New date" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}"><DatePicker Date="{Binding Date}" MinimumDate="{x:Static x:DateTime.Today}" /></Border>
-                        </VerticalStackLayout>
-                        <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
-                            <Label Text="New start time" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}"><TimePicker Time="{Binding Time}" /></Border>
-                        </VerticalStackLayout>
-                    </FlexLayout>
-                    <Label Text="The session keeps its length. The other person has to approve the new time before it moves." Style="{StaticResource Caption}" />
-                    <FlexLayout Wrap="Wrap">
-                        <Button Text="Send new time" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Command="{Binding SendRescheduleCommand}" />
-                        <Button Text="Keep current time" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding StopRescheduleCommand}" />
-                    </FlexLayout>
-                </VerticalStackLayout>
-            </Border>
-        </VerticalStackLayout>
-
-        <ScrollView Grid.Row="1"><c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" Padding="0,0,0,16" BindableLayout.ItemsSource="{Binding Sessions}">
-            <BindableLayout.EmptyView><Label Text="No sessions yet. Send a time request to book one." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
-            <BindableLayout.ItemTemplate>
-                <DataTemplate x:DataType="svc:SessionRow">
-                    <Border Style="{StaticResource Panel}">
-                        <VerticalStackLayout Spacing="8">
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                <VerticalStackLayout Spacing="2">
-                                    <c:CardTitle Icon="calendar-days" Text="{Binding Session.Title}" />
-                                    <Label Text="{Binding With, StringFormat='With {0}'}" />
-                                    <Label Style="{StaticResource Caption}">
-                                        <Label.Text>
-                                            <MultiBinding StringFormat="{}{0} to {1}">
-                                                <Binding Path="Session.ScheduledStart" Converter="{StaticResource LocalDate}" ConverterParameter="dddd d MMM, h:mm tt" />
-                                                <Binding Path="Session.ScheduledEnd" Converter="{StaticResource LocalDate}" ConverterParameter="h:mm tt" />
-                                            </MultiBinding>
-                                        </Label.Text>
-                                    </Label>
-                                </VerticalStackLayout>
-                                <c:StatusChip Grid.Column="1" Status="{Binding Session.Status}" VerticalOptions="Start" />
-                            </Grid>
-                            <Label Text="{Binding Amenity, StringFormat='At {0}'}" FontFamily="BarlowMedium" IsVisible="{Binding Amenity, Converter={StaticResource HasText}}" />
-                            <Button Text="Add 30 minutes" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" IsVisible="{Binding CanExtend}" Clicked="OnExtend"
-                                    SemanticProperties.Hint="Extends this session and its amenity booking by 30 minutes" />
-                            <FlexLayout Wrap="Wrap" IsVisible="{Binding CanManage}">
-                                <Button Text="Mark complete" Style="{StaticResource SmallButton}" Margin="0,0,8,8"
-                                        Clicked="OnComplete" />
-                                <Button Text="No-show" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                        Clicked="OnNoShow" />
-                            </FlexLayout>
-                            <!-- both the member and the coach can move or cancel a booked session -->
-                            <FlexLayout Wrap="Wrap" IsVisible="{Binding CanChange}">
-                                <Button Text="Reschedule" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                        Clicked="OnStartReschedule" />
-                                <Button Text="Cancel session" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                        Clicked="OnCancel" />
-                            </FlexLayout>
-                        </VerticalStackLayout>
+                    <c:CoachPhotoPrompt x:DataType="vm:CoachPhotoViewModel" BindingContext="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=Photo}" IsVisible="{Binding NeedsPhoto}" />
+                    <Border Style="{StaticResource SidePanel}" IsVisible="{Binding Rescheduling, Converter={StaticResource IsNotNull}}">
+                        <VerticalStackLayout Spacing="12">
+                                <c:CardTitle Icon="calendar-clock" Text="{Binding Rescheduling.Session.Title, StringFormat='Move “{0}” to a new time'}" />
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                    <VerticalStackLayout Spacing="4">
+                                        <Label Text="New date" Style="{StaticResource Caption}" />
+                                        <Border Style="{StaticResource Field}"><DatePicker Date="{Binding Date}" MinimumDate="{x:Static x:DateTime.Today}" /></Border>
+                                    </VerticalStackLayout>
+                                    <VerticalStackLayout Grid.Column="1" Spacing="4">
+                                        <Label Text="New start time" Style="{StaticResource Caption}" />
+                                        <Border Style="{StaticResource Field}"><TimePicker Time="{Binding Time}" /></Border>
+                                    </VerticalStackLayout>
+                                </Grid>
+                                <Label Text="The session keeps its length. The other person has to approve the new time before it moves." Style="{StaticResource Caption}" />
+                                <FlexLayout Wrap="Wrap">
+                                    <Button Text="Send new time" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Command="{Binding SendRescheduleCommand}" />
+                                    <Button Text="Keep current time" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding StopRescheduleCommand}" />
+                                </FlexLayout>
+                            </VerticalStackLayout>
                     </Border>
-                </DataTemplate>
-            </BindableLayout.ItemTemplate>
-        </c:CardGrid></ScrollView>
-    </Grid>
+                    <!-- desktop only: on phones the side stacks above the list, where a hint would just take room -->
+                    <ContentView IsVisible="{OnIdiom Phone=False, Default=True}">
+                        <Border Style="{StaticResource SidePanel}" IsVisible="{Binding Rescheduling, Converter={StaticResource IsNull}}">
+                            <VerticalStackLayout Spacing="6">
+                                <c:CardTitle Icon="calendar-clock" Text="Move a session" />
+                                <Label Text="Choose Reschedule on a booked session to pick its new time here." Style="{StaticResource Muted}" />
+                            </VerticalStackLayout>
+                        </Border>
+                    </ContentView>
+                </VerticalStackLayout>
+            </c:SideLayout>
+        </VerticalStackLayout>
+    </ScrollView>
 </v:BasePage>

@@ -139,7 +139,8 @@
     </Style>
 
     <!-- ===== Page layout: wide canvas, section titles, white rows inside a card, one lime card per page ===== -->
-    <x:Double x:Key="PageWidth">1240</x:Double>
+    <!-- pages fill the window (full-page layout, 2026-10-31); this only stops lines running on forever on very wide screens -->
+    <x:Double x:Key="PageWidth">2400</x:Double>
     <Style x:Key="SectionTitle" TargetType="Label" BasedOn="{StaticResource BaseLabel}">
         <Setter Property="FontFamily" Value="BarlowMedium" />
         <Setter Property="FontSize" Value="22" />
@@ -153,21 +154,61 @@
     </Style>
     <!-- a lime card: its labels set TextColor Black and its buttons use InkButton/InkSmallButton, in both themes (PageLayoutTests) -->
     <Style x:Key="HeroPanel" TargetType="Border">
-        <Setter Property="StrokeShape" Value="RoundRectangle 22" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 16" />
         <Setter Property="StrokeThickness" Value="0" />
-        <Setter Property="Padding" Value="18" />
+        <Setter Property="Padding" Value="14" />
         <Setter Property="BackgroundColor" Value="{StaticResource Lime}" />
     </Style>
 
-    <!-- ===== Surfaces: big rounded cards, flat, no border, no shadow ===== -->
+
+    <!-- ===== Surfaces: rounded cards, flat, no border, no shadow ===== -->
     <Style x:Key="Panel" TargetType="Border">
-        <Setter Property="StrokeShape" Value="RoundRectangle 22" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 16" />
         <Setter Property="StrokeThickness" Value="0" />
-        <Setter Property="Padding" Value="18" />
+        <Setter Property="Padding" Value="14" />
         <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource CardLight}, Dark={StaticResource CardDark}}" />
         <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
     </Style>
 
+
+    <!-- ===== Full-page layout pieces: page frame, number strip, tables, side panel ===== -->
+    <Thickness x:Key="PagePadding">16,12,16,20</Thickness>
+    <!-- a row of filters or actions above the page's content -->
+    <Style x:Key="Toolbar" TargetType="FlexLayout">
+        <Setter Property="Wrap" Value="Wrap" />
+        <Setter Property="AlignItems" Value="Center" />
+    </Style>
+    <!-- a number card in the strip at the top of a page: a small label, then the number -->
+    <Style x:Key="Kpi" TargetType="Border">
+        <Setter Property="StrokeShape" Value="RoundRectangle 14" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="Padding" Value="14,10" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource CardLight}, Dark={StaticResource CardDark}}" />
+    </Style>
+    <Style x:Key="KpiValue" TargetType="Label" BasedOn="{StaticResource Numeral}">
+        <Setter Property="FontSize" Value="34" />
+    </Style>
+    <!-- tables: a header of captions, then rows split by hairlines, all inside one Panel with no padding -->
+    <Style x:Key="TablePanel" TargetType="Border" BasedOn="{StaticResource Panel}">
+        <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style x:Key="TableHead" TargetType="Grid">
+        <Setter Property="Padding" Value="14,10" />
+        <Setter Property="ColumnSpacing" Value="12" />
+    </Style>
+    <Style x:Key="TableRow" TargetType="Grid">
+        <Setter Property="Padding" Value="14,8" />
+        <Setter Property="ColumnSpacing" Value="12" />
+        <Setter Property="MinimumHeightRequest" Value="44" />
+    </Style>
+    <Style x:Key="Hairline" TargetType="BoxView">
+        <Setter Property="HeightRequest" Value="1" />
+        <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+    </Style>
+    <!-- the page's form or selected item, on the right (SideLayout) -->
+    <Style x:Key="SidePanel" TargetType="Border" BasedOn="{StaticResource Panel}">
+        <Setter Property="VerticalOptions" Value="Start" />
+    </Style>
 
     <!-- ===== Status chips: a coloured dot AND a word, so colour is never the only signal ===== -->
     <Style x:Key="Chip" TargetType="Border">

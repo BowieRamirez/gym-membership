@@ -8,7 +8,7 @@
             x:Class="GymMembership.App.Views.UsersPage" x:DataType="vm:UsersViewModel" Title="Users and roles">
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
-        <VerticalStackLayout Padding="20,16,20,24" Spacing="14">
+        <VerticalStackLayout Padding="{OnIdiom Phone='20,16,20,24', Default='16,12,16,20'}" Spacing="14">
             <Label Text="You create every account here. Share the email and temporary password with the person, and they can sign in." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />

@@ -7,146 +7,202 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.RequestsPage" x:DataType="vm:RequestsViewModel" Title="Time requests">
 
+    <v:BasePage.Resources>
+        <!-- desktop: one table row per request, its buttons at the end -->
+        <DataTemplate x:Key="RequestRow" x:DataType="svc:RequestRow">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,190,150,130,*,110,340">
+                    <Label Text="{Binding With}" FontFamily="BarlowMedium" VerticalOptions="Center" />
+                    <Label Grid.Column="1" Text="{Binding Request.RequestedStart, Converter={StaticResource LocalDate}, ConverterParameter='ddd d MMM, h:mm tt'}" VerticalOptions="Center" />
+                    <Label Grid.Column="2" Text="{Binding Kind}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                    <Label Grid.Column="3" Text="{Binding Amenity}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                    <VerticalStackLayout Grid.Column="4" Spacing="2" VerticalOptions="Center">
+                        <Label Text="{Binding Request.Message}" Style="{StaticResource Muted}" LineBreakMode="TailTruncation" />
+                        <Label Text="{Binding ProposalText, StringFormat='Proposed: {0}'}" IsVisible="{Binding HasProposal}" />
+                    </VerticalStackLayout>
+                    <c:StatusChip Grid.Column="5" Status="{Binding Request.Status}" VerticalOptions="Center" />
+                    <HorizontalStackLayout Grid.Column="6" Spacing="6" VerticalOptions="Center" HorizontalOptions="End">
+                        <Button Text="Approve" Style="{StaticResource SmallButton}" IsVisible="{Binding CanRespond}" Clicked="OnApprove" />
+                        <Button Text="Accept" Style="{StaticResource SmallButton}" IsVisible="{Binding CanAccept}" Clicked="OnAccept" />
+                        <Button Text="Propose another time" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanPropose}" Clicked="OnPropose" />
+                        <Button Text="Ask for another time" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanAccept}" Clicked="OnAnother" />
+                        <Button Text="Decline" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanDecline}" Clicked="OnDecline" />
+                        <Button Text="Cancel request" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanCancel}" Clicked="OnCancel" />
+                    </HorizontalStackLayout>
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+        <!-- phone: the same facts stacked -->
+        <DataTemplate x:Key="RequestCard" x:DataType="svc:RequestRow">
+                                <VerticalStackLayout>
+                                    <Border Padding="14,10" StrokeThickness="0" BackgroundColor="Transparent">
+                                    <VerticalStackLayout Spacing="8">
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                            <VerticalStackLayout Spacing="2">
+                                                <c:CardTitle Icon="user-round" Text="{Binding With}" />
+                                                <Label Text="{Binding Request.RequestedStart, Converter={StaticResource LocalDate}, ConverterParameter='dddd d MMM, h:mm tt'}" />
+                                                <Label Text="{Binding Kind}" Style="{StaticResource Caption}" />
+                                            </VerticalStackLayout>
+                                            <c:StatusChip Grid.Column="1" Status="{Binding Request.Status}" VerticalOptions="Start" />
+                                        </Grid>
+                                        <Label Text="{Binding Amenity, StringFormat='At {0}'}" FontFamily="BarlowMedium" IsVisible="{Binding Amenity, Converter={StaticResource HasText}}" />
+                                        <Label Text="{Binding Request.Message}" Style="{StaticResource Muted}" IsVisible="{Binding Request.Message, Converter={StaticResource HasText}}" />
+                                        <Border Style="{StaticResource Row}" Padding="12,10" IsVisible="{Binding HasProposal}">
+                                            <Label Text="{Binding ProposalText, StringFormat='Proposed: {0}'}" />
+                                        </Border>
+                                        <FlexLayout Wrap="Wrap">
+                                            <Button Text="Approve" Style="{StaticResource SmallButton}" Margin="0,0,8,8" IsVisible="{Binding CanRespond}"
+                                                    Clicked="OnApprove" />
+                                            <Button Text="Accept" Style="{StaticResource SmallButton}" Margin="0,0,8,8" IsVisible="{Binding CanAccept}"
+                                                    Clicked="OnAccept" />
+                                            <Button Text="Propose another time" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanPropose}"
+                                                    Clicked="OnPropose" />
+                                            <Button Text="Ask for another time" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanAccept}"
+                                                    Clicked="OnAnother" />
+                                            <Button Text="Decline" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanDecline}"
+                                                    Clicked="OnDecline" />
+                                            <Button Text="Cancel request" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanCancel}"
+                                                    Clicked="OnCancel" />
+                                        </FlexLayout>
+                                    </VerticalStackLayout>
+                                </Border>
+                                    <BoxView Style="{StaticResource Hairline}" />
+                                </VerticalStackLayout>
+                            </DataTemplate>
+    </v:BasePage.Resources>
+
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
-        <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='20,16,20,24'}" Spacing="14">
+        <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="12">
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <Border Style="{StaticResource Panel}" IsVisible="{Binding IsResponding}">
+            <c:SideLayout>
+                <!-- main: the requests waiting for a reply -->
                 <VerticalStackLayout Spacing="10">
-                    <c:CardTitle Icon="clock" Text="{Binding ResponseTitle}" />
-                    <FlexLayout Wrap="Wrap" AlignItems="End" IsVisible="{Binding ResponseNeedsTime}">
-                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
-                            <Label Text="Date" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}"><DatePicker Date="{Binding ResponseDate}" MinimumDate="{x:Static x:DateTime.Today}" /></Border>
-                        </VerticalStackLayout>
-                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
-                            <Label Text="Start" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}"><TimePicker Time="{Binding ResponseTime}" /></Border>
-                        </VerticalStackLayout>
-                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
-                            <Label Text="Minutes" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Durations}" SelectedItem="{Binding ResponseDuration}" WidthRequest="90" /></Border>
-                        </VerticalStackLayout>
-                        <VerticalStackLayout Spacing="4" Margin="0,0,0,8">
-                            <Label Text="Amenity" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}">
-                                <Picker ItemsSource="{Binding AmenityChoices}" ItemDisplayBinding="{Binding Name}" SelectedItem="{Binding ResponseAmenity}" WidthRequest="180"
-                                        SemanticProperties.Description="Amenity for the session" />
-                            </Border>
-                        </VerticalStackLayout>
-                    </FlexLayout>
-                    <Border Style="{StaticResource Field}"><Entry Text="{Binding ResponseReason}" Placeholder="{Binding ResponseReasonHint}" /></Border>
-                    <HorizontalStackLayout Spacing="8">
-                        <Button Text="{Binding ResponseSubmitText}" Style="{StaticResource SmallButton}" Command="{Binding SubmitResponseCommand}" />
-                        <Button Text="Close" Style="{StaticResource SmallOutlineButton}" Command="{Binding CloseResponseCommand}" />
+                    <HorizontalStackLayout Spacing="12">
+                        <Label Text="Waiting for a reply" Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
+                        <Button Text="Refresh requests" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center"
+                                Command="{Binding LoadCommand}" IsVisible="{Binding UseWindowsRequestForm}" AutomationId="RefreshSessionRequests" />
                     </HorizontalStackLayout>
-                </VerticalStackLayout>
-            </Border>
-
-            <!-- Compose -->
-            <Border Style="{StaticResource Panel}" IsVisible="{Binding CanCompose}">
-                <VerticalStackLayout Spacing="12">
-                    <c:CardTitle Icon="calendar-plus" Text="{Binding ComposeTitle}" />
-                    <VerticalStackLayout Spacing="4" IsVisible="{Binding ShowMemberPicker}">
-                        <Label Text="Member" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}">
-                            <Picker ItemsSource="{Binding Members}" ItemDisplayBinding="{Binding Name}" SelectedItem="{Binding SelectedMember}"
-                                    Title="Choose a member" AutomationId="RequestMemberPicker" SemanticProperties.Description="Member to invite" />
-                        </Border>
-                        <Label Text="{Binding MemberPickerHint}" Style="{StaticResource Caption}" />
-                    </VerticalStackLayout>
-
-                    <VerticalStackLayout Spacing="4" IsVisible="{Binding IsCoach, Converter={StaticResource Not}}">
-                        <Label Text="Coach" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}">
-                            <Picker ItemsSource="{Binding Coaches}" ItemDisplayBinding="{Binding Name}" SelectedItem="{Binding SelectedCoach}"
-                                    SemanticProperties.Description="Coach" />
-                        </Border>
-                    </VerticalStackLayout>
-
-                    <FlexLayout Wrap="Wrap" AlignItems="End">
-                        <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
-                            <Label Text="Date" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}"><DatePicker Date="{Binding Date}" MinimumDate="{x:Static x:DateTime.Today}" /></Border>
-                        </VerticalStackLayout>
-                        <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
-                            <Label Text="Start time" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}"><TimePicker Time="{Binding Time}" /></Border>
-                        </VerticalStackLayout>
-                        <VerticalStackLayout Spacing="4" Margin="0,0,0,8">
-                            <Label Text="Minutes" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}">
-                                <Picker ItemsSource="{Binding Durations}" SelectedItem="{Binding DurationMinutes}" WidthRequest="90" />
-                            </Border>
-                        </VerticalStackLayout>
-                        <!-- members: a session can use an amenity; it then follows the booking grid and gym hours -->
-                        <VerticalStackLayout Spacing="4" Margin="12,0,0,8" IsVisible="{Binding IsCoach, Converter={StaticResource Not}}">
-                            <Label Text="Amenity" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}">
-                                <Picker ItemsSource="{Binding AmenityChoices}" ItemDisplayBinding="{Binding Name}" SelectedItem="{Binding SelectedAmenity}" WidthRequest="180"
-                                        SemanticProperties.Description="Amenity for the session" />
-                            </Border>
-                        </VerticalStackLayout>
-                    </FlexLayout>
-
-                    <VerticalStackLayout Spacing="4" IsVisible="{Binding IsCoach, Converter={StaticResource Not}}">
-                        <Label Text="Message (optional)" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}"><Entry Text="{Binding Message}" /></Border>
-                    </VerticalStackLayout>
-
-                    <Label Text="You already have a session booked together. Open Sessions to reschedule or cancel it. You can request another once it has ended. Refresh requests to check for updates."
-                           Style="{StaticResource Muted}" IsVisible="{Binding ShowActiveSession}" AutomationId="ActiveSessionRequestHint" />
-                    <Label Text="You already have a pending request to this coach. Wait for a reply or cancel it below before sending another. Refresh requests to check for a reply."
-                           Style="{StaticResource Muted}" IsVisible="{Binding ShowPendingRequest}" AutomationId="PendingSessionRequestHint" />
-                    <Button Text="{Binding SubmitText}" Style="{StaticResource SmallButton}" HorizontalOptions="Start"
-                            Command="{Binding SubmitCommand}" AutomationId="SubmitSessionRequest" />
-                </VerticalStackLayout>
-            </Border>
-            <Label Text="Hire a coach first, then you can request sessions here." Style="{StaticResource Muted}"
-                   IsVisible="{Binding CanCompose, Converter={StaticResource Not}}" />
-
-            <Button Text="Refresh requests" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start"
-                    Command="{Binding LoadCommand}" IsVisible="{Binding UseWindowsRequestForm}" AutomationId="RefreshSessionRequests" />
-            <Label Text="Waiting for a reply" Style="{StaticResource SectionTitle}" />
-            <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" BindableLayout.ItemsSource="{Binding Requests}">
-                <BindableLayout.EmptyView><Label Text="Nothing pending." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
-                <BindableLayout.ItemTemplate>
-                    <DataTemplate x:DataType="svc:RequestRow">
-                        <Border Style="{StaticResource Panel}">
-                            <VerticalStackLayout Spacing="8">
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                    <VerticalStackLayout Spacing="2">
-                                        <c:CardTitle Icon="user-round" Text="{Binding With}" />
-                                        <Label Text="{Binding Request.RequestedStart, Converter={StaticResource LocalDate}, ConverterParameter='dddd d MMM, h:mm tt'}" />
-                                        <Label Text="{Binding Kind}" Style="{StaticResource Caption}" />
-                                    </VerticalStackLayout>
-                                    <c:StatusChip Grid.Column="1" Status="{Binding Request.Status}" VerticalOptions="Start" />
-                                </Grid>
-                                <Label Text="{Binding Amenity, StringFormat='At {0}'}" FontFamily="BarlowMedium" IsVisible="{Binding Amenity, Converter={StaticResource HasText}}" />
-                                <Label Text="{Binding Request.Message}" Style="{StaticResource Muted}" IsVisible="{Binding Request.Message, Converter={StaticResource HasText}}" />
-                                <Border Style="{StaticResource Row}" Padding="12,10" IsVisible="{Binding HasProposal}">
-                                    <Label Text="{Binding ProposalText, StringFormat='Proposed: {0}'}" />
-                                </Border>
-                                <FlexLayout Wrap="Wrap">
-                                    <Button Text="Approve" Style="{StaticResource SmallButton}" Margin="0,0,8,8" IsVisible="{Binding CanRespond}"
-                                            Clicked="OnApprove" />
-                                    <Button Text="Accept" Style="{StaticResource SmallButton}" Margin="0,0,8,8" IsVisible="{Binding CanAccept}"
-                                            Clicked="OnAccept" />
-                                    <Button Text="Propose another time" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanPropose}"
-                                            Clicked="OnPropose" />
-                                    <Button Text="Ask for another time" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanAccept}"
-                                            Clicked="OnAnother" />
-                                    <Button Text="Decline" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanDecline}"
-                                            Clicked="OnDecline" />
-                                    <Button Text="Cancel request" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanCancel}"
-                                            Clicked="OnCancel" />
-                                </FlexLayout>
+                    <Border Style="{StaticResource TablePanel}">
+                        <VerticalStackLayout>
+                            <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,190,150,130,*,110,340" IsVisible="{OnIdiom Phone=False, Default=True}">
+                                <Label Text="With" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="1" Text="When" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="2" Text="Type" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="3" Text="Amenity" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="4" Text="Message" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="5" Text="Status" Style="{StaticResource Caption}" />
+                            </Grid>
+                            <BoxView Style="{StaticResource Hairline}" IsVisible="{OnIdiom Phone=False, Default=True}" />
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Requests}"
+                                                 BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource RequestCard}, Default={StaticResource RequestRow}}">
+                                <BindableLayout.EmptyView><Label Text="Nothing pending." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
                             </VerticalStackLayout>
-                        </Border>
-                    </DataTemplate>
-                </BindableLayout.ItemTemplate>
-            </c:CardGrid>
+                        </VerticalStackLayout>
+                    </Border>
+                </VerticalStackLayout>
+
+                <!-- side: answering a request, the request form, or why there is no form -->
+                <VerticalStackLayout Spacing="12">
+                    <Border Style="{StaticResource SidePanel}" IsVisible="{Binding IsResponding}">
+                                    <VerticalStackLayout Spacing="10">
+                                        <c:CardTitle Icon="clock" Text="{Binding ResponseTitle}" />
+                                        <FlexLayout Wrap="Wrap" AlignItems="End" IsVisible="{Binding ResponseNeedsTime}">
+                                            <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                                                <Label Text="Date" Style="{StaticResource Caption}" />
+                                                <Border Style="{StaticResource Field}"><DatePicker Date="{Binding ResponseDate}" MinimumDate="{x:Static x:DateTime.Today}" /></Border>
+                                            </VerticalStackLayout>
+                                            <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                                                <Label Text="Start" Style="{StaticResource Caption}" />
+                                                <Border Style="{StaticResource Field}"><TimePicker Time="{Binding ResponseTime}" /></Border>
+                                            </VerticalStackLayout>
+                                            <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                                                <Label Text="Minutes" Style="{StaticResource Caption}" />
+                                                <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Durations}" SelectedItem="{Binding ResponseDuration}" WidthRequest="90" /></Border>
+                                            </VerticalStackLayout>
+                                            <VerticalStackLayout Spacing="4" Margin="0,0,0,8">
+                                                <Label Text="Amenity" Style="{StaticResource Caption}" />
+                                                <Border Style="{StaticResource Field}">
+                                                    <Picker ItemsSource="{Binding AmenityChoices}" ItemDisplayBinding="{Binding Name}" SelectedItem="{Binding ResponseAmenity}" WidthRequest="180"
+                                                            SemanticProperties.Description="Amenity for the session" />
+                                                </Border>
+                                            </VerticalStackLayout>
+                                        </FlexLayout>
+                                        <Border Style="{StaticResource Field}"><Entry Text="{Binding ResponseReason}" Placeholder="{Binding ResponseReasonHint}" /></Border>
+                                        <HorizontalStackLayout Spacing="8">
+                                            <Button Text="{Binding ResponseSubmitText}" Style="{StaticResource SmallButton}" Command="{Binding SubmitResponseCommand}" />
+                                            <Button Text="Close" Style="{StaticResource SmallOutlineButton}" Command="{Binding CloseResponseCommand}" />
+                                        </HorizontalStackLayout>
+                                    </VerticalStackLayout>
+                                </Border>
+
+                    <!-- Compose -->
+                                <Border Style="{StaticResource SidePanel}" IsVisible="{Binding CanCompose}">
+                                    <VerticalStackLayout Spacing="12">
+                                        <c:CardTitle Icon="calendar-plus" Text="{Binding ComposeTitle}" />
+                                        <VerticalStackLayout Spacing="4" IsVisible="{Binding ShowMemberPicker}">
+                                            <Label Text="Member" Style="{StaticResource Caption}" />
+                                            <Border Style="{StaticResource Field}">
+                                                <Picker ItemsSource="{Binding Members}" ItemDisplayBinding="{Binding Name}" SelectedItem="{Binding SelectedMember}"
+                                                        Title="Choose a member" AutomationId="RequestMemberPicker" SemanticProperties.Description="Member to invite" />
+                                            </Border>
+                                            <Label Text="{Binding MemberPickerHint}" Style="{StaticResource Caption}" />
+                                        </VerticalStackLayout>
+
+                                        <VerticalStackLayout Spacing="4" IsVisible="{Binding IsCoach, Converter={StaticResource Not}}">
+                                            <Label Text="Coach" Style="{StaticResource Caption}" />
+                                            <Border Style="{StaticResource Field}">
+                                                <Picker ItemsSource="{Binding Coaches}" ItemDisplayBinding="{Binding Name}" SelectedItem="{Binding SelectedCoach}"
+                                                        SemanticProperties.Description="Coach" />
+                                            </Border>
+                                        </VerticalStackLayout>
+
+                                        <FlexLayout Wrap="Wrap" AlignItems="End">
+                                            <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
+                                                <Label Text="Date" Style="{StaticResource Caption}" />
+                                                <Border Style="{StaticResource Field}"><DatePicker Date="{Binding Date}" MinimumDate="{x:Static x:DateTime.Today}" /></Border>
+                                            </VerticalStackLayout>
+                                            <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
+                                                <Label Text="Start time" Style="{StaticResource Caption}" />
+                                                <Border Style="{StaticResource Field}"><TimePicker Time="{Binding Time}" /></Border>
+                                            </VerticalStackLayout>
+                                            <VerticalStackLayout Spacing="4" Margin="0,0,0,8">
+                                                <Label Text="Minutes" Style="{StaticResource Caption}" />
+                                                <Border Style="{StaticResource Field}">
+                                                    <Picker ItemsSource="{Binding Durations}" SelectedItem="{Binding DurationMinutes}" WidthRequest="90" />
+                                                </Border>
+                                            </VerticalStackLayout>
+                                            <!-- members: a session can use an amenity; it then follows the booking grid and gym hours -->
+                                            <VerticalStackLayout Spacing="4" Margin="0,0,0,8" IsVisible="{Binding IsCoach, Converter={StaticResource Not}}">
+                                                <Label Text="Amenity" Style="{StaticResource Caption}" />
+                                                <Border Style="{StaticResource Field}">
+                                                    <Picker ItemsSource="{Binding AmenityChoices}" ItemDisplayBinding="{Binding Name}" SelectedItem="{Binding SelectedAmenity}" WidthRequest="180"
+                                                            SemanticProperties.Description="Amenity for the session" />
+                                                </Border>
+                                            </VerticalStackLayout>
+                                        </FlexLayout>
+
+                                        <VerticalStackLayout Spacing="4" IsVisible="{Binding IsCoach, Converter={StaticResource Not}}">
+                                            <Label Text="Message (optional)" Style="{StaticResource Caption}" />
+                                            <Border Style="{StaticResource Field}"><Entry Text="{Binding Message}" /></Border>
+                                        </VerticalStackLayout>
+
+                                        <Label Text="You already have a session booked together. Open Sessions to reschedule or cancel it. You can request another once it has ended. Refresh requests to check for updates."
+                                               Style="{StaticResource Muted}" IsVisible="{Binding ShowActiveSession}" AutomationId="ActiveSessionRequestHint" />
+                                        <Label Text="You already have a pending request to this coach. Wait for a reply or cancel it below before sending another. Refresh requests to check for a reply."
+                                               Style="{StaticResource Muted}" IsVisible="{Binding ShowPendingRequest}" AutomationId="PendingSessionRequestHint" />
+                                        <Button Text="{Binding SubmitText}" Style="{StaticResource SmallButton}" HorizontalOptions="Start"
+                                                Command="{Binding SubmitCommand}" AutomationId="SubmitSessionRequest" />
+                                    </VerticalStackLayout>
+                                </Border>
+                                <Label Text="Hire a coach first, then you can request sessions here." Style="{StaticResource Muted}"
+                                       IsVisible="{Binding CanCompose, Converter={StaticResource Not}}" />
+                    <Label Text="Hire a coach first, then you can request sessions here." Style="{StaticResource Muted}"
+                           IsVisible="{Binding CanCompose, Converter={StaticResource Not}}" />
+                </VerticalStackLayout>
+            </c:SideLayout>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

@@ -7,55 +7,102 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.VoidPaymentsPage" x:DataType="vm:VoidPaymentsViewModel" Title="Void a payment">
 
-    <Grid RowDefinitions="Auto,*" Padding="20,16,20,0" MaximumWidthRequest="{StaticResource PageWidth}">
-        <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
+    <v:BasePage.Resources>
+        <!-- desktop: one table row per payment -->
+        <DataTemplate x:Key="PaymentRow" x:DataType="svc:PaymentRow">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="150,*,*,90,150,130,80">
+                    <Label Text="{Binding Payment.ReceiptNo}" VerticalOptions="Center" />
+                    <Label Grid.Column="1" Text="{Binding Payer}" VerticalOptions="Center" />
+                    <Label Grid.Column="2" Text="{Binding Item}" VerticalOptions="Center" />
+                    <Label Grid.Column="3" Text="{Binding Payment.Method}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                    <Label Grid.Column="4" Text="{Binding Payment.VerifiedAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM, h:mm tt'}" VerticalOptions="Center" />
+                    <Label Grid.Column="5" Text="{Binding Payment.Amount, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center" />
+                    <Button Grid.Column="6" Text="Void" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="End" Clicked="OnStart" />
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+        <!-- phone: the same facts stacked -->
+        <DataTemplate x:Key="PaymentCard" x:DataType="svc:PaymentRow">
+            <VerticalStackLayout>
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="14,10">
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="{Binding Payer}" FontFamily="BarlowSemiBold" />
+                        <Label Text="{Binding Item}" />
+                        <Label Style="{StaticResource Caption}">
+                            <Label.Text>
+                                <MultiBinding StringFormat="{}{0} · {1} · {2}">
+                                    <Binding Path="Payment.ReceiptNo" />
+                                    <Binding Path="Payment.Method" />
+                                    <Binding Path="Payment.VerifiedAt" Converter="{StaticResource LocalDate}" ConverterParameter="d MMM, h:mm tt" />
+                                </MultiBinding>
+                            </Label.Text>
+                        </Label>
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Column="1" Spacing="6" HorizontalOptions="End">
+                        <Label Text="{Binding Payment.Amount, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" HorizontalOptions="End" />
+                        <Button Text="Void" Style="{StaticResource SmallOutlineButton}" Clicked="OnStart" />
+                    </VerticalStackLayout>
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+    </v:BasePage.Resources>
+
+    <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
+        <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="12">
             <Label Text="A payment that was entered wrongly is never edited. Void it with a reason, which switches off what it paid for, then record it again correctly. Every void is kept in the audit log." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <Border Style="{StaticResource Panel}" IsVisible="{Binding Voiding, Converter={StaticResource IsNotNull}}">
-                <VerticalStackLayout Spacing="10">
-                    <c:CardTitle Icon="ban" Text="{Binding Voiding.Payment.ReceiptNo, StringFormat='Void receipt {0}?'}" />
-                    <Label Text="This can't be undone." Style="{StaticResource Caption}" />
-                    <Border Style="{StaticResource Field}" WidthRequest="360" HorizontalOptions="Start">
-                        <Entry Text="{Binding Reason}" Placeholder="Why is it being voided?" SemanticProperties.Description="Reason for voiding" />
-                    </Border>
-                    <HorizontalStackLayout Spacing="8">
-                        <Button Text="Void payment" Style="{StaticResource SmallButton}" Command="{Binding ConfirmCommand}" />
-                        <Button Text="Keep it" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepCommand}" />
-                    </HorizontalStackLayout>
-                </VerticalStackLayout>
-            </Border>
-        </VerticalStackLayout>
-
-        <ScrollView Grid.Row="1"><c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" Padding="0,0,0,16" BindableLayout.ItemsSource="{Binding Recent}">
-            <BindableLayout.EmptyView><Label Text="No verified payments yet." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
-            <BindableLayout.ItemTemplate>
-                <DataTemplate x:DataType="svc:PaymentRow">
-                    <Border Style="{StaticResource Panel}">
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
-                            <VerticalStackLayout Spacing="4">
-                                <c:CardTitle Icon="receipt" Text="{Binding Payer}" />
-                                <Label Text="{Binding Item}" />
-                                <Label Style="{StaticResource Caption}">
-                                    <Label.Text>
-                                        <MultiBinding StringFormat="{}{0} · {1} · {2}">
-                                            <Binding Path="Payment.ReceiptNo" />
-                                            <Binding Path="Payment.Method" />
-                                            <Binding Path="Payment.VerifiedAt" Converter="{StaticResource LocalDate}" ConverterParameter="d MMM, h:mm tt" />
-                                        </MultiBinding>
-                                    </Label.Text>
-                                </Label>
-                            </VerticalStackLayout>
-                            <VerticalStackLayout Grid.Column="1" Spacing="8" HorizontalOptions="End">
-                                <Label Text="{Binding Payment.Amount, StringFormat='₱{0:N2}'}" Style="{StaticResource Numeral}" HorizontalOptions="End" />
-                                <Button Text="Void" Style="{StaticResource SmallOutlineButton}"
-                                        Clicked="OnStart" />
-                            </VerticalStackLayout>
+            <c:SideLayout>
+                <Border Style="{StaticResource TablePanel}">
+                    <VerticalStackLayout>
+                        <Grid Style="{StaticResource TableHead}" ColumnDefinitions="150,*,*,90,150,130,80" IsVisible="{OnIdiom Phone=False, Default=True}">
+                            <Label Text="Receipt" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="1" Text="Member" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="2" Text="Item" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="3" Text="Method" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="4" Text="Verified" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="5" Text="Amount" Style="{StaticResource Caption}" HorizontalOptions="End" />
                         </Grid>
+                        <BoxView Style="{StaticResource Hairline}" IsVisible="{OnIdiom Phone=False, Default=True}" />
+                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Recent}"
+                                             BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource PaymentCard}, Default={StaticResource PaymentRow}}">
+                            <BindableLayout.EmptyView><Label Text="No verified payments yet." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- the side panel: the payment being voided, or how to start -->
+                <VerticalStackLayout Spacing="12">
+                    <Border Style="{StaticResource SidePanel}" IsVisible="{Binding Voiding, Converter={StaticResource IsNotNull}}">
+                        <VerticalStackLayout Spacing="10">
+                                <c:CardTitle Icon="ban" Text="{Binding Voiding.Payment.ReceiptNo, StringFormat='Void receipt {0}?'}" />
+                                <Label Text="{Binding Voiding.Payer}" />
+                                <Label Text="{Binding Voiding.Payment.Amount, StringFormat='₱{0:N2}'}" Style="{StaticResource KpiValue}" />
+                                <Label Text="This can't be undone." Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}">
+                                    <Entry Text="{Binding Reason}" Placeholder="Why is it being voided?" SemanticProperties.Description="Reason for voiding" />
+                                </Border>
+                                <HorizontalStackLayout Spacing="8">
+                                    <Button Text="Void payment" Style="{StaticResource SmallButton}" Command="{Binding ConfirmCommand}" />
+                                    <Button Text="Keep it" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepCommand}" />
+                                </HorizontalStackLayout>
+                            </VerticalStackLayout>
                     </Border>
-                </DataTemplate>
-            </BindableLayout.ItemTemplate>
-        </c:CardGrid></ScrollView>
-    </Grid>
+                    <!-- desktop only: on phones the side stacks above the list, where a hint would just take room -->
+                    <ContentView IsVisible="{OnIdiom Phone=False, Default=True}">
+                        <Border Style="{StaticResource SidePanel}" IsVisible="{Binding Voiding, Converter={StaticResource IsNull}}">
+                            <VerticalStackLayout Spacing="6">
+                                <c:CardTitle Icon="ban" Text="Void a payment" />
+                                <Label Text="Choose Void on a payment to give the reason here." Style="{StaticResource Muted}" />
+                            </VerticalStackLayout>
+                        </Border>
+                    </ContentView>
+                </VerticalStackLayout>
+            </c:SideLayout>
+        </VerticalStackLayout>
+    </ScrollView>
 </v:BasePage>
