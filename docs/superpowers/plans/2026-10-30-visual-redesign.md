@@ -1,6 +1,6 @@
 # Visual Redesign Implementation Plan
 
-> **Status (2026-10-30): built.** Tasks 1-7 are done and committed (b975c80..6527604), reviewed by a fresh reviewer (no critical findings; its two important points fixed in e654113). Work is on branch `visual-redesign-2026-10-30` on GitHub, not merged into main. Part 2, the page layouts, is in `2026-10-30-visual-redesign-pages.md`.
+> **Status (2026-10-30): built.** Tasks 1-7 are done and committed (b975c80..6527604), reviewed by a fresh reviewer (no critical findings; its two important points fixed in e654113). Work is on branch `visual-redesign-2026-10-30` on GitHub, not merged into main. Part 2, the page layouts, is in `2026-10-30-visual-redesign-pages.md`. Part 3, the sign-in screens (2026-10-31), is at the end of this file.
 > **Still open:** the owner's device checks in Task 7 step 4 (unticked below). Deferred small items are listed in `docs/progress-2026-10-16.md` section 8.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -314,3 +314,27 @@ git commit -m "style: every page on the new palette in light and dark"
 - [x] **Step 2:** Confirm `supabase.json` is back and no `.bak` exists: `ls src/GymMembership.App/Resources/Raw`.
 - [x] **Step 3:** Update the progress doc; commit it by path.
 - [ ] **Step 4:** Owner checks Windows and Android on their devices (real project); push and PR only when the owner asks.
+
+---
+
+## Part 3: Sign-in screens (2026-10-31)
+
+> **Status: built**, commit fe9a41a on `visual-redesign-2026-10-30` (pushed, not merged into main). Mockup: `docs/mockups/auth-redesign.html`.
+
+**What changed:** sign in, forgotten password and create account now share one layout (`AuthShell` in `Styles.xaml`). On Windows: the black brand panel on the left with a big glowing dumbbell, the tagline and three things members can do. On phones: a short brand header above the form.
+
+- Sign in: "Welcome back" heading, "Forgot password?" and "New member? Create an account" as text links (no button shape on Windows or Android), a spinner on the button while it works.
+- Forgotten password is two steps with a step bar: email, then six code boxes, a 30-second "Resend code" countdown, the new password with a strength meter, and the repeat box.
+- Create account: a strength meter and checklist under the password (only "6 to 64 characters" is required; the other two raise the meter), and each field says what is wrong when you leave it.
+- Everywhere: a field's frame turns lime (dark) or blue (light) while you type in it, the password eye is a plain grey icon, and Android no longer draws its own underline in text boxes.
+
+**Files:** `Resources/Styles/Styles.xaml` (`AuthShell`, `LinkButton`, `FieldError`), `Views/LoginPage.xaml`, `Views/RegisterPage.xaml(.cs)`, `Controls/Controls.cs` (`FieldFocus`, `CodeBoxes`, `PasswordStrength`), `Controls/DumbbellLogo.cs` (`Bare`), `Controls/Icons.cs` (`Ghost`), `MauiProgram.cs`, `Platforms/Windows/App.xaml`, `GymMembership.Core` (`AccountRules.PasswordStrength`, reset steps and resend countdown in `LoginViewModel`).
+
+- [x] Built for Windows and Android; xUnit 763/763.
+- [x] Checked on screen on Windows (dark) and on the Pixel 7 emulator (light and dark).
+- [ ] Owner checks a full password reset against the real project (step 2 sends a real email, so it has not been seen yet).
+- [ ] Owner checks the phone header with the keyboard open on create account.
+
+**Left out on purpose:** a custom Windows title bar (it would change every signed-in screen), a terms checkbox (there are no terms yet), removing the repeat-password boxes (tests rely on the "don't match" check).
+
+**Android emulator on this PC:** `"C:/Program Files (x86)/Android/android-sdk/emulator/emulator.exe" -avd pixel_7_-_api_36_0`, then `dotnet build src/GymMembership.App -f net10.0-android -t:Run`.
