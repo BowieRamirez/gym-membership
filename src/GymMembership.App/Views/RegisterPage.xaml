@@ -6,16 +6,16 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.RegisterPage" x:DataType="vm:RegisterViewModel"
-            Title="Create an account">
+            Title="Create an account" ControlTemplate="{StaticResource AuthShell}">
 
+    <!-- Same layout as sign in (AuthShell). Each field says what is wrong when you leave it, not only on submit. -->
     <ScrollView>
-        <VerticalStackLayout Padding="{OnIdiom Phone='24,48,24,24', Default='64,40'}" Spacing="18" MaximumWidthRequest="480"
+        <VerticalStackLayout Padding="{OnIdiom Phone='24,20,24,24', Default='64,40'}" Spacing="18" MaximumWidthRequest="440"
                              VerticalOptions="{OnIdiom Phone=Start, Default=Center}" HorizontalOptions="Fill">
-            <c:DumbbellLogo Size="48" Inverted="True" HorizontalOptions="Start" />
 
             <VerticalStackLayout Spacing="6">
-                <Label Text="Create an account" Style="{StaticResource Display}" SemanticProperties.HeadingLevel="Level1" />
-                <Label Text="You can look around right away. Pick a package and get your payment verified to unlock amenities, coaches, messages and sessions." Style="{StaticResource Muted}" />
+                <Label Text="Create your account" Style="{StaticResource Display}" SemanticProperties.HeadingLevel="Level1" />
+                <Label Text="Look around right away. Pick a package and get your payment verified to unlock amenities, coaches, messages and sessions." Style="{StaticResource Muted}" />
             </VerticalStackLayout>
 
             <c:Banner Message="{Binding ErrorMessage}" />
@@ -23,30 +23,42 @@
             <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
                 <VerticalStackLayout Spacing="6">
                     <Label Text="First name" Style="{StaticResource Caption}" />
-                    <Border Style="{StaticResource Field}"><Entry Text="{Binding FirstName}" TextChanged="OnNameChanged" MaxLength="{x:Static svc:AccountRules.MaxName}" ReturnType="Next" SemanticProperties.Description="First name" /></Border>
+                    <Border Style="{StaticResource Field}"><Entry x:Name="FirstNameBox" Text="{Binding FirstName}" TextChanged="OnNameChanged" Unfocused="OnFieldDone" MaxLength="{x:Static svc:AccountRules.MaxName}" ReturnType="Next" SemanticProperties.Description="First name" /></Border>
+                    <Label x:Name="FirstNameError" Style="{StaticResource FieldError}" />
                 </VerticalStackLayout>
                 <VerticalStackLayout Grid.Column="1" Spacing="6">
                     <Label Text="Last name" Style="{StaticResource Caption}" />
-                    <Border Style="{StaticResource Field}"><Entry Text="{Binding LastName}" TextChanged="OnNameChanged" MaxLength="{x:Static svc:AccountRules.MaxName}" ReturnType="Next" SemanticProperties.Description="Last name" /></Border>
+                    <Border Style="{StaticResource Field}"><Entry x:Name="LastNameBox" Text="{Binding LastName}" TextChanged="OnNameChanged" Unfocused="OnFieldDone" MaxLength="{x:Static svc:AccountRules.MaxName}" ReturnType="Next" SemanticProperties.Description="Last name" /></Border>
+                    <Label x:Name="LastNameError" Style="{StaticResource FieldError}" />
                 </VerticalStackLayout>
             </Grid>
             <VerticalStackLayout Spacing="6">
                 <Label Text="Email" Style="{StaticResource Caption}" />
-                <Border Style="{StaticResource Field}"><Entry Text="{Binding Email}" MaxLength="{x:Static svc:AccountRules.MaxEmail}" Keyboard="Email" ReturnType="Next" SemanticProperties.Description="Email address" /></Border>
+                <Border Style="{StaticResource Field}"><Entry x:Name="EmailBox" Text="{Binding Email}" TextChanged="OnFieldEdited" Unfocused="OnFieldDone" MaxLength="{x:Static svc:AccountRules.MaxEmail}" Keyboard="Email" ReturnType="Next" SemanticProperties.Description="Email address" /></Border>
+                <Label x:Name="EmailError" Style="{StaticResource FieldError}" />
             </VerticalStackLayout>
             <VerticalStackLayout Spacing="6">
-                <Label Text="Password (6 to 64 characters)" Style="{StaticResource Caption}" />
+                <Label Text="Password" Style="{StaticResource Caption}" />
                 <Border Style="{StaticResource Field}"><Grid ColumnDefinitions="*,Auto"><Entry x:Name="PasswordBox" Text="{Binding Password}" MaxLength="{x:Static svc:AccountRules.MaxPassword}" IsPassword="True" ReturnType="Next" SemanticProperties.Description="Password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference PasswordBox}" /></Grid></Border>
+                <c:PasswordStrength Password="{Binding Password}" Margin="0,4,0,0" />
             </VerticalStackLayout>
             <VerticalStackLayout Spacing="6">
                 <Label Text="Repeat password" Style="{StaticResource Caption}" />
                 <Border Style="{StaticResource Field}">
-                    <Grid ColumnDefinitions="*,Auto"><Entry x:Name="ConfirmPasswordBox" Text="{Binding ConfirmPassword}" MaxLength="{x:Static svc:AccountRules.MaxPassword}" IsPassword="True" ReturnType="Done" ReturnCommand="{Binding RegisterCommand}" SemanticProperties.Description="Repeat password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference ConfirmPasswordBox}" /></Grid>
+                    <Grid ColumnDefinitions="*,Auto"><Entry x:Name="ConfirmPasswordBox" Text="{Binding ConfirmPassword}" TextChanged="OnFieldEdited" Unfocused="OnFieldDone" MaxLength="{x:Static svc:AccountRules.MaxPassword}" IsPassword="True" ReturnType="Done" ReturnCommand="{Binding RegisterCommand}" SemanticProperties.Description="Repeat password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference ConfirmPasswordBox}" /></Grid>
                 </Border>
+                <Label x:Name="ConfirmPasswordError" Style="{StaticResource FieldError}" />
             </VerticalStackLayout>
 
-            <Button Text="Create account" Margin="0,6,0,0" Command="{Binding RegisterCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}" />
-            <Button Text="I already have an account" Style="{StaticResource OutlineButton}" Command="{Binding BackToSignInCommand}" />
+            <Grid>
+                <Button Text="Create account" Command="{Binding RegisterCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}" />
+                <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" WidthRequest="20" HeightRequest="20" HorizontalOptions="Start" Margin="20,0"
+                                   Color="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" InputTransparent="True" />
+            </Grid>
+            <HorizontalStackLayout HorizontalOptions="Center" Spacing="2">
+                <Label Text="Already a member?" Style="{StaticResource Muted}" FontSize="14" VerticalOptions="Center" />
+                <Button Text="Sign in" Style="{StaticResource LinkButton}" Command="{Binding BackToSignInCommand}" />
+            </HorizontalStackLayout>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

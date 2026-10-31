@@ -1,4 +1,5 @@
 using CommunityToolkit.Maui;
+using GymMembership.App.Controls;
 using GymMembership.App.Services;
 using GymMembership.App.Views;
 using GymMembership.Core.Backend;
@@ -26,6 +27,28 @@ public static class MauiProgram
 				fonts.AddFont("Barlow-SemiBold.ttf", "BarlowSemiBold");
 				fonts.AddFont("BarlowCondensed-SemiBold.ttf", "BarlowCondensedSemiBold");
 			});
+
+		// every input's Field frame lights up while it has focus
+		Microsoft.Maui.Handlers.ViewHandler.ViewMapper.AppendToMapping(nameof(FieldFocus), (_, view) => { if (view is InputView input) FieldFocus.Attach(input); });
+#if ANDROID
+		// inputs already sit in a rounded Field frame, so drop Android's own underline (the frame shows focus instead)
+		var noUnderline = Android.Content.Res.ColorStateList.ValueOf(Android.Graphics.Color.Transparent);
+		Microsoft.Maui.Handlers.EntryHandler.Mapper.AppendToMapping(nameof(IView.Background), (h, _) => h.PlatformView.BackgroundTintList = noUnderline);
+		Microsoft.Maui.Handlers.EditorHandler.Mapper.AppendToMapping(nameof(IView.Background), (h, _) => h.PlatformView.BackgroundTintList = noUnderline);
+#endif
+		// text links and the password eye: no button shape behind them. Windows' button template draws a grey pill on rest, hover and
+		// press, so it is swapped for a bare one that only shows the content; Android's button lifts with a shadow, which is turned off.
+		// Focus, keyboard, tap feedback and screen-reader behaviour belong to the Button and stay.
+		Microsoft.Maui.Handlers.ButtonHandler.Mapper.AppendToMapping(nameof(IView.Background), (handler, view) =>
+		{
+			if (view is not Button b || (b.Style != Application.Current?.Resources["LinkButton"] && b.Parent is not EyeButton)) return;
+#if WINDOWS
+			if (handler.PlatformView.Template != BareButton) handler.PlatformView.Template = BareButton;
+#elif ANDROID
+			handler.PlatformView.StateListAnimator = null;
+			handler.PlatformView.Elevation = 0;
+#endif
+		});
 
 		var s = builder.Services;
 
@@ -71,4 +94,16 @@ public static class MauiProgram
 
 		return builder.Build();
 	}
+
+#if WINDOWS
+	static Microsoft.UI.Xaml.Controls.ControlTemplate? _bareButton;
+	static Microsoft.UI.Xaml.Controls.ControlTemplate BareButton => _bareButton ??= (Microsoft.UI.Xaml.Controls.ControlTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(
+		"""
+		<ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" TargetType="Button">
+		    <ContentPresenter Background="Transparent" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+		                      Padding="{TemplateBinding Padding}" Foreground="{TemplateBinding Foreground}"
+		                      HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+		</ControlTemplate>
+		""");
+#endif
 }

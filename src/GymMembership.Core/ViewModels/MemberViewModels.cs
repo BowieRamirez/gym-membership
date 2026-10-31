@@ -88,12 +88,24 @@ public partial class LoginViewModel(IAuthService auth, IAppNavigator nav, ISupab
     [RelayCommand] private Task DemoSignInAsync(string demoEmail) => GoAsync(demoEmail, DemoGateway.DemoPassword);
 
     // ---------- forgotten password: email, then the code and a new password ----------
-    [ObservableProperty] private bool isResetting;
-    [ObservableProperty] private bool resetCodeSent;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsResetStep1), nameof(IsResetStep2))] private bool isResetting;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsResetStep1), nameof(IsResetStep2))] private bool resetCodeSent;
     [ObservableProperty] private string resetEmail = "";
     [ObservableProperty] private string resetCode = "";
     [ObservableProperty] private string newPassword = "";
     [ObservableProperty] private string confirmNewPassword = "";
+
+    /// <summary>Step 1 asks for the email; step 2 for the code and the new password.</summary>
+    public bool IsResetStep1 => IsResetting && !ResetCodeSent;
+    public bool IsResetStep2 => IsResetting && ResetCodeSent;
+
+    /// <summary>Seconds until another code can be sent.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanResend), nameof(ResendText))] private int resendIn;
+    public bool CanResend => ResendIn == 0;
+    public string ResendText => ResendIn > 0 ? $"Resend code in 0:{ResendIn:00}" : "Resend code";
+    int _countdown;   // a newer countdown stops the older one
+
+    [RelayCommand] private void ChangeResetEmail() { ResetCodeSent = false; ErrorMessage = Notice = null; }
 
     [RelayCommand]
     private void ForgotPassword()
@@ -110,6 +122,7 @@ public partial class LoginViewModel(IAuthService auth, IAppNavigator nav, ISupab
         Notice = null;
         if (!await RunAsync(() => auth.SendResetCodeAsync(ResetEmail))) return;
         ResetCodeSent = true;
+        _ = CountDownAsync();
         // the same words whether or not the address has an account, so nobody can use this to find out who is a member
         Notice = $"If an account uses {ResetEmail.Trim()}, we sent a 6-digit code to it." + (IsDemo ? $" Demo code: {DemoGateway.DemoCode}" : "");
     }
@@ -122,6 +135,16 @@ public partial class LoginViewModel(IAuthService auth, IAppNavigator nav, ISupab
         if (!await RunAsync(() => auth.ResetPasswordAsync(ResetEmail, ResetCode, NewPassword))) return;
         (IsResetting, Email, Password) = (false, ResetEmail.Trim(), "");
         Notice = "Password changed. Sign in with your new password.";
+    }
+
+    async Task CountDownAsync()
+    {
+        var run = ++_countdown;
+        for (ResendIn = 30; ResendIn > 0 && run == _countdown;)
+        {
+            await Task.Delay(1000);
+            if (run == _countdown) ResendIn--;
+        }
     }
 
     async Task GoAsync(string e, string p)

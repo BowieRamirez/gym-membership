@@ -1,4 +1,5 @@
 using System.Globalization;
+using GymMembership.Core.Services;
 using GymMembership.Core.ViewModels;
 using Microsoft.Maui.Controls.Shapes;
 
@@ -205,4 +206,123 @@ public class LocalDateConverter : IValueConverter
     }
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
+/// <summary>
+/// A field's frame turns lime (dark theme) or Plate Blue (light) while the box inside it has focus: the keyboard-focus indicator for every
+/// Entry, Editor and SearchBar in a "Field" border. MauiProgram attaches it to each input as its handler connects.
+/// </summary>
+public static class FieldFocus
+{
+    public static void Attach(InputView input)
+    {
+        input.Focused -= Changed; input.Unfocused -= Changed;
+        input.Focused += Changed; input.Unfocused += Changed;
+    }
+
+    static void Changed(object? sender, FocusEventArgs e)
+    {
+        var field = Application.Current!.Resources["Field"];
+        for (var p = (sender as Element)?.Parent; p is not null; p = p.Parent)
+            if (p is Border b && b.Style == field) { if (e.IsFocused) Mark(b); else Unmark(b); return; }
+    }
+
+    // a plain value (not a theme binding) so ClearValue hands the frame straight back to the Field style
+    public static void Mark(Border b) =>
+        b.Stroke = Pick(Application.Current!.RequestedTheme == AppTheme.Dark ? "Lime" : "PlateBlueLight");
+
+    public static void Unmark(Border b) => b.ClearValue(Border.StrokeProperty);
+
+    internal static Color Pick(string key) => Application.Current!.Resources.TryGetValue(key, out var v) && v is Color c ? c : Colors.Gray;
+}
+
+/// <summary>
+/// The 6-digit code from the email, shown as six boxes. One real Entry lies over them, almost invisible, so typing, pasting, backspace and
+/// autofill work as in any text box; the boxes only show its digits and which box is next.
+/// </summary>
+public class CodeBoxes : Grid
+{
+    public static readonly BindableProperty CodeProperty = BindableProperty.Create(nameof(Code), typeof(string), typeof(CodeBoxes), "",
+        BindingMode.TwoWay, propertyChanged: (b, _, _) => ((CodeBoxes)b).Show());
+    public string? Code { get => (string?)GetValue(CodeProperty); set => SetValue(CodeProperty, value); }
+
+    readonly Entry _entry = new() { Keyboard = Keyboard.Numeric, MaxLength = 6, Opacity = 0.01, HeightRequest = 56 };
+    readonly Border[] _boxes = new Border[6];
+    readonly Label[] _digits = new Label[6];
+
+    public CodeBoxes()
+    {
+        ColumnSpacing = 8;
+        for (var i = 0; i < 6; i++)
+        {
+            ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+            _digits[i] = new Label { FontFamily = "BarlowSemiBold", FontSize = 22, HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center };
+            _boxes[i] = new Border { Style = (Style)Application.Current!.Resources["Field"], Padding = 0, HeightRequest = 56, Content = _digits[i] };
+            AutomationProperties.SetIsInAccessibleTree(_boxes[i], false);
+            this.Add(_boxes[i], i);
+        }
+        this.Add(_entry, 0, 0);
+        SetColumnSpan((BindableObject)_entry, 6);
+        SemanticProperties.SetDescription(_entry, "6-digit code");
+        _entry.TextChanged += (_, e) =>
+        {
+            var digits = new string((e.NewTextValue ?? "").Where(char.IsAsciiDigit).Take(6).ToArray());
+            if (digits != e.NewTextValue) _entry.Text = digits; else Code = digits;
+        };
+        _entry.Focused += (_, _) => Show();
+        _entry.Unfocused += (_, _) => Show();
+    }
+
+    void Show()
+    {
+        var code = Code ?? "";
+        if (_entry.Text != code) _entry.Text = code;
+        for (var i = 0; i < 6; i++)
+        {
+            _digits[i].Text = i < code.Length ? code[i].ToString() : "";
+            if (_entry.IsFocused && i == Math.Min(code.Length, 5)) FieldFocus.Mark(_boxes[i]); else FieldFocus.Unmark(_boxes[i]);
+        }
+    }
+}
+
+/// <summary>
+/// Under a new password: four bars and a word for how strong it is, and the checklist from AccountRules. Only the length is required.
+/// Colour is never the only signal: the word and the ticks say the same.
+/// </summary>
+public class PasswordStrength : VerticalStackLayout
+{
+    public static readonly BindableProperty PasswordProperty = BindableProperty.Create(nameof(Password), typeof(string), typeof(PasswordStrength), "",
+        propertyChanged: (b, _, _) => ((PasswordStrength)b).Show());
+    public string? Password { get => (string?)GetValue(PasswordProperty); set => SetValue(PasswordProperty, value); }
+
+    static readonly string[] Words = ["", "Weak", "Fair", "Good", "Strong"];
+    static readonly string[] Tones = ["", "PlateRed", "PlateYellow", "PlateGreen", "PlateGreen"];
+    readonly BoxView[] _bars = new BoxView[4];
+    readonly Label _word = new() { Style = (Style)Application.Current!.Resources["Caption"], HorizontalOptions = LayoutOptions.End };
+    readonly Label[] _checks = new Label[3];
+    static readonly string[] CheckText = ["6 to 64 characters", "At least one number", "Upper and lower case letters"];
+
+    public PasswordStrength()
+    {
+        Spacing = 4;
+        var bars = new Grid { ColumnSpacing = 4, ColumnDefinitions = [new(GridLength.Star), new(GridLength.Star), new(GridLength.Star), new(GridLength.Star), new(GridLength.Auto)] };
+        for (var i = 0; i < 4; i++) { _bars[i] = new BoxView { HeightRequest = 4, CornerRadius = 2, VerticalOptions = LayoutOptions.Center }; bars.Add(_bars[i], i); }
+        bars.Add(_word, 4);
+        Add(bars);
+        for (var i = 0; i < 3; i++) Add(_checks[i] = new Label { Style = (Style)Application.Current!.Resources["Caption"] });
+        Show();
+    }
+
+    void Show()
+    {
+        var password = Password ?? "";
+        var score = AccountRules.PasswordStrength(password);
+        var (length, number, mixed) = AccountRules.PasswordChecks(password);
+        for (var i = 0; i < 4; i++)
+            if (i < score) _bars[i].SetAppThemeColor(BoxView.ColorProperty, FieldFocus.Pick(Tones[score] + "Light"), FieldFocus.Pick(Tones[score] + "Dark"));
+            else _bars[i].SetAppThemeColor(BoxView.ColorProperty, FieldFocus.Pick("LineLight"), FieldFocus.Pick("LineDark"));
+        _word.Text = Words[score];
+        bool[] ok = [length, number, mixed];
+        for (var i = 0; i < 3; i++) _checks[i].Text = (ok[i] ? "✓  " : "–  ") + CheckText[i];
+    }
 }

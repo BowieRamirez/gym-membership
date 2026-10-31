@@ -20,7 +20,11 @@ public class LogoTests
     [Fact]
     public void Sign_in_and_create_account_show_the_logo()
     {
-        Assert.Contains("<c:DumbbellLogo", File.ReadAllText(AppFile("Views", "LoginPage.xaml")));
-        Assert.Contains("<c:DumbbellLogo", File.ReadAllText(AppFile("Views", "RegisterPage.xaml")));
+        // both pages sit in AuthShell, whose brand panel (desktop) or header (phone) carries the logo
+        var styles = File.ReadAllText(AppFile("Resources", "Styles", "Styles.xaml"));
+        var shell = styles[styles.IndexOf("x:Key=\"AuthShell\"")..];
+        Assert.Contains("<c:DumbbellLogo", shell[..shell.IndexOf("</ControlTemplate>")]);
+        Assert.Contains("ControlTemplate=\"{StaticResource AuthShell}\"", File.ReadAllText(AppFile("Views", "LoginPage.xaml")));
+        Assert.Contains("ControlTemplate=\"{StaticResource AuthShell}\"", File.ReadAllText(AppFile("Views", "RegisterPage.xaml")));
     }
 }

@@ -77,6 +77,11 @@ public class IconView : ContentView
     public double Size { get => (double)GetValue(SizeProperty); set => SetValue(SizeProperty, value); }
     public double ChipSize { get => (double)GetValue(ChipSizeProperty); set => SetValue(ChipSizeProperty, value); }
 
+    /// <summary>No chip, a muted line that follows the theme: for an icon inside a field, like the password eye.</summary>
+    public static readonly BindableProperty GhostProperty = BindableProperty.Create(nameof(Ghost), typeof(bool), typeof(IconView), false,
+        propertyChanged: (b, _, _) => ((IconView)b).Recolour());
+    public bool Ghost { get => (bool)GetValue(GhostProperty); set => SetValue(GhostProperty, value); }
+
     readonly Microsoft.Maui.Controls.Shapes.Path _path = new()
     {
         Aspect = Stretch.Uniform, StrokeThickness = 2, StrokeLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round,
@@ -110,6 +115,12 @@ public class IconView : ContentView
 
     void Recolour()
     {
+        if (Ghost)
+        {
+            _chip.BackgroundColor = Colors.Transparent;
+            _path.SetAppTheme<Brush>(Shape.StrokeProperty, new SolidColorBrush(Pick("MutedLight", Colors.Gray)), new SolidColorBrush(Pick("MutedDark", Colors.Gray)));
+            return;
+        }
         var lime = Pick("Lime", Colors.YellowGreen);
         _chip.SetAppThemeColor(BackgroundColorProperty,
             Selected ? lime : Pick("IconChipLight", Colors.White), Selected ? lime : Pick("IconChipDark", Colors.LightGray));
@@ -126,7 +137,7 @@ public class EyeButton : Grid
         propertyChanged: (b, _, _) => ((EyeButton)b).Show(false));
     public Entry? Entry { get => (Entry?)GetValue(EntryProperty); set => SetValue(EntryProperty, value); }
 
-    readonly IconView _icon = new() { Size = 18, ChipSize = 32, HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center };
+    readonly IconView _icon = new() { Size = 20, ChipSize = 32, Ghost = true, HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center };
     readonly Button _button = new() { BackgroundColor = Colors.Transparent, BorderWidth = 0, Padding = 0, WidthRequest = 40, MinimumHeightRequest = 40 };
 
     public EyeButton()

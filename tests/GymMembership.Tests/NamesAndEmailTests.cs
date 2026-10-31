@@ -215,9 +215,13 @@ public class NamesAndEmailTests
         vm.ForgotPasswordCommand.Execute(null);
         Assert.True(vm.IsResetting);
 
+        Assert.True(vm.IsResetStep1);
         vm.ResetEmail = "member@demo.io";
         await vm.SendResetCodeCommand.ExecuteAsync(null);
         Assert.True(vm.ResetCodeSent);
+        Assert.True(vm.IsResetStep2);
+        Assert.False(vm.CanResend);   // the next code waits 30 seconds
+        Assert.Equal("Resend code in 0:30", vm.ResendText);
         Assert.StartsWith("If an account uses member@demo.io, we sent a 6-digit code to it.", vm.Notice);
 
         vm.ResetCode = DemoGateway.DemoCode; vm.NewPassword = "fresh123"; vm.ConfirmNewPassword = "fresh124";
@@ -231,6 +235,16 @@ public class NamesAndEmailTests
         Assert.Equal("Password changed. Sign in with your new password.", vm.Notice);
         Assert.True((await new AuthService(gw).SignInAsync("member@demo.io", "fresh123")).Ok);
     }
+
+    [Theory]
+    [InlineData("", 0)]
+    [InlineData("abc", 1)]          // too short
+    [InlineData("abcdef", 1)]       // length only
+    [InlineData("abcde1", 2)]
+    [InlineData("Abcde1", 3)]
+    [InlineData("Abcdefghij12", 4)]
+    public void Password_strength_counts_the_checklist(string password, int strength) =>
+        Assert.Equal(strength, AccountRules.PasswordStrength(password));
 
     static SettingsViewModel Settings(DemoGateway gw) =>
         new(new SettingsService(gw), new AuthService(gw), new NullNavigator(), new ProfileService(gw), new DemoPhotoPicker(), gw);

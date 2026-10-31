@@ -2,7 +2,8 @@
 <?xaml-comp compile="true" ?>
 <ResourceDictionary
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:c="clr-namespace:GymMembership.App.Controls">
 
     <!-- ===== Type scale (ratio 1.25 from 16) ===== -->
     <x:Double x:Key="TextCaption">13</x:Double>
@@ -93,7 +94,7 @@
         <Setter Property="FontSize" Value="{StaticResource TextBody}" />
     </Style>
 
-    <!-- A field is an entry framed by a hairline; the frame turns Plate Blue while focused (see FieldFrame in pages) -->
+    <!-- A field is an entry framed by a hairline; the frame turns lime (dark) or Plate Blue (light) while focused (Controls.FieldFocus) -->
     <Style x:Key="Field" TargetType="Border">
         <Setter Property="StrokeShape" Value="RoundRectangle 14" />
         <Setter Property="StrokeThickness" Value="1.5" />
@@ -254,6 +255,64 @@
         <Setter Property="Grid.Column" Value="{OnIdiom Phone=0, Default=1}" />
         <Setter Property="Grid.ColumnSpan" Value="{OnIdiom Phone=2, Default=1}" />
     </Style>
+
+    <!-- A text link: secondary actions beside a form (forgot password, create an account, resend code) -->
+    <Style x:Key="LinkButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource PlateBlueLight}, Dark={StaticResource Lime}}" />
+        <Setter Property="FontFamily" Value="BarlowMedium" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Padding" Value="4,0" />
+        <Setter Property="MinimumHeightRequest" Value="{OnPlatform Android=44, iOS=44, Default=32}" />
+    </Style>
+    <!-- What is wrong with one field, under it -->
+    <Style x:Key="FieldError" TargetType="Label" BasedOn="{StaticResource Caption}">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource PlateRedLight}, Dark={StaticResource PlateRedDark}}" />
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <!-- ===== Sign in, reset and create account share one layout: the brand panel on the left and the form on the right (desktop),
+         or a short brand header above the form (phone). On desktop row 0 stays empty. ===== -->
+    <ControlTemplate x:Key="AuthShell">
+        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,*">
+            <Border Grid.Row="{OnIdiom Phone=0, Default=1}" Grid.ColumnSpan="{OnIdiom Phone=2, Default=1}"
+                    Margin="{OnIdiom Phone='12,12,12,0', Default=14}" Padding="0"
+                    HeightRequest="{OnIdiom Phone=180, Default=-1}" StrokeThickness="0" StrokeShape="RoundRectangle 26"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource CardDark}}">
+                <!-- the dumbbell sits outside the padded grid, so only the panel's rounded edge clips it (Android clips a layout's children to its padding) -->
+                <Grid>
+                <!-- the one bold move: a big glowing dumbbell running off the panel's edge -->
+                <c:DumbbellLogo Bare="True" Size="{OnIdiom Phone=230, Default=460}" Rotation="-24" Opacity="0.9"
+                                HorizontalOptions="End" VerticalOptions="Start"
+                                TranslationX="{OnIdiom Phone=80, Default=150}" TranslationY="{OnIdiom Phone=-20, Default=20}" />
+                <Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="{OnIdiom Phone=10, Default=22}" Margin="{OnIdiom Phone='22,18', Default='48,40'}">
+                    <HorizontalStackLayout Spacing="12">
+                        <c:DumbbellLogo Size="44" Inverted="True" VerticalOptions="Center" />
+                        <Label Text="Gym Membership" Style="{StaticResource Heading}" TextColor="{StaticResource White}" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                    <Label Grid.Row="2" Text="Front desk, coaches and members in one place."
+                           Style="{StaticResource Display}" TextColor="{StaticResource White}" HorizontalOptions="Start"
+                           FontSize="{OnIdiom Phone=24, Default=39}" MaximumWidthRequest="{OnIdiom Phone=250, Default=420}" />
+                    <VerticalStackLayout Grid.Row="3" Spacing="10" IsVisible="{OnIdiom Phone=False, Default=True}">
+                        <HorizontalStackLayout Spacing="12">
+                            <c:IconView Icon="calendar-plus" Size="16" ChipSize="30" VerticalOptions="Center" />
+                            <Label Text="Book sessions and amenities" TextColor="{StaticResource White}" VerticalOptions="Center" />
+                        </HorizontalStackLayout>
+                        <HorizontalStackLayout Spacing="12">
+                            <c:IconView Icon="message-square" Size="16" ChipSize="30" VerticalOptions="Center" />
+                            <Label Text="Message your coach" TextColor="{StaticResource White}" VerticalOptions="Center" />
+                        </HorizontalStackLayout>
+                        <HorizontalStackLayout Spacing="12">
+                            <c:IconView Icon="id-card" Size="16" ChipSize="30" VerticalOptions="Center" />
+                            <Label Text="Manage your membership and payments" TextColor="{StaticResource White}" VerticalOptions="Center" />
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
+                </Grid>
+                </Grid>
+            </Border>
+            <ContentPresenter Grid.Row="1" Grid.Column="{OnIdiom Phone=0, Default=1}" Grid.ColumnSpan="{OnIdiom Phone=2, Default=1}" />
+        </Grid>
+    </ControlTemplate>
 
     <Style TargetType="Picker">
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
