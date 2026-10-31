@@ -12,7 +12,7 @@ public sealed class AdminOverviewPage : BasePage
         vm.SuperAdmin = superAdmin;
         Title = "Overview";
         BindingContext = vm;
-        var body = new VerticalStackLayout { Padding = new Thickness(24, 20, 24, 32), Spacing = 16 };
+        var body = new VerticalStackLayout { Padding = new Thickness(16, 12, 16, 20), Spacing = 14 };
         body.Children.Add(Text("Admin overview", "Title", "AdminOverviewTitle"));
         body.Children.Add(Text("Your administration pages at a glance. Choose a page to review or make changes.", "Muted"));
 
@@ -61,7 +61,7 @@ public sealed class AdminOverviewPage : BasePage
         var columns = 0;
         grid.SizeChanged += (_, _) =>
         {
-            var next = grid.Width >= 1000 ? 3 : grid.Width >= 650 ? 2 : 1;
+            var next = grid.Width >= 1400 ? 4 : grid.Width >= 1000 ? 3 : grid.Width >= 650 ? 2 : 1;
             if (next == columns) return;
             columns = next;
             grid.ColumnDefinitions.Clear();
@@ -97,7 +97,7 @@ public sealed class AdminOverviewPage : BasePage
         var activity = Text("", "Muted", "AdminOverviewActivity");
         activity.SetBinding(Label.TextProperty, nameof(vm.RecentActivity));
         body.Children.Add(activity);
-        Content = new ScrollView { Content = body, MaximumWidthRequest = 1240, HorizontalOptions = LayoutOptions.Fill };
+        Content = new ScrollView { Content = body, MaximumWidthRequest = 2400, HorizontalOptions = LayoutOptions.Fill };
     }
 
     static T Resource<T>(string key) => (T)Application.Current!.Resources[key];

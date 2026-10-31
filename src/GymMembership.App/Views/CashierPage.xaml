@@ -13,137 +13,143 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <Label Text="What are they paying for?" Style="{StaticResource SectionTitle}" />
-            <FlexLayout Wrap="Wrap">
-                <c:IconButton Text="Membership" Icon="ticket" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Membership">
-                    <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Kind}" Value="Membership"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
-                </c:IconButton>
-                <c:IconButton Text="Renewal" Icon="refresh-cw" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Renewal">
-                    <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Kind}" Value="Renewal"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
-                </c:IconButton>
-                <c:IconButton Text="Amenity" Icon="waves" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Amenity">
-                    <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Kind}" Value="Amenity"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
-                </c:IconButton>
-                <c:IconButton Text="Walk-in" Icon="footprints" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Walk-in">
-                    <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Kind}" Value="Walk-in"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
-                </c:IconButton>
-            </FlexLayout>
+            <c:SideLayout SideFirst="False">
+                <!-- main: what they pay for, who, which item; then today's cash -->
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="What are they paying for?" Style="{StaticResource SectionTitle}" Margin="0" />
+                                <FlexLayout Wrap="Wrap">
+                                    <c:IconButton Text="Membership" Icon="ticket" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Membership">
+                                        <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Kind}" Value="Membership"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
+                                    </c:IconButton>
+                                    <c:IconButton Text="Renewal" Icon="refresh-cw" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Renewal">
+                                        <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Kind}" Value="Renewal"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
+                                    </c:IconButton>
+                                    <c:IconButton Text="Amenity" Icon="waves" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Amenity">
+                                        <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Kind}" Value="Amenity"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
+                                    </c:IconButton>
+                                    <c:IconButton Text="Walk-in" Icon="footprints" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Walk-in">
+                                        <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Kind}" Value="Walk-in"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
+                                    </c:IconButton>
+                                </FlexLayout>
 
-            <!-- walk-ins have no member: just a name -->
-            <VerticalStackLayout Spacing="4" WidthRequest="300" HorizontalOptions="Start" IsVisible="{Binding IsWalkIn}">
-                <Label Text="Name" Style="{StaticResource Caption}" />
-                <Border Style="{StaticResource Field}"><Entry Text="{Binding WalkInName}" SemanticProperties.Description="Walk-in name" /></Border>
-            </VerticalStackLayout>
+                                <!-- walk-ins have no member: just a name -->
+                                <VerticalStackLayout Spacing="4" WidthRequest="300" HorizontalOptions="Start" IsVisible="{Binding IsWalkIn}">
+                                    <Label Text="Name" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><Entry Text="{Binding WalkInName}" SemanticProperties.Description="Walk-in name" /></Border>
+                                </VerticalStackLayout>
 
-            <VerticalStackLayout Spacing="12" IsVisible="{Binding NeedsMember}">
-                <FlexLayout Wrap="Wrap" AlignItems="End">
-                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="240">
-                        <Label Text="Find the member" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}"><Entry Text="{Binding Search}" Placeholder="Start of their name" ReturnCommand="{Binding FindCommand}" SemanticProperties.Description="Search members" /></Border>
-                    </VerticalStackLayout>
-                    <Button Text="Find" Style="{StaticResource SmallOutlineButton}" Margin="0,0,12,8" Command="{Binding FindCommand}" />
-                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="260">
-                        <Label Text="Member" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Hits}" ItemDisplayBinding="{Binding Username}" SelectedItem="{Binding Member}" SemanticProperties.Description="Member" /></Border>
-                    </VerticalStackLayout>
-                </FlexLayout>
+                                <VerticalStackLayout Spacing="12" IsVisible="{Binding NeedsMember}">
+                                    <FlexLayout Wrap="Wrap" AlignItems="End">
+                                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="240">
+                                            <Label Text="Find the member" Style="{StaticResource Caption}" />
+                                            <Border Style="{StaticResource Field}"><Entry Text="{Binding Search}" Placeholder="Start of their name" ReturnCommand="{Binding FindCommand}" SemanticProperties.Description="Search members" /></Border>
+                                        </VerticalStackLayout>
+                                        <Button Text="Find" Style="{StaticResource SmallOutlineButton}" Margin="0,0,12,8" Command="{Binding FindCommand}" />
+                                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="260">
+                                            <Label Text="Member" Style="{StaticResource Caption}" />
+                                            <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Hits}" ItemDisplayBinding="{Binding Username}" SelectedItem="{Binding Member}" SemanticProperties.Description="Member" /></Border>
+                                        </VerticalStackLayout>
+                                    </FlexLayout>
 
-                <Label Text="Choose one" Style="{StaticResource SectionTitle}" />
-                <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Options}">
-                    <BindableLayout.EmptyView>
-                        <Label Text="{Binding ItemsEmptyText}" Style="{StaticResource Muted}" />
-                    </BindableLayout.EmptyView>
-                    <BindableLayout.ItemTemplate>
-                        <DataTemplate x:DataType="vm:ItemOption">
-                            <Border Style="{StaticResource Panel}" Padding="14,12" WidthRequest="{OnIdiom Phone=156, Default=200}" Margin="0,0,12,12"
-                                    SemanticProperties.Description="{Binding Name}" SemanticProperties.Hint="{Binding PriceText}">
-                                <Border.Triggers>
-                                    <DataTrigger TargetType="Border" Binding="{Binding IsPicked}" Value="True">
-                                        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChalkLight}, Dark={StaticResource ChalkDark}}" />
-                                        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
-                                        <Setter Property="StrokeThickness" Value="2" />
-                                    </DataTrigger>
-                                </Border.Triggers>
-                                <Border.GestureRecognizers>
-                                    <TapGestureRecognizer Tapped="OnPickItem" />
-                                </Border.GestureRecognizers>
-                                <VerticalStackLayout Spacing="4">
-                                    <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" LineBreakMode="WordWrap" />
-                                    <Label Text="{Binding PriceText}" Style="{StaticResource Heading}" />
-                                    <Label Text="Selected" Style="{StaticResource Caption}" IsVisible="{Binding IsPicked}" />
+                                    <Label Text="Choose one" Style="{StaticResource SectionTitle}" Margin="0" />
+                                    <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Options}">
+                                        <BindableLayout.EmptyView>
+                                            <Label Text="{Binding ItemsEmptyText}" Style="{StaticResource Muted}" />
+                                        </BindableLayout.EmptyView>
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:ItemOption">
+                                                <Border Style="{StaticResource Panel}" Padding="14,12" WidthRequest="{OnIdiom Phone=156, Default=200}" Margin="0,0,12,12"
+                                                        SemanticProperties.Description="{Binding Name}" SemanticProperties.Hint="{Binding PriceText}">
+                                                    <Border.Triggers>
+                                                        <DataTrigger TargetType="Border" Binding="{Binding IsPicked}" Value="True">
+                                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChalkLight}, Dark={StaticResource ChalkDark}}" />
+                                                            <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+                                                            <Setter Property="StrokeThickness" Value="2" />
+                                                        </DataTrigger>
+                                                    </Border.Triggers>
+                                                    <Border.GestureRecognizers>
+                                                        <TapGestureRecognizer Tapped="OnPickItem" />
+                                                    </Border.GestureRecognizers>
+                                                    <VerticalStackLayout Spacing="4">
+                                                        <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" LineBreakMode="WordWrap" />
+                                                        <Label Text="{Binding PriceText}" Style="{StaticResource Heading}" />
+                                                        <Label Text="Selected" Style="{StaticResource Caption}" IsVisible="{Binding IsPicked}" />
+                                                    </VerticalStackLayout>
+                                                </Border>
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
+                                    </FlexLayout>
+                                </VerticalStackLayout>
+
+                                <!-- the order: what the cashier is about to charge, how, and the one button that does it -->
+
+                    <Label Text="Net cash today" Style="{StaticResource SectionTitle}" Margin="0" />
+                                <Border Style="{StaticResource Panel}" Padding="24,18">
+                                    <VerticalStackLayout Spacing="4">
+                                        <Label Text="Cash receipts minus cash refunds actually repaid today (Manila). Compare the net amount with the drawer; approval alone does not remove cash." Style="{StaticResource Caption}" />
+                                        <Label Text="{Binding CashTotal}" Style="{StaticResource Numeral}" />
+                                    </VerticalStackLayout>
+                                </Border>
+                                <Border Style="{StaticResource Panel}" Padding="12">
+                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding CashToday}" Spacing="8">
+                                    <BindableLayout.EmptyView><Label Text="No cash receipts or repaid cash refunds recorded today." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="svc:CashRow">
+                                            <Border Style="{StaticResource Row}" Padding="16,12">
+                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                    <Label Style="{StaticResource BaseLabel}" VerticalOptions="Center">
+                                                        <Label.Text>
+                                                            <MultiBinding StringFormat="{}{0}  ({1})"><Binding Path="Kind" /><Binding Path="Payments" /></MultiBinding>
+                                                        </Label.Text>
+                                                    </Label>
+                                                    <Label Grid.Column="1" Text="{Binding Total, StringFormat='₱{0:N2}'}" Style="{StaticResource Heading}" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </VerticalStackLayout>
+                                </Border>
+                </VerticalStackLayout>
+                <!-- side: the order, always in view while choosing -->
+                <Border Style="{StaticResource SidePanel}">
+                                <VerticalStackLayout Spacing="12">
+                                    <c:CardTitle Icon="receipt" Text="Order" />
+                                    <Label Text="{Binding OrderWho}" FontFamily="BarlowSemiBold" />
+                                    <Label Text="{Binding OrderWhat}" Style="{StaticResource Muted}" />
+                                    <Label Text="{Binding OrderHow}" Style="{StaticResource Caption}" />
+
+                                    <Label Text="Paid with" Style="{StaticResource Caption}" />
+                                    <FlexLayout Wrap="Wrap">
+                                        <c:IconButton Text="Cash" Icon="banknote" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="Cash">
+                                            <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Method}" Value="Cash"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
+                                        </c:IconButton>
+                                        <c:IconButton Text="GCash" Icon="smartphone" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="GCash">
+                                            <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Method}" Value="GCash"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
+                                        </c:IconButton>
+                                        <c:IconButton Text="Bank transfer" Icon="landmark" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="Bank transfer">
+                                            <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Method}" Value="Bank transfer"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
+                                        </c:IconButton>
+                                    </FlexLayout>
+
+                                    <VerticalStackLayout Spacing="4" WidthRequest="260" HorizontalOptions="Start" IsVisible="{Binding NeedsReference}">
+                                        <Label Text="Reference number" Style="{StaticResource Caption}" />
+                                        <Border Style="{StaticResource Field}"><Entry Text="{Binding ReferenceNo}" SemanticProperties.Description="Reference number" /></Border>
+                                    </VerticalStackLayout>
+                                    <VerticalStackLayout Spacing="4" WidthRequest="260" HorizontalOptions="Start" IsVisible="{Binding NeedsMember}">
+                                        <Label Text="Discount code (optional)" Style="{StaticResource Caption}" />
+                                        <Border Style="{StaticResource Field}"><Entry Text="{Binding DiscountCode}" SemanticProperties.Description="Discount code" /></Border>
+                                    </VerticalStackLayout>
+
+                                    <VerticalStackLayout Spacing="2">
+                                        <Label Text="Total" Style="{StaticResource Caption}" />
+                                        <Label Text="{Binding TotalText}" Style="{StaticResource Numeral}" />
+                                        <Label Text="{Binding TotalNote}" Style="{StaticResource Caption}" IsVisible="{Binding TotalNote, Converter={StaticResource HasText}}" />
+                                    </VerticalStackLayout>
+
+                                    <Button Text="Complete payment" Command="{Binding RecordCommand}" MinimumHeightRequest="56" FontSize="18" />
                                 </VerticalStackLayout>
                             </Border>
-                        </DataTemplate>
-                    </BindableLayout.ItemTemplate>
-                </FlexLayout>
-            </VerticalStackLayout>
-
-            <!-- the order: what the cashier is about to charge, how, and the one button that does it -->
-            <Border Style="{StaticResource Panel}">
-                <VerticalStackLayout Spacing="12">
-                    <c:CardTitle Icon="receipt" Text="Order" />
-                    <Label Text="{Binding OrderWho}" FontFamily="BarlowSemiBold" />
-                    <Label Text="{Binding OrderWhat}" Style="{StaticResource Muted}" />
-                    <Label Text="{Binding OrderHow}" Style="{StaticResource Caption}" />
-
-                    <Label Text="Paid with" Style="{StaticResource Caption}" />
-                    <FlexLayout Wrap="Wrap">
-                        <c:IconButton Text="Cash" Icon="banknote" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="Cash">
-                            <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Method}" Value="Cash"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
-                        </c:IconButton>
-                        <c:IconButton Text="GCash" Icon="smartphone" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="GCash">
-                            <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Method}" Value="GCash"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
-                        </c:IconButton>
-                        <c:IconButton Text="Bank transfer" Icon="landmark" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="Bank transfer">
-                            <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Method}" Value="Bank transfer"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
-                        </c:IconButton>
-                    </FlexLayout>
-
-                    <VerticalStackLayout Spacing="4" WidthRequest="260" HorizontalOptions="Start" IsVisible="{Binding NeedsReference}">
-                        <Label Text="Reference number" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}"><Entry Text="{Binding ReferenceNo}" SemanticProperties.Description="Reference number" /></Border>
-                    </VerticalStackLayout>
-                    <VerticalStackLayout Spacing="4" WidthRequest="260" HorizontalOptions="Start" IsVisible="{Binding NeedsMember}">
-                        <Label Text="Discount code (optional)" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}"><Entry Text="{Binding DiscountCode}" SemanticProperties.Description="Discount code" /></Border>
-                    </VerticalStackLayout>
-
-                    <VerticalStackLayout Spacing="2">
-                        <Label Text="Total" Style="{StaticResource Caption}" />
-                        <Label Text="{Binding TotalText}" Style="{StaticResource Numeral}" />
-                        <Label Text="{Binding TotalNote}" Style="{StaticResource Caption}" IsVisible="{Binding TotalNote, Converter={StaticResource HasText}}" />
-                    </VerticalStackLayout>
-
-                    <Button Text="Complete payment" Command="{Binding RecordCommand}" MinimumHeightRequest="56" FontSize="18" />
-                </VerticalStackLayout>
-            </Border>
-
-            <Label Text="Net cash today" Style="{StaticResource SectionTitle}" />
-            <Border Style="{StaticResource Panel}" Padding="24,18">
-                <VerticalStackLayout Spacing="4">
-                    <Label Text="Cash receipts minus cash refunds actually repaid today (Manila). Compare the net amount with the drawer; approval alone does not remove cash." Style="{StaticResource Caption}" />
-                    <Label Text="{Binding CashTotal}" Style="{StaticResource Numeral}" />
-                </VerticalStackLayout>
-            </Border>
-            <Border Style="{StaticResource Panel}" Padding="12">
-            <VerticalStackLayout BindableLayout.ItemsSource="{Binding CashToday}" Spacing="8">
-                <BindableLayout.EmptyView><Label Text="No cash receipts or repaid cash refunds recorded today." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
-                <BindableLayout.ItemTemplate>
-                    <DataTemplate x:DataType="svc:CashRow">
-                        <Border Style="{StaticResource Row}" Padding="16,12">
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                <Label Style="{StaticResource BaseLabel}" VerticalOptions="Center">
-                                    <Label.Text>
-                                        <MultiBinding StringFormat="{}{0}  ({1})"><Binding Path="Kind" /><Binding Path="Payments" /></MultiBinding>
-                                    </Label.Text>
-                                </Label>
-                                <Label Grid.Column="1" Text="{Binding Total, StringFormat='₱{0:N2}'}" Style="{StaticResource Heading}" />
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </BindableLayout.ItemTemplate>
-            </VerticalStackLayout>
-            </Border>
+            </c:SideLayout>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

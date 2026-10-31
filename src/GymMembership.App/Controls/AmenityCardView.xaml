@@ -7,7 +7,7 @@
 
     <Border Style="{StaticResource Panel}">
         <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="12">
-            <Border StrokeThickness="0" Padding="0" HeightRequest="160" StrokeShape="RoundRectangle 10"
+            <Border StrokeThickness="0" Padding="0" HeightRequest="{OnIdiom Phone=160, Default=120}" StrokeShape="RoundRectangle 10"
                     BackgroundColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}">
                 <Grid>
                     <c:Avatar x:Name="Mark" Letters="?" Diameter="56" HorizontalOptions="Center" VerticalOptions="Center" />
