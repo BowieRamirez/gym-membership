@@ -88,12 +88,24 @@ public partial class LoginViewModel(IAuthService auth, IAppNavigator nav, ISupab
     [RelayCommand] private Task DemoSignInAsync(string demoEmail) => GoAsync(demoEmail, DemoGateway.DemoPassword);
 
     // ---------- forgotten password: email, then the code and a new password ----------
-    [ObservableProperty] private bool isResetting;
-    [ObservableProperty] private bool resetCodeSent;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsResetStep1), nameof(IsResetStep2))] private bool isResetting;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsResetStep1), nameof(IsResetStep2))] private bool resetCodeSent;
     [ObservableProperty] private string resetEmail = "";
     [ObservableProperty] private string resetCode = "";
     [ObservableProperty] private string newPassword = "";
     [ObservableProperty] private string confirmNewPassword = "";
+
+    /// <summary>Step 1 asks for the email; step 2 for the code and the new password.</summary>
+    public bool IsResetStep1 => IsResetting && !ResetCodeSent;
+    public bool IsResetStep2 => IsResetting && ResetCodeSent;
+
+    /// <summary>Seconds until another code can be sent.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanResend), nameof(ResendText))] private int resendIn;
+    public bool CanResend => ResendIn == 0;
+    public string ResendText => ResendIn > 0 ? $"Resend code in 0:{ResendIn:00}" : "Resend code";
+    int _countdown;   // a newer countdown stops the older one
+
+    [RelayCommand] private void ChangeResetEmail() { ResetCodeSent = false; ErrorMessage = Notice = null; }
 
     [RelayCommand]
     private void ForgotPassword()
@@ -110,6 +122,7 @@ public partial class LoginViewModel(IAuthService auth, IAppNavigator nav, ISupab
         Notice = null;
         if (!await RunAsync(() => auth.SendResetCodeAsync(ResetEmail))) return;
         ResetCodeSent = true;
+        _ = CountDownAsync();
         // the same words whether or not the address has an account, so nobody can use this to find out who is a member
         Notice = $"If an account uses {ResetEmail.Trim()}, we sent a 6-digit code to it." + (IsDemo ? $" Demo code: {DemoGateway.DemoCode}" : "");
     }
@@ -122,6 +135,16 @@ public partial class LoginViewModel(IAuthService auth, IAppNavigator nav, ISupab
         if (!await RunAsync(() => auth.ResetPasswordAsync(ResetEmail, ResetCode, NewPassword))) return;
         (IsResetting, Email, Password) = (false, ResetEmail.Trim(), "");
         Notice = "Password changed. Sign in with your new password.";
+    }
+
+    async Task CountDownAsync()
+    {
+        var run = ++_countdown;
+        for (ResendIn = 30; ResendIn > 0 && run == _countdown;)
+        {
+            await Task.Delay(1000);
+            if (run == _countdown) ResendIn--;
+        }
     }
 
     async Task GoAsync(string e, string p)
@@ -177,7 +200,14 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
 public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker picker, ISubscriptionService subscription, IAttendanceService? codes = null) : LoadableViewModel
 {
     public ObservableCollection<MembershipRow> Memberships { get; } = new();
+    /// <summary>The payments the status filter lets through; the full list stays in <c>allPayments</c>.</summary>
     public ObservableCollection<PaymentItem> Payments { get; } = new();
+    IReadOnlyList<PaymentItem> allPayments = [];
+    /// <summary>All, Verified, Pending or Expired (which also covers rejected). Kept across reloads.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(PaymentsEmptyText))] private string filter = "All";
+    public string PaymentsEmptyText => Filter == "All" ? "No payments yet." : "No payments with this status. Choose All to see every payment.";
+    [ObservableProperty] private string termEndsText = "–";
+    [ObservableProperty] private string paymentsWaitingText = "–";
     [ObservableProperty] private string heroNumber = "–";
     [ObservableProperty] private string heroCaption = "Pick a package to get started.";
     [ObservableProperty] private double laneFraction;
@@ -202,11 +232,16 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
         try
         {
             if (codes is not null && MyCode is null) await RunAsync(codes.MyCodeAsync, c => MyCode = c);   // never changes, so read once
-            if (!await RunAsync(subscription.TermsAsync, rows => Fill(Terms, rows))) return;
+            if (!await RunAsync(subscription.TermsAsync, rows =>
+            {
+                Fill(Terms, rows);
+                TermEndsText = rows.FirstOrDefault(t => t.State == Status.Active) is { } t ? $"{t.Term.EndsAt.AddHours(8):d MMM yyyy}" : "None";   // Manila, as the terms table
+            })) return;
             var waiting = false;
             if (!await RunAsync(svc.MyPaymentsAsync, rows =>
             {
-                Fill(Payments, rows);
+                allPayments = rows; ApplyFilter();
+                PaymentsWaitingText = rows.Count(p => p.Status == Status.Pending).ToString();
                 PayNow = rows.FirstOrDefault(p => p.NeedsProof);
                 waiting = PayNow is not null || rows.Any(p => p.AwaitingReview);
             })) return;
@@ -219,6 +254,16 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
         }
         finally { _loading = false; }
     }
+
+    [RelayCommand] private void SetFilter(string f) => Filter = f;
+    partial void OnFilterChanged(string value) => ApplyFilter();
+    void ApplyFilter() => Fill(Payments, allPayments.Where(p => Filter switch
+    {
+        "Verified" => p.Status == Status.Verified,
+        "Pending" => p.Status == Status.Pending,
+        "Expired" => p.Status is Status.Expired or Status.Rejected,
+        _ => true,
+    }));
 
     void UpdateHero(IReadOnlyList<MembershipRow> rows, bool waitingOnPayment)
     {
@@ -818,6 +863,9 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
     [ObservableProperty] private bool mustChange;
     [ObservableProperty] private string letters = "?";
     [ObservableProperty] private string? avatarUrl;
+    /// <summary>The saved name and sign-in email for the page header; the fields below can hold unsaved edits.</summary>
+    [ObservableProperty] private string savedName = "";
+    [ObservableProperty] private string savedEmail = "";
 
     public override async Task OnAppearingAsync()
     {
@@ -832,6 +880,7 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
         if ((await profile.MeAsync()).Value is not { } me) return;
         if (names) (FirstName, LastName) = (me.FirstName, me.LastName);
         Letters = Initials.From(me.Name);
+        SavedName = me.Name;
         AvatarUrl = (await profile.AvatarUrlAsync(me.AvatarPath)).Value;   // no link: the initials stay
     }
 
@@ -869,7 +918,6 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
         Notice = "Password changed.";
     }
 
-    [RelayCommand] private async Task SignOutAsync() { if (!await Confirm.AskAsync("Sign out?", "You will need your email and password to sign in again.", "Sign out")) return; await auth.SignOutAsync(); nav.GoToLogin(); }
 
     // ---------- name ----------
     [ObservableProperty] private string firstName = "";
@@ -891,7 +939,7 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
     [ObservableProperty] private string emailCode = "";
     string _codeEmail = "";
 
-    async Task LoadEmailAsync() => await RunAsync(auth.EmailStatusAsync, s => (EmailAddress, EmailConfirmed) = (s.Email, s.Confirmed));
+    async Task LoadEmailAsync() => await RunAsync(auth.EmailStatusAsync, s => (EmailAddress, SavedEmail, EmailConfirmed) = (s.Email, s.Email, s.Confirmed));
 
     [RelayCommand]
     private async Task SendEmailCodeAsync()

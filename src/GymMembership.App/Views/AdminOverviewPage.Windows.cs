@@ -12,7 +12,7 @@ public sealed class AdminOverviewPage : BasePage
         vm.SuperAdmin = superAdmin;
         Title = "Overview";
         BindingContext = vm;
-        var body = new VerticalStackLayout { Padding = new Thickness(24, 20, 24, 32), Spacing = 16 };
+        var body = new VerticalStackLayout { Padding = new Thickness(16, 12, 16, 20), Spacing = 14 };
         body.Children.Add(Text("Admin overview", "Title", "AdminOverviewTitle"));
         body.Children.Add(Text("Your administration pages at a glance. Choose a page to review or make changes.", "Muted"));
 
@@ -33,7 +33,8 @@ public sealed class AdminOverviewPage : BasePage
         foreach (var card in vm.Shown)
         {
             var content = new VerticalStackLayout { Spacing = 10 };
-            content.Children.Add(Text(card.Title, "Heading", "AdminOverviewHeading-" + card.Key));
+            // the card header names the page with the same icon the side menu uses
+            content.Children.Add(new Controls.CardTitle { Icon = Controls.IconRail.PageIcons.GetValueOrDefault(card.Title, "layout-dashboard"), Text = card.Title, AutomationId = "AdminOverviewHeading-" + card.Key });
             var value = Text("", "Title", "AdminOverviewValue-" + card.Key);
             value.SetBinding(Label.TextProperty, new Binding(nameof(card.Value), source: card));
             content.Children.Add(value);
@@ -60,7 +61,7 @@ public sealed class AdminOverviewPage : BasePage
         var columns = 0;
         grid.SizeChanged += (_, _) =>
         {
-            var next = grid.Width >= 1000 ? 3 : grid.Width >= 650 ? 2 : 1;
+            var next = grid.Width >= 1400 ? 4 : grid.Width >= 1000 ? 3 : grid.Width >= 650 ? 2 : 1;
             if (next == columns) return;
             columns = next;
             grid.ColumnDefinitions.Clear();
@@ -76,7 +77,7 @@ public sealed class AdminOverviewPage : BasePage
         body.Children.Add(grid);
         body.Children.Add(Text("List-based counts reflect the records loaded by their admin pages; they are not guaranteed database-wide totals.", "Caption"));
         // D12: who came in on a chosen day (member QR check-ins and name-search check-ins alike)
-        body.Children.Add(Text("Check-ins", "Heading", "AdminOverviewCheckIns"));
+        body.Children.Add(Text("Check-ins", "SectionTitle", "AdminOverviewCheckIns"));
         var day = new DatePicker { MaximumDate = DateTime.Today.AddDays(1), HorizontalOptions = LayoutOptions.Start, AutomationId = "AdminCheckInDay" };
         day.SetBinding(DatePicker.DateProperty, nameof(vm.CheckInDay));
         body.Children.Add(new Border { Style = Resource<Style>("Field"), Content = day, HorizontalOptions = LayoutOptions.Start });
@@ -92,11 +93,11 @@ public sealed class AdminOverviewPage : BasePage
             return row;
         }));
         body.Children.Add(list);
-        body.Children.Add(Text("Recent audit activity", "Heading"));
+        body.Children.Add(Text("Recent audit activity", "SectionTitle"));
         var activity = Text("", "Muted", "AdminOverviewActivity");
         activity.SetBinding(Label.TextProperty, nameof(vm.RecentActivity));
         body.Children.Add(activity);
-        Content = new ScrollView { Content = body, MaximumWidthRequest = 1240, HorizontalOptions = LayoutOptions.Fill };
+        Content = new ScrollView { Content = body, MaximumWidthRequest = 2400, HorizontalOptions = LayoutOptions.Fill };
     }
 
     static T Resource<T>(string key) => (T)Application.Current!.Resources[key];

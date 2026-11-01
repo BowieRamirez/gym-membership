@@ -31,6 +31,18 @@ public sealed class PhoneNavigation
         }
     }
 
+    /// <summary>Back with nothing left to go back to: on Android the app goes to the background, still signed in, on the same page.
+    /// Left to Android, Back finished the app's only activity, and reopening built a new window, which always starts on sign-in.</summary>
+    public static bool SendToBackground()
+    {
+#if ANDROID
+        Platform.CurrentActivity?.MoveTaskToBack(true);
+        return true;
+#else
+        return false;
+#endif
+    }
+
     public static void Attach(Shell shell, bool coach, IServiceProvider services, Access? access = null)
     {
         if (!IsSupported) return;
@@ -89,10 +101,12 @@ public sealed class PhoneNavigation
         shell.Items.Add(_bar);
         shell.CurrentItem = _bar;
         _bar.CurrentItem = _bar.Items[0];
-        shell.SetAppThemeColor(Shell.TabBarBackgroundColorProperty, Color.FromArgb("#FFFFFF"), Color.FromArgb("#24282C"));
-        shell.SetAppThemeColor(Shell.TabBarForegroundColorProperty, Color.FromArgb("#1F2226"), Color.FromArgb("#ECEEF0"));
-        shell.SetAppThemeColor(Shell.TabBarTitleColorProperty, Color.FromArgb("#1F2226"), Color.FromArgb("#ECEEF0"));
-        shell.SetAppThemeColor(Shell.TabBarUnselectedColorProperty, Color.FromArgb("#5C646C"), Color.FromArgb("#9AA3AB"));
+        // light: white bar, black icons. Dark (owner, 2026-11-01): SurfaceDark, a step lighter than the page so the bar stays separate,
+        // with light names and muted icons. The selected icon is black in both, since it sits on the lime pill.
+        shell.SetAppThemeColor(Shell.TabBarBackgroundColorProperty, Color.FromArgb("#FFFFFF"), Color.FromArgb("#2C302B"));
+        shell.SetAppThemeColor(Shell.TabBarForegroundColorProperty, Color.FromArgb("#000000"), Color.FromArgb("#000000"));
+        shell.SetAppThemeColor(Shell.TabBarTitleColorProperty, Color.FromArgb("#000000"), Color.FromArgb("#EEF1EC"));
+        shell.SetAppThemeColor(Shell.TabBarUnselectedColorProperty, Color.FromArgb("#5A6159"), Color.FromArgb("#A3AAA1"));
         var app = Application.Current;
         void ThemeChanged(object? sender, AppThemeChangedEventArgs e) => shell.Dispatcher.Dispatch(StyleBar);
         shell.Loaded += (_, _) =>
@@ -151,13 +165,17 @@ public sealed class PhoneNavigation
         if (!_isLoaded || !ReferenceEquals(_shell.Window?.Page, _shell)) return;
 #if ANDROID
         if (_shell.Handler?.PlatformView is not Android.Views.View root) return;
+        var backdrop = Shell.GetBackgroundColor(_shell);
         void Visit(Android.Views.View view)
         {
+            // the app bar reaches up behind the status bar edge to edge and paints the theme's black colorPrimary there; give it the header's colour
+            if (view is Google.Android.Material.AppBar.AppBarLayout appBar && backdrop is not null)
+                appBar.SetBackgroundColor(backdrop.ToPlatform());
             if (view is Google.Android.Material.BottomNavigation.BottomNavigationView bar)
             {
                 var background = new Android.Graphics.Drawables.GradientDrawable();
                 var surface = Shell.GetTabBarBackgroundColor(_shell) ??
-                    Color.FromArgb(Application.Current?.RequestedTheme == AppTheme.Dark ? "#24282C" : "#FFFFFF");
+                    Color.FromArgb(Application.Current?.RequestedTheme == AppTheme.Dark ? "#2C302B" : "#FFFFFF");
                 var pageBackground = _shell.CurrentPage?.BackgroundColor ?? _shell.BackgroundColor ?? surface;
                 background.SetColor(surface.ToPlatform());
                 background.SetCornerRadius(0);
@@ -166,7 +184,20 @@ public sealed class PhoneNavigation
                 if (bar.Parent is Android.Views.View parent)
                     parent.SetBackgroundColor(pageBackground.ToPlatform());
                 bar.LabelVisibilityMode = Google.Android.Material.Navigation.NavigationBarView.LabelVisibilityLabeled;
+                bar.ItemTextAppearanceInactive = Resource.Style.TabLabel;
+                bar.ItemTextAppearanceActive = Resource.Style.TabLabel_Active;
                 bar.ItemHorizontalTranslationEnabled = false;
+                // MAUI's MaterialComponents theme gives the indicator no shape or size, so it is drawn only once both are set here
+                var density = bar.Resources?.DisplayMetrics?.Density ?? 1f;
+                bar.ItemActiveIndicatorEnabled = true;
+                bar.ItemActiveIndicatorColor = Android.Content.Res.ColorStateList.ValueOf(Color.FromArgb("#E4F58A").ToPlatform());
+                bar.ItemActiveIndicatorShapeAppearance = Google.Android.Material.Shape.ShapeAppearanceModel.InvokeBuilder().SetAllCornerSizes(16 * density).Build();
+                bar.ItemActiveIndicatorWidth = (int)(64 * density);
+                bar.ItemActiveIndicatorHeight = (int)(28 * density);    // 28, not 32: the pill no longer reaches down to the tab name
+                bar.ActiveIndicatorLabelPadding = (int)(6 * density);   // and a gap between the pill and the name
+                bar.ItemPaddingTop = (int)(8 * density);
+                bar.ItemPaddingBottom = (int)(4 * density);
+                bar.RequestLayout();
             }
             if (view is Android.Views.ViewGroup group)
                 for (var i = 0; i < group.ChildCount; i++)

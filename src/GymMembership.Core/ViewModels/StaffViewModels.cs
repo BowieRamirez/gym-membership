@@ -16,13 +16,25 @@ public sealed record HomeTile(string Route, string Icon, string Title, string Co
     public string Description => $"{Title}: {Count}";
 }
 
-public partial class HomeViewModel(IDeskHomeService svc) : LoadableViewModel
+/// <summary>The front desk home: the four tiles, then the payments waiting and the coaches in the gym (Phase 4b).
+/// Without the payment and coach services (older tests) it is the tiles alone.</summary>
+public partial class HomeViewModel(IDeskHomeService svc, IPaymentStaffService? payments = null, ICoachService? coaches = null) : LoadableViewModel
 {
     public ObservableCollection<HomeTile> Tiles { get; } = new();
+    /// <summary>Verifying needs the proof screenshot, so a row only opens Payments to verify.</summary>
+    public ObservableCollection<PaymentRow> ToVerify { get; } = new();
+    public ObservableCollection<CoachPresenceRow> InGym { get; } = new();
+    public bool HasLists => payments is not null && coaches is not null;
 
     public override Task OnAppearingAsync() => LoadAsync();
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.SummaryAsync, s => Show(s));
+    [RelayCommand]
+    private async Task LoadAsync()
+    {
+        if (!await RunAsync(svc.SummaryAsync, s => Show(s)) || !HasLists) return;
+        if (!await RunAsync(payments!.PendingAsync, ShowPayments)) return;
+        await RunAsync(coaches!.PresenceAsync, ShowCoaches);
+    }
 
     // Quiet: the error line is never touched and a failed look leaves the numbers as they were.
     public override async Task AutoRefreshAsync()
@@ -32,9 +44,24 @@ public partial class HomeViewModel(IDeskHomeService svc) : LoadableViewModel
         if (!result.Ok) return;
         ErrorMessage = null;   // a look that works replaces the banner a failed first load left above these numbers
         Show(result.Value!);
+        if (!HasLists) return;
+        if ((await payments!.PendingAsync()) is { Ok: true } p) ShowPayments(p.Value!);
+        if ((await coaches!.PresenceAsync()) is { Ok: true } c) ShowCoaches(c.Value!);
+    }
+
+    [RelayCommand]
+    private async Task CheckOutCoachAsync(CoachPresenceRow row)
+    {
+        Notice = null;
+        if (!await Confirm.AskAsync($"Check {row.Name} out?", "Members will no longer see them as in the gym.", "Check out")) return;
+        if (!await RunAsync(() => coaches!.CheckOutAsync(row.CoachId))) return;
+        Notice = $"{row.Name} is checked out.";
+        await RunAsync(coaches!.PresenceAsync, ShowCoaches);
     }
 
     void Show(DeskSummary s) => Sync(Tiles, Build(s), t => t.Route, (a, b) => a == b);
+    void ShowPayments(IReadOnlyList<PaymentRow> rows) => Sync(ToVerify, rows, p => p.Payment.Id, (a, b) => a == b);
+    void ShowCoaches(IReadOnlyList<CoachPresenceRow> rows) => Sync(InGym, rows.Where(r => r.InGym).ToList(), r => r.CoachId, (a, b) => a == b);
 
     public static IReadOnlyList<HomeTile> Build(DeskSummary s)
     {
@@ -438,6 +465,8 @@ public partial class RequestsViewModel(ISessionService svc) : LoadableViewModel
     [ObservableProperty] private TimeSpan time = new(9, 0, 0);
     [ObservableProperty] private int durationMinutes = 60;
     [ObservableProperty] private string? message;
+    [ObservableProperty] private string waitingText = "–";
+    [ObservableProperty] private string nextSessionText = "–";
 
     IReadOnlyList<TrainingSession> activeSessions = [];
     public bool HasActiveSession => IsCoach
@@ -477,6 +506,9 @@ public partial class RequestsViewModel(ISessionService svc) : LoadableViewModel
         {
             activeSessions = v.ActiveSessions ?? [];
             Fill(Requests, v.Rows); Fill(Coaches, v.HiredCoaches); Fill(Members, v.Trainees ?? []);
+            WaitingText = v.Rows.Count.ToString();
+            NextSessionText = activeSessions.MinBy(s => s.ScheduledStart) is { } next
+                ? next.ScheduledStart.ToLocalTime().ToString("ddd d MMM, h:mm tt", CultureInfo.InvariantCulture) : "None booked";
             Fill(AmenityChoices, new[] { new AmenityChoice(null, "No amenity") }.Concat((v.Amenities ?? []).Select(a => new AmenityChoice(a.Id, a.Name))));
             SelectedAmenity = AmenityChoices.FirstOrDefault(a => a.Id == SelectedAmenity?.Id) ?? AmenityChoices.First();
             IsCoach = v.IsCoach;
@@ -612,7 +644,12 @@ public partial class RequestsViewModel(ISessionService svc) : LoadableViewModel
 public partial class SessionsViewModel(ISessionService svc, CoachPhotoViewModel? photo = null) : LoadableViewModel
 {
     public CoachPhotoViewModel? Photo { get; } = photo;
+    /// <summary>The rows the status filter lets through; the full list stays in <c>all</c>.</summary>
     public ObservableCollection<SessionRow> Sessions { get; } = new();
+    IReadOnlyList<SessionRow> all = [];
+    /// <summary>All, Scheduled, Completed or Cancelled (which also covers no-shows). Kept across reloads.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(EmptyText))] private string filter = "All";
+    public string EmptyText => Filter == "All" ? "No sessions yet. Send a time request to book one." : "No sessions with this status. Choose All to see every session.";
     [ObservableProperty] private SessionRow? rescheduling;
     [ObservableProperty] private DateTime date = DateTime.Today.AddDays(1);
     [ObservableProperty] private TimeSpan time = new(9, 0, 0);
@@ -623,7 +660,17 @@ public partial class SessionsViewModel(ISessionService svc, CoachPhotoViewModel?
         if (Photo is not null) await Photo.OnAppearingAsync();
     }
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.SessionsAsync, rows => Fill(Sessions, rows));
+    [RelayCommand] private Task LoadAsync() => RunAsync(svc.SessionsAsync, rows => { all = rows; Apply(); });
+    [RelayCommand] private void SetFilter(string f) => Filter = f;
+    partial void OnFilterChanged(string value) => Apply();
+    void Apply() => Fill(Sessions, all.Where(r => Filter switch
+    {
+        "Scheduled" => r.Session.Status == Status.Scheduled,
+        "Completed" => r.Session.Status == Status.Completed,
+        "Cancelled" => r.Session.Status is Status.Cancelled or Status.NoShow,
+        _ => true,
+    }));
+
     [RelayCommand] private Task CompleteAsync(SessionRow row) => SetAsync(row, Status.Completed);
     [RelayCommand] private Task NoShowAsync(SessionRow row) => SetAsync(row, Status.NoShow);
 
@@ -710,6 +757,7 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     [ObservableProperty] private string rateText = "—";
     [ObservableProperty] private string upcomingText = "—";
     [ObservableProperty] private string nextText = "";
+    [ObservableProperty] private string traineesText = "—";
 
     List<CalendarSession> loaded = [];      // what the server last said for the range in view
     List<CalendarSession> upcoming = [];
@@ -736,6 +784,7 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     {
         if (Focus == default) { Focus = Today; SelectedDay = Today; }
         if (coach is not null && hours is null && gym is not null) { var g = await gym.GymAsync(); if (g.Ok) hours = g.Value; }
+        if (coach is not null) await RunAsync(coach.TraineesAsync, t => TraineesText = t.Count.ToString());
         await ReloadAsync();
         Prefill();
     }

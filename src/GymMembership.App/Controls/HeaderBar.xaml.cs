@@ -44,7 +44,8 @@ public partial class HeaderBar : ContentView
 		shell.Unloaded += (_, _) => timer.Stop();
 #if WINDOWS
 		SetupWindowsSidebar(shell);
-		shell.FlyoutFooter = new SignOutFooter { BindingContext = vm };   // Sign out sits at the bottom of the side menu on Windows
+		// Windows: the larger page title of the redesign (the title bar has a fixed height, so 28 is the most it fits); picture and Sign out live at the bottom of the side menu (IconRail)
+		TitleLabel.Style = (Style)Application.Current!.Resources["PageTitle"];
 		shell.Loaded += (_, _) => HideOverflowButton(shell);
 		shell.Navigated += (_, _) => HideOverflowButton(shell);
 #endif

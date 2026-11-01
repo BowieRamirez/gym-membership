@@ -16,11 +16,15 @@ public partial class HeaderBar
         if (shell is not (MemberShell or CoachShell)) return;
         SignOutButton.RemoveBinding(Button.CommandProperty);
         SignOutButton.Command = null;
-        SignOutButton.Text = "⌄";
-        SignOutButton.FontSize = 24;
-        SignOutButton.WidthRequest = 48;
-        SignOutButton.MinimumHeightRequest = 48;
+        // a bare 48 x 48 touch target under the chevron chip, as the bell is (the font has no "⌄", so text showed a plain "v")
+        SignOutButton.Style = null;
+        SignOutButton.Text = "";
+        SignOutButton.BackgroundColor = Colors.Transparent;
+        SignOutButton.BorderWidth = 0;
+        SignOutButton.WidthRequest = SignOutButton.HeightRequest = 48;
+        SignOutButton.MinimumWidthRequest = SignOutButton.MinimumHeightRequest = 48;
         SignOutButton.Padding = 0;
+        AccountIcon.IsVisible = true;
         SignOutButton.AutomationId = "AccountMenuButton";
         SemanticProperties.SetDescription(SignOutButton, "Account menu. Settings and Sign out.");
         SignOutButton.Clicked += (_, _) => ShowAccountMenu(shell);

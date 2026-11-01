@@ -116,6 +116,17 @@ public class PhoneNavigationTests
         Assert.Contains("new ScrollView", Read("Views/PhoneMorePage.cs"));
     }
 
+    // Back on a tab's own page finished the app's only activity; reopening built a new window, which always starts on sign-in.
+    // The Shell still goes back when it can; when it can't, the app goes to the background, as Android does for other apps.
+    [Theory]
+    [InlineData("MemberShell.xaml.cs")]
+    [InlineData("CoachShell.xaml.cs")]
+    public void Back_on_a_main_page_sends_the_app_to_the_background_instead_of_closing_it(string shell)
+    {
+        Assert.Contains("protected override bool OnBackButtonPressed() => base.OnBackButtonPressed() || Controls.PhoneNavigation.SendToBackground();", Read(shell));
+        Assert.Contains("MoveTaskToBack(true)", Read("Controls/PhoneNavigation.cs"));
+    }
+
     [Theory]
     [InlineData("membership")]
     [InlineData("packages")]
@@ -130,5 +141,32 @@ public class PhoneNavigationTests
         var svg = XDocument.Parse(Read($"Resources/Images/phone_{name}.svg"));
         Assert.Equal("0 0 24 24", svg.Root!.Attribute("viewBox")!.Value);
         Assert.NotEmpty(svg.Root.Elements());
+    }
+
+    // The redesign: a white bar in light mode, SurfaceDark in dark mode (owner, 2026-11-01: one step lighter than the page so it stays
+    // separate); the selected tab sits on lime with a black icon in both.
+    [Fact]
+    public void Bottom_bar_follows_the_theme_with_a_black_icon_on_the_lime_selection()
+    {
+        var source = Read("Controls/PhoneNavigation.cs");
+        Assert.Contains("TabBarBackgroundColorProperty, Color.FromArgb(\"#FFFFFF\"), Color.FromArgb(\"#2C302B\")", source);
+        Assert.Contains("TabBarForegroundColorProperty, Color.FromArgb(\"#000000\"), Color.FromArgb(\"#000000\")", source);
+        Assert.Contains("TabBarTitleColorProperty, Color.FromArgb(\"#000000\"), Color.FromArgb(\"#EEF1EC\")", source);
+        Assert.Contains("ItemActiveIndicatorColor", source);
+        // the app's MaterialComponents theme gives the indicator no shape or size, so without these it never draws
+        Assert.Contains("ItemActiveIndicatorShapeAppearance", source);
+        Assert.Contains("ItemActiveIndicatorWidth", source);
+        Assert.Contains("ItemActiveIndicatorHeight", source);
+        Assert.Contains("#E4F58A", source);
+        // the front desk's phone bar comes from the shared Shell style: light in both themes there too
+        var styles = Read("Resources/Styles/Styles.xaml");
+        Assert.Contains("<Setter Property=\"Shell.TabBarBackgroundColor\" Value=\"{AppThemeBinding Light={StaticResource IconChipLight}, Dark={StaticResource IconChipDark}}\" />", styles);
+        Assert.Contains("<Setter Property=\"Shell.TabBarForegroundColor\" Value=\"{StaticResource IconInk}\" />", styles);
+        Assert.Contains("<Setter Property=\"Shell.TabBarTitleColor\" Value=\"{StaticResource IconInk}\" />", styles);
+        foreach (var old in new[] { "#24282C", "#1F2226", "#ECEEF0", "#5C646C", "#9AA3AB" })
+        {
+            Assert.DoesNotContain(old, source);
+            Assert.DoesNotContain(old, Read("Views/PhoneMorePage.cs"));
+        }
     }
 }

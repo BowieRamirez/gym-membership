@@ -7,5 +7,10 @@ public partial class CoachShell : Shell
 		InitializeComponent();
 		Controls.PhoneNavigation.Attach(this, coach: true, services: sp);
 		((Controls.HeaderBar)GetTitleView(this)).Attach(this, sp);
+#if WINDOWS
+		Controls.IconRail.Install(this, "Coach", (Core.ViewModels.HeaderViewModel)GetTitleView(this).BindingContext, groupFrontDesk: false);
+#endif
 	}
+
+	protected override bool OnBackButtonPressed() => base.OnBackButtonPressed() || Controls.PhoneNavigation.SendToBackground();
 }

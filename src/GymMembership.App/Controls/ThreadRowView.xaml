@@ -6,7 +6,7 @@
              x:Class="GymMembership.App.Controls.ThreadRowView" x:DataType="vm:ThreadItem">
 
     <!-- One conversation in the list: picture, name, last message, time and an unread count. The open one sits on chalk. -->
-    <Border Style="{StaticResource Panel}" Padding="12,10">
+    <Border Style="{StaticResource Row}" Padding="12,10">
         <Border.Triggers>
             <DataTrigger TargetType="Border" Binding="{Binding IsOpen}" Value="True">
                 <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChalkLight}, Dark={StaticResource ChalkDark}}" />

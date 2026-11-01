@@ -24,11 +24,16 @@ public class ContrastTests
 
     public static IEnumerable<object[]> TextPairs()
     {
-        foreach (var (theme, ink, muted, inverse, inverseOn) in new[] { ("Light", "InkLight", "MutedLight", "White", "InkLight"), ("Dark", "InkDark", "MutedDark", "ChalkDark", "InkDark") })
+        foreach (var (theme, ink, muted, inverse, inverseOn) in new[] { ("Light", "InkLight", "MutedLight", "White", "InkLight"), ("Dark", "InkDark", "MutedDark", "Black", "Lime") })
         {
-            foreach (var bg in new[] { "Chalk" + theme, "Surface" + theme }) { yield return new object[] { ink, bg }; yield return new object[] { muted, bg }; }
-            yield return new object[] { inverse, inverseOn };   // button text, avatar letters
+            foreach (var bg in new[] { "Chalk" + theme, "Surface" + theme, "Card" + theme }) { yield return new object[] { ink, bg }; yield return new object[] { muted, bg }; }
+            yield return new object[] { inverse, inverseOn };   // button text: white on black (light), black on lime (dark)
         }
+        yield return new object[] { "White", "InkLight" };            // avatar letters, light
+        yield return new object[] { "ChalkDark", "InkDark" };         // avatar letters, dark
+        yield return new object[] { "Black", "Lime" };                // lime highlight, lime buttons
+        yield return new object[] { "IconInk", "IconChipLight" };     // icons sit on a light chip in both themes
+        yield return new object[] { "IconInk", "IconChipDark" };
         yield return new object[] { "White", "PlateRedLight" };       // unread badge, light
         yield return new object[] { "ChalkDark", "PlateRedDark" };    // unread badge, dark
     }
@@ -36,11 +41,29 @@ public class ContrastTests
     public static IEnumerable<object[]> IndicatorPairs() =>
         from theme in new[] { "Light", "Dark" }
         from plate in new[] { "PlateBlue", "PlateYellow", "PlateGreen", "PlateRed" }
-        from bg in new[] { "Chalk", "Surface" }
+        from bg in new[] { "Chalk", "Surface", "Card" }
         select new object[] { plate + theme, bg + theme };
 
     [Theory, MemberData(nameof(TextPairs))]
     public void Text_pairs_reach_4_5_to_1(string fg, string bg) => Assert.True(Ratio(fg, bg) >= 4.5, $"{fg} on {bg} is {Ratio(fg, bg):0.00}:1");
+
+    // The redesign: pages carry no colours from the old palette, selected choices are lime, and dashed lines only show progress.
+    [Fact]
+    public void No_page_uses_the_old_palette()
+    {
+        var app = TestPaths.AppFolder();
+        var files = new[] { "Views", "Controls" }.SelectMany(d => Directory.GetFiles(Path.Combine(app, d)))
+            .Concat(Directory.GetFiles(app, "*Shell*")).Where(f => f.EndsWith(".xaml") || f.EndsWith(".cs"));
+        var old = new[] { "#1F2226", "#24282C", "#EDEFF1", "#ECEEF0", "#5C646C", "#9AA3AB", "#CDD3D9", "#3A4047", "#1A1D20" };
+        foreach (var file in files)
+        {
+            var text = File.ReadAllText(file);
+            Assert.All(old, hex => Assert.DoesNotContain(hex, text, StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain("Value=\"{StaticResource SmallButton}\"", text);   // a selected toggle is lime, not black
+        }
+        foreach (var page in new[] { "Views/SettingsPage.xaml", "MemberShell.xaml", "CoachShell.xaml", "StaffShell.xaml" })
+            Assert.DoesNotContain("<c:LaneView", File.ReadAllText(Path.Combine(app, page)));
+    }
 
     [Theory, MemberData(nameof(IndicatorPairs))]
     public void Status_colors_reach_3_to_1(string fg, string bg) => Assert.True(Ratio(fg, bg) >= 3.0, $"{fg} on {bg} is {Ratio(fg, bg):0.00}:1");

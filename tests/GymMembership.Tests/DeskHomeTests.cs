@@ -175,4 +175,31 @@ public class DeskHomeTests
         Assert.Equal(4, vm.Tiles.Count);       // still showing the last numbers
         Assert.Null(vm.ErrorMessage);          // and no new error line
     }
+
+    // the demo refuses coach check-ins outside gym hours, so tests that check one in fix the time instead of using the real clock
+    sealed class FixedClock(DateTimeOffset now) : TimeProvider { public override DateTimeOffset GetUtcNow() => now; }
+    static readonly DateTimeOffset TenAmManilaToday = new(DateTime.UtcNow.AddHours(8).Date.AddHours(2), TimeSpan.Zero);   // 10:00 Manila is 02:00 UTC
+
+    // Phase 4b: under the tiles, the payments waiting and the coaches in the gym, with Check out
+    [Fact]
+    public async Task Home_lists_payments_to_verify_and_coaches_in_the_gym()
+    {
+        var (gw, _, svc) = await As("employee@demo.io", new DemoGateway(clock: new FixedClock(TenAmManilaToday)));
+        var coaches = new CoachService(gw);
+        var vm = new HomeViewModel(svc, new PaymentStaffService(gw), coaches);
+        await vm.OnAppearingAsync();
+        Assert.Equal((await new PaymentStaffService(gw).PendingAsync()).Value!.Select(p => p.Payment.Id), vm.ToVerify.Select(p => p.Payment.Id));
+        Assert.Contains(vm.ToVerify, p => p.Payment.PaymentCode == "GYM-7F3K2");
+        var presence = (await coaches.PresenceAsync()).Value!;
+        Assert.Equal(presence.Where(c => c.InGym).Select(c => c.CoachId), vm.InGym.Select(c => c.CoachId));   // only those checked in
+        var lena = vm.InGym.Single(c => c.CoachId == "u-coach1");   // the demo starts with both coaches in
+
+        await vm.CheckOutCoachCommand.ExecuteAsync(lena);
+        Assert.Null(vm.ErrorMessage);
+        Assert.DoesNotContain(vm.InGym, c => c.CoachId == "u-coach1");
+
+        Assert.True((await coaches.CheckInAsync("u-coach1")).Ok);
+        await vm.AutoRefreshAsync();                       // the 20-second look picks it up
+        Assert.Contains(vm.InGym, c => c.CoachId == "u-coach1");
+    }
 }

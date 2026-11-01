@@ -56,6 +56,19 @@ public static partial class AccountRules
 
     public static bool IsPassword(string password) => password.Length is >= MinPassword and <= MaxPassword;
 
+    /// <summary>The checklist under a new password. Only the length is required; the other two make it stronger.</summary>
+    public static (bool Length, bool Number, bool Mixed) PasswordChecks(string password) =>
+        (IsPassword(password), password.Any(char.IsDigit), password.Any(char.IsLower) && password.Any(char.IsUpper));
+
+    /// <summary>0 when empty, then 1 weak to 4 strong: one point per check passed, and 4 for all three at 12 or more characters.</summary>
+    public static int PasswordStrength(string password)
+    {
+        if (password.Length == 0) return 0;
+        var (length, number, mixed) = PasswordChecks(password);
+        var passed = (length ? 1 : 0) + (number ? 1 : 0) + (mixed ? 1 : 0);
+        return passed == 3 && password.Length >= 12 ? 4 : Math.Max(passed, 1);
+    }
+
     /// <summary>What the name field keeps as you type: letters (and their accents), spaces, hyphens and apostrophes.</summary>
     public static string KeepNameChars(string typed) => new(typed.Where(c =>
         char.IsLetter(c) || c is ' ' or '\'' or '-' ||
