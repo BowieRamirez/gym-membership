@@ -100,6 +100,7 @@ Owner: "match it with the windows version with the colors and the redesigns upda
 - Pitfall: an incremental Android build kept `supabase.json` in the APK after it was moved out. Demo Android builds need `--no-incremental`, and check the APK has only `supabase.sample.json` before signing in.
 
 ## Phase 5: check
-- [x] xUnit 773/773 (2026-11-01), Windows build. Android not rebuilt since Phase 3. - [ ] `scripts/Test-WindowsAdminNavigation.ps1` not run yet.
+- [x] xUnit 774/774 (2026-11-01), Windows and Android builds.
+- [x] `scripts/Test-WindowsAdminNavigation.ps1` (2026-11-01, demo build in a separate folder without supabase.json): all 20 checks pass: admin start-up, Overview button alignment with the sidebar open and collapsed, all 8 Overview shortcuts, refresh, the 6 front desk pages, group and sidebar collapse/reopen, rapid toggles.
 - [x] Demo-mode checks at 1920 px: My membership, Sessions (member and coach), Time requests (member and coach), Dashboard, Void a payment, Cashier, Check-in, My shifts, Admin overview.
-- [ ] Not yet: every other page at 1920 px, any page at 1100 px, the Android emulator.
+- [x] Owner checked every page on Windows (2026-11-01: "it looks good now"); Android pages checked on the Pixel 7 emulator (see "Android to match Windows").
