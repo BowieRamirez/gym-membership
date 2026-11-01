@@ -39,6 +39,20 @@ public class PageLayoutTests
             Assert.Contains(key, styles);
     }
 
+    // a table squeezed below the room its fixed columns need wraps text a letter per line: every table switches to its cards by width
+    [Fact]
+    public void Tables_switch_to_cards_by_their_own_width()
+    {
+        var controls = File.ReadAllText(AppFile("Controls", "Controls.cs"));
+        Assert.Contains("public class TableBody", controls);
+        foreach (var page in Directory.GetFiles(Path.GetDirectoryName(AppFile("Views", "SessionsPage.xaml"))!, "*.xaml"))
+        {
+            var xaml = File.ReadAllText(page);
+            var heads = xaml.Split("StaticResource TableHead}").Length - 1;
+            Assert.True(heads == xaml.Split("<c:TableBody ").Length - 1, $"{Path.GetFileName(page)}: every table head needs a TableBody");
+        }
+    }
+
     // a style based on one defined further down the file fails at runtime and closes the app at start-up (it builds fine)
     [Fact]
     public void Styles_are_based_only_on_styles_defined_above_them()

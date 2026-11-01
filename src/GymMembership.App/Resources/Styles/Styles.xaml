@@ -161,10 +161,10 @@
     </Style>
 
 
-    <!-- ===== Surfaces: rounded cards, flat, no border, no shadow ===== -->
+    <!-- ===== Surfaces: rounded cards, flat, no shadow; light mode adds a hairline so white cards keep their edge ===== -->
     <Style x:Key="Panel" TargetType="Border">
         <Setter Property="StrokeShape" Value="RoundRectangle 16" />
-        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="StrokeThickness" Value="{AppThemeBinding Light=1, Dark=0}" />
         <Setter Property="Padding" Value="14" />
         <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource CardLight}, Dark={StaticResource CardDark}}" />
         <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
@@ -300,8 +300,9 @@
     <!-- A text link: secondary actions beside a form (forgot password, create an account, resend code) -->
     <Style x:Key="LinkButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
         <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource PlateBlueLight}, Dark={StaticResource Lime}}" />
-        <Setter Property="FontFamily" Value="BarlowMedium" />
+        <!-- ink, not blue: in this palette blue means "scheduled" -->
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Lime}}" />
+        <Setter Property="FontFamily" Value="BarlowSemiBold" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="Padding" Value="4,0" />
         <Setter Property="MinimumHeightRequest" Value="{OnPlatform Android=44, iOS=44, Default=32}" />

@@ -95,15 +95,30 @@
             <c:SideLayout>
                 <!-- main: days left, paid terms, payments -->
                 <VerticalStackLayout Spacing="12">
-                    <!-- The one memorable moment: days left, a lime card with a pill bar that runs out -->
-                    <Border Style="{StaticResource HeroPanel}" Padding="{OnIdiom Phone='16,16', Default='18,14'}">
-                        <VerticalStackLayout Spacing="8">
-                            <c:CardTitle Icon="clock" Text="{Binding HeroCaption}" TextColor="{StaticResource Black}" />
-                            <Label Text="{Binding HeroNumber}" Style="{StaticResource Numeral}" FontSize="{OnIdiom Phone=84, Default=60}" TextColor="{StaticResource Black}"
-                                   SemanticProperties.Description="Days left on your membership" />
-                            <c:LaneView Fraction="{Binding LaneFraction}" HeightRequest="26" DashColor="{StaticResource Black}" TrackColor="#5A6159" />
-                        </VerticalStackLayout>
-                    </Border>
+                    <!-- The one memorable moment: days left, a lime card with a pill bar that runs out; then two plain number cards -->
+                    <c:CardGrid Columns="{OnIdiom Phone=1, Default=3}" MinColumnWidth="180">
+                        <Border Style="{StaticResource HeroPanel}" Padding="{OnIdiom Phone='16,16', Default='18,14'}">
+                            <VerticalStackLayout Spacing="8">
+                                <c:CardTitle Icon="clock" Text="{Binding HeroCaption}" TextColor="{StaticResource Black}" />
+                                <Label Text="{Binding HeroNumber}" Style="{StaticResource Numeral}" FontSize="{OnIdiom Phone=84, Default=60}" TextColor="{StaticResource Black}"
+                                       SemanticProperties.Description="Days left on your membership" />
+                                <c:LaneView Fraction="{Binding LaneFraction}" HeightRequest="26" DashColor="{StaticResource Black}" TrackColor="#5A6159" />
+                            </VerticalStackLayout>
+                        </Border>
+                        <Border Style="{StaticResource Panel}">
+                            <VerticalStackLayout Spacing="8">
+                                <c:CardTitle Icon="calendar-days" Text="Current term ends" />
+                                <Label Text="{Binding TermEndsText}" Style="{StaticResource Numeral}" />
+                            </VerticalStackLayout>
+                        </Border>
+                        <Border Style="{StaticResource Panel}">
+                            <VerticalStackLayout Spacing="8">
+                                <c:CardTitle Icon="banknote" Text="Payments waiting" />
+                                <Label Text="{Binding PaymentsWaitingText}" Style="{StaticResource Numeral}" />
+                                <Label Text="To pay or to be verified" Style="{StaticResource Caption}" />
+                            </VerticalStackLayout>
+                        </Border>
+                    </c:CardGrid>
 
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                         <VerticalStackLayout Spacing="2">
@@ -114,38 +129,59 @@
                     </Grid>
                     <Border Style="{StaticResource TablePanel}">
                         <VerticalStackLayout>
-                            <Grid Style="{StaticResource TableHead}" ColumnDefinitions="160,*,110,130,210" IsVisible="{OnIdiom Phone=False, Default=True}">
-                                <Label Text="Package" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="1" Text="Dates (Manila)" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="2" Text="Status" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="3" Text="Actually paid" Style="{StaticResource Caption}" HorizontalOptions="End" />
-                            </Grid>
-                            <BoxView Style="{StaticResource Hairline}" IsVisible="{OnIdiom Phone=False, Default=True}" />
-                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Terms}"
-                                                 BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource TermCard}, Default={StaticResource TermRow}}">
+                            <VerticalStackLayout x:Name="TermsHead" IsVisible="{OnIdiom Phone=False, Default=True}">
+                                <Grid Style="{StaticResource TableHead}" ColumnDefinitions="160,*,110,130,210">
+                                    <Label Text="Package" Style="{StaticResource Caption}" />
+                                    <Label Grid.Column="1" Text="Dates (Manila)" Style="{StaticResource Caption}" />
+                                    <Label Grid.Column="2" Text="Status" Style="{StaticResource Caption}" />
+                                    <Label Grid.Column="3" Text="Actually paid" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                </Grid>
+                                <BoxView Style="{StaticResource Hairline}" />
+                            </VerticalStackLayout>
+                            <c:TableBody BindableLayout.ItemsSource="{Binding Terms}" Header="{x:Reference TermsHead}" WideFrom="900"
+                                         RowTemplate="{StaticResource TermRow}" CardTemplate="{StaticResource TermCard}"
+                                         BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource TermCard}, Default={StaticResource TermRow}}">
                                 <BindableLayout.EmptyView>
                                     <Label Text="No paid terms yet. Choose a package, pay and wait for verification." Style="{StaticResource Muted}" Margin="14" />
                                 </BindableLayout.EmptyView>
-                            </VerticalStackLayout>
+                            </c:TableBody>
                         </VerticalStackLayout>
                     </Border>
 
                     <Label Text="Payments" Style="{StaticResource SectionTitle}" Margin="0" />
+                    <!-- status filter: the filled button is the one in use -->
+                    <FlexLayout Style="{StaticResource Toolbar}">
+                        <Button Text="All" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="All">
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="All"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
+                        </Button>
+                        <Button Text="Verified" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Verified">
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Verified"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
+                        </Button>
+                        <Button Text="Pending" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Pending">
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Pending"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
+                        </Button>
+                        <Button Text="Expired or rejected" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Expired">
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Expired"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
+                        </Button>
+                    </FlexLayout>
                     <Border Style="{StaticResource TablePanel}">
                         <VerticalStackLayout>
-                            <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,110,*,130,170,120,240" IsVisible="{OnIdiom Phone=False, Default=True}">
-                                <Label Text="Item" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="1" Text="Status" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="2" Text="Details" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="3" Text="Payment code" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="4" Text="Date" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="5" Text="Amount" Style="{StaticResource Caption}" HorizontalOptions="End" />
-                            </Grid>
-                            <BoxView Style="{StaticResource Hairline}" IsVisible="{OnIdiom Phone=False, Default=True}" />
-                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Payments}"
-                                                 BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource PaymentCard}, Default={StaticResource PaymentRow}}">
-                                <BindableLayout.EmptyView><Label Text="No payments yet." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                            <VerticalStackLayout x:Name="PaymentsHead" IsVisible="{OnIdiom Phone=False, Default=True}">
+                                <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,110,*,130,170,120,240">
+                                    <Label Text="Item" Style="{StaticResource Caption}" />
+                                    <Label Grid.Column="1" Text="Status" Style="{StaticResource Caption}" />
+                                    <Label Grid.Column="2" Text="Details" Style="{StaticResource Caption}" />
+                                    <Label Grid.Column="3" Text="Payment code" Style="{StaticResource Caption}" />
+                                    <Label Grid.Column="4" Text="Date" Style="{StaticResource Caption}" />
+                                    <Label Grid.Column="5" Text="Amount" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                </Grid>
+                                <BoxView Style="{StaticResource Hairline}" />
                             </VerticalStackLayout>
+                            <c:TableBody BindableLayout.ItemsSource="{Binding Payments}" Header="{x:Reference PaymentsHead}" WideFrom="1150"
+                                         RowTemplate="{StaticResource PaymentRow}" CardTemplate="{StaticResource PaymentCard}"
+                                         BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource PaymentCard}, Default={StaticResource PaymentRow}}">
+                                <BindableLayout.EmptyView><Label Text="{Binding PaymentsEmptyText, Source={RelativeSource AncestorType={x:Type vm:MyMembershipViewModel}}}" Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                            </c:TableBody>
                         </VerticalStackLayout>
                     </Border>
                 </VerticalStackLayout>

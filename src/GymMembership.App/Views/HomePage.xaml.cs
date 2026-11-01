@@ -17,4 +17,8 @@ public partial class HomePage : BasePage
 	{
 		if ((sender as BindableObject)?.BindingContext is HomeTile tile) (Shell.Current as StaffShell)?.ShowDeskPage(tile.Route);
 	}
+
+	// verifying needs the proof screenshot, so Home only opens the page that shows it
+	void OnVerify(object? sender, EventArgs e) => (Shell.Current as StaffShell)?.ShowDeskPage("verify");
+	void OnCheckOutCoach(object? sender, EventArgs e) => Row<HomeViewModel>(sender, v => v.CheckOutCoachCommand);
 }

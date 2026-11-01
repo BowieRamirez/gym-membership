@@ -59,19 +59,22 @@
             <c:SideLayout>
                 <Border Style="{StaticResource TablePanel}">
                     <VerticalStackLayout>
-                        <Grid Style="{StaticResource TableHead}" ColumnDefinitions="150,*,*,90,150,130,80" IsVisible="{OnIdiom Phone=False, Default=True}">
-                            <Label Text="Receipt" Style="{StaticResource Caption}" />
-                            <Label Grid.Column="1" Text="Member" Style="{StaticResource Caption}" />
-                            <Label Grid.Column="2" Text="Item" Style="{StaticResource Caption}" />
-                            <Label Grid.Column="3" Text="Method" Style="{StaticResource Caption}" />
-                            <Label Grid.Column="4" Text="Verified" Style="{StaticResource Caption}" />
-                            <Label Grid.Column="5" Text="Amount" Style="{StaticResource Caption}" HorizontalOptions="End" />
-                        </Grid>
-                        <BoxView Style="{StaticResource Hairline}" IsVisible="{OnIdiom Phone=False, Default=True}" />
-                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Recent}"
-                                             BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource PaymentCard}, Default={StaticResource PaymentRow}}">
-                            <BindableLayout.EmptyView><Label Text="No verified payments yet." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                        <VerticalStackLayout x:Name="RecentHead" IsVisible="{OnIdiom Phone=False, Default=True}">
+                            <Grid Style="{StaticResource TableHead}" ColumnDefinitions="150,*,*,90,150,130,80">
+                                <Label Text="Receipt" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="1" Text="Member" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="2" Text="Item" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="3" Text="Method" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="4" Text="Verified" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="5" Text="Amount" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                            </Grid>
+                            <BoxView Style="{StaticResource Hairline}" />
                         </VerticalStackLayout>
+                        <c:TableBody BindableLayout.ItemsSource="{Binding Recent}" Header="{x:Reference RecentHead}" WideFrom="1000"
+                                     RowTemplate="{StaticResource PaymentRow}" CardTemplate="{StaticResource PaymentCard}"
+                                     BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource PaymentCard}, Default={StaticResource PaymentRow}}">
+                            <BindableLayout.EmptyView><Label Text="No verified payments yet." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                        </c:TableBody>
                     </VerticalStackLayout>
                 </Border>
 

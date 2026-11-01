@@ -43,8 +43,8 @@
             <c:SideLayout SideFirst="False">
                 <!-- main: this month at a glance, the period, the month or the week -->
                 <VerticalStackLayout Spacing="12">
-                    <!-- this month at a glance: three cards, the first one lime -->
-                                <c:CardGrid Columns="{OnIdiom Phone=1, Default=3}" MinColumnWidth="180">
+                    <!-- this month at a glance: four cards, the first one lime -->
+                                <c:CardGrid Columns="{OnIdiom Phone=1, Default=4}" MinColumnWidth="180">
                                     <Border Style="{StaticResource HeroPanel}">
                                         <VerticalStackLayout Spacing="8">
                                             <c:CardTitle Icon="calendar-days" Text="Sessions this month" TextColor="{StaticResource Black}" />
@@ -62,6 +62,12 @@
                                             <c:CardTitle Icon="clock" Text="Upcoming" />
                                             <Label Text="{Binding UpcomingText}" Style="{StaticResource Numeral}" />
                                             <Label Text="{Binding NextText}" Style="{StaticResource Caption}" />
+                                        </VerticalStackLayout>
+                                    </Border>
+                                    <Border Style="{StaticResource Panel}" IsVisible="{Binding HasShifts}">
+                                        <VerticalStackLayout Spacing="8">
+                                            <c:CardTitle Icon="users" Text="Trainees" />
+                                            <Label Text="{Binding TraineesText}" Style="{StaticResource Numeral}" />
                                         </VerticalStackLayout>
                                     </Border>
                                 </c:CardGrid>

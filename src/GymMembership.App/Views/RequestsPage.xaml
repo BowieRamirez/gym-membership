@@ -80,26 +80,43 @@
             <c:SideLayout>
                 <!-- main: the requests waiting for a reply -->
                 <VerticalStackLayout Spacing="10">
+                    <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" MinColumnWidth="180">
+                        <Border Style="{StaticResource Panel}">
+                            <VerticalStackLayout Spacing="8">
+                                <c:CardTitle Icon="message-square" Text="Waiting for a reply" />
+                                <Label Text="{Binding WaitingText}" Style="{StaticResource Numeral}" />
+                            </VerticalStackLayout>
+                        </Border>
+                        <Border Style="{StaticResource Panel}">
+                            <VerticalStackLayout Spacing="8">
+                                <c:CardTitle Icon="calendar-clock" Text="Next session" />
+                                <Label Text="{Binding NextSessionText}" Style="{StaticResource Numeral}" />
+                            </VerticalStackLayout>
+                        </Border>
+                    </c:CardGrid>
                     <HorizontalStackLayout Spacing="12">
-                        <Label Text="Waiting for a reply" Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
+                        <Label Text="Open requests" Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
                         <Button Text="Refresh requests" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center"
                                 Command="{Binding LoadCommand}" IsVisible="{Binding UseWindowsRequestForm}" AutomationId="RefreshSessionRequests" />
                     </HorizontalStackLayout>
                     <Border Style="{StaticResource TablePanel}">
                         <VerticalStackLayout>
-                            <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,190,150,130,*,110,340" IsVisible="{OnIdiom Phone=False, Default=True}">
-                                <Label Text="With" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="1" Text="When" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="2" Text="Type" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="3" Text="Amenity" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="4" Text="Message" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="5" Text="Status" Style="{StaticResource Caption}" />
-                            </Grid>
-                            <BoxView Style="{StaticResource Hairline}" IsVisible="{OnIdiom Phone=False, Default=True}" />
-                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Requests}"
-                                                 BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource RequestCard}, Default={StaticResource RequestRow}}">
-                                <BindableLayout.EmptyView><Label Text="Nothing pending." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                            <VerticalStackLayout x:Name="RequestsHead" IsVisible="{OnIdiom Phone=False, Default=True}">
+                                <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,190,150,130,*,110,340">
+                                    <Label Text="With" Style="{StaticResource Caption}" />
+                                    <Label Grid.Column="1" Text="When" Style="{StaticResource Caption}" />
+                                    <Label Grid.Column="2" Text="Type" Style="{StaticResource Caption}" />
+                                    <Label Grid.Column="3" Text="Amenity" Style="{StaticResource Caption}" />
+                                    <Label Grid.Column="4" Text="Message" Style="{StaticResource Caption}" />
+                                    <Label Grid.Column="5" Text="Status" Style="{StaticResource Caption}" />
+                                </Grid>
+                                <BoxView Style="{StaticResource Hairline}" />
                             </VerticalStackLayout>
+                            <c:TableBody BindableLayout.ItemsSource="{Binding Requests}" Header="{x:Reference RequestsHead}" WideFrom="1300"
+                                         RowTemplate="{StaticResource RequestRow}" CardTemplate="{StaticResource RequestCard}"
+                                         BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource RequestCard}, Default={StaticResource RequestRow}}">
+                                <BindableLayout.EmptyView><Label Text="Nothing pending." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                            </c:TableBody>
                         </VerticalStackLayout>
                     </Border>
                 </VerticalStackLayout>

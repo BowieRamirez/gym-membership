@@ -81,7 +81,7 @@ public static class IconRail
                 var deskPages = new VerticalStackLayout { Spacing = 6, Padding = new Thickness(0, 6) };
                 foreach (var item in desk) deskPages.Children.Add(Link(item));
                 group = new Border { StrokeThickness = 0, StrokeShape = new RoundRectangle { CornerRadius = 16 }, Padding = new Thickness(4, 0), IsVisible = false, Content = deskPages };
-                group.SetAppThemeColor(VisualElement.BackgroundColorProperty, Theme("CardLight"), Theme("SurfaceDark"));
+                group.SetAppThemeColor(VisualElement.BackgroundColorProperty, Theme("ChalkLight"), Theme("SurfaceDark"));   // sage inside the white rail
                 button.Clicked += (_, _) => { group.IsVisible = !group.IsVisible; Refresh(); };
                 (briefcase, briefcaseIcon) = (button, icon);
                 first.Add(cell);
@@ -133,10 +133,12 @@ public static class IconRail
 
         var rail = new Border
         {
-            StrokeThickness = 0, StrokeShape = new RoundRectangle { CornerRadius = 22 },
+            StrokeThickness = 1, StrokeShape = new RoundRectangle { CornerRadius = 22 },
             Margin = new Thickness(12), Padding = new Thickness(0, 14), WidthRequest = 64, Content = layout
         };
         rail.SetAppThemeColor(VisualElement.BackgroundColorProperty, Theme("RailLight"), Theme("RailDark"));
+        // light: a hairline edge, since the backdrop is now the page colour; dark: the edge is the rail colour, so none shows
+        rail.SetAppTheme<Brush>(Border.StrokeProperty, new SolidColorBrush(Theme("LineLight")), new SolidColorBrush(Theme("RailDark")));
 
         shell.FlyoutHeader = null;
         shell.FlyoutFooter = null;

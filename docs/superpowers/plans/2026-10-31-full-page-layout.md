@@ -1,6 +1,6 @@
 # Full-Page Layout Plan
 
-> **Status (2026-10-31): Phases 1-3 built** (commits 6ea916c, 14581bb). Phase 4 waits for the owner; Phase 5 partly done (see below). Approved mockup: `docs/mockups/compact-pages.html` (owner: "Yes, build it"). Before/after reference: `docs/mockups/page-scan.html` (every page, every role, before this work). Branch `visual-redesign-2026-10-30`.
+> **Status (2026-11-01): Phases 1-4 built**, plus narrow-window tables, a new Settings layout and a light-mode palette (see "After Phase 4"). Phases 1-3: commits 6ea916c, 14581bb. Phase 5 partly done (see below). Approved mockup: `docs/mockups/compact-pages.html` (owner: "Yes, build it"). Before/after reference: `docs/mockups/page-scan.html` (every page, every role, before this work). Branch `visual-redesign-2026-10-30`.
 
 **Goal:** Every Windows page fills the window like the reference dashboard: no 1240 px centred column, a toolbar row, a strip of small number cards where the page has numbers, tables (header row, hairline rows) instead of half-empty card grids, and a 340 px side panel on the right for the page's form or selected item. Same palette and type. Phones keep their one-column layouts.
 
@@ -33,24 +33,27 @@
 
 ## Phase 4: new behaviour from the mockup (each one in Core with a test)
 
-**Owner, 2026-10-31:** "update the plan first about the extras … I'll continue it later". Not started. Each item: the logic in a Core view model with an xUnit test in `tests/GymMembership.Tests`, then the XAML. Filters are client-side over lists the page already loads, so they need no new queries. Check each in demo mode as Phases 2-3 were (see "How to check" below).
+**Owner, 2026-10-31:** "update the plan first about the extras … I'll continue it later". **2026-11-01:** Phase 4 built: 4a filters, 4b front desk lists, 4c numbers. No database changes were needed. The optional coach Sessions search is still skipped. Each item: the logic in a Core view model with an xUnit test in `tests/GymMembership.Tests`, then the XAML. Filters are client-side over lists the page already loads, so they need no new queries. Check each in demo mode as Phases 2-3 were (see "How to check" below).
 
 **4a. Status filters (segmented buttons in a toolbar row above the table)**
-- [ ] Sessions (`SessionsViewModel`, `ViewModels/StaffViewModels.cs`): All / Scheduled / Completed / Cancelled or no show. Keep the full list, expose a filtered `Sessions` view; the choice survives a reload. Same page for members and coaches.
-- [ ] My membership payments (`MyMembershipViewModel`, `ViewModels/SubscriptionViewModels.cs` + `MemberViewModels.cs`): All / Verified / Pending / Expired over `Payments` (`PaymentItem.Status`).
+- [x] Sessions (`SessionsViewModel`, `ViewModels/StaffViewModels.cs`): All / Scheduled / Completed / Cancelled or no show. Keep the full list, expose a filtered `Sessions` view; the choice survives a reload. Same page for members and coaches. (2026-11-01, `StatusFilterTests`; the buttons seen in demo mode as coach, the filtering itself only tested in xUnit.)
+- [x] My membership payments (`MyMembershipViewModel`, `ViewModels/SubscriptionViewModels.cs` + `MemberViewModels.cs`): All / Verified / Pending / Expired or rejected over `Payments` (`PaymentItem.Status`); voided payments show under All only. (2026-11-01, `StatusFilterTests`; not yet checked in demo mode.)
+- Empty state under a filter says "No … with this status. Choose All …" instead of "No … yet".
 - [ ] Optional, coach Sessions search by member name (mockup shows it); only if the list gets long.
 - Buttons: `SmallOutlineButton`, the selected one `LimeSmallButton` via `DataTrigger`, as Month/Week on the Dashboard.
 
 **4b. Front desk Home lists (`HomeViewModel`, `IDeskHomeService`)**
-- [ ] "Payments to verify" table under the tiles: payer, item, code, amount, Verify button that opens Payments to verify (reuse `IPaymentStaffService`, the source `VerifyPaymentsViewModel` uses; do not verify from Home, verifying needs the proof screenshot).
-- [ ] "In the gym now" table: coaches checked in (`CoachPresenceRow` via `ICoachService`, as `CheckInViewModel` loads them) with Check out.
-- [ ] Side panel: member search + Check in (same calls as Check-in) and amenity status list. If this duplicates Check-in too much, keep only the two tables.
+- [x] "Payments to verify" table under the tiles: payer, item, code, amount, Verify button that opens Payments to verify (reuse `IPaymentStaffService`, the source `VerifyPaymentsViewModel` uses; do not verify from Home, verifying needs the proof screenshot).
+- [x] "In the gym now" table: coaches checked in (`CoachPresenceRow` via `ICoachService`, as `CheckInViewModel` loads them) with Check out.
+- [x] Side panel: skipped. Member search and check-in are the Check-in page, and amenity status is already a tile, so only the two tables were built.
+- (2026-11-01, `DeskHomeTests.Home_lists_payments_to_verify_and_coaches_in_the_gym`, xUnit 773/773. Both lists refresh with the 20-second tile refresh. Checked in demo mode at ~900 px and maximised: Verify opens Payments to verify, Check out asks first, then shows a notice.)
 - Layout: tiles stay the number strip; the two tables side by side (`CardGrid Columns=2`), side panel via `SideLayout`.
 
 **4c. Extra numbers (Kpi cards, `Kpi` + `KpiValue` styles)**
-- [ ] My membership: "Ends" (end of the current term, from `Terms`) and "Payments waiting" (count of pending/unpaid `Payments`), beside the lime days-left card.
-- [ ] Time requests: "Waiting for a reply" (count of `Requests`), "Next session" (soonest scheduled session; needs `ISessionService`, which `SessionsViewModel` uses).
-- [ ] Coach Dashboard: a fourth card, "Trainees" (count; `TraineesViewModel`'s source).
+- [x] My membership: "Current term ends" (the active term's end, Manila, or "None") and "Payments waiting" (count of pending `Payments`), beside the lime days-left card in a 3-column `CardGrid`.
+- [x] Time requests: "Waiting for a reply" (count of `Requests`), "Next session" (soonest of `RequestsView.ActiveSessions`, already loaded, so no new call). The table title below became "Open requests" so the words aren't repeated.
+- [x] Coach Dashboard: a fourth card, "Trainees" (`ICoachService.TraineesAsync` count, active hires).
+- (2026-11-01, `ExtraNumbersTests`, xUnit 771/771, Windows build. Dashboard Trainees card seen in demo mode; My membership and Time requests cards not yet.)
 - Every number also says what it is in words (no colour-only meaning), like the existing tiles.
 
 **How to check (demo mode)**
@@ -62,9 +65,24 @@
 - A style `BasedOn` a key defined lower in `Styles.xaml` builds fine but crashes the app at start-up (`PageLayoutTests.Styles_are_based_only_on_styles_defined_above_them`).
 - Table rows: give the button column a fixed width; `Auto` sizes per row and the columns stop lining up with the header.
 - `SideLayout` takes exactly two children (main, side); wrap several side panels in one `VerticalStackLayout`. A `CollectionView` needs a bounded height, so pages built on one (Check-in) use a grid with `ColumnDefinitions="{OnIdiom Phone='*,0', Default='*,340'}"` instead.
+- Tables with wide fixed columns squeezed the text columns to a letter per line in narrow windows (owner screenshot, coach Sessions, 2026-11-01). Every table now uses `c:TableBody` (Controls.cs): row template + header from its `WideFrom` table width, phone cards below. Sessions/Requests 1300, payments 1150, Void 1000, terms 900. `PageLayoutTests.Tables_switch_to_cards_by_their_own_width` checks each `TableHead` has one.
+- Settings (2026-11-01, owner: "looks basic with the card boxes with the same sizes"): lime account header (saved name, email, confirmed, Change picture), name + email in one panel, theme + password in the side column. Checked in demo mode at ~900 px and maximised.
+- Row buttons inside a `DataTemplate`: use `Clicked` + `Row<TheViewModel>(sender, v => v.XCommand)` (BasePage), as every other page does. A `Command` bound through `RelativeSource AncestorType` builds but does nothing when clicked (found on Home Check out).
 - Desktop-only hints in a side panel: wrap them in `<ContentView IsVisible="{OnIdiom Phone=False, Default=True}">` so phones don't show them above the list.
 
+## After Phase 4: owner feedback, 2026-11-01
+- [x] Narrow windows: tables switch to their cards (`c:TableBody`, see Pitfalls). Seen in demo mode on coach Sessions at ~900 px and maximised.
+- [x] Settings re-laid out (see Pitfalls). Seen in demo mode.
+- [x] Light mode, owner: "the left nav bar … and at the top of the pages … make the light mode off", "the blue color in the letters". Then the owner picked "#ECEFE8, slightly deeper sage" for the page (Colors.xaml, light only, dark unchanged):
+  - Page, header, title bar and the area behind the rail: `ChalkLight` = `BackdropLight` = `Chalk` = #ECEFE8 (was a darker #DDE3DA frame round a #F2F4F0 page).
+  - Cards: `CardLight` #FFFFFF with a 1 px `LineLight` edge (`Panel` `StrokeThickness` Light=1, Dark=0). Fields and rows inside cards: `SurfaceLight` #F2F4F0. Icon chips: `IconChipLight` #ECEFE8. The rail's desk-pages group: `ChalkLight`.
+  - Rail: white with a 1 px `LineLight` edge in light mode (IconRail.Windows.cs).
+  - Windows title bar: `Window.TitleBar` in App.xaml.cs with the backdrop colour and ink text, so the rail's backdrop no longer cuts into a blue system bar.
+  - Links (`LinkButton`) and the focused-field border: ink in light mode, lime in dark. Blue (`PlateBlue`) now only means "scheduled".
+  - Contrast tests pass on the new colours. Seen in demo light mode: sign-in, Admin overview, Users and roles.
+- Owner kept the black "Open …" buttons on the Admin overview as they are.
+
 ## Phase 5: check
-- [x] xUnit 765/765, Windows and Android builds. - [ ] `scripts/Test-WindowsAdminNavigation.ps1` not run yet.
+- [x] xUnit 773/773 (2026-11-01), Windows build. Android not rebuilt since Phase 3. - [ ] `scripts/Test-WindowsAdminNavigation.ps1` not run yet.
 - [x] Demo-mode checks at 1920 px: My membership, Sessions (member and coach), Time requests (member and coach), Dashboard, Void a payment, Cashier, Check-in, My shifts, Admin overview.
 - [ ] Not yet: every other page at 1920 px, any page at 1100 px, the Android emulator.

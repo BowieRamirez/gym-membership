@@ -104,6 +104,31 @@ public class SideLayout : Layout
 }
 
 /// <summary>
+/// The rows of a table that is a table only while it has room: at WideFrom or wider it uses RowTemplate and shows Header (the
+/// column captions and their hairline); narrower, and on phones, it uses CardTemplate and hides Header, so fixed columns never
+/// squeeze the text ones down to a letter per line. Set the starting BindableLayout.ItemTemplate in XAML as before.
+/// </summary>
+public class TableBody : VerticalStackLayout
+{
+    public DataTemplate? RowTemplate { get; set; }
+    public DataTemplate? CardTemplate { get; set; }
+    public View? Header { get; set; }
+    public double WideFrom { get; set; } = 1000;
+    bool? wide;
+
+    protected override void OnSizeAllocated(double width, double height)
+    {
+        base.OnSizeAllocated(width, height);
+        // 24 px of slack once wide, so a scrollbar coming and going at the threshold can't flip it back and forth
+        var now = DeviceInfo.Idiom != DeviceIdiom.Phone && width >= WideFrom - (wide == true ? 24 : 0);
+        if (now == wide || width <= 0) return;
+        wide = now;
+        BindableLayout.SetItemTemplate(this, now ? RowTemplate : CardTemplate);
+        if (Header is not null) Header.IsVisible = now;
+    }
+}
+
+/// <summary>
 /// Cards in equal columns, filled row by row; each row is as tall as its tallest card. Unlike FlexLayout it gives every card a fixed
 /// width before measuring, so long text wraps inside the card instead of running past it. Works with BindableLayout.
 /// </summary>
@@ -282,7 +307,7 @@ public static class FieldFocus
 
     // a plain value (not a theme binding) so ClearValue hands the frame straight back to the Field style
     public static void Mark(Border b) =>
-        b.Stroke = Pick(Application.Current!.RequestedTheme == AppTheme.Dark ? "Lime" : "PlateBlueLight");
+        b.Stroke = Pick(Application.Current!.RequestedTheme == AppTheme.Dark ? "Lime" : "InkLight");
 
     public static void Unmark(Border b) => b.ClearValue(Border.StrokeProperty);
 
