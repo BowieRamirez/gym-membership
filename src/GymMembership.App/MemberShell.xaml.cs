@@ -27,6 +27,8 @@ public partial class MemberShell : Shell
 		Navigated += async (_, _) => await RecheckAsync();
 	}
 
+	protected override bool OnBackButtonPressed() => base.OnBackButtonPressed() || Controls.PhoneNavigation.SendToBackground();
+
 	// If the plan was approved (or expired) while the app was open, rebuild the menu so it matches.
 	async Task RecheckAsync()
 	{

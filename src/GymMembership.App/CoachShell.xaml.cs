@@ -11,4 +11,6 @@ public partial class CoachShell : Shell
 		Controls.IconRail.Install(this, "Coach", (Core.ViewModels.HeaderViewModel)GetTitleView(this).BindingContext, groupFrontDesk: false);
 #endif
 	}
+
+	protected override bool OnBackButtonPressed() => base.OnBackButtonPressed() || Controls.PhoneNavigation.SendToBackground();
 }

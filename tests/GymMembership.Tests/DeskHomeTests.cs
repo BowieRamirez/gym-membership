@@ -176,11 +176,15 @@ public class DeskHomeTests
         Assert.Null(vm.ErrorMessage);          // and no new error line
     }
 
+    // the demo refuses coach check-ins outside gym hours, so tests that check one in fix the time instead of using the real clock
+    sealed class FixedClock(DateTimeOffset now) : TimeProvider { public override DateTimeOffset GetUtcNow() => now; }
+    static readonly DateTimeOffset TenAmManilaToday = new(DateTime.UtcNow.AddHours(8).Date.AddHours(2), TimeSpan.Zero);   // 10:00 Manila is 02:00 UTC
+
     // Phase 4b: under the tiles, the payments waiting and the coaches in the gym, with Check out
     [Fact]
     public async Task Home_lists_payments_to_verify_and_coaches_in_the_gym()
     {
-        var (gw, _, svc) = await As("employee@demo.io");
+        var (gw, _, svc) = await As("employee@demo.io", new DemoGateway(clock: new FixedClock(TenAmManilaToday)));
         var coaches = new CoachService(gw);
         var vm = new HomeViewModel(svc, new PaymentStaffService(gw), coaches);
         await vm.OnAppearingAsync();

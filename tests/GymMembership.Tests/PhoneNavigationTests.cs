@@ -116,6 +116,17 @@ public class PhoneNavigationTests
         Assert.Contains("new ScrollView", Read("Views/PhoneMorePage.cs"));
     }
 
+    // Back on a tab's own page finished the app's only activity; reopening built a new window, which always starts on sign-in.
+    // The Shell still goes back when it can; when it can't, the app goes to the background, as Android does for other apps.
+    [Theory]
+    [InlineData("MemberShell.xaml.cs")]
+    [InlineData("CoachShell.xaml.cs")]
+    public void Back_on_a_main_page_sends_the_app_to_the_background_instead_of_closing_it(string shell)
+    {
+        Assert.Contains("protected override bool OnBackButtonPressed() => base.OnBackButtonPressed() || Controls.PhoneNavigation.SendToBackground();", Read(shell));
+        Assert.Contains("MoveTaskToBack(true)", Read("Controls/PhoneNavigation.cs"));
+    }
+
     [Theory]
     [InlineData("membership")]
     [InlineData("packages")]

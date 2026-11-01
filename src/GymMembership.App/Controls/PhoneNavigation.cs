@@ -31,6 +31,18 @@ public sealed class PhoneNavigation
         }
     }
 
+    /// <summary>Back with nothing left to go back to: on Android the app goes to the background, still signed in, on the same page.
+    /// Left to Android, Back finished the app's only activity, and reopening built a new window, which always starts on sign-in.</summary>
+    public static bool SendToBackground()
+    {
+#if ANDROID
+        Platform.CurrentActivity?.MoveTaskToBack(true);
+        return true;
+#else
+        return false;
+#endif
+    }
+
     public static void Attach(Shell shell, bool coach, IServiceProvider services, Access? access = null)
     {
         if (!IsSupported) return;
