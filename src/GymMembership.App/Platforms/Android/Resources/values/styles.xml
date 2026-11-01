@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- bottom tab labels: one size for all, so the selected one (bold) no longer grows into the screen edge -->
+    <style name="TabLabel" parent="TextAppearance.MaterialComponents.Caption">
+        <item name="android:textSize">12sp</item>
+    </style>
+    <style name="TabLabel.Active">
+        <item name="android:textStyle">bold</item>
+    </style>
+</resources>

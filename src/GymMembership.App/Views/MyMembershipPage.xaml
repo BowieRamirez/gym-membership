@@ -92,33 +92,36 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
+            <!-- The one memorable moment: days left, a lime card with a pill bar that runs out; then two plain number cards.
+                 Above the main/side split so it comes first on phones too (there the side, with Pay now and the QR, stacks first).
+                 Phones: days left full width, the two small cards as a pair under it. -->
+            <Grid ColumnDefinitions="{OnIdiom Phone='*,*', Default='*,*,*'}" RowDefinitions="{OnIdiom Phone='Auto,Auto', Default='Auto'}" ColumnSpacing="12" RowSpacing="12">
+                <Border Grid.ColumnSpan="{OnIdiom Phone=2, Default=1}" Style="{StaticResource HeroPanel}" Padding="{OnIdiom Phone='16,16', Default='18,14'}">
+                    <VerticalStackLayout Spacing="8">
+                        <c:CardTitle Icon="clock" Text="{Binding HeroCaption}" TextColor="{StaticResource Black}" />
+                        <Label Text="{Binding HeroNumber}" Style="{StaticResource Numeral}" FontSize="{OnIdiom Phone=72, Default=60}" TextColor="{StaticResource Black}"
+                               SemanticProperties.Description="Days left on your membership" />
+                        <c:LaneView Fraction="{Binding LaneFraction}" HeightRequest="26" DashColor="{StaticResource Black}" TrackColor="#5A6159" />
+                    </VerticalStackLayout>
+                </Border>
+                <Border Grid.Row="{OnIdiom Phone=1, Default=0}" Grid.Column="{OnIdiom Phone=0, Default=1}" Style="{StaticResource Panel}">
+                    <VerticalStackLayout Spacing="8">
+                        <c:CardTitle Icon="calendar-days" Text="Current term ends" />
+                        <Label Text="{Binding TermEndsText}" Style="{OnIdiom Phone={StaticResource KpiValue}, Default={StaticResource Numeral}}" />
+                    </VerticalStackLayout>
+                </Border>
+                <Border Grid.Row="{OnIdiom Phone=1, Default=0}" Grid.Column="{OnIdiom Phone=1, Default=2}" Style="{StaticResource Panel}">
+                    <VerticalStackLayout Spacing="8">
+                        <c:CardTitle Icon="banknote" Text="Payments waiting" />
+                        <Label Text="{Binding PaymentsWaitingText}" Style="{OnIdiom Phone={StaticResource KpiValue}, Default={StaticResource Numeral}}" />
+                        <Label Text="To pay or to be verified" Style="{StaticResource Caption}" />
+                    </VerticalStackLayout>
+                </Border>
+            </Grid>
+
             <c:SideLayout>
-                <!-- main: days left, paid terms, payments -->
+                <!-- main: paid terms, payments -->
                 <VerticalStackLayout Spacing="12">
-                    <!-- The one memorable moment: days left, a lime card with a pill bar that runs out; then two plain number cards -->
-                    <c:CardGrid Columns="{OnIdiom Phone=1, Default=3}" MinColumnWidth="180">
-                        <Border Style="{StaticResource HeroPanel}" Padding="{OnIdiom Phone='16,16', Default='18,14'}">
-                            <VerticalStackLayout Spacing="8">
-                                <c:CardTitle Icon="clock" Text="{Binding HeroCaption}" TextColor="{StaticResource Black}" />
-                                <Label Text="{Binding HeroNumber}" Style="{StaticResource Numeral}" FontSize="{OnIdiom Phone=84, Default=60}" TextColor="{StaticResource Black}"
-                                       SemanticProperties.Description="Days left on your membership" />
-                                <c:LaneView Fraction="{Binding LaneFraction}" HeightRequest="26" DashColor="{StaticResource Black}" TrackColor="#5A6159" />
-                            </VerticalStackLayout>
-                        </Border>
-                        <Border Style="{StaticResource Panel}">
-                            <VerticalStackLayout Spacing="8">
-                                <c:CardTitle Icon="calendar-days" Text="Current term ends" />
-                                <Label Text="{Binding TermEndsText}" Style="{StaticResource Numeral}" />
-                            </VerticalStackLayout>
-                        </Border>
-                        <Border Style="{StaticResource Panel}">
-                            <VerticalStackLayout Spacing="8">
-                                <c:CardTitle Icon="banknote" Text="Payments waiting" />
-                                <Label Text="{Binding PaymentsWaitingText}" Style="{StaticResource Numeral}" />
-                                <Label Text="To pay or to be verified" Style="{StaticResource Caption}" />
-                            </VerticalStackLayout>
-                        </Border>
-                    </c:CardGrid>
 
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                         <VerticalStackLayout Spacing="2">

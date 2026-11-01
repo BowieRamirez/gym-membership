@@ -31,8 +31,9 @@ public class AndroidAccountMenuTests
     {
         var source = Read("Controls/HeaderBar.Android.cs");
         Assert.Contains("SignOutButton.RemoveBinding(Button.CommandProperty)", source);
-        Assert.Contains("SignOutButton.Text = \"⌄\"", source);
-        Assert.Contains("SignOutButton.WidthRequest = 48", source);
+        Assert.Contains("AccountIcon.IsVisible = true", source);   // a drawn chevron chip: the font has no "⌄", Android showed a "v"
+        Assert.Contains("SignOutButton.WidthRequest = SignOutButton.HeightRequest = 48", source);
+        Assert.Contains("Icon=\"chevron-down\"", Read("Controls/HeaderBar.xaml"));
         Assert.Contains("SemanticProperties.SetDescription", source);
         Assert.Contains("new PopupMenu(anchor.Context!, anchor, GravityFlags.End)", source);
         Assert.Contains("items.Add(0, 1, 0, \"Settings\")", source);

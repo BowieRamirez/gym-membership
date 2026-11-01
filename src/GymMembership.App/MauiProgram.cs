@@ -35,6 +35,9 @@ public static class MauiProgram
 		var noUnderline = Android.Content.Res.ColorStateList.ValueOf(Android.Graphics.Color.Transparent);
 		Microsoft.Maui.Handlers.EntryHandler.Mapper.AppendToMapping(nameof(IView.Background), (h, _) => h.PlatformView.BackgroundTintList = noUnderline);
 		Microsoft.Maui.Handlers.EditorHandler.Mapper.AppendToMapping(nameof(IView.Background), (h, _) => h.PlatformView.BackgroundTintList = noUnderline);
+		Microsoft.Maui.Handlers.PickerHandler.Mapper.AppendToMapping(nameof(IView.Background), (h, _) => h.PlatformView.BackgroundTintList = noUnderline);
+		Microsoft.Maui.Handlers.DatePickerHandler.Mapper.AppendToMapping(nameof(IView.Background), (h, _) => h.PlatformView.BackgroundTintList = noUnderline);
+		Microsoft.Maui.Handlers.TimePickerHandler.Mapper.AppendToMapping(nameof(IView.Background), (h, _) => h.PlatformView.BackgroundTintList = noUnderline);
 #endif
 		// text links and the password eye: no button shape behind them. Windows' button template draws a grey pill on rest, hover and
 		// press, so it is swapped for a bare one that only shows the content; Android's button lifts with a shadow, which is turned off.

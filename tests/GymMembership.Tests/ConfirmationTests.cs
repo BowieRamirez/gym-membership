@@ -119,7 +119,6 @@ public class ConfirmationTests
     public static TheoryData<string, string, string> Approved => new()
     {
         { "MemberViewModels.cs", "HeaderViewModel", "SignOut" },
-        { "MemberViewModels.cs", "SettingsViewModel", "SignOut" },
         { "MemberViewModels.cs", "SettingsViewModel", "ChangePassword" },
         { "MemberViewModels.cs", "PackagesViewModel", "Avail" },
         { "MemberViewModels.cs", "AmenityBoardViewModel", "Buy" },

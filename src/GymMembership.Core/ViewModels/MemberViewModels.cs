@@ -918,7 +918,6 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
         Notice = "Password changed.";
     }
 
-    [RelayCommand] private async Task SignOutAsync() { if (!await Confirm.AskAsync("Sign out?", "You will need your email and password to sign in again.", "Sign out")) return; await auth.SignOutAsync(); nav.GoToLogin(); }
 
     // ---------- name ----------
     [ObservableProperty] private string firstName = "";

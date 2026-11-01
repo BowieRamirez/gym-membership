@@ -16,17 +16,18 @@
                     <c:CardTitle Icon="user-round" Text="{Binding With}" />
                     <Label Text="{Binding Session.ScheduledStart, Converter={StaticResource LocalDate}, ConverterParameter='h:mm tt'}" Style="{StaticResource Caption}" />
                     <Label Text="Cancelled" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold" IsVisible="{Binding Cancelled}" />
+                    <!-- Shrink 0 on every item: Android's FlexLayout otherwise squeezes them ("Presen", "Lat") instead of wrapping -->
                     <FlexLayout Wrap="Wrap" IsVisible="{Binding CanMark}">
-                        <Button Text="Present" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnMarkPresent">
+                        <Button Text="Present" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" FlexLayout.Shrink="0" Clicked="OnMarkPresent">
                             <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="present"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
                         </Button>
-                        <Button Text="Late" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnMarkLate">
+                        <Button Text="Late" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" FlexLayout.Shrink="0" Clicked="OnMarkLate">
                             <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="late"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
                         </Button>
-                        <Button Text="Absent" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnMarkAbsent">
+                        <Button Text="Absent" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" FlexLayout.Shrink="0" Clicked="OnMarkAbsent">
                             <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="absent"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
                         </Button>
-                        <Button Text="Excused" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnMarkExcused">
+                        <Button Text="Excused" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" FlexLayout.Shrink="0" Clicked="OnMarkExcused">
                             <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="excused"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
                         </Button>
                     </FlexLayout>
@@ -43,8 +44,8 @@
             <c:SideLayout SideFirst="False">
                 <!-- main: this month at a glance, the period, the month or the week -->
                 <VerticalStackLayout Spacing="12">
-                    <!-- this month at a glance: four cards, the first one lime -->
-                                <c:CardGrid Columns="{OnIdiom Phone=1, Default=4}" MinColumnWidth="180">
+                    <!-- this month at a glance: four cards, the first one lime; 2 x 2 on phones -->
+                                <c:CardGrid Columns="{OnIdiom Phone=2, Default=4}" MinColumnWidth="{OnIdiom Phone=140, Default=180}">
                                     <Border Style="{StaticResource HeroPanel}">
                                         <VerticalStackLayout Spacing="8">
                                             <c:CardTitle Icon="calendar-days" Text="Sessions this month" TextColor="{StaticResource Black}" />
@@ -72,25 +73,30 @@
                                     </Border>
                                 </c:CardGrid>
 
-                                <!-- Month | Week, then back, the period, forward, Today -->
-                                <FlexLayout Wrap="Wrap" AlignItems="Center">
-                                    <Button Text="Month" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding ShowMonthCommand}">
+                                <!-- One row on Windows: Month | Week, back, the period, forward, Today.
+                                     Phones: Month | Week with Today on the right, then back, the period centred, forward. -->
+                                <Grid ColumnDefinitions="{OnIdiom Phone='Auto,Auto,*,Auto', Default='Auto,Auto,Auto,Auto,*'}" RowDefinitions="{OnIdiom Phone='Auto,Auto', Default='Auto'}"
+                                      ColumnSpacing="8" RowSpacing="10">
+                                    <Button Text="Month" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" Command="{Binding ShowMonthCommand}">
                                         <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsMonth}" Value="True"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
                                     </Button>
-                                    <Button Text="Week" Style="{StaticResource SmallOutlineButton}" Margin="0,0,20,8" Command="{Binding ShowWeekCommand}">
+                                    <Button Grid.Column="1" Text="Week" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" Command="{Binding ShowWeekCommand}">
                                         <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsWeek}" Value="True"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
                                     </Button>
-                                    <Grid WidthRequest="44" HeightRequest="44" Margin="0,0,4,8">
-                                        <Button Style="{StaticResource SmallOutlineButton}" Padding="0" Command="{Binding PreviousCommand}" SemanticProperties.Description="Previous" />
-                                        <c:IconView Icon="chevron-left" Size="18" ChipSize="32" HorizontalOptions="Center" VerticalOptions="Center" />
+                                    <Grid Grid.Row="{OnIdiom Phone=1, Default=0}" Grid.Column="{OnIdiom Phone=0, Default=2}" Grid.ColumnSpan="{OnIdiom Phone=4, Default=1}"
+                                          ColumnDefinitions="{OnIdiom Phone='44,*,44', Default='44,Auto,44'}" ColumnSpacing="8" Margin="{OnIdiom Phone=0, Default='12,0,0,0'}">
+                                        <Grid WidthRequest="44" HeightRequest="44">
+                                            <Button Style="{StaticResource SmallOutlineButton}" Padding="0" Command="{Binding PreviousCommand}" SemanticProperties.Description="Previous" />
+                                            <c:IconView Icon="chevron-left" Size="18" ChipSize="32" HorizontalOptions="Center" VerticalOptions="Center" />
+                                        </Grid>
+                                        <Label Grid.Column="1" Text="{Binding PeriodTitle}" Style="{StaticResource Heading}" VerticalOptions="Center" HorizontalOptions="Center" />
+                                        <Grid Grid.Column="2" WidthRequest="44" HeightRequest="44">
+                                            <Button Style="{StaticResource SmallOutlineButton}" Padding="0" Command="{Binding NextCommand}" SemanticProperties.Description="Next" />
+                                            <c:IconView Icon="chevron-right" Size="18" ChipSize="32" HorizontalOptions="Center" VerticalOptions="Center" />
+                                        </Grid>
                                     </Grid>
-                                    <Label Text="{Binding PeriodTitle}" Style="{StaticResource Heading}" VerticalOptions="Center" Margin="8,0,8,8" />
-                                    <Grid WidthRequest="44" HeightRequest="44" Margin="0,0,12,8">
-                                        <Button Style="{StaticResource SmallOutlineButton}" Padding="0" Command="{Binding NextCommand}" SemanticProperties.Description="Next" />
-                                        <c:IconView Icon="chevron-right" Size="18" ChipSize="32" HorizontalOptions="Center" VerticalOptions="Center" />
-                                    </Grid>
-                                    <Button Text="Today" Style="{StaticResource SmallOutlineButton}" Margin="0,0,0,8" Command="{Binding TodayCommand}" />
-                                </FlexLayout>
+                                    <Button Grid.Column="3" Text="Today" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" Margin="{OnIdiom Phone=0, Default='4,0,0,0'}" Command="{Binding TodayCommand}" />
+                                </Grid>
 
                                 <!-- the month: a check for attended, an X for missed, both on a mixed day, nothing otherwise; every mark is also in the cell's spoken description -->
                                 <Border Style="{StaticResource Panel}" Padding="12" IsVisible="{Binding IsMonth}">

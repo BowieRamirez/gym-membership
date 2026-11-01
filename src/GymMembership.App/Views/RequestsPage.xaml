@@ -80,17 +80,18 @@
             <c:SideLayout>
                 <!-- main: the requests waiting for a reply -->
                 <VerticalStackLayout Spacing="10">
-                    <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" MinColumnWidth="180">
+                    <!-- a pair on phones too, with the smaller numerals (the date wraps between day and time) -->
+                    <c:CardGrid Columns="2" MinColumnWidth="{OnIdiom Phone=140, Default=180}">
                         <Border Style="{StaticResource Panel}">
                             <VerticalStackLayout Spacing="8">
                                 <c:CardTitle Icon="message-square" Text="Waiting for a reply" />
-                                <Label Text="{Binding WaitingText}" Style="{StaticResource Numeral}" />
+                                <Label Text="{Binding WaitingText}" Style="{OnIdiom Phone={StaticResource KpiValue}, Default={StaticResource Numeral}}" />
                             </VerticalStackLayout>
                         </Border>
                         <Border Style="{StaticResource Panel}">
                             <VerticalStackLayout Spacing="8">
                                 <c:CardTitle Icon="calendar-clock" Text="Next session" />
-                                <Label Text="{Binding NextSessionText}" Style="{StaticResource Numeral}" />
+                                <Label Text="{Binding NextSessionText}" Style="{OnIdiom Phone={StaticResource KpiValue}, Default={StaticResource Numeral}}" />
                             </VerticalStackLayout>
                         </Border>
                     </c:CardGrid>

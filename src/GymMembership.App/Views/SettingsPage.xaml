@@ -101,7 +101,6 @@
                 </VerticalStackLayout>
             </c:SideLayout>
 
-            <Button Text="Sign out" IsVisible="{OnPlatform WinUI=False, Default=True}" Style="{StaticResource OutlineButton}" Command="{Binding SignOutCommand}" HorizontalOptions="Start" />
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

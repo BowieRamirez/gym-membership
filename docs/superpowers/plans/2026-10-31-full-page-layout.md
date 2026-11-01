@@ -82,6 +82,22 @@
   - Contrast tests pass on the new colours. Seen in demo light mode: sign-in, Admin overview, Users and roles.
 - Owner kept the black "Open …" buttons on the Admin overview as they are.
 
+## Android to match Windows, 2026-11-01
+Owner: "match it with the windows version with the colors and the redesigns updated", for sign-in and the member and coach pages (the only Android users). The palette is shared, so the colours already carried over; these were the phone-only gaps, found and checked on the Pixel 7 emulator (API 36) in demo mode, light and dark:
+- [x] Status bar: Material's `AppBarLayout` paints the theme's black `colorPrimary` behind it edge to edge; `PhoneNavigation.StyleBar` now gives it the Shell backdrop colour. `MainActivity` sets dark/light status and navigation icons from the app's theme (the saved one, not only the phone's).
+- [x] Header account button: a drawn `chevron-down` chip on a bare 48 x 48 button (the font has no "⌄", Android showed a "v"); no longer cut off.
+- [x] Tab labels: one 12sp size, bold when selected (`Platforms/Android/Resources/values/styles.xml`), so "Membership" fits.
+- [x] More page (`PhoneMorePage`): white `Panel` cards with an icon chip, title and ›, palette colours instead of the old hard-coded ones.
+- [x] My membership: the number strip moved above the main/side split (phones stacked the QR first). Phones: days left full width, the two small cards as a pair (`KpiValue`). On Windows the strip now spans the page width.
+- [x] Time requests: its two number cards are a pair on phones too.
+- [x] Coach Dashboard: number cards 2 x 2 on phones; `FlexLayout.Shrink="0"` on the session marks and the period row (Android's FlexLayout squeezed them to "Presen", "Lat" and hid the period title).
+- [x] Android underline removed from `Picker`, `DatePicker`, `TimePicker` (as Entry/Editor already were).
+- [x] Owner follow-up: Dashboard period row is a grid. Windows keeps one row; phones get Month | Week with Today on the right, then ‹ period › centred. Tab bar: the lime pill is 28 high and the items get 8 top / 4 bottom padding, so there is a gap above the tab name (`ActiveIndicatorLabelPadding` alone did nothing). Tab bar in dark mode, owner (after first keeping it light): "make the nav bar at android dark but not too dark to see the separation", and it flashed while switching tabs. Now `SurfaceDark` #2C302B (a step above the #161816 page), light names, muted icons, black icon on the lime pill; the Shell colour and the restyled bar are the same, so nothing flashes.
+- [x] Settings: the Sign out button and `SettingsViewModel.SignOutCommand` removed (owner); Sign out stays in the header's account menu on Android.
+- Left as they are, on purpose: filter buttons wrap to a second row (a sideways scroll would hide options); the sign-in brand card stays a fixed header (from the shared `AuthShell`).
+- Found, not changed: Back on a main tab returns to the sign-in page without signing out, and Back from a More page lands on the first tab instead of the More list. Navigation, not this redesign.
+- Pitfall: an incremental Android build kept `supabase.json` in the APK after it was moved out. Demo Android builds need `--no-incremental`, and check the APK has only `supabase.sample.json` before signing in.
+
 ## Phase 5: check
 - [x] xUnit 773/773 (2026-11-01), Windows build. Android not rebuilt since Phase 3. - [ ] `scripts/Test-WindowsAdminNavigation.ps1` not run yet.
 - [x] Demo-mode checks at 1920 px: My membership, Sessions (member and coach), Time requests (member and coach), Dashboard, Void a payment, Cashier, Check-in, My shifts, Admin overview.

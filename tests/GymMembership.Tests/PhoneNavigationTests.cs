@@ -132,14 +132,15 @@ public class PhoneNavigationTests
         Assert.NotEmpty(svg.Root.Elements());
     }
 
-    // The redesign: the bar stays light in both themes so its icons can stay black, and the selected tab sits on lime.
+    // The redesign: a white bar in light mode, SurfaceDark in dark mode (owner, 2026-11-01: one step lighter than the page so it stays
+    // separate); the selected tab sits on lime with a black icon in both.
     [Fact]
-    public void Bottom_bar_is_light_in_both_themes_with_black_icons_and_lime_selection()
+    public void Bottom_bar_follows_the_theme_with_a_black_icon_on_the_lime_selection()
     {
         var source = Read("Controls/PhoneNavigation.cs");
-        Assert.Contains("TabBarBackgroundColorProperty, Color.FromArgb(\"#FFFFFF\"), Color.FromArgb(\"#E7EBE4\")", source);
+        Assert.Contains("TabBarBackgroundColorProperty, Color.FromArgb(\"#FFFFFF\"), Color.FromArgb(\"#2C302B\")", source);
         Assert.Contains("TabBarForegroundColorProperty, Color.FromArgb(\"#000000\"), Color.FromArgb(\"#000000\")", source);
-        Assert.Contains("TabBarTitleColorProperty, Color.FromArgb(\"#000000\"), Color.FromArgb(\"#000000\")", source);
+        Assert.Contains("TabBarTitleColorProperty, Color.FromArgb(\"#000000\"), Color.FromArgb(\"#EEF1EC\")", source);
         Assert.Contains("ItemActiveIndicatorColor", source);
         // the app's MaterialComponents theme gives the indicator no shape or size, so without these it never draws
         Assert.Contains("ItemActiveIndicatorShapeAppearance", source);
