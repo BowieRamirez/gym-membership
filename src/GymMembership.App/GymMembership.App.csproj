@@ -25,7 +25,7 @@
 		<RootNamespace>GymMembership.App</RootNamespace>
 		<UseMaui>true</UseMaui>
 		<SingleProject>true</SingleProject>
-		<MauiVersion>10.0.110</MauiVersion>
+		<MauiVersion>10.0.120</MauiVersion>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 
