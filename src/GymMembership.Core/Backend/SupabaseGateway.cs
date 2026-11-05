@@ -184,6 +184,8 @@ public sealed class SupabaseGateway : ISupabaseGateway
     }
 
     // ---------- tables ----------
+    // ponytail: the library doesn't quote values inside a grouped filter (a && b), so a comma starts a new condition. Filters hold only
+    // ids and fixed words today; send typed text to a server function instead. QueryInjectionTests pins this.
     public async Task<IReadOnlyList<T>> ListAsync<T>(Expression<Func<T, bool>>? where = null) where T : BaseModel, new()
     {
         var c = await ReadyAsync();

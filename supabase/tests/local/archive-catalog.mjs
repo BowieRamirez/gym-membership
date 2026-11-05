@@ -129,6 +129,17 @@ try {
     await db.query('grant select,insert,update,delete on storage.objects to authenticated');
     await assert.rejects(as(other, `insert into storage.objects(bucket_id,name) values('gym-assets','blocked.png')`), /row-level security/);
   });
+  await test('text in the dynamic SQL inputs stays plain text: type, id and reason cannot inject', async () => {
+    const attack = `x'; drop table profiles; --`;
+    await assert.rejects(archive(`membership_packages; drop table profiles; --`, plan), /bad_input/);
+    await assert.rejects(restore(`amenities" t; drop table profiles; --`, plan), /bad_input/);
+    await assert.rejects(restore('plan', `${plan}; drop table profiles`), /invalid input syntax/);
+    const target = (await db.query(`insert into membership_packages(name,price,duration_days) values('Injection target',1000,30) returning membership_package_id`)).rows[0].membership_package_id;
+    await archive('plan', target, attack);
+    const row = (await db.query('select is_active,archive_reason from membership_packages where membership_package_id=$1', [target])).rows[0];
+    assert.deepEqual(row, { is_active: false, archive_reason: attack });
+    assert.ok((await db.query(`select to_regclass('public.profiles') as t`)).rows[0].t);
+  });
 } finally {
   await db.end(); await server.stop();
 }

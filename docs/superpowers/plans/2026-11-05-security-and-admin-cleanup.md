@@ -24,14 +24,15 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 - Business rules live in the database and are mirrored in `DemoGateway`; hiding something in the UI is not enough.
 - New migrations continue from the latest number (0038 at the time of writing, so next is `0039`). Never rewrite an applied migration.
 - Logic goes in Core with an xUnit test in `tests/GymMembership.Tests`; database rules get a check in `supabase/tests/local`.
-- UI work: `frontend-design` skill first; AutomationIds used by the UI scripts stay on the same controls; phones keep their layouts.
+- UI work: AutomationIds used by the UI scripts stay on the same controls; phones keep their layouts.
+- **Design (owner, 2026-11-05):** every task that changes a screen uses the `impeccable` skill, so the system doesn't look like slop or AI-generated UI, alongside the `frontend-design` skill that `CLAUDE.md` requires. Main design phases: 7 and 8. Smaller screen changes: Phases 2, 3, 5 and 6, each marked below. Phases 1, 4 and 9 change no design unless a fix touches a screen.
 - Completed changes get `ponytail:ponytail-review` before finishing (`CLAUDE.md`).
 - Each new decision goes in section 2 with the owner's answer and the date.
 
 ### Current work / restart here
 
-- **2026-11-05:** Plan written and updated with the complete to-do list, no code changed. Branch created locally, not pushed.
-- Next concrete action: start Phase 1 with the baseline test run. Other decisions are needed only before the phase that uses them (see the table in section 3).
+- **2026-11-05:** Phase 1 VERIFIED and committed. Branch is local, not pushed. xUnit 779/779; database suite passes (307 counted).
+- Next concrete action: owner answers D8 (live email check) so Phase 2 can start. Other decisions are needed only before the phase that uses them (see the table in section 3).
 
 ## 1. Repository findings
 
@@ -81,7 +82,7 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 
 | Phase | Scope | Items | Needs | Status |
 | --- | --- | --- | --- | --- |
-| 1 | Parameterized query audit | 3 | D2 | PLANNED |
+| 1 | Parameterized query audit | 3 | D2 | VERIFIED |
 | 2 | Live email-in-use check | 2 | D2, D8 | PLANNED |
 | 3 | Lock names after creation | 1 | D2, D3 | PLANNED |
 | 4 | CRUD | 13 | D14 | PLANNED |
@@ -93,18 +94,21 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 | 10 | Final check and report | All | Phases 1-9 | PLANNED |
 
 ### Phase 1: parameterized queries (item 3)
-- [ ] Baseline: run xUnit and the database suite, and record the counts here before changing anything.
-- [ ] Check every query in `src/GymMembership.Core/Backend/` and `Services/` for filters or search text built with string interpolation.
-- [ ] Check `supabase/functions/` (`create-user`, `reset-password`, `_shared`).
-- [ ] Check every dynamic `execute` in the migrations, using the latest definition of each function. Confirm no user input reaches an identifier without a fixed list (`0024` at lines 49-52 and 74-78).
-- [ ] Add one check to `supabase/tests/local/rules.mjs` that puts an injection string through a search or name input and confirms it is treated as plain text.
-- [ ] Fix anything found. Record the result here even if nothing needed changing.
+- [x] Baseline (2026-11-05, before any change): xUnit 774/774; database suite exit 0, 306 counted, 0 failed.
+- [x] Check every query in `src/GymMembership.Core/Backend/` and `Services/` for filters or search text built with string interpolation. (2026-11-05: no SQL strings or hand-built filters. All 61 filter calls use ids, dates or fixed words; member search filters in the app, not in a query.)
+- [x] Check `supabase/functions/` (`create-user`, `reset-password`, `_shared`). (2026-11-05: read in full; all use the query builder with values passed separately.)
+- [x] Check every dynamic `execute` in the migrations, using the latest definition of each function. Confirm no user input reaches an identifier without a fixed list. (2026-11-05: only `0024` and `0006`. `0024` takes table and column names from a fixed `case` and passes values with `using`; `0006` only uses function signatures from the catalog. `chat_search` in `0015` is static SQL and escapes `\`, `%` and `_`.)
+- [x] Add checks that put injection strings through inputs and confirm they are treated as plain text. (2026-11-05: `rules.mjs` search with `%%`, `__` and a `drop table` string; `archive-catalog.mjs` type, id and reason; new `QueryInjectionTests.cs` for filter values. Removing the search escaping made the `rules.mjs` test fail, then the migration was restored unchanged.)
+- [x] Fix anything found. (2026-11-05: no injection path found in the app, so no behaviour changed.)
+- **Result:** item 3 was already met. Supabase queries go through the library or server functions, which keep values separate from the query. The checks above now guard that.
+- **Known limit:** the Supabase library does not quote values inside a grouped filter (`a && b`), so a comma in a value starts a new condition. Not reachable today, because those filters hold only ids and fixed words, and row level security still limits the results. Typed text must go to a server function. Pinned by `QueryInjectionTests` and a `ponytail:` comment on `SupabaseGateway.ListAsync`. Upgrade path: move any future typed-text filter to a server function.
+- `ponytail:ponytail-review` (2026-11-05): nothing to cut. Manual check: N/A, no screens changed. Deployment: N/A, no migration or Edge Function changed.
 
 ### Phase 2: email already in use (item 2)
 - [ ] Edge Function `check-email`: validates the address, applies the per-IP limit on the server, returns only `in_use` true or false. No anonymous database access, so the `rules.mjs` anonymous check stays as it is.
 - [ ] `IAuthService` method for the lookup, with the same behaviour in `DemoGateway`.
 - [ ] `RegisterViewModel`: 400 ms debounce with cancellation of the previous lookup; no lookup until the email shape is valid (`EmailShape`, `Services.cs:44`). Test: fast typing sends one lookup, and a slow old answer never overwrites a newer one.
-- [ ] `RegisterPage.xaml`: message under the email field, announced for screen readers. Lookup failure or rate limit shows nothing and does not block registering.
+- [ ] (`impeccable`) `RegisterPage.xaml`: message under the email field, announced for screen readers. Lookup failure or rate limit shows nothing and does not block registering.
 - [ ] The duplicate error on submit stays (`SupabaseGateway.cs:99`); it is the real guard.
 - [ ] Function test: over-limit calls are refused. Deploying the function is a separate step with the owner.
 
@@ -112,7 +116,7 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 - [ ] Migration `0039`: a trigger on `profiles` refuses changes to `first_name`, `last_name` and `full_name` after creation, including writers that only set `full_name` (`0035:31-39`). Revoke the `0035` update grant and retire its name-saving function as D3 requires.
 - [ ] Check that archive, restore and the `create-user` function still work with the trigger on.
 - [ ] Correction path per D3, audited, with a reason.
-- [ ] Settings: names shown read-only; `SaveNameAsync` and its command removed. Same refusal in `DemoGateway`.
+- [ ] (`impeccable`) Settings: names shown read-only; `SaveNameAsync` and its command removed. Same refusal in `DemoGateway`.
 - [ ] Tests: update `names-email.mjs` (it covers editing names today) and the xUnit name tests; add one check that a direct update as a signed-in user is refused.
 
 ### Phase 4: CRUD (item 13, marked very important)
@@ -123,19 +127,19 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 ### Phase 5: refunds and archiving (items 11, R2, 6, 8, 9, 12)
 - [ ] Item 11: test that approving a refund cancels that term and updates the member's status, and leaves other members untouched (`0025`). Later renewals per D10.
 - [ ] R2: migration changing `request_membership_refund` per D9, keeping `amount` equal to the payment. Not-yet-activated gets a full refund; anything else goes to manual review with a reason category.
-- [ ] `RefundsPage`: show activated or not and the reason category so staff can see which cases need review. Member screen says what happens before they submit, with no promise of a refund after activation.
+- [ ] (`impeccable`) `RefundsPage`: show activated or not and the reason category so staff can see which cases need review. Member screen says what happens before they submit, with no promise of a refund after activation.
 - [ ] Tests at the edges: just before and after activation, already checked in, second request, 0 amount, voided payment.
 - [ ] Item 6: verify archiving a deleted user keeps their payments, terms and check-ins, and they show in the Archive; fix any gaps.
 - [ ] Items 8 and 9: verify an inactive code can be deleted and lands in the Archive, and that an active one follows the rule you confirm here. The UI label says what happens.
 - [ ] Item 12: verify deleting an amenity archives it, no path removes the row, and existing passes and bookings still display.
 
 ### Phase 6: amenities and check-in fallbacks (items 7, 10, forgot phone)
-- [ ] Item 7: database change per D11 (session-based tracking, coach-present rule on the server), demo parity, booking and pass screens updated. Write tasks in detail once D11 is answered, because it changes pricing.
-- [ ] Item 10: local copy and queue per D12, with the sync rechecked by the server. Tests: stale copy, expired member, replayed queue doesn't double check in, and offline result never says plain Active.
-- [ ] Forgot phone: on the Check-in page's name search, show membership status and expiry before Check in; expired or inactive members can't be checked in; the check-in records that it was manual and who did it. Test: refused for an expired member by a direct call.
+- [ ] (`impeccable` for the screens) Item 7: database change per D11 (session-based tracking, coach-present rule on the server), demo parity, booking and pass screens updated. Write tasks in detail once D11 is answered, because it changes pricing.
+- [ ] (`impeccable` for the offline states) Item 10: local copy and queue per D12, with the sync rechecked by the server. Tests: stale copy, expired member, replayed queue doesn't double check in, and offline result never says plain Active.
+- [ ] (`impeccable`) Forgot phone: on the Check-in page's name search, show membership status and expiry before Check in; expired or inactive members can't be checked in; the check-in records that it was manual and who did it. Test: refused for an expired member by a direct call.
 
 ### Phase 7: admin overview, status labels and role names (items 4, 15, D17)
-- [ ] Mockup in `docs/mockups/`; owner approves before building (D6).
+- [ ] (`impeccable`, main design phase) Mockup in `docs/mockups/`; owner approves before building (D6).
 - [ ] Build it, keeping every destination reachable: accounts, packages, discounts, cancellations and refunds, revenue, payments, membership sync, logs and archive.
 - [ ] Update the Overview checks in `scripts/Test-WindowsAdminNavigation.ps1` if the shortcuts change.
 - [ ] Check in demo mode at about 900 px and maximised, in light and dark.
@@ -148,7 +152,7 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 - [ ] Migration: `ip_address` and `role` on `audit_log`, filled inside `audit()` per D7.
 - [ ] Server-side paging, 10 rows per page, with filters (D7). `AuditAsync` stops loading the whole table.
 - [ ] Item 14: map of action code to readable label in Core (`user.archive` becomes "Account deleted"). A test fails if any code used in the migrations or `DemoGateway` has no label; an unknown code shows as itself, never blank.
-- [ ] Swap the rows in `AuditPage.xaml` for a table with `TableHead` and `c:TableBody`, with a `WideFrom` value (`PageLayoutTests` checks each `TableHead` has one). Columns: date/time, user, role, IP address, action type, action, object type, object, change details.
+- [ ] (`impeccable`, main design phase, including filters and export) Swap the rows in `AuditPage.xaml` for a table with `TableHead` and `c:TableBody`, with a `WideFrom` value (`PageLayoutTests` checks each `TableHead` has one). Columns: date/time, user, role, IP address, action type, action, object type, object, change details.
 - [ ] Export button: CSV of the filtered rows, not just the visible page. Cells starting with `=`, `+`, `-` or `@` are escaped so a spreadsheet can't run them.
 - [ ] Check in demo mode, wide and narrow.
 
@@ -164,6 +168,7 @@ Each attempt gets a recorded result: refused correctly, or a bug with its fix. T
 ### Phase 10: final check and report
 - [ ] xUnit and database suites pass; Windows and Android builds pass; `scripts/Test-WindowsAdminNavigation.ps1` passes.
 - [ ] `ponytail:ponytail-review` on the changes; findings recorded.
+- [ ] `impeccable` review of every screen changed by this plan; fixes made and findings recorded.
 - [ ] Report to the owner: which items are done, which need clarification, which to check manually.
 - [ ] With the owner, separately: apply migrations, deploy Edge Functions, set the Auth password rule, open the PR, release.
 
@@ -229,3 +234,4 @@ Work in priority order: items 3, 2 and 1 first (security and data integrity), th
 - **2026-11-05:** Complete to-do list received; added items 5 (rest), 6-15, R2, the forgot-phone fallback and decisions D9-D16. Phases renumbered to 10. No code, database or git changes.
 - **2026-11-05:** Owner renamed the roles: Super admin to System admin, Sub-admin to Admin (D17, Phase 7). No code, database or git changes.
 - **2026-11-05:** Branch `security-admin-cleanup-2026-11-05` created from `origin/main` (D2); plan committed there.
+- **2026-11-05:** Phase 1 done: query audit found no injection path, tests added, one library limit recorded. xUnit 779/779; database suite exit 0, 307 counted. Owner added the `impeccable` rule for screen work.

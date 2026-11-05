@@ -633,6 +633,11 @@ await test('search finds a person by name and a conversation by message text, on
   assert.equal((await run(alex, `select * from chat_search('chat 77')`)).rowCount, 0);   // not Alex's conversation
   assert.equal((await run(bea, `select * from chat_search('c')`)).rowCount, 0);          // under two characters
   assert.equal((await run(bea, `select * from chat_search('%')`)).rowCount, 0);
+  // two characters, so these reach the search: unescaped, each would match all of Bea's conversations
+  assert.equal((await run(bea, `select * from chat_search($1)`, ['%%'])).rowCount, 0);
+  assert.equal((await run(bea, `select * from chat_search($1)`, ['__'])).rowCount, 0);
+  assert.equal((await run(bea, `select * from chat_search($1)`, [`'; drop table profiles; --`])).rowCount, 0);
+  assert.ok((await db.query(`select to_regclass('public.profiles') as t`)).rows[0].t);
   assert.equal((await run(desk, `select * from chat_search('payment is stuck')`)).rowCount, 1);   // staff find front-desk text
 });
 await test('support permission exists for admin, sub-admin and front desk only', async () => {
