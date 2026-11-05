@@ -72,6 +72,9 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 - [ ] **D12 — offline check-in (blocks Phase 6):** Reverses "offline is never Active" in the 2026-10-20 plan. Does offline mean the gym's internet is down, and how old may the data be? Recommend: the desk keeps a local copy of member codes and statuses, refreshed while online. Offline scans show "Last updated at ..." rather than Active, and check-ins are queued with their time, flagged as offline, then sent on reconnect and rechecked by the server. Copies older than 24 hours show "can't check". Known risk: a member who expired since the last refresh can get in.
 - [ ] **D13 — status labels (blocks Phase 7):** The list asks to confirm scope. Recommend: Active, Inactive and Deleted for accounts, packages, amenities and discount codes only. Memberships, payments and refunds keep their own statuses, because "Pending" or "Expired" would lose meaning.
 - [ ] **D14 — what CRUD means per entity (blocks Phase 4):** Recommend: master data (accounts, packages, amenities, codes) gets full create, read and update, with delete as archive. Money and history (payments, refunds, terms, check-ins, audit log) can't be edited or deleted, only reversed by the existing actions. Phase 4 produces the table for the owner to approve.
+- [ ] **D18 — phone and member goals (G1, blocks Phase 4):** The database stores both and lets people edit them, but no screen shows them. Recommend: remove the update permission and leave the columns unused, because nothing on the to-do list asks for them. Alternative: add them to Settings.
+- [ ] **D19 — editing discount codes (G2, blocks Phase 4):** Only the limit and on/off can change today. Recommend: also allow changing the end date, and keep code and percent fixed, because people may already have used them at that value.
+- [ ] **D20 — unused delete permissions (G3, blocks Phase 4):** Signed-in users have delete permission on shifts and notifications, limited by row rules, but the app never uses it. Recommend: remove it, since a shift's history should stay even when cancelled.
 - [ ] **D15 — items without a place in the priority order:** The list's order doesn't mention amenities (7), QR offline (10), the forgot-phone fallback or status labels (15). Recommend: 7, 10 and forgot-phone after refunds and archiving (Phase 6), and 15 with the UI (Phase 7). This plan assumes that until the owner says otherwise.
 - [ ] **D16 — "every function" in the testing item:** Recommend: every database function callable from the app gets at least one attempt to break it, enforced by a `rules.mjs` check that fails when a function has no test. UI screens are covered by the listed cases only.
 - [x] **D17 — role names (owner, 2026-11-05):** Super admin is now called **System admin**, and Sub-admin is now called **Admin**. Implementer's call, not asked: this changes the names people see only, and permissions stay the same. The internal codes stay as they are (`admin` = System admin, `subadmin` = Admin), because renaming them would touch applied migrations, permissions and existing accounts. From here on, "admin" in this plan's code references means the code; on screen it means the former Sub-admin.
@@ -132,8 +135,26 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 - [ ] Owner checks Correct name on the real backend.
 
 ### Phase 4: CRUD (item 13, marked very important)
-- [ ] Table in this plan: one row per entity, with what create, read, update and delete should do, who may do it, and where it is in the app. Owner approves it (D14).
-- [ ] For each row, test the service and the database function, and record pass or gap in the table.
+- [x] Table below drafted from the live database's permissions and a read of the services, view models and screens (2026-11-05). Nothing in it has been run yet, and the owner has not approved it (D14).
+
+| Entity | Create | Read | Update | Delete | Finding |
+| --- | --- | --- | --- | --- | --- |
+| Accounts | Register; Users and roles | Users and roles | Roles, active, reset password, sign-in email; name locked (Phase 3) | Archive | Looks complete |
+| Phone (all accounts) | None | None | Database allows it, no screen | None | **G1: stored but nowhere in the app** |
+| Member goals | None | None | Database allows it, no screen | None | **G1: stored but nowhere in the app** |
+| Coach profile | Created with the account | Coaches list, My coach profile | My coach profile | With the account | Looks complete |
+| Packages | Packages and amenities | Same; member Packages | Same | Archive; restore in Archive | Looks complete |
+| Amenities | Packages and amenities | Same; member Amenities | Same | **Deactivate only, no delete button** | **Gap: item 12, fixed in Phase 5** |
+| Discount codes | Discounts | Discounts | **Limit and on/off only**; code, percent and dates are fixed | Archive; restore in Archive | **G2: dates can't be changed** |
+| Gym settings | One fixed row | Gym settings | Gym settings | Not applicable | Looks complete |
+| Shifts | My shifts | My shifts, booking | Status | Cancel; **database also allows real delete, unused** | **G3: unused delete permission** |
+| Notifications | Server only | Bell | Mark read | **Database allows delete, no screen** | **G3: unused delete permission** |
+| Sessions, requests, reservations | Through the booking flows | Their pages | Reschedule, respond, extend | Cancel; history kept | Looks complete |
+| Messages, support | Send | Messages | Mark read | None; history kept | By design per D14 |
+| Payments, refunds, terms | Through the payment flows | Their pages | Verify, void, refund decisions only | None; reversed instead | By design per D14 |
+| Check-ins, scans, audit log | Server only | Their pages | None | None | By design per D14 |
+| Roles and permissions | Fixed in the database | Used by the app | Assign and remove roles | None | By design |
+- [ ] After approval: for each row, test the service and the database function, and record pass or gap in the table.
 - [ ] Fix the gaps, each with a test and the same behaviour in `DemoGateway`.
 
 ### Phase 5: refunds and archiving (items 11, R2, 6, 8, 9, 12)
