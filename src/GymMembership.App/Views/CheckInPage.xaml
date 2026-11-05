@@ -17,6 +17,15 @@
                             <Border Style="{StaticResource Panel}">
                             <VerticalStackLayout Spacing="12">
                             <c:CardTitle Icon="scan-line" Text="Scan a member" />
+                            <Label Text="{Binding OfflineText}" FontFamily="BarlowSemiBold" IsVisible="{Binding IsOffline}" AutomationId="OfflineNotice" />
+                            <VerticalStackLayout Spacing="6" IsVisible="{Binding HasQueue}">
+                                <Label Text="{Binding QueueText}" Style="{StaticResource Caption}" AutomationId="QueueText" />
+                                <Button Text="Send now" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" Command="{Binding SendQueueCommand}" AutomationId="SendQueue" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Spacing="6" IsVisible="{Binding HasRefused}">
+                                <Label Text="{Binding RefusedText}" Style="{StaticResource FieldError}" IsVisible="{Binding HasRefused}" AutomationId="RefusedText" />
+                                <Button Text="Dismiss" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" Command="{Binding ClearRefusedCommand}" />
+                            </VerticalStackLayout>
                             <FlexLayout Wrap="Wrap" AlignItems="Center">
                                 <Button Text="Scan member QR" Style="{StaticResource SmallButton}" Command="{Binding ToggleCameraCommand}" Margin="0,0,12,8" AutomationId="ScanCamera">
                                     <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsScanning}" Value="True"><Setter Property="Text" Value="Stop camera" /></DataTrigger></Button.Triggers>
@@ -79,9 +88,12 @@
                 <DataTemplate x:DataType="svc:MemberHit">
                     <Border Style="{StaticResource Row}">
                         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="14">
-                            <Label Text="{Binding Username}" Style="{StaticResource Heading}" VerticalOptions="Center" />
+                            <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                                <Label Text="{Binding Username}" Style="{StaticResource Heading}" />
+                                <Label Text="{Binding PlanText}" Style="{StaticResource Caption}" />
+                            </VerticalStackLayout>
                             <c:StatusChip Grid.Column="1" Status="{Binding PlanStatus}" VerticalOptions="Center" />
-                            <Button Grid.Column="2" Text="Check in" Style="{StaticResource SmallButton}"
+                            <Button Grid.Column="2" Text="Check in" Style="{StaticResource SmallButton}" IsEnabled="{Binding CanCheckIn}"
                                     Clicked="OnCheckIn" />
                         </Grid>
                     </Border>

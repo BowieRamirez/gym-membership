@@ -34,7 +34,7 @@ public static class ErrorMapper
         var m = message.ToLowerInvariant();
         if (Has(m, "forbidden", "42501", "jwt", "row-level security", "invalid login", "invalid_credentials", "not authenticated")) return AppErrorKind.Unauthorized;
         if (Has(m, "account_has_commitments", "account_archived", "record_archived", "record_not_restorable", "code_limit_reached", "shift_has_sessions", "slot_taken", "member_busy", "stale_proposal", "coach_unavailable", "coach_busy", "already_started", "not_in_use", "amenity_unavailable", "not_archived", "already_processed", "already_availed", "renewal_pending", "already_requested", "refund_in_progress", "not_refundable", "pending_session_request", "active_coaching_session", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
-        if (Has(m, "account_inactive", "bad_archive_reason", "bad_correction_reason", "discount_fixed", "refund_reason_required", "self_archive", "last_active_admin", "no_active_membership", "self_verify", "self_decision", "not_renewable", "wrong_member", "not_found", "23514",
+        if (Has(m, "account_inactive", "bad_archive_reason", "bad_correction_reason", "discount_fixed", "refund_reason_required", "no_coach_present", "self_archive", "last_active_admin", "no_active_membership", "self_verify", "self_decision", "not_renewable", "wrong_member", "not_found", "23514",
                    "refund_window_closed", "payment_expired", "gym_closed", "coach_not_in_gym", "bad_rate", "invite_member_inactive", "invalid_code", "limit_required", "bad_hours", "off_grid", "outside_gym_hours", "too_long", "past_slot", "too_far_ahead", "no_pass", "limit_below_used", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "super_admin_protected", "bad_code", "code_not_verified", "resend_wait", "same_password", "end must be after start")) return AppErrorKind.Validation;
         return AppErrorKind.Unknown;
     }
@@ -78,7 +78,7 @@ public static class ErrorText
         "too_long" => "A booking can be at most 2 hours (four touching slots).",
         "past_slot" => "That time has already started. Pick a later slot.",
         "too_far_ahead" => "You can book up to 14 days ahead.",
-        "no_pass" => "You need an active pass for this amenity. Buy one on the Amenities page.",
+        "no_pass" => "You need an active pass or session for this amenity. Buy one on the Amenities page.",
         "amenity_unavailable" => "This amenity is closed at that time.",
         "already_started" => "This booking has already started. Use End now instead.",
         "not_in_use" => "This booking is not in use right now.",
@@ -117,6 +117,7 @@ public static class ErrorText
         "renewal_pending" => "A membership or extension payment is already waiting. Finish that payment first.",
         "refund_window_closed" => "This term has ended, so a refund can't be requested.",
         "refund_reason_required" => "Choose why you are asking for a refund.",
+        "no_coach_present" => "Amenities can only be used while a coach is in the gym, and no coach is here right now.",
         "payment_expired" => "That unpaid payment has expired. Create a fresh payment.",
         "already_requested" => "A cancellation and refund request already exists for this term.",
         "active_coaching_session" => "You already have an active session together. Open Sessions to reschedule or cancel it. Finish, cancel or mark that session no-show before requesting another.",

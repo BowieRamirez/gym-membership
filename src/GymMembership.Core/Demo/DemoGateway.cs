@@ -72,6 +72,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     string[] RolesOf(string? user) => All<UserRole>().Where(u => u.UserId == user)
         .Select(u => All<Role>().First(r => r.RoleId == u.RoleId).Name).ToArray();
     bool Has(string permission) => RolesOf(CurrentUserId).Any(r => RolePermissions[r].Contains(permission));
+    bool CoachInGym => All<CoachVisit>().Any(v => v.CheckedOutAt is null && All<Profile>().Any(p => p.Id == v.CoachId && p.IsActive));
     bool IsStaff => RolesOf(CurrentUserId).Any(r => r is "admin" or "subadmin" or "employee");
     /// <summary>can_manage_person (0036): the super admin manages anyone; others with users:manage, members and coaches only.</summary>
     bool CanManagePerson(string user) => IsActiveUser && Has("users:manage") &&
@@ -309,6 +310,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                         throw Err("new row for relation \"messages\" violates check constraint (23514)");
                     break;
                 case AmenityUsage u:
+                    if (!CoachInGym) throw Err("no_coach_present");   // 0043
                     if (!ActiveMember(Uid) || !All<UserAmenity>().Any(a => a.Id == u.UserAmenityId && a.MemberId == Uid && a.Status == Status.Active && (a.ExpiresAt is null || a.ExpiresAt > DateTime.UtcNow)))
                         throw Err(Rls);
                     break;
@@ -615,7 +617,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 var am = All<Amenity>().FirstOrDefault(x => x.Id == I("p_amenity_id") && x.IsActive) ?? throw Err("not_found");
                 if (All<UserAmenity>().Any(x => x.MemberId == uid && x.AmenityId == am.Id && x.Status is Status.Pending or Status.Active)) throw Err("already_availed");
                 var d = Discounted(uid, a, am.Price);
-                var ua = Add(new UserAmenity { MemberId = uid, AmenityId = am.Id, Status = Status.Pending, AvailedAt = now });
+                var ua = Add(new UserAmenity { MemberId = uid, AmenityId = am.Id, Status = Status.Pending, AvailedAt = now, IsSession = am.DurationDays is null });
                 return Clone(NewQrPayment(PayKind.Amenity, uid, d, amenity: ua.Id));
             }
             case "renew_membership":
@@ -709,7 +711,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                         var am = All<Amenity>().FirstOrDefault(x => x.Id == itemId && x.IsActive) ?? throw Err("not_found");
                         if (All<UserAmenity>().Any(x => x.MemberId == memberId && x.AmenityId == am.Id && x.Status is Status.Pending or Status.Active)) throw Err("already_availed");
                         d = Discounted(memberId, a, am.Price);
-                        ua = Add(new UserAmenity { MemberId = memberId, AmenityId = am.Id, Status = Status.Pending, AvailedAt = now }).Id;
+                        ua = Add(new UserAmenity { MemberId = memberId, AmenityId = am.Id, Status = Status.Pending, AvailedAt = now, IsSession = am.DurationDays is null }).Id;
                     }
                 }
 
@@ -936,9 +938,26 @@ public sealed partial class DemoGateway : ISupabaseGateway
             {
                 Require("check_ins:record");
                 var memberId = S("p_member_id");
+                var method = Opt("p_method");
+                var at = Opt("p_at") is { } when ? DateTime.Parse(when, null, System.Globalization.DateTimeStyles.AdjustToUniversal) : (DateTime?)null;
+                var clientRef = Opt("p_client_ref");
+                if (method is not (null or "qr" or "manual" or "offline")) throw Err("bad_input");
+                if (at is { } t0 && (method != "offline" || t0 > now.AddMinutes(5) || t0 < now.AddHours(-48))) throw Err("bad_input");
+                if (clientRef is not null && All<GymCheckIn>().FirstOrDefault(c => c.ClientRef == clientRef) is { } again) return again.Id;
                 if (All<Member>().All(m => m.UserId != memberId)) throw Err("not_found");
-                if (!ActiveMember(memberId)) throw Err("no_active_membership");
-                return Add(new GymCheckIn { MemberId = memberId, CheckedInAt = now }).Id;
+                if (at is { } t1
+                    ? !(All<Profile>().Any(p => p.Id == memberId && p.IsActive) && All<MembershipTerm>().Any(x => x.MemberId == memberId && x.CancelledAt is null && x.StartsAt <= t1 && t1 < x.EndsAt))
+                    : !ActiveMember(memberId)) throw Err("no_active_membership");
+                return Add(new GymCheckIn { MemberId = memberId, CheckedInAt = at ?? now, Method = method, ClientRef = clientRef }).Id;
+            }
+            case "desk_member_snapshot":
+            {
+                Require("check_ins:record");
+                return All<Member>().Where(m => All<Profile>().Any(p => p.Id == m.UserId && p.IsActive) && All<MemberCode>().Any(c => c.UserId == m.UserId)).Select(m => new SavedMember
+                {
+                    Code = All<MemberCode>().First(c => c.UserId == m.UserId).Code, Member = m.UserId, Name = All<Profile>().First(p => p.Id == m.UserId).FullName,
+                    Terms = All<MembershipTerm>().Where(x => x.MemberId == m.UserId && x.CancelledAt is null && x.EndsAt > now).Select(x => new SavedTerm { Starts = x.StartsAt, Ends = x.EndsAt }).ToList(),
+                }).ToList();
             }
             case "verify_amenity_usage":
             {

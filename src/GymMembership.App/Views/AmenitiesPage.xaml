@@ -11,6 +11,7 @@
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
             <Label Text="What is open right now." Style="{StaticResource Muted}" />
             <Label Text="Tap Notify me on an amenity to get an alert when it becomes available or unavailable." Style="{StaticResource Muted}" IsVisible="{Binding CanFollow}" />
+            <Label Text="No coach is in the gym right now. Amenities can only be used while a coach is here." FontFamily="BarlowSemiBold" IsVisible="{Binding NoCoachInGym}" AutomationId="NoCoachNotice" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
         </VerticalStackLayout>

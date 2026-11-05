@@ -74,6 +74,8 @@ public static class MauiProgram
 		s.AddSingleton<ICoachService, CoachService>();
 		s.AddSingleton<ISessionService, SessionService>();
 		s.AddSingleton<IAttendanceService, AttendanceService>();
+		s.AddSingleton<IDeskStore, FileDeskStore>();
+		s.AddSingleton<OfflineDesk>();
 		s.AddSingleton<INotificationService, NotificationService>();
 		s.AddSingleton<IChatService, ChatService>();
 		// live updates need the real project; the demo and the tests use the do-nothing version

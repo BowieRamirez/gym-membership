@@ -58,7 +58,8 @@ public sealed partial class DemoGateway
                     return list;
                 }).OrderBy(b => b.Start).ToList();
                 var g = All<GymSettings>().First();
-                var made = new List<(int Amenity, DateTime Start, DateTime End)>();
+                var made = new List<(int Amenity, DateTime Start, DateTime End, int? Session)>();
+                var sessions = new HashSet<int>();
                 foreach (var b in bookings)
                 {
                     if (b.Count > 4) throw Err("too_long");
@@ -68,17 +69,21 @@ public sealed partial class DemoGateway
                     if (b.Start < day - Manila + g.OpensAt || b.End > day - Manila + g.ClosesAt) throw Err("outside_gym_hours");
                     var am = All<Amenity>().FirstOrDefault(x => x.Id == b.Amenity && x.IsActive) ?? throw Err("not_found");
                     if (am.Availability == "unavailable" && (am.BackAt is null || am.BackAt > b.Start)) throw Err("amenity_unavailable");
-                    if (!All<UserAmenity>().Any(p => p.MemberId == Uid && p.AmenityId == b.Amenity && p.Status == Status.Active && (p.ExpiresAt is null || p.ExpiresAt >= b.End))) throw Err("no_pass");
+                    if (b.Start <= now.AddMinutes(30) && !CoachInGym) throw Err("no_coach_present");   // 0043
+                    var pass = All<UserAmenity>().Where(p => p.MemberId == Uid && p.AmenityId == b.Amenity && p.Status == Status.Active && (p.ExpiresAt is null || p.ExpiresAt >= b.End) && !sessions.Contains(p.Id))
+                        .OrderBy(p => p.IsSession).ThenBy(p => p.Id).FirstOrDefault() ?? throw Err("no_pass");
+                    if (pass.IsSession) sessions.Add(pass.Id);
                     var others = Confirmed.Select(r => (AmenityId: r.AmenityId, MemberId: r.MemberId, Start: r.StartsAt, End: r.EndsAt))
                         .Concat(made.Select(m => (AmenityId: m.Amenity, MemberId: Uid!, Start: m.Start, End: m.End))).ToList();
                     if (others.Any(o => o.MemberId == Uid && o.Start < b.End && b.Start < o.End)
                         || All<TrainingSession>().Any(t => t.MemberId == Uid && t.Status == Status.Scheduled && t.ScheduledStart < b.End && b.Start < t.ScheduledEnd)) throw Err("member_busy");
                     if (others.Any(o => o.AmenityId == b.Amenity && o.Start < b.End + Cooldown && b.Start < o.End + Cooldown)) throw Err("slot_taken");
-                    made.Add((b.Amenity, b.Start, b.End));
+                    made.Add((b.Amenity, b.Start, b.End, pass.IsSession ? pass.Id : null));
                 }
                 result = made.Select(m =>
                 {
-                    var r = Add(new Reservation { MemberId = Uid!, AmenityId = m.Amenity, StartsAt = m.Start, EndsAt = m.End });
+                    var r = Add(new Reservation { MemberId = Uid!, AmenityId = m.Amenity, StartsAt = m.Start, EndsAt = m.End, UserAmenityId = m.Session });
+                    if (m.Session is { } used) All<UserAmenity>().First(p => p.Id == used).Status = Status.Expired;
                     Audit("reservation.book", "reservations", r.Id.ToString());
                     return Clone(r);
                 }).ToList();
@@ -93,6 +98,7 @@ public sealed partial class DemoGateway
                 if (r.Status != "confirmed") throw Err("already_processed");
                 if (r.StartsAt <= now) throw Err("already_started");
                 r.Status = "cancelled"; r.CancelledAt = now; r.CancelledBy = Uid; r.CancelReason = string.IsNullOrEmpty(reason) ? null : reason;
+                if (r.UserAmenityId is { } session) All<UserAmenity>().First(p => p.Id == session).Status = Status.Active;
                 if (r.MemberId != Uid) Notify(r.MemberId, "amenity", "Booking cancelled", reason);
                 Audit("reservation.cancel", "reservations", r.Id.ToString());
                 return true;

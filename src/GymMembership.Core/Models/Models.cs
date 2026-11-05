@@ -101,7 +101,8 @@ public class NotifiedMember : BaseModel
 }
 
 [Table("user_amenities")] public class UserAmenity : BaseModel
-{ [PrimaryKey("user_amenity_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("amenity_id")] public int AmenityId { get; set; }
+{ [Column("is_session", ignoreOnInsert: true, ignoreOnUpdate: true)] public bool IsSession { get; set; }
+  [PrimaryKey("user_amenity_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("amenity_id")] public int AmenityId { get; set; }
   [Column("status")] public string Status { get; set; } = "pending"; [Column("availed_at")] public DateTime AvailedAt { get; set; } [Column("expires_at")] public DateTime? ExpiresAt { get; set; } }
 
 // members insert (user_amenity_id, proof_path, notes); status and times are set by the database and by verify_amenity_usage
@@ -142,7 +143,9 @@ public class NotifiedMember : BaseModel
   [Column("checked_in_at")] public DateTime? CheckedInAt { get; set; } [Column("notes")] public string? Notes { get; set; } }
 
 [Table("gym_check_ins")] public class GymCheckIn : BaseModel
-{ [PrimaryKey("check_in_id")] public int Id { get; set; } [Column("member_id")] public string? MemberId { get; set; } [Column("payment_id")] public int? PaymentId { get; set; }
+{ [Column("method", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? Method { get; set; }
+  [Column("client_ref", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? ClientRef { get; set; }
+  [PrimaryKey("check_in_id")] public int Id { get; set; } [Column("member_id")] public string? MemberId { get; set; } [Column("payment_id")] public int? PaymentId { get; set; }
   [Column("checked_in_at")] public DateTime CheckedInAt { get; set; } }
 
 // unread while ReadAt is null; the app may only set read_at. (No computed IsRead property: every public property is sent in a write.)
@@ -250,7 +253,8 @@ public class ChatSearchHit : BaseModel
 
 // one amenity booking (0029). Written only through book_slots / cancel_reservation / end_reservation / extend_reservation.
 [Table("reservations")] public class Reservation : BaseModel
-{ [PrimaryKey("reservation_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("amenity_id")] public int AmenityId { get; set; }
+{ [Column("user_amenity_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? UserAmenityId { get; set; }
+  [PrimaryKey("reservation_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("amenity_id")] public int AmenityId { get; set; }
   [Column("coach_id")] public string? CoachId { get; set; } [Column("training_session_id")] public int? TrainingSessionId { get; set; }
   [Column("starts_at")] public DateTime StartsAt { get; set; } [Column("ends_at")] public DateTime EndsAt { get; set; } [Column("status")] public string Status { get; set; } = "confirmed";
   [Column("cancelled_at")] public DateTime? CancelledAt { get; set; } [Column("cancelled_by")] public string? CancelledBy { get; set; } [Column("cancel_reason")] public string? CancelReason { get; set; } }

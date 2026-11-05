@@ -37,6 +37,8 @@ public partial class CheckInPage : BasePage
 
 	protected override void OnDisappearing() { base.OnDisappearing(); if (BindingContext is CheckInViewModel vm) vm.IsScanning = false; StopCamera(); }
 
+	protected override TimeSpan? AutoRefresh => TimeSpan.FromSeconds(60);   // sends queued check-ins once the connection is back
+
 	void OnCheckIn(object? sender, EventArgs e) => Row<CheckInViewModel>(sender, v => v.CheckInCommand);
 	void OnToggleCoach(object? sender, EventArgs e) => Row<CheckInViewModel>(sender, v => v.ToggleCoachCommand);
 }

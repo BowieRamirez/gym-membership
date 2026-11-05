@@ -2,7 +2,7 @@ using GymMembership.Core.Models;
 
 namespace GymMembership.Core.Services;
 
-/// <summary>Why a member asks for a refund on a term that has started. Staff review these; none of them is automatic. Guidance, not legal advice.</summary>
+/// <summary>Why a member asks for a refund on a term they have used. Staff review these; none of them is automatic. Guidance, not legal advice.</summary>
 public static class RefundReasons
 {
     public sealed record Reason(string Key, string Member, string Staff);
@@ -23,17 +23,17 @@ public sealed record TermCard(MembershipTerm Term, string State, bool Activated,
 {
     public string Dates => $"{Term.StartsAt.AddHours(8):dd MMM yyyy, HH:mm} – {Term.EndsAt.AddHours(8):dd MMM yyyy, HH:mm} (Manila)";
     public string RefundText => Refund is { } r ? RefundCard.StateText(r) : Term.CancelledAt is not null ? "This term is cancelled."
-        : CanRequestRefund ? (Activated ? "Started. You can ask for a refund, and staff review each request." : "Not started yet. You can cancel it for a full refund.")
+        : CanRequestRefund ? (Activated ? "You have checked in during this term. You can ask for a refund, and staff review each request." : "You haven't used this term yet. You can cancel it for a full refund.")
         : State == Status.Expired ? "This term has ended." : "No verified payment available for a refund.";
 }
 public sealed record RefundCard(RefundRequest Request, string Member, string PackageName, string Dates, int LaterTerms = 0)
 {
-    /// <summary>A started term is only asked for until staff decide, so it must not read as a refund already owed.</summary>
+    /// <summary>A term the member has used is only asked for until staff decide, so it must not read as a refund already owed.</summary>
     public string AmountLabel => Request.WasActivated == true ? "Refund requested" : "Full refund";
     public string ReviewText => Request.WasActivated switch
     {
-        false => "Not started when requested: full refund owed.",
-        true => $"Started when requested, needs review: {RefundReasons.StaffText(Request.ReviewReason)}.",
+        false => "No check-in during this term: full refund owed.",
+        true => $"Checked in during this term, needs review: {RefundReasons.StaffText(Request.ReviewReason)}.",
         null => "",
     };
     /// <summary>D10: a later paid term has its own payment and stays, so staff should know before approving.</summary>
@@ -73,13 +73,14 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
         var terms = await gw.ListAsync<MembershipTerm>(t => t.MemberId == uid);
         var payments = await gw.ListAsync<Payment>(p => p.MemberId == uid);
         var refunds = await gw.ListAsync<RefundRequest>(r => r.MemberId == uid);
+        var checkIns = await gw.ListAsync<GymCheckIn>(c => c.MemberId == uid);
         var now = clock.GetUtcNow().UtcDateTime;
         return terms.OrderBy(t => t.CancelledAt is not null || t.EndsAt <= now).ThenBy(t => t.StartsAt).Select(t =>
         {
             var p = payments.FirstOrDefault(p => p.Id == t.PaymentId);
             var refund = refunds.FirstOrDefault(r => r.TermId == t.Id);
             var state = t.CancelledAt is not null ? Status.Cancelled : t.EndsAt <= now ? Status.Expired : t.StartsAt > now ? Status.Scheduled : Status.Active;
-            return new TermCard(t, state, now >= t.StartsAt, refund, t.CancelledAt is null && p is { Status: Status.Verified, Amount: > 0 } && now < t.EndsAt && refund is null);
+            return new TermCard(t, state, checkIns.Any(c => c.CheckedInAt >= t.StartsAt && c.CheckedInAt < t.EndsAt), refund, t.CancelledAt is null && p is { Status: Status.Verified, Amount: > 0 } && now < t.EndsAt && refund is null);
         }).ToList();
     });
 

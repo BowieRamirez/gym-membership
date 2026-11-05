@@ -338,10 +338,11 @@ public partial class AmenityBoardViewModel(IAmenityService svc) : LoadableViewMo
 {
     public ObservableCollection<AmenityCard> Cards { get; } = new();
     [ObservableProperty] private bool canFollow;
+    [ObservableProperty] private bool noCoachInGym;
 
     public override Task OnAppearingAsync() => LoadAsync();
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.BoardAsync, board => { Fill(Cards, board.Cards); CanFollow = board.CanFollow; });
+    [RelayCommand] private Task LoadAsync() => RunAsync(svc.BoardAsync, board => { Fill(Cards, board.Cards); CanFollow = board.CanFollow; NoCoachInGym = !board.CoachInGym; });
 
     public override async Task AutoRefreshAsync()
     {
@@ -350,6 +351,7 @@ public partial class AmenityBoardViewModel(IAmenityService svc) : LoadableViewMo
         if (!board.Ok) return;   // stay quiet: the next tick tries again
         Sync(Cards, board.Value!.Cards, c => c.Amenity.Id, (a, b) => a.SameAs(b));
         CanFollow = board.Value.CanFollow;
+        NoCoachInGym = !board.Value.CoachInGym;
     }
 
     [RelayCommand]

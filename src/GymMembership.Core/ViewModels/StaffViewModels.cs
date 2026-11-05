@@ -263,7 +263,7 @@ public partial class VerifyAmenityUsagesViewModel(IAmenityService svc) : Loadabl
     { if (await RunAsync(() => svc.VerifyUsageAsync(row.Usage.Id, approve))) Pending.Remove(row); }
 }
 
-public partial class CheckInViewModel(IAttendanceService svc, ICoachService coaches) : LoadableViewModel
+public partial class CheckInViewModel(IAttendanceService svc, ICoachService coaches, OfflineDesk? offline = null) : LoadableViewModel
 {
     public ObservableCollection<MemberHit> Hits { get; } = new();
     public ObservableCollection<CoachPresenceRow> Coaches { get; } = new();
@@ -273,18 +273,59 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
     [ObservableProperty] private bool isScanning;          // the camera is on
     public bool HasScan => Scan is not null;
 
-    public override async Task OnAppearingAsync() { await SearchAsync(); await LoadCoachesAsync(); }
+    // D12: when the connection drops, the desk works from its saved list (OfflineDesk)
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OfflineText))] private bool isOffline;
+    public string OfflineText => offline?.OfflineText ?? "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasQueue))] private string queueText = "";
+    public bool HasQueue => QueueText.Length > 0;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasRefused))] private string refusedText = "";
+    public bool HasRefused => RefusedText.Length > 0;
+
+    bool WentOffline<T>(AppResult<T> result) => offline is not null && result.Error == AppErrorKind.Offline;
+
+    void ShowQueue()
+    {
+        if (offline is null) return;
+        QueueText = offline.Queued.Count switch { 0 => "", 1 => "1 check-in is waiting to send.", var n => $"{n} check-ins are waiting to send." };
+        RefusedText = string.Join("\n", offline.Refused.Select(r => $"{r.Name}, {RevenuePdf.Manila(r.AtUtc)} (Manila), was refused when sent: {r.Why}"));
+        OnPropertyChanged(nameof(OfflineText));
+    }
+
+    void QueueFor(string memberId, string name)
+    {
+        offline!.Queue(memberId, name);
+        IsOffline = true; ErrorMessage = null;
+        Notice = $"{name} is saved and will be sent when the connection is back.";
+        ShowQueue();
+    }
+
+    public override async Task OnAppearingAsync() { await SearchAsync(); await LoadCoachesAsync(); await SendQueueAsync(); }
+
+    /// <summary>Sends anything queued and keeps the saved list up to date. Quiet when offline: the next tick tries again.</summary>
+    [RelayCommand]
+    private async Task SendQueueAsync()
+    {
+        if (offline is null) return;
+        var (sent, refused) = await offline.SendAsync();
+        if (await offline.RefreshAsync(force: sent + refused > 0) is AppErrorKind.Offline) IsOffline = true;
+        if (sent > 0) Notice = sent == 1 ? "1 offline check-in was sent." : $"{sent} offline check-ins were sent.";
+        ShowQueue();
+    }
+
+    [RelayCommand] private void ClearRefused() { offline?.ClearRefused(); ShowQueue(); }
 
     [RelayCommand] private void ToggleCamera() => IsScanning = !IsScanning;
 
-    /// <summary>D12: shows who the code belongs to and their live status. Never checks in by itself.</summary>
+    /// <summary>D12: shows who the code belongs to and their live status, or the saved list when offline. Never checks in by itself.</summary>
     [RelayCommand]
     private async Task ScanAsync(string? code)
     {
         code = (code ?? ScanInput).Trim();
         if (code.Length == 0) return;
         Notice = null; IsScanning = false; ScanInput = "";
-        await RunAsync(() => svc.ScanAsync(code), s => Scan = s);
+        var result = await svc.ScanAsync(code);
+        if (WentOffline(result)) { IsOffline = true; ErrorMessage = null; Scan = offline!.Find(code); ShowQueue(); return; }
+        await RunAsync(() => Task.FromResult(result), s => { Scan = s; IsOffline = false; });
     }
 
     [RelayCommand]
@@ -292,20 +333,39 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
     {
         if (Scan is not { CanCheckIn: true, Member: { } id } s) return;
         Notice = null;
-        if (await RunAsync(() => svc.CheckInAsync(id))) { Notice = $"{s.Name} is checked in."; Scan = null; }
+        if (s.IsSaved) { QueueFor(id, s.Name ?? "This member"); Scan = null; return; }
+        var result = await svc.CheckInAsync(id, "qr");
+        if (WentOffline(result)) { QueueFor(id, s.Name ?? "This member"); Scan = null; return; }
+        if (await RunAsync(() => Task.FromResult(result))) { Notice = $"{s.Name} is checked in."; Scan = null; }
     }
 
     [RelayCommand] private void ClearScan() => Scan = null;
 
-    [RelayCommand] private Task SearchAsync() => RunAsync(() => svc.FindMembersAsync(Search), rows => Fill(Hits, rows));
+    [RelayCommand]
+    private async Task SearchAsync()
+    {
+        var result = await svc.FindMembersAsync(Search);
+        if (WentOffline(result)) { IsOffline = true; ErrorMessage = null; Fill(Hits, offline!.Search(Search)); ShowQueue(); return; }
+        await RunAsync(() => Task.FromResult(result), rows => { Fill(Hits, rows); IsOffline = false; });
+    }
 
-    Task LoadCoachesAsync() => RunAsync(coaches.PresenceAsync, rows => Fill(Coaches, rows));
+    async Task LoadCoachesAsync()
+    {
+        var result = await coaches.PresenceAsync();
+        if (WentOffline(result)) return;   // the list on screen stays; coaches can't change without a connection anyway
+        await RunAsync(() => Task.FromResult(result), rows => Fill(Coaches, rows));
+    }
 
+    /// <summary>Forgot phone: staff find the member by name, see their status, and check them in. The server still decides.</summary>
     [RelayCommand]
     private async Task CheckInAsync(MemberHit hit)
     {
         Notice = null;
-        if (await RunAsync(() => svc.CheckInAsync(hit.MemberId))) Notice = $"{hit.Username} is checked in.";
+        if (IsOffline && !hit.CanCheckIn) { ErrorMessage = $"The saved list shows no paid term for {hit.Username}."; return; }
+        if (IsOffline) { QueueFor(hit.MemberId, hit.Username); return; }
+        var result = await svc.CheckInAsync(hit.MemberId, "manual");
+        if (WentOffline(result) && hit.CanCheckIn) { QueueFor(hit.MemberId, hit.Username); return; }
+        if (await RunAsync(() => Task.FromResult(result))) Notice = $"{hit.Username} is checked in.";
     }
 
     [RelayCommand]
@@ -1031,10 +1091,31 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     [ObservableProperty] private int newDays = 30;
     [ObservableProperty] private string newAmenityName = "";
     [ObservableProperty] private decimal newAmenityPrice = 200;
-    [ObservableProperty] private int newAmenityDays = 30;
     [ObservableProperty] private string newAmenityDescription = "";
     // like packages: one form adds an amenity, or edits the one held here
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(AmenitySaveLabel), nameof(IsEditingAmenity))] private Amenity? editingAmenity;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(AmenitySaveLabel), nameof(IsEditingAmenity), nameof(AmenityPriceLabel))] private Amenity? editingAmenity;
+    public string AmenityPriceLabel => EditingAmenity?.DurationDays is { } days ? $"Price for {days} days" : "Price per session";
+
+    // Today's amenities are priced for timed passes, so nothing switches until staff enter a session price (D11).
+    [ObservableProperty] private Amenity? pricingAmenity;
+    [ObservableProperty] private decimal sessionPrice;
+
+    [RelayCommand] private void StartSessionPrice(Amenity a) { (PricingAmenity, SessionPrice) = (a, 0); ErrorMessage = null; }
+    [RelayCommand] private void CancelSessionPrice() => PricingAmenity = null;
+
+    [RelayCommand]
+    private async Task SaveSessionPriceAsync()
+    {
+        if (PricingAmenity is not { } a) return;
+        if (SessionPrice <= 0) { ErrorMessage = "Enter a session price above zero."; return; }
+        if (!await Confirm.AskAsync($"Sell {a.Name} per session?", $"Members pay ₱{SessionPrice:N2} for each session. Passes already sold stay valid until they expire.", "Sell per session")) return;
+        var (price, days) = (a.Price, a.DurationDays);
+        (a.Price, a.DurationDays) = (SessionPrice, null);
+        if (!await RunAsync(() => svc.SaveAmenityAsync(a))) { (a.Price, a.DurationDays) = (price, days); return; }
+        PricingAmenity = null;
+        Notice = $"{a.Name} now sells per session.";
+        await LoadAsync();
+    }
     public string AmenitySaveLabel => EditingAmenity is null ? "Add amenity" : "Save changes";
     public bool IsEditingAmenity => EditingAmenity is not null;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(SaveLabel), nameof(IsEditing))] private MembershipPackage? editing;
@@ -1125,22 +1206,22 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     private async Task AddAmenityAsync()
     {
         if (string.IsNullOrWhiteSpace(NewAmenityName)) { ErrorMessage = "Give the amenity a name."; return; }
-        if (NewAmenityPrice < 0 || NewAmenityDays <= 0) { ErrorMessage = "Price can't be negative and days must be more than zero."; return; }
+        if (NewAmenityPrice < 0) { ErrorMessage = "Price can't be negative."; return; }
         if (!await Confirm.AskAsync(EditingAmenity is null ? $"Add {NewAmenityName.Trim()}?" : $"Save changes to {NewAmenityName.Trim()}?",
-                $"Pass: ₱{NewAmenityPrice:N2} for {NewAmenityDays} days.", EditingAmenity is null ? "Add amenity" : "Save changes")) return;
+                EditingAmenity?.DurationDays is { } days ? $"Pass: ₱{NewAmenityPrice:N2} for {days} days." : $"₱{NewAmenityPrice:N2} per session.", EditingAmenity is null ? "Add amenity" : "Save changes")) return;
         var a = EditingAmenity ?? new Amenity();
-        a.Name = NewAmenityName.Trim(); a.Price = NewAmenityPrice; a.DurationDays = NewAmenityDays;
+        a.Name = NewAmenityName.Trim(); a.Price = NewAmenityPrice;
         a.Description = string.IsNullOrWhiteSpace(NewAmenityDescription) ? null : NewAmenityDescription.Trim();
         if (await RunAsync(() => svc.SaveAmenityAsync(a))) { CancelAmenityEdit(); await LoadAsync(); }
     }
 
     [RelayCommand]
     private void EditAmenity(Amenity a)
-    { EditingAmenity = a; NewAmenityName = a.Name; NewAmenityPrice = a.Price; NewAmenityDays = a.DurationDays ?? 30; NewAmenityDescription = a.Description ?? ""; }
+    { EditingAmenity = a; NewAmenityName = a.Name; NewAmenityPrice = a.Price; NewAmenityDescription = a.Description ?? ""; }
 
     [RelayCommand]
     private void CancelAmenityEdit()
-    { EditingAmenity = null; NewAmenityName = ""; NewAmenityPrice = 200; NewAmenityDays = 30; NewAmenityDescription = ""; }
+    { EditingAmenity = null; NewAmenityName = ""; NewAmenityPrice = 200; NewAmenityDescription = ""; }
 
     [RelayCommand]
     private async Task UploadAmenityPhotoAsync(Amenity amenity)

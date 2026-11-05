@@ -25,6 +25,14 @@ public class SubscriptionTests
         await gw.SignInAsync("phase7@demo.io", "secret12");
     }
 
+    static async Task CheckIn(DemoGateway gw)
+    {
+        var me = gw.CurrentUserId!;
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        Assert.True((await new AttendanceService(gw).CheckInAsync(me)).Ok);
+        await gw.SignInAsync("phase7@demo.io", "secret12");
+    }
+
     [Fact]
     public async Task Paid_extension_keeps_current_term_and_queues_the_selected_package()
     {
@@ -130,10 +138,11 @@ public class SubscriptionTests
 
     [Theory]
     [InlineData("service_not_provided")] [InlineData("misled")] [InlineData("contract_allows")] [InlineData("illness_or_relocation")] [InlineData("change_of_mind")]
-    public async Task A_started_term_goes_to_review_with_a_reason_even_after_24_hours(string category)
+    public async Task A_term_with_a_check_in_goes_to_review_with_a_reason_even_after_24_hours(string category)
     {
         var (gw, clock, svc, monthly, _) = await Setup();
         var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
+        await CheckIn(gw);
         clock.Now=clock.Now.AddHours(25);
         var card=Assert.Single((await svc.TermsAsync()).Value!);
         Assert.True(card.Activated); Assert.True(card.CanRequestRefund);
@@ -160,6 +169,20 @@ public class SubscriptionTests
     }
 
     [Fact]
+    public async Task A_paid_term_with_no_check_in_is_a_full_refund_even_days_after_it_started()
+    {
+        var (gw, clock, svc, monthly, _) = await Setup();
+        var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
+        clock.Now=clock.Now.AddDays(10);
+        var card=Assert.Single((await svc.TermsAsync()).Value!);
+        Assert.False(card.Activated);
+        Assert.Contains("full refund",card.RefundText);
+        Assert.True((await svc.RequestRefundAsync(card.Term.Id,"Never came")).Ok);
+        var request=Assert.Single((await svc.RefundsAsync()).Value!).Request;
+        Assert.Equal((false,(string?)null,p.Amount),(request.WasActivated,request.ReviewReason,request.Amount));
+    }
+
+    [Fact]
     public async Task A_queued_term_that_has_not_started_is_a_full_refund_with_no_category_and_no_time_limit()
     {
         var (gw, clock, svc, monthly, annual) = await Setup();
@@ -174,16 +197,17 @@ public class SubscriptionTests
         await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
         var row=Assert.Single((await svc.RefundsAsync()).Value!);
         Assert.Equal((false,(string?)null,next.Amount),(row.Request.WasActivated,row.Request.ReviewReason,row.Request.Amount));
-        Assert.Equal("Not started when requested: full refund owed.",row.ReviewText);
+        Assert.Equal("No check-in during this term: full refund owed.",row.ReviewText);
         Assert.Equal("Full refund",row.AmountLabel);
         Assert.Equal(0,row.LaterTerms);
     }
 
     [Fact]
-    public async Task Staff_see_why_a_started_term_needs_review_and_are_warned_about_later_paid_terms_which_stay()
+    public async Task Staff_see_why_a_used_term_needs_review_and_are_warned_about_later_paid_terms_which_stay()
     {
         var (gw, _, svc, monthly, annual) = await Setup();
         var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
+        await CheckIn(gw);
         var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
         var next=(await svc.ExtendAsync(annual.Id)).Value!; await Verify(gw,next);
         Assert.True((await svc.RequestRefundAsync(term.Id,"The pool was closed","service_not_provided")).Ok);
@@ -193,7 +217,7 @@ public class SubscriptionTests
         var vm=new GymMembership.Core.ViewModels.RefundsViewModel(svc);
         await vm.OnAppearingAsync();
         var row=Assert.Single(vm.Requests);
-        Assert.Equal("Started when requested, needs review: gym didn't provide the agreed service.",row.ReviewText);
+        Assert.Equal("Checked in during this term, needs review: gym didn't provide the agreed service.",row.ReviewText);
         Assert.Equal("Refund requested",row.AmountLabel);
         Assert.Equal(1,row.LaterTerms);
         Assert.Equal("This member also has 1 later paid term. It stays and is not refunded.",row.LaterTermsWarning);

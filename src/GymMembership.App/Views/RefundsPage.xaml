@@ -10,7 +10,7 @@
         
             <VerticalStackLayout Spacing="10" Padding="0,0,0,16">
                 <Label Text="Cancellations &amp; refunds" Style="{StaticResource Heading}" />
-                <Label Text="A term that has not started is owed a full refund. A started term needs your review; this is guidance, not legal advice. Approving cancels only its selected term; other paid dates stay fixed. Return the actual paid amount manually, then record repayment. This app does not send money." Style="{StaticResource Muted}" />
+                <Label Text="A term with no check-ins is owed a full refund. A term the member has used needs your review; this is guidance, not legal advice. Approving cancels only its selected term; other paid dates stay fixed. Return the actual paid amount manually, then record repayment. This app does not send money." Style="{StaticResource Muted}" />
                 <c:Banner Message="{Binding ErrorMessage}" />
                 <c:Banner Kind="notice" Message="{Binding Notice}" />
             </VerticalStackLayout>

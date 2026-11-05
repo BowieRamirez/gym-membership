@@ -79,8 +79,21 @@ try {
     assert.equal(r.status,'pending'); assert.equal(Number(r.amount),900); assert.equal(await active(uid),true);
     await assert.rejects(request(uid,term),/already_requested|already_processed/);
   });
-  await test('a started term goes to review: it needs a reason category, and 24 hours no longer matters', async () => {
+  await test('a paid term with no check-in is a full refund with no category, even after it started', async () => {
     const {uid,pay,term} = await fixture();
+    await db.query("update payments set verified_at=now()-interval '10 days' where payment_id=$1",[pay.payment_id]);
+    const r = (await as(uid,'select * from request_membership_refund($1,$2)',[term.term_id,'Never came']))[0];
+    assert.deepEqual([r.was_activated,r.review_reason,Number(r.amount)],[false,null,Number(pay.amount)]);
+  });
+  await test('a check-in before the term does not activate it', async () => {
+    const {uid,term} = await fixture();
+    await as(desk,'select record_check_in($1)',[uid]);
+    await db.query("update gym_check_ins set checked_in_at=$2::timestamptz-interval '1 second' where member_id=$1",[uid,term.starts_at]);
+    assert.equal((await as(uid,'select * from request_membership_refund($1,$2)',[term.term_id,'Before']))[0].was_activated,false);
+  });
+  await test('a term with a check-in goes to review: it needs a reason category, and 24 hours no longer matters', async () => {
+    const {uid,pay,term} = await fixture();
+    await as(desk,'select record_check_in($1)',[uid]);
     await assert.rejects(as(uid,'select * from request_membership_refund($1,$2)',[term.term_id,'No category']),/refund_reason_required/);
     await assert.rejects(as(uid,'select * from request_membership_refund($1,$2,$3)',[term.term_id,'Bad category','because']),/bad_input/);
     await db.query("update payments set verified_at=now()-interval '25 hours' where payment_id=$1",[pay.payment_id]);

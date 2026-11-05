@@ -44,8 +44,8 @@ public partial class MyMembershipPage : BasePage
             var reason=await DisplayPromptAsync("Cancel & request refund",card.Activated?"Tell the staff what happened.":"Why are you cancelling this term?",maxLength:1000);
             if(string.IsNullOrWhiteSpace(reason)) return;
             var outcome=card.Activated
-                ?"This term has started, so staff review each request and a refund isn't guaranteed."
-                :$"This term hasn't started, so you get a full refund of ₱{card.Term.AmountPaid:N2}. Staff confirm it and repay you by hand.";
+                ?"You have checked in during this term, so staff review each request and a refund isn't guaranteed."
+                :$"You haven't used this term, so you get a full refund of ₱{card.Term.AmountPaid:N2}. Staff confirm it and repay you by hand.";
             if(!await DisplayAlertAsync("Submit cancellation request?",
                 $"{card.Term.PackageName}\n{card.Dates}\n\n{outcome}\n\nYour access stays unchanged until an admin approves. Approval cancels only this term; other paid dates stay fixed.","Submit request","Go back")) return;
             await vm.RequestRefundAsync(card,reason,category);

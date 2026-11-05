@@ -463,7 +463,7 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
 
 // ===================== Amenities =====================
 /// <summary>One amenity in the catalogue and where the member stands with it: not bought, paid and waiting, or active.</summary>
-public sealed record AmenityRow(Amenity Amenity, int? UserAmenityId, string? Status = null, DateTime? ExpiresAt = null)
+public sealed record AmenityRow(Amenity Amenity, int? UserAmenityId, string? Status = null, DateTime? ExpiresAt = null, bool IsSession = false)
 {
     public bool IsActive => Status == Models.Status.Active;
     public bool IsPending => Status == Models.Status.Pending;
@@ -471,16 +471,17 @@ public sealed record AmenityRow(Amenity Amenity, int? UserAmenityId, string? Sta
 }
 public sealed record UsageRow(AmenityUsage Usage, string Member, string Amenity);
 
-public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow, string? PhotoUrl = null, string? PassStatus = null, DateTime? PassUntil = null)
+public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow, string? PhotoUrl = null, string? PassStatus = null, DateTime? PassUntil = null, bool PassIsSession = false)
 {
     // members only (CanFollow): what a pass costs, or where theirs stands; empty hides it for coaches and staff
     public string PassText => !CanFollow ? "" : PassStatus switch
     {
         Models.Status.Pending => "Waiting for your payment to be verified",
+        Models.Status.Active when PassIsSession => "1 session ready to book",
         Models.Status.Active => PassUntil is { } until ? $"Pass active until {until.ToLocalTime():d MMM yyyy}" : "Pass active",
-        _ => Amenity.DurationDays is { } days ? $"₱{Amenity.Price:N2} for {days} days" : $"₱{Amenity.Price:N2}"
+        _ => Amenity.DurationDays is { } days ? $"₱{Amenity.Price:N2} for {days} days" : $"₱{Amenity.Price:N2} per session"
     };
-    public string BuyText => CanFollow && PassStatus is not (Models.Status.Pending or Models.Status.Active) ? "Buy pass" : "";
+    public string BuyText => !CanFollow || PassStatus is Models.Status.Pending or Models.Status.Active ? "" : Amenity.DurationDays is null ? "Buy a session" : "Buy pass";
     public bool CanBuy => BuyText.Length > 0;
 
     public string Availability => Amenity.Availability;
@@ -501,7 +502,7 @@ public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow,
 /// <summary>What a status change did: whether the amenity really changed, and the members who were alerted.</summary>
 public sealed record AmenityChange(bool Changed, IReadOnlyList<NotifiedMember> Told);
 
-public sealed record AmenityBoard(IReadOnlyList<AmenityCard> Cards, bool CanFollow);
+public sealed record AmenityBoard(IReadOnlyList<AmenityCard> Cards, bool CanFollow, bool CoachInGym = false);
 
 public interface IAmenityService
 {
@@ -532,8 +533,8 @@ public sealed class AmenityService(ISupabaseGateway gw) : IAmenityService
         var passes = isMember ? (await CatalogAsync()).Value?.ToDictionary(r => r.Amenity.Id) ?? [] : [];
         var cards = await Task.WhenAll(amenities.Select(async a =>
             new AmenityCard(a, saved.Contains(a.Id), isMember, (await Safe.RunAsync(() => photos.UrlAsync(a.ImagePath))).Value,
-                passes.GetValueOrDefault(a.Id)?.Status, passes.GetValueOrDefault(a.Id)?.ExpiresAt)));
-        return new AmenityBoard(cards, isMember);
+                passes.GetValueOrDefault(a.Id)?.Status, passes.GetValueOrDefault(a.Id)?.ExpiresAt, passes.GetValueOrDefault(a.Id)?.IsSession ?? false)));
+        return new AmenityBoard(cards, isMember, (await gw.ListAsync<CoachVisit>(v => v.CheckedOutAt == null)).Count > 0);
     });
 
     public Task<AppResult<bool>> SetFollowedAsync(int amenityId, bool follow) => Safe.RunAsync(async () =>
@@ -575,7 +576,7 @@ public sealed class AmenityService(ISupabaseGateway gw) : IAmenityService
         {
             var e = mine.Where(m => m.AmenityId == a.Id).OrderByDescending(m => m.AvailedAt).ThenByDescending(m => m.Id).FirstOrDefault();
             var status = e is null ? null : e.Status == Status.Active && e.ExpiresAt <= now ? Status.Expired : e.Status;
-            return new AmenityRow(a, e?.Id, status, e?.ExpiresAt);
+            return new AmenityRow(a, e?.Id, status, e?.ExpiresAt, e?.IsSession ?? false);
         }).ToList();
     });
 
@@ -1028,16 +1029,20 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
 }
 
 // ===================== Attendance and check-ins =====================
-public sealed record MemberHit(string MemberId, string Username, bool HasActiveMembership)
+public sealed record MemberHit(string MemberId, string Username, bool HasActiveMembership, DateTime? PaidUntil = null)
 {
     public string PlanStatus => HasActiveMembership ? "active" : "inactive";
+    /// <summary>Forgot phone: what staff check before letting someone in without a QR.</summary>
+    public string PlanText => !HasActiveMembership ? "No active membership" : PaidUntil is { } until ? $"Paid until {until.AddHours(8):d MMM yyyy}" : "Paid";
+    public bool CanCheckIn => HasActiveMembership;
 }
 
 public interface IAttendanceService
 {
     /// <summary>The coach records how a member did at a session: present, late, absent or excused.</summary>
     Task<AppResult<bool>> RecordAsync(int sessionId, string status);
-    Task<AppResult<bool>> CheckInAsync(string memberId);
+    /// <param name="method">How it was made, for the record: qr or manual (0044).</param>
+    Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null);
     Task<AppResult<IReadOnlyList<MemberHit>>> FindMembersAsync(string usernameFragment);
     /// <summary>The signed-in member's permanent QR code (0034), or null for anyone who is not a member.</summary>
     Task<AppResult<string?>> MyCodeAsync();
@@ -1054,14 +1059,21 @@ public sealed class MemberScan
     public string? Member { get; set; }
     public string? Name { get; set; }
     public DateTime? Expires { get; set; }
+    /// <summary>Set when this came from the saved list (OfflineDesk) rather than the server. It says how old that list is.</summary>
+    public string? SavedNote { get; set; }
 
-    public bool CanCheckIn => Result == "active" && Member is not null;
+    public bool CanCheckIn => Result is "active" or "saved" && Member is not null;
+    public bool IsSaved => Result.StartsWith("saved");
     public string StatusText => Result switch
     {
+        "saved" => $"Paid on the saved list. {SavedNote}",
+        "saved_unpaid" => $"No paid term on the saved list. {SavedNote}",
+        "saved_unknown" => $"Not on the saved list. {SavedNote}",
+        "saved_stale" => "Can't check right now: the saved list is out of date or missing.",
         "active" => "Active", "pending" => "Pending: a membership payment is waiting to be verified", "expired" => "Expired: no active membership",
         "inactive" => "Inactive: this account is archived", _ => "Not found: this code does not belong to any member"
     };
-    public string ExpiryText => Expires is { } e ? (Result == "active" ? "Membership ends " : "Membership ended ") + RevenuePdf.Manila(e) + " (Manila)" : "No end date";
+    public string ExpiryText => Expires is { } e ? (Result is "active" or "saved" ? "Membership ends " : "Membership ended ") + RevenuePdf.Manila(e) + " (Manila)" : IsSaved ? "" : "No end date";
 }
 
 public sealed record CheckInRow(string Name, DateTime At)
@@ -1069,24 +1081,31 @@ public sealed record CheckInRow(string Name, DateTime At)
     public string TimeText => At.AddHours(8).ToString("HH:mm", CultureInfo.InvariantCulture);   // Manila has no daylight saving
 }
 
-public sealed class AttendanceService(ISupabaseGateway gw) : IAttendanceService
+public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = null) : IAttendanceService
 {
+    readonly TimeProvider clock = time ?? TimeProvider.System;
+
     public Task<AppResult<bool>> RecordAsync(int sessionId, string status) => Safe.RunAsync(async () =>
     {
         await gw.RpcAsync("record_session_attendance", new() { ["p_session_id"] = sessionId, ["p_status"] = status });
         return true;
     });
 
-    public Task<AppResult<bool>> CheckInAsync(string memberId) => Safe.RunAsync(async () =>
-    { await gw.RpcAsync<int>("record_check_in", new() { ["p_member_id"] = memberId }); return true; });
+    public Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null) => Safe.RunAsync(async () =>
+    {
+        Dictionary<string, object> args = new() { ["p_member_id"] = memberId };
+        if (method is not null) args["p_method"] = method;
+        await gw.RpcAsync<int>("record_check_in", args);
+        return true;
+    });
 
     public Task<AppResult<IReadOnlyList<MemberHit>>> FindMembersAsync(string fragment) => Safe.RunAsync<IReadOnlyList<MemberHit>>(async () =>
     {
         var members = await gw.ListAsync<Member>();
         var profiles = await gw.ListAsync<Profile>();
-        var now = DateTime.UtcNow;
-        var active = (await gw.ListAsync<UserMembershipPackage>(m => m.Status == "active")).Where(m => m.EndsAt > now).Select(m => m.MemberId).ToHashSet();
-        return members.Join(profiles, m => m.UserId, p => p.Id, (m, p) => new MemberHit(m.UserId, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName, active.Contains(m.UserId)))
+        var now = clock.GetUtcNow().UtcDateTime;
+        var active = (await gw.ListAsync<UserMembershipPackage>(m => m.Status == "active")).Where(m => m.EndsAt > now).GroupBy(m => m.MemberId).ToDictionary(g => g.Key, g => g.Max(m => m.EndsAt));
+        return members.Join(profiles, m => m.UserId, p => p.Id, (m, p) => new MemberHit(m.UserId, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName, active.ContainsKey(m.UserId), active.GetValueOrDefault(m.UserId)))
             .Where(h => h.Username.Contains(fragment, StringComparison.OrdinalIgnoreCase)).Take(20).ToList();
     });
 
