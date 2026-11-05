@@ -31,8 +31,8 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 
 ### Current work / restart here
 
-- **2026-11-05:** Phase 2 IMPLEMENTED and committed, not deployed. Branch is local, not pushed. xUnit 792/792; database suite exit 0, 315 counted; Windows and Android builds pass.
-- Next concrete action: owner answers D3 (who can correct a name) so Phase 3 can start. Separately, with the owner: apply `0039` and deploy `check-email` (Phase 2's last task). Other decisions are needed only before the phase that uses them (see the table in section 3).
+- **2026-11-05:** Phase 2 DEPLOYED: `0039` applied and `check-email` live on project `avxcitoddadbblxuhiik`, at the owner's request. Function tested live; owner is testing the real register page. Branch is local, not pushed.
+- Next concrete action: owner confirms the message on the real register page, and answers D3 (who can correct a name) so Phase 3 can start. Other decisions are needed only before the phase that uses them (see the table in section 3).
 
 ## 1. Repository findings
 
@@ -83,7 +83,7 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 | Phase | Scope | Items | Needs | Status |
 | --- | --- | --- | --- | --- |
 | 1 | Parameterized query audit | 3 | D2 | VERIFIED |
-| 2 | Live email-in-use check | 2 | D2, D8 | IMPLEMENTED |
+| 2 | Live email-in-use check | 2 | D2, D8 | DEPLOYED |
 | 3 | Lock names after creation | 1 | D2, D3 | PLANNED |
 | 4 | CRUD | 13 | D14 | PLANNED |
 | 5 | Refunds and archiving | 11, R2, 6, 8, 9, 12 | D9, D10 | PLANNED |
@@ -112,7 +112,9 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 - [x] (`impeccable`, `frontend-design`) `RegisterPage.xaml`: message under the email field in the existing `FieldError` style, announced for screen readers. A failed or refused lookup shows nothing and does not block registering. Copy: "This email already has an account. Sign in, or use a different email." (2026-11-05: checked in a Windows demo build at 1180 and 520 px wide, dark theme: appears after the pause, clears on edit, ignores case. The screen reader announcement, light theme and Android screen have not been checked.)
 - [x] The duplicate error on submit stays (`SupabaseGateway.cs`); it is the real guard. (2026-11-05, test added.)
 - `ponytail:ponytail-review` (2026-11-05): one redundant call removed. xUnit 792/792 after that; database suite 315 counted, 0 failed, run before that one-line C# change.
-- [ ] **With the owner, not done:** apply `0039` to the live database and deploy with `supabase functions deploy check-email`, in that order. Then check on the real project: a taken and a free address give the right answer, a forged `x-forwarded-for` doesn't escape the 30-lookup limit (`cf-connecting-ip` is preferred but unconfirmed on this platform; the overall limit is the backstop), and the real register page shows the message. Until then the live app simply shows no message, and registering works as before.
+- [x] Applied `0039` (`db push`) and deployed `check-email` (`functions deploy --use-api`, `verify_jwt=false` confirmed) on the owner's go-ahead, 2026-11-05. Migration history up to date; `create-user` and `reset-password` unchanged.
+- [x] Live function checks (2026-11-05): real account and the same address in capitals answer `in_use: true`; a free address answers `false`; a bad address 400; GET 405. Forged addresses don't escape the limit: 36 calls with a different `x-forwarded-for` and `x-real-ip` each were counted as one address and refused at exactly the 31st lookup. A forged `cf-connecting-ip` is rejected by Cloudflare with 403. The overall limit of 600 was tested only in the local suite. Test rows were deleted from `email_checks` afterwards (0 rows left). The real account's email was read by script and not printed.
+- [ ] Owner checks the message on the real register page, without creating a new account.
 
 **Found while checking, already there, not changed**
 - [ ] The sign-in and register layout keeps its two columns in a narrow Windows window: at 520 px wide the headings break mid-word ("accoun / t") and the brand panel clips. Fix with the Phase 7 design work (`AuthShell`).
@@ -240,5 +242,6 @@ Work in priority order: items 3, 2 and 1 first (security and data integrity), th
 - **2026-11-05:** Complete to-do list received; added items 5 (rest), 6-15, R2, the forgot-phone fallback and decisions D9-D16. Phases renumbered to 10. No code, database or git changes.
 - **2026-11-05:** Owner renamed the roles: Super admin to System admin, Sub-admin to Admin (D17, Phase 7). No code, database or git changes.
 - **2026-11-05:** Branch `security-admin-cleanup-2026-11-05` created from `origin/main` (D2); plan committed there.
+- **2026-11-05:** Phase 2 deployed at the owner's request and the function tested live, including forged addresses.
 - **2026-11-05:** Phase 2 built: live email check with server limits, not deployed. Owner chose the live check (D8). xUnit 792/792; database suite exit 0, 315 counted.
 - **2026-11-05:** Phase 1 done: query audit found no injection path, tests added, one library limit recorded. xUnit 779/779; database suite exit 0, 307 counted. Owner added the `impeccable` rule for screen work.
