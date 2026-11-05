@@ -110,16 +110,16 @@ public class DiscountLimitTests
         await vm.LoadCommand.ExecuteAsync(null);
         var row = vm.Discounts.Single(r => r.Discount.Code == "FIVE");
 
-        vm.ChangeLimitCommand.Execute(row);
+        vm.EditCodeCommand.Execute(row);
         Assert.Equal(5, vm.EditLimit);
         vm.EditLimit = 1;                                   // two places are held
-        await vm.SaveLimitCommand.ExecuteAsync(null);
+        await vm.SaveEditCommand.ExecuteAsync(null);
         Assert.NotNull(vm.ErrorMessage);
         Assert.Same(row, vm.Editing);
         Assert.Equal(5, (await new AdminService(gw).DiscountsAsync()).Value!.Single(r => r.Discount.Code == "FIVE").Discount.MaxUses);
 
         vm.EditLimit = 2;
-        await vm.SaveLimitCommand.ExecuteAsync(null);
+        await vm.SaveEditCommand.ExecuteAsync(null);
         Assert.Null(vm.ErrorMessage);
         Assert.Null(vm.Editing);
         Assert.Equal(2, vm.Discounts.Single(r => r.Discount.Code == "FIVE").Discount.MaxUses);
@@ -127,9 +127,9 @@ public class DiscountLimitTests
         var welcome = vm.Discounts.Single(r => r.Discount.Code == "WELCOME10");
         welcome.Discount.MaxUses = null;
         Assert.True((await new AdminService(gw).SaveDiscountAsync(welcome.Discount)).Ok);   // other edits keep an old code unlimited
-        vm.ChangeLimitCommand.Execute(welcome);
+        vm.EditCodeCommand.Execute(welcome);
         vm.EditLimit = 50;
-        await vm.SaveLimitCommand.ExecuteAsync(null);
+        await vm.SaveEditCommand.ExecuteAsync(null);
         Assert.Equal(50, vm.Discounts.Single(r => r.Discount.Code == "WELCOME10").Discount.MaxUses);
         var limited = vm.Discounts.Single(r => r.Discount.Code == "WELCOME10").Discount;
         limited.MaxUses = null;

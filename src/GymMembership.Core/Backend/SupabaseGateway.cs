@@ -215,12 +215,6 @@ public sealed class SupabaseGateway : ISupabaseGateway
         await c.From<T>().Where(where).Set(boxed, value).Update();
     }
 
-    public async Task DeleteAsync<T>(T row) where T : BaseModel, new()
-    {
-        var c = await ReadyAsync();
-        await c.From<T>().Delete(row);
-    }
-
     // ---------- server functions ----------
     public async Task<TResult> RpcAsync<TResult>(string function, Dictionary<string, object>? args = null)
     {

@@ -34,7 +34,7 @@ public static class ErrorMapper
         var m = message.ToLowerInvariant();
         if (Has(m, "forbidden", "42501", "jwt", "row-level security", "invalid login", "invalid_credentials", "not authenticated")) return AppErrorKind.Unauthorized;
         if (Has(m, "account_has_commitments", "account_archived", "record_archived", "record_not_restorable", "code_limit_reached", "shift_has_sessions", "slot_taken", "member_busy", "stale_proposal", "coach_unavailable", "coach_busy", "already_started", "not_in_use", "amenity_unavailable", "not_archived", "already_processed", "already_availed", "renewal_pending", "already_requested", "refund_in_progress", "not_refundable", "pending_session_request", "active_coaching_session", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
-        if (Has(m, "account_inactive", "bad_archive_reason", "bad_correction_reason", "self_archive", "last_active_admin", "no_active_membership", "self_verify", "self_decision", "not_renewable", "wrong_member", "not_found", "23514",
+        if (Has(m, "account_inactive", "bad_archive_reason", "bad_correction_reason", "discount_fixed", "self_archive", "last_active_admin", "no_active_membership", "self_verify", "self_decision", "not_renewable", "wrong_member", "not_found", "23514",
                    "refund_window_closed", "payment_expired", "gym_closed", "coach_not_in_gym", "bad_rate", "invite_member_inactive", "invalid_code", "limit_required", "bad_hours", "off_grid", "outside_gym_hours", "too_long", "past_slot", "too_far_ahead", "no_pass", "limit_below_used", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "super_admin_protected", "bad_code", "code_not_verified", "resend_wait", "same_password", "end must be after start")) return AppErrorKind.Validation;
         return AppErrorKind.Unknown;
     }
@@ -59,6 +59,7 @@ public static class ErrorText
     {
         "bad_archive_reason" => "Enter a reason for deletion, from 1 to 500 characters.",
         "bad_correction_reason" => "Enter a reason for the correction, from 1 to 500 characters.",
+        "discount_fixed" => "A code and its percent can't change. To change them, archive this code and add a new one.",
         "self_archive" => "You can't delete your own account.",
         "last_active_admin" => "Keep at least one active administrator.",
         "account_has_commitments" => "Resolve this account's scheduled sessions, active coaching hires and pending payments before deleting it.",
@@ -221,7 +222,6 @@ public interface ISupabaseGateway
     Task<IReadOnlyList<T>> ListAsync<T>(Expression<Func<T, bool>>? where = null) where T : BaseModel, new();
     Task<T> InsertAsync<T>(T row) where T : BaseModel, new();
     Task UpdateAsync<T>(T row) where T : BaseModel, new();
-    Task DeleteAsync<T>(T row) where T : BaseModel, new();
     /// <summary>Sets one column on every row that matches, in a single request; rows the filter does not match are left alone.</summary>
     Task UpdateWhereAsync<T, TValue>(Expression<Func<T, bool>> where, Expression<Func<T, TValue>> column, TValue value) where T : BaseModel, new();
     Task<TResult> RpcAsync<TResult>(string function, Dictionary<string, object>? args = null);

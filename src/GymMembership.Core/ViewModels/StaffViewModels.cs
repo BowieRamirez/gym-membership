@@ -1191,19 +1191,34 @@ public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
 
     [ObservableProperty] private DiscountRow? editing;
     [ObservableProperty] private int editLimit;
+    [ObservableProperty] private DateTime editUntil;
+    int _limitShown;
 
-    [RelayCommand] private void ChangeLimit(DiscountRow row) { Editing = row; EditLimit = row.Discount.MaxUses ?? Math.Max(1, (int)(row.Used + row.Pending)); Notice = null; }
+    [RelayCommand]
+    private void EditCode(DiscountRow row)
+    {
+        (Editing, EditLimit, EditUntil) = (row, row.Discount.MaxUses ?? Math.Max(1, (int)(row.Used + row.Pending)), row.LastDay.ToLocalTime().Date);
+        _limitShown = EditLimit;
+        Notice = null; ErrorMessage = null;
+    }
     [RelayCommand] private void CancelEdit() => Editing = null;
 
     [RelayCommand]
-    private async Task SaveLimitAsync()
+    private async Task SaveEditAsync()
     {
         if (Editing is not { } row) return;
-        if (!await Confirm.AskAsync($"Change the limit for {row.Discount.Code}?", $"It can be used {EditLimit} times in total.", "Change limit")) return;
-        var old = row.Discount.MaxUses; row.Discount.MaxUses = EditLimit;
-        if (!await RunAsync(() => svc.SaveDiscountAsync(row.Discount))) { row.Discount.MaxUses = old; return; }
+        if (EditUntil.Date < DateTime.Today) { ErrorMessage = "Choose today or a later date."; return; }
+        var d = row.Discount;
+        // a field left alone keeps its value: changing only the date must not put a limit on an old unlimited code
+        int? limit = EditLimit == _limitShown ? d.MaxUses : EditLimit;
+        var expires = EditUntil.Date == row.LastDay.ToLocalTime().Date ? d.ExpiresAt : EditUntil.Date.AddDays(1).ToUniversalTime();
+        var summary = $"{(limit is { } uses ? $"Up to {uses} uses" : "No limit on uses")}, until {EditUntil:d MMM yyyy}.";
+        if (!await Confirm.AskAsync($"Save changes to {d.Code}?", summary, "Save changes")) return;
+        var (oldLimit, oldExpires) = (d.MaxUses, d.ExpiresAt);
+        (d.MaxUses, d.ExpiresAt) = (limit, expires);
+        if (!await RunAsync(() => svc.SaveDiscountAsync(d))) { (d.MaxUses, d.ExpiresAt) = (oldLimit, oldExpires); return; }
         Editing = null;
-        Notice = $"Code {row.Discount.Code} can now be used {EditLimit} times.";
+        Notice = $"Code {d.Code} saved. {summary}";
         await LoadAsync();
     }
 

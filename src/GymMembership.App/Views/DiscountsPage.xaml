@@ -25,13 +25,21 @@
 
             <Border Style="{StaticResource Panel}" IsVisible="{Binding Editing, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="10">
-                    <c:CardTitle Icon="tag" Text="{Binding Editing.Discount.Code, StringFormat='Change the limit for {0}'}" />
+                    <c:CardTitle Icon="tag" Text="{Binding Editing.Discount.Code, StringFormat='Edit code {0}'}" />
                     <Label Text="{Binding Editing.Usage}" Style="{StaticResource Caption}" />
-                    <Border Style="{StaticResource Field}" WidthRequest="110" HorizontalOptions="Start">
-                        <Entry Text="{Binding EditLimit}" Keyboard="Numeric" SemanticProperties.Description="New limit" />
-                    </Border>
+                    <FlexLayout Wrap="Wrap" AlignItems="End">
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="110">
+                            <Label Text="Max uses" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding EditLimit}" Keyboard="Numeric" SemanticProperties.Description="New limit" AutomationId="EditCodeLimit" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                            <Label Text="Valid until" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><DatePicker Date="{Binding EditUntil}" MinimumDate="{x:Static x:DateTime.Today}" SemanticProperties.Description="Last day the code works" AutomationId="EditCodeUntil" /></Border>
+                        </VerticalStackLayout>
+                    </FlexLayout>
+                    <Label Text="The code and percent can't change, because people may have used it at that value." Style="{StaticResource Caption}" />
                     <HorizontalStackLayout Spacing="8">
-                        <Button Text="Save limit" Style="{StaticResource SmallButton}" Command="{Binding SaveLimitCommand}" />
+                        <Button Text="Save changes" Style="{StaticResource SmallButton}" Command="{Binding SaveEditCommand}" AutomationId="SaveEditCode" />
                         <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelEditCommand}" />
                     </HorizontalStackLayout>
                 </VerticalStackLayout>
@@ -72,7 +80,7 @@
                                             <Label.Text>
                                                 <MultiBinding StringFormat="{}{0}% off, valid until {1}">
                                                     <Binding Path="Discount.Percent" />
-                                                    <Binding Path="Discount.ExpiresAt" Converter="{StaticResource LocalDate}" ConverterParameter="d MMM yyyy" />
+                                                    <Binding Path="LastDay" Converter="{StaticResource LocalDate}" ConverterParameter="d MMM yyyy" />
                                                 </MultiBinding>
                                             </Label.Text>
                                         </Label>
@@ -82,8 +90,8 @@
                                 </Grid>
                                 <!-- wraps on narrow screens so no label is cut off -->
                                 <FlexLayout Wrap="Wrap">
-                                    <Button Text="Change limit" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                            Clicked="OnChangeLimit" />
+                                    <Button Text="Edit" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                                            Clicked="OnEditCode" AutomationId="DiscountEdit" />
                                     <Button Text="Deactivate" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
                                             Clicked="OnToggle" />
                                     <Button Text="Archive" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"

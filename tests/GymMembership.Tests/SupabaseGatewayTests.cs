@@ -491,14 +491,6 @@ public sealed class SupabaseGatewayTests : IDisposable
         Assert.Contains("id=eq.1", Last.Query);
     }
 
-    [Fact]
-    public async Task Deleting_a_package_filters_on_its_id()
-    {
-        var gw = await SignedInAsync();
-        await gw.DeleteAsync(new MembershipPackage { Id = 3, Name = "x" });
-        Assert.Equal("DELETE", Last.Method);
-        Assert.Contains("membership_package_id=eq.3", Last.Query);
-    }
 
     // ---------- server functions ----------
     [Fact]

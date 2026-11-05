@@ -1181,6 +1181,8 @@ public sealed record AuditRow(AuditEntry Entry, string Actor);
 public sealed record DiscountRow(Discount Discount, string State, long Used = 0, long Pending = 0)
 {
     // used = verified + voided; pending payments hold a place too
+    /// <summary>The last day it works: ExpiresAt is the midnight that ends that day, so showing it directly reads one day late.</summary>
+    public DateTime LastDay => Discount.ExpiresAt.AddTicks(-1);
     public string Usage => (Discount.MaxUses is { } max ? $"{Used} of {max} used" : $"{Used} used, no limit") + (Pending > 0 ? $", {Pending} pending" : "");
 }
 public sealed record DiscountUse(long Id, long Used, long Pending);

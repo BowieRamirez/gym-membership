@@ -65,11 +65,6 @@ try {
       await assert.rejects(as(id, "update profiles set full_name='Changed Name' where id=$1", [id]), /permission denied/);
     }
   });
-  await test('other columns a person may edit still work', async () => {
-    const id = await user({ full_name: 'Phone Person' });
-    await as(id, "update profiles set phone='09170000000' where id=$1", [id]);
-    assert.equal((await db.query('select phone from profiles where id=$1', [id])).rows[0].phone, '09170000000');
-  });
   await test('a system admin corrects a name with a reason, full_name follows, and the audit log keeps old, new, reason and who', async () => {
     const admin = await staff('admin'), id = await user({ full_name: 'Maria Sntos' });
     await as(admin, 'select correct_name($1,$2,$3,$4)', [id, ' Maria ', ' Santos ', ' Typo at sign-up ']);

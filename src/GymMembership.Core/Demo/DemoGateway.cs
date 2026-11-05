@@ -363,6 +363,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     break;
                 case (Discount d, Discount old):
                     if (!Has("discounts:manage")) throw Err(Rls);
+                    if (!string.Equals(d.Code, old.Code, StringComparison.OrdinalIgnoreCase) || d.Percent != old.Percent) throw Err("discount_fixed");   // 0041
                     GuardDiscountLimit(old, d); list[index] = Clone(d); ArchiveUsedUpCodes();
                     break;
                 case (GymSettings, _): if (!Has("gym_settings:manage")) throw Err(Rls); list[index] = Clone(row); break;
@@ -384,14 +385,6 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 case (UserNotification, UserNotification old):   // only read_at
                     if (old.UserId != Uid) throw Err(Rls);
                     old.ReadAt = ((UserNotification)(object)row).ReadAt;
-                    break;
-                case (Profile p, Profile old):
-                    if (old.Id != Uid) throw Err(Rls);
-                    old.FullName = p.FullName; old.Phone = p.Phone;
-                    break;
-                case (Member m, Member old):
-                    if (old.UserId != Uid) throw Err(Rls);
-                    old.Goals = m.Goals;
                     break;
                 default: throw Err(Rls);
             }
@@ -424,27 +417,6 @@ public sealed partial class DemoGateway : ISupabaseGateway
         foreach (var n in All<UserNotification>().Where(n => n.UserId == Uid && matches((T)(object)n)).ToList())
             n.ReadAt = (DateTime?)(object?)value;
         return Task.CompletedTask;
-    }
-
-    public Task DeleteAsync<T>(T row) where T : BaseModel, new()
-    {
-        if (FailWith is not null) return Task.FromException(FailWith);
-        try
-        {
-            RequireActive();
-            switch (row)
-            {
-                case MembershipPackage or Amenity or Discount: throw Err(Rls);
-                case ShiftPost s when s.CoachId == Uid: GuardShift(All<ShiftPost>().FirstOrDefault(x => x.Id == s.Id) ?? s, null); break;
-                case UserNotification n when n.UserId == Uid: break;
-                default: throw Err(Rls);
-            }
-            var pk = Pk(typeof(T));
-            var key = pk.GetValue(row);
-            Table(typeof(T)).RemoveAll(r => Equals(pk.GetValue(r), key));
-            return Task.CompletedTask;
-        }
-        catch (Exception ex) { return Task.FromException(ex); }
     }
 
     // ---------- chat photos (mirrors 0016: can_use_chat_file) ----------
@@ -531,7 +503,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     }
 
     /// <summary>0028: a shift sits on the half-hour grid inside gym hours on one Manila day, and never leaves a scheduled session of its coach outside it.</summary>
-    void GuardShift(ShiftPost? old, ShiftPost? next)
+    void GuardShift(ShiftPost? old, ShiftPost next)
     {
         if (next is { Status: Status.Scheduled } && (old is null || old.Start != next.Start || old.End != next.End || old.Status != Status.Scheduled))
         {
