@@ -13,6 +13,16 @@
             <c:Banner Kind="notice" Message="{Binding Notice}" />
             <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" HorizontalOptions="Start" />
 
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding DeletingAmenity, Converter={StaticResource IsNotNull}}">
+                <VerticalStackLayout Spacing="10">
+                    <c:CardTitle Icon="archive" Text="{Binding DeletingAmenity.Name, StringFormat='Archive “{0}”? Passes already sold keep working.'}" />
+                    <HorizontalStackLayout Spacing="8">
+                        <Button Text="Yes, archive" Style="{StaticResource SmallButton}" Command="{Binding ConfirmDeleteAmenityCommand}" AutomationId="ConfirmArchiveAmenity" />
+                        <Button Text="Keep it" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepAmenityCommand}" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
             <Border Style="{StaticResource Panel}" IsVisible="{Binding Deleting, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="10">
                     <c:CardTitle Icon="archive" Text="{Binding Deleting.Name, StringFormat='Archive “{0}”? History will be retained.'}" />
@@ -135,6 +145,7 @@
                                             SemanticProperties.Hint="Choose a JPG, PNG or WebP up to 5 MB for this amenity" />
                                     <Button Text="Edit" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnEditAmenity" />
                                     <Button Text="Deactivate" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnToggleAmenity" />
+                                    <Button Text="Archive" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnDeleteAmenity" AutomationId="ArchiveAmenity" />
                                 </FlexLayout>
                             </VerticalStackLayout>
                         </Border>

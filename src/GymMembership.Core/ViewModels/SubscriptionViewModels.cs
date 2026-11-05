@@ -20,11 +20,11 @@ public partial class MyMembershipViewModel
         await LoadAsync();
     }
 
-    public async Task RequestRefundAsync(TermCard card, string reason)
+    public async Task RequestRefundAsync(TermCard card, string reason, string? category = null)
     {
         if (IsBusy) return;
         Notice = null;
-        if (!await RunAsync(() => subscription.RequestRefundAsync(card.Term.Id, reason))) return;
+        if (!await RunAsync(() => subscription.RequestRefundAsync(card.Term.Id, reason, category))) return;
         Notice = "Request submitted. Your term and access stay unchanged until an admin approves. No money has been sent yet.";
         await LoadAsync();
     }

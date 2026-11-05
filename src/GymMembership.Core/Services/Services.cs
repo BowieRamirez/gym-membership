@@ -1201,6 +1201,7 @@ public interface IAdminService
     /// <summary>Fixes a mistake in a locked name. System admin only (0040), with a reason that goes in the audit log.</summary>
     Task<AppResult<bool>> CorrectNameAsync(string userId, string firstName, string lastName, string reason);
     Task<AppResult<bool>> DeletePackageAsync(MembershipPackage package);
+    Task<AppResult<bool>> DeleteAmenityAsync(Amenity amenity);
     Task<AppResult<IReadOnlyList<DiscountRow>>> DiscountsAsync();
     Task<AppResult<bool>> SaveDiscountAsync(Discount discount);
     Task<AppResult<bool>> DeleteDiscountAsync(Discount discount);
@@ -1273,6 +1274,7 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         return await Safe.RunAsync(async () => { await gw.InvokeFunctionAsync("reset-password", new() { ["user_id"] = userId, ["password"] = password }); return true; });
     }
 
+    public Task<AppResult<bool>> DeleteAmenityAsync(Amenity a) => Rpc("archive_catalog_record", new() { ["p_type"] = "amenity", ["p_id"] = a.Id, ["p_reason"] = "Deactivated amenity" });
     public Task<AppResult<bool>> DeletePackageAsync(MembershipPackage p) => Rpc("archive_catalog_record", new() { ["p_type"] = "plan", ["p_id"] = p.Id, ["p_reason"] = "Deactivated gym plan" });
 
     public Task<AppResult<IReadOnlyList<DiscountRow>>> DiscountsAsync() => Safe.RunAsync<IReadOnlyList<DiscountRow>>(async () =>

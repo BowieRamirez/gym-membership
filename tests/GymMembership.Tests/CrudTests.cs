@@ -44,7 +44,64 @@ public class CrudTests
         sauna.Price = 250;
         Assert.True((await admin.SaveAmenityAsync(sauna)).Ok);
         Assert.Equal(250, (await admin.AllAmenitiesAsync()).Value!.Single(a => a.Name == "Crud room").Price);
-        // deleting one is item 12, built in Phase 5
+    }
+
+    [Fact]
+    public async Task Deleting_an_amenity_archives_it_and_keeps_passes_already_sold()
+    {
+        var gw = await As("admin@demo.io");
+        var vm = new CatalogAdminViewModel(new AdminService(gw)); var archive = new ArchiveService(gw);
+        await vm.OnAppearingAsync();
+        var amenity = vm.Amenities.First();
+        var passes = (await gw.ListAsync<UserAmenity>()).Count;
+
+        vm.DeleteAmenityCommand.Execute(amenity);
+        Assert.Same(amenity, vm.DeletingAmenity);
+        vm.KeepAmenityCommand.Execute(null);
+        Assert.Null(vm.DeletingAmenity);
+        Assert.Contains(amenity, vm.Amenities);
+
+        vm.DeleteAmenityCommand.Execute(amenity);
+        await vm.ConfirmDeleteAmenityCommand.ExecuteAsync(null);
+        Assert.Null(vm.DeletingAmenity);
+        Assert.DoesNotContain(vm.Amenities, a => a.Id == amenity.Id);
+        Assert.Single(await gw.ListAsync<Amenity>(a => a.Id == amenity.Id));   // the row is still there
+        Assert.Equal(passes, (await gw.ListAsync<UserAmenity>()).Count);
+
+        var row = (await archive.ListAsync(new(Type: "amenity"), 0)).Value!.Rows.Single(r => r.RecordId == amenity.Id.ToString());
+        Assert.Contains("amenity", row.Reason);
+        Assert.True((await archive.RestoreAsync(row)).Ok);
+        await vm.LoadCommand.ExecuteAsync(null);
+        Assert.Contains(vm.Amenities, a => a.Id == amenity.Id);
+    }
+
+    [Fact]
+    public async Task An_admin_cannot_delete_an_amenity_only_a_system_admin_can()
+    {
+        var gw = await As("subadmin@demo.io");
+        var vm = new CatalogAdminViewModel(new AdminService(gw));
+        await vm.OnAppearingAsync();
+        var amenity = vm.Amenities.First();
+        vm.DeleteAmenityCommand.Execute(amenity);
+        Assert.NotNull(vm.ErrorMessage);
+        Assert.Null(vm.DeletingAmenity);
+        Assert.False((await new AdminService(gw).DeleteAmenityAsync(amenity)).Ok);
+    }
+
+    [Fact]
+    public async Task An_inactive_code_is_already_in_the_archive_and_can_be_restored()
+    {
+        var gw = await As("admin@demo.io");
+        var vm = new DiscountsViewModel(new AdminService(gw)); var archive = new ArchiveService(gw);
+        await vm.OnAppearingAsync();
+        var row = vm.Discounts.First();
+
+        await vm.ToggleCommand.ExecuteAsync(row);
+        Assert.DoesNotContain(vm.Discounts, r => r.Discount.Id == row.Discount.Id);
+        var archived = (await archive.ListAsync(new(Type: "code"), 0)).Value!.Rows.Single(r => r.RecordId == row.Discount.Id.ToString());
+        Assert.NotNull(archived.ArchivedAt);
+        Assert.Single(await gw.ListAsync<Discount>(d => d.Id == row.Discount.Id));   // the row is still there
+        Assert.True((await archive.RestoreAsync(archived)).Ok);
     }
 
     [Fact]

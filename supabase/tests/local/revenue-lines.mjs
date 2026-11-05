@@ -39,7 +39,7 @@ const money = rows => rows.reduce((s, r) => s + Number(r.amount ?? r.total), 0);
 const ana = await paid('Ana Reyes'), ben = await paid('Ben Cruz'), voided = await paid('Void Person'), refunded = await paid('Refund Person');
 await as(admin, `select void_payment($1,'Wrong payment')`, [voided.pay.payment_id]);
 const term = (await as(refunded.uid, 'select * from membership_terms'))[0];
-const request = (await as(refunded.uid, 'select * from request_membership_refund($1,$2)', [term.term_id, 'Changed my plans']))[0];
+const request = (await as(refunded.uid, 'select * from request_membership_refund($1,$2,$3)', [term.term_id, 'Changed my plans', 'change_of_mind']))[0];
 await as(admin, 'select decide_membership_refund($1,true,$2)', [request.refund_request_id, 'Approved']);
 await as(desk, `select record_counter_payment('walk_in','cash',null,null,'Juan Walk',null,null)`);
 

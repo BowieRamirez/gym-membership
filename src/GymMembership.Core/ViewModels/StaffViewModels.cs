@@ -1076,6 +1076,25 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
 
     // delete asks first: DeletePackage picks the row, ConfirmDelete does it
     [ObservableProperty] private MembershipPackage? deleting;
+    [ObservableProperty] private Amenity? deletingAmenity;
+
+    [RelayCommand]
+    private void DeleteAmenity(Amenity a)
+    {
+        if (!CanArchive) { ErrorMessage = "Only the super admin can archive an amenity. Turn it off instead to stop selling it."; return; }
+        DeletingAmenity = a;
+    }
+    [RelayCommand] private void KeepAmenity() => DeletingAmenity = null;
+
+    [RelayCommand]
+    private async Task ConfirmDeleteAmenityAsync()
+    {
+        if (DeletingAmenity is not { } a) return;
+        DeletingAmenity = null;
+        if (!await RunAsync(() => svc.DeleteAmenityAsync(a))) return;
+        CancelAmenityEdit();
+        await LoadAsync();
+    }
 
     [RelayCommand]
     private void DeletePackage(MembershipPackage p)

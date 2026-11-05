@@ -34,6 +34,9 @@ public class RefundRequest : BaseModel
     [Column("reason")] public string Reason { get; set; } = "";
     [Column("requested_at")] public DateTime RequestedAt { get; set; }
     [Column("status")] public string Status { get; set; } = "pending";
+    /// <summary>Had the term started when this was asked? Null: asked before the rule existed (0042).</summary>
+    [Column("was_activated")] public bool? WasActivated { get; set; }
+    [Column("review_reason")] public string? ReviewReason { get; set; }
     [Column("decided_by")] public string? DecidedBy { get; set; }
     [Column("decided_at")] public DateTime? DecidedAt { get; set; }
     [Column("decision_reason")] public string? DecisionReason { get; set; }

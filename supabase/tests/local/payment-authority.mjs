@@ -31,7 +31,7 @@ async function fixture() {
   const uid = await user(), pay = (await as(uid, 'select * from extend_membership($1,null)', [monthly]))[0];
   await as(desk, 'select verify_payment($1,true)', [pay.payment_id]);
   const term = (await as(uid, 'select * from membership_terms'))[0];
-  const request = (await as(uid, 'select * from request_membership_refund($1,$2)', [term.term_id, 'Changed my plans']))[0];
+  const request = (await as(uid, 'select * from request_membership_refund($1,$2,$3)', [term.term_id, 'Changed my plans', 'change_of_mind']))[0];
   return { uid, pay, request };
 }
 const voidIt = (actor, pay) => as(actor, 'select void_payment($1,$2)', [pay.payment_id, 'Wrong payment']);

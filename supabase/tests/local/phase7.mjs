@@ -37,7 +37,7 @@ async function fixture(pkg = monthly, discount = null) {
   await verify(pay);
   return {uid, pay, term: (await terms(uid))[0]};
 }
-async function request(uid, term) { return (await as(uid,'select * from request_membership_refund($1,$2)',[term.term_id,'Changed my plans']))[0]; }
+async function request(uid, term) { return (await as(uid,'select * from request_membership_refund($1,$2,$3)',[term.term_id,'Changed my plans','change_of_mind']))[0]; }
 async function decide(id, approve = true) { await as(admin,'select decide_membership_refund($1,$2,$3)',[id,approve,approve ? 'Approved' : 'Not approved']); }
 async function paid(id, method = 'cash', reference = null) { await as(admin,'select record_membership_refund_paid($1,$2,$3)',[id,method,reference]); }
 
@@ -79,17 +79,55 @@ try {
     assert.equal(r.status,'pending'); assert.equal(Number(r.amount),900); assert.equal(await active(uid),true);
     await assert.rejects(request(uid,term),/already_requested|already_processed/);
   });
-  await test('deadline is strict at exactly 24h, permits one instant before it, and rejects later requests', async () => {
-    for (const [elapsed,eligible] of [[86399,true],[86400,false],[86401,false]]) {
-      const {uid,pay,term} = await fixture();
+  await test('a started term goes to review: it needs a reason category, and 24 hours no longer matters', async () => {
+    const {uid,pay,term} = await fixture();
+    await assert.rejects(as(uid,'select * from request_membership_refund($1,$2)',[term.term_id,'No category']),/refund_reason_required/);
+    await assert.rejects(as(uid,'select * from request_membership_refund($1,$2,$3)',[term.term_id,'Bad category','because']),/bad_input/);
+    await db.query("update payments set verified_at=now()-interval '25 hours' where payment_id=$1",[pay.payment_id]);
+    for (const category of ['service_not_provided','misled','contract_allows','illness_or_relocation','change_of_mind']) {
       await db.query('begin');
       try {
-        await db.query(`update payments set verified_at=now()-($1*interval '1 second') where payment_id=$2`,[elapsed,pay.payment_id]);
-        await db.query('set local role authenticated'); await db.query(`select set_config('request.jwt.claim.sub',$1,true)`,[uid]);
-        if (eligible) assert.equal((await db.query(`select * from request_membership_refund($1,'Boundary')`,[term.term_id])).rows[0].status,'pending');
-        else await assert.rejects(db.query(`select * from request_membership_refund($1,'Boundary')`,[term.term_id]),/refund_window_closed/);
+        await db.query('set local role authenticated'); await db.query("select set_config('request.jwt.claim.sub',$1,true)",[uid]);
+        const r = (await db.query('select * from request_membership_refund($1,$2,$3)',[term.term_id,'Boundary',category])).rows[0];
+        assert.deepEqual([r.status,r.was_activated,r.review_reason],['pending',true,category]);
       } finally { await db.query('rollback'); }
     }
+    const r = await request(uid,term);
+    assert.equal(Number(r.amount),Number(pay.amount));   // staff approve the full amount or reject
+  });
+  await test('a term that has ended cannot be requested, at exactly the end and after', async () => {
+    for (const seconds of [0,1,86400]) {
+      const {uid,term} = await fixture();
+      await db.query('begin');
+      try {
+        await db.query("update membership_terms set starts_at=now()-interval '40 days', ends_at=now()-($1*interval '1 second') where term_id=$2",[seconds,term.term_id]);
+        await db.query('set local role authenticated'); await db.query("select set_config('request.jwt.claim.sub',$1,true)",[uid]);
+        await assert.rejects(db.query('select * from request_membership_refund($1,$2,$3)',[term.term_id,'Too late','misled']),/refund_window_closed/);
+      } finally { await db.query('rollback'); }
+    }
+  });
+  await test('a queued term that has not started needs no category, and approving it cancels only that term', async () => {
+    const {uid} = await fixture();
+    const next = await extend(uid,monthly); await verify(next);
+    const queued = (await terms(uid)).find(t => t.payment_id === next.payment_id);
+    assert.ok(new Date(queued.starts_at) > new Date());
+    const r = (await as(uid,'select * from request_membership_refund($1,$2)',[queued.term_id,'Plans changed']))[0];
+    assert.deepEqual([r.was_activated,r.review_reason,Number(r.amount)],[false,null,Number(next.amount)]);
+    await decide(r.refund_request_id);
+    const after = await terms(uid);
+    assert.ok(after.find(t => t.term_id === queued.term_id).cancelled_at);
+    assert.equal(after.find(t => t.term_id !== queued.term_id).cancelled_at,null);
+    assert.equal((await db.query('select public.is_active_member($1) as a',[uid])).rows[0].a,true);
+  });
+  await test('approving a started term cancels it, ends access, and leaves a later paid term and other members alone', async () => {
+    const {uid,term} = await fixture(), other = await fixture();
+    const next = await extend(uid,monthly); await verify(next);
+    await decide((await request(uid,term)).refund_request_id);
+    const after = await terms(uid);
+    assert.ok(after.find(t => t.term_id === term.term_id).cancelled_at);
+    assert.equal(after.find(t => t.payment_id === next.payment_id).cancelled_at,null);
+    assert.equal((await db.query('select public.is_active_member($1) as a',[uid])).rows[0].a,false);
+    assert.equal((await db.query('select public.is_active_member($1) as a',[other.uid])).rows[0].a,true);
   });
   await test('ownership, admin authorization, read privacy and direct-write restrictions are enforced', async () => {
     const {uid,term} = await fixture();
@@ -215,7 +253,7 @@ try {
   await test('two simultaneous refund requests for one term create one request', async () => {
     const {uid,term} = await fixture();
     await second(async c => {
-      const results = await Promise.allSettled([request(uid,term),as(uid,'select * from request_membership_refund($1,$2)',[term.term_id,'Race'],c)]);
+      const results = await Promise.allSettled([request(uid,term),as(uid,'select * from request_membership_refund($1,$2,$3)',[term.term_id,'Race','change_of_mind'],c)]);
       assert.equal(results.filter(x=>x.status==='fulfilled').length,1);
     });
     assert.equal((await db.query('select * from refund_requests where term_id=$1',[term.term_id])).rowCount,1);
@@ -238,13 +276,13 @@ try {
     assert.equal((await refundOf(r.refund_request_id)).status,'paid');
     assert.equal((await db.query(`select * from audit_log where action='refund.paid' and entity_id=$1`,[String(r.refund_request_id)])).rowCount,1);
   });
-  await test('a counter-payment membership refunds inside 24h and not after', async () => {
+  await test('a counter-payment membership can be requested inside 24h and after it', async () => {
     const buy = async () => { const uid = await user();
       const p = (await as(desk,`select * from record_counter_payment('membership','cash',$1,$2)`,[uid,monthly]))[0]; return {uid,p,term:(await terms(uid))[0]}; };
     const a = await buy(); assert.equal(a.term.payment_id,a.p.payment_id);
     const r = await request(a.uid,a.term); assert.equal(r.status,'pending'); assert.equal(Number(r.amount),1000);
     const b = await buy(); await db.query(`update payments set verified_at=now()-interval '25 hours' where payment_id=$1`,[b.p.payment_id]);
-    await assert.rejects(request(b.uid,b.term),/refund_window_closed/);
+    assert.equal((await request(b.uid,b.term)).status,'pending');
   });
   await test('older clients: avail_membership then renew_membership then verify still queue exact paid terms', async () => {
     const uid = await user(); const first = (await as(uid,'select * from avail_membership($1)',[monthly]))[0]; await verify(first);

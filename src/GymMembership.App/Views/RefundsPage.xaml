@@ -10,7 +10,7 @@
         
             <VerticalStackLayout Spacing="10" Padding="0,0,0,16">
                 <Label Text="Cancellations &amp; refunds" Style="{StaticResource Heading}" />
-                <Label Text="A timely request remains reviewable after 24 hours. Approving cancels only its selected term; other paid dates stay fixed. Return the actual paid amount manually, then record repayment. This app does not send money." Style="{StaticResource Muted}" />
+                <Label Text="A term that has not started is owed a full refund. A started term needs your review; this is guidance, not legal advice. Approving cancels only its selected term; other paid dates stay fixed. Return the actual paid amount manually, then record repayment. This app does not send money." Style="{StaticResource Muted}" />
                 <c:Banner Message="{Binding ErrorMessage}" />
                 <c:Banner Kind="notice" Message="{Binding Notice}" />
             </VerticalStackLayout>
@@ -23,8 +23,13 @@
                         <c:CardTitle Icon="undo" Text="{Binding Member}" />
                         <Label Text="{Binding PackageName}" />
                         <Label Text="{Binding Dates}" Style="{StaticResource Caption}" />
-                        <Label Text="{Binding Request.Amount, StringFormat='Full refund: ₱{0:N2}'}" Style="{StaticResource PriceNumeral}" />
+                        <VerticalStackLayout Spacing="0">
+                            <Label Text="{Binding AmountLabel}" Style="{StaticResource Caption}" />
+                            <Label Text="{Binding Request.Amount, StringFormat='₱{0:N2}'}" Style="{StaticResource PriceNumeral}" />
+                        </VerticalStackLayout>
                         <Label Text="{Binding Request.Reason, StringFormat='Member reason: {0}'}" />
+                        <Label Text="{Binding ReviewText}" FontFamily="BarlowSemiBold" IsVisible="{Binding ReviewText, Converter={StaticResource HasText}}" />
+                        <Label Text="{Binding LaterTermsWarning}" Style="{StaticResource Caption}" IsVisible="{Binding LaterTermsWarning, Converter={StaticResource HasText}}" />
                         <Label Text="{Binding State}" Style="{StaticResource Muted}" />
                         <Label Text="{Binding Request.DecisionReason}" IsVisible="{Binding Request.DecisionReason, Converter={StaticResource IsNotNull}}" />
                         <VerticalStackLayout Spacing="8" IsVisible="{Binding CanDecide}">

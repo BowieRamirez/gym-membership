@@ -106,8 +106,12 @@ public sealed partial class DemoGateway
                 var p=All<Payment>().FirstOrDefault(p=>p.Id==term.PaymentId);
                 if(p?.Status!=Status.Verified||p.Amount<=0||term.CancelledAt is not null) throw Err("not_refundable");
                 if(All<RefundRequest>().Any(r=>r.TermId==term.Id)) throw Err("already_requested");
-                if(p.VerifiedAt is null || now>=p.VerifiedAt.Value.AddHours(24)) throw Err("refund_window_closed");
-                var r=Add(new RefundRequest {TermId=term.Id,PaymentId=p.Id,MemberId=Uid,Amount=p.Amount,Reason=reason,RequestedAt=now});
+                var category=a.GetValueOrDefault("p_category")?.ToString();
+                if(category is not null && RefundReasons.All.All(x=>x.Key!=category)) throw Err("bad_input");
+                if(now>=term.EndsAt) throw Err("refund_window_closed");
+                var activated=now>=term.StartsAt;   // 0042
+                if(activated && category is null) throw Err("refund_reason_required");
+                var r=Add(new RefundRequest {TermId=term.Id,PaymentId=p.Id,MemberId=Uid,Amount=p.Amount,Reason=reason,RequestedAt=now,WasActivated=activated,ReviewReason=activated?category:null});
                 Audit("refund.request","refund_requests",r.Id.ToString());result=Clone(r);return true;
             }
             case "decide_membership_refund":
