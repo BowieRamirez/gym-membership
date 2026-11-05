@@ -16,7 +16,7 @@ This is the restartable checklist for the to-do list. The original item numbers 
 3. Keep code, automated tests, manual checks and live deployment separate. Code written is not the same as verified or deployed.
 4. Before stopping, update "Current work" and the session log: exact failing tests, uncommitted files, and the next concrete action.
 5. Before resuming, read this file, run `git status --short`, check the recorded branch and commit, and continue from the next action. Do not overwrite unfamiliar changes.
-6. No live database migration, real account or payment operation, commit, push, or release is authorized merely by this plan. Schedule those separately with the owner.
+6. **Database changes (owner, 2026-11-05):** when a phase changes the database, push its migrations and Edge Functions to the live project as part of finishing the phase, then move on; no need to ask each time. Dry-run first, and push only that phase's own changes. Real account or payment operations, data edits, destructive changes to existing data, `git push`, merging and releases still need the owner's go-ahead.
 
 Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED`, `DEPLOYED`. Use `N/A` for verification that genuinely doesn't apply, with a reason. A ticked task does not mean the phase is accepted.
 
@@ -31,8 +31,8 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 
 ### Current work / restart here
 
-- **2026-11-05:** Phase 3 IMPLEMENTED and committed, not deployed (`0040` is not on the live database). Phase 2 is DEPLOYED; the owner's check of the real register page is not recorded yet. Branch is local, not pushed. xUnit 798/798; database suite exit 0, 322 counted; Windows and Android builds pass.
-- Next concrete action: owner decides when to apply `0040` (see Phase 3's last task). Then Phase 4 starts with the CRUD table for the owner to approve (D14).
+- **2026-11-05:** Phase 3 DEPLOYED: `0040` applied live. Phase 2 is also DEPLOYED. Owner checks on the real backend for both are not recorded yet. Branch is local, not pushed. Phase 4 IN PROGRESS: mapping what each entity allows, read only.
+- Next concrete action: finish the CRUD table and get the owner's approval (D14) before fixing any gaps.
 
 ## 1. Repository findings
 
@@ -84,8 +84,8 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 | --- | --- | --- | --- | --- |
 | 1 | Parameterized query audit | 3 | D2 | VERIFIED |
 | 2 | Live email-in-use check | 2 | D2, D8 | DEPLOYED |
-| 3 | Lock names after creation | 1 | D2, D3 | IMPLEMENTED |
-| 4 | CRUD | 13 | D14 | PLANNED |
+| 3 | Lock names after creation | 1 | D2, D3 | DEPLOYED |
+| 4 | CRUD | 13 | D14 | IN PROGRESS |
 | 5 | Refunds and archiving | 11, R2, 6, 8, 9, 12 | D9, D10 | PLANNED |
 | 6 | Amenities and check-in fallbacks | 7, 10, forgot phone | D11, D12, D15 | PLANNED |
 | 7 | Simplify admin overview, status labels, role names | 4, 15, role names | D6, D13, D17 | PLANNED |
@@ -128,7 +128,8 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 - [x] Tests: `names-email.mjs` and the xUnit name tests updated; direct updates as a signed-in user, staff and a System admin are refused. `rules.mjs` now checks the table's letter rules directly, since app users can no longer reach them. (2026-11-05)
 - Checked in a Windows demo build, dark theme, 1180 px wide: Settings shows the name with no input; the menu offers Correct name; the first name is prefilled; a missing reason is refused with a message; a correction updates the list and shows a notice. The Settings wording was changed after that look (text only). Not checked on screen: Admin not seeing the action (xUnit only), light theme, narrow window, Android Settings.
 - `ponytail:ponytail-review` (2026-11-05): nothing to cut.
-- [ ] **With the owner, not done:** apply `0040` to the live database. Until then the live database still allows renames, and Correct name fails on the real backend because the function doesn't exist yet. After it, "Save name" in already-installed versions (v0.4.0 and older) stops working with a general error, so it is best applied together with the next release.
+- [x] Applied `0040` live on the owner's instruction, 2026-11-05 (dry run showed only `0040`). Confirmed live: signed-in users can't update the three name columns, can still update `phone`, `set_my_name` is gone, signed-in users can call `correct_name` (it checks the role itself), and anonymous users can't. "Save name" in installed versions (v0.4.0 and older) now fails with a general error until they update.
+- [ ] Owner checks Correct name on the real backend.
 
 ### Phase 4: CRUD (item 13, marked very important)
 - [ ] Table in this plan: one row per entity, with what create, read, update and delete should do, who may do it, and where it is in the app. Owner approves it (D14).
@@ -245,6 +246,7 @@ Work in priority order: items 3, 2 and 1 first (security and data integrity), th
 - **2026-11-05:** Complete to-do list received; added items 5 (rest), 6-15, R2, the forgot-phone fallback and decisions D9-D16. Phases renumbered to 10. No code, database or git changes.
 - **2026-11-05:** Owner renamed the roles: Super admin to System admin, Sub-admin to Admin (D17, Phase 7). No code, database or git changes.
 - **2026-11-05:** Branch `security-admin-cleanup-2026-11-05` created from `origin/main` (D2); plan committed there.
+- **2026-11-05:** Phase 3 deployed: `0040` applied live. Owner set the rule: push each phase's database changes when it finishes.
 - **2026-11-05:** Phase 3 built: names locked, System admin correction (owner chose option A, D3), not deployed. xUnit 798/798; database suite exit 0, 322 counted.
 - **2026-11-05:** Phase 2 deployed at the owner's request and the function tested live, including forged addresses.
 - **2026-11-05:** Phase 2 built: live email check with server limits, not deployed. Owner chose the live check (D8). xUnit 792/792; database suite exit 0, 315 counted.
