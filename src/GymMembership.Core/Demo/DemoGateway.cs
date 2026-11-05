@@ -1251,13 +1251,19 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 return null;
             }
             case "touch_last_seen": RequireActive(); return null;   // the demo has no one to show it to
-            case "set_my_name":
+            case "correct_name":
             {
-                RequireActive();
-                string first = (Opt("p_first") ?? "").Trim(), last = (Opt("p_last") ?? "").Trim();
+                RequireArchiveAdmin();
+                string first = (Opt("p_first") ?? "").Trim(), last = (Opt("p_last") ?? "").Trim(), reason = (Opt("p_reason") ?? "").Trim();
                 if (!AccountRules.IsName(first, last)) throw Err("bad_name");
-                var p = All<Profile>().First(x => x.Id == uid);
+                if (reason.Length is < 1 or > 500) throw Err("bad_correction_reason");
+                var target = Opt("p_user");
+                var p = All<Profile>().FirstOrDefault(x => x.Id == target) ?? throw Err("not_found");
+                if (!p.IsActive) throw Err("record_archived");
+                var old = p.FullName;
                 (p.FirstName, p.LastName, p.FullName) = (first, last, NameParts.Join(first, last));
+                Add(new AuditEntry { ActorId = Uid, Action = "user.correct_name", Entity = "profiles", EntityId = p.Id, CreatedAt = SubscriptionNow,
+                    Details = new() { ["from"] = old, ["to"] = p.FullName, ["reason"] = reason } });
                 return null;
             }
             case "confirm_my_email":

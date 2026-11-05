@@ -26,7 +26,7 @@ public static class PayMethod { public const string Qr = "qr", Cash = "cash", Gc
   [Column("deleted_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? DeletedAt { get; set; }
   [Column("deleted_by", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? DeletedBy { get; set; }
   [Column("deletion_reason", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? DeletionReason { get; set; }
-  // full_name is built from these (0035); written only by set_my_name and sign-up
+  // full_name is built from these (0035); locked after sign-up; only correct_name changes them (0040)
   [Column("first_name", ignoreOnInsert: true, ignoreOnUpdate: true)] public string FirstName { get; set; } = "";
   [Column("last_name", ignoreOnInsert: true, ignoreOnUpdate: true)] public string LastName { get; set; } = "";
   // the sign-in email this person proved with a code; written only by confirm_my_email

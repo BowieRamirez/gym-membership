@@ -1159,7 +1159,7 @@ public sealed class NotificationService(ISupabaseGateway gw) : INotificationServ
 }
 
 // ===================== Admin =====================
-public sealed record UserRow(string UserId, string Username, bool IsActive, IReadOnlyList<string> Roles)
+public sealed record UserRow(string UserId, string Username, bool IsActive, IReadOnlyList<string> Roles, string FirstName = "", string LastName = "")
 {
     public string RoleText => string.Join(", ", Roles.Select(RoleName));
     /// <summary>What a role is called on screen (D15: the admin is the super admin).</summary>
@@ -1196,6 +1196,8 @@ public interface IAdminService
     Task<AppResult<bool>> SetActiveAsync(string userId, bool active);
     Task<AppResult<bool>> CreateUserAsync(string firstName, string lastName, string email, string role, string password);
     Task<AppResult<bool>> ResetPasswordAsync(string userId, string password);
+    /// <summary>Fixes a mistake in a locked name. System admin only (0040), with a reason that goes in the audit log.</summary>
+    Task<AppResult<bool>> CorrectNameAsync(string userId, string firstName, string lastName, string reason);
     Task<AppResult<bool>> DeletePackageAsync(MembershipPackage package);
     Task<AppResult<IReadOnlyList<DiscountRow>>> DiscountsAsync();
     Task<AppResult<bool>> SaveDiscountAsync(Discount discount);
@@ -1222,7 +1224,7 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         var roles = await gw.ListAsync<Role>();
         var links = await gw.ListAsync<UserRole>();
         return profiles.Where(p => p.DeletedAt is null).Select(p => new UserRow(p.Id, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName, p.IsActive,
-            links.Where(l => l.UserId == p.Id).Select(l => roles.First(r => r.RoleId == l.RoleId).Name).OrderBy(n => n).ToList())).ToList();
+            links.Where(l => l.UserId == p.Id).Select(l => roles.First(r => r.RoleId == l.RoleId).Name).OrderBy(n => n).ToList(), p.FirstName, p.LastName)).ToList();
     });
 
     public Task<AppResult<bool>> IsSuperAdminAsync() => Safe.RunAsync(async () =>
@@ -1253,6 +1255,14 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
             });
             return true;
         });
+    }
+
+    public Task<AppResult<bool>> CorrectNameAsync(string userId, string firstName, string lastName, string reason)
+    {
+        firstName = firstName.Trim(); lastName = lastName.Trim(); reason = reason.Trim();
+        if (!AccountRules.IsName(firstName, lastName)) return Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Validation, "bad_name"));
+        if (reason.Length is < 1 or > 500) return Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Validation, "bad_correction_reason"));
+        return Rpc("correct_name", new() { ["p_user"] = userId, ["p_first"] = firstName, ["p_last"] = lastName, ["p_reason"] = reason });
     }
 
     public async Task<AppResult<bool>> ResetPasswordAsync(string userId, string password)

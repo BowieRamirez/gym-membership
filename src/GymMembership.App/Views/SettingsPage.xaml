@@ -36,14 +36,14 @@
                             <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
                                 <VerticalStackLayout Spacing="4">
                                     <Label Text="First name" Style="{StaticResource Caption}" />
-                                    <Border Style="{StaticResource Field}"><Entry Text="{Binding FirstName}" TextChanged="OnNameChanged" MaxLength="{x:Static svc:AccountRules.MaxName}" SemanticProperties.Description="First name" /></Border>
+                                    <Label Text="{Binding FirstName}" FontFamily="BarlowSemiBold" AutomationId="SettingsFirstName" />
                                 </VerticalStackLayout>
-                                <VerticalStackLayout Grid.Column="1" Spacing="4">
+                                <VerticalStackLayout Grid.Column="1" Spacing="4" IsVisible="{Binding LastName, Converter={StaticResource HasText}}">
                                     <Label Text="Last name" Style="{StaticResource Caption}" />
-                                    <Border Style="{StaticResource Field}"><Entry Text="{Binding LastName}" TextChanged="OnNameChanged" MaxLength="{x:Static svc:AccountRules.MaxName}" ReturnCommand="{Binding SaveNameCommand}" SemanticProperties.Description="Last name" /></Border>
+                                    <Label Text="{Binding LastName}" FontFamily="BarlowSemiBold" AutomationId="SettingsLastName" />
                                 </VerticalStackLayout>
                             </Grid>
-                            <Button Text="Save name" Command="{Binding SaveNameCommand}" HorizontalOptions="Start" />
+                            <Label Text="Names can't be changed after sign-up. If yours is wrong, ask the gym to correct it." Style="{StaticResource Caption}" />
                         </VerticalStackLayout>
 
                         <!-- Email: send a code to the address, then type it. A new address becomes the sign-in email. -->

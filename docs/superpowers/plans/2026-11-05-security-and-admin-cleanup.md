@@ -22,7 +22,7 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 
 **Rules**
 - Business rules live in the database and are mirrored in `DemoGateway`; hiding something in the UI is not enough.
-- New migrations continue from the latest number (0039 after Phase 2, so next is `0040`). Never rewrite an applied migration.
+- New migrations continue from the latest number (0040 after Phase 3, so next is `0041`). Never rewrite an applied migration.
 - Logic goes in Core with an xUnit test in `tests/GymMembership.Tests`; database rules get a check in `supabase/tests/local`.
 - UI work: AutomationIds used by the UI scripts stay on the same controls; phones keep their layouts.
 - **Design (owner, 2026-11-05):** every task that changes a screen uses the `impeccable` skill, so the system doesn't look like slop or AI-generated UI, alongside the `frontend-design` skill that `CLAUDE.md` requires. Main design phases: 7 and 8. Smaller screen changes: Phases 2, 3, 5 and 6, each marked below. Phases 1, 4 and 9 change no design unless a fix touches a screen.
@@ -31,8 +31,8 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 
 ### Current work / restart here
 
-- **2026-11-05:** Phase 2 DEPLOYED: `0039` applied and `check-email` live on project `avxcitoddadbblxuhiik`, at the owner's request. Function tested live; owner is testing the real register page. Branch is local, not pushed.
-- Next concrete action: owner confirms the message on the real register page, and answers D3 (who can correct a name) so Phase 3 can start. Other decisions are needed only before the phase that uses them (see the table in section 3).
+- **2026-11-05:** Phase 3 IMPLEMENTED and committed, not deployed (`0040` is not on the live database). Phase 2 is DEPLOYED; the owner's check of the real register page is not recorded yet. Branch is local, not pushed. xUnit 798/798; database suite exit 0, 322 counted; Windows and Android builds pass.
+- Next concrete action: owner decides when to apply `0040` (see Phase 3's last task). Then Phase 4 starts with the CRUD table for the owner to approve (D14).
 
 ## 1. Repository findings
 
@@ -60,7 +60,7 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 
 - [ ] **D1 — screenshots:** The full list arrived 2026-11-05. The three screenshots it mentions (admin overview, Audit Logs, refund guidance) have not; the plan works from their text descriptions. Owner to supply them if they show more than that.
 - [x] **D2 — branch (owner, 2026-11-05):** One new branch for the whole plan, `security-admin-cleanup-2026-11-05`, merged to `main` by the owner when the plan is done. No branch per phase.
-- [ ] **D3 — name lock details:** Does this reverse D13 of the 2026-10-20 plan for everyone (members, coaches, staff, admins), and how is a typo fixed? Recommend: everyone is locked, and only a System admin can correct a name through an audited function with a reason. Without a correction path, a typo at registration is permanent.
+- [x] **D3 — name lock details (owner, 2026-11-05: option A):** Reverses D13 of the 2026-10-20 plan for everyone: members, coaches, staff and admins. Only a System admin can correct a name, with a reason of 1 to 500 characters that goes in the audit log. Implementer's call, not asked: a System admin may correct their own name, because a lone System admin's typo would otherwise be permanent.
 - [ ] **D4 — paying 0:** Can a payment of 0 ever be valid (for example a 100% discount)? Recommend: refuse 0 everywhere unless a discount brought the price to 0. Check first whether discounts can reach 100%.
 - [ ] **D5 — password rules:** Today 6 to 64 characters, length only. Recommend: 8 to 64 with at least one letter and one number, for new passwords only (registration, change, reset, temporary); existing passwords keep working. The Supabase Auth dashboard setting must match, or the rule is only client-side. Owner to change that setting.
 - [ ] **D6 — overview layout:** Does simplifying replace the eight cards and the black "Open" buttons the owner kept on 2026-11-01? Recommend: a mockup first in `docs/mockups/`, as with the full-page layout, showing a number strip plus a compact list of links.
@@ -84,7 +84,7 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 | --- | --- | --- | --- | --- |
 | 1 | Parameterized query audit | 3 | D2 | VERIFIED |
 | 2 | Live email-in-use check | 2 | D2, D8 | DEPLOYED |
-| 3 | Lock names after creation | 1 | D2, D3 | PLANNED |
+| 3 | Lock names after creation | 1 | D2, D3 | IMPLEMENTED |
 | 4 | CRUD | 13 | D14 | PLANNED |
 | 5 | Refunds and archiving | 11, R2, 6, 8, 9, 12 | D9, D10 | PLANNED |
 | 6 | Amenities and check-in fallbacks | 7, 10, forgot phone | D11, D12, D15 | PLANNED |
@@ -121,11 +121,14 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 - [ ] Empty fields on the register page show a lighter box inside the field border in dark mode. Check whether it is real or comes from the screenshot method, then fix with Phase 7.
 
 ### Phase 3: lock names (item 1)
-- [ ] Migration `0040`: a trigger on `profiles` refuses changes to `first_name`, `last_name` and `full_name` after creation, including writers that only set `full_name` (`0035:31-39`). Revoke the `0035` update grant and retire its name-saving function as D3 requires.
-- [ ] Check that archive, restore and the `create-user` function still work with the trigger on.
-- [ ] Correction path per D3, audited, with a reason.
-- [ ] (`impeccable`) Settings: names shown read-only; `SaveNameAsync` and its command removed. Same refusal in `DemoGateway`.
-- [ ] Tests: update `names-email.mjs` (it covers editing names today) and the xUnit name tests; add one check that a direct update as a signed-in user is refused.
+- [x] Migration `0040`: revokes `update` on `full_name`, `first_name` and `last_name` from signed-in users and drops `set_my_name`. Simpler than the trigger first planned: the table privilege already refuses every client, including a writer that only sets `full_name`, and no other function writes names. (2026-11-05)
+- [x] Sign-up, `create-user` and archive still work: names are set at creation by `handle_new_user`, which privileges don't affect. (2026-11-05, `names-email.mjs`, `account-archive.mjs`.)
+- [x] Correction path per D3: `correct_name`, audited as `user.correct_name` with old name, new name and reason. Refuses Admin, front desk, coach, member and anonymous callers, and archived or unknown accounts. (2026-11-05, 7 new checks in `names-email.mjs`.)
+- [x] (`impeccable`, `frontend-design`) Settings: names shown as plain text with "Names can't be changed after sign-up. If yours is wrong, ask the gym to correct it."; the Save name button, `SaveNameAsync` and `SetNameAsync` are gone. Users and roles: a "Correct name" action for System admins opens a panel built like Reset password. Same behaviour in `DemoGateway`. (2026-11-05)
+- [x] Tests: `names-email.mjs` and the xUnit name tests updated; direct updates as a signed-in user, staff and a System admin are refused. `rules.mjs` now checks the table's letter rules directly, since app users can no longer reach them. (2026-11-05)
+- Checked in a Windows demo build, dark theme, 1180 px wide: Settings shows the name with no input; the menu offers Correct name; the first name is prefilled; a missing reason is refused with a message; a correction updates the list and shows a notice. The Settings wording was changed after that look (text only). Not checked on screen: Admin not seeing the action (xUnit only), light theme, narrow window, Android Settings.
+- `ponytail:ponytail-review` (2026-11-05): nothing to cut.
+- [ ] **With the owner, not done:** apply `0040` to the live database. Until then the live database still allows renames, and Correct name fails on the real backend because the function doesn't exist yet. After it, "Save name" in already-installed versions (v0.4.0 and older) stops working with a general error, so it is best applied together with the next release.
 
 ### Phase 4: CRUD (item 13, marked very important)
 - [ ] Table in this plan: one row per entity, with what create, read, update and delete should do, who may do it, and where it is in the app. Owner approves it (D14).
@@ -242,6 +245,7 @@ Work in priority order: items 3, 2 and 1 first (security and data integrity), th
 - **2026-11-05:** Complete to-do list received; added items 5 (rest), 6-15, R2, the forgot-phone fallback and decisions D9-D16. Phases renumbered to 10. No code, database or git changes.
 - **2026-11-05:** Owner renamed the roles: Super admin to System admin, Sub-admin to Admin (D17, Phase 7). No code, database or git changes.
 - **2026-11-05:** Branch `security-admin-cleanup-2026-11-05` created from `origin/main` (D2); plan committed there.
+- **2026-11-05:** Phase 3 built: names locked, System admin correction (owner chose option A, D3), not deployed. xUnit 798/798; database suite exit 0, 322 counted.
 - **2026-11-05:** Phase 2 deployed at the owner's request and the function tested live, including forged addresses.
 - **2026-11-05:** Phase 2 built: live email check with server limits, not deployed. Owner chose the live check (D8). xUnit 792/792; database suite exit 0, 315 counted.
 - **2026-11-05:** Phase 1 done: query audit found no injection path, tests added, one library limit recorded. xUnit 779/779; database suite exit 0, 307 counted. Owner added the `impeccable` rule for screen work.

@@ -954,7 +954,7 @@ public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? a
         await LoadAsync();
     }
 
-    [RelayCommand] private void StartReset(UserRow user) { Resetting = user; ResetPassword = ""; Notice = null; }
+    [RelayCommand] private void StartReset(UserRow user) { Resetting = user; ResetPassword = ""; Notice = null; Correcting = null; }
     [RelayCommand] private void StopReset() => Resetting = null;
 
     [RelayCommand]
@@ -964,6 +964,33 @@ public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? a
         if (!await RunAsync(() => svc.ResetPasswordAsync(user.UserId, ResetPassword))) return;
         Notice = $"{user.Username} can sign in with the new temporary password.";
         Resetting = null;
+    }
+
+    // ---------- correcting a locked name ----------
+    [ObservableProperty] private UserRow? correcting;
+    [ObservableProperty] private string correctFirstName = "";
+    [ObservableProperty] private string correctLastName = "";
+    [ObservableProperty] private string correctReason = "";
+
+    public bool CanCorrectName(UserRow user) => IsSuperAdmin && user.IsActive;
+
+    [RelayCommand]
+    private void StartCorrectName(UserRow user)
+    {
+        (Correcting, CorrectFirstName, CorrectLastName, CorrectReason) = (user, user.FirstName, user.LastName, "");
+        Notice = null; ErrorMessage = null; Resetting = null;
+    }
+    [RelayCommand] private void StopCorrectName() => Correcting = null;
+
+    [RelayCommand]
+    private async Task ConfirmCorrectNameAsync()
+    {
+        if (Correcting is not { } user) return;
+        Notice = null;
+        if (!await RunAsync(() => svc.CorrectNameAsync(user.UserId, CorrectFirstName, CorrectLastName, CorrectReason))) return;
+        Correcting = null;
+        await LoadAsync();
+        Notice = $"Name corrected to {NameParts.Join(CorrectFirstName.Trim(), CorrectLastName.Trim())}.";
     }
 
     // argument is "<userId>|<role>"; assigns the role if missing, otherwise revokes it

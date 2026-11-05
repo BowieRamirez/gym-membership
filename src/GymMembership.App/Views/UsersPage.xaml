@@ -27,6 +27,31 @@
                 </VerticalStackLayout>
             </Border>
 
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding Correcting, Converter={StaticResource IsNotNull}}">
+                <VerticalStackLayout Spacing="10">
+                    <c:CardTitle Icon="id-card" Text="{Binding Correcting.Username, StringFormat='Correct the name of {0}'}" />
+                    <Label Text="Names are locked after sign-up. Use this only to fix a mistake. The old name, the new name and your reason go in the audit log." Style="{StaticResource Caption}" />
+                    <FlexLayout Wrap="Wrap" AlignItems="End">
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="180">
+                            <Label Text="First name" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding CorrectFirstName}" MaxLength="{x:Static svc:AccountRules.MaxName}" SemanticProperties.Description="Corrected first name" AutomationId="CorrectFirstName" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="180">
+                            <Label Text="Last name" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding CorrectLastName}" MaxLength="{x:Static svc:AccountRules.MaxName}" SemanticProperties.Description="Corrected last name" AutomationId="CorrectLastName" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="372">
+                            <Label Text="Reason" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding CorrectReason}" MaxLength="500" ReturnCommand="{Binding ConfirmCorrectNameCommand}" SemanticProperties.Description="Reason for the correction" AutomationId="CorrectReason" /></Border>
+                        </VerticalStackLayout>
+                    </FlexLayout>
+                    <HorizontalStackLayout Spacing="8">
+                        <Button Text="Correct name" Style="{StaticResource SmallButton}" Command="{Binding ConfirmCorrectNameCommand}" AutomationId="ConfirmCorrectName" />
+                        <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding StopCorrectNameCommand}" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
             <Border Style="{StaticResource Panel}">
                 <VerticalStackLayout Spacing="12">
                     <c:CardTitle Icon="users" Text="{Binding AddTitle}" />

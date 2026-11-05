@@ -368,7 +368,8 @@ await test('an account made through the Admin API gets the role written after it
 });
 
 console.log('\nnames are letters only (0012)');
-const setName = (uid, name) => run(uid, `update profiles set full_name = $2 where id = $1`, [uid, name]);
+// names are locked for app users (0040), so this exercises the table's own rules directly
+const setName = (uid, name) => db.query(`update profiles set full_name = $2 where id = $1`, [uid, name]);
 await test('a member can rename themselves to a real name', async () => {
   for (const ok of ["Mary-Ann O'Brien", 'Juan dela Cruz', 'José Peña', 'Al'])
     assert.equal(await code(setName(alex, ok)), 'ok', ok);

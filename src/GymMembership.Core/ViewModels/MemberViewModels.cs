@@ -941,18 +941,9 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
     }
 
 
-    // ---------- name ----------
+    // ---------- name: shown only, locked after sign-up (0040) ----------
     [ObservableProperty] private string firstName = "";
     [ObservableProperty] private string lastName = "";
-
-    [RelayCommand]
-    private async Task SaveNameAsync()
-    {
-        Notice = null;
-        if (!await RunAsync(() => profile.SetNameAsync(FirstName, LastName))) return;
-        await LoadPhotoAsync(names: true);
-        Notice = "Name saved.";
-    }
 
     // ---------- email: send a code to it, then type the code ----------
     [ObservableProperty] private string emailAddress = "";
