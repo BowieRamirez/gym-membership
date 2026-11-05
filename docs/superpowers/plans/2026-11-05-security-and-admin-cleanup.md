@@ -22,7 +22,7 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 
 **Rules**
 - Business rules live in the database and are mirrored in `DemoGateway`; hiding something in the UI is not enough.
-- New migrations continue from the latest number (0040 after Phase 3, so next is `0041`). Never rewrite an applied migration.
+- New migrations continue from the latest number (0041 after Phase 4, so next is `0042`). Never rewrite an applied migration.
 - Logic goes in Core with an xUnit test in `tests/GymMembership.Tests`; database rules get a check in `supabase/tests/local`.
 - UI work: AutomationIds used by the UI scripts stay on the same controls; phones keep their layouts.
 - **Design (owner, 2026-11-05):** every task that changes a screen uses the `impeccable` skill, so the system doesn't look like slop or AI-generated UI, alongside the `frontend-design` skill that `CLAUDE.md` requires. Main design phases: 7 and 8. Smaller screen changes: Phases 2, 3, 5 and 6, each marked below. Phases 1, 4 and 9 change no design unless a fix touches a screen.
@@ -31,8 +31,8 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 
 ### Current work / restart here
 
-- **2026-11-05:** Phase 3 DEPLOYED: `0040` applied live. Phase 2 is also DEPLOYED. Owner checks on the real backend for both are not recorded yet. Branch is local, not pushed. Phase 4 IN PROGRESS: mapping what each entity allows, read only.
-- Next concrete action: finish the CRUD table and get the owner's approval (D14) before fixing any gaps.
+- **2026-11-05:** Phase 4 DEPLOYED: `0041` applied live. Phases 2 and 3 are also DEPLOYED. Owner checks on the real backend for Phases 2, 3 and 4 are not recorded yet. Branch is local, not pushed. xUnit 810/810; database suite exit 0, 327 counted; Windows and Android builds pass.
+- Next concrete action: owner answers D9 and D10 (refund formula) so Phase 5 can start. Item 12, the missing amenity delete button, is in that phase.
 
 ## 1. Repository findings
 
@@ -71,11 +71,11 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 - [ ] **D11 — amenities per session (blocks Phase 6):** Reverses D6 and D9 of the 2026-10-20 plan. To settle: (a) what a "session" is: one booking of 30 minutes to 2 hours, or one check-in; (b) price per session, and what happens to passes already sold (recommend: they stay valid until they expire); (c) does solo use end; (d) "coach present" means any coach checked in (`coach_visits`), or the member's own coach; (e) does the coach need to be present when booking or only at the time of use. Recommend any checked-in coach, checked at time of use, because coaches can't be checked in for a future booking.
 - [ ] **D12 — offline check-in (blocks Phase 6):** Reverses "offline is never Active" in the 2026-10-20 plan. Does offline mean the gym's internet is down, and how old may the data be? Recommend: the desk keeps a local copy of member codes and statuses, refreshed while online. Offline scans show "Last updated at ..." rather than Active, and check-ins are queued with their time, flagged as offline, then sent on reconnect and rechecked by the server. Copies older than 24 hours show "can't check". Known risk: a member who expired since the last refresh can get in.
 - [ ] **D13 — status labels (blocks Phase 7):** The list asks to confirm scope. Recommend: Active, Inactive and Deleted for accounts, packages, amenities and discount codes only. Memberships, payments and refunds keep their own statuses, because "Pending" or "Expired" would lose meaning.
-- [ ] **D14 — what CRUD means per entity (blocks Phase 4):** Recommend: master data (accounts, packages, amenities, codes) gets full create, read and update, with delete as archive. Money and history (payments, refunds, terms, check-ins, audit log) can't be edited or deleted, only reversed by the existing actions. Phase 4 produces the table for the owner to approve.
-- [ ] **D18 — phone and member goals (G1, blocks Phase 4):** The database stores both and lets people edit them, but no screen shows them. Recommend: remove the update permission and leave the columns unused, because nothing on the to-do list asks for them. Alternative: add them to Settings.
-- [ ] **D19 — editing discount codes (G2, blocks Phase 4):** Only the limit and on/off can change today. Recommend: also allow changing the end date, and keep code and percent fixed, because people may already have used them at that value.
-- [ ] **D20 — unused delete permissions (G3, blocks Phase 4):** Signed-in users have delete permission on shifts and notifications, limited by row rules, but the app never uses it. Recommend: remove it, since a shift's history should stay even when cancelled.
+- [x] **D14 — what CRUD means per entity (owner, 2026-11-05: approved):** Master data (accounts, packages, amenities, codes) gets full create, read and update, with delete as archive. Money and history (payments, refunds, terms, check-ins, audit log) can't be edited or deleted, only reversed by the existing actions.
 - [ ] **D15 — items without a place in the priority order:** The list's order doesn't mention amenities (7), QR offline (10), the forgot-phone fallback or status labels (15). Recommend: 7, 10 and forgot-phone after refunds and archiving (Phase 6), and 15 with the UI (Phase 7). This plan assumes that until the owner says otherwise.
+- [x] **D18 — phone and member goals (owner, 2026-11-05):** Remove the update permission and leave the columns unused, because nothing on the to-do list asks for them. Stored values stay.
+- [x] **D19 — editing discount codes (owner, 2026-11-05):** The end date can also change. Code and percent stay fixed, because people may already have used them at that value.
+- [x] **D20 — unused delete permissions (owner, 2026-11-05):** Removed from shifts and notifications.
 - [ ] **D16 — "every function" in the testing item:** Recommend: every database function callable from the app gets at least one attempt to break it, enforced by a `rules.mjs` check that fails when a function has no test. UI screens are covered by the listed cases only.
 - [x] **D17 — role names (owner, 2026-11-05):** Super admin is now called **System admin**, and Sub-admin is now called **Admin**. Implementer's call, not asked: this changes the names people see only, and permissions stay the same. The internal codes stay as they are (`admin` = System admin, `subadmin` = Admin), because renaming them would touch applied migrations, permissions and existing accounts. From here on, "admin" in this plan's code references means the code; on screen it means the former Sub-admin.
 
@@ -88,7 +88,7 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 | 1 | Parameterized query audit | 3 | D2 | VERIFIED |
 | 2 | Live email-in-use check | 2 | D2, D8 | DEPLOYED |
 | 3 | Lock names after creation | 1 | D2, D3 | DEPLOYED |
-| 4 | CRUD | 13 | D14 | IN PROGRESS |
+| 4 | CRUD | 13 | D14, D18-D20 | DEPLOYED |
 | 5 | Refunds and archiving | 11, R2, 6, 8, 9, 12 | D9, D10 | PLANNED |
 | 6 | Amenities and check-in fallbacks | 7, 10, forgot phone | D11, D12, D15 | PLANNED |
 | 7 | Simplify admin overview, status labels, role names | 4, 15, role names | D6, D13, D17 | PLANNED |
@@ -135,7 +135,7 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 - [ ] Owner checks Correct name on the real backend.
 
 ### Phase 4: CRUD (item 13, marked very important)
-- [x] Table below drafted from the live database's permissions and a read of the services, view models and screens (2026-11-05). Nothing in it has been run yet, and the owner has not approved it (D14).
+- [x] Table below drafted from the live database's permissions and a read of the services, view models and screens (2026-11-05). Owner approved it the same day (D14). The findings below are the state before the fixes in this phase.
 
 | Entity | Create | Read | Update | Delete | Finding |
 | --- | --- | --- | --- | --- | --- |
@@ -154,8 +154,18 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 | Payments, refunds, terms | Through the payment flows | Their pages | Verify, void, refund decisions only | None; reversed instead | By design per D14 |
 | Check-ins, scans, audit log | Server only | Their pages | None | None | By design per D14 |
 | Roles and permissions | Fixed in the database | Used by the app | Assign and remove roles | None | By design |
-- [ ] After approval: for each row, test the service and the database function, and record pass or gap in the table.
-- [ ] Fix the gaps, each with a test and the same behaviour in `DemoGateway`.
+- [x] Each row tested (2026-11-05). New in this phase: `supabase/tests/local/crud-rules.mjs` pins all 38 tables' permissions against the approved table, so a new table fails until it is listed, and `CrudTests.cs` runs packages, amenities, codes, accounts, gym settings, coach profile and shifts through the app's own services. Sessions, requests, reservations, messages, payments, refunds and check-ins rely on the suites already there (`session-requests`, `structured-requests`, `reservations`, `phase7`, `payment-authority`, `member-qr`, `rules`); no new behaviour was added to them.
+- [x] Gaps fixed in `0041` and the app (2026-11-05):
+  - G1: phone and goals no longer editable; demo refuses direct edits of profiles and member rows too.
+  - G2: a code's end date can change, through one Edit panel with the limit. Changing only the date leaves an old unlimited code unlimited. Code and percent are refused by a trigger, not column rights, so installed apps that send every column back on save keep working.
+  - G3: delete permissions and policies removed from shifts and notifications.
+  - Removed the gateway's `DeleteAsync`, which nothing in the app called, so the app has no physical delete path at all.
+- **Found and fixed while testing:** the discount list showed "valid until" one day late, because `ExpiresAt` is the midnight that ends the chosen day. It now shows the real last day (`DiscountRow.LastDay`).
+- **Still open:** amenities have no delete button; that is item 12 in Phase 5.
+- (`impeccable`, `frontend-design`) Checked in a Windows demo build, dark theme, 1180 px wide: the list shows the Edit button and last day, and the panel opens with the limit and date filled in. The confirm dialog appeared, but the final save and the reworded dialog text were checked by xUnit only, not on screen. For an old unlimited code the panel shows "0 used, no limit" above a Max uses box prefilled with 1, which is safe but slightly confusing; the dialog states the result. Not checked on screen: light theme, narrow window, Android.
+- `ponytail:ponytail-review` (2026-11-05): 2 small cuts applied.
+- [x] Applied `0041` live under the per-phase rule, 2026-11-05 (dry run showed only `0041`). Confirmed live: all 38 tables match the approved table, the `discounts_fixed_guard` trigger exists, and the two delete policies are gone. Installed apps are not expected to be affected: they send a code's unchanged values and never used these permissions.
+- [ ] Owner checks Edit on a discount code on the real backend.
 
 ### Phase 5: refunds and archiving (items 11, R2, 6, 8, 9, 12)
 - [ ] Item 11: test that approving a refund cancels that term and updates the member's status, and leaves other members untouched (`0025`). Later renewals per D10.
@@ -267,6 +277,7 @@ Work in priority order: items 3, 2 and 1 first (security and data integrity), th
 - **2026-11-05:** Complete to-do list received; added items 5 (rest), 6-15, R2, the forgot-phone fallback and decisions D9-D16. Phases renumbered to 10. No code, database or git changes.
 - **2026-11-05:** Owner renamed the roles: Super admin to System admin, Sub-admin to Admin (D17, Phase 7). No code, database or git changes.
 - **2026-11-05:** Branch `security-admin-cleanup-2026-11-05` created from `origin/main` (D2); plan committed there.
+- **2026-11-05:** Phase 4 done and deployed: `0041` live, CRUD table approved, 38 tables match it. xUnit 810/810; database suite exit 0, 327 counted.
 - **2026-11-05:** Phase 3 deployed: `0040` applied live. Owner set the rule: push each phase's database changes when it finishes.
 - **2026-11-05:** Phase 3 built: names locked, System admin correction (owner chose option A, D3), not deployed. xUnit 798/798; database suite exit 0, 322 counted.
 - **2026-11-05:** Phase 2 deployed at the owner's request and the function tested live, including forged addresses.
