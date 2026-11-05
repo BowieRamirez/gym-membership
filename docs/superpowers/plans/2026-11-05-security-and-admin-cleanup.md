@@ -22,7 +22,7 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 
 **Rules**
 - Business rules live in the database and are mirrored in `DemoGateway`; hiding something in the UI is not enough.
-- New migrations continue from the latest number (0041 after Phase 4, so next is `0042`). Never rewrite an applied migration.
+- New migrations continue from the latest number (0042 after Phase 5, so next is `0043`). Never rewrite an applied migration.
 - Logic goes in Core with an xUnit test in `tests/GymMembership.Tests`; database rules get a check in `supabase/tests/local`.
 - UI work: AutomationIds used by the UI scripts stay on the same controls; phones keep their layouts.
 - **Design (owner, 2026-11-05):** every task that changes a screen uses the `impeccable` skill, so the system doesn't look like slop or AI-generated UI, alongside the `frontend-design` skill that `CLAUDE.md` requires. Main design phases: 7 and 8. Smaller screen changes: Phases 2, 3, 5 and 6, each marked below. Phases 1, 4 and 9 change no design unless a fix touches a screen.
@@ -31,8 +31,8 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 
 ### Current work / restart here
 
-- **2026-11-05:** Phase 4 DEPLOYED: `0041` applied live. Phases 2 and 3 are also DEPLOYED. Owner checks on the real backend for Phases 2, 3 and 4 are not recorded yet. Branch is local, not pushed. xUnit 810/810; database suite exit 0, 327 counted; Windows and Android builds pass.
-- Next concrete action: owner answers D9 and D10 (refund formula) so Phase 5 can start. Item 12, the missing amenity delete button, is in that phase.
+- **2026-11-05:** Phase 5 DEPLOYED: `0042` applied live. Phases 2, 3 and 4 are also DEPLOYED. Owner checks on the real backend for Phases 2 to 5 are not recorded yet. Branch is local, not pushed. xUnit 819/819; database suite exit 0, 330 counted; Windows and Android builds pass.
+- Next concrete action: owner answers D21 (is "activated" what they meant?), then D11 and D12 so Phase 6 can start.
 
 ## 1. Repository findings
 
@@ -66,8 +66,8 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 - [ ] **D6 — overview layout:** Does simplifying replace the eight cards and the black "Open" buttons the owner kept on 2026-11-01? Recommend: a mockup first in `docs/mockups/`, as with the full-page layout, showing a number strip plus a compact list of links.
 - [ ] **D7 — audit table data:** Recommend: show the existing `audit_log` in a table, adding `ip_address` and `role` columns filled from now on, with older rows blank rather than guessed. IP comes from the request headers Supabase passes through, and is personal data, so the owner should decide how long it is kept. Filters: date range, user, action type, object type. Export: CSV of the filtered rows.
 - [x] **D8 — email check exposure (owner, 2026-11-05: build the live check):** Showing "already in use" tells anyone whether an address has an account, however well it is rate limited; the owner accepts that for this gym. Edge Function `check-email` with a per-IP limit on the server.
-- [ ] **D9 — refund formula (blocks Phase 5):** What counts as "activated", and does the 24-hour rule stay? Recommend: activated = the term's start date has passed or the member has checked in during it, whichever is first. Before that, a full refund with no 24-hour limit. After that, the request goes to staff for manual review with a required reason: gym failed to provide the service, member was misled, contract allows it, illness or relocation, or change of mind (not automatic). Staff decide; the app only surfaces the case. The wording should be checked by someone qualified, since the guidance is not legal advice.
-- [ ] **D10 — what a refund cancels (blocks Phase 5):** Approval cancels the refunded term today. If the member also has a later paid renewal, is that cancelled too? Recommend: leave it, since it has its own payment, and show staff a warning when approving.
+- [x] **D9 — refund formula (owner, 2026-11-05):** Activated = the term's start date has passed or the member has checked in during it, whichever is first. Before that, a full refund with no 24-hour limit. After that, the request goes to staff for manual review with a required reason: gym failed to provide the service, member was misled, contract allows it, illness or relocation, or change of mind (not automatic). Staff decide; the app only surfaces the case. The wording should be checked by someone qualified, since the guidance is not legal advice.
+- [x] **D10 — what a refund cancels (owner, 2026-11-05):** The refunded term only. A later paid renewal has its own payment and stays; staff see a warning when approving.
 - [ ] **D11 — amenities per session (blocks Phase 6):** Reverses D6 and D9 of the 2026-10-20 plan. To settle: (a) what a "session" is: one booking of 30 minutes to 2 hours, or one check-in; (b) price per session, and what happens to passes already sold (recommend: they stay valid until they expire); (c) does solo use end; (d) "coach present" means any coach checked in (`coach_visits`), or the member's own coach; (e) does the coach need to be present when booking or only at the time of use. Recommend any checked-in coach, checked at time of use, because coaches can't be checked in for a future booking.
 - [ ] **D12 — offline check-in (blocks Phase 6):** Reverses "offline is never Active" in the 2026-10-20 plan. Does offline mean the gym's internet is down, and how old may the data be? Recommend: the desk keeps a local copy of member codes and statuses, refreshed while online. Offline scans show "Last updated at ..." rather than Active, and check-ins are queued with their time, flagged as offline, then sent on reconnect and rechecked by the server. Copies older than 24 hours show "can't check". Known risk: a member who expired since the last refresh can get in.
 - [ ] **D13 — status labels (blocks Phase 7):** The list asks to confirm scope. Recommend: Active, Inactive and Deleted for accounts, packages, amenities and discount codes only. Memberships, payments and refunds keep their own statuses, because "Pending" or "Expired" would lose meaning.
@@ -76,6 +76,7 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 - [x] **D18 — phone and member goals (owner, 2026-11-05):** Remove the update permission and leave the columns unused, because nothing on the to-do list asks for them. Stored values stay.
 - [x] **D19 — editing discount codes (owner, 2026-11-05):** The end date can also change. Code and percent stay fixed, because people may already have used them at that value.
 - [x] **D20 — unused delete permissions (owner, 2026-11-05):** Removed from shifts and notifications.
+- [ ] **D21 — is "activated" what the owner meant? (Found building Phase 5, nothing blocked):** A first-time member's term starts the moment staff verify the payment, so under D9 they are activated at once. "Not activated" only ever applies to a renewal queued behind a current term. A check-in adds nothing either, because one during a term can only happen after it starts. If the owner meant "has not used it yet", activated could mean the first check-in during the term, which would give a member who paid but never came a full refund. It is a one-line change in `request_membership_refund` and in `TermCard`. Built as D9 says until the owner decides.
 - [ ] **D16 — "every function" in the testing item:** Recommend: every database function callable from the app gets at least one attempt to break it, enforced by a `rules.mjs` check that fails when a function has no test. UI screens are covered by the listed cases only.
 - [x] **D17 — role names (owner, 2026-11-05):** Super admin is now called **System admin**, and Sub-admin is now called **Admin**. Implementer's call, not asked: this changes the names people see only, and permissions stay the same. The internal codes stay as they are (`admin` = System admin, `subadmin` = Admin), because renaming them would touch applied migrations, permissions and existing accounts. From here on, "admin" in this plan's code references means the code; on screen it means the former Sub-admin.
 
@@ -89,7 +90,7 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 | 2 | Live email-in-use check | 2 | D2, D8 | DEPLOYED |
 | 3 | Lock names after creation | 1 | D2, D3 | DEPLOYED |
 | 4 | CRUD | 13 | D14, D18-D20 | DEPLOYED |
-| 5 | Refunds and archiving | 11, R2, 6, 8, 9, 12 | D9, D10 | PLANNED |
+| 5 | Refunds and archiving | 11, R2, 6, 8, 9, 12 | D9, D10 | DEPLOYED |
 | 6 | Amenities and check-in fallbacks | 7, 10, forgot phone | D11, D12, D15 | PLANNED |
 | 7 | Simplify admin overview, status labels, role names | 4, 15, role names | D6, D13, D17 | PLANNED |
 | 8 | Audit log table and labels | 5, 14 | D7 | PLANNED |
@@ -168,13 +169,23 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 - [ ] Owner checks Edit on a discount code on the real backend.
 
 ### Phase 5: refunds and archiving (items 11, R2, 6, 8, 9, 12)
-- [ ] Item 11: test that approving a refund cancels that term and updates the member's status, and leaves other members untouched (`0025`). Later renewals per D10.
-- [ ] R2: migration changing `request_membership_refund` per D9, keeping `amount` equal to the payment. Not-yet-activated gets a full refund; anything else goes to manual review with a reason category.
-- [ ] (`impeccable`) `RefundsPage`: show activated or not and the reason category so staff can see which cases need review. Member screen says what happens before they submit, with no promise of a refund after activation.
-- [ ] Tests at the edges: just before and after activation, already checked in, second request, 0 amount, voided payment.
-- [ ] Item 6: verify archiving a deleted user keeps their payments, terms and check-ins, and they show in the Archive; fix any gaps.
-- [ ] Items 8 and 9: verify an inactive code can be deleted and lands in the Archive, and that an active one follows the rule you confirm here. The UI label says what happens.
-- [ ] Item 12: verify deleting an amenity archives it, no path removes the row, and existing passes and bookings still display.
+- [x] Item 11: approving a refund cancels that member's term and ends their access if it was the running one; a later paid term and other members are untouched. Already built in `0025`; now pinned by tests in `phase7.mjs` and `SubscriptionTests`. (2026-11-05)
+- [x] R2: `0042` changes `request_membership_refund`. A term that hasn't started: no reason category, full refund owed. A started term: a reason category is required and staff review it. The 24-hour window is gone. `amount` stays equal to the payment. (2026-11-05)
+- [x] (`impeccable`, `frontend-design`) `RefundsPage`: each card says which case it is and the reason, warns about later paid terms, and labels the amount "Full refund" or "Refund requested" so a case under review doesn't read as already owed. My membership: a started term asks for a reason from a list first, and the confirm dialog says a refund isn't guaranteed. (2026-11-05)
+- [x] Tests at the edges: exactly at the end of the term and after, 25 hours after payment, queued term, each reason, unknown reason, second request, later paid terms. The 0-amount and voided-payment refusals are unchanged and covered by existing `phase7.mjs` checks. (2026-11-05)
+- [x] Item 6: archiving a deleted user keeps their history. Already built in `0023`; covered by `account-archive.mjs` and `CrudTests`. No change needed. (2026-11-05)
+- [x] Items 8 and 9: already behave this way. Turning a code off archives it, so every inactive code is in the Archive and can be restored, and the row is kept; the Discounts list only shows active codes, so there is nothing further to delete. Pinned by `CrudTests`. **Owner to confirm this matches what they meant.** (2026-11-05)
+- [x] Item 12: the missing Archive action on amenities, System admin only, with a confirm panel like packages. The row stays, passes already sold are kept, and it can be restored. (2026-11-05, `CrudTests`.)
+- **Implementer's calls, not asked:**
+  - A term that has ended can't be requested, because there is nothing left to cancel.
+  - Staff can still reject a term that hasn't started, for example if the payment is disputed.
+  - Staff approve the full amount or reject; there are no partial refunds, as before.
+- Installed versions (v0.4.0 and older): their request button only appears in the old 24-hour window, and on a started term they send no reason, so they get a general error until they update. A queued term still works, because the two-argument call is still accepted.
+- Noticed, not changed: on packages, amenities and codes, Deactivate and Archive have the same effect apart from the recorded reason. Worth simplifying with the Phase 7 design work.
+- Checked in a Windows demo build, dark theme, 1180 px wide: member reason list, confirm dialog and pending text; the staff card for a started term; the amenity Archive button and confirm panel. The amount label was changed after that look. Not checked on screen: the not-started flow, the later-terms warning, the final approve, the final archive click (these are covered by tests), light theme, narrow window, Android.
+- `ponytail:ponytail-review` (2026-11-05): nothing to cut.
+- [x] Applied `0042` live under the per-phase rule, 2026-11-05 (dry run showed only `0042`). Confirmed live: the new function and columns exist, the old two-argument function is gone, the API reaches the function with 2 and 3 arguments, anonymous callers are refused, and the one older request was left unchanged.
+- [ ] Owner checks a refund request and an amenity archive on the real backend, using test records.
 
 ### Phase 6: amenities and check-in fallbacks (items 7, 10, forgot phone)
 - [ ] (`impeccable` for the screens) Item 7: database change per D11 (session-based tracking, coach-present rule on the server), demo parity, booking and pass screens updated. Write tasks in detail once D11 is answered, because it changes pricing.
@@ -277,6 +288,7 @@ Work in priority order: items 3, 2 and 1 first (security and data integrity), th
 - **2026-11-05:** Complete to-do list received; added items 5 (rest), 6-15, R2, the forgot-phone fallback and decisions D9-D16. Phases renumbered to 10. No code, database or git changes.
 - **2026-11-05:** Owner renamed the roles: Super admin to System admin, Sub-admin to Admin (D17, Phase 7). No code, database or git changes.
 - **2026-11-05:** Branch `security-admin-cleanup-2026-11-05` created from `origin/main` (D2); plan committed there.
+- **2026-11-05:** Phase 5 done and deployed: `0042` live. Items 11, 6, 8 and 9 were already built and are now pinned by tests. xUnit 819/819; database suite exit 0, 330 counted.
 - **2026-11-05:** Phase 4 done and deployed: `0041` live, CRUD table approved, 38 tables match it. xUnit 810/810; database suite exit 0, 327 counted.
 - **2026-11-05:** Phase 3 deployed: `0040` applied live. Owner set the rule: push each phase's database changes when it finishes.
 - **2026-11-05:** Phase 3 built: names locked, System admin correction (owner chose option A, D3), not deployed. xUnit 798/798; database suite exit 0, 322 counted.
