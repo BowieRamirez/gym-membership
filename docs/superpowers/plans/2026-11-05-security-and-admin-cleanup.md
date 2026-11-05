@@ -22,7 +22,7 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 
 **Rules**
 - Business rules live in the database and are mirrored in `DemoGateway`; hiding something in the UI is not enough.
-- New migrations continue from the latest number (0042 after Phase 5, so next is `0043`). Never rewrite an applied migration.
+- New migrations continue from the latest number (0044 after Phase 6, so next is `0045`). Never rewrite an applied migration.
 - Logic goes in Core with an xUnit test in `tests/GymMembership.Tests`; database rules get a check in `supabase/tests/local`.
 - UI work: AutomationIds used by the UI scripts stay on the same controls; phones keep their layouts.
 - **Design (owner, 2026-11-05):** every task that changes a screen uses the `impeccable` skill, so the system doesn't look like slop or AI-generated UI, alongside the `frontend-design` skill that `CLAUDE.md` requires. Main design phases: 7 and 8. Smaller screen changes: Phases 2, 3, 5 and 6, each marked below. Phases 1, 4 and 9 change no design unless a fix touches a screen.
@@ -31,8 +31,8 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 
 ### Current work / restart here
 
-- **2026-11-05:** Phase 5 DEPLOYED: `0042` applied live. Phases 2, 3 and 4 are also DEPLOYED. Owner checks on the real backend for Phases 2 to 5 are not recorded yet. Branch is local, not pushed. xUnit 819/819; database suite exit 0, 330 counted; Windows and Android builds pass.
-- Next concrete action: owner answers D21 (is "activated" what they meant?), then D11 and D12 so Phase 6 can start.
+- **2026-11-05:** Phase 6 DEPLOYED: `0043` and `0044` applied live. Phases 2 to 5 are also DEPLOYED. Owner checks on the real backend are not recorded yet. Commits from Phase 6 are not pushed to GitHub. xUnit 842/842; database suite exit 0, 353 counted; Windows and Android builds pass.
+- Next concrete action: owner sets session prices for the amenities that should switch, then answers D6 and D13 so Phase 7 can start with the mockup.
 
 ## 1. Repository findings
 
@@ -68,15 +68,15 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 - [x] **D8 — email check exposure (owner, 2026-11-05: build the live check):** Showing "already in use" tells anyone whether an address has an account, however well it is rate limited; the owner accepts that for this gym. Edge Function `check-email` with a per-IP limit on the server.
 - [x] **D9 — refund formula (owner, 2026-11-05):** Activated = the term's start date has passed or the member has checked in during it, whichever is first. Before that, a full refund with no 24-hour limit. After that, the request goes to staff for manual review with a required reason: gym failed to provide the service, member was misled, contract allows it, illness or relocation, or change of mind (not automatic). Staff decide; the app only surfaces the case. The wording should be checked by someone qualified, since the guidance is not legal advice.
 - [x] **D10 — what a refund cancels (owner, 2026-11-05):** The refunded term only. A later paid renewal has its own payment and stays; staff see a warning when approving.
-- [ ] **D11 — amenities per session (blocks Phase 6):** Reverses D6 and D9 of the 2026-10-20 plan. To settle: (a) what a "session" is: one booking of 30 minutes to 2 hours, or one check-in; (b) price per session, and what happens to passes already sold (recommend: they stay valid until they expire); (c) does solo use end; (d) "coach present" means any coach checked in (`coach_visits`), or the member's own coach; (e) does the coach need to be present when booking or only at the time of use. Recommend any checked-in coach, checked at time of use, because coaches can't be checked in for a future booking.
-- [ ] **D12 — offline check-in (blocks Phase 6):** Reverses "offline is never Active" in the 2026-10-20 plan. Does offline mean the gym's internet is down, and how old may the data be? Recommend: the desk keeps a local copy of member codes and statuses, refreshed while online. Offline scans show "Last updated at ..." rather than Active, and check-ins are queued with their time, flagged as offline, then sent on reconnect and rechecked by the server. Copies older than 24 hours show "can't check". Known risk: a member who expired since the last refresh can get in.
+- [x] **D11 — amenities per session (owner, 2026-11-05):** Reverses D6 and D9 of the 2026-10-20 plan. A session is one booking of 30 minutes to 2 hours. Passes already sold stay valid until they expire. Solo use without a coach present ends. Any checked-in coach counts as present, checked at the time of use. The owner has not given a price, and today's prices are for 30-day passes, so nothing was converted: each amenity keeps selling its pass until staff enter its session price with Set session price. New amenities are per session from the start.
+- [x] **D12 — offline check-in (owner, 2026-11-05):** Reverses "offline is never Active" in the 2026-10-20 plan. The desk keeps a local copy of member codes and statuses, refreshed while online. Offline scans show "Last updated at ..." rather than Active, and check-ins are queued with their time, flagged as offline, then sent on reconnect and rechecked by the server. Copies older than 24 hours show "can't check". Known risk, accepted: a member who expired since the last refresh can get in.
 - [ ] **D13 — status labels (blocks Phase 7):** The list asks to confirm scope. Recommend: Active, Inactive and Deleted for accounts, packages, amenities and discount codes only. Memberships, payments and refunds keep their own statuses, because "Pending" or "Expired" would lose meaning.
 - [x] **D14 — what CRUD means per entity (owner, 2026-11-05: approved):** Master data (accounts, packages, amenities, codes) gets full create, read and update, with delete as archive. Money and history (payments, refunds, terms, check-ins, audit log) can't be edited or deleted, only reversed by the existing actions.
 - [ ] **D15 — items without a place in the priority order:** The list's order doesn't mention amenities (7), QR offline (10), the forgot-phone fallback or status labels (15). Recommend: 7, 10 and forgot-phone after refunds and archiving (Phase 6), and 15 with the UI (Phase 7). This plan assumes that until the owner says otherwise.
 - [x] **D18 — phone and member goals (owner, 2026-11-05):** Remove the update permission and leave the columns unused, because nothing on the to-do list asks for them. Stored values stay.
 - [x] **D19 — editing discount codes (owner, 2026-11-05):** The end date can also change. Code and percent stay fixed, because people may already have used them at that value.
 - [x] **D20 — unused delete permissions (owner, 2026-11-05):** Removed from shifts and notifications.
-- [ ] **D21 — is "activated" what the owner meant? (Found building Phase 5, nothing blocked):** A first-time member's term starts the moment staff verify the payment, so under D9 they are activated at once. "Not activated" only ever applies to a renewal queued behind a current term. A check-in adds nothing either, because one during a term can only happen after it starts. If the owner meant "has not used it yet", activated could mean the first check-in during the term, which would give a member who paid but never came a full refund. It is a one-line change in `request_membership_refund` and in `TermCard`. Built as D9 says until the owner decides.
+- [x] **D21 — what "activated" means (owner, 2026-11-05):** Changes D9. Activated = the member has checked in during the term. A paid term with no check-in in it, started or not, is owed a full refund.
 - [ ] **D16 — "every function" in the testing item:** Recommend: every database function callable from the app gets at least one attempt to break it, enforced by a `rules.mjs` check that fails when a function has no test. UI screens are covered by the listed cases only.
 - [x] **D17 — role names (owner, 2026-11-05):** Super admin is now called **System admin**, and Sub-admin is now called **Admin**. Implementer's call, not asked: this changes the names people see only, and permissions stay the same. The internal codes stay as they are (`admin` = System admin, `subadmin` = Admin), because renaming them would touch applied migrations, permissions and existing accounts. From here on, "admin" in this plan's code references means the code; on screen it means the former Sub-admin.
 
@@ -91,7 +91,7 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 | 3 | Lock names after creation | 1 | D2, D3 | DEPLOYED |
 | 4 | CRUD | 13 | D14, D18-D20 | DEPLOYED |
 | 5 | Refunds and archiving | 11, R2, 6, 8, 9, 12 | D9, D10 | DEPLOYED |
-| 6 | Amenities and check-in fallbacks | 7, 10, forgot phone | D11, D12, D15 | PLANNED |
+| 6 | Amenities and check-in fallbacks | 7, 10, forgot phone | D11, D12, D15, D21 | DEPLOYED |
 | 7 | Simplify admin overview, status labels, role names | 4, 15, role names | D6, D13, D17 | PLANNED |
 | 8 | Audit log table and labels | 5, 14 | D7 | PLANNED |
 | 9 | Try to break the system | Testing | D4, D5, D16 | PLANNED |
@@ -188,9 +188,22 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 - [ ] Owner checks a refund request and an amenity archive on the real backend, using test records.
 
 ### Phase 6: amenities and check-in fallbacks (items 7, 10, forgot phone)
-- [ ] (`impeccable` for the screens) Item 7: database change per D11 (session-based tracking, coach-present rule on the server), demo parity, booking and pass screens updated. Write tasks in detail once D11 is answered, because it changes pricing.
-- [ ] (`impeccable` for the offline states) Item 10: local copy and queue per D12, with the sync rechecked by the server. Tests: stale copy, expired member, replayed queue doesn't double check in, and offline result never says plain Active.
-- [ ] (`impeccable`) Forgot phone: on the Check-in page's name search, show membership status and expiry before Check in; expired or inactive members can't be checked in; the check-in records that it was manual and who did it. Test: refused for an expired member by a direct call.
+- [x] D21 (`0043`): a term counts as activated only if the member checked in during it. A paid term with no check-in in it is a full refund, however long ago it started. (2026-11-05, `phase7.mjs`, `SubscriptionTests`.)
+- [x] Item 7, sessions (`0043`): buying a per-session amenity gives one session, and one booking of touching slots uses it. Cancelling before the start gives it back. A timed pass is used first. Two separate bookings on one session make neither. Online purchases and counter payments are both covered. Nothing is converted automatically; `Set session price` on each amenity switches it, and an ordinary edit never does. (2026-11-05, `amenity-sessions.mjs`, `AmenitySessionTests`.)
+- [x] Item 7, coach present (`0043`): logging an amenity use, and any booking starting within the next slot, needs a coach checked in; an archived coach doesn't count. A later booking can't be checked yet, so it is allowed. The Amenities page says when no coach is in. (2026-11-05)
+- [x] Item 10 (`0044`, `OfflineDesk`): the desk saves who has paid and refreshes every 30 minutes. A network failure, and nothing else, falls back to it. An offline scan shows the saved list with "Last updated at ...", never Active; a copy older than 24 hours or missing can't check anyone. Check-ins are queued with their real time and survive a restart. Sending happens every minute and on Send now. The server rechecks each against the term covering that time, resending can't double up, and a refusal is shown to staff, not dropped. (2026-11-05, `checkin-fallbacks.mjs`, `OfflineDeskTests`.)
+- [x] Forgot phone (`0044`): the Check-in name search shows "Paid until ..." or "No active membership" and disables Check in when there is none; the server still refuses. The check-in records `manual` and who did it. Works from the saved list when offline. (2026-11-05)
+- **Known limits, not solved:**
+  - The app must already be signed in when the connection drops; signing in needs the server.
+  - The coach rule covers logged uses and imminent bookings. Nothing physically stops a member with a booking made earlier if no coach arrives.
+  - Offline scans aren't in the scan log, because `scan_member` needs the server; only the resulting check-ins are recorded. D12 of the 2026-10-20 plan logged every scan.
+  - The saved list is a plain file in the Windows user's app data, holding names and member codes.
+  - Accepted by the owner: someone who expired since the last refresh can get in while offline.
+- Installed versions (v0.4.0 and older): check-in, buying and booking still work. They don't show the session wording or the coach notice, and a refused use shows a general error.
+- (`impeccable`, `frontend-design`) Checked in a Windows demo build, dark theme, 1180 px wide: the session price panel, and the Check-in list with paid status and disabled buttons. Not checked on screen: every offline state, because the demo can't lose its connection (covered by tests, owner to try with Wi-Fi off), buying and booking a session, the no-coach notice, light theme, narrow window, Android.
+- `ponytail:ponytail-review` (2026-11-05): 2 small cuts applied.
+- [x] Applied `0043` and `0044` live under the per-phase rule, 2026-11-05 (dry run showed only those two). Confirmed live: all active amenities still sell passes and no session rows exist, the two triggers are on, the old one-argument `record_check_in` is gone and the API reaches the new one with one argument, anonymous users are refused, and the app can't call `coach_in_gym` directly. No coach was checked in at that moment, so amenity use is blocked until one checks in.
+- [ ] Owner sets session prices, and tries a scan and a name check-in with Wi-Fi off on a real desk.
 
 ### Phase 7: admin overview, status labels and role names (items 4, 15, D17)
 - [ ] (`impeccable`, main design phase) Mockup in `docs/mockups/`; owner approves before building (D6).
@@ -288,6 +301,7 @@ Work in priority order: items 3, 2 and 1 first (security and data integrity), th
 - **2026-11-05:** Complete to-do list received; added items 5 (rest), 6-15, R2, the forgot-phone fallback and decisions D9-D16. Phases renumbered to 10. No code, database or git changes.
 - **2026-11-05:** Owner renamed the roles: Super admin to System admin, Sub-admin to Admin (D17, Phase 7). No code, database or git changes.
 - **2026-11-05:** Branch `security-admin-cleanup-2026-11-05` created from `origin/main` (D2); plan committed there.
+- **2026-11-05:** Phase 6 done and deployed: `0043` and `0044` live. Activated now means a check-in during the term (D21). xUnit 842/842; database suite exit 0, 353 counted.
 - **2026-11-05:** Phase 5 done and deployed: `0042` live. Items 11, 6, 8 and 9 were already built and are now pinned by tests. xUnit 819/819; database suite exit 0, 330 counted.
 - **2026-11-05:** Phase 4 done and deployed: `0041` live, CRUD table approved, 38 tables match it. xUnit 810/810; database suite exit 0, 327 counted.
 - **2026-11-05:** Phase 3 deployed: `0040` applied live. Owner set the rule: push each phase's database changes when it finishes.
