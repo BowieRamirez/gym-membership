@@ -249,7 +249,7 @@ public class NamesAndEmailTests
     static SettingsViewModel Settings(DemoGateway gw) =>
         new(new SettingsService(gw), new AuthService(gw), new NullNavigator(), new ProfileService(gw), new DemoPhotoPicker(), gw);
 
-    sealed class NullNavigator : IAppNavigator
+    internal sealed class NullNavigator : IAppNavigator
     {
         public void GoTo(AppRole role, bool changePassword = false) { }
         public void GoToLogin() { }

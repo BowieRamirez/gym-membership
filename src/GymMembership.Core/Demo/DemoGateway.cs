@@ -116,6 +116,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
         return Task.CompletedTask;
     }
 
+    public Task<bool> EmailInUseAsync(string email) => FailWith is { } failure
+        ? Task.FromException<bool>(failure)
+        : Task.FromResult(_accounts.Keys.Any(k => string.Equals(k, email.Trim(), StringComparison.OrdinalIgnoreCase)));
+
     public Task SignUpAsync(string email, string password, string firstName, string lastName)
     {
         email = email.Trim();

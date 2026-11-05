@@ -201,6 +201,8 @@ public interface ISupabaseGateway
     string? CurrentUserId { get; }
     Task SignInAsync(string email, string password);
     Task SignUpAsync(string email, string password, string firstName, string lastName);
+    /// <summary>Whether an account uses this address. Works signed out; the server limits how often it can be asked.</summary>
+    Task<bool> EmailInUseAsync(string email);
     /// <summary>The signed-in person's sign-in email, or null when nobody is signed in.</summary>
     string? CurrentEmail { get; }
     /// <summary>Emails a 6-digit code. For a new address, it first becomes the sign-in email (or Supabase sends its change code).</summary>

@@ -585,6 +585,29 @@ public sealed class SupabaseGatewayTests : IDisposable
     }
 
     [Fact]
+    public async Task The_email_check_works_signed_out_and_reads_the_answer()
+    {
+        var gw = new SupabaseGateway(new SupabaseSettings(_url, "anon-key"));
+        _reply = _ => (200, """{"in_use":true}""");
+        Assert.True(await gw.EmailInUseAsync("ana@demo.io"));
+        Assert.Equal("/functions/v1/check-email", Last.Path);
+        Assert.Equal("ana@demo.io", JsonDocument.Parse(Last.Body).RootElement.GetProperty("email").GetString());
+
+        _reply = _ => (200, """{"in_use":false}""");
+        Assert.False(await gw.EmailInUseAsync("free@demo.io"));
+    }
+
+    [Fact]
+    public async Task A_rate_limited_email_check_comes_back_as_a_failed_result()
+    {
+        var gw = new SupabaseGateway(new SupabaseSettings(_url, "anon-key"));
+        _reply = _ => (429, """{"error":"rate_limited"}""");
+        var result = await new AuthService(gw).EmailInUseAsync("ana@demo.io");
+        Assert.False(result.Ok);
+        Assert.Equal("rate_limited", result.Message);
+    }
+
+    [Fact]
     public async Task A_taken_email_from_the_create_user_function_is_reported_in_plain_words()
     {
         var gw = await SignedInAsync();

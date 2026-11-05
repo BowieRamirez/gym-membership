@@ -164,10 +164,32 @@ public partial class RegisterViewModel(IAuthService auth, IAppNavigator nav) : L
     [ObservableProperty] private string email = "";
     [ObservableProperty] private string password = "";
     [ObservableProperty] private string confirmPassword = "";
+    /// <summary>Set when the address already has an account. Only a hint: submitting is still allowed, and the server decides.</summary>
+    [ObservableProperty] private string? emailTaken;
+
+    /// <summary>How long typing must pause before the address is looked up.</summary>
+    public TimeSpan EmailCheckDelay { get; init; } = TimeSpan.FromMilliseconds(400);
+    CancellationTokenSource? _emailCheck;
+
+    partial void OnEmailChanged(string value) => _ = CheckEmailAsync(value.Trim());
+
+    async Task CheckEmailAsync(string address)
+    {
+        _emailCheck?.Cancel();
+        var check = _emailCheck = new CancellationTokenSource();
+        EmailTaken = null;
+        if (!AccountRules.IsEmail(address)) return;
+        try { await Task.Delay(EmailCheckDelay, check.Token); }
+        catch (OperationCanceledException) { return; }
+        var result = await auth.EmailInUseAsync(address);   // a refusal or lost connection shows nothing: this must never block registering
+        if (!check.IsCancellationRequested && result is { Ok: true, Value: true })
+            EmailTaken = "This email already has an account. Sign in, or use a different email.";
+    }
 
     [RelayCommand]
     private async Task RegisterAsync()
     {
+        _emailCheck?.Cancel();   // otherwise the new account's own address could come back as "in use" while the page changes
         if (Password != ConfirmPassword) { ErrorMessage = "The passwords don't match."; return; }
         if (await RunAsync(() => auth.RegisterAsync(FirstName, LastName, Email, Password))) nav.GoTo(AppRole.Member);
     }

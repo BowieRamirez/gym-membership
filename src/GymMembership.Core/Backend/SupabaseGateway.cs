@@ -242,6 +242,17 @@ public sealed class SupabaseGateway : ISupabaseGateway
         catch (Exception ex) when (ErrorCode(ex.Message) is { } code) { throw new Exception(code, ex); }   // {"error":"email_taken"} -> email_taken
     }
 
+    public async Task<bool> EmailInUseAsync(string email)
+    {
+        var c = await ReadyAsync();
+        try
+        {
+            var json = await c.Functions.Invoke("check-email", null, new Supabase.Functions.Client.InvokeFunctionOptions { Body = new Dictionary<string, object> { ["email"] = email } });
+            return JsonDocument.Parse(json).RootElement.GetProperty("in_use").GetBoolean();
+        }
+        catch (Exception ex) when (ErrorCode(ex.Message) is { } code) { throw new Exception(code, ex); }
+    }
+
     // the functions answer a refusal with {"error": "<code>"}; the app's messages are keyed by that code
     static string? ErrorCode(string body)
     {

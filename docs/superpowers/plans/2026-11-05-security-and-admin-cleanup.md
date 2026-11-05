@@ -22,7 +22,7 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 
 **Rules**
 - Business rules live in the database and are mirrored in `DemoGateway`; hiding something in the UI is not enough.
-- New migrations continue from the latest number (0038 at the time of writing, so next is `0039`). Never rewrite an applied migration.
+- New migrations continue from the latest number (0039 after Phase 2, so next is `0040`). Never rewrite an applied migration.
 - Logic goes in Core with an xUnit test in `tests/GymMembership.Tests`; database rules get a check in `supabase/tests/local`.
 - UI work: AutomationIds used by the UI scripts stay on the same controls; phones keep their layouts.
 - **Design (owner, 2026-11-05):** every task that changes a screen uses the `impeccable` skill, so the system doesn't look like slop or AI-generated UI, alongside the `frontend-design` skill that `CLAUDE.md` requires. Main design phases: 7 and 8. Smaller screen changes: Phases 2, 3, 5 and 6, each marked below. Phases 1, 4 and 9 change no design unless a fix touches a screen.
@@ -31,8 +31,8 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 
 ### Current work / restart here
 
-- **2026-11-05:** Phase 1 VERIFIED and committed. Branch is local, not pushed. xUnit 779/779; database suite passes (307 counted).
-- Next concrete action: owner answers D8 (live email check) so Phase 2 can start. Other decisions are needed only before the phase that uses them (see the table in section 3).
+- **2026-11-05:** Phase 2 IMPLEMENTED and committed, not deployed. Branch is local, not pushed. xUnit 792/792; database suite exit 0, 315 counted; Windows and Android builds pass.
+- Next concrete action: owner answers D3 (who can correct a name) so Phase 3 can start. Separately, with the owner: apply `0039` and deploy `check-email` (Phase 2's last task). Other decisions are needed only before the phase that uses them (see the table in section 3).
 
 ## 1. Repository findings
 
@@ -65,7 +65,7 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 - [ ] **D5 — password rules:** Today 6 to 64 characters, length only. Recommend: 8 to 64 with at least one letter and one number, for new passwords only (registration, change, reset, temporary); existing passwords keep working. The Supabase Auth dashboard setting must match, or the rule is only client-side. Owner to change that setting.
 - [ ] **D6 — overview layout:** Does simplifying replace the eight cards and the black "Open" buttons the owner kept on 2026-11-01? Recommend: a mockup first in `docs/mockups/`, as with the full-page layout, showing a number strip plus a compact list of links.
 - [ ] **D7 — audit table data:** Recommend: show the existing `audit_log` in a table, adding `ip_address` and `role` columns filled from now on, with older rows blank rather than guessed. IP comes from the request headers Supabase passes through, and is personal data, so the owner should decide how long it is kept. Filters: date range, user, action type, object type. Export: CSV of the filtered rows.
-- [ ] **D8 — email check exposure (item 2):** Showing "already in use" tells anyone whether an address has an account, however well it is rate limited. Recommend: accept that for this gym, and build an Edge Function `check-email` with a per-IP limit on the server. Alternative: skip the live check and keep the error on submit, which reveals the same answer more slowly and with less to abuse.
+- [x] **D8 — email check exposure (owner, 2026-11-05: build the live check):** Showing "already in use" tells anyone whether an address has an account, however well it is rate limited; the owner accepts that for this gym. Edge Function `check-email` with a per-IP limit on the server.
 - [ ] **D9 — refund formula (blocks Phase 5):** What counts as "activated", and does the 24-hour rule stay? Recommend: activated = the term's start date has passed or the member has checked in during it, whichever is first. Before that, a full refund with no 24-hour limit. After that, the request goes to staff for manual review with a required reason: gym failed to provide the service, member was misled, contract allows it, illness or relocation, or change of mind (not automatic). Staff decide; the app only surfaces the case. The wording should be checked by someone qualified, since the guidance is not legal advice.
 - [ ] **D10 — what a refund cancels (blocks Phase 5):** Approval cancels the refunded term today. If the member also has a later paid renewal, is that cancelled too? Recommend: leave it, since it has its own payment, and show staff a warning when approving.
 - [ ] **D11 — amenities per session (blocks Phase 6):** Reverses D6 and D9 of the 2026-10-20 plan. To settle: (a) what a "session" is: one booking of 30 minutes to 2 hours, or one check-in; (b) price per session, and what happens to passes already sold (recommend: they stay valid until they expire); (c) does solo use end; (d) "coach present" means any coach checked in (`coach_visits`), or the member's own coach; (e) does the coach need to be present when booking or only at the time of use. Recommend any checked-in coach, checked at time of use, because coaches can't be checked in for a future booking.
@@ -83,7 +83,7 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 | Phase | Scope | Items | Needs | Status |
 | --- | --- | --- | --- | --- |
 | 1 | Parameterized query audit | 3 | D2 | VERIFIED |
-| 2 | Live email-in-use check | 2 | D2, D8 | PLANNED |
+| 2 | Live email-in-use check | 2 | D2, D8 | IMPLEMENTED |
 | 3 | Lock names after creation | 1 | D2, D3 | PLANNED |
 | 4 | CRUD | 13 | D14 | PLANNED |
 | 5 | Refunds and archiving | 11, R2, 6, 8, 9, 12 | D9, D10 | PLANNED |
@@ -105,15 +105,21 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 - `ponytail:ponytail-review` (2026-11-05): nothing to cut. Manual check: N/A, no screens changed. Deployment: N/A, no migration or Edge Function changed.
 
 ### Phase 2: email already in use (item 2)
-- [ ] Edge Function `check-email`: validates the address, applies the per-IP limit on the server, returns only `in_use` true or false. No anonymous database access, so the `rules.mjs` anonymous check stays as it is.
-- [ ] `IAuthService` method for the lookup, with the same behaviour in `DemoGateway`.
-- [ ] `RegisterViewModel`: 400 ms debounce with cancellation of the previous lookup; no lookup until the email shape is valid (`EmailShape`, `Services.cs:44`). Test: fast typing sends one lookup, and a slow old answer never overwrites a newer one.
-- [ ] (`impeccable`) `RegisterPage.xaml`: message under the email field, announced for screen readers. Lookup failure or rate limit shows nothing and does not block registering.
-- [ ] The duplicate error on submit stays (`SupabaseGateway.cs:99`); it is the real guard.
-- [ ] Function test: over-limit calls are refused. Deploying the function is a separate step with the owner.
+- [x] Edge Function `check-email`: validates the address, returns only `in_use` true or false. The limit is on the server in `check_email_in_use` (`0039`), callable by the service role only, so the `rules.mjs` anonymous check stays as it is. Public by `verify_jwt = false` in `supabase/config.toml`. (2026-11-05; the function itself has not been run, because Deno isn't installed here. See the last task.)
+- [x] Limits (implementer's call): 30 lookups per network address and 600 overall in 10 minutes. The overall limit catches forged or rotating addresses. Addresses are hashed, rows last 10 minutes, and the email looked up is not stored. (2026-11-05, `supabase/tests/local/email-check.mjs`, 8 checks.)
+- [x] `IAuthService.EmailInUseAsync`, with the same behaviour in `DemoGateway`. (2026-11-05, gateway tests in `SupabaseGatewayTests`.)
+- [x] `RegisterViewModel`: 400 ms debounce with cancellation of the previous lookup; no lookup until the email shape is valid. Fast typing sends one lookup, and a slow old answer never overwrites a newer one. (2026-11-05, `RegisterEmailCheckTests`.)
+- [x] (`impeccable`, `frontend-design`) `RegisterPage.xaml`: message under the email field in the existing `FieldError` style, announced for screen readers. A failed or refused lookup shows nothing and does not block registering. Copy: "This email already has an account. Sign in, or use a different email." (2026-11-05: checked in a Windows demo build at 1180 and 520 px wide, dark theme: appears after the pause, clears on edit, ignores case. The screen reader announcement, light theme and Android screen have not been checked.)
+- [x] The duplicate error on submit stays (`SupabaseGateway.cs`); it is the real guard. (2026-11-05, test added.)
+- `ponytail:ponytail-review` (2026-11-05): one redundant call removed. xUnit 792/792 after that; database suite 315 counted, 0 failed, run before that one-line C# change.
+- [ ] **With the owner, not done:** apply `0039` to the live database and deploy with `supabase functions deploy check-email`, in that order. Then check on the real project: a taken and a free address give the right answer, a forged `x-forwarded-for` doesn't escape the 30-lookup limit (`cf-connecting-ip` is preferred but unconfirmed on this platform; the overall limit is the backstop), and the real register page shows the message. Until then the live app simply shows no message, and registering works as before.
+
+**Found while checking, already there, not changed**
+- [ ] The sign-in and register layout keeps its two columns in a narrow Windows window: at 520 px wide the headings break mid-word ("accoun / t") and the brand panel clips. Fix with the Phase 7 design work (`AuthShell`).
+- [ ] Empty fields on the register page show a lighter box inside the field border in dark mode. Check whether it is real or comes from the screenshot method, then fix with Phase 7.
 
 ### Phase 3: lock names (item 1)
-- [ ] Migration `0039`: a trigger on `profiles` refuses changes to `first_name`, `last_name` and `full_name` after creation, including writers that only set `full_name` (`0035:31-39`). Revoke the `0035` update grant and retire its name-saving function as D3 requires.
+- [ ] Migration `0040`: a trigger on `profiles` refuses changes to `first_name`, `last_name` and `full_name` after creation, including writers that only set `full_name` (`0035:31-39`). Revoke the `0035` update grant and retire its name-saving function as D3 requires.
 - [ ] Check that archive, restore and the `create-user` function still work with the trigger on.
 - [ ] Correction path per D3, audited, with a reason.
 - [ ] (`impeccable`) Settings: names shown read-only; `SaveNameAsync` and its command removed. Same refusal in `DemoGateway`.
@@ -234,4 +240,5 @@ Work in priority order: items 3, 2 and 1 first (security and data integrity), th
 - **2026-11-05:** Complete to-do list received; added items 5 (rest), 6-15, R2, the forgot-phone fallback and decisions D9-D16. Phases renumbered to 10. No code, database or git changes.
 - **2026-11-05:** Owner renamed the roles: Super admin to System admin, Sub-admin to Admin (D17, Phase 7). No code, database or git changes.
 - **2026-11-05:** Branch `security-admin-cleanup-2026-11-05` created from `origin/main` (D2); plan committed there.
+- **2026-11-05:** Phase 2 built: live email check with server limits, not deployed. Owner chose the live check (D8). xUnit 792/792; database suite exit 0, 315 counted.
 - **2026-11-05:** Phase 1 done: query audit found no injection path, tests added, one library limit recorded. xUnit 779/779; database suite exit 0, 307 counted. Owner added the `impeccable` rule for screen work.

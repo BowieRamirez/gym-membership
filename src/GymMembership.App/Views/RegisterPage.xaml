@@ -36,6 +36,7 @@
                 <Label Text="Email" Style="{StaticResource Caption}" />
                 <Border Style="{StaticResource Field}"><Entry x:Name="EmailBox" Text="{Binding Email}" TextChanged="OnFieldEdited" Unfocused="OnFieldDone" MaxLength="{x:Static svc:AccountRules.MaxEmail}" Keyboard="Email" ReturnType="Next" SemanticProperties.Description="Email address" /></Border>
                 <Label x:Name="EmailError" Style="{StaticResource FieldError}" />
+                <Label Text="{Binding EmailTaken}" IsVisible="{Binding EmailTaken, Converter={StaticResource HasText}}" Style="{StaticResource FieldError}" AutomationId="EmailTakenError" />
             </VerticalStackLayout>
             <VerticalStackLayout Spacing="6">
                 <Label Text="Password" Style="{StaticResource Caption}" />
