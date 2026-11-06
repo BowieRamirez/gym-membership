@@ -30,8 +30,8 @@
 
             <Border Style="{StaticResource HeroPanel}" Padding="24,20">
                 <VerticalStackLayout Spacing="8">
-                    <c:CardTitle Icon="chart-line" Text="Net in this period" TextColor="{StaticResource Black}" />
-                    <Label Text="{Binding TotalText}" Style="{StaticResource Numeral}" TextColor="{StaticResource Black}" />
+                    <c:CardTitle Icon="chart-line" Text="Net in this period" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+                    <Label Text="{Binding TotalText}" Style="{StaticResource Numeral}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
                 </VerticalStackLayout>
             </Border>
 

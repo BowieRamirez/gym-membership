@@ -6,7 +6,7 @@ using GymMembership.Core.Services;
 namespace GymMembership.App.Views;
 
 /// <summary>
-/// Approved mockup: docs/mockups/admin-overview.html (Phase 7, D6). A lime bar only when refunds wait, four numbers that each open
+/// Approved mockup: docs/mockups/admin-overview.html (Phase 7, D6). An attention bar only when refunds wait, four numbers that each open
 /// their page, the day's check-ins, and the other pages as a short list. The side menu still reaches every page.
 /// </summary>
 public sealed class AdminOverviewPage : BasePage
@@ -35,10 +35,11 @@ public sealed class AdminOverviewPage : BasePage
         if (superAdmin)
         {
             var attention = new Grid { ColumnSpacing = 14, ColumnDefinitions = { new(GridLength.Star), new(GridLength.Auto) } };
-            var say = new Label { Style = Resource<Style>("Heading"), TextColor = Colors.Black, VerticalOptions = LayoutOptions.Center, AutomationId = "AdminOverviewAttention" };
+            var say = new Label { Style = Resource<Style>("Heading"), VerticalOptions = LayoutOptions.Center, AutomationId = "AdminOverviewAttention" };
+            say.SetAppThemeColor(Label.TextColorProperty, Theme("White"), Theme("Black"));   // the bar is black (light) or yellow (dark)
             say.SetBinding(Label.TextProperty, nameof(vm.AttentionText));
             attention.Add(say);
-            var review = new Button { Text = "Review refunds", Style = Resource<Style>("InkSmallButton"), AutomationId = "AdminOverviewReview", VerticalOptions = LayoutOptions.Center };
+            var review = new Button { Text = "Review refunds", Style = Resource<Style>("HeroSmallButton"), AutomationId = "AdminOverviewReview", VerticalOptions = LayoutOptions.Center };
             review.Clicked += (_, _) => Open("Cancellations & refunds");
             attention.Add(review, 1);
             var bar = new Border { Style = Resource<Style>("HeroPanel"), Padding = new Thickness(18, 10, 10, 10), Content = attention };

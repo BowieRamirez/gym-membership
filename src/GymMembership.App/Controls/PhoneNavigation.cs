@@ -101,12 +101,12 @@ public sealed class PhoneNavigation
         shell.Items.Add(_bar);
         shell.CurrentItem = _bar;
         _bar.CurrentItem = _bar.Items[0];
-        // light: white bar, black icons. Dark (owner, 2026-11-01): SurfaceDark, a step lighter than the page so the bar stays separate,
-        // with light names and muted icons. The selected icon is black in both, since it sits on the lime pill.
-        shell.SetAppThemeColor(Shell.TabBarBackgroundColorProperty, Color.FromArgb("#FFFFFF"), Color.FromArgb("#2C302B"));
-        shell.SetAppThemeColor(Shell.TabBarForegroundColorProperty, Color.FromArgb("#000000"), Color.FromArgb("#000000"));
-        shell.SetAppThemeColor(Shell.TabBarTitleColorProperty, Color.FromArgb("#000000"), Color.FromArgb("#EEF1EC"));
-        shell.SetAppThemeColor(Shell.TabBarUnselectedColorProperty, Color.FromArgb("#5A6159"), Color.FromArgb("#A3AAA1"));
+        // Phase 9 (D23, approved mockup): a white bar (light) or near-black (dark); the current tab is a black pill with a yellow icon
+        // (light) or a yellow pill with a black icon (dark); other tabs muted.
+        shell.SetAppThemeColor(Shell.TabBarBackgroundColorProperty, Color.FromArgb("#FFFFFF"), Color.FromArgb("#161616"));
+        shell.SetAppThemeColor(Shell.TabBarForegroundColorProperty, Color.FromArgb("#FFEC00"), Color.FromArgb("#111111"));
+        shell.SetAppThemeColor(Shell.TabBarTitleColorProperty, Color.FromArgb("#111111"), Color.FromArgb("#F2F2F2"));
+        shell.SetAppThemeColor(Shell.TabBarUnselectedColorProperty, Color.FromArgb("#5B5B5B"), Color.FromArgb("#A6A6A6"));
         var app = Application.Current;
         void ThemeChanged(object? sender, AppThemeChangedEventArgs e) => shell.Dispatcher.Dispatch(StyleBar);
         shell.Loaded += (_, _) =>
@@ -174,8 +174,8 @@ public sealed class PhoneNavigation
             if (view is Google.Android.Material.BottomNavigation.BottomNavigationView bar)
             {
                 var background = new Android.Graphics.Drawables.GradientDrawable();
-                var surface = Shell.GetTabBarBackgroundColor(_shell) ??
-                    Color.FromArgb(Application.Current?.RequestedTheme == AppTheme.Dark ? "#2C302B" : "#FFFFFF");
+                var dark = Application.Current?.RequestedTheme == AppTheme.Dark;
+                var surface = Shell.GetTabBarBackgroundColor(_shell) ?? Color.FromArgb(dark ? "#161616" : "#FFFFFF");
                 var pageBackground = _shell.CurrentPage?.BackgroundColor ?? _shell.BackgroundColor ?? surface;
                 background.SetColor(surface.ToPlatform());
                 background.SetCornerRadius(0);
@@ -190,7 +190,7 @@ public sealed class PhoneNavigation
                 // MAUI's MaterialComponents theme gives the indicator no shape or size, so it is drawn only once both are set here
                 var density = bar.Resources?.DisplayMetrics?.Density ?? 1f;
                 bar.ItemActiveIndicatorEnabled = true;
-                bar.ItemActiveIndicatorColor = Android.Content.Res.ColorStateList.ValueOf(Color.FromArgb("#E4F58A").ToPlatform());
+                bar.ItemActiveIndicatorColor = Android.Content.Res.ColorStateList.ValueOf(Color.FromArgb(dark ? "#FFEC00" : "#111111").ToPlatform());
                 bar.ItemActiveIndicatorShapeAppearance = Google.Android.Material.Shape.ShapeAppearanceModel.InvokeBuilder().SetAllCornerSizes(16 * density).Build();
                 bar.ItemActiveIndicatorWidth = (int)(64 * density);
                 bar.ItemActiveIndicatorHeight = (int)(28 * density);    // 28, not 32: the pill no longer reaches down to the tab name

@@ -181,7 +181,7 @@ public class CardGrid : Layout
     }
 }
 
-/// <summary>A card's header: one of the Icons on its chip, then the title. TextColor is for lime cards, which keep black words.</summary>
+/// <summary>A card's header: one of the Icons on its chip, then the title. TextColor is for highlight cards, whose words flip with the card.</summary>
 public class CardTitle : ContentView
 {
     public static readonly BindableProperty IconProperty = BindableProperty.Create(nameof(Icon), typeof(string), typeof(CardTitle), "",
@@ -294,7 +294,7 @@ public class LocalDateConverter : IValueConverter
 }
 
 /// <summary>
-/// A field's frame turns lime (dark theme) or Plate Blue (light) while the box inside it has focus: the keyboard-focus indicator for every
+/// A field's frame turns yellow (dark theme) or ink (light) while the box inside it has focus: the keyboard-focus indicator for every
 /// Entry, Editor and SearchBar in a "Field" border. MauiProgram attaches it to each input as its handler connects.
 /// </summary>
 public static class FieldFocus
@@ -314,7 +314,7 @@ public static class FieldFocus
 
     // a plain value (not a theme binding) so ClearValue hands the frame straight back to the Field style
     public static void Mark(Border b) =>
-        b.Stroke = Pick(Application.Current!.RequestedTheme == AppTheme.Dark ? "Lime" : "InkLight");
+        b.Stroke = Pick(Application.Current!.RequestedTheme == AppTheme.Dark ? "Signal" : "InkLight");
 
     public static void Unmark(Border b) => b.ClearValue(Border.StrokeProperty);
 
@@ -381,7 +381,7 @@ public class PasswordStrength : VerticalStackLayout
     public string? Password { get => (string?)GetValue(PasswordProperty); set => SetValue(PasswordProperty, value); }
 
     static readonly string[] Words = ["", "Weak", "Fair", "Good", "Strong"];
-    static readonly string[] Tones = ["", "PlateRed", "PlateYellow", "PlateGreen", "PlateGreen"];
+    static readonly string[] Tones = ["", "Bad", "Pending", "Good", "Good"];
     readonly BoxView[] _bars = new BoxView[4];
     readonly Label _word = new() { Style = (Style)Application.Current!.Resources["Caption"], HorizontalOptions = LayoutOptions.End };
     readonly Label[] _checks = new Label[3];

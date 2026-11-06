@@ -69,13 +69,15 @@ public class IconTests
 
     // The redesign: every icon is black in both themes and sits on a light chip, so dark mode never draws black on black.
     [Fact]
-    public void Icon_view_is_black_in_both_themes()
+    // Phase 9 (D23, approved mockup): ink on a light chip in light, light on a dark chip in dark; bare icons on the side menu
+    public void Icon_view_follows_the_theme_and_can_drop_its_chip()
     {
         var source = File.ReadAllText(AppFile("Controls", "Icons.cs"));
         Assert.Contains("\"IconInk\"", source);
         Assert.Contains("\"IconChipDark\"", source);
-        Assert.DoesNotContain("InkDark", source);
-        Assert.DoesNotContain("OnInk", source);
+        Assert.Contains("Pick(\"InkDark\"", source);
+        Assert.Contains("BareProperty", source);
+        Assert.Contains("Bare = true", File.ReadAllText(AppFile("Controls", "IconRail.Windows.cs")));
     }
 
     [Fact]
@@ -88,10 +90,10 @@ public class IconTests
     }
 
     [Fact]
-    public void Selected_choice_buttons_are_lime_not_black()
+    public void Selected_choice_buttons_are_yellow_not_black()
     {
         var source = File.ReadAllText(AppFile("Controls", "Icons.cs"));
-        Assert.Contains("\"LimeSmallButton\"", source);
+        Assert.Contains("\"SignalSmallButton\"", source);
     }
 
     [Fact]

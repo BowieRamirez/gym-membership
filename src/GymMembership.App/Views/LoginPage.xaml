@@ -26,9 +26,9 @@
                 <Button Text="Use a different email" Style="{StaticResource LinkButton}" HorizontalOptions="Start" Margin="-4,0,0,10"
                         Command="{Binding ChangeResetEmailCommand}" IsVisible="{Binding IsResetStep2}" />
                 <Grid ColumnDefinitions="28,28" ColumnSpacing="6" HorizontalOptions="Start">
-                    <BoxView HeightRequest="4" CornerRadius="2" Color="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Lime}}" />
+                    <BoxView HeightRequest="4" CornerRadius="2" Color="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
                     <BoxView Grid.Column="1" HeightRequest="4" CornerRadius="2" Color="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
-                    <BoxView Grid.Column="1" HeightRequest="4" CornerRadius="2" Color="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Lime}}" IsVisible="{Binding ResetCodeSent}" />
+                    <BoxView Grid.Column="1" HeightRequest="4" CornerRadius="2" Color="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" IsVisible="{Binding ResetCodeSent}" />
                 </Grid>
                 <Label Text="Step 1 of 2" Style="{StaticResource Caption}" IsVisible="{Binding IsResetStep1}" />
                 <Label Text="Step 2 of 2" Style="{StaticResource Caption}" IsVisible="{Binding IsResetStep2}" />

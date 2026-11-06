@@ -26,14 +26,14 @@
                 <Button Text="{Binding CoachTabText}" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowTabCommand}" CommandParameter="coach">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Tab}" Value="coach">
-                            <Setter Property="Style" Value="{StaticResource LimeSmallButton}" />
+                            <Setter Property="Style" Value="{StaticResource SignalSmallButton}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
                 <Button Grid.Column="1" Text="{Binding StaffTabText}" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowTabCommand}" CommandParameter="support">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Tab}" Value="support">
-                            <Setter Property="Style" Value="{StaticResource LimeSmallButton}" />
+                            <Setter Property="Style" Value="{StaticResource SignalSmallButton}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
@@ -44,21 +44,21 @@
                 <Button Text="Open" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowFilterCommand}" CommandParameter="open">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="open">
-                            <Setter Property="Style" Value="{StaticResource LimeSmallButton}" />
+                            <Setter Property="Style" Value="{StaticResource SignalSmallButton}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
                 <Button Grid.Column="1" Text="Mine" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowFilterCommand}" CommandParameter="mine">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="mine">
-                            <Setter Property="Style" Value="{StaticResource LimeSmallButton}" />
+                            <Setter Property="Style" Value="{StaticResource SignalSmallButton}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
                 <Button Grid.Column="2" Text="Closed" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowFilterCommand}" CommandParameter="closed">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="closed">
-                            <Setter Property="Style" Value="{StaticResource LimeSmallButton}" />
+                            <Setter Property="Style" Value="{StaticResource SignalSmallButton}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
@@ -159,14 +159,14 @@
                                         <Label Text="Photo unavailable" Style="{StaticResource Caption}" IsVisible="{Binding PhotoMissing}">
                                             <Label.Triggers>
                                                 <DataTrigger TargetType="Label" Binding="{Binding Mine}" Value="True">
-                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" />
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PageDark}}" />
                                                 </DataTrigger>
                                             </Label.Triggers>
                                         </Label>
                                         <Label Text="{Binding Line.Body}" IsVisible="{Binding HasText}">
                                             <Label.Triggers>
                                                 <DataTrigger TargetType="Label" Binding="{Binding Mine}" Value="True">
-                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" />
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PageDark}}" />
                                                 </DataTrigger>
                                             </Label.Triggers>
                                         </Label>
@@ -175,13 +175,13 @@
                                                Style="{StaticResource Caption}" FontSize="12" HorizontalOptions="End">
                                             <Label.Triggers>
                                                 <DataTrigger TargetType="Label" Binding="{Binding Mine}" Value="True">
-                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" />
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PageDark}}" />
                                                     <Setter Property="Opacity" Value="0.75" />
                                                 </DataTrigger>
                                             </Label.Triggers>
                                         </Label>
                                         <Label Text="{Binding Status}" Style="{StaticResource Caption}" FontSize="12" HorizontalOptions="End"
-                                               IsVisible="{Binding Mine}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" Opacity="0.75" />
+                                               IsVisible="{Binding Mine}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PageDark}}" Opacity="0.75" />
                                     </VerticalStackLayout>
                                 </Border>
                             </Grid>

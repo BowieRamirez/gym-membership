@@ -5,7 +5,7 @@ using Microsoft.Maui.Controls.Shapes;
 namespace GymMembership.App.Controls;
 
 /// <summary>
-/// The Windows side menu: a slim white strip of black icons, the page name on hover, the current page on lime. Admins get the front desk
+/// The Windows side menu: a full-height yellow (light) or near-black (dark) strip of icons, the page name on hover, the current page on a black or yellow square. Admins get the front desk
 /// pages folded under one briefcase that opens downward. Sign out and the profile picture sit at the bottom; the middle scrolls on short
 /// windows. Custom content navigates through the original Shell items, so routes, pages and the phone menus stay as they are.
 /// </summary>
@@ -81,7 +81,7 @@ public static class IconRail
                 var deskPages = new VerticalStackLayout { Spacing = 6, Padding = new Thickness(0, 6) };
                 foreach (var item in desk) deskPages.Children.Add(Link(item));
                 group = new Border { StrokeThickness = 0, StrokeShape = new RoundRectangle { CornerRadius = 16 }, Padding = new Thickness(4, 0), IsVisible = false, Content = deskPages };
-                group.SetAppThemeColor(VisualElement.BackgroundColorProperty, Theme("ChalkLight"), Theme("SurfaceDark"));   // sage inside the white rail
+                group.SetAppThemeColor(VisualElement.BackgroundColorProperty, Color.FromRgba(0, 0, 0, 0.08), Theme("SurfaceDark"));   // a shade of the strip
                 button.Clicked += (_, _) => { group.IsVisible = !group.IsVisible; Refresh(); };
                 (briefcase, briefcaseIcon) = (button, icon);
                 first.Add(cell);
@@ -131,18 +131,13 @@ public static class IconRail
         layout.Add(new ScrollView { Content = pages, VerticalScrollBarVisibility = ScrollBarVisibility.Never }, 0, 1);
         layout.Add(new VerticalStackLayout { Spacing = 10, Children = { signOutCell, avatar } }, 0, 2);
 
-        var rail = new Border
-        {
-            StrokeThickness = 1, StrokeShape = new RoundRectangle { CornerRadius = 22 },
-            Margin = new Thickness(12), Padding = new Thickness(0, 14), WidthRequest = 64, Content = layout
-        };
+        // Phase 9 (D23, approved mockup): a full-height strip flush with the window's left edge, yellow (light) or near-black (dark)
+        var rail = new Border { StrokeThickness = 0, Padding = new Thickness(0, 14), WidthRequest = 72, Content = layout };
         rail.SetAppThemeColor(VisualElement.BackgroundColorProperty, Theme("RailLight"), Theme("RailDark"));
-        // light: a hairline edge, since the backdrop is now the page colour; dark: the edge is the rail colour, so none shows
-        rail.SetAppTheme<Brush>(Border.StrokeProperty, new SolidColorBrush(Theme("LineLight")), new SolidColorBrush(Theme("RailDark")));
 
         shell.FlyoutHeader = null;
         shell.FlyoutFooter = null;
-        shell.FlyoutWidth = 88;
+        shell.FlyoutWidth = 72;
         shell.SetAppThemeColor(Shell.FlyoutBackgroundColorProperty, Theme("BackdropLight"), Theme("BackdropDark"));
         shell.FlyoutContent = rail;
         shell.Navigated += (_, _) => Refresh();
@@ -155,14 +150,14 @@ public static class IconRail
         var button = new Button { BackgroundColor = Colors.Transparent, BorderWidth = 0, Padding = 0, WidthRequest = 48, HeightRequest = 48, CornerRadius = 14 };
         ToolTipProperties.SetText(button, name);
         SemanticProperties.SetDescription(button, name);
-        var view = new IconView { Icon = icon, Size = 18, ChipSize = 38, HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center };
+        var view = new IconView { Icon = icon, Size = 18, ChipSize = 40, Bare = true, HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center };
         return (new Grid { WidthRequest = 48, HeightRequest = 48, HorizontalOptions = LayoutOptions.Center, Children = { button, view } }, button, view);
     }
 
     static BoxView Divider()
     {
         var line = new BoxView { HeightRequest = 1.5, WidthRequest = 28, HorizontalOptions = LayoutOptions.Center, Margin = new Thickness(0, 4) };
-        line.SetAppThemeColor(BoxView.ColorProperty, Theme("LineLight"), Theme("LineDark"));
+        line.SetAppThemeColor(BoxView.ColorProperty, Color.FromRgba(0x11, 0x11, 0x11, 0.3), Color.FromRgba(0xF2, 0xF2, 0xF2, 0.2));   // the strip's ink, faint
         return line;
     }
 

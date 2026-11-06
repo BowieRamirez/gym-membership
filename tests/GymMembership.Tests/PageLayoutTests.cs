@@ -3,6 +3,8 @@ using Xunit;
 /// <summary>The redesign's page layout: wide canvas, card titles with icon chips, white rows, a lime card with black text, pill lanes.</summary>
 public class PageLayoutTests
 {
+    const string OnHero = "TextColor=\"{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}\"";
+
     static string AppFile(params string[] parts) => Path.Combine(new[] { TestPaths.AppFolder() }.Concat(parts).ToArray());
 
     [Fact]
@@ -11,7 +13,7 @@ public class PageLayoutTests
         var controls = File.ReadAllText(AppFile("Controls", "Controls.cs"));
         Assert.Contains("public class CardTitle", controls);
         var styles = File.ReadAllText(AppFile("Resources", "Styles", "Styles.xaml"));
-        foreach (var key in new[] { "x:Key=\"Row\"", "x:Key=\"HeroPanel\"", "x:Key=\"InkButton\"", "x:Key=\"InkSmallButton\"", "x:Key=\"PageWidth\"", "x:Key=\"SectionTitle\"" })
+        foreach (var key in new[] { "x:Key=\"Row\"", "x:Key=\"HeroPanel\"", "x:Key=\"HeroButton\"", "x:Key=\"HeroSmallButton\"", "x:Key=\"PageWidth\"", "x:Key=\"SectionTitle\"" })
             Assert.Contains(key, styles);
     }
 
@@ -88,9 +90,9 @@ public class PageLayoutTests
             Assert.DoesNotContain("MaximumWidthRequest=\"920\"", File.ReadAllText(file));
     }
 
-    // a lime card keeps its words black in dark mode too
+    // the highlight card is black in light and yellow in dark (Phase 9, D23): its words and buttons flip with it
     [Fact]
-    public void Lime_cards_hold_only_black_text_and_ink_buttons()
+    public void Highlight_cards_hold_only_flipping_text_and_hero_buttons()
     {
         foreach (var file in Directory.GetFiles(AppFile("Views"), "*.xaml"))
         {
@@ -99,9 +101,9 @@ public class PageLayoutTests
             {
                 var card = part[..part.IndexOf("</Border>", StringComparison.Ordinal)];
                 foreach (var label in card.Split("<Label").Skip(1).Select(l => l[..l.IndexOf('>')]))
-                    Assert.True(label.Contains("TextColor=\"{StaticResource Black}\""), $"{Path.GetFileName(file)}: lime-card label without black text: {label}");
+                    Assert.True(label.Contains(OnHero), $"{Path.GetFileName(file)}: highlight-card label without the flipping colour: {label}");
                 foreach (var button in card.Split("<Button").Skip(1).Select(b => b[..b.IndexOf('>')]))
-                    Assert.Contains("Ink", button);
+                    Assert.Contains("HeroSmallButton", button);
             }
         }
     }

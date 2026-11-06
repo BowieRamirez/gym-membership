@@ -17,7 +17,7 @@ public sealed class PhoneMorePage : ContentPage
         Title = "More";
         SafeAreaEdges = new SafeAreaEdges(SafeAreaRegions.Container);
         var res = Application.Current!.Resources;
-        this.SetAppThemeColor(BackgroundColorProperty, (Color)res["ChalkLight"], (Color)res["ChalkDark"]);
+        this.SetAppThemeColor(BackgroundColorProperty, (Color)res["PageLight"], (Color)res["PageDark"]);
         var list = new VerticalStackLayout { Padding = new Thickness(16, 12, 16, 24), Spacing = 10 };
         foreach (var (title, route) in destinations)
         {

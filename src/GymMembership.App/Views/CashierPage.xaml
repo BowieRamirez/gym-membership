@@ -62,7 +62,7 @@
                                                         SemanticProperties.Description="{Binding Name}" SemanticProperties.Hint="{Binding PriceText}">
                                                     <Border.Triggers>
                                                         <DataTrigger TargetType="Border" Binding="{Binding IsPicked}" Value="True">
-                                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChalkLight}, Dark={StaticResource ChalkDark}}" />
+                                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource PageLight}, Dark={StaticResource PageDark}}" />
                                                             <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
                                                             <Setter Property="StrokeThickness" Value="2" />
                                                         </DataTrigger>

@@ -81,16 +81,16 @@
                 <!-- status filter: the filled button is the one in use -->
                 <FlexLayout Style="{StaticResource Toolbar}">
                     <Button Text="All" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="All">
-                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="All"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
+                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="All"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
                     </Button>
                     <Button Text="Scheduled" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Scheduled">
-                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Scheduled"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
+                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Scheduled"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
                     </Button>
                     <Button Text="Completed" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Completed">
-                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Completed"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
+                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Completed"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
                     </Button>
                     <Button Text="Cancelled or no-show" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Cancelled">
-                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Cancelled"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
+                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Cancelled"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
                     </Button>
                 </FlexLayout>
                 <Border Style="{StaticResource TablePanel}">

@@ -59,7 +59,8 @@ public static class Icons
 }
 
 /// <summary>
-/// One of the Icons: drawn black in both themes on a light rounded chip (lime when Selected), so it reads on any surface.
+/// One of the Icons, on a rounded chip: ink on a light chip (light theme), light on a dark chip (dark). Selected: yellow on black (light)
+/// or black on yellow (dark), the side menu's current page (D23). Bare: no chip, for icons sitting on the side menu itself.
 /// Size is the drawing, ChipSize the chip around it. It is decorative (the words beside it say the same) and lets touches through.
 /// </summary>
 public class IconView : ContentView
@@ -83,6 +84,11 @@ public class IconView : ContentView
         propertyChanged: (b, _, _) => ((IconView)b).Recolour());
     public bool Ghost { get => (bool)GetValue(GhostProperty); set => SetValue(GhostProperty, value); }
 
+    /// <summary>No chip, an ink line that follows the theme: the side menu's icons, which sit straight on the yellow or near-black strip.</summary>
+    public static readonly BindableProperty BareProperty = BindableProperty.Create(nameof(Bare), typeof(bool), typeof(IconView), false,
+        propertyChanged: (b, _, _) => ((IconView)b).Recolour());
+    public bool Bare { get => (bool)GetValue(BareProperty); set => SetValue(BareProperty, value); }
+
     readonly Microsoft.Maui.Controls.Shapes.Path _path = new()
     {
         Aspect = Stretch.Uniform, StrokeThickness = 2, StrokeLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round,
@@ -94,7 +100,6 @@ public class IconView : ContentView
     {
         InputTransparent = true;
         AutomationProperties.SetIsInAccessibleTree(this, false);
-        _path.Stroke = new SolidColorBrush(Pick("IconInk", Colors.Black));
         _chip.Content = _path;
         Content = _chip;
         Resize();
@@ -116,15 +121,13 @@ public class IconView : ContentView
 
     void Recolour()
     {
-        if (Ghost)
-        {
-            _chip.BackgroundColor = Colors.Transparent;
-            _path.SetAppTheme<Brush>(Shape.StrokeProperty, new SolidColorBrush(Pick("MutedLight", Colors.Gray)), new SolidColorBrush(Pick("MutedDark", Colors.Gray)));
-            return;
-        }
-        var lime = Pick("Lime", Colors.YellowGreen);
-        _chip.SetAppThemeColor(BackgroundColorProperty,
-            Selected ? lime : Pick("IconChipLight", Colors.White), Selected ? lime : Pick("IconChipDark", Colors.LightGray));
+        var (chipLight, chipDark, lineLight, lineDark) =
+            Ghost ? (Colors.Transparent, Colors.Transparent, Pick("MutedLight", Colors.Gray), Pick("MutedDark", Colors.Gray))
+            : Selected ? (Pick("InkLight", Colors.Black), Pick("Signal", Colors.Yellow), Pick("Signal", Colors.Yellow), Pick("Black", Colors.Black))
+            : Bare ? (Colors.Transparent, Colors.Transparent, Pick("InkLight", Colors.Black), Pick("InkDark", Colors.White))
+            : (Pick("IconChipLight", Colors.White), Pick("IconChipDark", Colors.DimGray), Pick("IconInk", Colors.Black), Pick("InkDark", Colors.White));
+        _chip.SetAppThemeColor(BackgroundColorProperty, chipLight, chipDark);
+        _path.SetAppTheme<Brush>(Shape.StrokeProperty, new SolidColorBrush(lineLight), new SolidColorBrush(lineDark));
     }
 }
 
@@ -159,8 +162,8 @@ public class EyeButton : Grid
 }
 
 /// <summary>
-/// A choice button with an icon on its left. It stays a real Button (touch, keyboard, screen reader); IsSelected fills it lime (the icon
-/// stays black) and is announced as "selected".
+/// A choice button with an icon on its left. It stays a real Button (touch, keyboard, screen reader); IsSelected fills it yellow and is
+/// announced as "selected".
 /// </summary>
 public class IconButton : ContentView
 {
@@ -192,7 +195,7 @@ public class IconButton : ContentView
     {
         _button.Text = Text; _button.Command = Command; _button.CommandParameter = CommandParameter;
         _icon.Icon = Icon;
-        if (Application.Current!.Resources.TryGetValue(IsSelected ? "LimeSmallButton" : "SmallOutlineButton", out var style)) _button.Style = (Style)style;
+        if (Application.Current!.Resources.TryGetValue(IsSelected ? "SignalSmallButton" : "SmallOutlineButton", out var style)) _button.Style = (Style)style;
         SemanticProperties.SetDescription(_button, IsSelected ? $"{Text}, selected" : Text);
     }
 }

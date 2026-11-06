@@ -98,10 +98,10 @@
             <Grid ColumnDefinitions="{OnIdiom Phone='*,*', Default='*,*,*'}" RowDefinitions="{OnIdiom Phone='Auto,Auto', Default='Auto'}" ColumnSpacing="12" RowSpacing="12">
                 <Border Grid.ColumnSpan="{OnIdiom Phone=2, Default=1}" Style="{StaticResource HeroPanel}" Padding="{OnIdiom Phone='16,16', Default='18,14'}">
                     <VerticalStackLayout Spacing="8">
-                        <c:CardTitle Icon="clock" Text="{Binding HeroCaption}" TextColor="{StaticResource Black}" />
-                        <Label Text="{Binding HeroNumber}" Style="{StaticResource Numeral}" FontSize="{OnIdiom Phone=72, Default=60}" TextColor="{StaticResource Black}"
+                        <c:CardTitle Icon="clock" Text="{Binding HeroCaption}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+                        <Label Text="{Binding HeroNumber}" Style="{StaticResource Numeral}" FontSize="{OnIdiom Phone=72, Default=60}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}"
                                SemanticProperties.Description="Days left on your membership" />
-                        <c:LaneView Fraction="{Binding LaneFraction}" HeightRequest="26" DashColor="{StaticResource Black}" TrackColor="#5A6159" />
+                        <c:LaneView Fraction="{Binding LaneFraction}" HeightRequest="26" DashColor="{AppThemeBinding Light={StaticResource Signal}, Dark={StaticResource Black}}" TrackColor="{AppThemeBinding Light=#3A3A3A, Dark=#D6C700}" />
                     </VerticalStackLayout>
                 </Border>
                 <Border Grid.Row="{OnIdiom Phone=1, Default=0}" Grid.Column="{OnIdiom Phone=0, Default=1}" Style="{StaticResource Panel}">
@@ -155,16 +155,16 @@
                     <!-- status filter: the filled button is the one in use -->
                     <FlexLayout Style="{StaticResource Toolbar}">
                         <Button Text="All" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="All">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="All"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="All"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
                         </Button>
                         <Button Text="Verified" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Verified">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Verified"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Verified"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
                         </Button>
                         <Button Text="Pending" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Pending">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Pending"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Pending"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
                         </Button>
                         <Button Text="Expired or rejected" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Expired">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Expired"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Expired"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
                         </Button>
                     </FlexLayout>
                     <Border Style="{StaticResource TablePanel}">

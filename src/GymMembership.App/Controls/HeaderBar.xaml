@@ -22,9 +22,9 @@
             <c:IconView Icon="bell" Size="20" ChipSize="40" HorizontalOptions="Center" VerticalOptions="Center" />
             <Border IsVisible="{Binding HasUnread}" InputTransparent="True" HorizontalOptions="End" VerticalOptions="Start" Margin="0,4,2,0"
                     MinimumWidthRequest="18" HeightRequest="18" Padding="4,0" StrokeThickness="0" StrokeShape="RoundRectangle 9"
-                    BackgroundColor="{AppThemeBinding Light={StaticResource PlateRedLight}, Dark={StaticResource PlateRedDark}}">
+                    BackgroundColor="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}">
                 <Label Text="{Binding UnreadText}" FontSize="11" FontFamily="BarlowSemiBold" HorizontalOptions="Center" VerticalOptions="Center"
-                       TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" />
+                       TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PageDark}}" />
             </Border>
         </Grid>
 

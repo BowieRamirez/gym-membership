@@ -31,20 +31,20 @@
                     <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
                 </DataTrigger>
                 <DataTrigger TargetType="Button" Binding="{Binding State}" Value="yours">
-                    <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource PlateGreenLight}, Dark={StaticResource PlateGreenDark}}" />
-                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource PlateGreenLight}, Dark={StaticResource PlateGreenDark}}" />
+                    <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource GoodLight}, Dark={StaticResource GoodDark}}" />
+                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource GoodLight}, Dark={StaticResource GoodDark}}" />
                 </DataTrigger>
                 <DataTrigger TargetType="Button" Binding="{Binding State}" Value="booked">
-                    <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource PlateBlueLight}, Dark={StaticResource PlateBlueDark}}" />
-                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource PlateBlueLight}, Dark={StaticResource PlateBlueDark}}" />
+                    <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ScheduledLight}, Dark={StaticResource ScheduledDark}}" />
+                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource ScheduledLight}, Dark={StaticResource ScheduledDark}}" />
                 </DataTrigger>
                 <DataTrigger TargetType="Button" Binding="{Binding State}" Value="cooldown">
-                    <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource PlateYellowLight}, Dark={StaticResource PlateYellowDark}}" />
-                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource PlateYellowLight}, Dark={StaticResource PlateYellowDark}}" />
+                    <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource PendingLight}, Dark={StaticResource PendingDark}}" />
+                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource PendingLight}, Dark={StaticResource PendingDark}}" />
                 </DataTrigger>
                 <DataTrigger TargetType="Button" Binding="{Binding State}" Value="closed">
-                    <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource PlateRedLight}, Dark={StaticResource PlateRedDark}}" />
-                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource PlateRedLight}, Dark={StaticResource PlateRedDark}}" />
+                    <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
+                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
                 </DataTrigger>
                 <DataTrigger TargetType="Button" Binding="{Binding State}" Value="outside">
                     <Setter Property="BorderColor" Value="Transparent" />
@@ -71,13 +71,13 @@
                 <Label.FormattedText>
                     <FormattedString>
                         <Span Text="Pick open half-hours, then book them together. Touching slots make one session of up to 2 hours, with 30 minutes of cooldown after it. " />
-                        <Span Text="Yours" TextColor="{AppThemeBinding Light={StaticResource PlateGreenLight}, Dark={StaticResource PlateGreenDark}}" FontFamily="BarlowMedium" />
+                        <Span Text="Yours" TextColor="{AppThemeBinding Light={StaticResource GoodLight}, Dark={StaticResource GoodDark}}" FontFamily="BarlowMedium" />
                         <Span Text=", " />
-                        <Span Text="booked" TextColor="{AppThemeBinding Light={StaticResource PlateBlueLight}, Dark={StaticResource PlateBlueDark}}" FontFamily="BarlowMedium" />
+                        <Span Text="booked" TextColor="{AppThemeBinding Light={StaticResource ScheduledLight}, Dark={StaticResource ScheduledDark}}" FontFamily="BarlowMedium" />
                         <Span Text=", " />
-                        <Span Text="cooldown" TextColor="{AppThemeBinding Light={StaticResource PlateYellowLight}, Dark={StaticResource PlateYellowDark}}" FontFamily="BarlowMedium" />
+                        <Span Text="cooldown" TextColor="{AppThemeBinding Light={StaticResource PendingLight}, Dark={StaticResource PendingDark}}" FontFamily="BarlowMedium" />
                         <Span Text=", " />
-                        <Span Text="closed" TextColor="{AppThemeBinding Light={StaticResource PlateRedLight}, Dark={StaticResource PlateRedDark}}" FontFamily="BarlowMedium" />
+                        <Span Text="closed" TextColor="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" FontFamily="BarlowMedium" />
                         <Span Text="." />
                     </FormattedString>
                 </Label.FormattedText>

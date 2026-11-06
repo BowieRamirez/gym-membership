@@ -30,7 +30,7 @@ public class DumbbellLogo : GraphicsView, IDrawable
 
     public void Draw(ICanvas canvas, RectF rect)
     {
-        var lime = Color.FromArgb("#E4F58A");
+        var lime = Color.FromArgb("#FFEC00");   // ponytail: the dumbbell goes in 9.3 (HF monogram); signal yellow until then
         var unit = Math.Min(rect.Width, rect.Height) / 64f;
         if (Bare) { canvas.SetShadow(SizeF.Zero, 16 * unit, lime.WithAlpha(0.35f)); canvas.FillColor = lime; }
         else

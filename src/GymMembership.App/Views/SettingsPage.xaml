@@ -17,11 +17,11 @@
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="18">
                     <c:Avatar Letters="{Binding Letters}" Url="{Binding AvatarUrl}" Diameter="{OnIdiom Phone=64, Default=88}" VerticalOptions="Center" />
                     <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
-                        <Label Text="{Binding SavedName}" Style="{StaticResource PageTitle}" TextColor="{StaticResource Black}" />
-                        <Label Text="{Binding SavedEmail}" TextColor="{StaticResource Black}" />
-                        <Label Text="Email confirmed" Style="{StaticResource Caption}" TextColor="{StaticResource Black}" IsVisible="{Binding EmailConfirmed}" />
-                        <Label Text="Email not confirmed yet" Style="{StaticResource Caption}" TextColor="{StaticResource Black}" IsVisible="{Binding EmailConfirmed, Converter={StaticResource Not}}" />
-                        <Button Text="Change picture" Style="{StaticResource InkSmallButton}"
+                        <Label Text="{Binding SavedName}" Style="{StaticResource PageTitle}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+                        <Label Text="{Binding SavedEmail}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+                        <Label Text="Email confirmed" Style="{StaticResource Caption}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" IsVisible="{Binding EmailConfirmed}" />
+                        <Label Text="Email not confirmed yet" Style="{StaticResource Caption}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" IsVisible="{Binding EmailConfirmed, Converter={StaticResource Not}}" />
+                        <Button Text="Change picture" Style="{StaticResource HeroSmallButton}"
                                 Command="{Binding ChangePhotoCommand}" HorizontalOptions="Start" Margin="0,6,0,0" />
                     </VerticalStackLayout>
                 </Grid>

@@ -105,6 +105,6 @@ public class AccountDeletionViewModelTests
         Assert.DoesNotContain("OnToggleRoleEmployee", users); Assert.DoesNotContain("OnToggleActive", users);
         var popup = File.ReadAllText(Path.Combine(TestPaths.AppFolder(), "Controls", "DeleteAccountPopup.xaml"));
         Assert.Contains("Reason for deletion", popup); Assert.Contains("<Editor", popup);
-        Assert.Contains("No, Cancel", popup); Assert.Contains("Text=\"Confirm\"", popup); Assert.Contains("PlateRedLight", popup);
+        Assert.Contains("No, Cancel", popup); Assert.Contains("Text=\"Confirm\"", popup); Assert.Contains("BadLight", popup);
     }
 }

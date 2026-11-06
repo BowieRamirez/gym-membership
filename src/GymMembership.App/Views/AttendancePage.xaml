@@ -19,16 +19,16 @@
                     <!-- Shrink 0 on every item: Android's FlexLayout otherwise squeezes them ("Presen", "Lat") instead of wrapping -->
                     <FlexLayout Wrap="Wrap" IsVisible="{Binding CanMark}">
                         <Button Text="Present" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" FlexLayout.Shrink="0" Clicked="OnMarkPresent">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="present"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="present"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
                         </Button>
                         <Button Text="Late" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" FlexLayout.Shrink="0" Clicked="OnMarkLate">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="late"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="late"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
                         </Button>
                         <Button Text="Absent" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" FlexLayout.Shrink="0" Clicked="OnMarkAbsent">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="absent"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="absent"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
                         </Button>
                         <Button Text="Excused" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" FlexLayout.Shrink="0" Clicked="OnMarkExcused">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="excused"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="excused"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
                         </Button>
                     </FlexLayout>
                 </VerticalStackLayout>
@@ -48,8 +48,8 @@
                                 <c:CardGrid Columns="{OnIdiom Phone=2, Default=4}" MinColumnWidth="{OnIdiom Phone=140, Default=180}">
                                     <Border Style="{StaticResource HeroPanel}">
                                         <VerticalStackLayout Spacing="8">
-                                            <c:CardTitle Icon="calendar-days" Text="Sessions this month" TextColor="{StaticResource Black}" />
-                                            <Label Text="{Binding SessionsText}" Style="{StaticResource Numeral}" TextColor="{StaticResource Black}" />
+                                            <c:CardTitle Icon="calendar-days" Text="Sessions this month" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+                                            <Label Text="{Binding SessionsText}" Style="{StaticResource Numeral}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
                                         </VerticalStackLayout>
                                     </Border>
                                     <Border Style="{StaticResource Panel}">
@@ -78,10 +78,10 @@
                                 <Grid ColumnDefinitions="{OnIdiom Phone='Auto,Auto,*,Auto', Default='Auto,Auto,Auto,Auto,*'}" RowDefinitions="{OnIdiom Phone='Auto,Auto', Default='Auto'}"
                                       ColumnSpacing="8" RowSpacing="10">
                                     <Button Text="Month" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" Command="{Binding ShowMonthCommand}">
-                                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsMonth}" Value="True"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
+                                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsMonth}" Value="True"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
                                     </Button>
                                     <Button Grid.Column="1" Text="Week" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" Command="{Binding ShowWeekCommand}">
-                                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsWeek}" Value="True"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
+                                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsWeek}" Value="True"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
                                     </Button>
                                     <Grid Grid.Row="{OnIdiom Phone=1, Default=0}" Grid.Column="{OnIdiom Phone=0, Default=2}" Grid.ColumnSpan="{OnIdiom Phone=4, Default=1}"
                                           ColumnDefinitions="{OnIdiom Phone='44,*,44', Default='44,Auto,44'}" ColumnSpacing="8" Margin="{OnIdiom Phone=0, Default='12,0,0,0'}">
@@ -122,7 +122,7 @@
                                                             <Setter Property="StrokeThickness" Value="2" />
                                                         </DataTrigger>
                                                         <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
-                                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChalkLight}, Dark={StaticResource ChalkDark}}" />
+                                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource PageLight}, Dark={StaticResource PageDark}}" />
                                                         </DataTrigger>
                                                     </Border.Triggers>
                                                     <Border.GestureRecognizers><TapGestureRecognizer Tapped="OnDay" /></Border.GestureRecognizers>

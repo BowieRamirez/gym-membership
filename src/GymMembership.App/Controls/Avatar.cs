@@ -25,7 +25,7 @@ public class Avatar : ContentView
     {
         _frame.Content = new Grid { Children = { _letters, _photo } };
         _frame.SetAppThemeColor(Border.BackgroundColorProperty, Res("InkLight", Colors.Black), Res("InkDark", Colors.White));
-        _letters.SetAppThemeColor(Label.TextColorProperty, Res("White", Colors.White), Res("ChalkDark", Colors.Black));
+        _letters.SetAppThemeColor(Label.TextColorProperty, Res("White", Colors.White), Res("PageDark", Colors.Black));
         Content = _frame;
         HorizontalOptions = LayoutOptions.Start;
         SemanticProperties.SetDescription(this, "Profile picture");
