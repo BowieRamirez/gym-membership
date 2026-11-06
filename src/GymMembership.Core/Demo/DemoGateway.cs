@@ -1294,7 +1294,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         var now = DateTime.UtcNow;
         DateTime At(int days, double hour) => DateTime.Today.AddDays(days).AddHours(hour).ToUniversalTime(); // seed in the viewer's local time
         foreach (var r in new[] { "admin", "employee", "coach", "member", "subadmin" }) Add(new Role { Name = r });
-        Add(new GymSettings { GymName = "Gym Membership", QrAccountName = "Demo Gym (GCash)", WalkInPrice = 150, PaymentExpiryHours = 48 });
+        Add(new GymSettings { GymName = "Health & Fitness Gym Center", QrAccountName = "Demo Gym (GCash)", WalkInPrice = 150, PaymentExpiryHours = 48 });
 
         AddUser("u-admin", "Dana Reyes", "admin@demo.io", "admin");
         AddUser("u-emp", "Marco Santos", "employee@demo.io", "employee");

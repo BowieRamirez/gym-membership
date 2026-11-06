@@ -325,16 +325,12 @@
                     Margin="{OnIdiom Phone='12,12,12,0', Default=14}" Padding="0"
                     HeightRequest="{OnIdiom Phone=180, Default=-1}" StrokeThickness="0" StrokeShape="RoundRectangle 26"
                     BackgroundColor="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource CardDark}}">
-                <!-- the dumbbell sits outside the padded grid, so only the panel's rounded edge clips it (Android clips a layout's children to its padding) -->
+                <!-- ponytail: the brand panel keeps its old layout until 9.4 puts the full badge here -->
                 <Grid>
-                <!-- the one bold move: a big glowing dumbbell running off the panel's edge -->
-                <c:DumbbellLogo Bare="True" Size="{OnIdiom Phone=230, Default=460}" Rotation="-24" Opacity="0.9"
-                                HorizontalOptions="End" VerticalOptions="Start"
-                                TranslationX="{OnIdiom Phone=80, Default=150}" TranslationY="{OnIdiom Phone=-20, Default=20}" />
                 <Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="{OnIdiom Phone=10, Default=22}" Margin="{OnIdiom Phone='22,18', Default='48,40'}">
                     <HorizontalStackLayout Spacing="12">
-                        <c:DumbbellLogo Size="44" Inverted="True" VerticalOptions="Center" />
-                        <Label Text="Gym Membership" Style="{StaticResource Heading}" TextColor="{StaticResource White}" VerticalOptions="Center" />
+                        <c:LogoMark Size="44" VerticalOptions="Center" />
+                        <Label Text="Health &amp; Fitness Gym Center" Style="{StaticResource Heading}" TextColor="{StaticResource White}" VerticalOptions="Center" />
                     </HorizontalStackLayout>
                     <Label Grid.Row="2" Text="Front desk, coaches and members in one place."
                            Style="{StaticResource Display}" TextColor="{StaticResource White}" HorizontalOptions="Start"

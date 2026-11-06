@@ -5,14 +5,14 @@
        xmlns:c="clr-namespace:GymMembership.App.Controls"
        xmlns:views="clr-namespace:GymMembership.App.Views"
        FlyoutBehavior="{OnPlatform WinUI=Locked, Default=Flyout}"
-       Title="Gym Membership">
+       Title="Gym Center">
 
     <Shell.TitleView><c:HeaderBar /></Shell.TitleView>
 
     <Shell.FlyoutHeader>
         <VerticalStackLayout Padding="20,28,20,16" Spacing="14">
             <Label x:Name="RoleLabel" Text="Front desk" Style="{StaticResource Heading}" />
-            <c:DumbbellLogo Size="36" Inverted="True" HorizontalOptions="Start" />
+            <c:LogoMark Size="36" HorizontalOptions="Start" />
         </VerticalStackLayout>
     </Shell.FlyoutHeader>
 

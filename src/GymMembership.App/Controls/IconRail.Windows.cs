@@ -111,9 +111,9 @@ public static class IconRail
         }
 
         // top: the logo, which also says whose menu this is
-        var logo = new ContentView { Content = new DumbbellLogo { Size = 40 }, HorizontalOptions = LayoutOptions.Center };
-        ToolTipProperties.SetText(logo, "Gym Membership, " + roleName);
-        SemanticProperties.SetDescription(logo, "Gym Membership, " + roleName);
+        var logo = new ContentView { Content = new LogoMark { Size = 44 }, HorizontalOptions = LayoutOptions.Center };
+        ToolTipProperties.SetText(logo, "Gym Center, " + roleName);
+        SemanticProperties.SetDescription(logo, "Gym Center, " + roleName);
 
         // bottom: Sign out, then your picture (opens Settings, as the header picture does on phones)
         var (signOutCell, signOut, _) = IconCell("log-out", "Sign out");
