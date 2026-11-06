@@ -25,7 +25,7 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 - New migrations continue from the latest number (0045 after Phase 8, so next is `0046`). Never rewrite an applied migration.
 - Logic goes in Core with an xUnit test in `tests/GymMembership.Tests`; database rules get a check in `supabase/tests/local`.
 - UI work: AutomationIds used by the UI scripts stay on the same controls; phones keep their layouts.
-- **Design (owner, 2026-11-05):** every task that changes a screen uses the `impeccable` skill, so the system doesn't look like slop or AI-generated UI, alongside the `frontend-design` skill that `CLAUDE.md` requires. Main design phases: 7 and 8. Smaller screen changes: Phases 2, 3, 5 and 6, each marked below. Phases 1, 4 and 9 change no design unless a fix touches a screen.
+- **Design (owner, 2026-11-05):** every task that changes a screen uses the `impeccable` skill, so the system doesn't look like slop or AI-generated UI, alongside the `frontend-design` skill that `CLAUDE.md` requires. Main design phases: 7, 8 and 9 (Phase 9 is the whole-app yellow-and-black redesign). Smaller screen changes: Phases 2, 3, 5 and 6, each marked below. Phases 1, 4 and 10 change no design unless a fix touches a screen.
 - Completed changes get `ponytail:ponytail-review` before finishing (`CLAUDE.md`).
 - Each new decision goes in section 2 with the owner's answer and the date.
 
@@ -34,7 +34,8 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 - **2026-11-05:** Phase 6 DEPLOYED: `0043` and `0044` applied live. Phases 2 to 5 are also DEPLOYED. Owner checks on the real backend are not recorded yet. Commits from Phase 6 are not pushed to GitHub. xUnit 842/842; database suite exit 0, 353 counted; Windows and Android builds pass.
 - **2026-11-06:** Owner answered D4, D5, D7 (IP kept 90 days) and D13, all as recommended. Phase 7 started: overview mockup `docs/mockups/admin-overview.html` drafted, waiting for approval (D6).
 - **2026-11-06:** Phase 8 DEPLOYED: `0045` applied and `create-user` and `reset-password` redeployed. Phase 7 VERIFIED (no database change). xUnit 864/864; database suite exit 0, 363 counted; Windows and Android builds pass; `Test-WindowsAdminNavigation.ps1` passes. Commits are not pushed to GitHub.
-- Next concrete action: Phase 9 (try to break the system), using D4 (0 only after a 100% discount), D5 (8 to 64 with a letter and a number) and D16, which is still open. Owner still to set session prices and check Phases 2 to 8 on the real backend.
+- **2026-11-06:** Owner added a new Phase 9, the yellow-and-black redesign of every Windows page and the Android member and coach screens, with the new badge, the HF monogram and the name "Gym Center" (D22 to D25, design `docs/superpowers/specs/2026-11-06-yellow-black-redesign-design.md`). Trying to break the system is now Phase 10 and the final check Phase 11.
+- Next concrete action: Phase 9, task 9.1: the mockup in `docs/mockups/` for the owner to approve. Owner still to set session prices and check Phases 2 to 8 on the real backend.
 
 ## 1. Repository findings
 
@@ -81,6 +82,10 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 - [x] **D20 — unused delete permissions (owner, 2026-11-05):** Removed from shifts and notifications.
 - [x] **D21 — what "activated" means (owner, 2026-11-05):** Changes D9. Activated = the member has checked in during the term. A paid term with no check-in in it, started or not, is owed a full refund.
 - [ ] **D16 — "every function" in the testing item:** Recommend: every database function callable from the app gets at least one attempt to break it, enforced by a `rules.mjs` check that fails when a function has no test. UI screens are covered by the listed cases only.
+- [x] **D22 — redesign scope (owner, 2026-11-06):** Windows: every page for every account type, including sign-in, registration and the locked screen. Android: member and coach screens only (with sign-in and registration). Android front-desk and admin layouts stay; they inherit the colours.
+- [x] **D23 — colours (owner, 2026-11-06):** Yellow and black after the owner's reference dashboard, in both light and dark themes. Yellow is the signal colour, not the background of everything.
+- [x] **D24 — logo (owner, 2026-11-06):** The "Health & Fitness Gym Center" badge (`docs/screenshotsforexample/882263184_1999024240766862_3446343023741622644_n.jpg`) where there is room; option B, an "HF" monogram in the badge's ring, where it is small (side menu, icons, splash, phone headers). Chosen in the visual companion.
+- [x] **D25 — name (owner, 2026-11-06):** "Health & Fitness Gym Center" in full beside the badge; "Gym Center" where space is tight (window title, Android app name, side-menu tooltip).
 - [x] **D17 — role names (owner, 2026-11-05):** Super admin is now called **System admin**, and Sub-admin is now called **Admin**. Implementer's call, not asked: this changes the names people see only, and permissions stay the same. The internal codes stay as they are (`admin` = System admin, `subadmin` = Admin), because renaming them would touch applied migrations, permissions and existing accounts. From here on, "admin" in this plan's code references means the code; on screen it means the former Sub-admin.
 
 ## 3. Phases and item coverage
@@ -97,8 +102,9 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 | 6 | Amenities and check-in fallbacks | 7, 10, forgot phone | D11, D12, D15, D21 | DEPLOYED |
 | 7 | Simplify admin overview, status labels, role names | 4, 15, role names | D6, D13, D17 | VERIFIED (no database change) |
 | 8 | Audit log table and labels | 5, 14 | D7 | DEPLOYED |
-| 9 | Try to break the system | Testing | D4, D5, D16 | PLANNED |
-| 10 | Final check and report | All | Phases 1-9 | PLANNED |
+| 9 | Yellow and black redesign: every Windows page, Android member and coach screens, new logo and name | Added 2026-11-06 | D22-D25 | PLANNED |
+| 10 | Try to break the system | Testing | D4, D5, D16 | PLANNED |
+| 11 | Final check and report | All | Phases 1-10 | PLANNED |
 
 ### Phase 1: parameterized queries (item 3)
 - [x] Baseline (2026-11-05, before any change): xUnit 774/774; database suite exit 0, 306 counted, 0 failed.
@@ -217,7 +223,7 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 - [x] Role names (D17): `UserRow.RoleName` is the one place; the shell uses it through `RoleTitle`. Wording changed in errors, the Users role picker and actions ("Make admin"), archive messages and the demo sign-in buttons ("System admin", "Admin"; they never had AutomationIds, so the two Windows scripts now find them by the new names).
 - [x] Role-picker trap: `UserRow.RoleCode` maps picker names explicitly and refuses anything else; "System admin" is never offered. Tests: choosing "Admin" creates `subadmin`, a forced "System admin" is refused before any call, and a direct `create-user` for `admin` fails in the demo. The live `create-user` only accepts member, coach, employee and subadmin (`ROLES`), so the server refuses it too.
 - [x] Title: "Overview", in the window header only. The Audit Log role column (Phase 8) uses `RoleName`.
-- [ ] `scripts/Test-WindowsArchive.ps1` was already out of date before this phase: it opened the first account (the System admin, who can't be deleted since `0037`) and a page called "Discounts & Archive". Both fixed; it now fails later, at "Restore record", because the first archived row it opens can't be restored. Fix in Phase 10.
+- [ ] `scripts/Test-WindowsArchive.ps1` was already out of date before this phase: it opened the first account (the System admin, who can't be deleted since `0037`) and a page called "Discounts & Archive". Both fixed; it now fails later, at "Restore record", because the first archived row it opens can't be restored. Fix in Phase 11.
 - `ponytail-review` (2026-11-06): one shrink applied (`RoleTitle`); two cosmetic findings left (one-caller `Tap` helper, two "has text" properties the tests pin).
 
 ### Phase 8: audit log table and labels (items 5, 14)
@@ -230,7 +236,19 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 - [x] Applied `0045` and deployed `create-user` and `reset-password` under the per-phase rule, 2026-11-06 (dry run showed only `0045`). Confirmed live: both columns exist, the nightly job is scheduled, `audit()` fills the address, signed-in users can call `audit_records` but not `main_role` or `clear_old_audit_ips`, and an anonymous call through the API is refused with 42501. Not yet seen live: a real entry with its address and role; the next audited action will show it.
 - [ ] Owner checks the Logs page on the real backend after doing any audited action (for example a role change on a test account): the IP address and role columns should be filled for it.
 
-### Phase 9: try to break the system (testing)
+### Phase 9: yellow and black redesign (added 2026-11-06, D22-D25)
+Design: `docs/superpowers/specs/2026-11-06-yellow-black-redesign-design.md` (scope, colour table, logo and name rules, the page standard, the page list). Every task uses `impeccable` and `frontend-design`. No behaviour or database change: every action and fact on a page today stays reachable, and AutomationIds stay on the same controls. After each task: xUnit passes, `scripts/Test-WindowsAdminNavigation.ps1` passes against a demo build, and the screens are checked in the demo app at about 900 px and maximised, light and dark (Android on the `pixel_7_-_api_36_0` emulator).
+- [ ] 9.1 Mockup in `docs/mockups/yellow-black.html` with the real tokens from the design's colour table: the sign-in screen with the badge, the Overview, one member page (My membership) and one coach page (Dashboard) on Windows, and My membership on Android, each light and dark; the HF monogram at 128, 48 and 32 px. Contrast checked (body 4.5:1, large 3:1, muted text on page and panel). Owner approves before the app changes.
+- [ ] 9.2 Colours and shared pieces: `Colors.xaml` remapped to the approved values with names that say what they are (no colour left pointing at the old sage or lime); `Styles.xaml` (HeroPanel becomes the yellow attention panel, InkButton and the other buttons, Panel, TablePanel, Chip, Field, fonts unchanged); `StatusChip` meaning colours; `IconRail.Windows.cs` side menu (yellow in light, `#161616` in dark, selected item black or yellow); `HeaderBar`; `IconView` chips; Android bottom bar. `PageLayoutTests` rules renamed with the styles, not dropped. Every page picks up the new colours here, before any layout work.
+- [ ] 9.3 Logo and name: HF monogram as vector artwork replacing `DumbbellLogo` in the side menu and phone headers; `Resources/AppIcon/appicon.svg` and `appiconfg.svg`, `Resources/Splash/splash.svg`; the badge as `Resources/Images/gym_badge.png` (trimmed to the circle, on a white round in both themes). "Gym Center" in `App.xaml.cs` (window and title bar), `MemberShell.xaml` title, `IconRail.Windows.cs` tooltip and screen-reader name, the `Styles.xaml` heading and `ApplicationTitle` in the project file; `ApplicationId` unchanged. Demo gym name "Health & Fitness Gym Center". A test pins that "Gym Membership" no longer appears in the app's screens or project title.
+- [ ] 9.4 Entry pages on Windows and Android: sign-in, registration, locked. Full badge and the full name; fixes the Phase 2 notes (two-column layout breaking at 520 px, the lighter box inside empty dark fields).
+- [ ] 9.5 Member pages, Windows and Android: My membership, Packages, Amenities, Book an amenity, Coaches, Sessions, Time requests, Messages, Settings.
+- [ ] 9.6 Coach pages, Windows and Android: Dashboard, Sessions, Time requests, Trainees, My shifts, My coach profile, Amenities, Messages, Settings.
+- [ ] 9.7 Front-desk pages, Windows only: Home, Payments to verify, Cashier, Check-in, Amenity status (with verify amenity use). Check on Android that these still read correctly in the new colours, without relayout.
+- [ ] 9.8 Admin and System admin pages, Windows only: Users and roles, Packages and amenities, Discounts, Cancellations and refunds, Void a payment, Gym settings, Revenue, Logs and Archive (and the Archive panel). The Overview gets the new colours only; it is the standard.
+- [ ] 9.9 `impeccable` review across all changed screens, fixes made; `ponytail-review` on the phase diff; Windows and Android builds; plan and progress updated. Owner checks the new look on a real Windows desk and a phone.
+
+### Phase 10: try to break the system (testing)
 Each attempt gets a recorded result: refused correctly, or a bug with its fix. Test both the app's validation and the server, because the app's checks can be bypassed.
 - [ ] Regex validation: bad names, emails and money values against `Services.cs:43-57,617` and the database constraints, which should agree.
 - [ ] Check-in without a valid membership: expired, pending, archived and unknown QR code, by scan and by name search. The server must refuse `record_check_in` directly.
@@ -239,10 +257,10 @@ Each attempt gets a recorded result: refused correctly, or a bug with its fix. T
 - [ ] Paying 0 per D4, plus negative amounts, at the cashier, member payment and through a direct function call.
 - [ ] Every other database function per D16, with the `rules.mjs` check that fails when one has no test.
 
-### Phase 10: final check and report
+### Phase 11: final check and report
 - [ ] xUnit and database suites pass; Windows and Android builds pass; `scripts/Test-WindowsAdminNavigation.ps1` passes.
 - [ ] `ponytail:ponytail-review` on the changes; findings recorded.
-- [ ] `impeccable` review of every screen changed by this plan; fixes made and findings recorded.
+- [ ] `impeccable` review of every screen changed by this plan, including Phase 9; fixes made and findings recorded.
 - [ ] Report to the owner: which items are done, which need clarification, which to check manually.
 - [ ] With the owner, separately: apply migrations, deploy Edge Functions, set the Auth password rule, open the PR, release.
 
@@ -305,6 +323,7 @@ Work in priority order: items 3, 2 and 1 first (security and data integrity), th
 
 ## Session log
 
+- **2026-11-06:** New Phase 9 added at the owner's request (yellow and black redesign, D22-D25); old Phases 9 and 10 renumbered to 10 and 11. Design written. No code changes.
 - **2026-11-06:** Phase 8 done and deployed: audit log table with labels, 10 a page, filters and CSV export; `0045` live. xUnit 864/864; database suite exit 0, 363 counted.
 - **2026-11-06:** Phase 7 done: overview rebuilt (mockup approved, D6), status labels (item 15), role names and the role-picker fix (D17). xUnit 850/850. No database changes.
 - **2026-11-06:** D4, D5, D7, D13 answered by the owner. Phase 7 overview mockup drafted. No code or database changes.
