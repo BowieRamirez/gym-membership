@@ -39,10 +39,10 @@ try {
     $admin = $null
     for ($i = 0; $i -lt 40 -and $null -eq $admin; $i++) {
         $admin = $root.FindFirst([Windows.Automation.TreeScope]::Descendants,
-            (New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::NameProperty, 'Admin')))
+            (New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::NameProperty, 'System admin')))
         if ($null -eq $admin) { Start-Sleep -Milliseconds 200 }
     }
-    if ($null -eq $admin) { throw 'Demo Admin shortcut is missing. Refusing to enter credentials.' }
+    if ($null -eq $admin) { throw 'Demo System admin shortcut is missing. Refusing to enter credentials.' }
     Invoke-Element $admin
     Wait-Name 'AdminFrontDeskGroup' 'collapsed'
     Write-Output 'PASS admin startup; operations initially collapsed'

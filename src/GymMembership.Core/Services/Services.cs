@@ -1183,8 +1183,15 @@ public sealed class NotificationService(ISupabaseGateway gw) : INotificationServ
 public sealed record UserRow(string UserId, string Username, bool IsActive, IReadOnlyList<string> Roles, string FirstName = "", string LastName = "")
 {
     public string RoleText => string.Join(", ", Roles.Select(RoleName));
-    /// <summary>What a role is called on screen (D15: the admin is the super admin).</summary>
-    public static string RoleName(string role) => role switch { "admin" => "super admin", "subadmin" => "sub-admin", _ => role };
+    /// <summary>What a role is called on screen, the one place for it (D17): the code admin is the System admin, subadmin is the Admin.</summary>
+    public static string RoleName(string role) => role switch { "admin" => "system admin", "subadmin" => "admin", _ => role };
+    /// <summary>RoleName with a capital, for titles and buttons.</summary>
+    public static string RoleTitle(string role) => RoleName(role) is var n ? char.ToUpperInvariant(n[0]) + n[1..] : "";
+    /// <summary>
+    /// The role code for a name in the Add user picker, or null. Explicit on purpose (D17): lower-casing "Admin" would ask for
+    /// admin, the System admin role. The System admin is never offered here, and create-user refuses it anyway.
+    /// </summary>
+    public static string? RoleCode(string shown) => shown switch { "Member" => "member", "Coach" => "coach", "Employee" => "employee", "Admin" => "subadmin", _ => null };
     public bool IsCoach => Roles.Contains("coach");
     public bool IsEmployee => Roles.Contains("employee");
     public string CoachActionText => IsCoach ? "Remove coach" : "Make coach";
@@ -1192,15 +1199,17 @@ public sealed record UserRow(string UserId, string Username, bool IsActive, IRea
     public bool IsSubAdmin => Roles.Contains("subadmin");
     /// <summary>Fixed from the app (0037): no role changes, no deactivating, no deleting.</summary>
     public bool IsSuperAdmin => Roles.Contains("admin");
-    public string SubAdminActionText => IsSubAdmin ? "Remove sub-admin" : "Make sub-admin";
+    public string SubAdminActionText => IsSubAdmin ? "Remove admin" : "Make admin";
     /// <summary>Front desk, sub-admin or super admin: only the super admin manages these accounts (D15).</summary>
     public bool IsStaff => Roles.Any(r => r is "admin" or "subadmin" or "employee");
     public string ActiveActionText => IsActive ? "Deactivate" : "Reactivate";
-    public string ActiveStatus => IsActive ? "active" : "inactive";
+    public string ActiveStatus => RecordStatus.Of(IsActive);
 }
 public sealed record AuditRow(AuditEntry Entry, string Actor);
 public sealed record DiscountRow(Discount Discount, string State, long Used = 0, long Pending = 0)
 {
+    /// <summary>The chip word (D13): an expired code is Inactive; the card still shows its last day.</summary>
+    public string StatusText => RecordStatus.Of(State == "active");
     // used = verified + voided; pending payments hold a place too
     /// <summary>The last day it works: ExpiresAt is the midnight that ends that day, so showing it directly reads one day late.</summary>
     public DateTime LastDay => Discount.ExpiresAt.AddTicks(-1);

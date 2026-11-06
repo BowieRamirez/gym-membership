@@ -107,7 +107,7 @@ public static class ErrorText
         "email_confirmation_required" => "Check your email and confirm your address, then sign in.",
         _ when raw?.Contains("invalid login credentials", StringComparison.OrdinalIgnoreCase) == true || raw?.Contains("invalid_credentials", StringComparison.OrdinalIgnoreCase) == true => "Email or password is incorrect. Try again, or use Forgot password? to reset your password.",
         "wrong_password" => "Your current password isn't right.",
-        "super_admin_protected" => "Super admin accounts can't have their roles changed, be deactivated or be deleted.",
+        "super_admin_protected" => "System admin accounts can't have their roles changed, be deactivated or be deleted.",
         "bad_code" or "code_not_verified" => "That code is wrong, already used or expired. Check the latest email, or send a new code.",
         "resend_wait" => "A code was just sent. Wait a minute before asking for another one.",
         "same_password" => "Pick a password that's different from your old one.",
@@ -143,7 +143,16 @@ public static class ErrorText
     };
 }
 
-/// <summary>Admin is the super admin (D15); SubAdmin does desk work plus some admin pages.</summary>
+/// <summary>
+/// Item 15, D13: the one status word for master data (accounts, packages, amenities, discount codes). Deleted means archived as deleted;
+/// anything turned off, expired or archived otherwise is Inactive. Memberships, payments and refunds keep their own statuses.
+/// </summary>
+public static class RecordStatus
+{
+    public static string Of(bool active, bool deleted = false) => deleted ? "Deleted" : active ? "Active" : "Inactive";
+}
+
+/// <summary>Admin is the System admin (D15, D17); SubAdmin is the Admin on screen: desk work plus some admin pages.</summary>
 public enum AppRole { Member, Coach, Employee, Admin, SubAdmin }
 
 public static class RoleResolver

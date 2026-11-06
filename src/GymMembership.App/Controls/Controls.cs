@@ -220,9 +220,9 @@ public class StatusChip : ContentView
     readonly Ellipse _dot = new();
     readonly Label _label = new() { VerticalOptions = LayoutOptions.Center, FontSize = 13 };
 
-    static readonly HashSet<string> Good = ["verified", "active", "completed", "approved", "present", "available"];
-    static readonly HashSet<string> Bad = ["rejected", "expired", "cancelled", "absent", "no_show", "inactive", "unavailable"];
-    static readonly HashSet<string> Wait = ["pending", "late", "in_use"];
+    static readonly HashSet<string> Good = new(["verified", "active", "completed", "approved", "present", "available"], StringComparer.OrdinalIgnoreCase);
+    static readonly HashSet<string> Bad = new(["rejected", "expired", "cancelled", "absent", "no_show", "inactive", "unavailable", "deleted"], StringComparer.OrdinalIgnoreCase);
+    static readonly HashSet<string> Wait = new(["pending", "late", "in_use"], StringComparer.OrdinalIgnoreCase);
 
     public StatusChip()
     {
@@ -272,6 +272,13 @@ public class Banner : ContentView
         var key = Kind == "notice" ? "NoticePanel" : "ErrorPanel";
         if (Application.Current!.Resources.TryGetValue(key, out var style)) _box.Style = (Style)style;
     }
+}
+
+/// <summary>IsActive to the D13 word, for catalog rows bound straight to their model.</summary>
+public class RecordStatusConverter : IValueConverter
+{
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => GymMembership.Core.Services.RecordStatus.Of(value is true);
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
 
 public class LocalDateConverter : IValueConverter

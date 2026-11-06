@@ -15,6 +15,7 @@
             <toolkit:IsNotNullConverter x:Key="IsNotNull" />
             <toolkit:IsStringNotNullOrEmptyConverter x:Key="HasText" />
             <c:LocalDateConverter x:Key="LocalDate" />
+            <c:RecordStatusConverter x:Key="RecordStatus" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

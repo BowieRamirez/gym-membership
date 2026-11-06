@@ -87,12 +87,7 @@
                                             </Label.Text>
                                         </Label>
                                     </VerticalStackLayout>
-                                    <c:StatusChip Grid.Column="1" VerticalOptions="Center">
-                                        <c:StatusChip.Triggers>
-                                            <DataTrigger TargetType="c:StatusChip" Binding="{Binding IsActive}" Value="True"><Setter Property="Status" Value="active" /></DataTrigger>
-                                            <DataTrigger TargetType="c:StatusChip" Binding="{Binding IsActive}" Value="False"><Setter Property="Status" Value="inactive" /></DataTrigger>
-                                        </c:StatusChip.Triggers>
-                                    </c:StatusChip>
+                                    <c:StatusChip Grid.Column="1" VerticalOptions="Center" Status="{Binding IsActive, Converter={StaticResource RecordStatus}}" />
                                 </Grid>
                                 <HorizontalStackLayout Spacing="8">
                                     <Button Text="Edit" Style="{StaticResource SmallButton}"
@@ -145,12 +140,7 @@
                                         <Label Style="{StaticResource Caption}" Text="{Binding Price, StringFormat='₱{0:N2} per session'}" IsVisible="{Binding DurationDays, Converter={StaticResource IsNull}}" />
                                         <Label Text="Photo set" Style="{StaticResource Caption}" IsVisible="{Binding ImagePath, Converter={StaticResource IsNotNull}}" />
                                     </VerticalStackLayout>
-                                    <c:StatusChip Grid.Column="1" VerticalOptions="Center">
-                                        <c:StatusChip.Triggers>
-                                            <DataTrigger TargetType="c:StatusChip" Binding="{Binding IsActive}" Value="True"><Setter Property="Status" Value="active" /></DataTrigger>
-                                            <DataTrigger TargetType="c:StatusChip" Binding="{Binding IsActive}" Value="False"><Setter Property="Status" Value="inactive" /></DataTrigger>
-                                        </c:StatusChip.Triggers>
-                                    </c:StatusChip>
+                                    <c:StatusChip Grid.Column="1" VerticalOptions="Center" Status="{Binding IsActive, Converter={StaticResource RecordStatus}}" />
                                 </Grid>
                                 <FlexLayout Wrap="Wrap">
                                     <Button Text="Add or replace photo" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnUploadAmenityPhoto"

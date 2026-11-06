@@ -101,11 +101,11 @@ public class SubAdminTests
         var gw = await As("admin@demo.io");
         var vm = new UsersViewModel(new AdminService(gw), new AccountArchiveService(gw));
         await vm.LoadCommand.ExecuteAsync(null);
-        Assert.Equal(["Member", "Coach", "Employee", "Sub-admin"], vm.Roles);
+        Assert.Equal(["Member", "Coach", "Employee", "Admin"], vm.Roles);
         Assert.True(vm.IsSuperAdmin);
         Assert.True(vm.CanManage(vm.Users.First(u => u.Roles.Contains("employee"))));
         var row = vm.Users.First(u => u.Username == "Alex Tan");
-        Assert.Equal("Make sub-admin", row.SubAdminActionText);
+        Assert.Equal("Make admin", row.SubAdminActionText);
     }
 
     [Fact]
@@ -114,11 +114,34 @@ public class SubAdminTests
         var gw = await As("admin@demo.io");
         var vm = new UsersViewModel(new AdminService(gw), new AccountArchiveService(gw));
         await vm.LoadCommand.ExecuteAsync(null);
-        (vm.NewFirstName, vm.NewLastName, vm.NewEmail, vm.NewPassword, vm.NewRole) = ("Rina", "Cruz", "rina@demo.io", "temp1234", "Sub-admin");
+        (vm.NewFirstName, vm.NewLastName, vm.NewEmail, vm.NewPassword, vm.NewRole) = ("Rina", "Cruz", "rina@demo.io", "temp1234", "Admin");
         Confirm.Answer = (_, _, _) => Task.FromResult(true);
         await vm.AddUserCommand.ExecuteAsync(null);
         Assert.Null(vm.ErrorMessage);
         Assert.Equal(AppRole.SubAdmin, (await new AuthService(gw).SignInAsync("rina@demo.io", "temp1234")).Value);
+    }
+
+    // D17: the on-screen name "Admin" is the subadmin code; lower-casing it would have asked for admin, the System admin role
+    [Fact]
+    public async Task The_add_user_form_maps_names_to_codes_explicitly_and_never_asks_for_the_System_admin_role()
+    {
+        Assert.Equal("subadmin", UserRow.RoleCode("Admin"));
+        foreach (var odd in new[] { "System admin", "admin", "ADMIN", "Sub-admin", "subadmin", "" }) Assert.Null(UserRow.RoleCode(odd));
+        Assert.Equal(("System admin", "Admin"), (UserRow.RoleTitle("admin"), UserRow.RoleTitle("subadmin")));
+
+        var gw = await As("admin@demo.io");
+        var vm = new UsersViewModel(new AdminService(gw), new AccountArchiveService(gw));
+        await vm.LoadCommand.ExecuteAsync(null);
+        Assert.DoesNotContain("System admin", vm.Roles);
+        Confirm.Answer = (_, _, _) => Task.FromResult(true);
+        (vm.NewFirstName, vm.NewLastName, vm.NewEmail, vm.NewPassword, vm.NewRole) = ("Sol", "Reyes", "sol@demo.io", "temp1234", "System admin");
+        await vm.AddUserCommand.ExecuteAsync(null);
+        Assert.Equal("Choose a role from the list.", vm.ErrorMessage);
+        Assert.False((await new AuthService(gw).SignInAsync("sol@demo.io", "temp1234")).Ok);
+
+        // and the server side refuses the System admin role from this function whatever the app sends (create-user has the same list)
+        var direct = await new AdminService(await As("admin@demo.io")).CreateUserAsync("Sol", "Reyes", "sol@demo.io", "admin", "temp1234");
+        Assert.False(direct.Ok);
     }
 
     [Fact]
@@ -132,7 +155,7 @@ public class SubAdminTests
                                   await new AccountArchiveService(gw).DeleteAsync(bea, "Leaving") })
         {
             Assert.False(r.Ok);
-            Assert.Equal("Super admin accounts can't have their roles changed, be deactivated or be deleted.", ErrorText.For(r.Error, r.Message));
+            Assert.Equal("System admin accounts can't have their roles changed, be deactivated or be deleted.", ErrorText.For(r.Error, r.Message));
         }
         Assert.True((await gw.ListAsync<Profile>(p => p.Id == bea)).Single().IsActive);
     }

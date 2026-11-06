@@ -20,7 +20,7 @@ public partial class StaffShell : Shell
 #endif
 	}
 
-	static string RoleName(AppRole role) => role switch { AppRole.Admin => "Super admin", AppRole.SubAdmin => "Sub-admin", _ => "Front desk" };
+	static string RoleName(AppRole role) => role switch { AppRole.Admin => UserRow.RoleTitle("admin"), AppRole.SubAdmin => UserRow.RoleTitle("subadmin"), _ => "Front desk" };
 
 	// short names fit under a bottom-bar slot; the pages themselves keep their full titles
 	static readonly Dictionary<string, string> ShortNames = new()

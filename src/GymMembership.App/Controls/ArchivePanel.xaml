@@ -48,7 +48,7 @@
                         <Label Text="{Binding Selected.Name}" Style="{StaticResource Heading}" />
                         <Label Text="{Binding Selected.RecordId, StringFormat='Record ID: {0}'}" Style="{StaticResource Caption}" />
                         <Label Text="{Binding Selected.TypeLabel}" />
-                        <Label Text="{Binding Selected.Status, StringFormat='Status: {0}'}" />
+                        <Label Text="{Binding Selected.StatusText, StringFormat='Status: {0}'}" />
                         <Label Text="{Binding Selected.DateText, StringFormat='Archived: {0}'}" />
                         <Label Text="{Binding Selected.ActorText, StringFormat='Archived by: {0}'}" />
                         <Label Text="{Binding Selected.Reason, StringFormat='Reason: {0}'}" LineBreakMode="WordWrap" />
@@ -74,7 +74,7 @@
                                 <VerticalStackLayout Spacing="8">
                                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                                         <VerticalStackLayout Spacing="2"><Label Text="{Binding Name}" Style="{StaticResource Heading}" /><Label Text="{Binding TypeLabel}" Style="{StaticResource Caption}" /></VerticalStackLayout>
-                                        <c:StatusChip Grid.Column="1" Status="{Binding Status}" VerticalOptions="Start" />
+                                        <c:StatusChip Grid.Column="1" Status="{Binding StatusText}" VerticalOptions="Start" />
                                     </Grid>
                                     <Label Text="{Binding DateText}" Style="{StaticResource Caption}" />
                                     <Label Text="{Binding Reason}" LineBreakMode="WordWrap" />

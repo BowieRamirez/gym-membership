@@ -33,7 +33,8 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 
 - **2026-11-05:** Phase 6 DEPLOYED: `0043` and `0044` applied live. Phases 2 to 5 are also DEPLOYED. Owner checks on the real backend are not recorded yet. Commits from Phase 6 are not pushed to GitHub. xUnit 842/842; database suite exit 0, 353 counted; Windows and Android builds pass.
 - **2026-11-06:** Owner answered D4, D5, D7 (IP kept 90 days) and D13, all as recommended. Phase 7 started: overview mockup `docs/mockups/admin-overview.html` drafted, waiting for approval (D6).
-- Next concrete action: owner approves or changes the mockup; meanwhile role names (D17) and the role-picker trap can be built, since they don't depend on it. Owner still to set session prices.
+- **2026-11-06:** Phase 7 VERIFIED (no database change, so nothing to deploy): overview rebuilt per the approved mockup, Active/Inactive/Deleted labels, role names and the role-picker fix. xUnit 850/850; Windows and Android builds pass; `Test-WindowsAdminNavigation.ps1` passes. Not pushed to GitHub.
+- Next concrete action: Phase 8 (audit log table): migration `0045` adding `ip_address` and `role` to `audit_log` with the 90-day IP clearing (D7), then paging and labels. Owner still to set session prices and check Phases 2 to 6 on the real backend.
 
 ## 1. Repository findings
 
@@ -64,13 +65,14 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 - [x] **D3 — name lock details (owner, 2026-11-05: option A):** Reverses D13 of the 2026-10-20 plan for everyone: members, coaches, staff and admins. Only a System admin can correct a name, with a reason of 1 to 500 characters that goes in the audit log. Implementer's call, not asked: a System admin may correct their own name, because a lone System admin's typo would otherwise be permanent.
 - [x] **D4 — paying 0 (owner, 2026-11-06):** Refuse 0 everywhere (cashier, member payment, direct calls) unless a discount brought the price to 0. Checked: codes allow 1 to 100% (`0002_tables.sql:136`), so a 100% code can reach 0.
 - [x] **D5 — password rules (owner, 2026-11-06: as recommended):** Today 6 to 64 characters, length only. Decided: 8 to 64 with at least one letter and one number, for new passwords only (registration, change, reset, temporary); existing passwords keep working. The Supabase Auth dashboard setting must match, or the rule is only client-side. Owner to change that setting.
-- [ ] **D6 — overview layout:** Does simplifying replace the eight cards and the black "Open" buttons the owner kept on 2026-11-01? Recommend: a mockup first in `docs/mockups/`, as with the full-page layout, showing a number strip plus a compact list of links.
+- [x] **D6 — overview layout:** see the answer above. Does simplifying replace the eight cards and the black "Open" buttons the owner kept on 2026-11-01? Recommend: a mockup first in `docs/mockups/`, as with the full-page layout, showing a number strip plus a compact list of links.
 - [x] **D7 — audit table data (owner, 2026-11-06: as recommended, IP kept 90 days):** Show the existing `audit_log` in a table, adding `ip_address` and `role` columns filled from now on, with older rows blank rather than guessed. IP comes from the request headers Supabase passes through, and is personal data, so it is cleared from rows older than 90 days; the rest of the row stays. Filters: date range, user, action type, object type. Export: CSV of the filtered rows.
 - [x] **D8 — email check exposure (owner, 2026-11-05: build the live check):** Showing "already in use" tells anyone whether an address has an account, however well it is rate limited; the owner accepts that for this gym. Edge Function `check-email` with a per-IP limit on the server.
 - [x] **D9 — refund formula (owner, 2026-11-05):** Activated = the term's start date has passed or the member has checked in during it, whichever is first. Before that, a full refund with no 24-hour limit. After that, the request goes to staff for manual review with a required reason: gym failed to provide the service, member was misled, contract allows it, illness or relocation, or change of mind (not automatic). Staff decide; the app only surfaces the case. The wording should be checked by someone qualified, since the guidance is not legal advice.
 - [x] **D10 — what a refund cancels (owner, 2026-11-05):** The refunded term only. A later paid renewal has its own payment and stays; staff see a warning when approving.
 - [x] **D11 — amenities per session (owner, 2026-11-05):** Reverses D6 and D9 of the 2026-10-20 plan. A session is one booking of 30 minutes to 2 hours. Passes already sold stay valid until they expire. Solo use without a coach present ends. Any checked-in coach counts as present, checked at the time of use. The owner has not given a price, and today's prices are for 30-day passes, so nothing was converted: each amenity keeps selling its pass until staff enter its session price with Set session price. New amenities are per session from the start.
 - [x] **D12 — offline check-in (owner, 2026-11-05):** Reverses "offline is never Active" in the 2026-10-20 plan. The desk keeps a local copy of member codes and statuses, refreshed while online. Offline scans show "Last updated at ..." rather than Active, and check-ins are queued with their time, flagged as offline, then sent on reconnect and rechecked by the server. Copies older than 24 hours show "can't check". Known risk, accepted: a member who expired since the last refresh can get in.
+- [x] **D6 — overview layout (owner, 2026-11-06: mockup approved as is):** The eight cards and black "Open" buttons are replaced; title "Overview"; check-in list shows how each came in.
 - [x] **D13 — status labels (owner, 2026-11-06: as recommended):** Active, Inactive and Deleted for accounts, packages, amenities and discount codes only. Memberships, payments and refunds keep their own statuses, because "Pending" or "Expired" would lose meaning.
 - [x] **D14 — what CRUD means per entity (owner, 2026-11-05: approved):** Master data (accounts, packages, amenities, codes) gets full create, read and update, with delete as archive. Money and history (payments, refunds, terms, check-ins, audit log) can't be edited or deleted, only reversed by the existing actions.
 - [ ] **D15 — items without a place in the priority order:** The list's order doesn't mention amenities (7), QR offline (10), the forgot-phone fallback or status labels (15). Recommend: 7, 10 and forgot-phone after refunds and archiving (Phase 6), and 15 with the UI (Phase 7). This plan assumes that until the owner says otherwise.
@@ -93,7 +95,7 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 | 4 | CRUD | 13 | D14, D18-D20 | DEPLOYED |
 | 5 | Refunds and archiving | 11, R2, 6, 8, 9, 12 | D9, D10 | DEPLOYED |
 | 6 | Amenities and check-in fallbacks | 7, 10, forgot phone | D11, D12, D15, D21 | DEPLOYED |
-| 7 | Simplify admin overview, status labels, role names | 4, 15, role names | D6, D13, D17 | IN PROGRESS |
+| 7 | Simplify admin overview, status labels, role names | 4, 15, role names | D6, D13, D17 | VERIFIED (no database change) |
 | 8 | Audit log table and labels | 5, 14 | D7 | PLANNED |
 | 9 | Try to break the system | Testing | D4, D5, D16 | PLANNED |
 | 10 | Final check and report | All | Phases 1-9 | PLANNED |
@@ -207,14 +209,16 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 - [ ] Owner sets session prices, and tries a scan and a name check-in with Wi-Fi off on a real desk.
 
 ### Phase 7: admin overview, status labels and role names (items 4, 15, D17)
-- [ ] (`impeccable`, main design phase) Mockup in `docs/mockups/`; owner approves before building (D6). (2026-11-06: `docs/mockups/admin-overview.html` drafted and checked in headless Edge: dark and light, maximised and 900 px, both admin roles, a failed summary. URL options `?theme=light&role=admin&width=narrow&state=fail`. Waiting for owner approval.)
-- [ ] Build it, keeping every destination reachable: accounts, packages, discounts, cancellations and refunds, revenue, payments, membership sync, logs and archive.
-- [ ] Update the Overview checks in `scripts/Test-WindowsAdminNavigation.ps1` if the shortcuts change.
-- [ ] Check in demo mode at about 900 px and maximised, in light and dark.
-- [ ] Item 15: one function in Core turning a record into Active, Inactive or Deleted, with a test, used on the screens in scope per D13. Meaning is in the words, not only colour.
-- [ ] Role names (D17): one place for the on-screen name. `StaffShell.xaml.cs:23` and `Services.cs:1158` each have their own copy today; make the shell use the `Services.cs` one. Then replace the wording on screen, including error messages (`Foundation.cs:108`, `UsersPage.xaml.cs:34`, `StaffViewModels.cs:1056,1188`, `AdminOverviewViewModel.cs:113`), the Users role picker, and the demo sign-in buttons (`LoginPage.xaml:128,130`, which keep their AutomationIds). About 12 files.
-- [ ] **Security trap in the role picker:** `StaffViewModels.cs:950` turns the chosen name into a role with `NewRole == "Sub-admin" ? "subadmin" : NewRole.ToLowerInvariant()`. If only the wording changes, choosing "Admin" asks for `admin`, the System admin role. Map names to codes explicitly. Test: choosing "Admin" creates `subadmin`, and "System admin" is not offered. Also confirm the server refuses a request for `admin` from this form (`DemoGateway.cs:203` does; check `create-user`).
-- [ ] Decide with the mockup whether the "Admin overview" title stays, since both roles see it. The Audit Log role column (Phase 8) uses the new names, including for older rows.
+- [x] (`impeccable`, main design phase) Mockup `docs/mockups/admin-overview.html`, checked in headless Edge (dark and light, maximised and 900 px, both admin roles, a failed summary; URL options `?theme=light&role=admin&width=narrow&state=fail`). Owner approved it as is, 2026-11-06 (D6).
+- [x] Built (`4ec5395`): a lime bar only when refunds wait (says how many are for a used term), four numbers that open Revenue, Users and roles, Packages and amenities and Discounts, the day's check-ins with QR / By name / Sent later, the other four pages as links, and the five newest audit events. Every page the cards reached is one click away, and the side menu is unchanged. The page heading was dropped because the window header already says "Overview", as on the other admin pages; the long captions and per-card Retry are gone. `AdminOverviewTests` (+5), `WindowsAdminNavigationTests`.
+- [x] `scripts/Test-WindowsAdminNavigation.ps1`: card alignment check removed (no cards), title waits moved to `AdminOverviewUpdated`, sign-in by "System admin". Passes against a demo build, all 8 shortcuts, 2026-11-06.
+- [x] Checked in a Windows demo build at 900 px and maximised, light and dark, as System admin and Admin (2026-11-06). Not seen on screen: the lime bar and check-in rows (the demo has no pending refund or check-in today; both covered by tests).
+- [x] Item 15: `RecordStatus.Of` in `Foundation.cs` gives Active, Inactive or Deleted; used by the Users, Packages and amenities, Discounts and Archive chips (`RecordStatusTests`). An expired code says Inactive and its card still shows the last day; the Archive keeps its Expired filter. The chip colours ignore case and treat Deleted as bad.
+- [x] Role names (D17): `UserRow.RoleName` is the one place; the shell uses it through `RoleTitle`. Wording changed in errors, the Users role picker and actions ("Make admin"), archive messages and the demo sign-in buttons ("System admin", "Admin"; they never had AutomationIds, so the two Windows scripts now find them by the new names).
+- [x] Role-picker trap: `UserRow.RoleCode` maps picker names explicitly and refuses anything else; "System admin" is never offered. Tests: choosing "Admin" creates `subadmin`, a forced "System admin" is refused before any call, and a direct `create-user` for `admin` fails in the demo. The live `create-user` only accepts member, coach, employee and subadmin (`ROLES`), so the server refuses it too.
+- [x] Title: "Overview", in the window header only. The Audit Log role column (Phase 8) uses `RoleName`.
+- [ ] `scripts/Test-WindowsArchive.ps1` was already out of date before this phase: it opened the first account (the System admin, who can't be deleted since `0037`) and a page called "Discounts & Archive". Both fixed; it now fails later, at "Restore record", because the first archived row it opens can't be restored. Fix in Phase 10.
+- `ponytail-review` (2026-11-06): one shrink applied (`RoleTitle`); two cosmetic findings left (one-caller `Tap` helper, two "has text" properties the tests pin).
 
 ### Phase 8: audit log table and labels (items 5, 14)
 - [ ] Migration: `ip_address` and `role` on `audit_log`, filled inside `audit()` per D7.
@@ -242,7 +246,8 @@ Each attempt gets a recorded result: refused correctly, or a bug with its fix. T
 
 ## How to check (demo mode)
 - Real config `src/GymMembership.App/Resources/Raw/supabase.json` must be moved out of the project before a demo build and put back right after (never commit it, never leave a `.bak` in the repo). Android demo builds also need `--no-incremental`.
-- Demo sign-in buttons on the login page: Member, Coach, Front desk, Admin, Sub-admin.
+- Demo sign-in buttons on the login page: Member, Coach, Front desk, System admin, Admin.
+- A demo Windows build can go to a separate folder so Visual Studio's lock on `bin\Debug` doesn't matter: `dotnet build ... -f net10.0-windows10.0.19041.0 -p:OutDir=<folder>\` (move `supabase.json` out first and back after).
 - The owner often runs the app from Visual Studio, which locks `bin\Debug`. Ask before closing it.
 
 ## To-do list as received
@@ -298,6 +303,7 @@ Work in priority order: items 3, 2 and 1 first (security and data integrity), th
 
 ## Session log
 
+- **2026-11-06:** Phase 7 done: overview rebuilt (mockup approved, D6), status labels (item 15), role names and the role-picker fix (D17). xUnit 850/850. No database changes.
 - **2026-11-06:** D4, D5, D7, D13 answered by the owner. Phase 7 overview mockup drafted. No code or database changes.
 - **2026-11-05:** Plan created from the to-do list and a read of the code. No code, database or git changes.
 - **2026-11-05:** Complete to-do list received; added items 5 (rest), 6-15, R2, the forgot-phone fallback and decisions D9-D16. Phases renumbered to 10. No code, database or git changes.

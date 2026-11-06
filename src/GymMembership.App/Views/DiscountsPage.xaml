@@ -86,7 +86,7 @@
                                         </Label>
                                         <Label Text="{Binding Usage}" Style="{StaticResource Caption}" />
                                     </VerticalStackLayout>
-                                    <c:StatusChip Grid.Column="1" Status="{Binding State}" VerticalOptions="Start" />
+                                    <c:StatusChip Grid.Column="1" Status="{Binding StatusText}" VerticalOptions="Start" />
                                 </Grid>
                                 <!-- wraps on narrow screens so no label is cut off -->
                                 <FlexLayout Wrap="Wrap">

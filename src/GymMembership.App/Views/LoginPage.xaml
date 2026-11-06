@@ -125,9 +125,9 @@
                                 Command="{Binding DemoSignInCommand}" CommandParameter="coach@demo.io" />
                         <Button Text="Front desk" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
                                 Command="{Binding DemoSignInCommand}" CommandParameter="employee@demo.io" />
-                        <Button Text="Admin" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                        <Button Text="System admin" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
                                 Command="{Binding DemoSignInCommand}" CommandParameter="admin@demo.io" />
-                        <Button Text="Sub-admin" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                        <Button Text="Admin" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
                                 Command="{Binding DemoSignInCommand}" CommandParameter="subadmin@demo.io" />
                     </FlexLayout>
                 </VerticalStackLayout>

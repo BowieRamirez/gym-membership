@@ -31,7 +31,7 @@ public partial class UsersPage : BasePage
 		{
 			if (!vm.CanManage(user))
 			{
-				vm.ErrorMessage = "Only the super admin can change front-desk, sub-admin and super admin accounts.";
+				vm.ErrorMessage = "Only a System admin can change front desk, Admin and System admin accounts.";
 				return;
 			}
 			// D15: roles and deleting are the super admin's; a deactivated account can only be switched back on
