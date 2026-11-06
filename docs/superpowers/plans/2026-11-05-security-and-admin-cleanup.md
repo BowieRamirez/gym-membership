@@ -35,7 +35,8 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 - **2026-11-06:** Owner answered D4, D5, D7 (IP kept 90 days) and D13, all as recommended. Phase 7 started: overview mockup `docs/mockups/admin-overview.html` drafted, waiting for approval (D6).
 - **2026-11-06:** Phase 8 DEPLOYED: `0045` applied and `create-user` and `reset-password` redeployed. Phase 7 VERIFIED (no database change). xUnit 864/864; database suite exit 0, 363 counted; Windows and Android builds pass; `Test-WindowsAdminNavigation.ps1` passes. Commits are not pushed to GitHub.
 - **2026-11-06:** Owner added a new Phase 9, the yellow-and-black redesign of every Windows page and the Android member and coach screens, with the new badge, the HF monogram and the name "Gym Center" (D22 to D25, design `docs/superpowers/specs/2026-11-06-yellow-black-redesign-design.md`). Trying to break the system is now Phase 10 and the final check Phase 11.
-- Next concrete action: 9.4, the sign-in, registration and locked pages with the full badge. Note: after an Android demo build, build the real app with `--no-incremental` so `supabase.json` is packed again. Owner still to set session prices and check Phases 2 to 8 on the real backend.
+- **2026-11-06 (stopped here):** Phase 9 IN PROGRESS. 9.1 mockup approved; 9.2 colours, side menu and phone tab bar done; 9.3 HF monogram, icon, splash, badge image and the name "Gym Center" done. Pages still have their old layouts in the new colours. xUnit 884/884; Windows and Android builds pass; navigation script passes. Branch pushed to GitHub on the owner's request (commits up to the 9.3 commit). Not merged.
+- Next concrete action: 9.4, the sign-in, registration and locked pages with the full badge (`Resources/Images/gym_badge.png`, on a white round), Windows and Android; it also fixes the two Phase 2 notes about the sign-in layout. Then 9.5 member pages. Note: after an Android demo build, build the real app with `--no-incremental` so `supabase.json` is packed again. Owner still to set session prices and check Phases 2 to 8 on the real backend.
 
 ## 1. Repository findings
 
@@ -102,7 +103,7 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 | 6 | Amenities and check-in fallbacks | 7, 10, forgot phone | D11, D12, D15, D21 | DEPLOYED |
 | 7 | Simplify admin overview, status labels, role names | 4, 15, role names | D6, D13, D17 | VERIFIED (no database change) |
 | 8 | Audit log table and labels | 5, 14 | D7 | DEPLOYED |
-| 9 | Yellow and black redesign: every Windows page, Android member and coach screens, new logo and name | Added 2026-11-06 | D22-D25 | PLANNED |
+| 9 | Yellow and black redesign: every Windows page, Android member and coach screens, new logo and name | Added 2026-11-06 | D22-D25 | IN PROGRESS (9.1-9.3 done) |
 | 10 | Try to break the system | Testing | D4, D5, D16 | PLANNED |
 | 11 | Final check and report | All | Phases 1-10 | PLANNED |
 
@@ -323,6 +324,7 @@ Work in priority order: items 3, 2 and 1 first (security and data integrity), th
 
 ## Session log
 
+- **2026-11-06:** Phase 9 tasks 9.1 to 9.3 done (mockup approved, colours and side menu, logo and name). Branch pushed to GitHub at the owner's request. Next: 9.4.
 - **2026-11-06:** New Phase 9 added at the owner's request (yellow and black redesign, D22-D25); old Phases 9 and 10 renumbered to 10 and 11. Design written. No code changes.
 - **2026-11-06:** Phase 8 done and deployed: audit log table with labels, 10 a page, filters and CSV export; `0045` live. xUnit 864/864; database suite exit 0, 363 counted.
 - **2026-11-06:** Phase 7 done: overview rebuilt (mockup approved, D6), status labels (item 15), role names and the role-picker fix (D17). xUnit 850/850. No database changes.
