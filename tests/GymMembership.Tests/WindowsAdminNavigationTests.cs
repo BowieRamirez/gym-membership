@@ -33,16 +33,15 @@ public class WindowsAdminNavigationTests
     }
 
     [Fact]
-    public void Overview_card_actions_are_in_a_bottom_row_not_in_the_variable_height_text_stack()
+    public void Every_overview_page_opens_from_a_figure_or_a_link_and_the_mockup_is_kept()
     {
         var source = File.ReadAllText(Path.Combine(TestPaths.AppFolder(), "Views", "AdminOverviewPage.Windows.cs"));
-        Assert.Contains("new RowDefinition(GridLength.Star)", source);
-        Assert.Contains("new RowDefinition(GridLength.Auto)", source);
-        Assert.Contains("cardLayout.SetRow(actions, 1)", source);
-        Assert.Contains("Content = cardLayout", source);
-        Assert.Contains("actions.Children.Add(open)", source);
-        Assert.DoesNotContain("content.Children.Add(open)", source);
-        Assert.DoesNotContain("content.Children.Add(retry)", source);
+        Assert.Contains("vm.Figures", source);
+        Assert.Contains("vm.Links", source);
+        Assert.Contains("AutomationId = \"AdminOverviewOpen-\" + card.Key", source);   // scripts/Test-WindowsAdminNavigation.ps1 opens each page by these ids
+        var vm = new GymMembership.Core.ViewModels.AdminOverviewViewModel(null!, null!);
+        Assert.Equal(vm.Cards.Select(c => c.Key).Order(), vm.Figures.Concat(vm.Links).Select(c => c.Key).Order());
+        Assert.True(File.Exists(Path.Combine(TestPaths.AppFolder(), "..", "..", "docs", "mockups", "admin-overview.html")));
     }
 
     [Fact]

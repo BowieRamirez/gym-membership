@@ -103,11 +103,11 @@ public class MemberQrTests
     {
         var gw = new DemoGateway();
         var (_, svc) = await As("employee@demo.io", gw);
-        Assert.True((await svc.CheckInAsync("u-alex")).Ok);
+        Assert.True((await svc.CheckInAsync("u-alex", "manual")).Ok);
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
         var vm = new AdminOverviewViewModel(new AdminService(gw), new SubscriptionService(gw), svc);
         await vm.LoadCheckInsAsync();
-        Assert.Contains(vm.CheckIns, r => r.Name == "Alex Tan");
+        Assert.Contains(vm.CheckIns, r => r.Name == "Alex Tan" && r.HowText == "By name");   // the method recorded (0044) reaches the overview
         Assert.Matches(@"^\d+ check-ins?$", vm.CheckInsText);
 
         vm.CheckInDay = vm.CheckInDay.AddDays(-400);

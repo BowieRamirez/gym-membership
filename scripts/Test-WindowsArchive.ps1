@@ -50,7 +50,7 @@ try {
         throw "No actionable control: $name"
     }
     Invoke-Name 'Admin'
-    $null = Wait-Id 'AdminOverviewTitle'
+    $null = Wait-Id 'AdminOverviewUpdated'
     Invoke-Name 'Users and roles'
     Invoke-Element (Wait-Id 'UserAccountActions')
     Invoke-Name 'Delete Account'

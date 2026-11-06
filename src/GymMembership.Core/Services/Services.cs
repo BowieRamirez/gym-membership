@@ -1076,9 +1076,11 @@ public sealed class MemberScan
     public string ExpiryText => Expires is { } e ? (Result is "active" or "saved" ? "Membership ends " : "Membership ended ") + RevenuePdf.Manila(e) + " (Manila)" : IsSaved ? "" : "No end date";
 }
 
-public sealed record CheckInRow(string Name, DateTime At)
+public sealed record CheckInRow(string Name, DateTime At, string? Method = null)
 {
     public string TimeText => At.AddHours(8).ToString("HH:mm", CultureInfo.InvariantCulture);   // Manila has no daylight saving
+    /// <summary>How it came in (0044); blank for check-ins recorded before that.</summary>
+    public string HowText => Method switch { "qr" => "QR", "manual" => "By name", "offline" => "Sent later", _ => "" };
 }
 
 public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = null) : IAttendanceService
@@ -1122,7 +1124,7 @@ public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = 
         var rows = await gw.ListAsync<GymCheckIn>(c => c.CheckedInAt >= from && c.CheckedInAt < to);
         var names = await Directory_.UserNamesAsync(gw);
         return rows.OrderBy(c => c.CheckedInAt)
-            .Select(c => new CheckInRow(c.MemberId is { } m ? names.GetValueOrDefault(m, "Member") : "Walk-in", c.CheckedInAt)).ToList();
+            .Select(c => new CheckInRow(c.MemberId is { } m ? names.GetValueOrDefault(m, "Member") : "Walk-in", c.CheckedInAt, c.Method)).ToList();
     });
 }
 
