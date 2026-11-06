@@ -157,7 +157,9 @@ public class NotifiedMember : BaseModel
 [Table("audit_log")] public class AuditEntry : BaseModel
 { [PrimaryKey("audit_id")] public int Id { get; set; } [Column("actor_id")] public string? ActorId { get; set; } [Column("action")] public string Action { get; set; } = "";
   [Column("entity")] public string Entity { get; set; } = ""; [Column("entity_id")] public string? EntityId { get; set; } [Column("details")] public Dictionary<string, object>? Details { get; set; }
-  [Column("created_at")] public DateTime CreatedAt { get; set; } }
+  [Column("created_at")] public DateTime CreatedAt { get; set; }
+  // 0045 fills these inside audit(); the app never writes the log (the demo stores them here)
+  [Column("ip_address")] public string? IpAddress { get; set; } [Column("role")] public string? Role { get; set; } }
 
 [Table("discounts")] public class Discount : BaseModel
 { [PrimaryKey("discount_id")] public int Id { get; set; } [Column("code")] public string Code { get; set; } = ""; [Column("percent")] public int Percent { get; set; }

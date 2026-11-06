@@ -1435,9 +1435,73 @@ public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive
     public bool HasArchive => Archive is not null;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowLogs))] private bool showArchive;
     public bool ShowLogs => !ShowArchive;
-    public ObservableCollection<AuditRow> Entries { get; } = new();
+    public ObservableCollection<AuditRecord> Entries { get; } = new();
 
-    public override Task OnAppearingAsync() => ShowArchive && Archive is not null ? Archive.OnAppearingAsync() : LoadAsync();
+    // filters (D7): Manila dates, part of the user's name, action type, object type. Index 0 of each list is "All".
+    public string[] Areas { get; } = ["All action types", .. AuditLabels.Areas.Values];
+    public string[] ObjectTypes { get; } = ["All object types", .. AuditLabels.Objects.Values];
+    [ObservableProperty] private int areaIndex;
+    [ObservableProperty] private int objectIndex;
+    [ObservableProperty] private string user = "";
+    [ObservableProperty] private bool useDates;
+    [ObservableProperty] private DateTime from = DateTime.Today.AddDays(-7);
+    [ObservableProperty] private DateTime to = DateTime.Today;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(PageText)), NotifyCanExecuteChangedFor(nameof(PreviousCommand))] private int page;
+    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(NextCommand))] private bool hasMore;
+    [ObservableProperty] private bool isEmpty;
+    public string PageText => $"Page {Page + 1}";
+    bool HasPrevious => Page > 0;
+    AuditFilter _applied = new();
+    /// <summary>Set by the page: shows the Save dialog and writes the text. Returns where it went, or null if cancelled.</summary>
+    public Func<string, string, Task<string?>>? SaveFile { get; set; }
+
+    public override Task OnAppearingAsync() => ShowArchive && Archive is not null ? Archive.OnAppearingAsync() : LoadPageAsync(Page);
+
+    AuditFilter Current()
+    {
+        return new(UseDates ? DateOnly.FromDateTime(From) : null, UseDates ? DateOnly.FromDateTime(To) : null, User,
+            AreaIndex > 0 ? AuditLabels.Areas.Keys.ElementAt(AreaIndex - 1) : null, ObjectIndex > 0 ? AuditLabels.Objects.Keys.ElementAt(ObjectIndex - 1) : null);
+    }
+
+    [RelayCommand]
+    private async Task ApplyAsync()
+    {
+        if (IsBusy) return;
+        if (UseDates && To.Date < From.Date) { ErrorMessage = "The end date must be on or after the start date."; return; }
+        _applied = Current();
+        await LoadPageAsync(0);
+    }
+
+    [RelayCommand]
+    private async Task ClearFiltersAsync()
+    {
+        if (IsBusy) return;
+        AreaIndex = ObjectIndex = 0; User = ""; UseDates = false; From = DateTime.Today.AddDays(-7); To = DateTime.Today; _applied = new();
+        await LoadPageAsync(0);
+    }
+
+    async Task LoadPageAsync(int target)
+    {
+        IsEmpty = false;
+        if (!await RunAsync(() => svc.AuditPageAsync(_applied, target), result =>
+            { Fill(Entries, result.Rows); Page = target; HasMore = result.HasMore; IsEmpty = Entries.Count == 0; }))
+        { Entries.Clear(); HasMore = false; }
+    }
+
+    [RelayCommand(CanExecute = nameof(HasPrevious))] private Task PreviousAsync() => !IsBusy && Page > 0 ? LoadPageAsync(Page - 1) : Task.CompletedTask;
+    [RelayCommand(CanExecute = nameof(HasMore))] private Task NextAsync() => !IsBusy && HasMore ? LoadPageAsync(Page + 1) : Task.CompletedTask;
+
+    /// <summary>Every row the applied filters match, not just this page, as CSV.</summary>
+    [RelayCommand]
+    private async Task ExportAsync()
+    {
+        if (IsBusy || SaveFile is null) return;
+        Notice = null;
+        IReadOnlyList<AuditRecord>? rows = null;
+        if (!await RunAsync(() => svc.AuditExportAsync(_applied), r => rows = r)) return;
+        var where = await SaveFile($"audit-log-{DateTime.Today:yyyy-MM-dd}.csv", AuditCsv.Build(rows!));
+        if (where is not null) Notice = $"Saved {rows!.Count} entr{(rows.Count == 1 ? "y" : "ies")} to {where}.";
+    }
 
     [RelayCommand] private async Task OpenArchiveAsync()
     {
@@ -1446,8 +1510,7 @@ public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive
         await Archive.OnAppearingAsync();
     }
 
-    [RelayCommand] private async Task OpenLogsAsync() { ShowArchive = false; await LoadAsync(); }
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.AuditAsync, rows => Fill(Entries, rows));
+    [RelayCommand] private async Task OpenLogsAsync() { ShowArchive = false; await LoadPageAsync(Page); }
 }
 
 public sealed record StatusChoice(string Value, string Label);

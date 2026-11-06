@@ -27,7 +27,7 @@ public class AdminOverviewTests
         Set(a, "AllAmenitiesAsync", (IReadOnlyList<Amenity>)[]);
         Set(a, "DiscountsAsync", (IReadOnlyList<DiscountRow>)[]);
         Set(a, "RevenueAsync", (IReadOnlyList<RevenueRow>)[]);
-        Set(a, "AuditAsync", (IReadOnlyList<AuditRow>)[]);
+        Set(a, "AuditPageAsync", new AuditPage([], false));
         Set(a, "GymSettingsAsync", new GymSettings { GymName = "Test gym" });
         Set(s, "RefundsAsync", (IReadOnlyList<RefundCard>)[]);
         return (new AdminOverviewViewModel(admin, subs) { Clock = () => DateTimeOffset.Parse("2026-10-31T16:30:00Z") }, a, s);
@@ -44,7 +44,7 @@ public class AdminOverviewTests
         Assert.Equal(new[] { "users", "catalog", "discounts", "refunds", "revenue", "void", "gym", "audit" }, vm.Cards.Select(c => c.Key));
         Assert.All(vm.Cards, c => Assert.False(c.IsUnavailable));
         Assert.Equal(new[] { "RefundsAsync" }, s.Calls.Select(c => c.Method));
-        Assert.All(a.Calls, c => Assert.Contains(c.Method, new[] { "UsersAsync", "AllPackagesAsync", "AllAmenitiesAsync", "DiscountsAsync", "RevenueAsync", "GymSettingsAsync", "AuditAsync" }));
+        Assert.All(a.Calls, c => Assert.Contains(c.Method, new[] { "UsersAsync", "AllPackagesAsync", "AllAmenitiesAsync", "DiscountsAsync", "RevenueAsync", "GymSettingsAsync", "AuditPageAsync" }));
         Assert.Equal("Find a verified payment and void it with a reason", Card(vm, "void").Value);
         Assert.Equal(new[] { "revenue", "users", "catalog", "discounts" }, vm.Figures.Select(c => c.Key));
         Assert.Equal(new[] { "refunds", "void", "gym", "audit" }, vm.Links.Select(c => c.Key));
@@ -128,7 +128,7 @@ public class AdminOverviewTests
         await vm.RefreshAsync();
         Assert.Equal("No activity yet.", vm.RecentActivity);
         Assert.True(vm.HasActivityMessage);
-        Set(a, "AuditAsync", (IReadOnlyList<AuditRow>)Enumerable.Range(1, 7).Select(i => new AuditRow(new AuditEntry { Action = "event-" + i, CreatedAt = new DateTime(2026, 10, i, 18, 0, 0, DateTimeKind.Utc) }, "Owner")).ToArray());
+        Set(a, "AuditPageAsync", new AuditPage(Enumerable.Range(1, 7).Reverse().Select(i => new AuditRecord { Action = "event-" + i, ActorName = "Owner", CreatedAt = new DateTime(2026, 10, i, 18, 0, 0, DateTimeKind.Utc) }).ToList(), false));
         await vm.RefreshAsync();
         Assert.Equal(new[] { "event-7", "event-6", "event-5", "event-4", "event-3" }, vm.Activity.Select(a => a.Action));
         Assert.False(vm.HasActivityMessage);
@@ -151,10 +151,10 @@ public class AdminOverviewTests
     public async Task Failed_refresh_clears_old_revenue_and_audit_instead_of_leaving_stale_success()
     {
         var (vm, a, _) = Create();
-        Set(a, "AuditAsync", (IReadOnlyList<AuditRow>)[new(new AuditEntry { Action = "old-event", CreatedAt = DateTime.UtcNow }, "Owner")]);
+        Set(a, "AuditPageAsync", new AuditPage([new AuditRecord { Action = "user.archive", ActorName = "Owner", CreatedAt = DateTime.UtcNow }], false));
         await vm.RefreshAsync();
-        Assert.Single(vm.Activity);
-        a.Results["AuditAsync"] = Task.FromResult(AppResult<IReadOnlyList<AuditRow>>.Fail(AppErrorKind.Offline));
+        Assert.Equal("Account deleted", Assert.Single(vm.Activity).Action);   // item 14: the label, not user.archive
+        a.Results["AuditPageAsync"] = Task.FromResult(AppResult<AuditPage>.Fail(AppErrorKind.Offline));
         a.Results["RevenueAsync"] = Task.FromException<AppResult<IReadOnlyList<RevenueRow>>>(new HttpRequestException("offline"));
         await vm.RefreshAsync();
         Assert.Empty(vm.Activity);

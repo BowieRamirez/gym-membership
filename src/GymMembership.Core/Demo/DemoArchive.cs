@@ -7,6 +7,9 @@ public sealed partial class DemoGateway
 {
     readonly Dictionary<(string Type, string Id), (DateTime At, string Actor, string Reason)> _archiveMetadata = new();
 
+    /// <summary>The table archive_catalog_record audits under (0024).</summary>
+    static string CatalogTable(string type) => type switch { "plan" => "membership_packages", "amenity" => "amenities", _ => "discounts" };
+
     void StampArchive(string type, string id, string reason) => _archiveMetadata[(type, id)] = (SubscriptionNow, Uid, reason);
 
     void GuardCatalogEdit(object old, object edited)
@@ -40,7 +43,7 @@ public sealed partial class DemoGateway
             default: throw Err("bad_input");
         }
         StampArchive(type, id.ToString(), reason);
-        Add(new AuditEntry { ActorId = Uid, Action = "catalog.archive", Entity = type, EntityId = id.ToString(), CreatedAt = SubscriptionNow, Details = new() { ["reason"] = reason } });
+        Add(new AuditEntry { ActorId = Uid, Action = "catalog.archive", Entity = CatalogTable(type), EntityId = id.ToString(), CreatedAt = SubscriptionNow, Details = new() { ["reason"] = reason } });
     }
 
     void RestoreArchived(string type, string id)
@@ -71,7 +74,7 @@ public sealed partial class DemoGateway
                 default: throw Err("bad_input");
             }
             var reason = _archiveMetadata.GetValueOrDefault((type, id)).Reason ?? "Unknown (legacy record)";
-            Add(new AuditEntry { ActorId = Uid, Action = "catalog.restore", Entity = type, EntityId = id, CreatedAt = SubscriptionNow, Details = new() { ["reason"] = reason } });
+            Add(new AuditEntry { ActorId = Uid, Action = "catalog.restore", Entity = CatalogTable(type), EntityId = id, CreatedAt = SubscriptionNow, Details = new() { ["reason"] = reason } });
         }
         _archiveMetadata.Remove((type, id));
     }
@@ -132,5 +135,26 @@ public sealed partial class DemoGateway
                 && (to is null || r.ArchivedAt is { } b && DateOnly.FromDateTime(b.ToUniversalTime().AddHours(8)) <= to)
                 && r.Reason.Contains(S("p_reason").Trim(), StringComparison.OrdinalIgnoreCase))
             .OrderBy(r => r.ArchivedAt is null).ThenByDescending(r => r.ArchivedAt).ThenBy(r => r.Type, StringComparer.Ordinal).ThenBy(r => r.RecordId, StringComparer.Ordinal).Skip(offset).Take(limit).ToList();
+    }
+
+    /// <summary>audit_records (0045): one page of the log, newest first, for audit:read only.</summary>
+    List<AuditRecord> AuditRecords(Dictionary<string, object> args)
+    {
+        Require("audit:read");
+        string S(string key) => Convert.ToString(args.GetValueOrDefault(key), CultureInfo.InvariantCulture) ?? "";
+        DateOnly? D(string key) => string.IsNullOrEmpty(S(key)) ? null : DateOnly.ParseExact(S(key), "yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var (from, to, user, area, entity) = (D("p_from"), D("p_to"), S("p_user").Trim(), S("p_area"), S("p_entity"));
+        var offset = args.ContainsKey("p_offset") ? Convert.ToInt32(args["p_offset"]) : 0;
+        var limit = args.ContainsKey("p_limit") ? Convert.ToInt32(args["p_limit"]) : 11;
+        if (offset < 0 || limit is < 1 or > 1001 || to < from || user.Length > 100 || area.Length > 40 || entity.Length > 40) throw Err("bad_audit_filter");
+        string? Name(string? id) => All<Profile>().FirstOrDefault(p => p.Id == id)?.FullName;
+        DateOnly Day(DateTime at) => DateOnly.FromDateTime(at.ToUniversalTime().AddHours(8));
+        return All<AuditEntry>()
+            .Select(e => new AuditRecord { Id = e.Id, CreatedAt = e.CreatedAt, ActorName = Name(e.ActorId) ?? "System", Role = e.Role, IpAddress = e.IpAddress,
+                Action = e.Action, Entity = e.Entity, EntityId = e.EntityId, ObjectName = e.Entity is "profiles" or "user_roles" ? Name(e.EntityId) : null, Details = e.Details })
+            .Where(r => (from is null || Day(r.CreatedAt) >= from) && (to is null || Day(r.CreatedAt) <= to)
+                && r.ActorName.Contains(user, StringComparison.OrdinalIgnoreCase)
+                && (area == "" || r.Action.Split('.')[0] == area) && (entity == "" || r.Entity == entity))
+            .OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.Id).Skip(offset).Take(limit).ToList();
     }
 }

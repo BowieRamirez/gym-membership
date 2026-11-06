@@ -7,6 +7,12 @@ export const cors = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+/** What the audit log records about who acted (0045, D7): the caller's address, as public.request_ip reads it, and main role. */
+export function auditBy(req: Request, caller: { id: string; superAdmin: boolean }) {
+  const ip = req.headers.get('cf-connecting-ip') ?? req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
+  return { actor_id: caller.id, ip_address: ip?.slice(0, 64) || null, role: caller.superAdmin ? 'admin' : 'subadmin' };
+}
+
 export function reply(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 }

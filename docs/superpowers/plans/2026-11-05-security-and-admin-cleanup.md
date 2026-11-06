@@ -22,7 +22,7 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 
 **Rules**
 - Business rules live in the database and are mirrored in `DemoGateway`; hiding something in the UI is not enough.
-- New migrations continue from the latest number (0044 after Phase 6, so next is `0045`). Never rewrite an applied migration.
+- New migrations continue from the latest number (0045 after Phase 8, so next is `0046`). Never rewrite an applied migration.
 - Logic goes in Core with an xUnit test in `tests/GymMembership.Tests`; database rules get a check in `supabase/tests/local`.
 - UI work: AutomationIds used by the UI scripts stay on the same controls; phones keep their layouts.
 - **Design (owner, 2026-11-05):** every task that changes a screen uses the `impeccable` skill, so the system doesn't look like slop or AI-generated UI, alongside the `frontend-design` skill that `CLAUDE.md` requires. Main design phases: 7 and 8. Smaller screen changes: Phases 2, 3, 5 and 6, each marked below. Phases 1, 4 and 9 change no design unless a fix touches a screen.
@@ -33,8 +33,8 @@ Status vocabulary: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED
 
 - **2026-11-05:** Phase 6 DEPLOYED: `0043` and `0044` applied live. Phases 2 to 5 are also DEPLOYED. Owner checks on the real backend are not recorded yet. Commits from Phase 6 are not pushed to GitHub. xUnit 842/842; database suite exit 0, 353 counted; Windows and Android builds pass.
 - **2026-11-06:** Owner answered D4, D5, D7 (IP kept 90 days) and D13, all as recommended. Phase 7 started: overview mockup `docs/mockups/admin-overview.html` drafted, waiting for approval (D6).
-- **2026-11-06:** Phase 7 VERIFIED (no database change, so nothing to deploy): overview rebuilt per the approved mockup, Active/Inactive/Deleted labels, role names and the role-picker fix. xUnit 850/850; Windows and Android builds pass; `Test-WindowsAdminNavigation.ps1` passes. Not pushed to GitHub.
-- Next concrete action: Phase 8 (audit log table): migration `0045` adding `ip_address` and `role` to `audit_log` with the 90-day IP clearing (D7), then paging and labels. Owner still to set session prices and check Phases 2 to 6 on the real backend.
+- **2026-11-06:** Phase 8 DEPLOYED: `0045` applied and `create-user` and `reset-password` redeployed. Phase 7 VERIFIED (no database change). xUnit 864/864; database suite exit 0, 363 counted; Windows and Android builds pass; `Test-WindowsAdminNavigation.ps1` passes. Commits are not pushed to GitHub.
+- Next concrete action: Phase 9 (try to break the system), using D4 (0 only after a 100% discount), D5 (8 to 64 with a letter and a number) and D16, which is still open. Owner still to set session prices and check Phases 2 to 8 on the real backend.
 
 ## 1. Repository findings
 
@@ -96,7 +96,7 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 | 5 | Refunds and archiving | 11, R2, 6, 8, 9, 12 | D9, D10 | DEPLOYED |
 | 6 | Amenities and check-in fallbacks | 7, 10, forgot phone | D11, D12, D15, D21 | DEPLOYED |
 | 7 | Simplify admin overview, status labels, role names | 4, 15, role names | D6, D13, D17 | VERIFIED (no database change) |
-| 8 | Audit log table and labels | 5, 14 | D7 | PLANNED |
+| 8 | Audit log table and labels | 5, 14 | D7 | DEPLOYED |
 | 9 | Try to break the system | Testing | D4, D5, D16 | PLANNED |
 | 10 | Final check and report | All | Phases 1-9 | PLANNED |
 
@@ -221,12 +221,14 @@ Order set by the owner: 3, 2, 1, then CRUD (13), refunds and archiving, UI and a
 - `ponytail-review` (2026-11-06): one shrink applied (`RoleTitle`); two cosmetic findings left (one-caller `Tap` helper, two "has text" properties the tests pin).
 
 ### Phase 8: audit log table and labels (items 5, 14)
-- [ ] Migration: `ip_address` and `role` on `audit_log`, filled inside `audit()` per D7.
-- [ ] Server-side paging, 10 rows per page, with filters (D7). `AuditAsync` stops loading the whole table.
-- [ ] Item 14: map of action code to readable label in Core (`user.archive` becomes "Account deleted"). A test fails if any code used in the migrations or `DemoGateway` has no label; an unknown code shows as itself, never blank.
-- [ ] (`impeccable`, main design phase, including filters and export) Swap the rows in `AuditPage.xaml` for a table with `TableHead` and `c:TableBody`, with a `WideFrom` value (`PageLayoutTests` checks each `TableHead` has one). Columns: date/time, user, role, IP address, action type, action, object type, object, change details.
-- [ ] Export button: CSV of the filtered rows, not just the visible page. Cells starting with `=`, `+`, `-` or `@` are escaped so a spreadsheet can't run them.
-- [ ] Check in demo mode, wide and narrow.
+- [x] `0045`: `ip_address` and `role` on `audit_log`, filled inside `audit()` from `request_ip()` (Cloudflare's `cf-connecting-ip`, else the first `x-forwarded-for`; null, never an error, if unreadable) and `main_role()` (RoleResolver's order). Older entries stay blank (D7). `create-user` and `reset-password`, which write the log directly, fill both through `auditBy` in `_shared/admin.ts`. A nightly job (`clear-audit-ips`, 00:20 Manila) clears addresses older than 90 days. (2026-11-06, `audit-log.mjs`, 10 checks.)
+- [x] Server-side paging: `audit_records` returns a page newest first (the app asks for 11 to know about a next page) with filters for Manila dates, part of the user's name, action type (the part before the dot) and object type (the table), for `audit:read` only. Account and role entries also get the person's name. `AuditAsync`, which loaded the whole table, is gone; the overview reads the first page. The demo mirrors it. (2026-11-06, `audit-log.mjs`, `AuditLogTests`.)
+- [x] Item 14: `AuditLabels` in Core (`user.archive` is "Account deleted"; 24 actions, 7 action types, 8 object types). `AuditLogTests` scans the migrations, Edge Functions and demo and fails on any code or table without a label; an unknown code shows as itself. The demo now audits catalog archives under the table name, as `0024` does.
+- [x] (`impeccable`, `frontend-design`) `AuditPage.xaml`: filters panel, then a table with `TableHead` and `c:TableBody` (`WideFrom="1150"`, cards below that) with the nine columns: date and time, user, role, IP address, action type, action, object type, object, change details. Previous and Next are disabled at the ends. The log view uses the full width, left edge in line with the Audit log and Archive buttons.
+- [x] Export CSV: every row the applied filters match, read 1000 at a time, through the system Save dialog. Every cell is quoted; one starting with `=`, `+`, `-`, `@`, a tab or a return gets a leading `'`. (2026-11-06, `AuditLogTests`.)
+- [x] Checked in a Windows demo build, maximised and at 900 px, dark (2026-11-06). Fixed from that look: each dropdown showed its label twice, the table was off-centre from the buttons above it, a date wrapped, and role entries showed an id instead of a name. Not seen on screen: a full page of 10 rows and the Save dialog (the demo has two entries; both covered by tests).
+- [x] Applied `0045` and deployed `create-user` and `reset-password` under the per-phase rule, 2026-11-06 (dry run showed only `0045`). Confirmed live: both columns exist, the nightly job is scheduled, `audit()` fills the address, signed-in users can call `audit_records` but not `main_role` or `clear_old_audit_ips`, and an anonymous call through the API is refused with 42501. Not yet seen live: a real entry with its address and role; the next audited action will show it.
+- [ ] Owner checks the Logs page on the real backend after doing any audited action (for example a role change on a test account): the IP address and role columns should be filled for it.
 
 ### Phase 9: try to break the system (testing)
 Each attempt gets a recorded result: refused correctly, or a bug with its fix. Test both the app's validation and the server, because the app's checks can be bypassed.
@@ -303,6 +305,7 @@ Work in priority order: items 3, 2 and 1 first (security and data integrity), th
 
 ## Session log
 
+- **2026-11-06:** Phase 8 done and deployed: audit log table with labels, 10 a page, filters and CSV export; `0045` live. xUnit 864/864; database suite exit 0, 363 counted.
 - **2026-11-06:** Phase 7 done: overview rebuilt (mockup approved, D6), status labels (item 15), role names and the role-picker fix (D17). xUnit 850/850. No database changes.
 - **2026-11-06:** D4, D5, D7, D13 answered by the owner. Phase 7 overview mockup drafted. No code or database changes.
 - **2026-11-05:** Plan created from the to-do list and a read of the code. No code, database or git changes.

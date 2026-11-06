@@ -1,6 +1,6 @@
 // POST { user_id, password }
 // The owner sets a new temporary password for someone who forgot theirs (plan 4.4).
-import { adminClient, cors, reply, requireAdmin, STAFF_ROLES } from '../_shared/admin.ts';
+import { adminClient, auditBy, cors, reply, requireAdmin, STAFF_ROLES } from '../_shared/admin.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -31,6 +31,6 @@ Deno.serve(async (req) => {
   await admin.from('user_notifications').insert({
     user_id: userId, type: 'system', title: 'Your password was reset. Sign in with the new one.',
   });
-  await admin.from('audit_log').insert({ actor_id: caller.id, action: 'user.reset_password', entity: 'profiles', entity_id: userId });
+  await admin.from('audit_log').insert({ ...auditBy(req, caller), action: 'user.reset_password', entity: 'profiles', entity_id: userId });
   return reply({ ok: true });
 });

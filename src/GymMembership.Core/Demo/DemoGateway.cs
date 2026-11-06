@@ -60,6 +60,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         if (pk.PropertyType == typeof(int) && (int)pk.GetValue(row)! == 0)
             pk.SetValue(row, All<T>().Select(r => (int)pk.GetValue(r)!).DefaultIfEmpty(0).Max() + 1);
         if (row is Payment payment) SnapshotMembershipPayment(payment);
+        if (row is AuditEntry { Role: null } entry) entry.Role = MainRole(entry.ActorId);   // as audit() does (0045); the demo has no network address
         Table(typeof(T)).Add(row);
         if (row is Member m) Add(new MemberCode { UserId = m.UserId, Code = "GYM1-" + Guid.NewGuid().ToString("N") });   // 0034: every member gets a code
         return row;
@@ -71,6 +72,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
     string Uid => CurrentUserId ?? throw Err("not authenticated");
     string[] RolesOf(string? user) => All<UserRole>().Where(u => u.UserId == user)
         .Select(u => All<Role>().First(r => r.RoleId == u.RoleId).Name).ToArray();
+    /// <summary>main_role (0045): the one role that best describes a person, in RoleResolver's order.</summary>
+    string? MainRole(string? user) => new[] { "admin", "subadmin", "employee", "coach", "member" }.FirstOrDefault(RolesOf(user).Contains);
     bool Has(string permission) => RolesOf(CurrentUserId).Any(r => RolePermissions[r].Contains(permission));
     bool CoachInGym => All<CoachVisit>().Any(v => v.CheckedOutAt is null && All<Profile>().Any(p => p.Id == v.CoachId && p.IsActive));
     bool IsStaff => RolesOf(CurrentUserId).Any(r => r is "admin" or "subadmin" or "employee");
@@ -596,6 +599,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         switch (fn)
         {
             case "archive_records": return ArchiveRecords(a);
+            case "audit_records": return AuditRecords(a);
             case "discount_usage":
                 Require("discounts:manage"); ArchiveUsedUpCodes();
                 return All<Discount>().Select(d => new DiscountUse(d.Id, Consumed(d), All<Payment>().Count(p => p.DiscountId == d.Id && p.Status == Status.Pending))).ToList();

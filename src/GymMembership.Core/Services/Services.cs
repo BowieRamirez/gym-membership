@@ -1205,7 +1205,6 @@ public sealed record UserRow(string UserId, string Username, bool IsActive, IRea
     public string ActiveActionText => IsActive ? "Deactivate" : "Reactivate";
     public string ActiveStatus => RecordStatus.Of(IsActive);
 }
-public sealed record AuditRow(AuditEntry Entry, string Actor);
 public sealed record DiscountRow(Discount Discount, string State, long Used = 0, long Pending = 0)
 {
     /// <summary>The chip word (D13): an expired code is Inactive; the card still shows its last day.</summary>
@@ -1243,7 +1242,10 @@ public interface IAdminService
     Task<AppResult<IReadOnlyList<RevenueRow>>> RevenueAsync(DateOnly from, DateOnly to);
     /// <summary>Every receipt and approved refund in the range, all pages, for the PDF export.</summary>
     Task<AppResult<IReadOnlyList<RevenueLine>>> RevenueLinesAsync(DateOnly from, DateOnly to);
-    Task<AppResult<IReadOnlyList<AuditRow>>> AuditAsync();
+    /// <summary>One page of the audit log, newest first, filtered on the server (0045). Page 0 is the newest.</summary>
+    Task<AppResult<AuditPage>> AuditPageAsync(AuditFilter filter, int page);
+    /// <summary>Every row the filter matches, for the CSV export, read in pages of 1000.</summary>
+    Task<AppResult<IReadOnlyList<AuditRecord>>> AuditExportAsync(AuditFilter filter);
     Task<AppResult<GymSettings>> GymSettingsAsync();
     /// <summary>Saves the gym name, QR account name and walk-in price, and uploads a new payment QR image when one is given.</summary>
     Task<AppResult<bool>> SaveGymSettingsAsync(GymSettings settings, (string FileName, byte[] Data)? qrImage);
@@ -1372,12 +1374,32 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         });
     }
 
-    public Task<AppResult<IReadOnlyList<AuditRow>>> AuditAsync() => Safe.RunAsync<IReadOnlyList<AuditRow>>(async () =>
+    public const int AuditPageSize = 10;   // item 14
+
+    public Task<AppResult<AuditPage>> AuditPageAsync(AuditFilter filter, int page) => Safe.RunAsync(async () =>
     {
-        var names = await Directory_.UserNamesAsync(gw);
-        return (await gw.ListAsync<AuditEntry>()).OrderByDescending(a => a.CreatedAt)
-            .Select(a => new AuditRow(a, names.GetValueOrDefault(a.ActorId ?? "", "System"))).ToList();
+        var rows = await AuditRowsAsync(filter, page * AuditPageSize, AuditPageSize + 1);
+        return new AuditPage(rows.Take(AuditPageSize).ToList(), rows.Count > AuditPageSize);
     });
+
+    public Task<AppResult<IReadOnlyList<AuditRecord>>> AuditExportAsync(AuditFilter filter) => Safe.RunAsync<IReadOnlyList<AuditRecord>>(async () =>
+    {
+        // ponytail: whole export held in memory; stream it if the log ever reaches hundreds of thousands of rows
+        var all = new List<AuditRecord>();
+        while (true)
+        {
+            var rows = await AuditRowsAsync(filter, all.Count, 1000);
+            all.AddRange(rows);
+            if (rows.Count < 1000) return all;
+        }
+    });
+
+    async Task<List<AuditRecord>> AuditRowsAsync(AuditFilter f, int offset, int limit) =>
+        await gw.RpcAsync<List<AuditRecord>>("audit_records", new()
+        {
+            ["p_from"] = f.From?.ToString("yyyy-MM-dd")!, ["p_to"] = f.To?.ToString("yyyy-MM-dd")!, ["p_user"] = f.User?.Trim() ?? "",
+            ["p_area"] = f.Area ?? "", ["p_entity"] = f.Entity ?? "", ["p_offset"] = offset, ["p_limit"] = limit
+        }) ?? [];
 
     public Task<AppResult<GymSettings>> GymSettingsAsync() => Safe.RunAsync(async () => (await gw.ListAsync<GymSettings>()).First());
 

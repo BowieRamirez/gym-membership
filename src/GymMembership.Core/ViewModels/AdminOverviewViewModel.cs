@@ -120,9 +120,8 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
                 }),
                 Load("audit", async () =>
                 {
-                    var rows = Require(await admin.AuditAsync());
-                    var latest = rows.OrderByDescending(r => r.Entry.CreatedAt).Take(5).ToList();
-                    foreach (var r in latest) Activity.Add(new(r.Entry.Action, r.Actor, When(Manila(r.Entry.CreatedAt), today)));
+                    var latest = Require(await admin.AuditPageAsync(new(), 0)).Rows.Take(5).ToList();   // newest first from the server
+                    foreach (var r in latest) Activity.Add(new(r.ActionText, r.ActorName, When(r.Manila, today)));
                     RecentActivity = latest.Count == 0 ? "No activity yet." : "";
                     return ("Full audit log and archived records", "");
                 }));
@@ -164,8 +163,7 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
     static string When(DateTime manila, DateOnly today) => DateOnly.FromDateTime(manila) == today
         ? manila.ToString("HH:mm", CultureInfo.InvariantCulture)
         : DateOnly.FromDateTime(manila) == today.AddDays(-1) ? "Yesterday" : manila.ToString("dd MMM", CultureInfo.InvariantCulture);
-    static DateTime Manila(DateTime value) => (value.Kind == DateTimeKind.Local ? value.ToUniversalTime() : value).AddHours(8);
 }
 
-/// <summary>One recent audit event on the overview. Action is the raw code until Phase 8 gives it a label.</summary>
+/// <summary>One recent audit event on the overview, with its readable label (item 14).</summary>
 public sealed record ActivityRow(string Action, string Actor, string WhenText);
