@@ -39,15 +39,23 @@ public class LogoTests
     [Fact]
     public void Sign_in_and_create_account_show_the_brand()
     {
-        // both pages sit in AuthShell, whose brand panel (desktop) or header (phone) carries the badge (9.4) or the monogram
+        // both pages sit in AuthShell (Controls.AuthLayout): the full badge and name, two columns only when there is room (9.4)
         var styles = File.ReadAllText(AppFile("Resources", "Styles", "Styles.xaml"));
         var shell = styles[styles.IndexOf("x:Key=\"AuthShell\"")..];
-        shell = shell[..shell.IndexOf("</ControlTemplate>")];
-        Assert.True(shell.Contains("<c:LogoMark") || shell.Contains("gym_badge.png"));
-        Assert.Contains("Health &amp; Fitness Gym Center", shell);
-        Assert.Contains("ControlTemplate=\"{StaticResource AuthShell}\"", File.ReadAllText(AppFile("Views", "LoginPage.xaml")));
-        Assert.Contains("ControlTemplate=\"{StaticResource AuthShell}\"", File.ReadAllText(AppFile("Views", "RegisterPage.xaml")));
+        Assert.Contains("<c:AuthLayout", shell[..shell.IndexOf("</ControlTemplate>")]);
+        var controls = File.ReadAllText(AppFile("Controls", "Controls.cs"));
+        var layout = controls[controls.IndexOf("class AuthLayout")..];
+        layout = layout[..layout.IndexOf("/// <summary>")];
+        Assert.Contains("\"gym_badge.png\"", layout);
+        Assert.Contains("\"Health & Fitness Gym Center\"", layout);
+        Assert.Contains("Width >= WideFrom", layout);   // a narrow window gets the band, not two squeezed columns
         Assert.True(File.Exists(AppFile("Resources", "Images", "gym_badge.png")));
+        foreach (var (page, action) in new[] { ("LoginPage.xaml", "Sign in"), ("RegisterPage.xaml", "Create account") })
+        {
+            var xaml = File.ReadAllText(AppFile("Views", page));
+            Assert.Contains("ControlTemplate=\"{StaticResource AuthShell}\"", xaml);
+            Assert.Contains($"<Button Text=\"{action}\" Style=\"{{StaticResource SignalButton}}\"", xaml);   // the one yellow main action
+        }
     }
 
     [Fact]

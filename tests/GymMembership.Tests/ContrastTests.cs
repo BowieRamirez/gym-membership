@@ -38,6 +38,7 @@ public class ContrastTests
         yield return new object[] { "InkDark", "IconChipDark" };
         yield return new object[] { "White", "BadLight" };            // unread badge, light
         yield return new object[] { "PageDark", "BadDark" };          // unread badge, dark
+        yield return new object[] { "MutedDark", "InkLight" };        // sign-in brand panel tagline, light (AuthLayout)
         yield return new object[] { "PendingLight", "CardLight" };    // pending and cooldown words, light (the old yellow failed on white)
     }
 

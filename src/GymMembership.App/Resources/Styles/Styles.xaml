@@ -274,6 +274,11 @@
         <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Signal}, Dark={StaticResource Black}}" />
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
     </Style>
+    <!-- Yellow in both themes: the one main action of a sign-in or registration page (black text, so it works in light too) -->
+    <Style x:Key="SignalButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+        <Setter Property="BackgroundColor" Value="{StaticResource Signal}" />
+        <Setter Property="TextColor" Value="{StaticResource Black}" />
+    </Style>
     <!-- Yellow: a selected choice (a filled surface, so it works in light too) -->
     <Style x:Key="SignalSmallButton" TargetType="Button" BasedOn="{StaticResource SmallButton}">
         <Setter Property="BackgroundColor" Value="{StaticResource Signal}" />
@@ -317,43 +322,10 @@
         <Setter Property="IsVisible" Value="False" />
     </Style>
 
-    <!-- ===== Sign in, reset and create account share one layout: the brand panel on the left and the form on the right (desktop),
-         or a short brand header above the form (phone). On desktop row 0 stays empty. ===== -->
+    <!-- ===== Sign in, reset and create account share one layout: the brand panel with the badge beside the form, or a band above it
+         when the window is narrow and on phones (Controls.AuthLayout) ===== -->
     <ControlTemplate x:Key="AuthShell">
-        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,*">
-            <Border Grid.Row="{OnIdiom Phone=0, Default=1}" Grid.ColumnSpan="{OnIdiom Phone=2, Default=1}"
-                    Margin="{OnIdiom Phone='12,12,12,0', Default=14}" Padding="0"
-                    HeightRequest="{OnIdiom Phone=180, Default=-1}" StrokeThickness="0" StrokeShape="RoundRectangle 26"
-                    BackgroundColor="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource CardDark}}">
-                <!-- ponytail: the brand panel keeps its old layout until 9.4 puts the full badge here -->
-                <Grid>
-                <Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="{OnIdiom Phone=10, Default=22}" Margin="{OnIdiom Phone='22,18', Default='48,40'}">
-                    <HorizontalStackLayout Spacing="12">
-                        <c:LogoMark Size="44" VerticalOptions="Center" />
-                        <Label Text="Health &amp; Fitness Gym Center" Style="{StaticResource Heading}" TextColor="{StaticResource White}" VerticalOptions="Center" />
-                    </HorizontalStackLayout>
-                    <Label Grid.Row="2" Text="Front desk, coaches and members in one place."
-                           Style="{StaticResource Display}" TextColor="{StaticResource White}" HorizontalOptions="Start"
-                           FontSize="{OnIdiom Phone=24, Default=39}" MaximumWidthRequest="{OnIdiom Phone=250, Default=420}" />
-                    <VerticalStackLayout Grid.Row="3" Spacing="10" IsVisible="{OnIdiom Phone=False, Default=True}">
-                        <HorizontalStackLayout Spacing="12">
-                            <c:IconView Icon="calendar-plus" Size="16" ChipSize="30" VerticalOptions="Center" />
-                            <Label Text="Book sessions and amenities" TextColor="{StaticResource White}" VerticalOptions="Center" />
-                        </HorizontalStackLayout>
-                        <HorizontalStackLayout Spacing="12">
-                            <c:IconView Icon="message-square" Size="16" ChipSize="30" VerticalOptions="Center" />
-                            <Label Text="Message your coach" TextColor="{StaticResource White}" VerticalOptions="Center" />
-                        </HorizontalStackLayout>
-                        <HorizontalStackLayout Spacing="12">
-                            <c:IconView Icon="id-card" Size="16" ChipSize="30" VerticalOptions="Center" />
-                            <Label Text="Manage your membership and payments" TextColor="{StaticResource White}" VerticalOptions="Center" />
-                        </HorizontalStackLayout>
-                    </VerticalStackLayout>
-                </Grid>
-                </Grid>
-            </Border>
-            <ContentPresenter Grid.Row="1" Grid.Column="{OnIdiom Phone=0, Default=1}" Grid.ColumnSpan="{OnIdiom Phone=2, Default=1}" />
-        </Grid>
+        <c:AuthLayout />
     </ControlTemplate>
 
     <Style TargetType="Picker">

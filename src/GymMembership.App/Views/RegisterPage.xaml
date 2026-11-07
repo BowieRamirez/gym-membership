@@ -52,9 +52,9 @@
             </VerticalStackLayout>
 
             <Grid>
-                <Button Text="Create account" Command="{Binding RegisterCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}" />
+                <Button Text="Create account" Style="{StaticResource SignalButton}" Command="{Binding RegisterCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}" />
                 <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" WidthRequest="20" HeightRequest="20" HorizontalOptions="Start" Margin="20,0"
-                                   Color="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" InputTransparent="True" />
+                                   Color="{StaticResource Black}" InputTransparent="True" />
             </Grid>
             <HorizontalStackLayout HorizontalOptions="Center" Spacing="2">
                 <Label Text="Already a member?" Style="{StaticResource Muted}" FontSize="14" VerticalOptions="Center" />

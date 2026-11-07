@@ -104,6 +104,82 @@ public class SideLayout : Layout
 }
 
 /// <summary>
+/// AuthShell (sign in, reset, create account): the brand panel with the full badge beside the form when there is room (WideFrom),
+/// otherwise a short band above it with a smaller badge, so a narrow window or a phone never squeezes two columns (Phase 2 note).
+/// The form is the page's own content.
+/// </summary>
+public class AuthLayout : Grid
+{
+    const double WideFrom = 960;
+
+    readonly Border _brand, _badge;
+    readonly Grid _inner;
+    readonly VerticalStackLayout _words;
+    readonly Label _name, _tagline;
+    readonly BoxView _bar;
+    bool? _wide;
+
+    public AuthLayout()
+    {
+        // the badge is black on white, so it keeps its white round in both themes, ringed in the signal yellow
+        _badge = new Border
+        {
+            StrokeShape = new Ellipse(), StrokeThickness = 6, Stroke = FieldFocus.Pick("Signal"), BackgroundColor = Colors.White, Padding = 0,
+            HorizontalOptions = LayoutOptions.Start, VerticalOptions = LayoutOptions.Center,
+            Content = new Image { Source = "gym_badge.png", Aspect = Aspect.AspectFit },
+        };
+        AutomationProperties.SetIsInAccessibleTree(_badge, false);   // the name beside it says the same
+        _name = new Label { Text = "Health & Fitness Gym Center", FontFamily = "BarlowCondensedSemiBold", LineHeight = 1.05, TextColor = Colors.White };
+        _tagline = new Label { Text = "Members, coaches and the front desk, in one place.", LineHeight = 1.2, TextColor = FieldFocus.Pick("MutedDark") };
+        _words = new VerticalStackLayout { Spacing = 6, HorizontalOptions = LayoutOptions.Start, Children = { _name, _tagline } };
+        _bar = new BoxView { Color = FieldFocus.Pick("Signal"), WidthRequest = 56, HeightRequest = 4, CornerRadius = 2, HorizontalOptions = LayoutOptions.Start };
+        _inner = new Grid { Children = { _badge, _words, _bar } };
+        _brand = new Border { StrokeThickness = 0, StrokeShape = new RoundRectangle { CornerRadius = 26 }, Content = _inner };
+        _brand.SetAppThemeColor(BackgroundColorProperty, FieldFocus.Pick("InkLight"), FieldFocus.Pick("CardDark"));
+        Add(_brand);
+        Add(new ContentPresenter());
+        Fit(false);
+        SizeChanged += (_, _) => { if (Width > 0) Fit(Width >= WideFrom); };
+    }
+
+    void Fit(bool wide)
+    {
+        if (wide == _wide) return;
+        _wide = wide;
+        var form = Children[1];
+        ColumnDefinitions.Clear(); RowDefinitions.Clear();
+        _inner.ColumnDefinitions.Clear(); _inner.RowDefinitions.Clear();
+        _bar.IsVisible = wide;
+        if (wide)
+        {
+            // left: badge, name and line centred on the form's height, the yellow bar at the foot; right: the form
+            ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+            ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+            SetColumn(form, 1); SetRow(form, 0);
+            _brand.Margin = 14; _brand.Padding = new Thickness(48, 44);
+            _badge.WidthRequest = _badge.HeightRequest = 200;
+            _name.FontSize = 34; _tagline.FontSize = 16;
+            foreach (var h in new[] { GridLength.Star, GridLength.Auto, GridLength.Auto, GridLength.Star, GridLength.Auto }) _inner.RowDefinitions.Add(new RowDefinition(h));
+            _inner.SetRow(_badge, 1); _inner.SetRow(_words, 2); _inner.SetColumn(_words, 0); _inner.SetRow(_bar, 4);
+            _words.Margin = new Thickness(0, 28, 0, 0); _words.MaximumWidthRequest = 360;
+            return;
+        }
+        // narrow window or phone: a band above the form, badge beside the name
+        RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        RowDefinitions.Add(new RowDefinition(GridLength.Star));
+        SetColumn(form, 0); SetRow(form, 1);
+        _brand.Margin = new Thickness(12, 12, 12, 0); _brand.Padding = new Thickness(20, 18);
+        _badge.WidthRequest = _badge.HeightRequest = DeviceInfo.Idiom == DeviceIdiom.Phone ? 76 : 96;
+        _name.FontSize = DeviceInfo.Idiom == DeviceIdiom.Phone ? 23 : 26; _tagline.FontSize = 14;
+        _inner.ColumnSpacing = 18;
+        _inner.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        _inner.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        _inner.SetRow(_badge, 0); _inner.SetRow(_words, 0); _inner.SetColumn(_words, 1);
+        _words.Margin = 0; _words.MaximumWidthRequest = double.PositiveInfinity; _words.VerticalOptions = LayoutOptions.Center;
+    }
+}
+
+/// <summary>
 /// The rows of a table that is a table only while it has room: at WideFrom or wider it uses RowTemplate and shows Header (the
 /// column captions and their hairline); narrower, and on phones, it uses CardTemplate and hides Header, so fixed columns never
 /// squeeze the text ones down to a letter per line. Set the starting BindableLayout.ItemTemplate in XAML as before.
