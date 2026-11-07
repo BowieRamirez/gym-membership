@@ -31,9 +31,13 @@ public class ExtraNumbersTests
         var current = alex.Terms.Single(t => t.State == Status.Active);
         Assert.Equal($"{current.Term.EndsAt.AddHours(8):d MMM yyyy}", alex.TermEndsText);
         Assert.Equal("0", alex.PaymentsWaitingText);
+        Assert.True(alex.HasActiveTerm);
 
         var bea = await Membership("bea");          // paid by QR, waiting for the front desk, no term yet
-        Assert.Equal("None", bea.TermEndsText);
+        Assert.Equal("No active term", bea.TermEndsText);
+        Assert.False(bea.HasActiveTerm);   // the card then shows only its sentence and the action
+        Assert.False(bea.CanStart);        // she has a payment waiting, so Pay now is the next step, not Choose a package
+        Assert.False(alex.CanStart);
         Assert.Equal("1", bea.PaymentsWaitingText);
     }
 

@@ -111,7 +111,11 @@
             <Grid RowDefinitions="Auto,Auto,*,Auto" IsVisible="{Binding HasChat}">
                 <!-- who you are talking to, and for staff: take, release, close -->
                 <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="12" Padding="16,12">
-                    <Button Text="Back" Style="{StaticResource SmallOutlineButton}" Command="{Binding BackCommand}" IsVisible="{Binding IsCompact}" VerticalOptions="Center" />
+                    <!-- phones: a back arrow, as in any Android app bar, not a "Back" pill -->
+                    <Grid WidthRequest="44" HeightRequest="44" IsVisible="{Binding IsCompact}" VerticalOptions="Center">
+                        <Button BackgroundColor="Transparent" BorderWidth="0" Padding="0" Command="{Binding BackCommand}" SemanticProperties.Description="Back to conversations" />
+                        <c:IconView Icon="chevron-left" Ghost="True" Size="24" HorizontalOptions="Center" VerticalOptions="Center" InputTransparent="True" />
+                    </Grid>
                     <c:Avatar Grid.Column="1" Letters="{Binding Selected.Letters}" Url="{Binding Selected.AvatarUrl}" Diameter="40" VerticalOptions="Center" />
                     <VerticalStackLayout Grid.Column="2" VerticalOptions="Center">
                         <Label Text="{Binding Selected.Thread.WithName}" Style="{StaticResource Heading}" LineBreakMode="TailTruncation" />

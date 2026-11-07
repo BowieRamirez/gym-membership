@@ -71,8 +71,8 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <!-- phones: the requests first, then the form (which can be a long dead form while a session is booked) -->
-            <c:SideLayout SideFirst="{OnIdiom Phone=False, Default=True}">
+            <!-- the requests first, then the form (which can be a long dead form while a session is booked); stacked, the form stops at a readable width -->
+            <c:SideLayout SideFirst="False" StackedSideWidth="640">
                 <!-- main: the requests waiting for a reply -->
                 <VerticalStackLayout Spacing="10">
                     <!-- Windows only: the list and Sessions say the same on a phone -->
@@ -80,13 +80,13 @@
                         <Border Style="{StaticResource Panel}">
                             <VerticalStackLayout Spacing="8">
                                 <c:CardTitle Text="Waiting for a reply" />
-                                <Label Text="{Binding WaitingText}" Style="{OnIdiom Phone={StaticResource KpiValue}, Default={StaticResource Numeral}}" />
+                                <Label Text="{Binding WaitingText}" Style="{StaticResource KpiValue}" />
                             </VerticalStackLayout>
                         </Border>
                         <Border Style="{StaticResource Panel}">
                             <VerticalStackLayout Spacing="8">
                                 <c:CardTitle Text="Next session" />
-                                <Label Text="{Binding NextSessionText}" Style="{OnIdiom Phone={StaticResource KpiValue}, Default={StaticResource Numeral}}" />
+                                <Label Text="{Binding NextSessionText}" Style="{StaticResource KpiValue}" />
                             </VerticalStackLayout>
                         </Border>
                     </c:CardGrid>

@@ -73,7 +73,7 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <c:SideLayout>
+            <c:SideLayout StackedSideWidth="600">
                 <VerticalStackLayout Spacing="4">
                 <!-- status filter chips in one line that scrolls sideways on a phone; the yellow one is in use -->
                 <ScrollView Orientation="Horizontal" HorizontalScrollBarVisibility="Never" Margin="0,0,0,8">
@@ -114,8 +114,13 @@
                 </Border>
                 </VerticalStackLayout>
 
-                <!-- the side panel: the coach photo prompt, then the session being moved (or how to move one) -->
-                <VerticalStackLayout Spacing="12">
+                <!-- the side panel only while it has something: the coach photo prompt, or the session being moved. Hidden otherwise,
+                     so the list takes the full width (the old "Move a session" hint pushed the list down on narrower windows). -->
+                <VerticalStackLayout Spacing="12" IsVisible="False">
+                    <VerticalStackLayout.Triggers>
+                        <DataTrigger TargetType="VerticalStackLayout" Binding="{Binding Rescheduling, Converter={StaticResource IsNotNull}}" Value="True"><Setter Property="IsVisible" Value="True" /></DataTrigger>
+                        <DataTrigger TargetType="VerticalStackLayout" Binding="{Binding Photo.NeedsPhoto}" Value="True"><Setter Property="IsVisible" Value="True" /></DataTrigger>
+                    </VerticalStackLayout.Triggers>
                     <c:CoachPhotoPrompt x:DataType="vm:CoachPhotoViewModel" BindingContext="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=Photo}" IsVisible="{Binding NeedsPhoto}" />
                     <Border Style="{StaticResource SidePanel}" IsVisible="{Binding Rescheduling, Converter={StaticResource IsNotNull}}">
                         <VerticalStackLayout Spacing="12">
@@ -137,15 +142,7 @@
                                 </FlexLayout>
                             </VerticalStackLayout>
                     </Border>
-                    <!-- desktop only: on phones the side stacks above the list, where a hint would just take room -->
-                    <ContentView IsVisible="{OnIdiom Phone=False, Default=True}">
-                        <Border Style="{StaticResource SidePanel}" IsVisible="{Binding Rescheduling, Converter={StaticResource IsNull}}">
-                            <VerticalStackLayout Spacing="6">
-                                <c:CardTitle Text="Move a session" />
-                                <Label Text="Choose Reschedule on a booked session to pick its new time here." Style="{StaticResource Muted}" />
-                            </VerticalStackLayout>
-                        </Border>
-                    </ContentView>
+
                 </VerticalStackLayout>
             </c:SideLayout>
         </VerticalStackLayout>

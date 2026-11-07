@@ -62,14 +62,18 @@ public class SideLayout : Layout
     public double WideFrom { get; set; } = 1100;
     /// <summary>Stacked order: the side above the main area (a form above its list), or below it (a calendar above the chosen day).</summary>
     public bool SideFirst { get; set; } = true;
+    /// <summary>Stacked only: the side's widest, left-aligned, so a form doesn't stretch its fields across a whole window (Phase 9 critique).</summary>
+    public double StackedSideWidth { get; set; } = double.PositiveInfinity;
 
     bool IsWide(double width) => double.IsFinite(width) && width >= WideFrom;
+    double StackedWidth(IView view, double width) => view == Part(1) ? Math.Min(width, StackedSideWidth) : width;
+    IView? Part(int i) => Count > i && this[i].Visibility != Visibility.Collapsed ? this[i] : null;
 
     protected override Microsoft.Maui.Layouts.ILayoutManager CreateLayoutManager() => new Manager(this);
 
     sealed class Manager(SideLayout layout) : Microsoft.Maui.Layouts.ILayoutManager
     {
-        IView? Part(int i) => layout.Count > i && layout[i].Visibility != Visibility.Collapsed ? layout[i] : null;
+        IView? Part(int i) => layout.Part(i);
 
         public Size Measure(double widthConstraint, double heightConstraint)
         {
@@ -79,7 +83,7 @@ public class SideLayout : Layout
                 var mainHeight = main.Measure(widthConstraint - layout.SideWidth - layout.Spacing, double.PositiveInfinity).Height;
                 return new Size(widthConstraint, Math.Max(mainHeight, side.Measure(layout.SideWidth, double.PositiveInfinity).Height));
             }
-            var heights = (layout.SideFirst ? new[] { side, main } : new[] { main, side }).Where(v => v is not null).Select(v => v!.Measure(widthConstraint, double.PositiveInfinity).Height).ToList();
+            var heights = (layout.SideFirst ? new[] { side, main } : new[] { main, side }).Where(v => v is not null).Select(v => v!.Measure(layout.StackedWidth(v, widthConstraint), double.PositiveInfinity).Height).ToList();
             return new Size(widthConstraint, heights.Sum() + layout.Spacing * Math.Max(0, heights.Count - 1));
         }
 
@@ -95,7 +99,7 @@ public class SideLayout : Layout
             var y = bounds.Top;
             foreach (var view in (layout.SideFirst ? new[] { side, main } : new[] { main, side }).Where(v => v is not null))
             {
-                view!.Arrange(new Rect(bounds.Left, y, bounds.Width, view.DesiredSize.Height));
+                view!.Arrange(new Rect(bounds.Left, y, layout.StackedWidth(view, bounds.Width), view.DesiredSize.Height));
                 y += view.DesiredSize.Height + layout.Spacing;
             }
             return bounds.Size;

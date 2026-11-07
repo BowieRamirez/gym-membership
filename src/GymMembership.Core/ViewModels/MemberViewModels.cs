@@ -233,6 +233,10 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
     [ObservableProperty] private string heroNumber = "–";
     [ObservableProperty] private string heroCaption = "Pick a package to get started.";
     [ObservableProperty] private double laneFraction;
+    /// <summary>A term is running now: only then do the days, the end date and the lane mean anything (a new member saw "–" and "Ends None").</summary>
+    [ObservableProperty] private bool hasActiveTerm;
+    /// <summary>Nothing running and no payment in progress (to pay or being checked): the highlight card itself offers the way in.</summary>
+    [ObservableProperty] private bool canStart;
 
     /// <summary>The QR payment the member still has to pay and send proof for, if any.</summary>
     [ObservableProperty] private PaymentItem? payNow;
@@ -257,7 +261,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
             if (!await RunAsync(subscription.TermsAsync, rows =>
             {
                 Fill(Terms, rows);
-                TermEndsText = rows.FirstOrDefault(t => t.State == Status.Active) is { } t ? $"{t.Term.EndsAt.AddHours(8):d MMM yyyy}" : "None";   // Manila, as the terms table
+                TermEndsText = rows.FirstOrDefault(t => t.State == Status.Active) is { } t ? $"{t.Term.EndsAt.AddHours(8):d MMM yyyy}" : "No active term";   // Manila, as the terms table
             })) return;
             var waiting = false;
             if (!await RunAsync(svc.MyPaymentsAsync, rows =>
@@ -291,6 +295,8 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
     {
         var active = rows.FirstOrDefault(r => r.Status == Status.Active);
         var expired = rows.FirstOrDefault(r => r.Status == Status.Expired);
+        HasActiveTerm = active is { DaysLeft: not null };
+        CanStart = !HasActiveTerm && !waitingOnPayment;
         if (active is { DaysLeft: { } left })
         {
             HeroNumber = left.ToString();

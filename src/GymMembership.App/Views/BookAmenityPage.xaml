@@ -99,9 +99,9 @@
                 <Button Text="{Binding BookText}" Style="{StaticResource SignalButton}" Command="{Binding BookCommand}" />
             </VerticalStackLayout>
             <FlexLayout Wrap="Wrap" AlignItems="Center" IsVisible="{OnIdiom Phone=False, Default=True}">
-                <Button Text="Previous day" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,6" Command="{Binding PreviousDayCommand}" />
+                <Button Text="Previous day" Style="{StaticResource FilterChip}" Margin="0,0,8,6" Command="{Binding PreviousDayCommand}" />
                 <Label Text="{Binding DayText}" Style="{StaticResource Heading}" Margin="0,0,8,6" VerticalOptions="Center" />
-                <Button Text="Next day" Style="{StaticResource SmallOutlineButton}" Margin="0,0,16,6" Command="{Binding NextDayCommand}" />
+                <Button Text="Next day" Style="{StaticResource FilterChip}" Margin="0,0,16,6" Command="{Binding NextDayCommand}" />
                 <Button Text="{Binding BookText}" Style="{StaticResource SmallButton}" Margin="0,0,0,6" Command="{Binding BookCommand}" />
             </FlexLayout>
 
