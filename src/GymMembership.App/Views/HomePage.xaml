@@ -91,7 +91,7 @@
                             </Border.GestureRecognizers>
                             <!-- on lime every word is black, in both themes -->
                             <VerticalStackLayout Spacing="8">
-                                <c:CardTitle Icon="{Binding Icon}" Text="{Binding Title}">
+                                <c:CardTitle Text="{Binding Title}">
                                     <c:CardTitle.Triggers><DataTrigger TargetType="c:CardTitle" Binding="{Binding NeedsAttention}" Value="True"><Setter Property="TextColor" Value="{StaticResource Black}" /></DataTrigger></c:CardTitle.Triggers>
                                 </c:CardTitle>
                                 <Label Text="{Binding Count}" Style="{StaticResource Numeral}">
@@ -110,7 +110,7 @@
             <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" MinColumnWidth="420" IsVisible="{Binding HasLists}">
                 <Border Style="{StaticResource TablePanel}">
                     <VerticalStackLayout>
-                        <c:CardTitle Icon="receipt" Text="Payments to verify" Margin="14,12,14,4" />
+                        <c:CardTitle Text="Payments to verify" Margin="14,12,14,4" />
                         <VerticalStackLayout x:Name="PayHead" IsVisible="{OnIdiom Phone=False, Default=True}">
                             <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,*,110,100,90">
                                 <Label Text="Payer" Style="{StaticResource Caption}" />
@@ -130,7 +130,7 @@
 
                 <Border Style="{StaticResource TablePanel}">
                     <VerticalStackLayout>
-                        <c:CardTitle Icon="users" Text="Coaches in the gym now" Margin="14,12,14,4" />
+                        <c:CardTitle Text="Coaches in the gym now" Margin="14,12,14,4" />
                         <VerticalStackLayout x:Name="CoachHead" IsVisible="{OnIdiom Phone=False, Default=True}">
                             <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,*,110">
                                 <Label Text="Coach" Style="{StaticResource Caption}" />

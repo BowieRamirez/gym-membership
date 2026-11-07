@@ -82,7 +82,7 @@
                 <VerticalStackLayout Spacing="12">
                     <Border Style="{StaticResource SidePanel}" IsVisible="{Binding Voiding, Converter={StaticResource IsNotNull}}">
                         <VerticalStackLayout Spacing="10">
-                                <c:CardTitle Icon="ban" Text="{Binding Voiding.Payment.ReceiptNo, StringFormat='Void receipt {0}?'}" />
+                                <c:CardTitle Text="{Binding Voiding.Payment.ReceiptNo, StringFormat='Void receipt {0}?'}" />
                                 <Label Text="{Binding Voiding.Payer}" />
                                 <Label Text="{Binding Voiding.Payment.Amount, StringFormat='₱{0:N2}'}" Style="{StaticResource KpiValue}" />
                                 <Label Text="This can't be undone." Style="{StaticResource Caption}" />
@@ -99,7 +99,7 @@
                     <ContentView IsVisible="{OnIdiom Phone=False, Default=True}">
                         <Border Style="{StaticResource SidePanel}" IsVisible="{Binding Voiding, Converter={StaticResource IsNull}}">
                             <VerticalStackLayout Spacing="6">
-                                <c:CardTitle Icon="ban" Text="Void a payment" />
+                                <c:CardTitle Text="Void a payment" />
                                 <Label Text="Choose Void on a payment to give the reason here." Style="{StaticResource Muted}" />
                             </VerticalStackLayout>
                         </Border>

@@ -15,7 +15,7 @@
             <Border Style="{StaticResource Panel}">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
                     <VerticalStackLayout Spacing="8" VerticalOptions="Center">
-                        <c:CardTitle Icon="dumbbell" Text="At the gym" />
+                        <c:CardTitle Text="At the gym" />
                         <Label Text="{Binding VisitText}" Style="{StaticResource Caption}" />
                     </VerticalStackLayout>
                     <Button Grid.Column="1" Text="{Binding VisitButton}" Command="{Binding ToggleVisitCommand}" Style="{StaticResource SmallButton}" VerticalOptions="Center" />

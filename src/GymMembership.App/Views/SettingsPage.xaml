@@ -12,16 +12,17 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <!-- who is signed in: the one lime card on the page. Saved values, not what is being typed below. -->
-            <Border Style="{StaticResource HeroPanel}" Padding="{OnIdiom Phone='16,16', Default='20,18'}">
+            <!-- who is signed in: a plain panel (Phase 9: yellow is kept for actions and the one key figure, not a profile).
+                 Saved values, not what is being typed below. -->
+            <Border Style="{StaticResource Panel}" Padding="{OnIdiom Phone='16,16', Default='20,18'}">
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="18">
                     <c:Avatar Letters="{Binding Letters}" Url="{Binding AvatarUrl}" Diameter="{OnIdiom Phone=64, Default=88}" VerticalOptions="Center" />
                     <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
-                        <Label Text="{Binding SavedName}" Style="{StaticResource PageTitle}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
-                        <Label Text="{Binding SavedEmail}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
-                        <Label Text="Email confirmed" Style="{StaticResource Caption}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" IsVisible="{Binding EmailConfirmed}" />
-                        <Label Text="Email not confirmed yet" Style="{StaticResource Caption}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" IsVisible="{Binding EmailConfirmed, Converter={StaticResource Not}}" />
-                        <Button Text="Change picture" Style="{StaticResource HeroSmallButton}"
+                        <Label Text="{Binding SavedName}" Style="{StaticResource PageTitle}" />
+                        <Label Text="{Binding SavedEmail}" />
+                        <Label Text="Email confirmed" Style="{StaticResource Caption}" IsVisible="{Binding EmailConfirmed}" />
+                        <Label Text="Email not confirmed yet" Style="{StaticResource Caption}" IsVisible="{Binding EmailConfirmed, Converter={StaticResource Not}}" />
+                        <Button Text="Change picture" Style="{StaticResource SmallOutlineButton}"
                                 Command="{Binding ChangePhotoCommand}" HorizontalOptions="Start" Margin="0,6,0,0" />
                     </VerticalStackLayout>
                 </Grid>
@@ -32,7 +33,7 @@
                 <Border Style="{StaticResource Panel}" Padding="0">
                     <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" MinColumnWidth="340" Spacing="0">
                         <VerticalStackLayout Spacing="14" Padding="18">
-                            <c:CardTitle Icon="id-card" Text="Your name" />
+                            <c:CardTitle Text="Your name" />
                             <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
                                 <VerticalStackLayout Spacing="4">
                                     <Label Text="First name" Style="{StaticResource Caption}" />
@@ -48,7 +49,7 @@
 
                         <!-- Email: send a code to the address, then type it. A new address becomes the sign-in email. -->
                         <VerticalStackLayout Spacing="14" Padding="18">
-                            <c:CardTitle Icon="message-square" Text="Sign-in email" />
+                            <c:CardTitle Text="Sign-in email" />
                             <Label Text="Not confirmed yet. Send a code to this address to confirm it." Style="{StaticResource Caption}" IsVisible="{Binding EmailConfirmed, Converter={StaticResource Not}}" />
                             <VerticalStackLayout Spacing="4">
                                 <Label Text="Email address" Style="{StaticResource Caption}" />
@@ -71,7 +72,7 @@
                 <VerticalStackLayout Spacing="12">
                     <Border Style="{StaticResource SidePanel}">
                         <VerticalStackLayout Spacing="10">
-                            <c:CardTitle Icon="settings" Text="Theme" />
+                            <c:CardTitle Text="Theme" />
                             <Border Style="{StaticResource Field}">
                                 <Picker ItemsSource="{Binding Themes}" SelectedItem="{Binding Theme}" SemanticProperties.Description="Theme" />
                             </Border>
@@ -82,7 +83,7 @@
 
                     <Border Style="{StaticResource SidePanel}">
                         <VerticalStackLayout Spacing="12">
-                            <c:CardTitle Icon="eye" Text="Change password" />
+                            <c:CardTitle Text="Change password" />
                             <VerticalStackLayout Spacing="4">
                                 <Label Text="Current password" Style="{StaticResource Caption}" />
                                 <Border Style="{StaticResource Field}"><Grid ColumnDefinitions="*,Auto"><Entry x:Name="CurrentPasswordBox" Text="{Binding CurrentPassword}" IsPassword="True" SemanticProperties.Description="Current password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference CurrentPasswordBox}" /></Grid></Border>

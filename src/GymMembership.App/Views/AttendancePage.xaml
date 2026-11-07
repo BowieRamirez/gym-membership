@@ -13,7 +13,7 @@
         <DataTemplate x:Key="SessionTemplate" x:DataType="svc:CalendarSession">
             <Border Style="{StaticResource Panel}" Padding="14,12" Margin="0,0,0,8">
                 <VerticalStackLayout Spacing="8">
-                    <c:CardTitle Icon="user-round" Text="{Binding With}" />
+                    <c:CardTitle Text="{Binding With}" />
                     <Label Text="{Binding Session.ScheduledStart, Converter={StaticResource LocalDate}, ConverterParameter='h:mm tt'}" Style="{StaticResource Caption}" />
                     <Label Text="Cancelled" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold" IsVisible="{Binding Cancelled}" />
                     <!-- Shrink 0 on every item: Android's FlexLayout otherwise squeezes them ("Presen", "Lat") instead of wrapping -->
@@ -48,26 +48,26 @@
                                 <c:CardGrid Columns="{OnIdiom Phone=2, Default=4}" MinColumnWidth="{OnIdiom Phone=140, Default=180}">
                                     <Border Style="{StaticResource HeroPanel}">
                                         <VerticalStackLayout Spacing="8">
-                                            <c:CardTitle Icon="calendar-days" Text="Sessions this month" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+                                            <c:CardTitle Text="Sessions this month" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
                                             <Label Text="{Binding SessionsText}" Style="{StaticResource Numeral}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
                                         </VerticalStackLayout>
                                     </Border>
                                     <Border Style="{StaticResource Panel}">
                                         <VerticalStackLayout Spacing="8">
-                                            <c:CardTitle Icon="badge-check" Text="Attendance rate" />
+                                            <c:CardTitle Text="Attendance rate" />
                                             <Label Text="{Binding RateText}" Style="{StaticResource Numeral}" />
                                         </VerticalStackLayout>
                                     </Border>
                                     <Border Style="{StaticResource Panel}">
                                         <VerticalStackLayout Spacing="8">
-                                            <c:CardTitle Icon="clock" Text="Upcoming" />
+                                            <c:CardTitle Text="Upcoming" />
                                             <Label Text="{Binding UpcomingText}" Style="{StaticResource Numeral}" />
                                             <Label Text="{Binding NextText}" Style="{StaticResource Caption}" />
                                         </VerticalStackLayout>
                                     </Border>
                                     <Border Style="{StaticResource Panel}" IsVisible="{Binding HasShifts}">
                                         <VerticalStackLayout Spacing="8">
-                                            <c:CardTitle Icon="users" Text="Trainees" />
+                                            <c:CardTitle Text="Trainees" />
                                             <Label Text="{Binding TraineesText}" Style="{StaticResource Numeral}" />
                                         </VerticalStackLayout>
                                     </Border>

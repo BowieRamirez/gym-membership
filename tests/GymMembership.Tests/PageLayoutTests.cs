@@ -1,6 +1,6 @@
 using Xunit;
 
-/// <summary>The redesign's page layout: wide canvas, card titles with icon chips, white rows, a lime card with black text, pill lanes.</summary>
+/// <summary>The redesign's page layout: wide canvas, plain card titles, panels with dividers, one highlight card whose words flip with it, pill lanes.</summary>
 public class PageLayoutTests
 {
     const string OnHero = "TextColor=\"{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}\"";

@@ -56,7 +56,7 @@
 
                                 <Border Style="{StaticResource SidePanel}">
                                     <VerticalStackLayout Spacing="12">
-                                        <c:CardTitle Icon="calendar-clock" Text="Post a shift" />
+                                        <c:CardTitle Text="Post a shift" />
                                         <FlexLayout Wrap="Wrap" AlignItems="End">
                                             <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
                                                 <Label Text="Date" Style="{StaticResource Caption}" />

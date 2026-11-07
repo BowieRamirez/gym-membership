@@ -9,7 +9,7 @@
 
     <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='16,12,16,0'}" MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
-            <Label Text="Choose your next package. Pay by QR and send proof on My membership. After verification, a paid extension starts after your last paid term, or immediately if it has ended. No upgrades, automatic charges or unused-time credits." Style="{StaticResource Muted}" />
+            <Label Text="Choose your next package. Pay by QR and send proof on My membership. After verification, a paid extension starts after your last paid term, or immediately if it has ended. No upgrades, automatic charges or unused-time credits." Style="{StaticResource Muted}" MaximumWidthRequest="760" HorizontalOptions="Start" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
             <VerticalStackLayout Spacing="4" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" WidthRequest="{OnIdiom Phone=-1, Default=260}">
@@ -27,7 +27,7 @@
                     <Border Style="{StaticResource Panel}">
                         <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="16">
                             <VerticalStackLayout Spacing="4">
-                                <c:CardTitle Icon="package" Text="{Binding Name}" />
+                                <c:CardTitle Text="{Binding Name}" />
                                 <Label Text="{Binding Description}" Style="{StaticResource Muted}" />
                                 <Label Text="{Binding DurationDays, StringFormat='{0} days of access'}" Style="{StaticResource Caption}" />
                             </VerticalStackLayout>

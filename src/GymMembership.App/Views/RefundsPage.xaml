@@ -20,7 +20,7 @@
             <DataTemplate x:DataType="svc:RefundCard">
                 <Border Style="{StaticResource Panel}">
                     <VerticalStackLayout Spacing="8">
-                        <c:CardTitle Icon="undo" Text="{Binding Member}" />
+                        <c:CardTitle Text="{Binding Member}" />
                         <Label Text="{Binding PackageName}" />
                         <Label Text="{Binding Dates}" Style="{StaticResource Caption}" />
                         <VerticalStackLayout Spacing="0">

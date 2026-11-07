@@ -261,21 +261,18 @@ public class CardGrid : Layout
     }
 }
 
-/// <summary>A card's header: one of the Icons on its chip, then the title. TextColor is for highlight cards, whose words flip with the card.</summary>
+/// <summary>A card's header: the title alone, as a level-2 heading. No icon chip (Phase 9, approved mockup: an icon beside every heading
+/// is the dashboard-kit look). TextColor is for highlight cards, whose words flip with the card.</summary>
 public class CardTitle : ContentView
 {
-    public static readonly BindableProperty IconProperty = BindableProperty.Create(nameof(Icon), typeof(string), typeof(CardTitle), "",
-        propertyChanged: (b, _, n) => ((CardTitle)b)._icon.Icon = (string)n);
     public static readonly BindableProperty TextProperty = BindableProperty.Create(nameof(Text), typeof(string), typeof(CardTitle), "",
         propertyChanged: (b, _, n) => ((CardTitle)b)._label.Text = (string)n);
     public static readonly BindableProperty TextColorProperty = BindableProperty.Create(nameof(TextColor), typeof(Color), typeof(CardTitle), null,
         propertyChanged: (b, _, n) => { if (n is Color c) ((CardTitle)b)._label.TextColor = c; });
 
-    public string Icon { get => (string)GetValue(IconProperty); set => SetValue(IconProperty, value); }
     public string Text { get => (string)GetValue(TextProperty); set => SetValue(TextProperty, value); }
     public Color? TextColor { get => (Color?)GetValue(TextColorProperty); set => SetValue(TextColorProperty, value); }
 
-    readonly IconView _icon = new() { Size = 17, ChipSize = 34, VerticalOptions = LayoutOptions.Center };
     readonly Label _label = new() { FontFamily = "BarlowSemiBold", FontSize = 18, VerticalOptions = LayoutOptions.Center, LineBreakMode = LineBreakMode.WordWrap };
 
     public CardTitle()
@@ -284,8 +281,7 @@ public class CardTitle : ContentView
         _label.FontSize = 18;
         SemanticProperties.SetHeadingLevel(_label, SemanticHeadingLevel.Level2);
         PropertyChanged += (_, e) => { if (e.PropertyName == nameof(AutomationId) && _label.AutomationId is null) _label.AutomationId = AutomationId; };
-        Content = new Grid { ColumnDefinitions = [new(GridLength.Auto), new(GridLength.Star)], ColumnSpacing = 10, Children = { _icon, _label } };
-        Grid.SetColumn(_label, 1);
+        Content = _label;
     }
 }
 

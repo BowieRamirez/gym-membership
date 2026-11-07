@@ -21,7 +21,7 @@
                     <Border Style="{StaticResource Panel}">
                         <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="16">
                             <VerticalStackLayout Spacing="3">
-                                <c:CardTitle Icon="user-round" Text="{Binding Name}" />
+                                <c:CardTitle Text="{Binding Name}" />
                                 <Label Text="{Binding NextText}" />
                                 <Label Text="{Binding Completed, StringFormat='{0} sessions completed'}" Style="{StaticResource Caption}" />
                             </VerticalStackLayout>

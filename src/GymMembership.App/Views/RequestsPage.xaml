@@ -40,7 +40,7 @@
                                     <VerticalStackLayout Spacing="8">
                                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                                             <VerticalStackLayout Spacing="2">
-                                                <c:CardTitle Icon="user-round" Text="{Binding With}" />
+                                                <c:CardTitle Text="{Binding With}" />
                                                 <Label Text="{Binding Request.RequestedStart, Converter={StaticResource LocalDate}, ConverterParameter='dddd d MMM, h:mm tt'}" />
                                                 <Label Text="{Binding Kind}" Style="{StaticResource Caption}" />
                                             </VerticalStackLayout>
@@ -84,13 +84,13 @@
                     <c:CardGrid Columns="2" MinColumnWidth="{OnIdiom Phone=140, Default=180}">
                         <Border Style="{StaticResource Panel}">
                             <VerticalStackLayout Spacing="8">
-                                <c:CardTitle Icon="message-square" Text="Waiting for a reply" />
+                                <c:CardTitle Text="Waiting for a reply" />
                                 <Label Text="{Binding WaitingText}" Style="{OnIdiom Phone={StaticResource KpiValue}, Default={StaticResource Numeral}}" />
                             </VerticalStackLayout>
                         </Border>
                         <Border Style="{StaticResource Panel}">
                             <VerticalStackLayout Spacing="8">
-                                <c:CardTitle Icon="calendar-clock" Text="Next session" />
+                                <c:CardTitle Text="Next session" />
                                 <Label Text="{Binding NextSessionText}" Style="{OnIdiom Phone={StaticResource KpiValue}, Default={StaticResource Numeral}}" />
                             </VerticalStackLayout>
                         </Border>
@@ -126,7 +126,7 @@
                 <VerticalStackLayout Spacing="12">
                     <Border Style="{StaticResource SidePanel}" IsVisible="{Binding IsResponding}">
                                     <VerticalStackLayout Spacing="10">
-                                        <c:CardTitle Icon="clock" Text="{Binding ResponseTitle}" />
+                                        <c:CardTitle Text="{Binding ResponseTitle}" />
                                         <FlexLayout Wrap="Wrap" AlignItems="End" IsVisible="{Binding ResponseNeedsTime}">
                                             <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
                                                 <Label Text="Date" Style="{StaticResource Caption}" />
@@ -159,7 +159,7 @@
                     <!-- Compose -->
                                 <Border Style="{StaticResource SidePanel}" IsVisible="{Binding CanCompose}">
                                     <VerticalStackLayout Spacing="12">
-                                        <c:CardTitle Icon="calendar-plus" Text="{Binding ComposeTitle}" />
+                                        <c:CardTitle Text="{Binding ComposeTitle}" />
                                         <VerticalStackLayout Spacing="4" IsVisible="{Binding ShowMemberPicker}">
                                             <Label Text="Member" Style="{StaticResource Caption}" />
                                             <Border Style="{StaticResource Field}">

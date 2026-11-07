@@ -98,7 +98,7 @@
             <Grid ColumnDefinitions="{OnIdiom Phone='*,*', Default='*,*,*'}" RowDefinitions="{OnIdiom Phone='Auto,Auto', Default='Auto'}" ColumnSpacing="12" RowSpacing="12">
                 <Border Grid.ColumnSpan="{OnIdiom Phone=2, Default=1}" Style="{StaticResource HeroPanel}" Padding="{OnIdiom Phone='16,16', Default='18,14'}">
                     <VerticalStackLayout Spacing="8">
-                        <c:CardTitle Icon="clock" Text="{Binding HeroCaption}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+                        <c:CardTitle Text="{Binding HeroCaption}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
                         <Label Text="{Binding HeroNumber}" Style="{StaticResource Numeral}" FontSize="{OnIdiom Phone=72, Default=60}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}"
                                SemanticProperties.Description="Days left on your membership" />
                         <c:LaneView Fraction="{Binding LaneFraction}" HeightRequest="26" DashColor="{AppThemeBinding Light={StaticResource Signal}, Dark={StaticResource Black}}" TrackColor="{AppThemeBinding Light=#3A3A3A, Dark=#D6C700}" />
@@ -106,13 +106,13 @@
                 </Border>
                 <Border Grid.Row="{OnIdiom Phone=1, Default=0}" Grid.Column="{OnIdiom Phone=0, Default=1}" Style="{StaticResource Panel}">
                     <VerticalStackLayout Spacing="8">
-                        <c:CardTitle Icon="calendar-days" Text="Current term ends" />
+                        <c:CardTitle Text="Current term ends" />
                         <Label Text="{Binding TermEndsText}" Style="{OnIdiom Phone={StaticResource KpiValue}, Default={StaticResource Numeral}}" />
                     </VerticalStackLayout>
                 </Border>
                 <Border Grid.Row="{OnIdiom Phone=1, Default=0}" Grid.Column="{OnIdiom Phone=1, Default=2}" Style="{StaticResource Panel}">
                     <VerticalStackLayout Spacing="8">
-                        <c:CardTitle Icon="banknote" Text="Payments waiting" />
+                        <c:CardTitle Text="Payments waiting" />
                         <Label Text="{Binding PaymentsWaitingText}" Style="{OnIdiom Phone={StaticResource KpiValue}, Default={StaticResource Numeral}}" />
                         <Label Text="To pay or to be verified" Style="{StaticResource Caption}" />
                     </VerticalStackLayout>
@@ -124,10 +124,7 @@
                 <VerticalStackLayout Spacing="12">
 
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                        <VerticalStackLayout Spacing="2">
-                            <Label Text="Your paid terms" Style="{StaticResource SectionTitle}" Margin="0" />
-                            <Label Text="Extensions start after your last paid term. No upgrades or unused-time credits. Other paid terms keep their dates if one is cancelled, so a gap may remain." Style="{StaticResource Caption}" />
-                        </VerticalStackLayout>
+                        <Label Text="Your paid terms" Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
                         <Button Grid.Column="1" Text="Choose a package / extend" Style="{StaticResource SmallButton}" VerticalOptions="Center" Clicked="OnChoosePackage" />
                     </Grid>
                     <Border Style="{StaticResource TablePanel}">
@@ -150,8 +147,10 @@
                             </c:TableBody>
                         </VerticalStackLayout>
                     </Border>
+                    <!-- the rule under the table it explains, as in the approved mockup -->
+                    <Label Text="Extensions start after your last paid term. No upgrades or unused-time credits. Other paid terms keep their dates if one is cancelled, so a gap may remain." Style="{StaticResource Caption}" />
 
-                    <Label Text="Payments" Style="{StaticResource SectionTitle}" Margin="0" />
+                    <Label Text="Payments" Style="{StaticResource SectionTitle}" Margin="0,10,0,0" />
                     <!-- status filter: the filled button is the one in use -->
                     <FlexLayout Style="{StaticResource Toolbar}">
                         <Button Text="All" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="All">
@@ -180,7 +179,7 @@
                                 </Grid>
                                 <BoxView Style="{StaticResource Hairline}" />
                             </VerticalStackLayout>
-                            <c:TableBody BindableLayout.ItemsSource="{Binding Payments}" Header="{x:Reference PaymentsHead}" WideFrom="1150"
+                            <c:TableBody BindableLayout.ItemsSource="{Binding Payments}" Header="{x:Reference PaymentsHead}" WideFrom="1000"
                                          RowTemplate="{StaticResource PaymentRow}" CardTemplate="{StaticResource PaymentCard}"
                                          BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource PaymentCard}, Default={StaticResource PaymentRow}}">
                                 <BindableLayout.EmptyView><Label Text="{Binding PaymentsEmptyText, Source={RelativeSource AncestorType={x:Type vm:MyMembershipViewModel}}}" Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
@@ -194,7 +193,7 @@
                     <!-- Pay by QR: the code is what the front desk matches your transfer against, so it is the biggest thing here -->
                     <Border Style="{StaticResource SidePanel}" IsVisible="{Binding PayNow, Converter={StaticResource IsNotNull}}">
                         <VerticalStackLayout Spacing="12">
-                            <c:CardTitle Icon="banknote" Text="{Binding PayNow.Amount, StringFormat='Pay ₱{0:N2} by QR'}" />
+                            <c:CardTitle Text="{Binding PayNow.Amount, StringFormat='Pay ₱{0:N2} by QR'}" />
                             <Image Source="{Binding QrUrl}" IsVisible="{Binding HasQr}" WidthRequest="168" HeightRequest="168" HorizontalOptions="Center"
                                    SemanticProperties.Description="The gym's payment QR code" />
                             <Label Text="{Binding AccountName, StringFormat='Pay to {0}'}" IsVisible="{Binding AccountName, Converter={StaticResource IsNotNull}}" />
@@ -218,7 +217,7 @@
                     <!-- D12: the member's permanent ID code, kept apart from the gym's pay-by-QR panel. Always dark on white so any scanner reads it. -->
                     <Border Style="{StaticResource SidePanel}" IsVisible="{Binding HasCode}">
                         <VerticalStackLayout Spacing="10">
-                            <c:CardTitle Icon="scan-line" Text="Your member QR" />
+                            <c:CardTitle Text="Your member QR" />
                             <!-- the generator ignores its own size on Windows, so the white frame sets it and the code fills the frame -->
                             <Border BackgroundColor="White" StrokeThickness="0" Padding="8" WidthRequest="180" HeightRequest="180" HorizontalOptions="Center"
                                     AutomationId="MemberQr" SemanticProperties.Description="Your member QR code">

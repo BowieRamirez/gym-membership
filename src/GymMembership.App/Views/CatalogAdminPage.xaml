@@ -15,7 +15,7 @@
 
             <Border Style="{StaticResource Panel}" IsVisible="{Binding PricingAmenity, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="10">
-                    <c:CardTitle Icon="waves" Text="{Binding PricingAmenity.Name, StringFormat='Sell “{0}” per session'}" />
+                    <c:CardTitle Text="{Binding PricingAmenity.Name, StringFormat='Sell “{0}” per session'}" />
                     <Label Text="Members will pay for each booking instead of buying a timed pass. Passes already sold stay valid until they expire." Style="{StaticResource Caption}" />
                     <VerticalStackLayout Spacing="4" WidthRequest="160" HorizontalOptions="Start">
                         <Label Text="Price per session" Style="{StaticResource Caption}" />
@@ -30,7 +30,7 @@
 
             <Border Style="{StaticResource Panel}" IsVisible="{Binding DeletingAmenity, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="10">
-                    <c:CardTitle Icon="archive" Text="{Binding DeletingAmenity.Name, StringFormat='Archive “{0}”? Passes already sold keep working.'}" />
+                    <c:CardTitle Text="{Binding DeletingAmenity.Name, StringFormat='Archive “{0}”? Passes already sold keep working.'}" />
                     <HorizontalStackLayout Spacing="8">
                         <Button Text="Yes, archive" Style="{StaticResource SmallButton}" Command="{Binding ConfirmDeleteAmenityCommand}" AutomationId="ConfirmArchiveAmenity" />
                         <Button Text="Keep it" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepAmenityCommand}" />
@@ -40,7 +40,7 @@
 
             <Border Style="{StaticResource Panel}" IsVisible="{Binding Deleting, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="10">
-                    <c:CardTitle Icon="archive" Text="{Binding Deleting.Name, StringFormat='Archive “{0}”? History will be retained.'}" />
+                    <c:CardTitle Text="{Binding Deleting.Name, StringFormat='Archive “{0}”? History will be retained.'}" />
                     <HorizontalStackLayout Spacing="8">
                         <Button Text="Yes, archive" Style="{StaticResource SmallButton}" Command="{Binding ConfirmDeleteCommand}" />
                         <Button Text="Keep it" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepPackageCommand}" />
@@ -78,7 +78,7 @@
                             <VerticalStackLayout Spacing="10">
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
                                     <VerticalStackLayout Spacing="2">
-                                        <c:CardTitle Icon="package" Text="{Binding Name}" />
+                                        <c:CardTitle Text="{Binding Name}" />
                                         <Label Style="{StaticResource Caption}">
                                             <Label.Text>
                                                 <MultiBinding StringFormat="{}₱{0:N2}, {1} days">
@@ -129,7 +129,7 @@
                             <VerticalStackLayout Spacing="10">
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
                                     <VerticalStackLayout VerticalOptions="Center" Spacing="2">
-                                        <c:CardTitle Icon="waves" Text="{Binding Name}" />
+                                        <c:CardTitle Text="{Binding Name}" />
                                         <Label Style="{StaticResource Caption}" IsVisible="{Binding DurationDays, Converter={StaticResource IsNotNull}}">
                                             <Label.Text>
                                                 <MultiBinding StringFormat="{}₱{0:N2} for {1} days">

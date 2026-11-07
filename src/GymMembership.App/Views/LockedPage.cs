@@ -20,7 +20,7 @@ public class LockedPage : ContentPage
 			Children =
 			{
 				// the page title above already names the feature (and "Coaches is for members" reads wrong)
-				new Controls.CardTitle { Icon = "id-card", Text = "This page is for members" },
+				new Controls.CardTitle { Text = "This page is for members" },
 				new Label
 				{
 					Style = (Style)res["Muted"],

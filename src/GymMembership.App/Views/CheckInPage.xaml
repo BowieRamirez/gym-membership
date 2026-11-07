@@ -16,7 +16,7 @@
                 <!-- D12: a member's QR is identification only; the result comes from live data and a scan never checks in by itself -->
                             <Border Style="{StaticResource Panel}">
                             <VerticalStackLayout Spacing="12">
-                            <c:CardTitle Icon="scan-line" Text="Scan a member" />
+                            <c:CardTitle Text="Scan a member" />
                             <Label Text="{Binding OfflineText}" FontFamily="BarlowSemiBold" IsVisible="{Binding IsOffline}" AutomationId="OfflineNotice" />
                             <VerticalStackLayout Spacing="6" IsVisible="{Binding HasQueue}">
                                 <Label Text="{Binding QueueText}" Style="{StaticResource Caption}" AutomationId="QueueText" />

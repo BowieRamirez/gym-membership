@@ -113,7 +113,7 @@
                 <!-- side: the order, always in view while choosing -->
                 <Border Style="{StaticResource SidePanel}">
                                 <VerticalStackLayout Spacing="12">
-                                    <c:CardTitle Icon="receipt" Text="Order" />
+                                    <c:CardTitle Text="Order" />
                                     <Label Text="{Binding OrderWho}" FontFamily="BarlowSemiBold" />
                                     <Label Text="{Binding OrderWhat}" Style="{StaticResource Muted}" />
                                     <Label Text="{Binding OrderHow}" Style="{StaticResource Caption}" />

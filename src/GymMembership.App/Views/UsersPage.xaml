@@ -15,7 +15,7 @@
 
             <Border Style="{StaticResource Panel}" IsVisible="{Binding Resetting, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="10">
-                    <c:CardTitle Icon="eye" Text="{Binding Resetting.Username, StringFormat='Reset password for {0}'}" />
+                    <c:CardTitle Text="{Binding Resetting.Username, StringFormat='Reset password for {0}'}" />
                     <Label Text="Set a new temporary password and share it with them. The old one stops working." Style="{StaticResource Caption}" />
                     <Border Style="{StaticResource Field}" WidthRequest="240" HorizontalOptions="Start">
                         <Grid ColumnDefinitions="*,Auto"><Entry x:Name="ResetPasswordBox" Text="{Binding ResetPassword}" IsPassword="True" Placeholder="At least 6 characters" SemanticProperties.Description="New temporary password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference ResetPasswordBox}" /></Grid>
@@ -29,7 +29,7 @@
 
             <Border Style="{StaticResource Panel}" IsVisible="{Binding Correcting, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="10">
-                    <c:CardTitle Icon="id-card" Text="{Binding Correcting.Username, StringFormat='Correct the name of {0}'}" />
+                    <c:CardTitle Text="{Binding Correcting.Username, StringFormat='Correct the name of {0}'}" />
                     <Label Text="Names are locked after sign-up. Use this only to fix a mistake. The old name, the new name and your reason go in the audit log." Style="{StaticResource Caption}" />
                     <FlexLayout Wrap="Wrap" AlignItems="End">
                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="180">
@@ -54,7 +54,7 @@
 
             <Border Style="{StaticResource Panel}">
                 <VerticalStackLayout Spacing="12">
-                    <c:CardTitle Icon="users" Text="{Binding AddTitle}" />
+                    <c:CardTitle Text="{Binding AddTitle}" />
                     <FlexLayout Wrap="Wrap" AlignItems="End">
                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="180">
                             <Label Text="First name" Style="{StaticResource Caption}" />

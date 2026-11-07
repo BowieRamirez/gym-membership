@@ -35,7 +35,7 @@
 
             <Border Style="{StaticResource Panel}">
                 <VerticalStackLayout Spacing="10">
-                    <c:CardTitle Icon="scan-line" Text="Payment QR" />
+                    <c:CardTitle Text="Payment QR" />
                     <Label Text="The GCash, Maya or QR Ph code members scan. Upload a clear image of it." Style="{StaticResource Caption}" />
                     <VerticalStackLayout Spacing="6">
                         <Label Text="Name shown on the QR" Style="{StaticResource Caption}" />

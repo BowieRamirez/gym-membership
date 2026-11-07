@@ -72,7 +72,6 @@
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="12">
-            <Label Text="Your booked training sessions, soonest first." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
@@ -120,7 +119,7 @@
                     <c:CoachPhotoPrompt x:DataType="vm:CoachPhotoViewModel" BindingContext="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=Photo}" IsVisible="{Binding NeedsPhoto}" />
                     <Border Style="{StaticResource SidePanel}" IsVisible="{Binding Rescheduling, Converter={StaticResource IsNotNull}}">
                         <VerticalStackLayout Spacing="12">
-                                <c:CardTitle Icon="calendar-clock" Text="{Binding Rescheduling.Session.Title, StringFormat='Move “{0}” to a new time'}" />
+                                <c:CardTitle Text="{Binding Rescheduling.Session.Title, StringFormat='Move “{0}” to a new time'}" />
                                 <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                                     <VerticalStackLayout Spacing="4">
                                         <Label Text="New date" Style="{StaticResource Caption}" />
@@ -142,7 +141,7 @@
                     <ContentView IsVisible="{OnIdiom Phone=False, Default=True}">
                         <Border Style="{StaticResource SidePanel}" IsVisible="{Binding Rescheduling, Converter={StaticResource IsNull}}">
                             <VerticalStackLayout Spacing="6">
-                                <c:CardTitle Icon="calendar-clock" Text="Move a session" />
+                                <c:CardTitle Text="Move a session" />
                                 <Label Text="Choose Reschedule on a booked session to pick its new time here." Style="{StaticResource Muted}" />
                             </VerticalStackLayout>
                         </Border>

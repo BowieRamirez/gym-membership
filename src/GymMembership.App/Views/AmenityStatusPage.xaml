@@ -16,7 +16,7 @@
             <!-- the editor for the amenity you chose -->
             <Border Style="{StaticResource Panel}" IsVisible="{Binding IsEditing}">
                 <VerticalStackLayout Spacing="10">
-                    <c:CardTitle Icon="waves" Text="{Binding Editing.Amenity.Name, StringFormat='Change {0}'}" />
+                    <c:CardTitle Text="{Binding Editing.Amenity.Name, StringFormat='Change {0}'}" />
                     <Border Style="{StaticResource Field}">
                         <Picker ItemsSource="{Binding Choices}" ItemDisplayBinding="{Binding Label}" SelectedItem="{Binding Choice}" SemanticProperties.Description="Status" />
                     </Border>
