@@ -11,4 +11,5 @@ public partial class PackagesPage : BasePage
 	}
 
 	void OnAvail(object? sender, EventArgs e) => Row<PackagesViewModel>(sender, v => v.AvailCommand);
+	void OnToggleRules(object? sender, EventArgs e) => Rules.IsVisible = !Rules.IsVisible;   // phones: the rules stay folded until asked for
 }

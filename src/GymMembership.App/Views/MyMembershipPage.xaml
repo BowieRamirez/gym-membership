@@ -27,16 +27,26 @@
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
         </DataTemplate>
-        <!-- phone: the same facts stacked -->
+        <!-- phone and narrow windows: two lines (name and status; days and price), a note only when a refund or cancellation exists.
+             The refund dialog explains the outcome, so the row doesn't. -->
         <DataTemplate x:Key="TermCard" x:DataType="svc:TermCard">
             <VerticalStackLayout>
-                <VerticalStackLayout Spacing="6" Padding="14,10">
-                    <Grid ColumnDefinitions="*,Auto"><Label Text="{Binding Term.PackageName}" FontFamily="BarlowSemiBold" /><c:StatusChip Grid.Column="1" Status="{Binding State}" /></Grid>
-                    <Label Text="{Binding Dates}" Style="{StaticResource Caption}" />
-                    <Label Text="{Binding Term.AmountPaid, StringFormat='Actually paid: ₱{0:N2}'}" />
-                    <Label Text="{Binding RefundText}" Style="{StaticResource Muted}" />
-                    <Label Text="{Binding Refund.DecisionReason}" IsVisible="{Binding Refund.DecisionReason, Converter={StaticResource IsNotNull}}" />
-                    <Button Text="Cancel &amp; request refund" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start"
+                <VerticalStackLayout Spacing="4" Padding="14,12">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <Label Text="{Binding Term.PackageName}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                        <c:StatusChip Grid.Column="1" Status="{Binding State}" VerticalOptions="Center" />
+                    </Grid>
+                    <Label Style="{StaticResource Caption}">
+                        <Label.Text>
+                            <MultiBinding StringFormat="{}{0}  ·  ₱{1:N2}">
+                                <Binding Path="ShortDates" />
+                                <Binding Path="Term.AmountPaid" />
+                            </MultiBinding>
+                        </Label.Text>
+                    </Label>
+                    <Label Text="{Binding RefundNote}" Style="{StaticResource Caption}" IsVisible="{Binding RefundNote, Converter={StaticResource IsNotNull}}" />
+                    <Label Text="{Binding Refund.DecisionReason}" Style="{StaticResource Caption}" IsVisible="{Binding Refund.DecisionReason, Converter={StaticResource IsNotNull}}" />
+                    <Button Text="Cancel &amp; request refund" Style="{StaticResource FilterChip}" HorizontalOptions="Start" Margin="0,6,0,0"
                             IsVisible="{Binding CanRequestRefund}" Clicked="OnRequestRefund" />
                 </VerticalStackLayout>
                 <BoxView Style="{StaticResource Hairline}" />
@@ -60,28 +70,33 @@
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
         </DataTemplate>
+        <!-- phone and narrow windows: what and how much; then the status, the day and the payment code; the receipt or reason only when there is one -->
         <DataTemplate x:Key="PaymentCard" x:DataType="svc:PaymentItem">
             <VerticalStackLayout>
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="14,10">
-                    <VerticalStackLayout Spacing="4">
+                <VerticalStackLayout Spacing="4" Padding="14,12">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                         <Label Text="{Binding What}" FontFamily="BarlowSemiBold" />
-                        <c:StatusChip Status="{Binding Status}" />
-                        <Label Text="{Binding Detail}" IsVisible="{Binding Detail, Converter={StaticResource IsNotNull}}" />
-                        <Label Style="{StaticResource Caption}">
+                        <Label Grid.Column="1" Text="{Binding Amount, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" />
+                    </Grid>
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                        <c:StatusChip Status="{Binding Status}" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Style="{StaticResource Caption}" VerticalOptions="Center">
                             <Label.Text>
-                                <MultiBinding StringFormat="{}{0} · {1}">
+                                <MultiBinding StringFormat="{}{0}  ·  {1}">
+                                    <Binding Path="CreatedAt" Converter="{StaticResource LocalDate}" ConverterParameter="d MMM yyyy" />
                                     <Binding Path="PaymentCode" />
-                                    <Binding Path="CreatedAt" Converter="{StaticResource LocalDate}" ConverterParameter="d MMM yyyy, h:mm tt" />
                                 </MultiBinding>
                             </Label.Text>
                         </Label>
-                    </VerticalStackLayout>
-                    <VerticalStackLayout Grid.Column="1" Spacing="6">
-                        <Label Text="{Binding Amount, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" HorizontalOptions="End" />
-                        <Button Text="Pay again" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanPayAgain}" Clicked="OnPayAgain" />
-                        <Button Text="Cancel payment" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanCancel}" Clicked="OnCancelPayment" />
-                    </VerticalStackLayout>
-                </Grid>
+                    </Grid>
+                    <Label Text="{Binding Detail}" Style="{StaticResource Caption}" IsVisible="{Binding Detail, Converter={StaticResource HasText}}" />
+                    <HorizontalStackLayout Spacing="8" Margin="0,6,0,0" IsVisible="{Binding CanPayAgain}">
+                        <Button Text="Pay again" Style="{StaticResource FilterChip}" Clicked="OnPayAgain" />
+                    </HorizontalStackLayout>
+                    <HorizontalStackLayout Spacing="8" Margin="0,6,0,0" IsVisible="{Binding CanCancel}">
+                        <Button Text="Cancel payment" Style="{StaticResource FilterChip}" Clicked="OnCancelPayment" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
         </DataTemplate>
@@ -92,25 +107,30 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <!-- The one memorable moment: days left, a lime card with a pill bar that runs out; then two plain number cards.
-                 Above the main/side split so it comes first on phones too (there the side, with Pay now and the QR, stacks first).
-                 Phones: days left full width, the two small cards as a pair under it. -->
-            <Grid ColumnDefinitions="{OnIdiom Phone='*,*', Default='*,*,*'}" RowDefinitions="{OnIdiom Phone='Auto,Auto', Default='Auto'}" ColumnSpacing="12" RowSpacing="12">
-                <Border Grid.ColumnSpan="{OnIdiom Phone=2, Default=1}" Style="{StaticResource HeroPanel}" Padding="{OnIdiom Phone='16,16', Default='18,14'}">
-                    <VerticalStackLayout Spacing="8">
+            <!-- The one memorable moment: days left, the highlight card with a pill bar that runs out; then two plain number cards (Windows).
+                 Above the main/side split so it comes first on phones too. Phones (Phase 9, Android mockup): the highlight alone, with
+                 the end date and the one action inside it; pending payments show in Pay now and the payments list. -->
+            <Grid ColumnDefinitions="{OnIdiom Phone='*', Default='*,*,*'}" ColumnSpacing="12" RowSpacing="12">
+                <Border Style="{StaticResource HeroPanel}" Padding="{OnIdiom Phone='18,16', Default='18,14'}">
+                    <VerticalStackLayout Spacing="{OnIdiom Phone=4, Default=8}">
                         <c:CardTitle Text="{Binding HeroCaption}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
-                        <Label Text="{Binding HeroNumber}" Style="{StaticResource Numeral}" FontSize="{OnIdiom Phone=72, Default=60}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}"
+                        <Label Text="{Binding HeroNumber}" Style="{StaticResource Numeral}" FontSize="{OnIdiom Phone=56, Default=60}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}"
                                SemanticProperties.Description="Days left on your membership" />
+                        <Label Text="{Binding TermEndsText, StringFormat='Ends {0}'}" Style="{StaticResource Caption}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}"
+                               IsVisible="{OnIdiom Phone=True, Default=False}" Margin="0,0,0,6" />
                         <c:LaneView Fraction="{Binding LaneFraction}" HeightRequest="26" DashColor="{AppThemeBinding Light={StaticResource Signal}, Dark={StaticResource Black}}" TrackColor="{AppThemeBinding Light=#3A3A3A, Dark=#D6C700}" />
+                        <!-- phones: the one action sits on the highlight card, so a yellow card and a yellow button never stack -->
+                        <Button Text="Choose a package / extend" Style="{StaticResource HeroSmallButton}" Clicked="OnChoosePackage" Margin="0,10,0,0"
+                                IsVisible="{OnIdiom Phone=True, Default=False}" />
                     </VerticalStackLayout>
                 </Border>
-                <Border Grid.Row="{OnIdiom Phone=1, Default=0}" Grid.Column="{OnIdiom Phone=0, Default=1}" Style="{StaticResource Panel}">
+                <Border Grid.Column="1" Style="{StaticResource Panel}" IsVisible="{OnIdiom Phone=False, Default=True}">
                     <VerticalStackLayout Spacing="8">
                         <c:CardTitle Text="Current term ends" />
                         <Label Text="{Binding TermEndsText}" Style="{OnIdiom Phone={StaticResource KpiValue}, Default={StaticResource Numeral}}" />
                     </VerticalStackLayout>
                 </Border>
-                <Border Grid.Row="{OnIdiom Phone=1, Default=0}" Grid.Column="{OnIdiom Phone=1, Default=2}" Style="{StaticResource Panel}">
+                <Border Grid.Column="2" Style="{StaticResource Panel}" IsVisible="{OnIdiom Phone=False, Default=True}">
                     <VerticalStackLayout Spacing="8">
                         <c:CardTitle Text="Payments waiting" />
                         <Label Text="{Binding PaymentsWaitingText}" Style="{OnIdiom Phone={StaticResource KpiValue}, Default={StaticResource Numeral}}" />
@@ -125,7 +145,7 @@
 
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                         <Label Text="Your paid terms" Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
-                        <Button Grid.Column="1" Text="Choose a package / extend" Style="{StaticResource SmallButton}" VerticalOptions="Center" Clicked="OnChoosePackage" />
+                        <Button Grid.Column="1" Text="Choose a package / extend" Style="{StaticResource SmallButton}" VerticalOptions="Center" Clicked="OnChoosePackage" IsVisible="{OnIdiom Phone=False, Default=True}" />
                     </Grid>
                     <Border Style="{StaticResource TablePanel}">
                         <VerticalStackLayout>
@@ -147,25 +167,30 @@
                             </c:TableBody>
                         </VerticalStackLayout>
                     </Border>
-                    <!-- the rule under the table it explains, as in the approved mockup -->
-                    <Label Text="Extensions start after your last paid term. No upgrades or unused-time credits. Other paid terms keep their dates if one is cancelled, so a gap may remain." Style="{StaticResource Caption}" />
+                    <!-- the rule under the table it explains, as in the approved mockup; on phones folded behind a link so the screen isn't a wall of text -->
+                    <Button Text="How paid terms work" Style="{StaticResource LinkButton}" HorizontalOptions="Start" Margin="-4,-8,0,-8" Clicked="OnToggleTermsRule"
+                            IsVisible="{OnIdiom Phone=True, Default=False}" />
+                    <Label x:Name="TermsRule" Text="Extensions start after your last paid term. No upgrades or unused-time credits. Other paid terms keep their dates if one is cancelled, so a gap may remain."
+                           Style="{StaticResource Caption}" IsVisible="{OnIdiom Phone=False, Default=True}" />
 
-                    <Label Text="Payments" Style="{StaticResource SectionTitle}" Margin="0,10,0,0" />
-                    <!-- status filter: the filled button is the one in use -->
-                    <FlexLayout Style="{StaticResource Toolbar}">
-                        <Button Text="All" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="All">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="All"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
-                        </Button>
-                        <Button Text="Verified" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Verified">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Verified"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
-                        </Button>
-                        <Button Text="Pending" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Pending">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Pending"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
-                        </Button>
-                        <Button Text="Expired or rejected" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Expired">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Expired"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
-                        </Button>
-                    </FlexLayout>
+                    <Label Text="Payments" Style="{StaticResource SectionTitle}" Margin="{OnIdiom Phone=0, Default='0,10,0,0'}" />
+                    <!-- status filter chips in one line that scrolls sideways on a phone; the yellow one is in use -->
+                    <ScrollView Orientation="Horizontal" HorizontalScrollBarVisibility="Never">
+                        <HorizontalStackLayout Spacing="8">
+                            <Button Text="All" Style="{StaticResource FilterChip}" Command="{Binding SetFilterCommand}" CommandParameter="All">
+                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="All"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /></DataTrigger></Button.Triggers>
+                            </Button>
+                            <Button Text="Verified" Style="{StaticResource FilterChip}" Command="{Binding SetFilterCommand}" CommandParameter="Verified">
+                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Verified"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /></DataTrigger></Button.Triggers>
+                            </Button>
+                            <Button Text="Pending" Style="{StaticResource FilterChip}" Command="{Binding SetFilterCommand}" CommandParameter="Pending">
+                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Pending"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /></DataTrigger></Button.Triggers>
+                            </Button>
+                            <Button Text="Expired or rejected" Style="{StaticResource FilterChip}" Command="{Binding SetFilterCommand}" CommandParameter="Expired">
+                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Expired"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /></DataTrigger></Button.Triggers>
+                            </Button>
+                        </HorizontalStackLayout>
+                    </ScrollView>
                     <Border Style="{StaticResource TablePanel}">
                         <VerticalStackLayout>
                             <VerticalStackLayout x:Name="PaymentsHead" IsVisible="{OnIdiom Phone=False, Default=True}">
@@ -215,16 +240,27 @@
                     </Border>
 
                     <!-- D12: the member's permanent ID code, kept apart from the gym's pay-by-QR panel. Always dark on white so any scanner reads it. -->
+                    <!-- Phones: a one-line row whose Show button opens the code in place (bigger, for the desk scanner), so the code
+                         doesn't fill the first screen. Windows: the code is always shown. -->
                     <Border Style="{StaticResource SidePanel}" IsVisible="{Binding HasCode}">
                         <VerticalStackLayout Spacing="10">
-                            <c:CardTitle Text="Your member QR" />
-                            <!-- the generator ignores its own size on Windows, so the white frame sets it and the code fills the frame -->
-                            <Border BackgroundColor="White" StrokeThickness="0" Padding="8" WidthRequest="180" HeightRequest="180" HorizontalOptions="Center"
-                                    AutomationId="MemberQr" SemanticProperties.Description="Your member QR code">
-                                <zxing:BarcodeGeneratorView Format="QrCode" Value="{Binding MyCode}" HorizontalOptions="Fill" VerticalOptions="Fill"
-                                                            ForegroundColor="Black" BackgroundColor="White" />
-                            </Border>
-                            <Label Text="Show this at the front desk when you arrive. It only identifies you; it is not for paying." Style="{StaticResource Muted}" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                                    <c:CardTitle Text="Your member QR" />
+                                    <Label Text="Show it at the front desk when you arrive." Style="{StaticResource Caption}" IsVisible="{OnIdiom Phone=True, Default=False}" />
+                                </VerticalStackLayout>
+                                <Button x:Name="QrToggle" Grid.Column="1" Text="Show" Style="{StaticResource FilterChip}" VerticalOptions="Center" Clicked="OnToggleQr"
+                                        IsVisible="{OnIdiom Phone=True, Default=False}" SemanticProperties.Hint="Shows or hides your member QR code" />
+                            </Grid>
+                            <VerticalStackLayout x:Name="QrBody" Spacing="10" IsVisible="{OnIdiom Phone=False, Default=True}">
+                                <!-- the generator ignores its own size on Windows, so the white frame sets it and the code fills the frame -->
+                                <Border BackgroundColor="White" StrokeThickness="0" Padding="8" WidthRequest="{OnIdiom Phone=240, Default=180}" HeightRequest="{OnIdiom Phone=240, Default=180}" HorizontalOptions="Center"
+                                        AutomationId="MemberQr" SemanticProperties.Description="Your member QR code">
+                                    <zxing:BarcodeGeneratorView Format="QrCode" Value="{Binding MyCode}" HorizontalOptions="Fill" VerticalOptions="Fill"
+                                                                ForegroundColor="Black" BackgroundColor="White" />
+                                </Border>
+                                <Label Text="Show this at the front desk when you arrive. It only identifies you; it is not for paying." Style="{StaticResource Caption}" />
+                            </VerticalStackLayout>
                         </VerticalStackLayout>
                     </Border>
                 </VerticalStackLayout>

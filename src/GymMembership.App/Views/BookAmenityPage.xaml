@@ -67,10 +67,14 @@
 
     <ScrollView>
         <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="10">
+            <!-- the booking rules: shown on Windows, behind a link on phones; the colour key stays visible everywhere -->
+            <Button Text="How booking works" Style="{StaticResource LinkButton}" HorizontalOptions="Start" Margin="-4,-8,0,-8" Clicked="OnToggleRules"
+                    IsVisible="{OnIdiom Phone=True, Default=False}" />
+            <Label x:Name="Rules" Text="Pick open half-hours, then book them together. Touching slots make one session of up to 2 hours, with 30 minutes of cooldown after it."
+                   Style="{StaticResource Caption}" IsVisible="{OnIdiom Phone=False, Default=True}" />
             <Label Style="{StaticResource Caption}">
                 <Label.FormattedText>
                     <FormattedString>
-                        <Span Text="Pick open half-hours, then book them together. Touching slots make one session of up to 2 hours, with 30 minutes of cooldown after it. " />
                         <Span Text="Yours" TextColor="{AppThemeBinding Light={StaticResource GoodLight}, Dark={StaticResource GoodDark}}" FontFamily="BarlowMedium" />
                         <Span Text=", " />
                         <Span Text="booked" TextColor="{AppThemeBinding Light={StaticResource ScheduledLight}, Dark={StaticResource ScheduledDark}}" FontFamily="BarlowMedium" />
@@ -85,7 +89,16 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <FlexLayout Wrap="Wrap" AlignItems="Center">
+            <!-- phones: the day on its own line, then the two day chips, then the one yellow action at full width -->
+            <VerticalStackLayout Spacing="10" IsVisible="{OnIdiom Phone=True, Default=False}">
+                <Label Text="{Binding DayText}" Style="{StaticResource Heading}" />
+                <HorizontalStackLayout Spacing="8">
+                    <Button Text="Previous day" Style="{StaticResource FilterChip}" Command="{Binding PreviousDayCommand}" />
+                    <Button Text="Next day" Style="{StaticResource FilterChip}" Command="{Binding NextDayCommand}" />
+                </HorizontalStackLayout>
+                <Button Text="{Binding BookText}" Style="{StaticResource SignalButton}" Command="{Binding BookCommand}" />
+            </VerticalStackLayout>
+            <FlexLayout Wrap="Wrap" AlignItems="Center" IsVisible="{OnIdiom Phone=False, Default=True}">
                 <Button Text="Previous day" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,6" Command="{Binding PreviousDayCommand}" />
                 <Label Text="{Binding DayText}" Style="{StaticResource Heading}" Margin="0,0,8,6" VerticalOptions="Center" />
                 <Button Text="Next day" Style="{StaticResource SmallOutlineButton}" Margin="0,0,16,6" Command="{Binding NextDayCommand}" />

@@ -33,43 +33,37 @@
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
         </DataTemplate>
-        <!-- phone: the same facts stacked -->
+        <!-- phone and narrow windows: who and the status; when and what kind; the amenity, message and proposal only when there are any; actions as chips -->
         <DataTemplate x:Key="RequestCard" x:DataType="svc:RequestRow">
-                                <VerticalStackLayout>
-                                    <Border Padding="14,10" StrokeThickness="0" BackgroundColor="Transparent">
-                                    <VerticalStackLayout Spacing="8">
-                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                            <VerticalStackLayout Spacing="2">
-                                                <c:CardTitle Text="{Binding With}" />
-                                                <Label Text="{Binding Request.RequestedStart, Converter={StaticResource LocalDate}, ConverterParameter='dddd d MMM, h:mm tt'}" />
-                                                <Label Text="{Binding Kind}" Style="{StaticResource Caption}" />
-                                            </VerticalStackLayout>
-                                            <c:StatusChip Grid.Column="1" Status="{Binding Request.Status}" VerticalOptions="Start" />
-                                        </Grid>
-                                        <Label Text="{Binding Amenity, StringFormat='At {0}'}" FontFamily="BarlowMedium" IsVisible="{Binding Amenity, Converter={StaticResource HasText}}" />
-                                        <Label Text="{Binding Request.Message}" Style="{StaticResource Muted}" IsVisible="{Binding Request.Message, Converter={StaticResource HasText}}" />
-                                        <Border Style="{StaticResource Row}" Padding="12,10" IsVisible="{Binding HasProposal}">
-                                            <Label Text="{Binding ProposalText, StringFormat='Proposed: {0}'}" />
-                                        </Border>
-                                        <FlexLayout Wrap="Wrap">
-                                            <Button Text="Approve" Style="{StaticResource SmallButton}" Margin="0,0,8,8" IsVisible="{Binding CanRespond}"
-                                                    Clicked="OnApprove" />
-                                            <Button Text="Accept" Style="{StaticResource SmallButton}" Margin="0,0,8,8" IsVisible="{Binding CanAccept}"
-                                                    Clicked="OnAccept" />
-                                            <Button Text="Propose another time" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanPropose}"
-                                                    Clicked="OnPropose" />
-                                            <Button Text="Ask for another time" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanAccept}"
-                                                    Clicked="OnAnother" />
-                                            <Button Text="Decline" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanDecline}"
-                                                    Clicked="OnDecline" />
-                                            <Button Text="Cancel request" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanCancel}"
-                                                    Clicked="OnCancel" />
-                                        </FlexLayout>
-                                    </VerticalStackLayout>
-                                </Border>
-                                    <BoxView Style="{StaticResource Hairline}" />
-                                </VerticalStackLayout>
-                            </DataTemplate>
+            <VerticalStackLayout>
+                <VerticalStackLayout Spacing="4" Padding="14,12">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <Label Text="{Binding With}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                        <c:StatusChip Grid.Column="1" Status="{Binding Request.Status}" VerticalOptions="Center" />
+                    </Grid>
+                    <Label Style="{StaticResource Caption}">
+                        <Label.Text>
+                            <MultiBinding StringFormat="{}{0}  ·  {1}">
+                                <Binding Path="Request.RequestedStart" Converter="{StaticResource LocalDate}" ConverterParameter="ddd d MMM, h:mm tt" />
+                                <Binding Path="Kind" />
+                            </MultiBinding>
+                        </Label.Text>
+                    </Label>
+                    <Label Text="{Binding Amenity, StringFormat='At {0}'}" Style="{StaticResource Caption}" IsVisible="{Binding Amenity, Converter={StaticResource HasText}}" />
+                    <Label Text="{Binding Request.Message}" Style="{StaticResource Muted}" FontSize="15" IsVisible="{Binding Request.Message, Converter={StaticResource HasText}}" />
+                    <Label Text="{Binding ProposalText, StringFormat='Proposed: {0}'}" FontFamily="BarlowMedium" IsVisible="{Binding HasProposal}" />
+                    <FlexLayout Wrap="Wrap" Margin="0,4,0,0">
+                        <Button Text="Approve" Style="{StaticResource FilterChipOn}" Margin="0,0,8,8" IsVisible="{Binding CanRespond}" Clicked="OnApprove" />
+                        <Button Text="Accept" Style="{StaticResource FilterChipOn}" Margin="0,0,8,8" IsVisible="{Binding CanAccept}" Clicked="OnAccept" />
+                        <Button Text="Propose another time" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanPropose}" Clicked="OnPropose" />
+                        <Button Text="Ask for another time" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanAccept}" Clicked="OnAnother" />
+                        <Button Text="Decline" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanDecline}" Clicked="OnDecline" />
+                        <Button Text="Cancel request" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanCancel}" Clicked="OnCancel" />
+                    </FlexLayout>
+                </VerticalStackLayout>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
     </v:BasePage.Resources>
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
@@ -77,11 +71,12 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <c:SideLayout>
+            <!-- phones: the requests first, then the form (which can be a long dead form while a session is booked) -->
+            <c:SideLayout SideFirst="{OnIdiom Phone=False, Default=True}">
                 <!-- main: the requests waiting for a reply -->
                 <VerticalStackLayout Spacing="10">
-                    <!-- a pair on phones too, with the smaller numerals (the date wraps between day and time) -->
-                    <c:CardGrid Columns="2" MinColumnWidth="{OnIdiom Phone=140, Default=180}">
+                    <!-- Windows only: the list and Sessions say the same on a phone -->
+                    <c:CardGrid Columns="2" MinColumnWidth="180" IsVisible="{OnIdiom Phone=False, Default=True}">
                         <Border Style="{StaticResource Panel}">
                             <VerticalStackLayout Spacing="8">
                                 <c:CardTitle Text="Waiting for a reply" />
@@ -207,16 +202,14 @@
                                             <Border Style="{StaticResource Field}"><Entry Text="{Binding Message}" /></Border>
                                         </VerticalStackLayout>
 
-                                        <Label Text="You already have a session booked together. Open Sessions to reschedule or cancel it. You can request another once it has ended. Refresh requests to check for updates."
+                                        <Label Text="You already have a session booked with this coach. Request another after it ends, or change it in Sessions."
                                                Style="{StaticResource Muted}" IsVisible="{Binding ShowActiveSession}" AutomationId="ActiveSessionRequestHint" />
-                                        <Label Text="You already have a pending request to this coach. Wait for a reply or cancel it below before sending another. Refresh requests to check for a reply."
+                                        <Label Text="Your request to this coach is still waiting. Cancel it in the list to send a different one."
                                                Style="{StaticResource Muted}" IsVisible="{Binding ShowPendingRequest}" AutomationId="PendingSessionRequestHint" />
                                         <Button Text="{Binding SubmitText}" Style="{StaticResource SmallButton}" HorizontalOptions="Start"
                                                 Command="{Binding SubmitCommand}" AutomationId="SubmitSessionRequest" />
                                     </VerticalStackLayout>
                                 </Border>
-                                <Label Text="Hire a coach first, then you can request sessions here." Style="{StaticResource Muted}"
-                                       IsVisible="{Binding CanCompose, Converter={StaticResource Not}}" />
                     <Label Text="Hire a coach first, then you can request sessions here." Style="{StaticResource Muted}"
                            IsVisible="{Binding CanCompose, Converter={StaticResource Not}}" />
                 </VerticalStackLayout>

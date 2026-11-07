@@ -54,15 +54,14 @@
                             <VerticalStackLayout Spacing="4">
                                 <Label Text="Email address" Style="{StaticResource Caption}" />
                                 <Border Style="{StaticResource Field}"><Entry Text="{Binding EmailAddress}" Keyboard="Email" MaxLength="{x:Static svc:AccountRules.MaxEmail}" SemanticProperties.Description="Sign-in email" /></Border>
-                                <Label Text="Changing it also changes the email you sign in with." Style="{StaticResource Caption}" />
                             </VerticalStackLayout>
-                            <Button Text="Send code" Command="{Binding SendEmailCodeCommand}" HorizontalOptions="Start" />
+                            <Button Text="Send code" Style="{StaticResource SmallButton}" Command="{Binding SendEmailCodeCommand}" HorizontalOptions="Start" />
                             <VerticalStackLayout Spacing="12" IsVisible="{Binding CodeSent}">
                                 <VerticalStackLayout Spacing="4">
                                     <Label Text="Code from the email" Style="{StaticResource Caption}" />
                                     <Border Style="{StaticResource Field}"><Entry Text="{Binding EmailCode}" Keyboard="Numeric" MaxLength="6" ReturnCommand="{Binding ConfirmEmailCommand}" SemanticProperties.Description="6-digit code" /></Border>
                                 </VerticalStackLayout>
-                                <Button Text="Confirm email" Command="{Binding ConfirmEmailCommand}" HorizontalOptions="Start" />
+                                <Button Text="Confirm email" Style="{StaticResource SmallButton}" Command="{Binding ConfirmEmailCommand}" HorizontalOptions="Start" />
                             </VerticalStackLayout>
                         </VerticalStackLayout>
                     </c:CardGrid>
@@ -76,7 +75,6 @@
                             <Border Style="{StaticResource Field}">
                                 <Picker ItemsSource="{Binding Themes}" SelectedItem="{Binding Theme}" SemanticProperties.Description="Theme" />
                             </Border>
-                            <Label Text="System follows your device. Light and dark stay fixed." Style="{StaticResource Caption}" />
                             <Button Text="Save theme" Style="{StaticResource SmallButton}" Command="{Binding SaveCommand}" HorizontalOptions="Start" />
                         </VerticalStackLayout>
                     </Border>
@@ -96,7 +94,7 @@
                                 <Label Text="Repeat new password" Style="{StaticResource Caption}" />
                                 <Border Style="{StaticResource Field}"><Grid ColumnDefinitions="*,Auto"><Entry x:Name="ConfirmPasswordBox" Text="{Binding ConfirmPassword}" IsPassword="True" ReturnCommand="{Binding ChangePasswordCommand}" SemanticProperties.Description="Repeat new password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference ConfirmPasswordBox}" /></Grid></Border>
                             </VerticalStackLayout>
-                            <Button Text="Change password" Command="{Binding ChangePasswordCommand}" HorizontalOptions="Start" />
+                            <Button Text="Change password" Style="{StaticResource SmallButton}" Command="{Binding ChangePasswordCommand}" HorizontalOptions="Start" />
                         </VerticalStackLayout>
                     </Border>
                 </VerticalStackLayout>

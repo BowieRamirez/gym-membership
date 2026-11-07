@@ -16,6 +16,7 @@ public partial class BookAmenityPage : BasePage
 	}
 
 	void OnGridAreaSized(object? sender, EventArgs e) => FitGrid();
+	void OnToggleRules(object? sender, EventArgs e) => Rules.IsVisible = !Rules.IsVisible;   // phones: the rules stay folded until asked for
 
 	// Windows only: stretch the cells so the day fills the space beside Your bookings, and follow the window as it is resized.
 	// Phones keep the compact sizes from the XAML and scroll sideways instead.

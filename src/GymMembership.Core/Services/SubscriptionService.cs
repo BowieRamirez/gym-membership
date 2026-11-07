@@ -22,6 +22,10 @@ public static class RefundReasons
 public sealed record TermCard(MembershipTerm Term, string State, bool Activated, RefundRequest? Refund, bool CanRequestRefund)
 {
     public string Dates => $"{Term.StartsAt.AddHours(8):dd MMM yyyy, HH:mm} – {Term.EndsAt.AddHours(8):dd MMM yyyy, HH:mm} (Manila)";
+    /// <summary>Phone rows: the days only (Manila), "13 Oct – 12 Nov 2026"; the full times stay on Windows and in the refund dialog.</summary>
+    public string ShortDates => $"{Term.StartsAt.AddHours(8):d MMM} – {Term.EndsAt.AddHours(8):d MMM yyyy}";
+    /// <summary>Phone rows: a line only when a refund request or a cancellation exists; the chip and the refund dialog say the rest.</summary>
+    public string? RefundNote => Refund is { } r ? RefundCard.StateText(r) : Term.CancelledAt is not null ? "This term is cancelled." : null;
     public string RefundText => Refund is { } r ? RefundCard.StateText(r) : Term.CancelledAt is not null ? "This term is cancelled."
         : CanRequestRefund ? (Activated ? "You have checked in during this term. You can ask for a refund, and staff review each request." : "You haven't used this term yet. You can cancel it for a full refund.")
         : State == Status.Expired ? "This term has ended." : "No verified payment available for a refund.";

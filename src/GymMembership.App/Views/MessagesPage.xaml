@@ -21,48 +21,48 @@
                 <Entry Text="{Binding SearchText}" Placeholder="Search people and messages" ClearButtonVisibility="WhileEditing" SemanticProperties.Description="Search" />
             </Border>
 
-            <!-- a member's two conversations -->
-            <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="8" IsVisible="{Binding HasTabs}">
-                <Button Text="{Binding CoachTabText}" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowTabCommand}" CommandParameter="coach">
+            <!-- a member's two conversations, as chips (the yellow one is open) -->
+            <HorizontalStackLayout Grid.Row="1" Spacing="8" IsVisible="{Binding HasTabs}">
+                <Button Text="{Binding CoachTabText}" Style="{StaticResource FilterChip}" Command="{Binding ShowTabCommand}" CommandParameter="coach">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Tab}" Value="coach">
-                            <Setter Property="Style" Value="{StaticResource SignalSmallButton}" />
+                            <Setter Property="Style" Value="{StaticResource FilterChipOn}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
-                <Button Grid.Column="1" Text="{Binding StaffTabText}" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowTabCommand}" CommandParameter="support">
+                <Button Text="{Binding StaffTabText}" Style="{StaticResource FilterChip}" Command="{Binding ShowTabCommand}" CommandParameter="support">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Tab}" Value="support">
-                            <Setter Property="Style" Value="{StaticResource SignalSmallButton}" />
+                            <Setter Property="Style" Value="{StaticResource FilterChipOn}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
-            </Grid>
+            </HorizontalStackLayout>
 
             <!-- front desk: which members' conversations -->
-            <Grid Grid.Row="2" ColumnDefinitions="*,*,*" ColumnSpacing="8" IsVisible="{Binding HasFilters}">
-                <Button Text="Open" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowFilterCommand}" CommandParameter="open">
+            <HorizontalStackLayout Grid.Row="2" Spacing="8" IsVisible="{Binding HasFilters}">
+                <Button Text="Open" Style="{StaticResource FilterChip}" Command="{Binding ShowFilterCommand}" CommandParameter="open">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="open">
-                            <Setter Property="Style" Value="{StaticResource SignalSmallButton}" />
+                            <Setter Property="Style" Value="{StaticResource FilterChipOn}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
-                <Button Grid.Column="1" Text="Mine" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowFilterCommand}" CommandParameter="mine">
+                <Button Text="Mine" Style="{StaticResource FilterChip}" Command="{Binding ShowFilterCommand}" CommandParameter="mine">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="mine">
-                            <Setter Property="Style" Value="{StaticResource SignalSmallButton}" />
+                            <Setter Property="Style" Value="{StaticResource FilterChipOn}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
-                <Button Grid.Column="2" Text="Closed" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowFilterCommand}" CommandParameter="closed">
+                <Button Text="Closed" Style="{StaticResource FilterChip}" Command="{Binding ShowFilterCommand}" CommandParameter="closed">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="closed">
-                            <Setter Property="Style" Value="{StaticResource SignalSmallButton}" />
+                            <Setter Property="Style" Value="{StaticResource FilterChipOn}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
-            </Grid>
+            </HorizontalStackLayout>
 
             <!-- what the search found inside messages (names are matched in the list below) -->
             <ScrollView Grid.Row="3" MaximumHeightRequest="240" IsVisible="{Binding HasHits}">

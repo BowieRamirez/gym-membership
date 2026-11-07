@@ -7,9 +7,48 @@
             xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.PackagesPage" x:DataType="vm:PackagesViewModel" Title="Packages">
 
+    <v:BasePage.Resources>
+        <!-- phone: name and length on the left, the price on the right, one line about it, then the button at its own width -->
+        <DataTemplate x:Key="PackagePhone" x:DataType="m:MembershipPackage">
+            <Border Style="{StaticResource Panel}" Padding="16,14">
+                <VerticalStackLayout Spacing="8">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                            <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" FontSize="18" />
+                            <Label Text="{Binding DurationDays, StringFormat='{0} days of access'}" Style="{StaticResource Caption}" />
+                        </VerticalStackLayout>
+                        <Label Grid.Column="1" Text="{Binding Price, StringFormat='₱{0:N0}'}" Style="{StaticResource Numeral}" FontSize="30" VerticalOptions="Center" />
+                    </Grid>
+                    <Label Text="{Binding Description}" Style="{StaticResource Muted}" FontSize="15" IsVisible="{Binding Description, Converter={StaticResource HasText}}" />
+                    <Button Text="Choose next term" Style="{StaticResource SmallButton}" HorizontalOptions="Start" Clicked="OnAvail" />
+                </VerticalStackLayout>
+            </Border>
+        </DataTemplate>
+        <DataTemplate x:Key="PackageWide" x:DataType="m:MembershipPackage">
+            <Border Style="{StaticResource Panel}">
+                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="16">
+                    <VerticalStackLayout Spacing="4">
+                        <c:CardTitle Text="{Binding Name}" />
+                        <Label Text="{Binding Description}" Style="{StaticResource Muted}" />
+                        <Label Text="{Binding DurationDays, StringFormat='{0} days of access'}" Style="{StaticResource Caption}" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Style="{StaticResource CardActions}" Spacing="6">
+                        <Label Text="{Binding Price, StringFormat='₱{0:N0}'}" Style="{StaticResource PriceNumeral}" HorizontalOptions="{OnIdiom Phone=Start, Default=End}" />
+                        <Button Text="Choose next term" Style="{StaticResource SmallButton}"
+                                Clicked="OnAvail" />
+                    </VerticalStackLayout>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </v:BasePage.Resources>
+
     <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='16,12,16,0'}" MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
-            <Label Text="Choose your next package. Pay by QR and send proof on My membership. After verification, a paid extension starts after your last paid term, or immediately if it has ended. No upgrades, automatic charges or unused-time credits." Style="{StaticResource Muted}" MaximumWidthRequest="760" HorizontalOptions="Start" />
+            <!-- the rules: shown on Windows, folded behind a link on phones so the packages come first -->
+            <Button Text="How buying a package works" Style="{StaticResource LinkButton}" HorizontalOptions="Start" Margin="-4,-8,0,-8" Clicked="OnToggleRules"
+                    IsVisible="{OnIdiom Phone=True, Default=False}" />
+            <Label x:Name="Rules" Text="Choose your next package. Pay by QR and send proof on My membership. After verification, a paid extension starts after your last paid term, or immediately if it has ended. No upgrades, automatic charges or unused-time credits."
+                   Style="{OnIdiom Phone={StaticResource Caption}, Default={StaticResource Muted}}" MaximumWidthRequest="760" HorizontalOptions="Start" IsVisible="{OnIdiom Phone=False, Default=True}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
             <VerticalStackLayout Spacing="4" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" WidthRequest="{OnIdiom Phone=-1, Default=260}">
@@ -18,28 +57,12 @@
             </VerticalStackLayout>
         </VerticalStackLayout>
 
-        <ScrollView Grid.Row="1"><c:CardGrid Columns="{OnIdiom Phone=1, Default=4}" Padding="0,0,0,16" BindableLayout.ItemsSource="{Binding Packages}">
+        <ScrollView Grid.Row="1"><c:CardGrid Columns="{OnIdiom Phone=1, Default=4}" Padding="0,0,0,16" BindableLayout.ItemsSource="{Binding Packages}"
+                     BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource PackagePhone}, Default={StaticResource PackageWide}}">
             <BindableLayout.EmptyView>
                 <Label Text="No packages are on sale right now. Check back soon." Style="{StaticResource Muted}" />
             </BindableLayout.EmptyView>
-            <BindableLayout.ItemTemplate>
-                <DataTemplate x:DataType="m:MembershipPackage">
-                    <Border Style="{StaticResource Panel}">
-                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="16">
-                            <VerticalStackLayout Spacing="4">
-                                <c:CardTitle Text="{Binding Name}" />
-                                <Label Text="{Binding Description}" Style="{StaticResource Muted}" />
-                                <Label Text="{Binding DurationDays, StringFormat='{0} days of access'}" Style="{StaticResource Caption}" />
-                            </VerticalStackLayout>
-                            <VerticalStackLayout Style="{StaticResource CardActions}" Spacing="6">
-                                <Label Text="{Binding Price, StringFormat='₱{0:N0}'}" Style="{StaticResource PriceNumeral}" HorizontalOptions="{OnIdiom Phone=Start, Default=End}" />
-                                <Button Text="Choose next term" Style="{StaticResource SmallButton}"
-                                        Clicked="OnAvail" />
-                            </VerticalStackLayout>
-                        </Grid>
-                    </Border>
-                </DataTemplate>
-            </BindableLayout.ItemTemplate>
+
         </c:CardGrid></ScrollView>
     </Grid>
 </v:BasePage>

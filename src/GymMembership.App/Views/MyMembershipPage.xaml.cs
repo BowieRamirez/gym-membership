@@ -27,6 +27,9 @@ public partial class MyMembershipPage : BasePage
         finally { vm.DialogOpen = false; }
     }
     async void OnChoosePackage(object? sender, EventArgs e) => await Controls.PhoneNavigation.GoToAsync(Shell.Current, "//packages");
+    // phones: the member QR and the terms rule stay folded until asked for
+    void OnToggleQr(object? sender, EventArgs e) { QrBody.IsVisible = !QrBody.IsVisible; QrToggle.Text = QrBody.IsVisible ? "Hide" : "Show"; }
+    void OnToggleTermsRule(object? sender, EventArgs e) => TermsRule.IsVisible = !TermsRule.IsVisible;
     async void OnRequestRefund(object? sender, EventArgs e)
     {
         if (BindingContext is not MyMembershipViewModel vm || vm.IsBusy || vm.DialogOpen

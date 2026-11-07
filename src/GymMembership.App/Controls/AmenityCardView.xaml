@@ -27,7 +27,8 @@
             <FlexLayout Wrap="Wrap">
                 <Button Text="{Binding BuyText}" Style="{StaticResource SmallButton}" Margin="0,0,8,0" IsVisible="{Binding CanBuy}" Clicked="OnBuy"
                         SemanticProperties.Hint="Orders a pass for this amenity. It starts when staff verify your payment." />
-                <Button x:Name="Action" Style="{StaticResource SmallOutlineButton}" IsVisible="False" />
+                <!-- Notify me / Following is a toggle: a chip, not a second button competing with Buy pass -->
+                <Button x:Name="Action" Style="{StaticResource FilterChip}" VerticalOptions="Center" IsVisible="False" />
             </FlexLayout>
         </VerticalStackLayout>
     </Border>

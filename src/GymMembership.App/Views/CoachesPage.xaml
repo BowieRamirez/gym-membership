@@ -9,7 +9,7 @@
 
     <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='16,12,16,0'}" MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
-            <Label Text="Coaches in the gym right now. Hire one to request one-to-one sessions. You need an active membership." Style="{StaticResource Muted}" />
+            <Label Text="Hire a coach to request one-to-one sessions. Needs an active membership." Style="{StaticResource Muted}" IsVisible="{OnIdiom Phone=False, Default=True}" />
             <c:Banner Message="{Binding ErrorMessage}" />
         </VerticalStackLayout>
 
@@ -23,7 +23,7 @@
                         </Border.Triggers>
                         <VerticalStackLayout Spacing="12">
                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
-                                <c:Avatar Letters="{Binding Letters}" Url="{Binding PhotoUrl}" Diameter="72"
+                                <c:Avatar Letters="{Binding Letters}" Url="{Binding PhotoUrl}" Diameter="{OnIdiom Phone=56, Default=72}"
                                           SemanticProperties.Description="{Binding Name, StringFormat='Profile photo of {0}'}" />
                                 <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
                                     <Label Text="{Binding Name}" Style="{StaticResource Heading}" />
@@ -33,15 +33,17 @@
                                     <Label Text="Not in the gym right now." Style="{StaticResource Caption}" IsVisible="{Binding InGym, Converter={StaticResource Not}}" />
                                 </VerticalStackLayout>
                             </Grid>
-                            <Label Text="{Binding Coach.Bio}" Style="{StaticResource Muted}" />
-                            <Label Text="On the floor" FontFamily="BarlowMedium" />
-                            <Label Text="{Binding ShiftsText}" Style="{StaticResource Caption}" />
+                            <Label Text="{Binding Coach.Bio}" Style="{StaticResource Muted}" FontSize="{OnIdiom Phone=15, Default=16}" />
+                            <VerticalStackLayout Spacing="2">
+                                <Label Text="On the floor" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold" />
+                                <Label Text="{Binding ShiftsText}" Style="{StaticResource Caption}" />
+                            </VerticalStackLayout>
                             <Label Text="{Binding RateText}" FontFamily="BarlowSemiBold" />
                             <FlexLayout Wrap="Wrap">
                                 <Button Text="Hire" Style="{StaticResource SmallButton}" Margin="0,0,8,8"
                                         IsVisible="{Binding Hired, Converter={StaticResource Not}}" IsEnabled="{Binding Closed, Converter={StaticResource Not}}" Clicked="OnHire" />
                                 <Button Text="Message" Style="{StaticResource SmallButton}" Margin="0,0,8,8" IsVisible="{Binding Hired}" Clicked="OnMessage" />
-                                <Button Text="End hire" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding Hired}" Clicked="OnEndHire" />
+                                <Button Text="End hire" Style="{StaticResource FilterChip}" Margin="0,4,8,8" VerticalOptions="Start" IsVisible="{Binding Hired}" Clicked="OnEndHire" />
                             </FlexLayout>
                         </VerticalStackLayout>
                     </Border>
