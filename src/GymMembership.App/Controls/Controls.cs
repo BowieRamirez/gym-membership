@@ -129,7 +129,7 @@ public class AuthLayout : Grid
             Content = new Image { Source = "gym_badge.png", Aspect = Aspect.AspectFit },
         };
         AutomationProperties.SetIsInAccessibleTree(_badge, false);   // the name beside it says the same
-        _name = new Label { Text = "Health & Fitness Gym Center", FontFamily = "BarlowCondensedSemiBold", LineHeight = 1.05, TextColor = Colors.White };
+        _name = new Label { Text = "Health & Fitness Gym Center", FontFamily = "BarlowCondensedSemiBold", LineHeight = 1.15, TextColor = Colors.White };
         _tagline = new Label { Text = "Members, coaches and the front desk, in one place.", LineHeight = 1.2, TextColor = FieldFocus.Pick("MutedDark") };
         _words = new VerticalStackLayout { Spacing = 6, HorizontalOptions = LayoutOptions.Start, Children = { _name, _tagline } };
         _bar = new BoxView { Color = FieldFocus.Pick("Signal"), WidthRequest = 56, HeightRequest = 4, CornerRadius = 2, HorizontalOptions = LayoutOptions.Start };
@@ -150,18 +150,22 @@ public class AuthLayout : Grid
         ColumnDefinitions.Clear(); RowDefinitions.Clear();
         _inner.ColumnDefinitions.Clear(); _inner.RowDefinitions.Clear();
         _bar.IsVisible = wide;
+        // centred in the wide panel (owner, 2026-11-07: the badge read small and off to one side); left-aligned beside the badge in the band
+        var align = wide ? LayoutOptions.Center : LayoutOptions.Start;
+        _badge.HorizontalOptions = _words.HorizontalOptions = _bar.HorizontalOptions = align;
+        _name.HorizontalTextAlignment = _tagline.HorizontalTextAlignment = wide ? TextAlignment.Center : TextAlignment.Start;
         if (wide)
         {
-            // left: badge, name and line centred on the form's height, the yellow bar at the foot; right: the form
+            // left: badge, name and line centred in the panel, the yellow bar at the foot; right: the form
             ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
             ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
             SetColumn(form, 1); SetRow(form, 0);
             _brand.Margin = 14; _brand.Padding = new Thickness(48, 44);
-            _badge.WidthRequest = _badge.HeightRequest = 200;
-            _name.FontSize = 34; _tagline.FontSize = 16;
+            _badge.WidthRequest = _badge.HeightRequest = 300;
+            _name.FontSize = 34; _tagline.FontSize = 16;   // 34 keeps the name on one line down to WideFrom
             foreach (var h in new[] { GridLength.Star, GridLength.Auto, GridLength.Auto, GridLength.Star, GridLength.Auto }) _inner.RowDefinitions.Add(new RowDefinition(h));
             _inner.SetRow(_badge, 1); _inner.SetRow(_words, 2); _inner.SetColumn(_words, 0); _inner.SetRow(_bar, 4);
-            _words.Margin = new Thickness(0, 28, 0, 0); _words.MaximumWidthRequest = 360;
+            _words.Margin = new Thickness(0, 32, 0, 0); _words.MaximumWidthRequest = 400;
             return;
         }
         // narrow window or phone: a band above the form, badge beside the name
