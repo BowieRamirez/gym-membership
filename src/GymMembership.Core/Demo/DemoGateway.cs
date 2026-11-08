@@ -127,7 +127,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
     public Task SignUpAsync(string email, string password, string firstName, string lastName)
     {
         email = email.Trim();
-        if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName) || !email.Contains('@') || password.Length < 6) return Task.FromException(Err("bad_input"));
+        if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName) || !email.Contains('@')) return Task.FromException(Err("bad_input"));
+        if (!AccountRules.IsPassword(password)) return Task.FromException(Err("weak_password"));   // Supabase Auth's letters_digits rule (D5)
         if (_accounts.ContainsKey(email)) return Task.FromException(Err("email_taken"));
         var id = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], NameParts.Join(firstName, lastName), email, "member", firstName.Trim(), lastName.Trim());
         _passwords[id] = password;
@@ -174,6 +175,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
 
     public Task ResetPasswordWithCodeAsync(string email, string code, string newPassword)
     {
+        if (!AccountRules.IsPassword(newPassword)) return Task.FromException(Err("weak_password"));
         if (code != DemoCode || !_codesSent.Remove(email.Trim()) || !_accounts.TryGetValue(email.Trim(), out var uid))
             return Task.FromException(Err("bad_code"));
         CurrentUserId = uid;
@@ -186,7 +188,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     {
         var uid = Uid;
         if (currentPassword != _passwords.GetValueOrDefault(uid, DemoPassword)) return Task.FromException(Err("wrong_password"));
-        if (newPassword.Length < 6) return Task.FromException(Err("bad_input"));
+        if (!AccountRules.IsPassword(newPassword)) return Task.FromException(Err("weak_password"));
         _passwords[uid] = newPassword;
         return Task.CompletedTask;
     }
@@ -208,7 +210,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 case "create-user":
                 {
                     var email = S("email").Trim().ToLowerInvariant(); var role = S("role");
-                    if (role is not ("member" or "coach" or "employee" or "subadmin") || string.IsNullOrWhiteSpace(S("name")) || !email.Contains('@') || S("password").Length < 6) throw Err("bad_input");
+                    if (role is not ("member" or "coach" or "employee" or "subadmin") || string.IsNullOrWhiteSpace(S("name")) || !AccountRules.IsEmail(email)) throw Err("bad_input");
+                    if (!AccountRules.IsPassword(S("password"))) throw Err("bad_password");   // as _shared/rules.ts
                     if (_accounts.ContainsKey(email)) throw Err("email_taken");
                     if (!super && role is not ("member" or "coach")) throw Err("forbidden");
                     var (first, last) = S("first_name") is { Length: > 0 } f && S("last_name") is { Length: > 0 } l ? (f.Trim(), l.Trim()) : NameParts.Split(S("name"));
@@ -222,7 +225,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 {
                     var p = All<Profile>().FirstOrDefault(x => x.Id == S("user_id")) ?? throw Err("not_found");
                     if (!p.IsActive) throw Err("record_archived");
-                    if (S("password").Length < 6) throw Err("bad_input");
+                    if (!AccountRules.IsPassword(S("password"))) throw Err("bad_password");
                     if (!CanManagePerson(p.Id)) throw Err("forbidden");
                     _passwords[p.Id] = S("password"); p.MustChangePassword = true;
                     Notify(p.Id, "system", "Your password was reset. Sign in with the new one.");
@@ -530,7 +533,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     /// <summary>No code: full price. A bad, expired or already-used code is an error, never a silent full price.</summary>
     (int? Id, decimal Cut, decimal Amount) Discounted(string member, Dictionary<string, object> a, decimal price)
     {
-        if (!a.TryGetValue("p_discount_code", out var raw) || string.IsNullOrWhiteSpace(raw as string)) return (null, 0, price);
+        if (!a.TryGetValue("p_discount_code", out var raw) || string.IsNullOrWhiteSpace(raw as string)) return NotFree((null, 0, price));
         var code = ((string)raw).Trim();
         var now = DateTime.UtcNow;
         ArchiveUsedUpCodes();
@@ -538,8 +541,12 @@ public sealed partial class DemoGateway : ISupabaseGateway
         if (d is null || All<Payment>().Any(p => p.MemberId == member && p.DiscountId == d.Id && p.Status is Status.Pending or Status.Verified or Status.Voided)) throw Err("invalid_code");
         if (d.MaxUses is { } max && Held(d) >= max) throw Err("code_limit_reached");
         var cut = Math.Round(price * d.Percent / 100m, 2);
-        return (d.Id, cut, price - cut);
+        return NotFree((d.Id, cut, price - cut));
     }
+
+    /// <summary>D4, as 0046: 0 only when a discount brought it there. Checked before any row is added, as the server rolls back.</summary>
+    static (int? Id, decimal Cut, decimal Amount) NotFree((int? Id, decimal Cut, decimal Amount) d) =>
+        d.Amount <= 0 && d.Cut <= 0 ? throw Err("zero_amount") : d;
 
     Payment NewQrPayment(string kind, string member, (int? Id, decimal Cut, decimal Amount) d, int? ump = null, int? renewal = null, int? amenity = null)
     {
@@ -685,7 +692,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 {
                     walkIn = Opt("p_walk_in_name") ?? throw Err("bad_input");
                     memberId = null;
-                    d = (null, 0, All<GymSettings>().First().WalkInPrice);
+                    d = NotFree((null, 0, All<GymSettings>().First().WalkInPrice));
                 }
                 else
                 {

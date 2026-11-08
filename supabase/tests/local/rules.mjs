@@ -69,6 +69,23 @@ await test('after every migration, anonymous reaches no table and no security de
         and has_table_privilege('anon', c.oid, 'select, insert, update, delete')`);
   assert.ok(!r.rows.length, r.rows.map(x => x.name).join(', '));
 });
+// D16 (Phase 10): every database function the app calls has at least one attempt to break it in these tests, i.e. a call with an
+// expected refusal (assert.rejects, code(...) or an error pattern) on the same line or the line after.
+await test('every function the app calls has a test that tries to break it', async () => {
+  const { readdirSync, readFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const here = new URL('.', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'), root = join(here, '../../..');
+  const walk = d => readdirSync(d, { withFileTypes: true }).flatMap(e =>
+    ['bin', 'obj'].includes(e.name) ? [] : e.isDirectory() ? walk(join(d, e.name)) : e.name.endsWith('.cs') ? [join(d, e.name)] : []);
+  const app = walk(join(root, 'src')).map(f => readFileSync(f, 'utf8')).join('\n');
+  const called = [...new Set([...app.matchAll(/Rpc[A-Za-z]*(?:<[^>]*>)?\(\s*"([a-z_0-9]+)"/g)].map(m => m[1]))];
+  assert.ok(called.length > 40, `found only ${called.length} calls; has the gateway's Rpc method been renamed?`);
+  const lines = readdirSync(here).filter(f => f.endsWith('.mjs')).flatMap(f => readFileSync(join(here, f), 'utf8').split('\n'));
+  const refused = /assert\.rejects|code\(|\/[a-z_|]{3,}\/\)/;
+  const untried = called.filter(fn => !lines.some((l, i) =>
+    new RegExp(`(?<![a-z_])${fn}(?![a-z_0-9])`).test(l) && refused.test(l + ' ' + (lines[i + 1] ?? ''))));
+  assert.deepEqual(untried, [], `no break attempt for: ${untried.join(', ')}`);
+});
 await test('a member sees only themself, plus coaches', async () => {
   const r = await run(alex, 'select id from profiles');
   assert.deepEqual(r.rows.map(x => x.id).sort(), [alex, coach].sort());
@@ -564,6 +581,7 @@ await test('opening a conversation marks what you received delivered and read, a
 });
 await test('delivered is set when the list is loaded, read only when the chat is opened', async () => {
   await say(coach, 'coach', coach, bea, 'one more');
+  assert.match(await code(run(null, `select mark_chats_delivered()`)), /not_authenticated|forbidden|42501/);   // Phase 10: nobody signed in
   await run(bea, `select mark_chats_delivered()`);
   const m = (await page(coach, 'coach', coach, bea, null, 1)).rows[0];
   assert.equal(m.body, 'one more'); assert.ok(m.delivered_at); assert.equal(m.read_at, null);

@@ -295,9 +295,9 @@ public class NamesAndEmailTests
     [Theory]
     [InlineData("", 0)]
     [InlineData("abc", 1)]          // too short
-    [InlineData("abcdef", 1)]       // length only
-    [InlineData("abcde1", 2)]
-    [InlineData("Abcde1", 3)]
+    [InlineData("abcdefgh", 1)]     // length only
+    [InlineData("abcdefg1", 2)]     // the two required checks
+    [InlineData("Abcdefg1", 3)]
     [InlineData("Abcdefghij12", 4)]
     public void Password_strength_counts_the_checklist(string password, int strength) =>
         Assert.Equal(strength, AccountRules.PasswordStrength(password));

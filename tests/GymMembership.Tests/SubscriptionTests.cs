@@ -265,9 +265,11 @@ public class SubscriptionTests
     {
         var (gw, _, svc, _, _) = await Setup();
         await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
-        var free=await gw.InsertAsync(new MembershipPackage {Name="Free trial",Price=0,DurationDays=7,IsActive=true});
+        // D4: a payment is ₱0 only when a discount brought it there
+        var trial=await gw.InsertAsync(new MembershipPackage {Name="Trial",Price=100,DurationDays=7,IsActive=true});
+        await gw.InsertAsync(new Discount {Code="TRIALFREE",Percent=100,MaxUses=5,StartsAt=DateTime.UtcNow.AddMinutes(-1),ExpiresAt=DateTime.UtcNow.AddDays(1),IsActive=true});
         await gw.SignInAsync("phase7@demo.io","secret12");
-        var p=(await svc.ExtendAsync(free.Id)).Value!; await Verify(gw,p);
+        var p=(await svc.ExtendAsync(trial.Id,"TRIALFREE")).Value!; Assert.Equal(0m,p.Amount); await Verify(gw,p);
         var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
         Assert.False((await svc.RequestRefundAsync(term.Id,"Changed plans","change_of_mind")).Ok);
     }

@@ -112,6 +112,17 @@ public class AccountTests
     public async Task Register_accepts_real_names(string first, string last) =>
         Assert.True((await new AuthService(new DemoGateway()).RegisterAsync(first, last, "new@demo.io", "secret12")).Ok);
 
+    [Fact]
+    public async Task A_name_typed_with_separate_accent_marks_is_stored_composed_and_marks_the_server_refuses_are_refused_here()
+    {
+        // the live database's [[:alpha:]] (en_US.UTF-8) refuses a separate combining accent and Devanagari vowel signs (checked 2026-11-08)
+        var gw = new DemoGateway();
+        Assert.True((await new AuthService(gw).RegisterAsync("José", "Peña", "new@demo.io", "secret12")).Ok);
+        var me = (await gw.ListAsync<Profile>(p => p.Id == gw.CurrentUserId)).Single();
+        Assert.Equal(("José", "Peña"), (me.FirstName, me.LastName));
+        Assert.Equal("bad_name", (await new AuthService(new DemoGateway()).RegisterAsync("हिन", "Person", "new@demo.io", "secret12")).Message);
+    }
+
     [Theory]
     [InlineData("nobody")]
     [InlineData("a@b")]
@@ -131,12 +142,40 @@ public class AccountTests
     }
 
     [Fact]
-    public async Task Register_keeps_the_password_between_6_and_64_characters()
+    public async Task Register_keeps_the_password_between_8_and_64_characters_with_a_letter_and_a_number()
     {
+        // D5: the same rule as Supabase Auth's "letters_digits", which counts only a to z and 0 to 9
         var auth = new AuthService(new DemoGateway());
-        Assert.Equal("bad_password", (await auth.RegisterAsync("New", "Person", "new@demo.io", "12345")).Message);
-        Assert.Equal("bad_password", (await auth.RegisterAsync("New", "Person", "new@demo.io", new string('x', 65))).Message);
-        Assert.True((await auth.RegisterAsync("New", "Person", "new@demo.io", new string('x', 64))).Ok);
+        foreach (var bad in new[] { "abcde12", "abcdefgh", "12345678", "ññññññ12", "абвгдеж1", new string('x', 64), new string('x', 64) + "1" })
+            Assert.Equal("bad_password", (await auth.RegisterAsync("New", "Person", "new@demo.io", bad)).Message);
+        Assert.True((await auth.RegisterAsync("New", "Person", "new@demo.io", "abcdefg1")).Ok);
+        Assert.True((await auth.RegisterAsync("Other", "Person", "other@demo.io", new string('x', 63) + "1")).Ok);
+    }
+
+    [Fact]
+    public async Task Every_way_to_set_a_password_uses_the_same_rule()
+    {
+        // D5: change, the staff temporary password and the staff reset refused "abcdefgh" before; they checked only 6 characters
+        var gw = await As("admin@demo.io");
+        var auth = new AuthService(gw);
+        Assert.Equal("bad_password", (await auth.ChangePasswordAsync(DemoGateway.DemoPassword, "abcdefgh")).Message);
+        Assert.Equal("bad_password", (await auth.ChangePasswordAsync(DemoGateway.DemoPassword, new string('a', 64) + "1")).Message);
+        var admin = new AdminService(gw);
+        Assert.Equal("bad_password", (await admin.CreateUserAsync("Xena", "Cruz", "x@demo.io", "member", "abcdefgh")).Message);
+        Assert.Equal("bad_email", (await admin.CreateUserAsync("Xena", "Cruz", "x@demo", "member", "abcdefg1")).Message);
+        var member = (await admin.UsersAsync()).Value!.First(u => u.Roles.Count == 1 && u.Roles[0] == "member");
+        Assert.Equal("bad_password", (await admin.ResetPasswordAsync(member.UserId, "12345678")).Message);
+        Assert.True((await admin.ResetPasswordAsync(member.UserId, "temp1234")).Ok);
+    }
+
+    [Fact]
+    public async Task The_demo_refuses_a_weak_password_even_when_the_app_check_is_skipped()
+    {
+        // the server (Supabase Auth, the Edge Functions) is the real check; the demo stands in for it
+        await Assert.ThrowsAnyAsync<Exception>(() => new DemoGateway().SignUpAsync("weak@demo.io", "abcdefgh", "Weak", "Person"));
+        var gw = await As("admin@demo.io");
+        await Assert.ThrowsAnyAsync<Exception>(() => gw.InvokeFunctionAsync("create-user", new()
+            { ["first_name"] = "Weak", ["last_name"] = "Person", ["email"] = "weak@demo.io", ["role"] = "member", ["password"] = "abcdefgh" }));
     }
 
     [Theory]

@@ -89,7 +89,7 @@
                                 <Border Style="{StaticResource Field}"><Grid ColumnDefinitions="*,Auto"><Entry x:Name="CurrentPasswordBox" Text="{Binding CurrentPassword}" IsPassword="True" SemanticProperties.Description="Current password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference CurrentPasswordBox}" /></Grid></Border>
                             </VerticalStackLayout>
                             <VerticalStackLayout Spacing="4">
-                                <Label Text="New password (at least 6 characters)" Style="{StaticResource Caption}" />
+                                <Label Text="New password (8 to 64 characters, a letter and a number)" Style="{StaticResource Caption}" />
                                 <Border Style="{StaticResource Field}"><Grid ColumnDefinitions="*,Auto"><Entry x:Name="NewPasswordBox" Text="{Binding NewPassword}" IsPassword="True" SemanticProperties.Description="New password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference NewPasswordBox}" /></Grid></Border>
                             </VerticalStackLayout>
                             <VerticalStackLayout Spacing="4">

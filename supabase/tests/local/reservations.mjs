@@ -117,11 +117,14 @@ try {
     assert.ok(g.blocks.some(b => b.mine === true && b.id));
     assert.ok(g.now && g.opens && g.closes);
     assert.ok(!JSON.stringify(g).includes('Ana Private'));
+    await assert.rejects(as(ben, 'select amenity_grid(null)'), /bad_input/);   // Phase 10: break attempt
   });
   await test('ending early while in use keeps a cooldown from the real end', async () => {
     const id = (await db.query(`insert into reservations(member_id,amenity_id,starts_at,ends_at,created_by)
       values($1,$2,now()-interval '20 minutes',now()+interval '40 minutes',$1) returning reservation_id`, [ana, ring])).rows[0].reservation_id;
+    await assert.rejects(as(ben, 'select end_reservation($1)', [id]), /not_found/);   // Phase 10: someone else's booking
     await as(ana, 'select end_reservation($1)', [id]);
+    await assert.rejects(as(ana, 'select end_reservation($1)', [id]), /not_in_use/);   // already ended
     const r = (await db.query('select ends_at <= now() + interval \'1 second\' as ended, status from reservations where reservation_id=$1', [id])).rows[0];
     assert.deepEqual(r, { ended: true, status: 'confirmed' });
     await assert.rejects(as(ana, 'select cancel_reservation($1,null)', [id]), /already_started/);

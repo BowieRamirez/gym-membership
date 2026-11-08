@@ -101,7 +101,11 @@ try {
   await test('request another time goes back to the same coach as a pending request', async () => {
     const p = await pair(), id = await ask(p, '10:00', '11:00');
     await propose(p, id, '12:00', '13:00');
+    const stranger = (await pair()).member;   // Phase 10: break attempts
+    await assert.rejects(as(stranger, 'select request_another_time($1,$2,$3,$4,null)', [id, at('16:00'), at('17:00'), ring]), /not_found/);
+    await assert.rejects(as(p.coach, 'select request_another_time($1,$2,$3,$4,null)', [id, at('16:00'), at('17:00'), ring]), /not_found/);
     await as(p.member, 'select request_another_time($1,$2,$3,$4,null)', [id, at('16:00'), at('17:00'), ring]);
+    await assert.rejects(as(p.member, 'select request_another_time($1,$2,$3,$4,null)', [id, at('18:00'), at('19:00'), ring]), /already_processed/);
     const r = await req(id);
     assert.equal(r.status, 'pending'); assert.equal(r.version, 2); assert.equal(+r.requested_start, +new Date(at('16:00'))); assert.equal(String(r.amenity_id), String(ring));
     assert.equal(r.proposed_start, null);
@@ -144,6 +148,7 @@ try {
     const p = await pair(), id = await ask(p, '20:00', '21:00');
     await as(p.coach, 'select respond_time_request($1,true)', [id]);
     const session = (await db.query('select training_session_id from training_sessions where member_id=$1', [p.member])).rows[0].training_session_id;
+    await assert.rejects(as((await pair()).member, `select cancel_session($1,'Sick')`, [session]), /not_found/);   // Phase 10: not theirs
     await as(p.member, `select cancel_session($1,'Sick')`, [session]);
     assert.equal((await booked(p)).length, 0);
   });

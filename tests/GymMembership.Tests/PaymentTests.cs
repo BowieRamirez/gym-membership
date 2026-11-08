@@ -136,6 +136,30 @@ public class PaymentTests
     }
 
     [Fact]
+    public async Task D4_a_payment_of_0_is_refused_unless_a_discount_brought_it_there()
+    {
+        // 0046 refuses it on the server for every path; the demo stands in for that
+        var gw = await As("admin@demo.io");
+        var settings = (await gw.ListAsync<GymSettings>()).First(); settings.WalkInPrice = 0; await gw.UpdateAsync(settings);
+        var free = (await gw.ListAsync<MembershipPackage>()).First(p => p.Name == "Monthly"); free.Price = 0; await gw.UpdateAsync(free);
+        Assert.True((await new AdminService(gw).SaveDiscountAsync(new Discount { Code = "ALLFREE", Percent = 100, MaxUses = 5, ExpiresAt = DateTime.UtcNow.AddDays(1) })).Ok);
+
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        var staff = new PaymentStaffService(gw);
+        Assert.Equal("zero_amount", (await staff.RecordCounterAsync(PayKind.WalkIn, PayMethod.Cash, null, null, "Pedro Ramos", null, null)).Message);
+
+        var auth = new AuthService(gw);
+        Assert.True((await auth.RegisterAsync("Free", "Rider", "free@demo.io", "secret12")).Ok);
+        var member = new MembershipService(gw);
+        Assert.Equal("zero_amount", (await member.AvailAsync(free.Id)).Message);
+        Assert.Empty(await gw.ListAsync<UserMembershipPackage>(m => m.MemberId == gw.CurrentUserId));   // nothing left behind
+        Assert.Equal("zero_amount", (await member.AvailAsync(free.Id, "ALLFREE")).Message);   // 100% of ₱0 is no discount
+        var quarterly = await Package(gw, "Quarterly");
+        var pay = (await member.AvailAsync(quarterly.Id, "ALLFREE")).Value!;
+        Assert.Equal((0m, quarterly.Price), (pay.Amount, pay.DiscountAmount));
+    }
+
+    [Fact]
     public async Task The_counter_lists_what_can_be_sold_including_a_members_renewals()
     {
         var gw = await As("employee@demo.io");

@@ -1,6 +1,7 @@
 // POST { user_id, password }
 // The owner sets a new temporary password for someone who forgot theirs (plan 4.4).
 import { adminClient, auditBy, cors, reply, requireAdmin, STAFF_ROLES } from '../_shared/admin.ts';
+import { isPassword } from '../_shared/rules.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -13,7 +14,8 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   const userId = String(body.user_id ?? '');
   const password = String(body.password ?? '');
-  if (!userId || password.length < 6) return reply({ error: 'bad_input' }, 400);
+  if (!userId) return reply({ error: 'bad_input' }, 400);
+  if (!isPassword(password)) return reply({ error: 'bad_password' }, 400);   // D5, as the app checks
 
   const { data: target, error: targetError } = await admin.from('profiles').select('is_active').eq('id', userId).maybeSingle();
   if (targetError) return reply({ error: 'bad_input' }, 400);

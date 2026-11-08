@@ -48,9 +48,9 @@
             <Border Style="{StaticResource Panel}" IsVisible="{Binding Resetting, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="10">
                     <c:CardTitle Text="{Binding Resetting.Username, StringFormat='Reset password for {0}'}" />
-                    <Label Text="Set a new temporary password and share it with them. The old one stops working." Style="{StaticResource Caption}" />
+                    <Label Text="Set a new temporary password of 8 to 64 characters, with a letter and a number, and share it with them. The old one stops working." Style="{StaticResource Caption}" />
                     <Border Style="{StaticResource Field}" WidthRequest="240" HorizontalOptions="Start">
-                        <Grid ColumnDefinitions="*,Auto"><Entry x:Name="ResetPasswordBox" Text="{Binding ResetPassword}" IsPassword="True" Placeholder="At least 6 characters" SemanticProperties.Description="New temporary password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference ResetPasswordBox}" /></Grid>
+                        <Grid ColumnDefinitions="*,Auto"><Entry x:Name="ResetPasswordBox" Text="{Binding ResetPassword}" IsPassword="True" SemanticProperties.Description="New temporary password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference ResetPasswordBox}" /></Grid>
                     </Border>
                     <HorizontalStackLayout Spacing="8">
                         <Button Text="Set password" Style="{StaticResource SmallButton}" Command="{Binding ConfirmResetCommand}" />
@@ -87,6 +87,7 @@
             <Border Style="{StaticResource Panel}">
                 <VerticalStackLayout Spacing="12">
                     <c:CardTitle Text="{Binding AddTitle}" />
+                    <Label Text="The temporary password needs 8 to 64 characters, with a letter and a number." Style="{StaticResource Caption}" />
                     <FlexLayout Wrap="Wrap" AlignItems="End">
                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="180">
                             <Label Text="First name" Style="{StaticResource Caption}" />

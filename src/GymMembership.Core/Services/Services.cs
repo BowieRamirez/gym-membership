@@ -39,13 +39,14 @@ public interface IAuthService
 /// <summary>What a new account may use. The entry caps on the register page read the same numbers.</summary>
 public static partial class AccountRules
 {
-    public const int MinName = 2, MaxName = 60, MaxEmailLocal = 64, MaxEmail = 100, MinPassword = 6, MaxPassword = 64;
+    public const int MinName = 2, MaxName = 60, MaxEmailLocal = 64, MaxEmail = 100, MinPassword = 8, MaxPassword = 64;
 
-    // letters (any script), joined by single spaces, hyphens or apostrophes: "Mary-Ann O'Brien", "Juan dela Cruz"
-    [GeneratedRegex(@"^[\p{L}\p{M}]+(?:[ '\-][\p{L}\p{M}]+)*$")] private static partial Regex NameShape();
+    // letters (any script), joined by single spaces, hyphens or apostrophes: "Mary-Ann O'Brien", "Juan dela Cruz". No separate accent
+    // marks: the database's [[:alpha:]] refuses them (checked live 2026-11-08), so a name is composed first ("e" + accent becomes "é").
+    [GeneratedRegex(@"^\p{L}+(?:[ '\-]\p{L}+)*$")] private static partial Regex NameShape();
     [GeneratedRegex(@"^[^@\s]+@[^@\s]+\.[^@\s]+$")] private static partial Regex EmailShape();
 
-    public static bool IsName(string name) => name.Length is >= MinName and <= MaxName && NameShape().IsMatch(name);
+    public static bool IsName(string name) => (name = name.Normalize()).Length is >= MinName and <= MaxName && NameShape().IsMatch(name);
 
     /// <summary>Both parts are names, and "first last" fits the 60 characters the database allows for the full name.</summary>
     public static bool IsName(string first, string last) => IsName(first) && IsName(last) && NameParts.Join(first, last).Length <= MaxName;
@@ -56,18 +57,23 @@ public static partial class AccountRules
     public static bool IsEmail(string email) =>
         email.Length <= MaxEmail && EmailShape().IsMatch(email) && email.IndexOf('@') <= MaxEmailLocal;
 
-    public static bool IsPassword(string password) => password.Length is >= MinPassword and <= MaxPassword;
+    /// <summary>
+    /// D5, for new passwords only: 8 to 64 characters with a letter and a number. Letters and numbers are a to z and 0 to 9, as Supabase
+    /// Auth's "letters_digits" counts them, and as supabase/functions/_shared/rules.ts checks for staff-made passwords.
+    /// </summary>
+    public static bool IsPassword(string password) => PasswordChecks(password) is (true, true, _);
 
-    /// <summary>The checklist under a new password. Only the length is required; the other two make it stronger.</summary>
-    public static (bool Length, bool Number, bool Mixed) PasswordChecks(string password) =>
-        (IsPassword(password), password.Any(char.IsDigit), password.Any(char.IsLower) && password.Any(char.IsUpper));
+    /// <summary>The checklist under a new password. The first two are required; mixed case makes it stronger.</summary>
+    public static (bool Length, bool LetterAndNumber, bool Mixed) PasswordChecks(string password) =>
+        (password.Length is >= MinPassword and <= MaxPassword, password.Any(char.IsAsciiLetter) && password.Any(char.IsAsciiDigit),
+         password.Any(char.IsLower) && password.Any(char.IsUpper));
 
     /// <summary>0 when empty, then 1 weak to 4 strong: one point per check passed, and 4 for all three at 12 or more characters.</summary>
     public static int PasswordStrength(string password)
     {
         if (password.Length == 0) return 0;
-        var (length, number, mixed) = PasswordChecks(password);
-        var passed = (length ? 1 : 0) + (number ? 1 : 0) + (mixed ? 1 : 0);
+        var (length, letterAndNumber, mixed) = PasswordChecks(password);
+        var passed = (length ? 1 : 0) + (letterAndNumber ? 1 : 0) + (mixed ? 1 : 0);
         return passed == 3 && password.Length >= 12 ? 4 : Math.Max(passed, 1);
     }
 
@@ -99,7 +105,7 @@ public sealed class AuthService(ISupabaseGateway gw) : IAuthService
 
     public async Task<AppResult<bool>> RegisterAsync(string firstName, string lastName, string email, string password)
     {
-        firstName = firstName.Trim(); lastName = lastName.Trim(); email = email.Trim();
+        firstName = firstName.Trim().Normalize(); lastName = lastName.Trim().Normalize(); email = email.Trim();
         if (!AccountRules.IsName(firstName, lastName)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_name");
         if (!AccountRules.IsEmail(email)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_email");
         if (!AccountRules.IsPassword(password)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_password");
@@ -166,7 +172,7 @@ public sealed class AuthService(ISupabaseGateway gw) : IAuthService
 
     public async Task<AppResult<bool>> ChangePasswordAsync(string current, string next)
     {
-        if (next.Length < 6) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
+        if (!AccountRules.IsPassword(next)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_password");
         return await Safe.RunAsync(async () =>
         {
             await gw.ChangePasswordAsync(current, next);
@@ -1280,17 +1286,18 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
     // accounts are made by an Edge Function: it holds the service-role key, which the app never has
     public async Task<AppResult<bool>> CreateUserAsync(string firstName, string lastName, string email, string role, string password)
     {
-        firstName = firstName.Trim(); lastName = lastName.Trim();
-        if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName) || !email.Contains('@') || password.Length < 6 || role is not ("member" or "coach" or "employee" or "subadmin"))
-            return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
+        firstName = firstName.Trim().Normalize(); lastName = lastName.Trim().Normalize(); email = email.Trim();
+        if (role is not ("member" or "coach" or "employee" or "subadmin")) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
         if (!AccountRules.IsName(firstName, lastName)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_name");   // the database refuses it too (0012, 0035)
+        if (!AccountRules.IsEmail(email)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_email");
+        if (!AccountRules.IsPassword(password)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_password");   // create-user checks it too
         return await Safe.RunAsync(async () =>
         {
             // name goes along for a create-user function deployed before first/last name existed
             await gw.InvokeFunctionAsync("create-user", new()
             {
                 ["first_name"] = firstName, ["last_name"] = lastName, ["name"] = NameParts.Join(firstName, lastName),
-                ["email"] = email.Trim(), ["role"] = role, ["password"] = password
+                ["email"] = email, ["role"] = role, ["password"] = password
             });
             return true;
         });
@@ -1298,7 +1305,7 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
 
     public Task<AppResult<bool>> CorrectNameAsync(string userId, string firstName, string lastName, string reason)
     {
-        firstName = firstName.Trim(); lastName = lastName.Trim(); reason = reason.Trim();
+        firstName = firstName.Trim().Normalize(); lastName = lastName.Trim().Normalize(); reason = reason.Trim();
         if (!AccountRules.IsName(firstName, lastName)) return Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Validation, "bad_name"));
         if (reason.Length is < 1 or > 500) return Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Validation, "bad_correction_reason"));
         return Rpc("correct_name", new() { ["p_user"] = userId, ["p_first"] = firstName, ["p_last"] = lastName, ["p_reason"] = reason });
@@ -1306,7 +1313,7 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
 
     public async Task<AppResult<bool>> ResetPasswordAsync(string userId, string password)
     {
-        if (password.Length < 6) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
+        if (!AccountRules.IsPassword(password)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_password");   // reset-password checks it too
         return await Safe.RunAsync(async () => { await gw.InvokeFunctionAsync("reset-password", new() { ["user_id"] = userId, ["password"] = password }); return true; });
     }
 
@@ -1409,7 +1416,8 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
 
     public async Task<AppResult<bool>> SaveGymSettingsAsync(GymSettings s, (string FileName, byte[] Data)? qrImage)
     {
-        if (string.IsNullOrWhiteSpace(s.GymName) || s.WalkInPrice < 0) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
+        if (string.IsNullOrWhiteSpace(s.GymName)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
+        if (s.WalkInPrice <= 0) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_walk_in_price");   // D4: ₱0 could never be paid
         static bool OnGrid(TimeSpan t) => t.Seconds == 0 && t.Minutes is 0 or 30 && t >= TimeSpan.Zero && t < TimeSpan.FromDays(1);
         if (!OnGrid(s.OpensAt) || !OnGrid(s.ClosesAt) || s.ClosesAt <= s.OpensAt) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_hours");
         return await Safe.RunAsync(async () =>

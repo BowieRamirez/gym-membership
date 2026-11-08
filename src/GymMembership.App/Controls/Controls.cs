@@ -451,7 +451,7 @@ public class CodeBoxes : Grid
 }
 
 /// <summary>
-/// Under a new password: four bars and a word for how strong it is, and the checklist from AccountRules. Only the length is required.
+/// Under a new password: four bars and a word for how strong it is, and the checklist from AccountRules. The first two lines are required.
 /// Colour is never the only signal: the word and the ticks say the same.
 /// </summary>
 public class PasswordStrength : VerticalStackLayout
@@ -465,7 +465,7 @@ public class PasswordStrength : VerticalStackLayout
     readonly BoxView[] _bars = new BoxView[4];
     readonly Label _word = new() { Style = (Style)Application.Current!.Resources["Caption"], HorizontalOptions = LayoutOptions.End };
     readonly Label[] _checks = new Label[3];
-    static readonly string[] CheckText = ["6 to 64 characters", "At least one number", "Upper and lower case letters"];
+    static readonly string[] CheckText = ["8 to 64 characters", "A letter and a number", "Upper and lower case (optional)"];
 
     public PasswordStrength()
     {
@@ -482,12 +482,12 @@ public class PasswordStrength : VerticalStackLayout
     {
         var password = Password ?? "";
         var score = AccountRules.PasswordStrength(password);
-        var (length, number, mixed) = AccountRules.PasswordChecks(password);
+        var (length, letterAndNumber, mixed) = AccountRules.PasswordChecks(password);
         for (var i = 0; i < 4; i++)
             if (i < score) _bars[i].SetAppThemeColor(BoxView.ColorProperty, FieldFocus.Pick(Tones[score] + "Light"), FieldFocus.Pick(Tones[score] + "Dark"));
             else _bars[i].SetAppThemeColor(BoxView.ColorProperty, FieldFocus.Pick("LineLight"), FieldFocus.Pick("LineDark"));
         _word.Text = Words[score];
-        bool[] ok = [length, number, mixed];
+        bool[] ok = [length, letterAndNumber, mixed];
         for (var i = 0; i < 3; i++) _checks[i].Text = (ok[i] ? "✓  " : "–  ") + CheckText[i];
     }
 }

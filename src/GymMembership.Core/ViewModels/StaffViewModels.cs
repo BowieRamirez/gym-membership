@@ -1199,7 +1199,7 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     private async Task AddAmenityAsync()
     {
         if (string.IsNullOrWhiteSpace(NewAmenityName)) { ErrorMessage = "Give the amenity a name."; return; }
-        if (NewAmenityPrice < 0) { ErrorMessage = "Price can't be negative."; return; }
+        if (NewAmenityPrice <= 0) { ErrorMessage = "Enter a price above ₱0."; return; }   // D4: ₱0 could never be paid
         if (!await Confirm.AskAsync(EditingAmenity is null ? $"Add {NewAmenityName.Trim()}?" : $"Save changes to {NewAmenityName.Trim()}?",
                 EditingAmenity?.DurationDays is { } days ? $"Pass: ₱{NewAmenityPrice:N2} for {days} days." : $"₱{NewAmenityPrice:N2} per session.", EditingAmenity is null ? "Add amenity" : "Save changes")) return;
         var a = EditingAmenity ?? new Amenity();

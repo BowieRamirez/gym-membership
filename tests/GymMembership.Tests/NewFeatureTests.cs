@@ -25,7 +25,7 @@ public class NewFeatureTests
         Assert.Contains(await gw.ListAsync<Coach>(), c => c.UserId == gw.CurrentUserId);
         Assert.True((await auth.MustChangePasswordAsync()).Value);
 
-        Assert.True((await auth.ChangePasswordAsync("temp1234", "my-own-pass")).Ok);
+        Assert.True((await auth.ChangePasswordAsync("temp1234", "my-own-pass9")).Ok);
         Assert.False((await auth.MustChangePasswordAsync()).Value);
     }
 

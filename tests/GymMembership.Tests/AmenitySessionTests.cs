@@ -139,9 +139,17 @@ public class AmenitySessionTests
         Assert.Equal(30, (await gw.ListAsync<Amenity>(a => a.Id == id)).Single().DurationDays);
 
         Assert.Equal("Price per session", vm.AmenityPriceLabel);
-        vm.NewAmenityName = "Ice bath"; vm.NewAmenityPrice = 120;
+        vm.NewAmenityName = "Ice bath"; vm.NewAmenityPrice = 0;   // D4: ₱0 could never be paid
+        await vm.AddAmenityCommand.ExecuteAsync(null);
+        Assert.Equal("Enter a price above ₱0.", vm.ErrorMessage);
+        vm.NewAmenityPrice = 120;
         await vm.AddAmenityCommand.ExecuteAsync(null);
         Assert.Null((await gw.ListAsync<Amenity>()).Single(a => a.Name == "Ice bath").DurationDays);
+
+        var admin = new AdminService(gw);
+        var settings = (await admin.GymSettingsAsync()).Value!;
+        settings.WalkInPrice = 0;
+        Assert.Equal("bad_walk_in_price", (await admin.SaveGymSettingsAsync(settings, null)).Message);
     }
 
     [Fact]
