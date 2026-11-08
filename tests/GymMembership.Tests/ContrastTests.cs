@@ -64,7 +64,9 @@ public class ContrastTests
     {
         var app = TestPaths.AppFolder();
         var files = new[] { "Views", "Controls" }.SelectMany(d => Directory.GetFiles(Path.Combine(app, d)))
-            .Concat(Directory.GetFiles(app, "*Shell*")).Where(f => f.EndsWith(".xaml") || f.EndsWith(".cs"));
+            .Concat(Directory.GetFiles(app, "*Shell*")).Where(f => f.EndsWith(".xaml") || f.EndsWith(".cs"))
+            // Android's own resources too: a lime colorAccent survived there until 9.6 and tinted the switch
+            .Concat(Directory.GetFiles(Path.Combine(app, "Platforms", "Android", "Resources"), "*.xml", SearchOption.AllDirectories));
         var old = new[] { "#1F2226", "#24282C", "#EDEFF1", "#ECEEF0", "#5C646C", "#9AA3AB", "#CDD3D9", "#3A4047", "#1A1D20",
             "#E4F58A", "#2C302B", "#EEF1EC", "#5A6159", "#A3AAA1", "#ECEFE8", "#212521", "#161816", "#D4DAD0", "#3A3F39" };   // + the sage and lime of 2026-10-30
         foreach (var gone in new[] { "Lime", "Chalk", "Plate" }) Assert.DoesNotContain($"x:Key=\"{gone}", File.ReadAllText(Path.Combine(app, "Resources", "Styles", "Colors.xaml")));

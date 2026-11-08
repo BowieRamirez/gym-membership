@@ -157,15 +157,13 @@ public class Phase6bPhotoTests
     }
 
     [Fact]
-    public async Task Profile_and_landing_screen_load_the_shared_photo_model()
+    public async Task Profile_loads_the_shared_photo_model()
     {
+        // 9.6 (owner, 2026-11-08): the prompt lives on My coach profile only, no longer above the sessions list
         var gw = await As("coach");
         var profile = new CoachProfileViewModel(new CoachService(gw), Photo(gw));
         await profile.OnAppearingAsync();
         Assert.True(profile.Photo!.NeedsPhoto);
-        var sessions = new SessionsViewModel(new SessionService(gw), Photo(gw));
-        await sessions.OnAppearingAsync();
-        Assert.True(sessions.Photo!.NeedsPhoto);
     }
 
     [Fact]

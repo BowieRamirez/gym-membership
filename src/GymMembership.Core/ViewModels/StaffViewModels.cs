@@ -461,34 +461,11 @@ public partial class ShiftsViewModel(ICoachService svc) : LoadableViewModel
     [ObservableProperty] private TimeSpan time = new(8, 0, 0);
     [ObservableProperty] private int hours = 4;   // D10 default length
     [ObservableProperty] private string? note;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(HiringButtonText))] private bool isOpen = true;
 
-    public string HiringButtonText => IsOpen ? "Pause hiring" : "Resume hiring";
-
-    public override async Task OnAppearingAsync()
-    {
-        await LoadAsync();
-        await RunAsync(svc.MyCoachAsync, c => { if (c is not null) IsOpen = c.IsAvailable; });
-    }
+    // hiring on/off lives on My coach profile ("Taking new members"); 9.6 took the duplicate Pause hiring button off this page
+    public override Task OnAppearingAsync() => LoadAsync();
 
     [RelayCommand] private Task LoadAsync() => RunAsync(svc.MyShiftsAsync, rows => Fill(Shifts, rows));
-
-    /// <summary>Flips the coach's availability: while paused, members see the coach grayed out and cannot hire.</summary>
-    [RelayCommand]
-    private async Task ToggleHiringAsync()
-    {
-        Notice = null;
-        var c = (await svc.MyCoachAsync()).Value;
-        if (c is null) return;
-        var open = !c.IsAvailable;
-        if (!await (open ? Confirm.AskAsync("Start taking new trainees?", "Members can hire you again.", "Resume hiring")
-                         : Confirm.AskAsync("Pause hiring?", "Members still see you, but they can't hire you until you resume.", "Pause hiring"))) return;
-        if (await RunAsync(() => svc.UpdateProfileAsync(c.Bio, c.Specialty, c.HourlyRate, open)))
-        {
-            IsOpen = open;
-            Notice = open ? "Hiring is open. Members can hire you again." : "Hiring is paused. Members still see you, but they cannot hire you until you resume.";
-        }
-    }
 
     [RelayCommand]
     private async Task PostAsync()
@@ -701,10 +678,9 @@ public partial class RequestsViewModel(ISessionService svc) : LoadableViewModel
     }
 }
 
-public partial class SessionsViewModel(ISessionService svc, CoachPhotoViewModel? photo = null) : LoadableViewModel
+public partial class SessionsViewModel(ISessionService svc) : LoadableViewModel
 {
-    public CoachPhotoViewModel? Photo { get; } = photo;
-    /// <summary>The rows the status filter lets through; the full list stays in <c>all</c>.</summary>
+    /// <summary>The rows the status filter lets through, scheduled first (soonest first), then the rest newest first; the full list stays in <c>all</c>.</summary>
     public ObservableCollection<SessionRow> Sessions { get; } = new();
     IReadOnlyList<SessionRow> all = [];
     /// <summary>All, Scheduled, Completed or Cancelled (which also covers no-shows). Kept across reloads.</summary>
@@ -714,13 +690,9 @@ public partial class SessionsViewModel(ISessionService svc, CoachPhotoViewModel?
     [ObservableProperty] private DateTime date = DateTime.Today.AddDays(1);
     [ObservableProperty] private TimeSpan time = new(9, 0, 0);
 
-    public override async Task OnAppearingAsync()
-    {
-        await LoadAsync();
-        if (Photo is not null) await Photo.OnAppearingAsync();
-    }
+    public override Task OnAppearingAsync() => LoadAsync();
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.SessionsAsync, rows => { all = rows; Apply(); });
+    [RelayCommand] private Task LoadAsync() => RunAsync(svc.SessionsAsync, rows => { all = Ordered(rows); Apply(); });
     [RelayCommand] private void SetFilter(string f) => Filter = f;
     partial void OnFilterChanged(string value) => Apply();
     void Apply() => Fill(Sessions, all.Where(r => Filter switch
@@ -730,6 +702,13 @@ public partial class SessionsViewModel(ISessionService svc, CoachPhotoViewModel?
         "Cancelled" => r.Session.Status is Status.Cancelled or Status.NoShow,
         _ => true,
     }));
+
+    /// <summary>What still needs doing first: scheduled sessions soonest first, then history newest first.</summary>
+    public static IReadOnlyList<SessionRow> Ordered(IEnumerable<SessionRow> rows) =>
+    [
+        .. rows.Where(r => r.Session.Status == Status.Scheduled).OrderBy(r => r.Session.ScheduledStart),
+        .. rows.Where(r => r.Session.Status != Status.Scheduled).OrderByDescending(r => r.Session.ScheduledStart),
+    ];
 
     [RelayCommand] private Task CompleteAsync(SessionRow row) => SetAsync(row, Status.Completed);
     [RelayCommand] private Task NoShowAsync(SessionRow row) => SetAsync(row, Status.NoShow);
@@ -816,7 +795,8 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     [ObservableProperty] private string sessionsText = "—";
     [ObservableProperty] private string rateText = "—";
     [ObservableProperty] private string upcomingText = "—";
-    [ObservableProperty] private string nextText = "";
+    [ObservableProperty] private string nextTimeText = "—";
+    [ObservableProperty] private string nextWhenText = "";
     [ObservableProperty] private string traineesText = "—";
 
     List<CalendarSession> loaded = [];      // what the server last said for the range in view
@@ -913,7 +893,8 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     void Rebuild()
     {
         var today = Today;
-        Sync(Days, AttendanceCalendar.Days(AttendanceCalendar.MonthGrid(Focus.Year, Focus.Month), loaded, today, SelectedDay, new DateOnly(Focus.Year, Focus.Month, 1), Zone), d => d.Date, (a, b) => a == b);
+        var month = AttendanceCalendar.Days(AttendanceCalendar.MonthGrid(Focus.Year, Focus.Month), loaded, today, SelectedDay, new DateOnly(Focus.Year, Focus.Month, 1), Zone);
+        Sync(Days, AttendanceCalendar.WithEntries(month, loaded, shifts.Where(x => x.Status != "cancelled").Select(x => x.Start), Zone), d => d.Date, (a, b) => a == b);
         var week = AttendanceCalendar.Days(AttendanceCalendar.WeekOf(Focus), loaded, today, SelectedDay, null, Zone);
         Fill(WeekRows, week.Select(d => new WeekRow(d, AttendanceCalendar.SessionsOn(loaded, d.Date, Zone))));
         Fill(DaySessions, SelectedDay is { } day ? AttendanceCalendar.SessionsOn(loaded, day, Zone) : Array.Empty<CalendarSession>());
@@ -923,9 +904,15 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
         SessionsText = known ? summary.SessionsThisMonth.ToString(CultureInfo.InvariantCulture) : "—";   // not a made-up zero while the month is loading or could not load
         RateText = known && summary.RatePercent is { } r ? $"{r}%" : "—";
         UpcomingText = summary.Upcoming.ToString(CultureInfo.InvariantCulture);
-        NextText = summary.Next is { } n
-            ? $"Next: {AttendanceCalendar.LocalTime(n.Session.ScheduledStart, Zone).ToString("ddd d MMM, h:mm tt", CultureInfo.InvariantCulture)} with {n.With}"
-            : "No upcoming sessions.";
+        // the yellow card (9.6, as approved): the time big, then the day in words and who
+        if (summary.Next is { } next)
+        {
+            var at = AttendanceCalendar.LocalTime(next.Session.ScheduledStart, Zone);
+            var on = DateOnly.FromDateTime(at);
+            NextTimeText = at.ToString("h:mm tt", CultureInfo.InvariantCulture);
+            NextWhenText = $"{(on == today ? "today" : on == today.AddDays(1) ? "tomorrow" : at.ToString("ddd d MMM", CultureInfo.InvariantCulture))} with {next.With}";
+        }
+        else { NextTimeText = "None booked"; NextWhenText = "Sessions you book show here."; }
     }
 
     [RelayCommand] private void ShowMonth() { ViewMode = "Month"; Rebuild(); }

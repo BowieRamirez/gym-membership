@@ -22,8 +22,8 @@
                     </VerticalStackLayout>
                     <c:StatusChip Grid.Column="5" Status="{Binding Request.Status}" VerticalOptions="Center" />
                     <HorizontalStackLayout Grid.Column="6" Spacing="6" VerticalOptions="Center" HorizontalOptions="End">
-                        <Button Text="Approve" Style="{StaticResource SmallButton}" IsVisible="{Binding CanRespond}" Clicked="OnApprove" />
-                        <Button Text="Accept" Style="{StaticResource SmallButton}" IsVisible="{Binding CanAccept}" Clicked="OnAccept" />
+                        <Button Text="Approve" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanRespond}" Clicked="OnApprove" />
+                        <Button Text="Accept" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanAccept}" Clicked="OnAccept" />
                         <Button Text="Propose another time" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanPropose}" Clicked="OnPropose" />
                         <Button Text="Ask for another time" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanAccept}" Clicked="OnAnother" />
                         <Button Text="Decline" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanDecline}" Clicked="OnDecline" />
@@ -53,8 +53,8 @@
                     <Label Text="{Binding Request.Message}" Style="{StaticResource Muted}" FontSize="15" IsVisible="{Binding Request.Message, Converter={StaticResource HasText}}" />
                     <Label Text="{Binding ProposalText, StringFormat='Proposed: {0}'}" FontFamily="BarlowMedium" IsVisible="{Binding HasProposal}" />
                     <FlexLayout Wrap="Wrap" Margin="0,4,0,0">
-                        <Button Text="Approve" Style="{StaticResource FilterChipOn}" Margin="0,0,8,8" IsVisible="{Binding CanRespond}" Clicked="OnApprove" />
-                        <Button Text="Accept" Style="{StaticResource FilterChipOn}" Margin="0,0,8,8" IsVisible="{Binding CanAccept}" Clicked="OnAccept" />
+                        <Button Text="Approve" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanRespond}" Clicked="OnApprove" />
+                        <Button Text="Accept" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanAccept}" Clicked="OnAccept" />
                         <Button Text="Propose another time" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanPropose}" Clicked="OnPropose" />
                         <Button Text="Ask for another time" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanAccept}" Clicked="OnAnother" />
                         <Button Text="Decline" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanDecline}" Clicked="OnDecline" />

@@ -23,6 +23,11 @@ public sealed record CalendarDay(DateOnly Date, bool InMonth, bool IsToday, bool
     public bool HasX => Absent > 0;
     public int Sessions => Attended + Absent + Excused + Unmarked;
 
+    /// <summary>9.6: what the cell names on Windows, in time order ("9:00 AM Alex T.", "Shift 6:00 AM"); two at most, the rest as "+2 more".</summary>
+    public string? Entry1 { get; init; }
+    public string? Entry2 { get; init; }
+    public string? More { get; init; }
+
     /// <summary>What a screen reader says: the same facts as the check and the X, in words.</summary>
     public string Description
     {
@@ -83,6 +88,25 @@ public static class AttendanceCalendar
             return new CalendarDay(d, monthOf is not { } m || (d.Year == m.Year && d.Month == m.Month), d == today, d == selected,
                 on.Count(s => s.Attended), on.Count(s => s.Absent), on.Count(s => s.Excused), on.Count(s => s.Unmarked));
         }).ToList();
+    }
+
+    /// <summary>Names each day's sessions (not cancelled) and shifts, in time order, as the approved mockup's calendar does.</summary>
+    public static IReadOnlyList<CalendarDay> WithEntries(IReadOnlyList<CalendarDay> days, IReadOnlyList<CalendarSession> sessions, IEnumerable<DateTime> shiftStarts, TimeZoneInfo zone)
+    {
+        static string Time(DateTime t) => t.ToString("h:mm tt", CultureInfo.InvariantCulture);
+        var entries = sessions.Where(s => !s.Cancelled).Select(s => (At: s.Session.ScheduledStart, Text: $"{Time(LocalTime(s.Session.ScheduledStart, zone))} {ShortName(s.With)}"))
+            .Concat(shiftStarts.Select(t => (At: t, Text: $"Shift {Time(LocalTime(t, zone))}")))
+            .GroupBy(e => LocalDay(e.At, zone)).ToDictionary(g => g.Key, g => g.OrderBy(e => e.At).Select(e => e.Text).ToList());
+        return days.Select(d => entries.GetValueOrDefault(d.Date) is { } on
+            ? d with { Entry1 = on[0], Entry2 = on.ElementAtOrDefault(1), More = on.Count > 2 ? $"+{on.Count - 2} more" : null }
+            : d).ToList();
+    }
+
+    /// <summary>"Alex Tan" as "Alex T.", so a name fits a calendar cell.</summary>
+    public static string ShortName(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length < 2 ? name : $"{parts[0]} {parts[^1][0]}.";
     }
 
     public static IReadOnlyList<CalendarSession> SessionsOn(IReadOnlyList<CalendarSession> sessions, DateOnly day, TimeZoneInfo zone) =>

@@ -286,8 +286,10 @@
     </Style>
 
     <!-- Chips (Material 3 filter / assist chips): status filters and small actions inside list rows. Rounded rectangles, not pills, so a
-         filter never reads as a main action; 40 tall on phones (with 8 between them) and 34 on Windows. FilterChipOn is the filter in use. -->
+         filter never reads as a main action; 40 tall on phones (with 8 between them) and 34 on Windows. FilterChipOn is the filter in use.
+         Never shrunk in a wrapping FlexLayout: it wraps to the next line instead of cutting the word ("Declin"). -->
     <Style x:Key="FilterChip" TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+        <Setter Property="FlexLayout.Shrink" Value="0" />
         <Setter Property="MinimumHeightRequest" Value="{OnPlatform Android=40, iOS=40, Default=34}" />
         <Setter Property="HeightRequest" Value="{OnPlatform Android=40, iOS=40, Default=34}" />
         <Setter Property="CornerRadius" Value="10" />
@@ -302,6 +304,23 @@
         <Setter Property="TextColor" Value="{StaticResource Black}" />
         <Setter Property="BorderColor" Value="{StaticResource Signal}" />
     </Style>
+
+    <!-- A two-way view switch (the coach Dashboard's Month | Week, as approved): a quiet track, the chosen side a darker or lighter
+         block in bold. Not yellow: choosing a view is not the page's main action. -->
+    <Style x:Key="SegmentTrack" TargetType="Border">
+        <Setter Property="StrokeShape" Value="RoundRectangle 12" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="Padding" Value="3" />
+        <Setter Property="HorizontalOptions" Value="Start" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
+    </Style>
+    <!-- the track's own colour, not Transparent: Android drew a Transparent segment as a black block with no label -->
+    <Style x:Key="Segment" TargetType="Button" BasedOn="{StaticResource FilterChip}">
+        <Setter Property="BorderWidth" Value="0" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+    </Style>
+    <!-- the chosen side (bold, InkLight / SurfaceDark) is set by the page's DataTriggers, not by a second style -->
 
     <!-- Card action cells: beside the text on wide screens, under it (full width) on phones. Parent Grid needs RowDefinitions="Auto,Auto". -->
     <Style x:Key="CardActions" TargetType="VerticalStackLayout">
@@ -355,6 +374,8 @@
     <Style TargetType="DatePicker">
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
         <Setter Property="FontFamily" Value="Barlow" />
+        <!-- the app's own date words ("Mon 9 Nov 2026"), not the system's 11/9/2026, which reads as 11 September here -->
+        <Setter Property="Format" Value="ddd d MMM yyyy" />
     </Style>
     <Style TargetType="TimePicker">
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />

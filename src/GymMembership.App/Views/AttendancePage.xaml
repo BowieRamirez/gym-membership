@@ -8,217 +8,283 @@
             xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.AttendancePage" x:DataType="vm:AttendanceViewModel" Title="Dashboard">
 
+    <!-- Phase 9.6, as approved in docs/mockups/yellow-black.html?screen=coach: the yellow card is the next session; the calendar names each
+         day's sessions and shifts; the chosen day lists its sessions (marked with chips) before the shift form. Phones start with today:
+         the card, three small figures, the day, then the week. -->
     <v:BasePage.Resources>
-        <!-- one session with its four marks; the filled button is the current mark. Used by the day list and by every row of the week view. -->
+        <!-- one session: time and who, then its four marks as chips (the yellow one is the current mark). The day panel and the week use it. -->
         <DataTemplate x:Key="SessionTemplate" x:DataType="svc:CalendarSession">
-            <Border Style="{StaticResource Panel}" Padding="14,12" Margin="0,0,0,8">
-                <VerticalStackLayout Spacing="8">
-                    <c:CardTitle Text="{Binding With}" />
-                    <Label Text="{Binding Session.ScheduledStart, Converter={StaticResource LocalDate}, ConverterParameter='h:mm tt'}" Style="{StaticResource Caption}" />
-                    <Label Text="Cancelled" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold" IsVisible="{Binding Cancelled}" />
-                    <!-- Shrink 0 on every item: Android's FlexLayout otherwise squeezes them ("Presen", "Lat") instead of wrapping -->
-                    <FlexLayout Wrap="Wrap" IsVisible="{Binding CanMark}">
-                        <Button Text="Present" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" FlexLayout.Shrink="0" Clicked="OnMarkPresent">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="present"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
-                        </Button>
-                        <Button Text="Late" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" FlexLayout.Shrink="0" Clicked="OnMarkLate">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="late"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
-                        </Button>
-                        <Button Text="Absent" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" FlexLayout.Shrink="0" Clicked="OnMarkAbsent">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="absent"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
-                        </Button>
-                        <Button Text="Excused" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" FlexLayout.Shrink="0" Clicked="OnMarkExcused">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="excused"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
-                        </Button>
-                    </FlexLayout>
-                </VerticalStackLayout>
-            </Border>
+            <VerticalStackLayout Spacing="8">
+                <BoxView Style="{StaticResource Hairline}" />
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Margin="0,2,0,0">
+                    <Label Text="{Binding Session.ScheduledStart, Converter={StaticResource LocalDate}, ConverterParameter='h:mm tt'}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                    <Label Grid.Column="1" Text="{Binding With}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                    <Label Grid.Column="2" Text="Cancelled" Style="{StaticResource Caption}" IsVisible="{Binding Cancelled}" VerticalOptions="Center" />
+                </Grid>
+                <FlexLayout Wrap="Wrap" IsVisible="{Binding CanMark}">
+                    <Button Text="Present" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnMarkPresent">
+                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="present"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /></DataTrigger></Button.Triggers>
+                    </Button>
+                    <Button Text="Late" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnMarkLate">
+                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="late"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /></DataTrigger></Button.Triggers>
+                    </Button>
+                    <Button Text="Absent" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnMarkAbsent">
+                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="absent"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /></DataTrigger></Button.Triggers>
+                    </Button>
+                    <Button Text="Excused" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnMarkExcused">
+                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="excused"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /></DataTrigger></Button.Triggers>
+                    </Button>
+                </FlexLayout>
+            </VerticalStackLayout>
         </DataTemplate>
     </v:BasePage.Resources>
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
-        <VerticalStackLayout Padding="{OnIdiom Phone='20,16,20,24', Default='16,12,16,20'}" Spacing="14">
+        <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="14">
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <c:SideLayout SideFirst="False">
-                <!-- main: this month at a glance, the period, the month or the week -->
+            <!-- the figures. Windows: four cards across, the first the yellow next-session card. Phones: the card, then one panel of three. -->
+            <c:CardGrid Columns="{OnIdiom Phone=1, Default=4}" MinColumnWidth="180">
+                <Border Style="{StaticResource HeroPanel}">
+                    <VerticalStackLayout Spacing="6">
+                        <c:CardTitle Text="Next session" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+                        <Label Text="{Binding NextTimeText}" Style="{StaticResource Numeral}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+                        <Label Text="{Binding NextWhenText}" FontFamily="BarlowMedium" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+                    </VerticalStackLayout>
+                </Border>
+                <Border Style="{StaticResource Panel}" IsVisible="{OnIdiom Phone=False, Default=True}">
+                    <VerticalStackLayout Spacing="6">
+                        <c:CardTitle Text="Sessions this month" />
+                        <Label Text="{Binding SessionsText}" Style="{StaticResource Numeral}" />
+                        <Label Text="{Binding UpcomingText, StringFormat='{0} coming up'}" Style="{StaticResource Caption}" />
+                    </VerticalStackLayout>
+                </Border>
+                <Border Style="{StaticResource Panel}" IsVisible="{OnIdiom Phone=False, Default=True}">
+                    <VerticalStackLayout Spacing="6">
+                        <c:CardTitle Text="Attendance rate" />
+                        <Label Text="{Binding RateText}" Style="{StaticResource Numeral}" />
+                        <Label Text="of sessions held" Style="{StaticResource Caption}" />
+                    </VerticalStackLayout>
+                </Border>
+                <Border Style="{StaticResource Panel}" IsVisible="{OnIdiom Phone=False, Default=True}">
+                    <VerticalStackLayout Spacing="6">
+                        <c:CardTitle Text="Trainees" />
+                        <Label Text="{Binding TraineesText}" Style="{StaticResource Numeral}" />
+                        <Label Text="with you now" Style="{StaticResource Caption}" />
+                    </VerticalStackLayout>
+                </Border>
+                <!-- phones: the same three figures in one short panel -->
+                <Border Style="{StaticResource Panel}" IsVisible="{OnIdiom Phone=True, Default=False}">
+                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
+                        <VerticalStackLayout Spacing="2">
+                            <Label Text="This month" Style="{StaticResource Caption}" />
+                            <Label Text="{Binding SessionsText}" Style="{StaticResource KpiValue}" FontSize="28" />
+                            <Label Text="{Binding UpcomingText, StringFormat='{0} coming up'}" Style="{StaticResource Caption}" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="1" Spacing="2">
+                            <Label Text="Attendance" Style="{StaticResource Caption}" />
+                            <Label Text="{Binding RateText}" Style="{StaticResource KpiValue}" FontSize="28" />
+                            <Label Text="of sessions held" Style="{StaticResource Caption}" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="2" Spacing="2">
+                            <Label Text="Trainees" Style="{StaticResource Caption}" />
+                            <Label Text="{Binding TraineesText}" Style="{StaticResource KpiValue}" FontSize="28" />
+                            <Label Text="with you now" Style="{StaticResource Caption}" />
+                        </VerticalStackLayout>
+                    </Grid>
+                </Border>
+            </c:CardGrid>
+
+            <!-- Windows: the calendar, the chosen day beside it. Phones: the chosen day (today when the page opens) first, then the calendar. -->
+            <c:SideLayout SideFirst="{OnIdiom Phone=True, Default=False}" SideWidth="420" StackedSideWidth="{OnIdiom Phone=10000, Default=600}">
                 <VerticalStackLayout Spacing="12">
-                    <!-- this month at a glance: four cards, the first one lime; 2 x 2 on phones -->
-                                <c:CardGrid Columns="{OnIdiom Phone=2, Default=4}" MinColumnWidth="{OnIdiom Phone=140, Default=180}">
-                                    <Border Style="{StaticResource HeroPanel}">
-                                        <VerticalStackLayout Spacing="8">
-                                            <c:CardTitle Text="Sessions this month" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
-                                            <Label Text="{Binding SessionsText}" Style="{StaticResource Numeral}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
-                                        </VerticalStackLayout>
-                                    </Border>
-                                    <Border Style="{StaticResource Panel}">
-                                        <VerticalStackLayout Spacing="8">
-                                            <c:CardTitle Text="Attendance rate" />
-                                            <Label Text="{Binding RateText}" Style="{StaticResource Numeral}" />
-                                        </VerticalStackLayout>
-                                    </Border>
-                                    <Border Style="{StaticResource Panel}">
-                                        <VerticalStackLayout Spacing="8">
-                                            <c:CardTitle Text="Upcoming" />
-                                            <Label Text="{Binding UpcomingText}" Style="{StaticResource Numeral}" />
-                                            <Label Text="{Binding NextText}" Style="{StaticResource Caption}" />
-                                        </VerticalStackLayout>
-                                    </Border>
-                                    <Border Style="{StaticResource Panel}" IsVisible="{Binding HasShifts}">
-                                        <VerticalStackLayout Spacing="8">
-                                            <c:CardTitle Text="Trainees" />
-                                            <Label Text="{Binding TraineesText}" Style="{StaticResource Numeral}" />
-                                        </VerticalStackLayout>
-                                    </Border>
-                                </c:CardGrid>
+                    <!-- Windows: back, the period, forward, Today, then Month | Week on the right. Phones: Month | Week and Today, then back, the period, forward. -->
+                    <Grid ColumnDefinitions="{OnIdiom Phone='Auto,*,Auto', Default='Auto,Auto,*,Auto'}" RowDefinitions="{OnIdiom Phone='Auto,Auto', Default='Auto'}"
+                          ColumnSpacing="8" RowSpacing="10">
+                        <Grid Grid.Row="{OnIdiom Phone=1, Default=0}" Grid.ColumnSpan="{OnIdiom Phone=3, Default=1}"
+                              ColumnDefinitions="{OnIdiom Phone='44,*,44', Default='44,Auto,44'}" ColumnSpacing="8">
+                            <Grid WidthRequest="44" HeightRequest="44">
+                                <Button Style="{StaticResource SmallOutlineButton}" Padding="0" Command="{Binding PreviousCommand}" SemanticProperties.Description="Previous" />
+                                <c:IconView Icon="chevron-left" Size="18" ChipSize="32" HorizontalOptions="Center" VerticalOptions="Center" />
+                            </Grid>
+                            <Label Grid.Column="1" Text="{Binding PeriodTitle}" Style="{StaticResource Heading}" VerticalOptions="Center" HorizontalOptions="Center" />
+                            <Grid Grid.Column="2" WidthRequest="44" HeightRequest="44">
+                                <Button Style="{StaticResource SmallOutlineButton}" Padding="0" Command="{Binding NextCommand}" SemanticProperties.Description="Next" />
+                                <c:IconView Icon="chevron-right" Size="18" ChipSize="32" HorizontalOptions="Center" VerticalOptions="Center" />
+                            </Grid>
+                        </Grid>
+                        <Button Grid.Column="{OnIdiom Phone=2, Default=1}" Text="Today" Style="{StaticResource FilterChip}" VerticalOptions="Center" Command="{Binding TodayCommand}" />
+                        <Border Grid.Column="{OnIdiom Phone=0, Default=3}" Style="{StaticResource SegmentTrack}" VerticalOptions="Center">
+                            <HorizontalStackLayout Spacing="2">
+                                <!-- the chosen side by setters, not a style swap: Android lost the other side's label when its style was swapped back -->
+                                <Button Text="Month" Style="{StaticResource Segment}" Command="{Binding ShowMonthCommand}">
+                                    <Button.Triggers>
+                                        <DataTrigger TargetType="Button" Binding="{Binding IsMonth}" Value="True">
+                                            <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                                        </DataTrigger>
+                                    </Button.Triggers>
+                                </Button>
+                                <Button Text="Week" Style="{StaticResource Segment}" Command="{Binding ShowWeekCommand}">
+                                    <Button.Triggers>
+                                        <DataTrigger TargetType="Button" Binding="{Binding IsWeek}" Value="True">
+                                            <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                                        </DataTrigger>
+                                    </Button.Triggers>
+                                </Button>
+                            </HorizontalStackLayout>
+                        </Border>
+                    </Grid>
 
-                                <!-- One row on Windows: Month | Week, back, the period, forward, Today.
-                                     Phones: Month | Week with Today on the right, then back, the period centred, forward. -->
-                                <Grid ColumnDefinitions="{OnIdiom Phone='Auto,Auto,*,Auto', Default='Auto,Auto,Auto,Auto,*'}" RowDefinitions="{OnIdiom Phone='Auto,Auto', Default='Auto'}"
-                                      ColumnSpacing="8" RowSpacing="10">
-                                    <Button Text="Month" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" Command="{Binding ShowMonthCommand}">
-                                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsMonth}" Value="True"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
-                                    </Button>
-                                    <Button Grid.Column="1" Text="Week" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" Command="{Binding ShowWeekCommand}">
-                                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsWeek}" Value="True"><Setter Property="Style" Value="{StaticResource SignalSmallButton}" /></DataTrigger></Button.Triggers>
-                                    </Button>
-                                    <Grid Grid.Row="{OnIdiom Phone=1, Default=0}" Grid.Column="{OnIdiom Phone=0, Default=2}" Grid.ColumnSpan="{OnIdiom Phone=4, Default=1}"
-                                          ColumnDefinitions="{OnIdiom Phone='44,*,44', Default='44,Auto,44'}" ColumnSpacing="8" Margin="{OnIdiom Phone=0, Default='12,0,0,0'}">
-                                        <Grid WidthRequest="44" HeightRequest="44">
-                                            <Button Style="{StaticResource SmallOutlineButton}" Padding="0" Command="{Binding PreviousCommand}" SemanticProperties.Description="Previous" />
-                                            <c:IconView Icon="chevron-left" Size="18" ChipSize="32" HorizontalOptions="Center" VerticalOptions="Center" />
-                                        </Grid>
-                                        <Label Grid.Column="1" Text="{Binding PeriodTitle}" Style="{StaticResource Heading}" VerticalOptions="Center" HorizontalOptions="Center" />
-                                        <Grid Grid.Column="2" WidthRequest="44" HeightRequest="44">
-                                            <Button Style="{StaticResource SmallOutlineButton}" Padding="0" Command="{Binding NextCommand}" SemanticProperties.Description="Next" />
-                                            <c:IconView Icon="chevron-right" Size="18" ChipSize="32" HorizontalOptions="Center" VerticalOptions="Center" />
-                                        </Grid>
-                                    </Grid>
-                                    <Button Grid.Column="3" Text="Today" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" Margin="{OnIdiom Phone=0, Default='4,0,0,0'}" Command="{Binding TodayCommand}" />
-                                </Grid>
-
-                                <!-- the month: a check for attended, an X for missed, both on a mixed day, nothing otherwise; every mark is also in the cell's spoken description -->
-                                <Border Style="{StaticResource Panel}" Padding="12" IsVisible="{Binding IsMonth}">
-                                <VerticalStackLayout Spacing="6">
-                                    <Grid ColumnDefinitions="*,*,*,*,*,*,*">
-                                        <Label Grid.Column="0" Text="Mon" Style="{StaticResource Caption}" HorizontalOptions="Center" />
-                                        <Label Grid.Column="1" Text="Tue" Style="{StaticResource Caption}" HorizontalOptions="Center" />
-                                        <Label Grid.Column="2" Text="Wed" Style="{StaticResource Caption}" HorizontalOptions="Center" />
-                                        <Label Grid.Column="3" Text="Thu" Style="{StaticResource Caption}" HorizontalOptions="Center" />
-                                        <Label Grid.Column="4" Text="Fri" Style="{StaticResource Caption}" HorizontalOptions="Center" />
-                                        <Label Grid.Column="5" Text="Sat" Style="{StaticResource Caption}" HorizontalOptions="Center" />
-                                        <Label Grid.Column="6" Text="Sun" Style="{StaticResource Caption}" HorizontalOptions="Center" />
-                                    </Grid>
-                                    <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Days}">
-                                        <BindableLayout.ItemTemplate>
-                                            <DataTemplate x:DataType="svc:CalendarDay">
-                                                <Border Style="{StaticResource Row}" FlexLayout.Basis="14.2857%" Padding="2,8" HeightRequest="{OnIdiom Phone=58, Default=76}" Margin="2" StrokeShape="RoundRectangle 12"
-                                                        SemanticProperties.Description="{Binding Description}">
-                                                    <Border.Triggers>
-                                                        <DataTrigger TargetType="Border" Binding="{Binding Dimmed}" Value="True"><Setter Property="Opacity" Value="0.45" /></DataTrigger>
-                                                        <DataTrigger TargetType="Border" Binding="{Binding IsToday}" Value="True">
-                                                            <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
-                                                            <Setter Property="StrokeThickness" Value="2" />
-                                                        </DataTrigger>
-                                                        <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
-                                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource PageLight}, Dark={StaticResource PageDark}}" />
-                                                        </DataTrigger>
-                                                    </Border.Triggers>
-                                                    <Border.GestureRecognizers><TapGestureRecognizer Tapped="OnDay" /></Border.GestureRecognizers>
-                                                    <VerticalStackLayout Spacing="4" HorizontalOptions="Center">
-                                                        <Label Text="{Binding Number}" FontFamily="BarlowSemiBold" HorizontalOptions="Center" />
-                                                        <HorizontalStackLayout Spacing="3" HorizontalOptions="Center" HeightRequest="14">
-                                                            <c:IconView Icon="check" Size="10" ChipSize="16" IsVisible="{Binding HasCheck}" />
-                                                            <c:IconView Icon="x" Size="10" ChipSize="16" IsVisible="{Binding HasX}" />
-                                                        </HorizontalStackLayout>
-                                                    </VerticalStackLayout>
-                                                </Border>
-                                            </DataTemplate>
-                                        </BindableLayout.ItemTemplate>
-                                    </FlexLayout>
-                                </VerticalStackLayout>
-                                </Border>
-
-                    <!-- the week: one row per day, its sessions inline -->
-                                <VerticalStackLayout IsVisible="{Binding IsWeek}" Spacing="10" BindableLayout.ItemsSource="{Binding WeekRows}">
-                                    <BindableLayout.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:WeekRow">
-                                            <VerticalStackLayout Spacing="6">
-                                                <HorizontalStackLayout Spacing="8" SemanticProperties.Description="{Binding Day.Description}">
-                                                    <HorizontalStackLayout.GestureRecognizers><TapGestureRecognizer Tapped="OnWeekDay" /></HorizontalStackLayout.GestureRecognizers>
-                                                    <Label Text="{Binding Title}" Style="{StaticResource Heading}" VerticalOptions="Center" />
-                                                    <c:IconView Icon="check" Size="12" ChipSize="20" IsVisible="{Binding Day.HasCheck}" />
-                                                    <c:IconView Icon="x" Size="12" ChipSize="20" IsVisible="{Binding Day.HasX}" />
-                                                </HorizontalStackLayout>
-                                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Sessions}" BindableLayout.ItemTemplate="{StaticResource SessionTemplate}">
-                                                    <BindableLayout.EmptyView><Label Text="No sessions." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+                    <!-- the month: each day names its sessions and shifts (Windows), with a check for attended and an X for missed; today's number
+                         is yellow, the chosen day has an outline; every mark is also in the cell's spoken description -->
+                    <Border Style="{StaticResource Panel}" Padding="10" IsVisible="{Binding IsMonth}">
+                        <VerticalStackLayout Spacing="6">
+                            <Grid ColumnDefinitions="*,*,*,*,*,*,*">
+                                <Label Grid.Column="0" Text="Mon" Style="{StaticResource Caption}" Margin="8,0" />
+                                <Label Grid.Column="1" Text="Tue" Style="{StaticResource Caption}" Margin="8,0" />
+                                <Label Grid.Column="2" Text="Wed" Style="{StaticResource Caption}" Margin="8,0" />
+                                <Label Grid.Column="3" Text="Thu" Style="{StaticResource Caption}" Margin="8,0" />
+                                <Label Grid.Column="4" Text="Fri" Style="{StaticResource Caption}" Margin="8,0" />
+                                <Label Grid.Column="5" Text="Sat" Style="{StaticResource Caption}" Margin="8,0" />
+                                <Label Grid.Column="6" Text="Sun" Style="{StaticResource Caption}" Margin="8,0" />
+                            </Grid>
+                            <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Days}">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="svc:CalendarDay">
+                                        <Border Style="{StaticResource Row}" FlexLayout.Basis="14.2857%" Padding="{OnIdiom Phone='4,6', Default=6}" HeightRequest="{OnIdiom Phone=58, Default=86}"
+                                                Margin="2" StrokeShape="RoundRectangle 10" SemanticProperties.Description="{Binding Description}">
+                                            <Border.Triggers>
+                                                <DataTrigger TargetType="Border" Binding="{Binding Dimmed}" Value="True"><Setter Property="Opacity" Value="0.45" /></DataTrigger>
+                                                <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
+                                                    <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
+                                                    <Setter Property="StrokeThickness" Value="2" />
+                                                </DataTrigger>
+                                            </Border.Triggers>
+                                            <Border.GestureRecognizers><TapGestureRecognizer Tapped="OnDay" /></Border.GestureRecognizers>
+                                            <VerticalStackLayout Spacing="3">
+                                                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
+                                                    <!-- today: the number on a small yellow block (a filled surface, so it reads in light too) -->
+                                                    <Border StrokeThickness="0" StrokeShape="RoundRectangle 6" Padding="5,0" HorizontalOptions="Start" BackgroundColor="Transparent">
+                                                        <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding IsToday}" Value="True"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /></DataTrigger></Border.Triggers>
+                                                        <Label Text="{Binding Number}" FontFamily="BarlowSemiBold" FontSize="14">
+                                                            <Label.Triggers><DataTrigger TargetType="Label" Binding="{Binding IsToday}" Value="True"><Setter Property="TextColor" Value="{StaticResource Black}" /></DataTrigger></Label.Triggers>
+                                                        </Label>
+                                                    </Border>
+                                                    <HorizontalStackLayout Grid.Row="{OnIdiom Phone=1, Default=0}" Grid.Column="{OnIdiom Phone=0, Default=1}" Grid.ColumnSpan="{OnIdiom Phone=2, Default=1}"
+                                                                           Spacing="2" HorizontalOptions="{OnIdiom Phone=Start, Default=End}" Margin="{OnIdiom Phone='3,4,0,0', Default=0}">
+                                                        <c:IconView Icon="check" Size="10" ChipSize="16" IsVisible="{Binding HasCheck}" />
+                                                        <c:IconView Icon="x" Size="10" ChipSize="16" IsVisible="{Binding HasX}" />
+                                                    </HorizontalStackLayout>
+                                                </Grid>
+                                                <VerticalStackLayout Spacing="2" IsVisible="{OnIdiom Phone=False, Default=True}">
+                                                    <Label Text="{Binding Entry1}" Style="{StaticResource Caption}" FontSize="12" LineBreakMode="TailTruncation" Margin="5,0,0,0"
+                                                           IsVisible="{Binding Entry1, Converter={StaticResource HasText}}" />
+                                                    <Label Text="{Binding Entry2}" Style="{StaticResource Caption}" FontSize="12" LineBreakMode="TailTruncation" Margin="5,0,0,0"
+                                                           IsVisible="{Binding Entry2, Converter={StaticResource HasText}}" />
+                                                    <Label Text="{Binding More}" Style="{StaticResource Caption}" FontSize="12" Margin="5,0,0,0"
+                                                           IsVisible="{Binding More, Converter={StaticResource HasText}}" />
                                                 </VerticalStackLayout>
-                                            </VerticalStackLayout>
-                                        </DataTemplate>
-                                    </BindableLayout.ItemTemplate>
-                                </VerticalStackLayout>
-                </VerticalStackLayout>
-
-                <!-- side: the selected day, post a shift, its shifts and sessions -->
-                <Border Style="{StaticResource SidePanel}">
-                    <VerticalStackLayout Spacing="10">
-                        <!-- the selected day: post a shift (date and start filled in, 4 hours), that day's shifts, and in the month view its sessions -->
-                                    <Label Text="Tap a day to post a shift or see its sessions." Style="{StaticResource Muted}" IsVisible="{Binding HasDay, Converter={StaticResource Not}}" />
-                                    <VerticalStackLayout IsVisible="{Binding HasDay}" Spacing="10">
-                                        <Label Text="{Binding DayTitle}" Style="{StaticResource SectionTitle}" AutomationId="DashboardDayTitle" />
-                                        <Border Style="{StaticResource Panel}" Padding="0" BackgroundColor="Transparent" IsVisible="{Binding HasShifts}">
-                                            <VerticalStackLayout Spacing="12">
-                                                <Label Text="Post a shift" FontFamily="BarlowSemiBold" />
-                                                <FlexLayout Wrap="Wrap" AlignItems="End">
-                                                    <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
-                                                        <Label Text="Starts" Style="{StaticResource Caption}" />
-                                                        <Border Style="{StaticResource Field}"><TimePicker Time="{Binding PostTime}" SemanticProperties.Description="Shift start" /></Border>
-                                                    </VerticalStackLayout>
-                                                    <VerticalStackLayout Spacing="4" Margin="0,0,0,8">
-                                                        <Label Text="Hours" Style="{StaticResource Caption}" />
-                                                        <Border Style="{StaticResource Field}">
-                                                            <Picker ItemsSource="{Binding HoursOptions}" SelectedItem="{Binding PostHours}" WidthRequest="90" SemanticProperties.Description="Shift length in hours" />
-                                                        </Border>
-                                                    </VerticalStackLayout>
-                                                </FlexLayout>
-                                                <VerticalStackLayout Spacing="4">
-                                                    <Label Text="Note (optional)" Style="{StaticResource Caption}" />
-                                                    <Border Style="{StaticResource Field}"><Entry Text="{Binding PostNote}" Placeholder="What you will be running" /></Border>
-                                                </VerticalStackLayout>
-                                                <Label Text="A shift that would run past closing ends at closing time." Style="{StaticResource Caption}" IsVisible="{Binding CanPost}" />
-                                                <Label Text="The gym has no opening hours left on this day." Style="{StaticResource Caption}" IsVisible="{Binding CanPost, Converter={StaticResource Not}}" />
-                                                <Button Text="Post shift" Style="{StaticResource SmallButton}" HorizontalOptions="Start" Command="{Binding PostShiftCommand}" IsEnabled="{Binding CanPost}" AutomationId="DashboardPostShift" />
                                             </VerticalStackLayout>
                                         </Border>
-                                        <VerticalStackLayout IsVisible="{Binding HasShifts}" BindableLayout.ItemsSource="{Binding DayShifts}" Spacing="8">
-                                            <BindableLayout.EmptyView><Label Text="No shifts posted. Add one above." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
-                                            <BindableLayout.ItemTemplate>
-                                                <DataTemplate x:DataType="m:ShiftPost">
-                                                    <Border Style="{StaticResource Panel}" Padding="14,10">
-                                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                                            <VerticalStackLayout Spacing="2" VerticalOptions="Center">
-                                                                <Label FontFamily="BarlowMedium">
-                                                                    <Label.Text>
-                                                                        <MultiBinding StringFormat="{}Shift {0} to {1}">
-                                                                            <Binding Path="Start" Converter="{StaticResource LocalDate}" ConverterParameter="h:mm tt" />
-                                                                            <Binding Path="End" Converter="{StaticResource LocalDate}" ConverterParameter="h:mm tt" />
-                                                                        </MultiBinding>
-                                                                    </Label.Text>
-                                                                </Label>
-                                                                <Label Text="{Binding Note}" Style="{StaticResource Caption}" IsVisible="{Binding Note, Converter={StaticResource HasText}}" />
-                                                            </VerticalStackLayout>
-                                                            <Button Grid.Column="1" Text="Cancel shift" Style="{StaticResource SmallOutlineButton}" Clicked="OnCancelShift" />
-                                                        </Grid>
-                                                    </Border>
-                                                </DataTemplate>
-                                            </BindableLayout.ItemTemplate>
-                                        </VerticalStackLayout>
-                                        <Label Text="Sessions" FontFamily="BarlowSemiBold" IsVisible="{Binding IsMonth}" />
-                                        <VerticalStackLayout IsVisible="{Binding IsMonth}" BindableLayout.ItemsSource="{Binding DaySessions}" BindableLayout.ItemTemplate="{StaticResource SessionTemplate}">
-                                            <BindableLayout.EmptyView><Label Text="No sessions this day." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </FlexLayout>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- the week: one block per day, its sessions with their marks -->
+                    <VerticalStackLayout IsVisible="{Binding IsWeek}" Spacing="10" BindableLayout.ItemsSource="{Binding WeekRows}">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="vm:WeekRow">
+                                <Border Style="{StaticResource Panel}">
+                                    <VerticalStackLayout Spacing="8">
+                                        <HorizontalStackLayout Spacing="8" SemanticProperties.Description="{Binding Day.Description}">
+                                            <HorizontalStackLayout.GestureRecognizers><TapGestureRecognizer Tapped="OnWeekDay" /></HorizontalStackLayout.GestureRecognizers>
+                                            <Label Text="{Binding Title}" Style="{StaticResource Heading}" VerticalOptions="Center" />
+                                            <c:IconView Icon="check" Size="12" ChipSize="20" IsVisible="{Binding Day.HasCheck}" />
+                                            <c:IconView Icon="x" Size="12" ChipSize="20" IsVisible="{Binding Day.HasX}" />
+                                        </HorizontalStackLayout>
+                                        <VerticalStackLayout Spacing="8" BindableLayout.ItemsSource="{Binding Sessions}" BindableLayout.ItemTemplate="{StaticResource SessionTemplate}">
+                                            <BindableLayout.EmptyView><Label Text="No sessions." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
                                         </VerticalStackLayout>
                                     </VerticalStackLayout>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+
+                <!-- the chosen day: its sessions (in the week view on Windows they are already in the list), its shifts, then post a shift -->
+                <Border Style="{StaticResource SidePanel}">
+                    <VerticalStackLayout Spacing="12">
+                        <Label Text="Tap a day to post a shift or see its sessions." Style="{StaticResource Muted}" IsVisible="{Binding HasDay, Converter={StaticResource Not}}" />
+                        <VerticalStackLayout IsVisible="{Binding HasDay}" Spacing="12">
+                            <Label Text="{Binding DayTitle}" Style="{StaticResource Heading}" AutomationId="DashboardDayTitle" />
+                            <VerticalStackLayout Spacing="8" IsVisible="{OnIdiom Phone=True, Default=False}"
+                                                 BindableLayout.ItemsSource="{Binding DaySessions}" BindableLayout.ItemTemplate="{StaticResource SessionTemplate}">
+                                <VerticalStackLayout.Triggers>
+                                    <DataTrigger TargetType="VerticalStackLayout" Binding="{Binding IsMonth}" Value="True"><Setter Property="IsVisible" Value="True" /></DataTrigger>
+                                </VerticalStackLayout.Triggers>
+                                <BindableLayout.EmptyView><Label Text="No sessions this day." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+                            </VerticalStackLayout>
+
+                            <VerticalStackLayout IsVisible="{Binding HasShifts}" BindableLayout.ItemsSource="{Binding DayShifts}" Spacing="8">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="m:ShiftPost">
+                                        <VerticalStackLayout Spacing="8">
+                                            <BoxView Style="{StaticResource Hairline}" />
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                                                    <Label FontFamily="BarlowMedium">
+                                                        <Label.Text>
+                                                            <MultiBinding StringFormat="{}Shift {0} to {1}">
+                                                                <Binding Path="Start" Converter="{StaticResource LocalDate}" ConverterParameter="h:mm tt" />
+                                                                <Binding Path="End" Converter="{StaticResource LocalDate}" ConverterParameter="h:mm tt" />
+                                                            </MultiBinding>
+                                                        </Label.Text>
+                                                    </Label>
+                                                    <Label Text="{Binding Note}" Style="{StaticResource Caption}" IsVisible="{Binding Note, Converter={StaticResource HasText}}" />
+                                                </VerticalStackLayout>
+                                                <Button Grid.Column="1" Text="Cancel shift" Style="{StaticResource FilterChip}" VerticalOptions="Center" Clicked="OnCancelShift" />
+                                            </Grid>
+                                        </VerticalStackLayout>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+
+                            <!-- post a shift on the chosen day: the start (opening time, or the next half hour today) and 4 hours filled in -->
+                            <VerticalStackLayout Spacing="10" IsVisible="{Binding HasShifts}">
+                                <BoxView Style="{StaticResource Hairline}" />
+                                <Label Text="Post a shift" FontFamily="BarlowSemiBold" FontSize="17" />
+                                <Grid ColumnDefinitions="*,110" ColumnSpacing="12">
+                                    <VerticalStackLayout Spacing="4">
+                                        <Label Text="Starts" Style="{StaticResource Caption}" />
+                                        <Border Style="{StaticResource Field}"><TimePicker Time="{Binding PostTime}" SemanticProperties.Description="Shift start" /></Border>
+                                    </VerticalStackLayout>
+                                    <VerticalStackLayout Grid.Column="1" Spacing="4">
+                                        <Label Text="Hours" Style="{StaticResource Caption}" />
+                                        <Border Style="{StaticResource Field}">
+                                            <Picker ItemsSource="{Binding HoursOptions}" SelectedItem="{Binding PostHours}" SemanticProperties.Description="Shift length in hours" />
+                                        </Border>
+                                    </VerticalStackLayout>
+                                </Grid>
+                                <VerticalStackLayout Spacing="4">
+                                    <Label Text="Note (optional)" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><Entry Text="{Binding PostNote}" Placeholder="What you will be running" /></Border>
+                                </VerticalStackLayout>
+                                <FlexLayout Wrap="Wrap" AlignItems="Center">
+                                    <Button Text="Post shift" Style="{StaticResource SmallButton}" Margin="0,0,12,6" FlexLayout.Shrink="0"
+                                            Command="{Binding PostShiftCommand}" IsEnabled="{Binding CanPost}" AutomationId="DashboardPostShift" />
+                                    <Label Text="Ends at closing time if it would run past it." Style="{StaticResource Caption}" Margin="0,0,0,6" IsVisible="{Binding CanPost}" />
+                                    <Label Text="The gym has no opening hours left on this day." Style="{StaticResource Caption}" Margin="0,0,0,6" IsVisible="{Binding CanPost, Converter={StaticResource Not}}" />
+                                </FlexLayout>
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
                     </VerticalStackLayout>
                 </Border>
             </c:SideLayout>

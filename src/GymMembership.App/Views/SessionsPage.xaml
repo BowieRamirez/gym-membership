@@ -27,7 +27,7 @@
                     <HorizontalStackLayout Grid.Column="5" Spacing="6" VerticalOptions="Center" HorizontalOptions="End">
                         <Button Text="Add 30 minutes" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanExtend}" Clicked="OnExtend"
                                 SemanticProperties.Hint="Extends this session and its amenity booking by 30 minutes" />
-                        <Button Text="Mark complete" Style="{StaticResource SmallButton}" IsVisible="{Binding CanManage}" Clicked="OnComplete" />
+                        <Button Text="Mark complete" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanManage}" Clicked="OnComplete" />
                         <Button Text="No-show" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanManage}" Clicked="OnNoShow" />
                         <Button Text="Reschedule" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanChange}" Clicked="OnStartReschedule" />
                         <Button Text="Cancel session" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanChange}" Clicked="OnCancel" />
@@ -57,7 +57,7 @@
                     <FlexLayout Wrap="Wrap" Margin="0,4,0,0">
                         <Button Text="Add 30 minutes" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanExtend}" Clicked="OnExtend"
                                 SemanticProperties.Hint="Extends this session and its amenity booking by 30 minutes" />
-                        <Button Text="Mark complete" Style="{StaticResource FilterChipOn}" Margin="0,0,8,8" IsVisible="{Binding CanManage}" Clicked="OnComplete" />
+                        <Button Text="Mark complete" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanManage}" Clicked="OnComplete" />
                         <Button Text="No-show" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanManage}" Clicked="OnNoShow" />
                         <Button Text="Reschedule" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanChange}" Clicked="OnStartReschedule" />
                         <Button Text="Cancel session" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanChange}" Clicked="OnCancel" />
@@ -114,15 +114,10 @@
                 </Border>
                 </VerticalStackLayout>
 
-                <!-- the side panel only while it has something: the coach photo prompt, or the session being moved. Hidden otherwise,
-                     so the list takes the full width (the old "Move a session" hint pushed the list down on narrower windows). -->
-                <VerticalStackLayout Spacing="12" IsVisible="False">
-                    <VerticalStackLayout.Triggers>
-                        <DataTrigger TargetType="VerticalStackLayout" Binding="{Binding Rescheduling, Converter={StaticResource IsNotNull}}" Value="True"><Setter Property="IsVisible" Value="True" /></DataTrigger>
-                        <DataTrigger TargetType="VerticalStackLayout" Binding="{Binding Photo.NeedsPhoto}" Value="True"><Setter Property="IsVisible" Value="True" /></DataTrigger>
-                    </VerticalStackLayout.Triggers>
-                    <c:CoachPhotoPrompt x:DataType="vm:CoachPhotoViewModel" BindingContext="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=Photo}" IsVisible="{Binding NeedsPhoto}" />
-                    <Border Style="{StaticResource SidePanel}" IsVisible="{Binding Rescheduling, Converter={StaticResource IsNotNull}}">
+                <!-- the side panel only while a session is being moved; otherwise the list takes the full width. The coach photo
+                     prompt lives on My coach profile only (9.6: here it sat above the sessions that needed action). -->
+                <VerticalStackLayout Spacing="12" IsVisible="{Binding Rescheduling, Converter={StaticResource IsNotNull}}">
+                    <Border Style="{StaticResource SidePanel}">
                         <VerticalStackLayout Spacing="12">
                                 <c:CardTitle Text="{Binding Rescheduling.Session.Title, StringFormat='Move “{0}” to a new time'}" />
                                 <Grid ColumnDefinitions="*,*" ColumnSpacing="8">

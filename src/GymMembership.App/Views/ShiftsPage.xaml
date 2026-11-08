@@ -23,11 +23,13 @@
                                             <Border Style="{StaticResource Panel}">
                                                 <VerticalStackLayout Spacing="8">
                                                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                        <!-- the day, then the hours on their own line (one heading broke inside "2:00 / PM") -->
                                                         <VerticalStackLayout Spacing="2">
-                                                            <Label Style="{StaticResource Heading}">
+                                                            <Label Text="{Binding Start, Converter={StaticResource LocalDate}, ConverterParameter='dddd d MMM'}" Style="{StaticResource Heading}" />
+                                                            <Label FontFamily="BarlowMedium">
                                                                 <Label.Text>
                                                                     <MultiBinding StringFormat="{}{0} to {1}">
-                                                                        <Binding Path="Start" Converter="{StaticResource LocalDate}" ConverterParameter="dddd d MMM, h:mm tt" />
+                                                                        <Binding Path="Start" Converter="{StaticResource LocalDate}" ConverterParameter="h:mm tt" />
                                                                         <Binding Path="End" Converter="{StaticResource LocalDate}" ConverterParameter="h:mm tt" />
                                                                     </MultiBinding>
                                                                 </Label.Text>
@@ -48,12 +50,8 @@
                                     </BindableLayout.ItemTemplate>
                                 </c:CardGrid>
                 </VerticalStackLayout>
-                <!-- side: hiring on or off, then post a shift -->
+                <!-- side: post a shift (taking new members on or off is on My coach profile) -->
                 <VerticalStackLayout Spacing="12">
-                    <Button Text="{Binding HiringButtonText}" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start"
-                                        Command="{Binding ToggleHiringCommand}"
-                                        SemanticProperties.Hint="Pausing keeps you listed but members cannot hire you until you resume" />
-
                                 <Border Style="{StaticResource SidePanel}">
                                     <VerticalStackLayout Spacing="12">
                                         <c:CardTitle Text="Post a shift" />

@@ -18,13 +18,14 @@
                         <c:CardTitle Text="At the gym" />
                         <Label Text="{Binding VisitText}" Style="{StaticResource Caption}" />
                     </VerticalStackLayout>
-                    <Button Grid.Column="1" Text="{Binding VisitButton}" Command="{Binding ToggleVisitCommand}" Style="{StaticResource SmallButton}" VerticalOptions="Center" />
+                    <Button Grid.Column="1" Text="{Binding VisitButton}" Command="{Binding ToggleVisitCommand}" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" />
                 </Grid>
             </Border>
             <c:CoachPhotoPrompt x:DataType="vm:CoachPhotoViewModel" BindingContext="{Binding Source={RelativeSource AncestorType={x:Type vm:CoachProfileViewModel}}, Path=Photo}" IsVisible="{Binding IsCoach}" />
             </c:CardGrid>
 
-            <Border Style="{StaticResource Panel}">
+            <!-- the form stops at a readable width on wide windows, left-aligned (it stretched to about 1450 px) -->
+            <Border Style="{StaticResource Panel}" MaximumWidthRequest="{OnIdiom Phone=10000, Default=720}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}">
             <VerticalStackLayout Spacing="16">
 
             <VerticalStackLayout Spacing="6">

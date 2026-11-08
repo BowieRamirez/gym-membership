@@ -18,20 +18,17 @@
             <BindableLayout.EmptyView><Label Text="No trainees yet. Members appear here when they hire you." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
             <BindableLayout.ItemTemplate>
                 <DataTemplate x:DataType="svc:TraineeRow">
+                    <!-- 9.6: the text gets the card's full width, the two actions follow as chips (no yellow per card, Remove no bigger than Message) -->
                     <Border Style="{StaticResource Panel}">
-                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="16">
-                            <VerticalStackLayout Spacing="3">
-                                <c:CardTitle Text="{Binding Name}" />
-                                <Label Text="{Binding NextText}" />
-                                <Label Text="{Binding Completed, StringFormat='{0} sessions completed'}" Style="{StaticResource Caption}" />
-                            </VerticalStackLayout>
-                            <VerticalStackLayout Style="{StaticResource CardActions}" Spacing="8">
-                                <Button Text="Message" Style="{StaticResource SmallButton}"
-                                        Clicked="OnMessage" />
-                                <Button Text="Remove" Style="{StaticResource SmallOutlineButton}"
-                                        Clicked="OnRemove" />
-                            </VerticalStackLayout>
-                        </Grid>
+                        <VerticalStackLayout Spacing="3">
+                            <c:CardTitle Text="{Binding Name}" />
+                            <Label Text="{Binding NextText}" />
+                            <Label Text="{Binding Completed, StringFormat='{0} sessions completed'}" Style="{StaticResource Caption}" />
+                            <FlexLayout Wrap="Wrap" Margin="0,8,0,-8">
+                                <Button Text="Message" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnMessage" />
+                                <Button Text="Remove" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnRemove" />
+                            </FlexLayout>
+                        </VerticalStackLayout>
                     </Border>
                 </DataTemplate>
             </BindableLayout.ItemTemplate>

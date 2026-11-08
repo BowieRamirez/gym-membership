@@ -284,20 +284,18 @@ public class NewFeatureTests
         Assert.Contains((await sessions.SessionsAsync()).Value!, r => r.Session.ScheduledStart == slot.Request.RequestedStart && r.Session.MemberId == "u-alex");
     }
 
-    // ---------- coaches can pause hiring ----------
+    // ---------- coaches can pause hiring (9.6: only through the profile's "Taking new members" switch) ----------
     [Fact]
     public async Task A_paused_coach_stays_listed_but_closed_and_cannot_be_hired()
     {
         var gw = await As("kai@demo.io");
         var coaches = new CoachService(gw);
-        var vm = new GymMembership.Core.ViewModels.ShiftsViewModel(coaches);
+        var vm = new GymMembership.Core.ViewModels.CoachProfileViewModel(coaches);
         await vm.OnAppearingAsync();
-        Assert.True(vm.IsOpen);
-        Assert.Equal("Pause hiring", vm.HiringButtonText);
+        Assert.True(vm.IsAvailable);
 
-        await vm.ToggleHiringCommand.ExecuteAsync(null);
-        Assert.False(vm.IsOpen);
-        Assert.Equal("Resume hiring", vm.HiringButtonText);
+        vm.IsAvailable = false;
+        await vm.SaveCommand.ExecuteAsync(null);
 
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         var card = (await coaches.ListCoachesAsync()).Value!.First(c => c.Name == "Kai Mendoza");
@@ -305,7 +303,8 @@ public class NewFeatureTests
         Assert.False((await coaches.HireAsync(card.Coach.UserId)).Ok);
 
         await gw.SignInAsync("kai@demo.io", DemoGateway.DemoPassword);
-        await vm.ToggleHiringCommand.ExecuteAsync(null);
+        vm.IsAvailable = true;
+        await vm.SaveCommand.ExecuteAsync(null);
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         Assert.False((await coaches.ListCoachesAsync()).Value!.First(c => c.Name == "Kai Mendoza").Closed);
     }
