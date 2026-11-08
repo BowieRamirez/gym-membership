@@ -101,7 +101,7 @@ public class SubAdminTests
         var gw = await As("admin@demo.io");
         var vm = new UsersViewModel(new AdminService(gw), new AccountArchiveService(gw));
         await vm.LoadCommand.ExecuteAsync(null);
-        Assert.Equal(["Member", "Coach", "Employee", "Admin"], vm.Roles);
+        Assert.Equal(["Member", "Coach", "Front desk", "Admin"], vm.Roles);   // D28: the employee code is called Front desk
         Assert.True(vm.IsSuperAdmin);
         Assert.True(vm.CanManage(vm.Users.First(u => u.Roles.Contains("employee"))));
         var row = vm.Users.First(u => u.Username == "Alex Tan");
@@ -126,8 +126,10 @@ public class SubAdminTests
     public async Task The_add_user_form_maps_names_to_codes_explicitly_and_never_asks_for_the_System_admin_role()
     {
         Assert.Equal("subadmin", UserRow.RoleCode("Admin"));
-        foreach (var odd in new[] { "System admin", "admin", "ADMIN", "Sub-admin", "subadmin", "" }) Assert.Null(UserRow.RoleCode(odd));
-        Assert.Equal(("System admin", "Admin"), (UserRow.RoleTitle("admin"), UserRow.RoleTitle("subadmin")));
+        Assert.Equal("employee", UserRow.RoleCode("Front desk"));
+        foreach (var odd in new[] { "System admin", "admin", "ADMIN", "Sub-admin", "subadmin", "Employee", "" }) Assert.Null(UserRow.RoleCode(odd));
+        Assert.Equal(("System admin", "Admin", "Front desk"), (UserRow.RoleTitle("admin"), UserRow.RoleTitle("subadmin"), UserRow.RoleTitle("employee")));
+        Assert.Equal("Front desk, Coach", new UserRow("u", "x", true, ["employee", "coach"]).RoleText);
 
         var gw = await As("admin@demo.io");
         var vm = new UsersViewModel(new AdminService(gw), new AccountArchiveService(gw));

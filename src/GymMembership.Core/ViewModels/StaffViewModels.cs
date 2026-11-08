@@ -964,7 +964,7 @@ public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? a
     /// <summary>What can be added: a sub-admin adds members and coaches only (D15).</summary>
     [ObservableProperty] private string[] roles = ["Member", "Coach"];
     [ObservableProperty, NotifyPropertyChangedFor(nameof(AddTitle))] private bool isSuperAdmin;
-    public string AddTitle => IsSuperAdmin ? "Add a member, coach or employee" : "Add a member or coach";
+    public string AddTitle => IsSuperAdmin ? "Add a member, coach or staff account" : "Add a member or coach";
 
     /// <summary>The super admin manages anyone; a sub-admin manages members and coaches.</summary>
     public bool CanManage(UserRow user) => IsSuperAdmin || !user.IsStaff;
@@ -990,7 +990,7 @@ public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? a
         if (archive is not null)
             await RunAsync(archive.CanManageAsync, allowed => CanDeleteAccounts = allowed);
         await RunAsync(svc.IsSuperAdminAsync, yes => IsSuperAdmin = yes);
-        Roles = IsSuperAdmin ? ["Member", "Coach", "Employee", "Admin"] : ["Member", "Coach"];
+        Roles = IsSuperAdmin ? ["Member", "Coach", "Front desk", "Admin"] : ["Member", "Coach"];
         if (!Roles.Contains(NewRole)) NewRole = "Member";
         await RunAsync(svc.UsersAsync, rows => { Fill(Users, rows.Where(r => r.IsActive)); Fill(Deactivated, rows.Where(r => !r.IsActive)); });
     }

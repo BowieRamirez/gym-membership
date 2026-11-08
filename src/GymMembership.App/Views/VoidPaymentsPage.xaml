@@ -15,7 +15,7 @@
                     <Label Text="{Binding Payment.ReceiptNo}" VerticalOptions="Center" />
                     <Label Grid.Column="1" Text="{Binding Payer}" VerticalOptions="Center" />
                     <Label Grid.Column="2" Text="{Binding Item}" VerticalOptions="Center" />
-                    <Label Grid.Column="3" Text="{Binding Payment.Method}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                    <Label Grid.Column="3" Text="{Binding MethodText}" Style="{StaticResource Muted}" VerticalOptions="Center" />
                     <Label Grid.Column="4" Text="{Binding Payment.VerifiedAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM, h:mm tt'}" VerticalOptions="Center" />
                     <Label Grid.Column="5" Text="{Binding Payment.Amount, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center" />
                     <Button Grid.Column="6" Text="Void" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="End" Clicked="OnStart" />
@@ -34,7 +34,7 @@
                             <Label.Text>
                                 <MultiBinding StringFormat="{}{0} · {1} · {2}">
                                     <Binding Path="Payment.ReceiptNo" />
-                                    <Binding Path="Payment.Method" />
+                                    <Binding Path="MethodText" />
                                     <Binding Path="Payment.VerifiedAt" Converter="{StaticResource LocalDate}" ConverterParameter="d MMM, h:mm tt" />
                                 </MultiBinding>
                             </Label.Text>
@@ -52,7 +52,7 @@
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="12">
-            <Label Text="A payment that was entered wrongly is never edited. Void it with a reason, which switches off what it paid for, then record it again correctly. Every void is kept in the audit log." Style="{StaticResource Muted}" />
+            <Label Text="Payments are never edited: void a wrong one with a reason (it switches off what it paid for), then record it again correctly." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
@@ -98,10 +98,8 @@
                     <!-- desktop only: on phones the side stacks above the list, where a hint would just take room -->
                     <ContentView IsVisible="{OnIdiom Phone=False, Default=True}">
                         <Border Style="{StaticResource SidePanel}" IsVisible="{Binding Voiding, Converter={StaticResource IsNull}}">
-                            <VerticalStackLayout Spacing="6">
-                                <c:CardTitle Text="Void a payment" />
-                                <Label Text="Choose Void on a payment to give the reason here." Style="{StaticResource Muted}" />
-                            </VerticalStackLayout>
+                            <!-- 9.8: no heading repeating the page title; the one line says what happens here -->
+                            <Label Text="Choose Void on a payment to give the reason here." Style="{StaticResource Muted}" />
                         </Border>
                     </ContentView>
                 </VerticalStackLayout>

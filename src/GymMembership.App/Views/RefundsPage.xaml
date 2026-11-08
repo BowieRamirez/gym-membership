@@ -9,8 +9,8 @@
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}" Padding="{OnIdiom Phone='16,12', Default='20,16'}"><VerticalStackLayout>
         
             <VerticalStackLayout Spacing="10" Padding="0,0,0,16">
-                <Label Text="Cancellations &amp; refunds" Style="{StaticResource Heading}" />
-                <Label Text="A term with no check-ins is owed a full refund. A term the member has used needs your review; this is guidance, not legal advice. Approving cancels only its selected term; other paid dates stay fixed. Return the actual paid amount manually, then record repayment. This app does not send money." Style="{StaticResource Muted}" />
+                <!-- 9.8: no heading repeating the page title; the rules in two sentences (were five) -->
+                <Label Text="An unused term is owed a full refund; a used one needs your review (guidance, not legal advice), and approving cancels only that term. The app sends no money: return it yourself, then record the repayment." Style="{StaticResource Muted}" />
                 <c:Banner Message="{Binding ErrorMessage}" />
                 <c:Banner Kind="notice" Message="{Binding Notice}" />
             </VerticalStackLayout>
@@ -33,10 +33,11 @@
                         <Label Text="{Binding State}" Style="{StaticResource Muted}" />
                         <Label Text="{Binding Request.DecisionReason}" IsVisible="{Binding Request.DecisionReason, Converter={StaticResource IsNotNull}}" />
                         <VerticalStackLayout Spacing="8" IsVisible="{Binding CanDecide}">
-                            <Button Text="Approve cancellation / refund" Style="{StaticResource SmallButton}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" Clicked="OnApprove" />
+                            <!-- outline per card (9.8): a queue of requests is not one page-wide main action -->
+                            <Button Text="Approve cancellation / refund" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" Clicked="OnApprove" />
                             <Button Text="Reject request" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" Clicked="OnReject" />
                         </VerticalStackLayout>
-                        <Button Text="Record money repaid" Style="{StaticResource SmallButton}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" IsVisible="{Binding CanRepay}" Clicked="OnPaid" />
+                        <Button Text="Record money repaid" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" IsVisible="{Binding CanRepay}" Clicked="OnPaid" />
                     </VerticalStackLayout>
                 </Border>
             </DataTemplate>

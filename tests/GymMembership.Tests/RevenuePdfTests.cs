@@ -11,6 +11,16 @@ public class RevenuePdfTests
 {
     static readonly byte[] Font = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoSans-Regular.ttf"));
 
+    [Fact]
+    public void Revenue_rows_and_methods_read_as_words_not_codes()
+    {
+        // 9.8: the screen showed "walk_in · cash · 1 payment(s)"
+        Assert.Equal("Walk-in · Cash · 1 payment", new RevenueRow(DateTime.Today, PayKind.WalkIn, PayMethod.Cash, 1, 150).Summary);
+        Assert.Equal("Extension · QR · 3 payments", new RevenueRow(DateTime.Today, PayKind.Renewal, PayMethod.Qr, 3, 900).Summary);
+        Assert.Equal(("Bank transfer", "GCash", "voucher"), (PayMethod.Name(PayMethod.BankTransfer), PayMethod.Name(PayMethod.Gcash), PayMethod.Name("voucher")));
+        Assert.Equal("Sat 7 Nov 2026, 8:30 AM", new AuditRecord { CreatedAt = new DateTime(2026, 11, 7, 0, 30, 0, DateTimeKind.Utc) }.ShownWhen);
+    }
+
     sealed class Files : IReportFiles
     {
         public string? Name; public byte[]? Pdf; public Exception? Fail;

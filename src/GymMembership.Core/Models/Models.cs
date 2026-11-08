@@ -15,8 +15,18 @@ public static class Status
         Scheduled = "scheduled", NoShow = "no_show", Ended = "ended";
 }
 
-public static class PayKind { public const string Membership = "membership", Renewal = "renewal", Amenity = "amenity", WalkIn = "walk_in"; }
-public static class PayMethod { public const string Qr = "qr", Cash = "cash", Gcash = "gcash", BankTransfer = "bank_transfer"; }
+public static class PayKind
+{
+    public const string Membership = "membership", Renewal = "renewal", Amenity = "amenity", WalkIn = "walk_in";
+    /// <summary>What a kind is called on screen (9.8: Revenue showed the codes). Extension, as the payment lists say for a renewal.</summary>
+    public static string Name(string k) => k switch { Membership => "Membership", Renewal => "Extension", Amenity => "Amenity", WalkIn => "Walk-in", _ => k };
+}
+public static class PayMethod
+{
+    public const string Qr = "qr", Cash = "cash", Gcash = "gcash", BankTransfer = "bank_transfer";
+    /// <summary>What a method is called on screen and in the PDF.</summary>
+    public static string Name(string m) => m switch { Cash => "Cash", Gcash => "GCash", Qr => "QR", BankTransfer => "Bank transfer", _ => m };
+}
 
 [Table("profiles")] public class Profile : BaseModel
 { [PrimaryKey("id")] public string Id { get; set; } = ""; [Column("username")] public string Username { get; set; } = ""; [Column("full_name")] public string FullName { get; set; } = "";
@@ -261,4 +271,8 @@ public class ChatSearchHit : BaseModel
   [Column("starts_at")] public DateTime StartsAt { get; set; } [Column("ends_at")] public DateTime EndsAt { get; set; } [Column("status")] public string Status { get; set; } = "confirmed";
   [Column("cancelled_at")] public DateTime? CancelledAt { get; set; } [Column("cancelled_by")] public string? CancelledBy { get; set; } [Column("cancel_reason")] public string? CancelReason { get; set; } }
 
-public record RevenueRow(DateTime Day, string Kind, string Method, long Payments, decimal Total);
+public record RevenueRow(DateTime Day, string Kind, string Method, long Payments, decimal Total)
+{
+    /// <summary>"Membership · QR · 1 payment" (9.8: was "membership · qr · 1 payment(s)").</summary>
+    public string Summary => $"{PayKind.Name(Kind)} · {PayMethod.Name(Method)} · {Payments} {(Payments == 1 ? "payment" : "payments")}";
+}

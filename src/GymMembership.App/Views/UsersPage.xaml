@@ -7,9 +7,41 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.UsersPage" x:DataType="vm:UsersViewModel" Title="Users and roles">
 
+    <v:BasePage.Resources>
+        <!-- one account: name, role, status, then the actions menu (role, password, name, deactivate, delete) -->
+        <DataTemplate x:Key="AccountRow" x:DataType="svc:UserRow">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,*,110,100">
+                    <Label Text="{Binding Username}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                    <Label Grid.Column="1" Text="{Binding RoleText}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                    <c:StatusChip Grid.Column="2" Status="{Binding ActiveStatus}" VerticalOptions="Center" />
+                    <Button Grid.Column="3" Text="Actions" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="End" VerticalOptions="Center"
+                            Clicked="OnAccountActions" AutomationId="UserAccountActions"
+                            SemanticProperties.Description="{Binding Username, StringFormat='Actions for {0}'}" SemanticProperties.Hint="Role, password and account actions" />
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+        <DataTemplate x:Key="AccountCard" x:DataType="svc:UserRow">
+            <VerticalStackLayout>
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="14,10">
+                    <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                        <Label Text="{Binding Username}" FontFamily="BarlowSemiBold" />
+                        <Label Text="{Binding RoleText}" Style="{StaticResource Caption}" />
+                        <c:StatusChip Status="{Binding ActiveStatus}" />
+                    </VerticalStackLayout>
+                    <Button Grid.Column="1" Text="Actions" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center"
+                            Clicked="OnAccountActions" AutomationId="UserAccountActions"
+                            SemanticProperties.Description="{Binding Username, StringFormat='Actions for {0}'}" SemanticProperties.Hint="Role, password and account actions" />
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+    </v:BasePage.Resources>
+
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='20,16,20,24', Default='16,12,16,20'}" Spacing="14">
-            <Label Text="You create every account here. Share the email and temporary password with the person, and they can sign in." Style="{StaticResource Muted}" />
+            <Label Text="Share the email and temporary password with the person so they can sign in." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
@@ -81,49 +113,33 @@
                 </VerticalStackLayout>
             </Border>
 
+            <!-- 9.8: the accounts as a table (hairline rows in one panel, a header), each row's menu a labelled "Actions" button (was a "⋮"
+                 glyph); the menu itself is unchanged (owner, D28). AutomationId stays: scripts/Test-WindowsArchive.ps1 uses it. -->
             <Label Text="Active accounts" Style="{StaticResource SectionTitle}" />
-            <Border Style="{StaticResource Panel}" Padding="12">
-            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Users}" Spacing="8">
-                <BindableLayout.ItemTemplate>
-                    <DataTemplate x:DataType="svc:UserRow">
-                        <Border Style="{StaticResource Row}">
-                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
-                                <VerticalStackLayout Spacing="2" VerticalOptions="Center">
-                                    <Label Text="{Binding Username}" Style="{StaticResource Heading}" />
-                                    <Label Text="{Binding RoleText}" Style="{StaticResource Caption}" />
-                                </VerticalStackLayout>
-                                <c:StatusChip Grid.Column="1" Status="{Binding ActiveStatus}" VerticalOptions="Center" />
-                                <Button Grid.Column="2" Text="⋮" Style="{StaticResource SmallOutlineButton}" FontSize="24" WidthRequest="48" MinimumHeightRequest="48"
-                                        VerticalOptions="Center" Clicked="OnAccountActions" AutomationId="UserAccountActions"
-                                        SemanticProperties.Description="Account actions" SemanticProperties.Hint="Open role, password and account actions" />
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </BindableLayout.ItemTemplate>
-            </VerticalStackLayout>
+            <Border Style="{StaticResource TablePanel}">
+                <VerticalStackLayout>
+                    <VerticalStackLayout x:Name="AccountHead">
+                        <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,*,110,100">
+                            <Label Text="Name" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="1" Text="Role" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="2" Text="Status" Style="{StaticResource Caption}" />
+                        </Grid>
+                        <BoxView Style="{StaticResource Hairline}" />
+                    </VerticalStackLayout>
+                    <c:TableBody BindableLayout.ItemsSource="{Binding Users}" Header="{x:Reference AccountHead}" WideFrom="700"
+                                 RowTemplate="{StaticResource AccountRow}" CardTemplate="{StaticResource AccountCard}"
+                                 BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource AccountCard}, Default={StaticResource AccountRow}}">
+                        <BindableLayout.EmptyView><Label Text="No active accounts." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                    </c:TableBody>
+                </VerticalStackLayout>
             </Border>
 
             <Label Text="Deactivated accounts" Style="{StaticResource SectionTitle}" />
             <Label Text="Switched off, not deleted. Reactivate someone to let them sign in again." Style="{StaticResource Caption}" />
-            <Border Style="{StaticResource Panel}" Padding="12">
-            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Deactivated}" Spacing="8">
-                <BindableLayout.ItemTemplate>
-                    <DataTemplate x:DataType="svc:UserRow">
-                        <Border Style="{StaticResource Row}">
-                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
-                                <VerticalStackLayout Spacing="2" VerticalOptions="Center">
-                                    <Label Text="{Binding Username}" Style="{StaticResource Heading}" />
-                                    <Label Text="{Binding RoleText}" Style="{StaticResource Caption}" />
-                                </VerticalStackLayout>
-                                <c:StatusChip Grid.Column="1" Status="{Binding ActiveStatus}" VerticalOptions="Center" />
-                                <Button Grid.Column="2" Text="⋮" Style="{StaticResource SmallOutlineButton}" FontSize="24" WidthRequest="48" MinimumHeightRequest="48"
-                                        VerticalOptions="Center" Clicked="OnAccountActions" AutomationId="UserAccountActions"
-                                        SemanticProperties.Description="Account actions" SemanticProperties.Hint="Open role, password and account actions" />
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </BindableLayout.ItemTemplate>
-            </VerticalStackLayout>
+            <Border Style="{StaticResource TablePanel}">
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Deactivated}" BindableLayout.ItemTemplate="{StaticResource AccountRow}">
+                    <BindableLayout.EmptyView><Label Text="No deactivated accounts." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                </VerticalStackLayout>
             </Border>
         </VerticalStackLayout>
     </ScrollView>

@@ -38,7 +38,9 @@ public sealed class AuditRecord : BaseModel
     [Column("details")] public Dictionary<string, object>? Details { get; set; }
 
     [JsonIgnore] public DateTime Manila => (CreatedAt.Kind == DateTimeKind.Local ? CreatedAt.ToUniversalTime() : CreatedAt).AddHours(8);   // no daylight saving
-    [JsonIgnore] public string WhenText => Manila.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+    [JsonIgnore] public string WhenText => Manila.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture);   // the CSV: sortable
+    /// <summary>On screen, in the app's date words (9.8: the table showed the CSV's "2026-11-05 17:12").</summary>
+    [JsonIgnore] public string ShownWhen => Manila.ToString("ddd d MMM yyyy, h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
     /// <summary>Blank for entries written before 0045 (D7: not guessed).</summary>
     [JsonIgnore] public string RoleText => Role is null ? "" : GymMembership.Core.Services.UserRow.RoleTitle(Role);
     [JsonIgnore] public string AreaText => GymMembership.Core.Services.AuditLabels.Area(Action);

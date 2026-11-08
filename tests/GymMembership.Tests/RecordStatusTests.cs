@@ -18,7 +18,11 @@ public class RecordStatusTests
     {
         string View(params string[] path) => File.ReadAllText(Path.Combine([TestPaths.AppFolder(), .. path]));
         Assert.Contains("Status=\"{Binding ActiveStatus}\"", View("Views", "UsersPage.xaml"));
-        Assert.Equal(2, View("Views", "CatalogAdminPage.xaml").Split("Converter={StaticResource RecordStatus}").Length - 1);   // packages and amenities
+        // packages and amenities, each as a table row and a stacked row (9.8): every status chip on the page uses the shared word
+        var catalog = View("Views", "CatalogAdminPage.xaml");
+        var chips = catalog.Split("<c:StatusChip").Length - 1;
+        Assert.Equal(4, chips);
+        Assert.Equal(chips, catalog.Split("Converter={StaticResource RecordStatus}").Length - 1);
         Assert.Contains("Status=\"{Binding StatusText}\"", View("Views", "DiscountsPage.xaml"));
         Assert.Contains("Status=\"{Binding StatusText}\"", View("Controls", "ArchivePanel.xaml"));
     }

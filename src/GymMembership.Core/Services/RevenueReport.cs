@@ -1,4 +1,5 @@
 using System.Globalization;
+using GymMembership.Core.Models;
 using PdfSharp.Drawing;
 using PdfSharp.Fonts;
 using PdfSharp.Pdf;
@@ -22,7 +23,6 @@ public static class RevenuePdf
     public static string Money(decimal v) => (v < 0 ? "-₱" : "₱") + Math.Abs(v).ToString("N2", En);
     public static string Manila(DateTime utc) => utc.AddHours(8).ToString("d MMM yyyy, HH:mm", En);   // Manila has no daylight saving
     public static string Range(DateOnly from, DateOnly to) => $"{from.ToString("d MMM yyyy", En)} to {to.ToString("d MMM yyyy", En)} (Asia/Manila)";
-    static string MethodName(string m) => m switch { "cash" => "Cash", "gcash" => "GCash", "qr" => "QR", "bank_transfer" => "Bank transfer", _ => m };
 
     // PDFsharp needs font bytes on Android (no system fonts), and the resolver is process-wide, so it is set once
     sealed class OneFont(byte[] data) : IFontResolver
@@ -93,7 +93,7 @@ public static class RevenuePdf
             foreach (var l in lines)
             {
                 if (y + RowHeight > Bottom) { NewPage(); Header(); }
-                Row([Manila(l.At), l.Receipt ?? "", l.Payer, l.Refund ? "Refund: " + l.Item : l.Item, MethodName(l.Method), Money(l.Amount)], body);
+                Row([Manila(l.At), l.Receipt ?? "", l.Payer, l.Refund ? "Refund: " + l.Item : l.Item, PayMethod.Name(l.Method), Money(l.Amount)], body);
             }
             if (y + RowHeight > Bottom) { NewPage(); Header(); }
             Row(["", "", "", "", "Net", Money(lines.Sum(l => l.Amount))], head);

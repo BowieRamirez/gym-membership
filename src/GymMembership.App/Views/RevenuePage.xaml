@@ -9,7 +9,8 @@
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='20,16,20,24', Default='16,12,16,20'}" Spacing="14">
-            <Label Text="Net receipts: verified payments minus approved refunds, grouped by Manila day, item and payment method. A refund counts on the day it was approved, and is shown against the method the member paid with. The cash drawer on the Cashier page drops only when the repayment is recorded. Payment counts count receipts, not refunds. Voids are excluded." Style="{StaticResource Muted}" />
+            <!-- 9.8: one sentence (was five); the cash-drawer timing is said on the Cashier page, where the drawer is -->
+            <Label Text="Verified payments minus refunds (counted on the day they were approved), by Manila day, item and method; voided payments are left out." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
@@ -22,7 +23,7 @@
                     <Label Text="To" Style="{StaticResource Caption}" />
                     <Border Style="{StaticResource Field}"><DatePicker Date="{Binding To}" /></Border>
                 </VerticalStackLayout>
-                <Button Text="Show revenue" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Command="{Binding LoadCommand}" />
+                <Button Text="Show revenue" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding LoadCommand}" />
                 <!-- exports the period shown below, even if the dates above were changed since -->
                 <Button Text="Export PDF" Style="{StaticResource SmallOutlineButton}" Margin="0,0,0,8" Command="{Binding ExportPdfCommand}"
                         SemanticProperties.Hint="Creates a PDF of the receipts and refunds shown and opens the share sheet" />
@@ -35,26 +36,22 @@
                 </VerticalStackLayout>
             </Border>
 
-            <Border Style="{StaticResource Panel}" Padding="12">
-            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Rows}" Spacing="8">
-                <BindableLayout.EmptyView><Label Text="No receipts or approved refunds in this period." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+            <!-- 9.8: rows divided by hairlines in one panel (were a card per row) -->
+            <Border Style="{StaticResource TablePanel}">
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Rows}">
+                <BindableLayout.EmptyView><Label Text="No receipts or approved refunds in this period." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="m:RevenueRow">
-                        <Border Style="{StaticResource Row}" Padding="16,12">
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <VerticalStackLayout>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="14,10">
                                 <VerticalStackLayout Spacing="2">
-                                    <Label Text="{Binding Day, StringFormat='{0:ddd d MMM}'}" />
-                                    <Label Style="{StaticResource Caption}">
-                                        <Label.Text>
-                                            <MultiBinding StringFormat="{}{0} · {1} · {2} payment(s)">
-                                                <Binding Path="Kind" /><Binding Path="Method" /><Binding Path="Payments" />
-                                            </MultiBinding>
-                                        </Label.Text>
-                                    </Label>
+                                    <Label Text="{Binding Day, StringFormat='{0:ddd d MMM}'}" FontFamily="BarlowMedium" />
+                                    <Label Text="{Binding Summary}" Style="{StaticResource Caption}" />
                                 </VerticalStackLayout>
-                                <Label Grid.Column="1" Text="{Binding Total, StringFormat='₱{0:N2}'}" Style="{StaticResource Heading}" VerticalOptions="Center" />
+                                <Label Grid.Column="1" Text="{Binding Total, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" FontSize="17" VerticalOptions="Center" />
                             </Grid>
-                        </Border>
+                            <BoxView Style="{StaticResource Hairline}" />
+                        </VerticalStackLayout>
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
             </VerticalStackLayout>

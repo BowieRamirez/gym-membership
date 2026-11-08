@@ -25,9 +25,16 @@
                 <Label Text="Walk-in price (₱)" Style="{StaticResource Caption}" />
                 <Border Style="{StaticResource Field}" WidthRequest="160" HorizontalOptions="Start"><Entry Text="{Binding WalkInPrice}" Keyboard="Numeric" SemanticProperties.Description="Walk-in price" /></Border>
                 <Label Text="Opening hours, every day (Manila time). Coach shifts and bookings must fit inside them, on the hour or half hour." Style="{StaticResource Caption}" />
-                <FlexLayout Wrap="Wrap">
-                    <Border Style="{StaticResource Field}" Margin="0,0,8,8"><TimePicker Time="{Binding OpensAt}" SemanticProperties.Description="Opening time" /></Border>
-                    <Border Style="{StaticResource Field}" Margin="0,0,8,8"><TimePicker Time="{Binding ClosesAt}" SemanticProperties.Description="Closing time" /></Border>
+                <!-- 9.8: each picker says which end of the day it is -->
+                <FlexLayout Wrap="Wrap" AlignItems="End">
+                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                        <Label Text="Opens" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><TimePicker Time="{Binding OpensAt}" SemanticProperties.Description="Opening time" /></Border>
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                        <Label Text="Closes" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><TimePicker Time="{Binding ClosesAt}" SemanticProperties.Description="Closing time" /></Border>
+                    </VerticalStackLayout>
                 </FlexLayout>
             </VerticalStackLayout>
             </VerticalStackLayout>

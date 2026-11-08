@@ -369,7 +369,10 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
 }
 
 // ===================== Payment verification and the counter (staff) =====================
-public sealed record PaymentRow(Payment Payment, string Payer, string Item, bool HasProof);
+public sealed record PaymentRow(Payment Payment, string Payer, string Item, bool HasProof)
+{
+    public string MethodText => PayMethod.Name(Payment.Method);   // 9.8: Void showed "cash" and "qr"
+}
 public sealed record CashRow(string Kind, long Payments, decimal Total);
 /// <summary>Something the counter can take a payment for: a package, a membership to renew, or an amenity.</summary>
 public sealed record CounterItem(int Id, string Label, decimal? Price = null);
@@ -1182,16 +1185,17 @@ public sealed class NotificationService(ISupabaseGateway gw) : INotificationServ
 // ===================== Admin =====================
 public sealed record UserRow(string UserId, string Username, bool IsActive, IReadOnlyList<string> Roles, string FirstName = "", string LastName = "")
 {
-    public string RoleText => string.Join(", ", Roles.Select(RoleName));
-    /// <summary>What a role is called on screen, the one place for it (D17): the code admin is the System admin, subadmin is the Admin.</summary>
-    public static string RoleName(string role) => role switch { "admin" => "system admin", "subadmin" => "admin", _ => role };
+    public string RoleText => string.Join(", ", Roles.Select(RoleTitle));   // 9.8: titles in lists, as the audit log shows them
+    /// <summary>What a role is called on screen, the one place for it (D17): the code admin is the System admin, subadmin is the Admin,
+    /// and (D28, 9.8) employee is the Front desk, as the menu calls it.</summary>
+    public static string RoleName(string role) => role switch { "admin" => "system admin", "subadmin" => "admin", "employee" => "front desk", _ => role };
     /// <summary>RoleName with a capital, for titles and buttons.</summary>
     public static string RoleTitle(string role) => RoleName(role) is var n ? char.ToUpperInvariant(n[0]) + n[1..] : "";
     /// <summary>
     /// The role code for a name in the Add user picker, or null. Explicit on purpose (D17): lower-casing "Admin" would ask for
     /// admin, the System admin role. The System admin is never offered here, and create-user refuses it anyway.
     /// </summary>
-    public static string? RoleCode(string shown) => shown switch { "Member" => "member", "Coach" => "coach", "Employee" => "employee", "Admin" => "subadmin", _ => null };
+    public static string? RoleCode(string shown) => shown switch { "Member" => "member", "Coach" => "coach", "Front desk" => "employee", "Admin" => "subadmin", _ => null };
     public bool IsCoach => Roles.Contains("coach");
     public bool IsEmployee => Roles.Contains("employee");
     public string CoachActionText => IsCoach ? "Remove coach" : "Make coach";

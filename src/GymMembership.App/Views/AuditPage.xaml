@@ -11,8 +11,8 @@
         <!-- wide: one row per entry, the columns of the owner's table (items 5 and 14) -->
         <DataTemplate x:Key="AuditRowTemplate" x:DataType="m:AuditRecord">
             <VerticalStackLayout>
-                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="134,*,100,112,96,*,104,*,1.4*">
-                    <Label Text="{Binding WhenText}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="170,*,100,112,96,*,104,*,1.4*">
+                    <Label Text="{Binding ShownWhen}" Style="{StaticResource Muted}" VerticalOptions="Center" />
                     <Label Grid.Column="1" Text="{Binding ActorName}" VerticalOptions="Center" />
                     <Label Grid.Column="2" Text="{Binding RoleText}" Style="{StaticResource Muted}" VerticalOptions="Center" />
                     <Label Grid.Column="3" Text="{Binding IpAddress}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
@@ -32,7 +32,7 @@
                 <VerticalStackLayout Padding="14,10" Spacing="2">
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                         <Label Text="{Binding ActionText}" FontFamily="BarlowSemiBold" />
-                        <Label Grid.Column="1" Text="{Binding WhenText}" Style="{StaticResource Caption}" />
+                        <Label Grid.Column="1" Text="{Binding ShownWhen}" Style="{StaticResource Caption}" />
                     </Grid>
                     <Label Style="{StaticResource Muted}">
                         <Label.Text>
@@ -56,10 +56,30 @@
     </v:BasePage.Resources>
 
     <Grid RowDefinitions="Auto,*">
-        <HorizontalStackLayout Padding="20,12,20,0" Spacing="10" MaximumWidthRequest="{StaticResource PageWidth}">
-            <Button Text="Audit log" Command="{Binding OpenLogsCommand}" Style="{StaticResource SmallOutlineButton}" AutomationId="OpenLogs" />
-            <Button Text="Archive" Command="{Binding OpenArchiveCommand}" IsVisible="{Binding HasArchive}" Style="{StaticResource SmallOutlineButton}" AutomationId="OpenArchive" />
-        </HorizontalStackLayout>
+        <!-- 9.8: the two views as the quiet switch (as the coach Dashboard's Month | Week); the open one is bold and filled. They were two
+             identical outline pills, so neither said which was open. -->
+        <Border Style="{StaticResource SegmentTrack}" Margin="20,12,20,0">
+            <HorizontalStackLayout Spacing="2">
+                <Button Text="Audit log" Command="{Binding OpenLogsCommand}" Style="{StaticResource Segment}" AutomationId="OpenLogs">
+                    <Button.Triggers>
+                        <DataTrigger TargetType="Button" Binding="{Binding ShowLogs}" Value="True">
+                            <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                        </DataTrigger>
+                    </Button.Triggers>
+                </Button>
+                <Button Text="Archive" Command="{Binding OpenArchiveCommand}" IsVisible="{Binding HasArchive}" Style="{StaticResource Segment}" AutomationId="OpenArchive">
+                    <Button.Triggers>
+                        <DataTrigger TargetType="Button" Binding="{Binding ShowArchive}" Value="True">
+                            <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                        </DataTrigger>
+                    </Button.Triggers>
+                </Button>
+            </HorizontalStackLayout>
+        </Border>
         <Grid Grid.Row="1" IsVisible="{Binding ShowArchive}">
             <c:ArchivePanel BindingContext="{Binding Archive}" />
         </Grid>
@@ -81,18 +101,18 @@
                             </VerticalStackLayout>
                             <VerticalStackLayout WidthRequest="190" Margin="0,0,12,8" Spacing="4">
                                 <Label Text="Action type" Style="{StaticResource Caption}" />
-                                <Picker SemanticProperties.Description="Action type" ItemsSource="{Binding Areas}" SelectedIndex="{Binding AreaIndex}" AutomationId="AuditArea" />
+                                <Border Style="{StaticResource Field}"><Picker SemanticProperties.Description="Action type" ItemsSource="{Binding Areas}" SelectedIndex="{Binding AreaIndex}" AutomationId="AuditArea" /></Border>
                             </VerticalStackLayout>
                             <VerticalStackLayout WidthRequest="190" Margin="0,0,12,8" Spacing="4">
                                 <Label Text="Object type" Style="{StaticResource Caption}" />
-                                <Picker SemanticProperties.Description="Object type" ItemsSource="{Binding ObjectTypes}" SelectedIndex="{Binding ObjectIndex}" AutomationId="AuditObject" />
+                                <Border Style="{StaticResource Field}"><Picker SemanticProperties.Description="Object type" ItemsSource="{Binding ObjectTypes}" SelectedIndex="{Binding ObjectIndex}" AutomationId="AuditObject" /></Border>
                             </VerticalStackLayout>
                             <HorizontalStackLayout Margin="0,0,12,14" Spacing="8">
                                 <Switch IsToggled="{Binding UseDates}" AutomationId="AuditUseDates" />
                                 <Label Text="Dates (Manila)" VerticalOptions="Center" />
                             </HorizontalStackLayout>
-                            <VerticalStackLayout Margin="0,0,12,8" Spacing="4" IsVisible="{Binding UseDates}"><Label Text="From" Style="{StaticResource Caption}" /><DatePicker Date="{Binding From}" /></VerticalStackLayout>
-                            <VerticalStackLayout Margin="0,0,12,8" Spacing="4" IsVisible="{Binding UseDates}"><Label Text="Through" Style="{StaticResource Caption}" /><DatePicker Date="{Binding To}" /></VerticalStackLayout>
+                            <VerticalStackLayout Margin="0,0,12,8" Spacing="4" IsVisible="{Binding UseDates}"><Label Text="From" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><DatePicker Date="{Binding From}" /></Border></VerticalStackLayout>
+                            <VerticalStackLayout Margin="0,0,12,8" Spacing="4" IsVisible="{Binding UseDates}"><Label Text="Through" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><DatePicker Date="{Binding To}" /></Border></VerticalStackLayout>
                         </FlexLayout>
                         <FlexLayout Wrap="Wrap">
                             <Button Text="Apply filters" Command="{Binding ApplyCommand}" Style="{StaticResource SmallButton}" Margin="0,0,8,0" AutomationId="AuditApply" />
@@ -107,7 +127,7 @@
                 <Border Style="{StaticResource TablePanel}">
                     <VerticalStackLayout>
                         <VerticalStackLayout x:Name="AuditHead" IsVisible="{OnIdiom Phone=False, Default=True}">
-                            <Grid Style="{StaticResource TableHead}" ColumnDefinitions="134,*,100,112,96,*,104,*,1.4*">
+                            <Grid Style="{StaticResource TableHead}" ColumnDefinitions="170,*,100,112,96,*,104,*,1.4*">
                                 <Label Text="Date and time" Style="{StaticResource Caption}" />
                                 <Label Grid.Column="1" Text="User" Style="{StaticResource Caption}" />
                                 <Label Grid.Column="2" Text="Role" Style="{StaticResource Caption}" />
