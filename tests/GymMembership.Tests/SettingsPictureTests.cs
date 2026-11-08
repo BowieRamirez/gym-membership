@@ -29,6 +29,17 @@ public class SettingsPictureTests
     }
 
     [Fact]
+    public async Task The_theme_picker_shows_words_and_stores_the_code()
+    {
+        var (vm, _) = await Build(null);   // 9.6 polish: the picker showed "system"
+        Assert.Equal("Same as device", vm.ThemeNames[vm.ThemeIndex]);
+        vm.ThemeIndex = 2;
+        Assert.Equal("dark", vm.Theme);
+        vm.Theme = "light";
+        Assert.Equal(1, vm.ThemeIndex);
+    }
+
+    [Fact]
     public async Task Opening_settings_shows_the_initials()
     {
         var (vm, _) = await Build(null);

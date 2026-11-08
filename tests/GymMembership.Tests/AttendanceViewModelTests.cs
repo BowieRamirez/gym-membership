@@ -142,6 +142,12 @@ public class AttendanceViewModelTests
         var (_, _, vm) = await Open(s => { s.All = [S("2026-10-20T01:00:00Z", null)]; s.Upcoming = []; });
         Assert.Equal("—", vm.RateText);
         Assert.Equal("None booked", vm.NextTimeText);
+        Assert.False(vm.HasNext);                                           // shown at heading size, not as a numeral
+        vm.ShowWeekCommand.Execute(null);
+        Assert.True(vm.WeekRows.Single(r => r.Day.Date == new DateOnly(2026, 10, 14)).IsEmpty);   // one line, not a card
+        var (_, _, busy) = await Open();
+        busy.ShowWeekCommand.Execute(null);
+        Assert.False(busy.WeekRows.Single(r => r.Day.Date == new DateOnly(2026, 10, 12)).IsEmpty);
     }
 
     [Fact]

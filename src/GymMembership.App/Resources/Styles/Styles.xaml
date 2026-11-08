@@ -116,9 +116,11 @@
             <VisualStateGroupList>
                 <VisualStateGroup x:Name="CommonStates">
                     <VisualState x:Name="Normal" />
+                    <!-- disabled: a grey block with muted words, not a faded yellow (it read as a muddy olive in dark, 9.6 polish) -->
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
-                            <Setter Property="Opacity" Value="0.45" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource SurfaceDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
                         </VisualState.Setters>
                     </VisualState>
                     <VisualState x:Name="Pressed">
@@ -286,12 +288,13 @@
     </Style>
 
     <!-- Chips (Material 3 filter / assist chips): status filters and small actions inside list rows. Rounded rectangles, not pills, so a
-         filter never reads as a main action; 40 tall on phones (with 8 between them) and 34 on Windows. FilterChipOn is the filter in use.
+         filter never reads as a main action; 48 tall on phones (Android's touch minimum; they were 40 until the 9.6 polish) and 34 on
+         Windows. FilterChipOn is the filter in use.
          Never shrunk in a wrapping FlexLayout: it wraps to the next line instead of cutting the word ("Declin"). -->
     <Style x:Key="FilterChip" TargetType="Button" BasedOn="{StaticResource OutlineButton}">
         <Setter Property="FlexLayout.Shrink" Value="0" />
-        <Setter Property="MinimumHeightRequest" Value="{OnPlatform Android=40, iOS=40, Default=34}" />
-        <Setter Property="HeightRequest" Value="{OnPlatform Android=40, iOS=40, Default=34}" />
+        <Setter Property="MinimumHeightRequest" Value="{OnPlatform Android=48, iOS=48, Default=34}" />
+        <Setter Property="HeightRequest" Value="{OnPlatform Android=48, iOS=48, Default=34}" />
         <Setter Property="CornerRadius" Value="10" />
         <Setter Property="Padding" Value="14,0" />
         <Setter Property="BorderWidth" Value="1" />

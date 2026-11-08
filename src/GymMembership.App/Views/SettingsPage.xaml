@@ -73,8 +73,9 @@
                     <Border Style="{StaticResource SidePanel}">
                         <VerticalStackLayout Spacing="10">
                             <c:CardTitle Text="Theme" />
-                            <Border Style="{StaticResource Field}">
-                                <Picker ItemsSource="{Binding Themes}" SelectedItem="{Binding Theme}" SemanticProperties.Description="Theme" />
+                            <!-- three short choices: the field is as wide as the longest, not the panel (9.6 polish) -->
+                            <Border Style="{StaticResource Field}" WidthRequest="240" HorizontalOptions="Start">
+                                <Picker ItemsSource="{Binding ThemeNames}" SelectedIndex="{Binding ThemeIndex}" SemanticProperties.Description="Theme" />
                             </Border>
                             <Button Text="Save theme" Style="{StaticResource SmallOutlineButton}" Command="{Binding SaveCommand}" HorizontalOptions="Start" />
                         </VerticalStackLayout>

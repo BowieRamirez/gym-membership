@@ -763,6 +763,7 @@ public partial class SessionsViewModel(ISessionService svc) : LoadableViewModel
 public sealed record WeekRow(CalendarDay Day, IReadOnlyList<CalendarSession> Sessions)
 {
     public string Title => Day.Date.ToString("ddd d MMM", CultureInfo.InvariantCulture);
+    public bool IsEmpty => Sessions.Count == 0;   // an empty day is one line in the week, not a card saying "No sessions."
 }
 
 // the coach's attendance calendar: a month or a week, a day list underneath, and marks that can be corrected in place
@@ -796,6 +797,7 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     [ObservableProperty] private string rateText = "—";
     [ObservableProperty] private string upcomingText = "—";
     [ObservableProperty] private string nextTimeText = "—";
+    [ObservableProperty] private bool hasNext;     // "None booked" is words, not a big number
     [ObservableProperty] private string nextWhenText = "";
     [ObservableProperty] private string traineesText = "—";
 
@@ -905,6 +907,7 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
         RateText = known && summary.RatePercent is { } r ? $"{r}%" : "—";
         UpcomingText = summary.Upcoming.ToString(CultureInfo.InvariantCulture);
         // the yellow card (9.6, as approved): the time big, then the day in words and who
+        HasNext = summary.Next is not null;
         if (summary.Next is { } next)
         {
             var at = AttendanceCalendar.LocalTime(next.Session.ScheduledStart, Zone);

@@ -30,6 +30,14 @@ public class MessengerViewModelTests
     }
 
     [Fact]
+    public async Task A_coach_with_no_conversations_is_told_so()
+    {
+        var (_, _, vm) = await Open("kai@demo.io");   // 9.6 polish: the list was blank
+        Assert.Empty(vm.Threads);
+        Assert.Equal("No conversations yet.", vm.EmptyListText);
+    }
+
+    [Fact]
     public async Task The_staff_tab_shows_the_front_desk_thread_and_staff_find_it_in_their_inbox()
     {
         var (gw, _, vm) = await Open("carlo@demo.io");

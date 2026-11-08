@@ -134,7 +134,7 @@
                 <Button Grid.Row="1" Text="Load earlier messages" Style="{StaticResource SmallOutlineButton}" Command="{Binding LoadEarlierCommand}"
                         IsVisible="{Binding HasMore}" HorizontalOptions="Center" Margin="0,0,0,10" />
 
-                <!-- Your messages sit right in Rubber (the primary ink); theirs sit left on a hairline panel -->
+                <!-- Your messages sit right on the highlight colour; theirs sit left on a panel -->
                 <CollectionView Grid.Row="2" ItemsSource="{Binding Bubbles}" ItemsUpdatingScrollMode="KeepLastItemInView" Margin="16,0">
                     <CollectionView.EmptyView>
                         <Label Text="No messages yet. Say hello below." Style="{StaticResource Muted}" />
@@ -149,7 +149,8 @@
                                         <DataTrigger TargetType="Border" Binding="{Binding Mine}" Value="True">
                                             <Setter Property="HorizontalOptions" Value="End" />
                                             <Setter Property="StrokeShape" Value="RoundRectangle 14,14,4,14" />
-                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+                                            <!-- the highlight flip (D23): black in light, yellow in dark (was a near-white block in dark until the 9.6 polish) -->
+                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
                                         </DataTrigger>
                                     </Border.Triggers>
                                     <VerticalStackLayout Spacing="3">

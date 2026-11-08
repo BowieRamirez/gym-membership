@@ -49,7 +49,9 @@
                 <Border Style="{StaticResource HeroPanel}">
                     <VerticalStackLayout Spacing="6">
                         <c:CardTitle Text="Next session" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
-                        <Label Text="{Binding NextTimeText}" Style="{StaticResource Numeral}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+                        <Label Text="{Binding NextTimeText}" Style="{StaticResource Numeral}" IsVisible="{Binding HasNext}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+                        <!-- nothing booked: "None booked" at heading size, so it stays on one line in a narrow card -->
+                        <Label Text="{Binding NextTimeText}" Style="{StaticResource Heading}" FontSize="26" IsVisible="{Binding HasNext, Converter={StaticResource Not}}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
                         <Label Text="{Binding NextWhenText}" FontFamily="BarlowMedium" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
                     </VerticalStackLayout>
                 </Border>
@@ -194,6 +196,13 @@
                                     </DataTemplate>
                                 </BindableLayout.ItemTemplate>
                             </FlexLayout>
+                            <!-- the key for the marks (they were unexplained until the 9.6 polish); screen readers get the same in each day's description -->
+                            <HorizontalStackLayout Spacing="6" Margin="6,4,0,0">
+                                <c:IconView Icon="check" Size="10" ChipSize="16" VerticalOptions="Center" />
+                                <Label Text="Attended" Style="{StaticResource Caption}" VerticalOptions="Center" Margin="0,0,12,0" />
+                                <c:IconView Icon="x" Size="10" ChipSize="16" VerticalOptions="Center" />
+                                <Label Text="Absent" Style="{StaticResource Caption}" VerticalOptions="Center" />
+                            </HorizontalStackLayout>
                         </VerticalStackLayout>
                     </Border>
 
@@ -201,17 +210,19 @@
                     <VerticalStackLayout IsVisible="{Binding IsWeek}" Spacing="10" BindableLayout.ItemsSource="{Binding WeekRows}">
                         <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="vm:WeekRow">
+                                <!-- a day with sessions is a card; an empty day is a single line ("Wed 4 Nov   No sessions") -->
                                 <Border Style="{StaticResource Panel}">
+                                    <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding IsEmpty}" Value="True"><Setter Property="Padding" Value="14,8" /></DataTrigger></Border.Triggers>
                                     <VerticalStackLayout Spacing="8">
-                                        <HorizontalStackLayout Spacing="8" SemanticProperties.Description="{Binding Day.Description}">
-                                            <HorizontalStackLayout.GestureRecognizers><TapGestureRecognizer Tapped="OnWeekDay" /></HorizontalStackLayout.GestureRecognizers>
+                                        <Grid ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="8" SemanticProperties.Description="{Binding Day.Description}">
+                                            <Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnWeekDay" /></Grid.GestureRecognizers>
                                             <Label Text="{Binding Title}" Style="{StaticResource Heading}" VerticalOptions="Center" />
-                                            <c:IconView Icon="check" Size="12" ChipSize="20" IsVisible="{Binding Day.HasCheck}" />
-                                            <c:IconView Icon="x" Size="12" ChipSize="20" IsVisible="{Binding Day.HasX}" />
-                                        </HorizontalStackLayout>
-                                        <VerticalStackLayout Spacing="8" BindableLayout.ItemsSource="{Binding Sessions}" BindableLayout.ItemTemplate="{StaticResource SessionTemplate}">
-                                            <BindableLayout.EmptyView><Label Text="No sessions." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
-                                        </VerticalStackLayout>
+                                            <c:IconView Grid.Column="1" Icon="check" Size="12" ChipSize="20" IsVisible="{Binding Day.HasCheck}" />
+                                            <c:IconView Grid.Column="2" Icon="x" Size="12" ChipSize="20" IsVisible="{Binding Day.HasX}" />
+                                            <Label Grid.Column="3" Text="No sessions" Style="{StaticResource Muted}" HorizontalOptions="End" VerticalOptions="Center" IsVisible="{Binding IsEmpty}" />
+                                        </Grid>
+                                        <VerticalStackLayout Spacing="8" BindableLayout.ItemsSource="{Binding Sessions}" BindableLayout.ItemTemplate="{StaticResource SessionTemplate}"
+                                                             IsVisible="{Binding IsEmpty, Converter={StaticResource Not}}" />
                                     </VerticalStackLayout>
                                 </Border>
                             </DataTemplate>

@@ -15,7 +15,7 @@
         </VerticalStackLayout>
 
         <ScrollView Grid.Row="1"><c:CardGrid Columns="{OnIdiom Phone=1, Default=4}" Padding="0,0,0,16" BindableLayout.ItemsSource="{Binding Trainees}">
-            <BindableLayout.EmptyView><Label Text="No trainees yet. Members appear here when they hire you." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+            <BindableLayout.EmptyView><Label Text="No trainees yet. Members can hire you while Taking new members is on in My coach profile." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
             <BindableLayout.ItemTemplate>
                 <DataTemplate x:DataType="svc:TraineeRow">
                     <!-- 9.6: the text gets the card's full width, the two actions follow as chips (no yellow per card, Remove no bigger than Message) -->

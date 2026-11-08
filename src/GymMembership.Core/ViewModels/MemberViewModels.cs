@@ -472,7 +472,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     public bool CanRelease => HasFilters && Selected?.Thread is { IsSupport: true, ClaimedBy: not null } t && t.ClaimedBy == myId;
     public bool CanClose => HasFilters && Selected?.Thread is { IsSupport: true, Status: "open" };
     public bool CanReopen => HasFilters && Selected?.Thread is { IsSupport: true, Status: "closed" };
-    public string EmptyListText => HasFilters ? "No conversations here." : Tab == "coach" && HasTabs ? "You have no coach yet. Hire one from the Coaches page to start a conversation." : "";
+    public string EmptyListText => HasFilters ? "No conversations here." : Tab == "coach" && HasTabs ? "You have no coach yet. Hire one from the Coaches page to start a conversation." : "No conversations yet.";
 
     // ---- live updates. Every Realtime event is a hint; the answer always comes from the server through AutoRefreshAsync.
     /// <summary>Realtime calls back on its own thread, and the lists must change on the UI thread. The page sets this; with none (tests) the work runs where it is.</summary>
@@ -889,7 +889,10 @@ public partial class NotificationsViewModel : LoadableViewModel, IDisposable
 public partial class SettingsViewModel(ISettingsService settings, IAuthService auth, IAppNavigator nav, IProfileService profile, IProofPicker picker, ISupabaseGateway? gateway = null) : LoadableViewModel
 {
     public string[] Themes { get; } = ["system", "light", "dark"];
-    [ObservableProperty] private string theme = "system";
+    /// <summary>What the picker shows, in the same order as <see cref="Themes"/> (9.6 polish: it showed the stored code, "system").</summary>
+    public string[] ThemeNames { get; } = ["Same as device", "Light", "Dark"];
+    public int ThemeIndex { get => Math.Max(0, Array.IndexOf(Themes, Theme)); set { if (value >= 0) Theme = Themes[value]; } }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ThemeIndex))] private string theme = "system";
     [ObservableProperty] private bool mustChange;
     [ObservableProperty] private string letters = "?";
     [ObservableProperty] private string? avatarUrl;

@@ -10,6 +10,7 @@ target_fingerprint: "sha256:ced37d95c0cef4d2b7757864e915180d130c51a63d55de4f0172
 target_path: "C:\\Users\\bowie\\OneDrive\\Desktop\\projects\\gym-membership\\src\\GymMembership.App\\CoachShell.xaml"
 timestamp: 2026-11-08T07-48-03Z
 slug: src-gymmembership-app-coachshell-xaml
+closed: true
 ---
 Method: design review only (detector not applicable, native platform). Re-score after the 9.6 fixes.
 
