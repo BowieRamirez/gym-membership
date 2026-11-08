@@ -48,7 +48,7 @@ try {
     Write-Output 'PASS admin startup; operations initially collapsed'
     Wait-Name 'AdminNavigation-overview' ', current page$'
     Wait-Name 'AdminOverviewUpdated' 'Checked.*Manila'
-    foreach ($key in @('users', 'catalog', 'discounts', 'refunds', 'revenue', 'void', 'gym', 'audit')) {
+    foreach ($key in @('users', 'catalog', 'discounts', 'refunds', 'revenue', 'gym', 'audit')) {
         $value = Find-Id ('AdminOverviewValue-' + $key)
         if ($null -eq $value -or $value.Current.Name -match 'Loading|Unavailable') { throw "Overview summary failed: $key" }
         Invoke-Id ('AdminOverviewOpen-' + $key)

@@ -491,3 +491,42 @@ public class PasswordStrength : VerticalStackLayout
         for (var i = 0; i < 3; i++) _checks[i].Text = (ok[i] ? "✓  " : "–  ") + CheckText[i];
     }
 }
+
+/// <summary>
+/// The quiet two-way switch at the top of a combined page (Refunds &amp; voids, Coaches &amp; amenities, Trainees &amp; shifts), drawn like
+/// Logs &amp; Archive's: the open side bold and filled. Pages show their halves from ShowSecond.
+/// </summary>
+public class PartSwitch : ContentView
+{
+    public static readonly BindableProperty ShowSecondProperty = BindableProperty.Create(nameof(ShowSecond), typeof(bool), typeof(PartSwitch), false,
+        propertyChanged: (b, _, _) => ((PartSwitch)b).Paint());
+    public bool ShowSecond { get => (bool)GetValue(ShowSecondProperty); set => SetValue(ShowSecondProperty, value); }
+    public string First { get => _first.Text; set { _first.Text = value; Paint(); } }
+    public string Second { get => _second.Text; set { _second.Text = value; Paint(); } }
+
+    readonly Button _first = new() { AutomationId = "PartFirst" }, _second = new() { AutomationId = "PartSecond" };
+
+    public PartSwitch()
+    {
+        var res = Application.Current!.Resources;
+        _first.Style = _second.Style = (Style)res["Segment"];
+        _first.Clicked += (_, _) => ShowSecond = false;
+        _second.Clicked += (_, _) => ShowSecond = true;
+        Content = new Border { Style = (Style)res["SegmentTrack"], Content = new HorizontalStackLayout { Spacing = 2, Children = { _first, _second } } };
+        Paint();
+    }
+
+    // both sides set outright: a style swap lost the other label on Android, and clearing the open side's values left Windows' fill
+    // in place. Closed = the Segment style's own values.
+    void Paint()
+    {
+        var res = Application.Current!.Resources;
+        foreach (var (button, open) in new[] { (_first, !ShowSecond), (_second, ShowSecond) })
+        {
+            SemanticProperties.SetDescription(button, open ? $"{button.Text}, selected" : button.Text);
+            button.FontFamily = open ? "BarlowSemiBold" : "BarlowMedium";
+            button.SetAppThemeColor(Button.BackgroundColorProperty, (Color)res[open ? "InkLight" : "LineLight"], (Color)res[open ? "SurfaceDark" : "PageDark"]);
+            button.SetAppThemeColor(Button.TextColorProperty, (Color)res[open ? "White" : "MutedLight"], (Color)res[open ? "InkDark" : "MutedDark"]);
+        }
+    }
+}

@@ -5,8 +5,12 @@
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
-            x:Class="GymMembership.App.Views.RefundsPage" x:DataType="vm:RefundsViewModel" Title="Cancellations &amp; refunds">
-    <ScrollView MaximumWidthRequest="{StaticResource PageWidth}" Padding="{OnIdiom Phone='16,12', Default='20,16'}"><VerticalStackLayout>
+            x:Class="GymMembership.App.Views.RefundsPage" x:DataType="vm:RefundsViewModel" Title="Refunds &amp; voids">
+    <!-- D30: Cancellations &amp; refunds and Void a payment are one page with the switch; the void half is VoidPaymentsPage's content (BasePage.HostPart) -->
+    <Grid RowDefinitions="Auto,*" MaximumWidthRequest="{StaticResource PageWidth}">
+    <c:PartSwitch x:Name="Switch" First="Cancellations &amp; refunds" Second="Void a payment" Margin="16,12,16,0" />
+    <ContentView x:Name="Part" Grid.Row="1" IsVisible="{Binding ShowSecond, Source={x:Reference Switch}, x:DataType=c:PartSwitch}" />
+    <ScrollView Grid.Row="1" Padding="16,12" IsVisible="{Binding ShowSecond, Source={x:Reference Switch}, x:DataType=c:PartSwitch, Converter={StaticResource Not}}"><VerticalStackLayout>
         
             <VerticalStackLayout Spacing="10" Padding="0,0,0,16">
                 <!-- 9.8: no heading repeating the page title; the rules in two sentences (were five) -->
@@ -43,4 +47,5 @@
             </DataTemplate>
         </BindableLayout.ItemTemplate>
     </c:CardGrid></VerticalStackLayout></ScrollView>
+    </Grid>
 </v:BasePage>

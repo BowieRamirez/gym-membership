@@ -6,7 +6,7 @@ namespace GymMembership.App.Views;
 
 public partial class RefundsPage : BasePage
 {
-    public RefundsPage(RefundsViewModel vm) {InitializeComponent();BindingContext=vm;}
+    public RefundsPage(RefundsViewModel vm, VoidPaymentsPage voids) {InitializeComponent();BindingContext=vm;HostPart(Switch, Part, voids);}
     protected override TimeSpan? AutoRefresh => TimeSpan.FromSeconds(20);
     async void OnApprove(object? sender, EventArgs e) => await DecideAsync(sender,true);
     async void OnReject(object? sender, EventArgs e) => await DecideAsync(sender,false);

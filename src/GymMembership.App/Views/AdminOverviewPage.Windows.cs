@@ -40,7 +40,7 @@ public sealed class AdminOverviewPage : BasePage
             say.SetBinding(Label.TextProperty, nameof(vm.AttentionText));
             attention.Add(say);
             var review = new Button { Text = "Review refunds", Style = Resource<Style>("HeroSmallButton"), AutomationId = "AdminOverviewReview", VerticalOptions = LayoutOptions.Center };
-            review.Clicked += (_, _) => Open("Cancellations & refunds");
+            review.Clicked += (_, _) => Open("Refunds & voids");
             attention.Add(review, 1);
             var bar = new Border { Style = Resource<Style>("HeroPanel"), Padding = new Thickness(18, 10, 10, 10), Content = attention };
             bar.SetBinding(IsVisibleProperty, nameof(vm.HasAttention));

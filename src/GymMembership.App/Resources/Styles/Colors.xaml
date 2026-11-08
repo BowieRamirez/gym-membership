@@ -12,6 +12,7 @@
     <Color x:Key="InkLight">#111111</Color>
     <Color x:Key="MutedLight">#5B5B5B</Color>
     <Color x:Key="LineLight">#E4E4E4</Color>
+    <Color x:Key="TakenLight">#D6D6D6</Color>     <!-- a booked half-hour on Book an amenity: a solid block, so taken never looks free (dark: LineDark) -->
     <Color x:Key="EdgeLight">#808080</Color>      <!-- a field's border: 3:1, so the box shows as a control -->
 
     <Color x:Key="PageDark">#0E0E0E</Color>

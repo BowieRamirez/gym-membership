@@ -40,6 +40,8 @@ public class ContrastTests
         yield return new object[] { "PageDark", "BadDark" };          // unread badge, dark
         yield return new object[] { "MutedDark", "InkLight" };        // sign-in brand panel tagline, light (AuthLayout)
         yield return new object[] { "PendingLight", "CardLight" };    // pending and cooldown words, light (the old yellow failed on white)
+        yield return new object[] { "MutedLight", "TakenLight" };     // "Booked" in a taken slot, light (Book an amenity)
+        yield return new object[] { "MutedDark", "LineDark" };        // "Booked" in a taken slot, dark
     }
 
     public static IEnumerable<object[]> IndicatorPairs() =>

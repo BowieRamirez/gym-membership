@@ -55,12 +55,12 @@ public sealed class PhoneNavigation
         _shell = shell;
         var original = shell.Items.ToList();
         var primary = coach
-            ? new[] { ("Dashboard", "Dashboard", "overview"), ("Sessions", "Sessions", "sessions"), ("Trainees", "Trainees", "trainees"), ("Messages", "Messages", "messages") }
+            ? new[] { ("Dashboard", "Dashboard", "overview"), ("Sessions", "Sessions", "sessions"), ("Trainees & shifts", "Trainees", "trainees"), ("Messages", "Messages", "messages") }
             : new[] { ("My membership", "Membership", "membership"), ("Packages", "Packages", "packages"), ("Sessions", "Sessions", "sessions"), ("Messages", "Messages", "messages") };
         var pageTypes = new Dictionary<string, Type>
         {
-            ["Amenities"] = typeof(AmenitiesPage), ["Book an amenity"] = typeof(BookAmenityPage), ["Coaches"] = typeof(CoachesPage),
-            ["Time requests"] = typeof(RequestsPage), ["My shifts"] = typeof(ShiftsPage),
+            ["Amenities"] = typeof(AmenitiesPage), ["Book an amenity"] = typeof(BookAmenityPage), ["Coaches & amenities"] = typeof(CoachesPage),
+            ["Time requests"] = typeof(RequestsPage),
             ["My coach profile"] = typeof(CoachProfilePage),
             ["Settings"] = typeof(SettingsPage)
         };

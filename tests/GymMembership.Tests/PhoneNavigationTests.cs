@@ -41,7 +41,7 @@ public class PhoneNavigationTests
     public void Phone_coach_opens_on_the_dashboard_and_keeps_requests_in_more_with_five_tabs()
     {
         var source = Read("Controls/PhoneNavigation.cs");
-        Assert.Contains("(\"Dashboard\", \"Dashboard\", \"overview\"), (\"Sessions\", \"Sessions\", \"sessions\"), (\"Trainees\", \"Trainees\", \"trainees\"), (\"Messages\", \"Messages\", \"messages\")", source);
+        Assert.Contains("(\"Dashboard\", \"Dashboard\", \"overview\"), (\"Sessions\", \"Sessions\", \"sessions\"), (\"Trainees & shifts\", \"Trainees\", \"trainees\"), (\"Messages\", \"Messages\", \"messages\")", source);
         Assert.Contains("<FlyoutItem Title=\"Dashboard\" Route=\"dashboard\"><ShellContent ContentTemplate=\"{DataTemplate views:AttendancePage}\" />", Read("CoachShell.xaml"));
         Assert.Contains("(\"My membership\", \"Membership\", \"membership\"), (\"Packages\", \"Packages\", \"packages\"), (\"Sessions\", \"Sessions\", \"sessions\"), (\"Messages\", \"Messages\", \"messages\")", source);
         Assert.Contains("_bar.Items.Add(_more)", source);
@@ -53,9 +53,8 @@ public class PhoneNavigationTests
 
     [Theory]
     [InlineData("Amenities", "AmenitiesPage")]
-    [InlineData("Coaches", "CoachesPage")]
+    [InlineData("Coaches & amenities", "CoachesPage")]
     [InlineData("Time requests", "RequestsPage")]
-    [InlineData("My shifts", "ShiftsPage")]
     [InlineData("My coach profile", "CoachProfilePage")]
     [InlineData("Settings", "SettingsPage")]
     public void Every_more_destination_has_an_explicit_dependency_injected_page_factory(string title, string page)

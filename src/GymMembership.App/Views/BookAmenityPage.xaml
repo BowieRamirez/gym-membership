@@ -13,8 +13,10 @@
         <x:Double x:Key="SlotHeight">26</x:Double>
         <x:Double x:Key="AmenityWidth">94</x:Double>
         <x:Double x:Key="SlotFont">11</x:Double>
-        <!-- One half-hour cell. Colour only ever means status: plate colours on the outline and text, a solid fill only for your picks.
-             Always enabled so the disabled look never hides the status; tapping a cell that can't be picked does nothing. -->
+        <!-- One half-hour cell (D30, approved mockup). Open: a white box (dark: raised) with a field's 3:1 edge, so free time shows
+             as something to tap. Booked: a solid grey block, so taken never looks free. Yours, cooldown and closed: their plate colour on
+             the outline and text, no fill. Your picks: solid ink. Always enabled so the disabled look never hides the status; tapping a
+             cell that can't be picked does nothing. -->
         <Style x:Key="SlotButton" TargetType="Button" x:DataType="vm:SlotCell">
             <Setter Property="WidthRequest" Value="{DynamicResource SlotWidth}" />
             <Setter Property="HeightRequest" Value="{DynamicResource SlotHeight}" />
@@ -23,30 +25,32 @@
             <Setter Property="FontSize" Value="{DynamicResource SlotFont}" />
             <Setter Property="CornerRadius" Value="4" />
             <Setter Property="BorderWidth" Value="1.5" />
-            <Setter Property="BackgroundColor" Value="Transparent" />
-            <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
-            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource CardLight}, Dark={StaticResource SurfaceDark}}" />
+            <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource EdgeLight}, Dark={StaticResource EdgeDark}}" />
+            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
             <Style.Triggers>
-                <DataTrigger TargetType="Button" Binding="{Binding State}" Value="open">
-                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
-                </DataTrigger>
                 <DataTrigger TargetType="Button" Binding="{Binding State}" Value="yours">
+                    <Setter Property="BackgroundColor" Value="Transparent" />
                     <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource GoodLight}, Dark={StaticResource GoodDark}}" />
                     <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource GoodLight}, Dark={StaticResource GoodDark}}" />
                 </DataTrigger>
                 <DataTrigger TargetType="Button" Binding="{Binding State}" Value="booked">
-                    <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ScheduledLight}, Dark={StaticResource ScheduledDark}}" />
-                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource ScheduledLight}, Dark={StaticResource ScheduledDark}}" />
+                    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource TakenLight}, Dark={StaticResource LineDark}}" />
+                    <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource TakenLight}, Dark={StaticResource LineDark}}" />
+                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
                 </DataTrigger>
                 <DataTrigger TargetType="Button" Binding="{Binding State}" Value="cooldown">
+                    <Setter Property="BackgroundColor" Value="Transparent" />
                     <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource PendingLight}, Dark={StaticResource PendingDark}}" />
                     <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource PendingLight}, Dark={StaticResource PendingDark}}" />
                 </DataTrigger>
                 <DataTrigger TargetType="Button" Binding="{Binding State}" Value="closed">
+                    <Setter Property="BackgroundColor" Value="Transparent" />
                     <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
                     <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
                 </DataTrigger>
                 <DataTrigger TargetType="Button" Binding="{Binding State}" Value="outside">
+                    <Setter Property="BackgroundColor" Value="Transparent" />
                     <Setter Property="BorderColor" Value="Transparent" />
                 </DataTrigger>
                 <!-- can't be picked and has no plate colour: faded, so it never passes for a free cell -->

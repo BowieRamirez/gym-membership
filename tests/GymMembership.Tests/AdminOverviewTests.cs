@@ -41,13 +41,12 @@ public class AdminOverviewTests
     {
         var (vm, a, s) = Create();
         await vm.RefreshAsync();
-        Assert.Equal(new[] { "users", "catalog", "discounts", "refunds", "revenue", "void", "gym", "audit" }, vm.Cards.Select(c => c.Key));
+        Assert.Equal(new[] { "users", "catalog", "discounts", "refunds", "revenue", "gym", "audit" }, vm.Cards.Select(c => c.Key));
         Assert.All(vm.Cards, c => Assert.False(c.IsUnavailable));
         Assert.Equal(new[] { "RefundsAsync" }, s.Calls.Select(c => c.Method));
         Assert.All(a.Calls, c => Assert.Contains(c.Method, new[] { "UsersAsync", "AllPackagesAsync", "AllAmenitiesAsync", "DiscountsAsync", "RevenueAsync", "GymSettingsAsync", "AuditPageAsync" }));
-        Assert.Equal("Find a verified payment and void it with a reason", Card(vm, "void").Value);
         Assert.Equal(new[] { "revenue", "users", "catalog", "discounts" }, vm.Figures.Select(c => c.Key));
-        Assert.Equal(new[] { "refunds", "void", "gym", "audit" }, vm.Links.Select(c => c.Key));
+        Assert.Equal(new[] { "refunds", "gym", "audit" }, vm.Links.Select(c => c.Key));
         Assert.False(vm.HasAttention);
     }
 

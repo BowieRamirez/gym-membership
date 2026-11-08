@@ -39,8 +39,8 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
 
     public IReadOnlyList<AdminOverviewCard> Cards { get; } = [
         new("users", "Users and roles", "Accounts"), new("catalog", "Packages and amenities", "Packages"),
-        new("discounts", "Discounts", "Discount codes"), new("refunds", "Cancellations & refunds"),
-        new("revenue", "Revenue", "Revenue today"), new("void", "Void a payment"),
+        new("discounts", "Discounts", "Discount codes"), new("refunds", "Refunds & voids"),
+        new("revenue", "Revenue", "Revenue today"),
         new("gym", "Gym settings"), new("audit", "Logs & Archive")];
     /// <summary>The number strip, in the order shown; every role on the overview has these four pages.</summary>
     public IEnumerable<AdminOverviewCard> Figures => new[] { "revenue", "users", "catalog", "discounts" }.Select(k => Cards.Single(c => c.Key == k));
@@ -48,7 +48,7 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
     public IEnumerable<AdminOverviewCard> Links => Shown.Where(c => c.Label is null);
     /// <summary>False for a sub-admin (D15): the cards for super-admin pages are neither shown nor loaded.</summary>
     public bool SuperAdmin { get; set; } = true;
-    static readonly string[] SuperAdminOnly = ["refunds", "void", "gym", "audit"];
+    static readonly string[] SuperAdminOnly = ["refunds", "gym", "audit"];
     public IEnumerable<AdminOverviewCard> Shown => Cards.Where(c => SuperAdmin || !SuperAdminOnly.Contains(c.Key));
     public Func<DateTimeOffset> Clock { get; set; } = () => DateTimeOffset.UtcNow;
     [ObservableProperty] string updatedText = "Loading admin summaries…";
@@ -74,7 +74,6 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
         var now = Clock();
         var today = DateOnly.FromDateTime(now.ToOffset(TimeSpan.FromHours(8)).DateTime);
         var month = new DateOnly(today.Year, today.Month, 1);
-        Cards.Single(c => c.Key == "void").Value = "Find a verified payment and void it with a reason";
         try
         {
             await Task.WhenAll(

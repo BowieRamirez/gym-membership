@@ -8,8 +8,8 @@ public sealed class PhoneMorePage : ContentPage
 {
     static readonly Dictionary<string, string> Icons = new()
     {
-        ["Amenities"] = "waves", ["Book an amenity"] = "calendar-plus", ["Coaches"] = "users", ["Time requests"] = "calendar-clock",
-        ["My shifts"] = "calendar-days", ["My coach profile"] = "user-round",
+        ["Amenities"] = "waves", ["Book an amenity"] = "calendar-plus", ["Coaches & amenities"] = "users", ["Time requests"] = "calendar-clock",
+        ["My coach profile"] = "user-round",
     };
 
     public PhoneMorePage((string Title, string Route)[] destinations, Func<string, Task> open)
