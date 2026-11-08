@@ -1081,7 +1081,7 @@ public sealed class MemberScan
 
 public sealed record CheckInRow(string Name, DateTime At, string? Method = null)
 {
-    public string TimeText => At.AddHours(8).ToString("HH:mm", CultureInfo.InvariantCulture);   // Manila has no daylight saving
+    public string TimeText => At.AddHours(8).ToString("h:mm tt", CultureInfo.InvariantCulture);   // Manila has no daylight saving
     /// <summary>How it came in (0044); blank for check-ins recorded before that.</summary>
     public string HowText => Method switch { "qr" => "QR", "manual" => "By name", "offline" => "Sent later", _ => "" };
 }

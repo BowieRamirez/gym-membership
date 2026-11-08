@@ -300,13 +300,13 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
         if (active is { DaysLeft: { } left })
         {
             HeroNumber = left.ToString();
-            HeroCaption = left == 1 ? $"day left on {active.PackageName}" : $"days left on {active.PackageName}";
+            HeroCaption = left == 1 ? $"Day left on {active.PackageName}" : $"Days left on {active.PackageName}";
             LaneFraction = Math.Clamp((double)left / Math.Max(1, active.DurationDays), 0, 1);
         }
         else if (waitingOnPayment)
         { HeroNumber = "–"; HeroCaption = PayNow is not null ? "Pay by QR and send your proof to start your membership." : "Waiting for staff to verify your payment."; LaneFraction = 0; }
         else if (Terms.FirstOrDefault(t => t.State == Status.Scheduled) is { } next)
-        { HeroNumber = "0"; HeroCaption = $"No active access. Your next paid term starts {next.Term.StartsAt.AddHours(8):dd MMM yyyy, HH:mm} (Manila)."; LaneFraction = 0; }
+        { HeroNumber = "0"; HeroCaption = $"No active access. Your next paid term starts {next.Term.StartsAt.AddHours(8):d MMM yyyy, h:mm tt} (Manila)."; LaneFraction = 0; }
         else if (expired is not null)
         { HeroNumber = "0"; HeroCaption = $"{expired.PackageName} has expired. Choose a package to extend."; LaneFraction = 0; }
         else

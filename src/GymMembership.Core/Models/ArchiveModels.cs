@@ -16,7 +16,7 @@ public sealed class ArchiveRecord : BaseModel
     [Column("details")] public string Details { get; set; } = "";
     [Column("can_restore")] public bool CanRestore { get; set; }
     [JsonIgnore] public string DateText => ArchivedAt is { } at
-        ? $"{at.ToUniversalTime().AddHours(8):dd MMM yyyy, h:mm tt} (Asia/Manila)" : "Unknown (legacy record)";
+        ? $"{at.ToUniversalTime().AddHours(8):d MMM yyyy, h:mm tt} (Manila)" : "Unknown (legacy record)";
     /// <summary>D13: Deleted for a deleted account, Inactive for everything else here (Status keeps "expired" for the filter).</summary>
     [JsonIgnore] public string StatusText => GymMembership.Core.Services.RecordStatus.Of(false, Status == "deleted");
     [JsonIgnore] public string ActorText => ArchivedBy ?? "Unknown / automatic";

@@ -129,7 +129,7 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
             else if (Cards.Single(c => c.Key == "audit").IsUnavailable)
                 RecentActivity = "Couldn't load recent activity. Refresh to try again.";
             var failed = Shown.Count(c => c.IsUnavailable);
-            UpdatedText = $"{today:dddd, dd MMM yyyy} · Checked {Clock().ToOffset(TimeSpan.FromHours(8)):HH:mm} Manila" +
+            UpdatedText = $"{today:dddd, d MMM yyyy} · Checked {Clock().ToOffset(TimeSpan.FromHours(8)):h:mm tt} Manila" +
                 (failed > 0 ? $" · {failed} summar{(failed == 1 ? "y" : "ies")} unavailable" : "");
         }
         finally { IsBusy = false; }
@@ -159,10 +159,10 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
 
     static T Require<T>(AppResult<T> result) => result.Ok ? result.Value! : throw new SummaryUnavailableException(ErrorText.For(result.Error, result.Message));
     sealed class SummaryUnavailableException(string message) : Exception(message);
-    static string Money(decimal amount) => "₱ " + amount.ToString("N2", CultureInfo.InvariantCulture);
+    static string Money(decimal amount) => "₱" + amount.ToString("N2", CultureInfo.InvariantCulture);
     static string When(DateTime manila, DateOnly today) => DateOnly.FromDateTime(manila) == today
-        ? manila.ToString("HH:mm", CultureInfo.InvariantCulture)
-        : DateOnly.FromDateTime(manila) == today.AddDays(-1) ? "Yesterday" : manila.ToString("dd MMM", CultureInfo.InvariantCulture);
+        ? manila.ToString("h:mm tt", CultureInfo.InvariantCulture)
+        : DateOnly.FromDateTime(manila) == today.AddDays(-1) ? "Yesterday" : manila.ToString("d MMM", CultureInfo.InvariantCulture);
 }
 
 /// <summary>One recent audit event on the overview, with its readable label (item 14).</summary>

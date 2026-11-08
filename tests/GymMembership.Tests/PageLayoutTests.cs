@@ -37,7 +37,7 @@ public class PageLayoutTests
         Assert.Contains("WideFrom", side);
         Assert.Equal(2, side.Split("new[] { side, main }").Length - 1);   // Measure and ArrangeChildren both put the side first
         var styles = File.ReadAllText(AppFile("Resources", "Styles", "Styles.xaml"));
-        foreach (var key in new[] { "x:Key=\"Kpi\"", "x:Key=\"TablePanel\"", "x:Key=\"TableRow\"", "x:Key=\"SidePanel\"", "x:Key=\"Toolbar\"" })
+        foreach (var key in new[] { "x:Key=\"TablePanel\"", "x:Key=\"TableRow\"", "x:Key=\"SidePanel\"" })
             Assert.Contains(key, styles);
     }
 

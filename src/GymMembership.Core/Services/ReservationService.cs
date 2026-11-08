@@ -33,7 +33,7 @@ public sealed class GridBlock
 public sealed record BookingRow(Reservation Booking, string Amenity, bool InUse)
 {
     static DateTime Manila(DateTime utc) => utc.ToUniversalTime().AddHours(8);   // Manila has no daylight saving
-    public string When => $"{Manila(Booking.StartsAt):ddd d MMM, HH:mm}–{Manila(Booking.EndsAt):HH:mm}";
+    public string When => $"{Manila(Booking.StartsAt):ddd d MMM, h:mm tt} to {Manila(Booking.EndsAt):h:mm tt}";
     public bool CanCancel => !InUse;
     public bool CanEnd => InUse;
 }

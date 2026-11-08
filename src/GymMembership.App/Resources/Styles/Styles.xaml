@@ -174,20 +174,7 @@
     </Style>
 
 
-    <!-- ===== Full-page layout pieces: page frame, number strip, tables, side panel ===== -->
-    <Thickness x:Key="PagePadding">16,12,16,20</Thickness>
-    <!-- a row of filters or actions above the page's content -->
-    <Style x:Key="Toolbar" TargetType="FlexLayout">
-        <Setter Property="Wrap" Value="Wrap" />
-        <Setter Property="AlignItems" Value="Center" />
-    </Style>
-    <!-- a number card in the strip at the top of a page: a small label, then the number -->
-    <Style x:Key="Kpi" TargetType="Border">
-        <Setter Property="StrokeShape" Value="RoundRectangle 14" />
-        <Setter Property="StrokeThickness" Value="0" />
-        <Setter Property="Padding" Value="14,10" />
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource CardLight}, Dark={StaticResource CardDark}}" />
-    </Style>
+    <!-- ===== Full-page layout pieces: number strip, tables, side panel ===== -->
     <Style x:Key="KpiValue" TargetType="Label" BasedOn="{StaticResource Numeral}">
         <Setter Property="FontSize" Value="34" />
     </Style>
@@ -281,11 +268,6 @@
         <Setter Property="BackgroundColor" Value="{StaticResource Signal}" />
         <Setter Property="TextColor" Value="{StaticResource Black}" />
     </Style>
-    <!-- Yellow: a selected choice (a filled surface, so it works in light too) -->
-    <Style x:Key="SignalSmallButton" TargetType="Button" BasedOn="{StaticResource SmallButton}">
-        <Setter Property="BackgroundColor" Value="{StaticResource Signal}" />
-        <Setter Property="TextColor" Value="{StaticResource Black}" />
-    </Style>
 
     <!-- Chips (Material 3 filter / assist chips): status filters and small actions inside list rows. Rounded rectangles, not pills, so a
          filter never reads as a main action; 48 tall on phones (Android's touch minimum; they were 40 until the 9.6 polish) and 34 on
@@ -324,27 +306,6 @@
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
     </Style>
     <!-- the chosen side (bold, InkLight / SurfaceDark) is set by the page's DataTriggers, not by a second style -->
-
-    <!-- Card action cells: beside the text on wide screens, under it (full width) on phones. Parent Grid needs RowDefinitions="Auto,Auto". -->
-    <Style x:Key="CardActions" TargetType="VerticalStackLayout">
-        <Setter Property="Margin" Value="{OnIdiom Phone='0,10,0,0', Default=0}" />
-        <Setter Property="Grid.Row" Value="{OnIdiom Phone=1, Default=0}" />
-        <Setter Property="Grid.Column" Value="{OnIdiom Phone=0, Default=1}" />
-        <Setter Property="Grid.ColumnSpan" Value="{OnIdiom Phone=2, Default=1}" />
-        <Setter Property="HorizontalOptions" Value="{OnIdiom Phone=Fill, Default=End}" />
-    </Style>
-    <Style x:Key="CardButton" TargetType="Button" BasedOn="{StaticResource SmallButton}">
-        <Setter Property="Margin" Value="{OnIdiom Phone='0,10,0,0', Default=0}" />
-        <Setter Property="Grid.Row" Value="{OnIdiom Phone=1, Default=0}" />
-        <Setter Property="Grid.Column" Value="{OnIdiom Phone=0, Default=1}" />
-        <Setter Property="Grid.ColumnSpan" Value="{OnIdiom Phone=2, Default=1}" />
-    </Style>
-    <Style x:Key="CardOutlineButton" TargetType="Button" BasedOn="{StaticResource SmallOutlineButton}">
-        <Setter Property="Margin" Value="{OnIdiom Phone='0,10,0,0', Default=0}" />
-        <Setter Property="Grid.Row" Value="{OnIdiom Phone=1, Default=0}" />
-        <Setter Property="Grid.Column" Value="{OnIdiom Phone=0, Default=1}" />
-        <Setter Property="Grid.ColumnSpan" Value="{OnIdiom Phone=2, Default=1}" />
-    </Style>
 
     <!-- A text link: secondary actions beside a form (forgot password, create an account, resend code) -->
     <Style x:Key="LinkButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">

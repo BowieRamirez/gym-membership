@@ -14,7 +14,7 @@ public partial class SlotCell(int amenityId, DateTime startUtc, string state) : 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Label), nameof(Short))] private bool selected;
     public bool CanSelect => State == "open";
     // read aloud: the full time and status
-    public string Label => $"{StartUtc.AddHours(8):HH:mm} " + (Selected ? "selected" : State switch
+    public string Label => $"{StartUtc.AddHours(8):h:mm tt} " + (Selected ? "selected" : State switch
     {
         "open" => "open", "yours" => "your booking", "booked" => "booked", "cooldown" => "cooldown",
         "blocked" => "too close to the next booking", "closed" => "closed", "outside" => "outside gym hours", _ => "past"
@@ -72,7 +72,7 @@ public partial class BookAmenityViewModel(IReservationService svc) : LoadableVie
         // whole hours, so a gym that opens or closes on the half hour gets one blank half cell
         var rows = new List<SlotRow>();
         for (var h = g.Opens.AddMinutes(-g.Opens.Minute); h < g.Closes; h = h.AddHours(1))
-            rows.Add(new SlotRow(h.AddHours(8).ToString("HH:mm"), g.Amenities.Select(a => new AmenityHour(Cell(a, h), Cell(a, h.AddMinutes(30)))).ToList()));
+            rows.Add(new SlotRow(h.AddHours(8).ToString("h tt", System.Globalization.CultureInfo.InvariantCulture), g.Amenities.Select(a => new AmenityHour(Cell(a, h), Cell(a, h.AddMinutes(30)))).ToList()));
         Fill(Rows, rows);
         SelectedCount = Selected().Count();
     }

@@ -19,7 +19,7 @@ public class ReservationTests
     // rows are whole hours; each amenity has its :00 and :30 cell side by side
     static SlotCell Cell(BookAmenityViewModel vm, string amenity, string time)
     {
-        var pair = vm.Rows.Single(r => r.Time == time[..3] + "00").Amenities[vm.Amenities.IndexOf(amenity)];
+        var pair = vm.Rows.Single(r => r.Amenities[0].Early.StartUtc.AddHours(8).ToString("HH:mm") == time[..3] + "00").Amenities[vm.Amenities.IndexOf(amenity)];   // Manila
         return time.EndsWith(":30") ? pair.Late : pair.Early;
     }
 
@@ -28,9 +28,9 @@ public class ReservationTests
     {
         var (_, vm) = await Member();
         Assert.Equal(16, vm.Rows.Count);                                        // 06:00 to 22:00, an hour a row
-        Assert.Equal(("06:00", "21:00"), (vm.Rows[0].Time, vm.Rows[^1].Time));
+        Assert.Equal(("6 AM", "9 PM"), (vm.Rows[0].Time, vm.Rows[^1].Time));
         Assert.Equal(vm.Amenities.Count, vm.Rows[0].Amenities.Count);
-        Assert.Equal(("", "10:00 open"), (Cell(vm, "Pool", "10:00").Short, Cell(vm, "Pool", "10:00").Label));
+        Assert.Equal(("", "10:00 AM open"), (Cell(vm, "Pool", "10:00").Short, Cell(vm, "Pool", "10:00").Label));
         Assert.Contains("Pool", vm.Amenities);
         Assert.DoesNotContain("Boxing ring", vm.Amenities);                   // inactive amenities are not bookable
         Assert.Equal("open", Cell(vm, "Pool", "10:00").State);
@@ -48,7 +48,7 @@ public class ReservationTests
         Assert.Null(vm.ErrorMessage);
         Assert.Equal("Booked.", vm.Notice);
         var booking = Assert.Single(vm.Bookings);
-        Assert.EndsWith("10:00–11:00", booking.When);
+        Assert.EndsWith("10:00 AM to 11:00 AM", booking.When);
         Assert.Equal(("yours", "yours", "cooldown", "open"), (Cell(vm, "Pool", "10:00").State, Cell(vm, "Pool", "10:30").State,
             Cell(vm, "Pool", "11:00").State, Cell(vm, "Pool", "11:30").State));
         Assert.Equal("blocked", Cell(vm, "Pool", "09:30").State);             // its cooldown would run into 10:00

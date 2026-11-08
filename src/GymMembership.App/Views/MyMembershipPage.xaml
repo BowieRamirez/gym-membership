@@ -191,23 +191,21 @@
                            Style="{StaticResource Caption}" IsVisible="{OnIdiom Phone=False, Default=True}" />
 
                     <Label Text="Payments" Style="{StaticResource SectionTitle}" Margin="{OnIdiom Phone=0, Default='0,10,0,0'}" />
-                    <!-- status filter chips in one line that scrolls sideways on a phone; the yellow one is in use -->
-                    <ScrollView Orientation="Horizontal" HorizontalScrollBarVisibility="Never">
-                        <HorizontalStackLayout Spacing="8">
-                            <Button Text="All" Style="{StaticResource FilterChip}" Command="{Binding SetFilterCommand}" CommandParameter="All">
+                    <!-- status filter chips; they wrap onto a second line on a narrow phone; the yellow one is in use -->
+                    <FlexLayout Wrap="Wrap">
+                            <Button Text="All" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="All">
                                 <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="All"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /></DataTrigger></Button.Triggers>
                             </Button>
-                            <Button Text="Verified" Style="{StaticResource FilterChip}" Command="{Binding SetFilterCommand}" CommandParameter="Verified">
+                            <Button Text="Verified" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Verified">
                                 <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Verified"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /></DataTrigger></Button.Triggers>
                             </Button>
-                            <Button Text="Pending" Style="{StaticResource FilterChip}" Command="{Binding SetFilterCommand}" CommandParameter="Pending">
+                            <Button Text="Pending" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Pending">
                                 <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Pending"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /></DataTrigger></Button.Triggers>
                             </Button>
-                            <Button Text="Expired or rejected" Style="{StaticResource FilterChip}" Command="{Binding SetFilterCommand}" CommandParameter="Expired">
+                            <Button Text="Expired or rejected" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Expired">
                                 <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Expired"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /></DataTrigger></Button.Triggers>
                             </Button>
-                        </HorizontalStackLayout>
-                    </ScrollView>
+                    </FlexLayout>
                     <Border Style="{StaticResource TablePanel}">
                         <VerticalStackLayout>
                             <VerticalStackLayout x:Name="PaymentsHead" IsVisible="{OnIdiom Phone=False, Default=True}">

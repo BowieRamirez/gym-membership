@@ -21,7 +21,7 @@ public static class RefundReasons
 
 public sealed record TermCard(MembershipTerm Term, string State, bool Activated, RefundRequest? Refund, bool CanRequestRefund)
 {
-    public string Dates => $"{Term.StartsAt.AddHours(8):dd MMM yyyy, HH:mm} – {Term.EndsAt.AddHours(8):dd MMM yyyy, HH:mm} (Manila)";
+    public string Dates => $"{Term.StartsAt.AddHours(8):d MMM yyyy, h:mm tt} – {Term.EndsAt.AddHours(8):d MMM yyyy, h:mm tt} (Manila)";
     /// <summary>Phone rows: the days only (Manila), "13 Oct – 12 Nov 2026"; the full times stay on Windows and in the refund dialog.</summary>
     public string ShortDates => $"{Term.StartsAt.AddHours(8):d MMM} – {Term.EndsAt.AddHours(8):d MMM yyyy}";
     /// <summary>Phone rows: a line only when a refund request or a cancellation exists; the chip and the refund dialog say the rest.</summary>
@@ -52,7 +52,7 @@ public sealed record RefundCard(RefundRequest Request, string Member, string Pac
         "pending" => "Pending admin review — access unchanged",
         "approved" => "Cancelled — awaiting manual repayment",
         "rejected" => "Rejected — term unchanged: " + r.DecisionReason,
-        "paid" => $"Repaid {r.PaidAt?.AddHours(8):dd MMM yyyy, HH:mm} (Manila) · {r.RepaymentMethod} · {r.RepaymentReference}",
+        "paid" => $"Repaid {r.PaidAt?.AddHours(8):d MMM yyyy, h:mm tt} (Manila) · {r.RepaymentMethod} · {r.RepaymentReference}",
         _ => r.Status
     };
 }
@@ -103,7 +103,7 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
         return requests.OrderBy(r => r.Status is "paid" or "rejected").ThenBy(r => r.RequestedAt).Select(r =>
         {
             var term = terms.FirstOrDefault(t => t.Id == r.TermId);
-            var dates = term is null ? "" : $"{term.StartsAt.AddHours(8):dd MMM yyyy, HH:mm} – {term.EndsAt.AddHours(8):dd MMM yyyy, HH:mm} (Manila)";
+            var dates = term is null ? "" : $"{term.StartsAt.AddHours(8):d MMM yyyy, h:mm tt} – {term.EndsAt.AddHours(8):d MMM yyyy, h:mm tt} (Manila)";
             var later = term is null ? 0 : terms.Count(t => t.MemberId == r.MemberId && t.CancelledAt is null && t.StartsAt >= term.EndsAt);
             return new RefundCard(r,names.GetValueOrDefault(r.MemberId,"Member"),term?.PackageName ?? "Membership",dates,later);
         }).ToList();

@@ -132,7 +132,7 @@ public class AdminOverviewTests
         await vm.RefreshAsync();
         Assert.Equal(new[] { "event-7", "event-6", "event-5", "event-4", "event-3" }, vm.Activity.Select(a => a.Action));
         Assert.False(vm.HasActivityMessage);
-        Assert.Equal("08 Oct", vm.Activity[0].WhenText);   // 18:00 UTC on the 7th is the 8th in Manila
+        Assert.Equal("8 Oct", vm.Activity[0].WhenText);   // 18:00 UTC on the 7th is the 8th in Manila
         Assert.Equal("Owner", vm.Activity[0].Actor);
     }
 

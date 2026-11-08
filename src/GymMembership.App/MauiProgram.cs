@@ -38,6 +38,24 @@ public static class MauiProgram
 		Microsoft.Maui.Handlers.PickerHandler.Mapper.AppendToMapping(nameof(IView.Background), (h, _) => h.PlatformView.BackgroundTintList = noUnderline);
 		Microsoft.Maui.Handlers.DatePickerHandler.Mapper.AppendToMapping(nameof(IView.Background), (h, _) => h.PlatformView.BackgroundTintList = noUnderline);
 		Microsoft.Maui.Handlers.TimePickerHandler.Mapper.AppendToMapping(nameof(IView.Background), (h, _) => h.PlatformView.BackgroundTintList = noUnderline);
+#elif WINDOWS
+		// WinUI fills every input with 6 % white, which showed as a second box inside the Field frame. Overrides in
+		// Platforms/Windows/App.xaml don't reach that fill, so each input gets it cleared on itself (unless a page sets a background).
+		Microsoft.Maui.Handlers.EntryHandler.Mapper.AppendToMapping(nameof(IView.Background), (h, v) => NoFill(h.PlatformView, v, "TextControl"));
+		Microsoft.Maui.Handlers.EditorHandler.Mapper.AppendToMapping(nameof(IView.Background), (h, v) => NoFill(h.PlatformView, v, "TextControl"));
+		Microsoft.Maui.Handlers.PickerHandler.Mapper.AppendToMapping(nameof(IView.Background), (h, v) => NoFill(h.PlatformView, v, "ComboBox"));
+		Microsoft.Maui.Handlers.DatePickerHandler.Mapper.AppendToMapping(nameof(IView.Background), (h, v) => NoFill(h.PlatformView, v, "CalendarDatePicker"));
+		Microsoft.Maui.Handlers.TimePickerHandler.Mapper.AppendToMapping(nameof(IView.Background), (h, v) => NoFill(h.PlatformView, v, "TimePickerButton"));
+		// a picker's Title is its prompt ("Choose a member"): inside the empty box, as on Android, not a second label above it.
+		// MAUI puts it back as a header whenever the title or its colour is mapped, so both are followed.
+		static void Prompt(Microsoft.Maui.Handlers.IPickerHandler h, IPicker v)
+		{
+			h.PlatformView.Header = null;
+			h.PlatformView.HeaderTemplate = null;
+			h.PlatformView.PlaceholderText = v.Title ?? "";
+		}
+		Microsoft.Maui.Handlers.PickerHandler.Mapper.AppendToMapping(nameof(IPicker.Title), Prompt);
+		Microsoft.Maui.Handlers.PickerHandler.Mapper.AppendToMapping(nameof(IPicker.TitleColor), Prompt);
 #endif
 		// text links and the password eye: no button shape behind them. Windows' button template draws a grey pill on rest, hover and
 		// press, so it is swapped for a bare one that only shows the content; Android's button lifts with a shadow, which is turned off.
@@ -101,6 +119,16 @@ public static class MauiProgram
 	}
 
 #if WINDOWS
+	// fill and edge of a WinUI input in every state: "TextControl" + "Background" + "PointerOver", and so on
+	static void NoFill(Microsoft.UI.Xaml.Controls.Control input, IView view, string prefix)
+	{
+		if (view.Background is not null) return;
+		var none = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
+		input.Background = input.BorderBrush = none;
+		foreach (var part in new[] { "Background", "BorderBrush" })
+			foreach (var state in new[] { "", "PointerOver", "Pressed", "Focused", "Disabled" }) input.Resources[prefix + part + state] = none;
+	}
+
 	static Microsoft.UI.Xaml.Controls.ControlTemplate? _bareButton;
 	static Microsoft.UI.Xaml.Controls.ControlTemplate BareButton => _bareButton ??= (Microsoft.UI.Xaml.Controls.ControlTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(
 		"""
