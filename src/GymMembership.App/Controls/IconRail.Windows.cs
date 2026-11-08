@@ -19,7 +19,7 @@ public static class IconRail
         ["Payments to verify"] = "badge-check",
         ["Cashier"] = "banknote",
         ["Check-in"] = "scan-line",
-        ["Amenity Status"] = "waves",
+        ["Amenity status"] = "waves",
         ["Users and roles"] = "users",
         ["Packages and amenities"] = "package",
         ["Discounts"] = "tag",

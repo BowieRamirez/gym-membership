@@ -1,4 +1,3 @@
-using System.Windows.Input;
 using Microsoft.Maui.Controls.Shapes;
 
 namespace GymMembership.App.Controls;
@@ -158,44 +157,5 @@ public class EyeButton : Grid
         if (Entry is not null) Entry.IsPassword = !visible;
         _icon.Icon = visible ? "eye-off" : "eye";
         SemanticProperties.SetDescription(_button, visible ? "Hide password" : "Show password");
-    }
-}
-
-/// <summary>
-/// A choice button with an icon on its left. It stays a real Button (touch, keyboard, screen reader); IsSelected fills it yellow and is
-/// announced as "selected".
-/// </summary>
-public class IconButton : ContentView
-{
-    public static readonly BindableProperty TextProperty = Prop<string>(nameof(Text), "");
-    public static readonly BindableProperty IconProperty = Prop<string>(nameof(Icon), "");
-    public static readonly BindableProperty CommandProperty = Prop<ICommand?>(nameof(Command), null);
-    public static readonly BindableProperty CommandParameterProperty = Prop<object?>(nameof(CommandParameter), null);
-    public static readonly BindableProperty IsSelectedProperty = Prop(nameof(IsSelected), false);
-
-    static BindableProperty Prop<T>(string name, T def) =>
-        BindableProperty.Create(name, typeof(T), typeof(IconButton), def, propertyChanged: (b, _, _) => ((IconButton)b).Refresh());
-
-    public string Text { get => (string)GetValue(TextProperty); set => SetValue(TextProperty, value); }
-    public string Icon { get => (string)GetValue(IconProperty); set => SetValue(IconProperty, value); }
-    public ICommand? Command { get => (ICommand?)GetValue(CommandProperty); set => SetValue(CommandProperty, value); }
-    public object? CommandParameter { get => GetValue(CommandParameterProperty); set => SetValue(CommandParameterProperty, value); }
-    public bool IsSelected { get => (bool)GetValue(IsSelectedProperty); set => SetValue(IsSelectedProperty, value); }
-
-    readonly Button _button = new() { Padding = new Thickness(44, 0, 16, 0) };   // room on the left for the icon
-    readonly IconView _icon = new() { Size = 16, ChipSize = 28, HorizontalOptions = LayoutOptions.Start, VerticalOptions = LayoutOptions.Center, Margin = new Thickness(8, 0, 0, 0) };
-
-    public IconButton()
-    {
-        Content = new Grid { Children = { _button, _icon } };
-        Refresh();
-    }
-
-    void Refresh()
-    {
-        _button.Text = Text; _button.Command = Command; _button.CommandParameter = CommandParameter;
-        _icon.Icon = Icon;
-        if (Application.Current!.Resources.TryGetValue(IsSelected ? "SignalSmallButton" : "SmallOutlineButton", out var style)) _button.Style = (Style)style;
-        SemanticProperties.SetDescription(_button, IsSelected ? $"{Text}, selected" : Text);
     }
 }

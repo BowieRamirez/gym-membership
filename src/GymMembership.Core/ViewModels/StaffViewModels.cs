@@ -66,17 +66,20 @@ public partial class HomeViewModel(IDeskHomeService svc, IPaymentStaffService? p
     public static IReadOnlyList<HomeTile> Build(DeskSummary s)
     {
         var amenityDetail = string.Join(", ", new[] { s.AmenitiesInUse > 0 ? $"{s.AmenitiesInUse} in use" : null, s.AmenitiesUnavailable > 0 ? $"{s.AmenitiesUnavailable} unavailable" : null }.OfType<string>());
+        // 9.7: one highlighted figure (the page standard). Payments waiting first, then unanswered chats; an unavailable amenity is news,
+        // not a desk task, so it is said in words only. Every tile still says what it needs in its caption.
+        bool pay = s.PaymentsToVerify > 0, chats = !pay && (s.UnreadMessages > 0 || s.UnclaimedChats > 0);
         return
         [
             new("checkin", "log-in", "Check-ins today", s.CheckInsToday.ToString(),
                 s.CheckInsToday == 0 ? "No one has checked in yet" : "Tap to check someone in", false),
             new("verify", "receipt", "Payments to verify", s.PaymentsToVerify.ToString(),
-                s.PaymentsToVerify == 0 ? "All caught up" : s.PaymentsToVerify == 1 ? "1 payment is waiting" : $"{s.PaymentsToVerify} payments are waiting", s.PaymentsToVerify > 0),
+                s.PaymentsToVerify == 0 ? "All caught up" : s.PaymentsToVerify == 1 ? "1 payment is waiting" : $"{s.PaymentsToVerify} payments are waiting", pay),
             new("amenities", "waves", "Amenities available", $"{s.AmenitiesAvailable} of {s.AmenitiesTotal}",
-                amenityDetail.Length == 0 ? "All open" : amenityDetail, s.AmenitiesUnavailable > 0),
+                amenityDetail.Length == 0 ? "All open" : amenityDetail, false),
             new("messages", "message-square", "Unread messages", s.UnreadMessages.ToString(),
                 s.UnclaimedChats > 0 ? (s.UnclaimedChats == 1 ? "1 chat nobody has taken" : $"{s.UnclaimedChats} chats nobody has taken")
-                : s.UnreadMessages > 0 ? "Open Messages to reply" : "No new messages", s.UnreadMessages > 0 || s.UnclaimedChats > 0),
+                : s.UnreadMessages > 0 ? "Open Messages to reply" : "No new messages", chats),
         ];
     }
 }

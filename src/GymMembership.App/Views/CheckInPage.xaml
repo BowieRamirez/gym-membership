@@ -93,7 +93,9 @@
                                 <Label Text="{Binding PlanText}" Style="{StaticResource Caption}" />
                             </VerticalStackLayout>
                             <c:StatusChip Grid.Column="1" Status="{Binding PlanStatus}" VerticalOptions="Center" />
-                            <Button Grid.Column="2" Text="Check in" Style="{StaticResource SmallButton}" IsEnabled="{Binding CanCheckIn}"
+                            <!-- 9.7: outline (Scan member QR is the page's one yellow action); a member who can't check in gets no button,
+                                 their "No active membership" line says why (it was a greyed button a screen reader still landed on) -->
+                            <Button Grid.Column="2" Text="Check in" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanCheckIn}"
                                     Clicked="OnCheckIn" />
                         </Grid>
                     </Border>

@@ -9,27 +9,28 @@
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='20,16,20,24', Default='16,12,16,20'}" Spacing="14">
-            <Label Text="Take cash, GCash or a bank transfer. It is verified at once and gets a receipt number to write on the paper receipt." Style="{StaticResource Muted}" />
+            <Label Text="Payments taken here count as verified at once and get a receipt number for the paper receipt." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <c:SideLayout SideFirst="False">
+            <c:SideLayout SideFirst="False" StackedSideWidth="{OnIdiom Phone=10000, Default=600}">
                 <!-- main: what they pay for, who, which item; then today's cash -->
                 <VerticalStackLayout Spacing="12">
                     <Label Text="What are they paying for?" Style="{StaticResource SectionTitle}" Margin="0" />
+                                <!-- 9.7: the app's chips (were icon pills); the chosen one is yellow and says "selected" to a screen reader -->
                                 <FlexLayout Wrap="Wrap">
-                                    <c:IconButton Text="Membership" Icon="ticket" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Membership">
-                                        <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Kind}" Value="Membership"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
-                                    </c:IconButton>
-                                    <c:IconButton Text="Renewal" Icon="refresh-cw" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Renewal">
-                                        <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Kind}" Value="Renewal"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
-                                    </c:IconButton>
-                                    <c:IconButton Text="Amenity" Icon="waves" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Amenity">
-                                        <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Kind}" Value="Amenity"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
-                                    </c:IconButton>
-                                    <c:IconButton Text="Walk-in" Icon="footprints" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Walk-in">
-                                        <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Kind}" Value="Walk-in"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
-                                    </c:IconButton>
+                                    <Button Text="Membership" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Membership">
+                                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="Membership"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /><Setter Property="SemanticProperties.Description" Value="Membership, selected" /></DataTrigger></Button.Triggers>
+                                    </Button>
+                                    <Button Text="Renewal" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Renewal">
+                                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="Renewal"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /><Setter Property="SemanticProperties.Description" Value="Renewal, selected" /></DataTrigger></Button.Triggers>
+                                    </Button>
+                                    <Button Text="Amenity" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Amenity">
+                                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="Amenity"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /><Setter Property="SemanticProperties.Description" Value="Amenity, selected" /></DataTrigger></Button.Triggers>
+                                    </Button>
+                                    <Button Text="Walk-in" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Walk-in">
+                                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="Walk-in"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /><Setter Property="SemanticProperties.Description" Value="Walk-in, selected" /></DataTrigger></Button.Triggers>
+                                    </Button>
                                 </FlexLayout>
 
                                 <!-- walk-ins have no member: just a name -->
@@ -47,7 +48,7 @@
                                         <Button Text="Find" Style="{StaticResource SmallOutlineButton}" Margin="0,0,12,8" Command="{Binding FindCommand}" />
                                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="260">
                                             <Label Text="Member" Style="{StaticResource Caption}" />
-                                            <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Hits}" ItemDisplayBinding="{Binding Username}" SelectedItem="{Binding Member}" SemanticProperties.Description="Member" /></Border>
+                                            <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Hits}" ItemDisplayBinding="{Binding Username}" SelectedItem="{Binding Member}" Title="Choose after Find" SemanticProperties.Description="Member" /></Border>
                                         </VerticalStackLayout>
                                     </FlexLayout>
 
@@ -61,9 +62,9 @@
                                                 <Border Style="{StaticResource Panel}" Padding="14,12" WidthRequest="{OnIdiom Phone=156, Default=200}" Margin="0,0,12,12"
                                                         SemanticProperties.Description="{Binding Name}" SemanticProperties.Hint="{Binding PriceText}">
                                                     <Border.Triggers>
+                                                        <!-- picked: an outline (ink in light, yellow in dark) on the same card, not a darker hole (as the coach calendar, 9.6) -->
                                                         <DataTrigger TargetType="Border" Binding="{Binding IsPicked}" Value="True">
-                                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource PageLight}, Dark={StaticResource PageDark}}" />
-                                                            <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+                                                            <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
                                                             <Setter Property="StrokeThickness" Value="2" />
                                                         </DataTrigger>
                                                     </Border.Triggers>
@@ -81,34 +82,6 @@
                                     </FlexLayout>
                                 </VerticalStackLayout>
 
-                                <!-- the order: what the cashier is about to charge, how, and the one button that does it -->
-
-                    <Label Text="Net cash today" Style="{StaticResource SectionTitle}" Margin="0" />
-                                <Border Style="{StaticResource Panel}" Padding="24,18">
-                                    <VerticalStackLayout Spacing="4">
-                                        <Label Text="Cash receipts minus cash refunds actually repaid today (Manila). Compare the net amount with the drawer; approval alone does not remove cash." Style="{StaticResource Caption}" />
-                                        <Label Text="{Binding CashTotal}" Style="{StaticResource Numeral}" />
-                                    </VerticalStackLayout>
-                                </Border>
-                                <Border Style="{StaticResource Panel}" Padding="12">
-                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding CashToday}" Spacing="8">
-                                    <BindableLayout.EmptyView><Label Text="No cash receipts or repaid cash refunds recorded today." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
-                                    <BindableLayout.ItemTemplate>
-                                        <DataTemplate x:DataType="svc:CashRow">
-                                            <Border Style="{StaticResource Row}" Padding="16,12">
-                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                                    <Label Style="{StaticResource BaseLabel}" VerticalOptions="Center">
-                                                        <Label.Text>
-                                                            <MultiBinding StringFormat="{}{0}  ({1})"><Binding Path="Kind" /><Binding Path="Payments" /></MultiBinding>
-                                                        </Label.Text>
-                                                    </Label>
-                                                    <Label Grid.Column="1" Text="{Binding Total, StringFormat='₱{0:N2}'}" Style="{StaticResource Heading}" />
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </BindableLayout.ItemTemplate>
-                                </VerticalStackLayout>
-                                </Border>
                 </VerticalStackLayout>
                 <!-- side: the order, always in view while choosing -->
                 <Border Style="{StaticResource SidePanel}">
@@ -120,15 +93,15 @@
 
                                     <Label Text="Paid with" Style="{StaticResource Caption}" />
                                     <FlexLayout Wrap="Wrap">
-                                        <c:IconButton Text="Cash" Icon="banknote" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="Cash">
-                                            <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Method}" Value="Cash"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
-                                        </c:IconButton>
-                                        <c:IconButton Text="GCash" Icon="smartphone" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="GCash">
-                                            <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Method}" Value="GCash"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
-                                        </c:IconButton>
-                                        <c:IconButton Text="Bank transfer" Icon="landmark" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="Bank transfer">
-                                            <c:IconButton.Triggers><DataTrigger TargetType="c:IconButton" Binding="{Binding Method}" Value="Bank transfer"><Setter Property="IsSelected" Value="True" /></DataTrigger></c:IconButton.Triggers>
-                                        </c:IconButton>
+                                        <Button Text="Cash" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="Cash">
+                                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Method}" Value="Cash"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /><Setter Property="SemanticProperties.Description" Value="Cash, selected" /></DataTrigger></Button.Triggers>
+                                        </Button>
+                                        <Button Text="GCash" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="GCash">
+                                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Method}" Value="GCash"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /><Setter Property="SemanticProperties.Description" Value="GCash, selected" /></DataTrigger></Button.Triggers>
+                                        </Button>
+                                        <Button Text="Bank transfer" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="Bank transfer">
+                                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Method}" Value="Bank transfer"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /><Setter Property="SemanticProperties.Description" Value="Bank transfer, selected" /></DataTrigger></Button.Triggers>
+                                        </Button>
                                     </FlexLayout>
 
                                     <VerticalStackLayout Spacing="4" WidthRequest="260" HorizontalOptions="Start" IsVisible="{Binding NeedsReference}">
@@ -150,6 +123,34 @@
                                 </VerticalStackLayout>
                             </Border>
             </c:SideLayout>
+
+            <!-- today's cash in one panel, under the order so a stacked window keeps the order right after the choices (9.7: was a title,
+                 a panel with a long rule and a second panel for the rows, all between the choices and the order) -->
+            <Border Style="{StaticResource Panel}">
+                <VerticalStackLayout Spacing="8">
+                    <c:CardTitle Text="Net cash today" />
+                    <Label Text="{Binding CashTotal}" Style="{StaticResource KpiValue}" />
+                    <Label Text="Cash taken minus cash refunds paid back today. It should match the drawer." Style="{StaticResource Caption}" />
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding CashToday}">
+                        <BindableLayout.EmptyView><Label Text="No cash taken or paid back yet today." Style="{StaticResource Muted}" Margin="0,4,0,0" /></BindableLayout.EmptyView>
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="svc:CashRow">
+                                <VerticalStackLayout>
+                                    <BoxView Style="{StaticResource Hairline}" />
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="0,10">
+                                        <Label VerticalOptions="Center">
+                                            <Label.Text>
+                                                <MultiBinding StringFormat="{}{0}  ({1})"><Binding Path="Kind" /><Binding Path="Payments" /></MultiBinding>
+                                            </Label.Text>
+                                        </Label>
+                                        <Label Grid.Column="1" Text="{Binding Total, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                                    </Grid>
+                                </VerticalStackLayout>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>
