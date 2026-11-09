@@ -2,7 +2,7 @@
 
 Created: 2026-11-09
 Last updated: 2026-11-09 (Phases 1 and 2 deployed and pushed; Phase 3 waits on F1, F2, F3)
-Status: Phases 1, 2 and 3 DEPLOYED (`0048`, `0049`, `0050` live; Phase 3 commits not pushed to GitHub yet). Phases 4 to 8 wait on their decisions in section 2.
+Status: Phases 1 to 4 DEPLOYED (`0048` to `0051` live; Phase 3 and 4 commits not pushed to GitHub yet). Phases 5 to 8 wait on their decisions in section 2.
 Branch: `security-admin-cleanup-2026-11-05`, the same branch as the finished 2026-11-05 plan (owner, 2026-11-09). Not merged to `main` yet; the owner merges when this plan is done.
 
 **Goal:** Work through the owner's 12-item list of features and improvements (received 2026-11-09): a cashier drawer shift, live records and rotating member QR codes, discount locks, chat with every staff role, a merged coach profile, a member calendar, a membership-aware menu, a new amenity booking flow with desk payment and refunds, announcements, a cheat-proof manual check-in, time requests in chat, and coach-assigned amenities.
@@ -36,7 +36,8 @@ Status vocabulary: `PLANNED`, `WAITING` (decisions open), `IN PROGRESS`, `BLOCKE
 ### Current work / restart here
 
 - **2026-11-10:** Phase 3 done, verified, committed (`ba91955`) and `0050` live. **Since `0050` is live, desk apps from before Phase 3 can't take cash** (they have no Start shift, so every cash payment and cash refund is refused with "no_open_shift"): every desk needs the new build, and each cashier starts a shift at the Cashier page. GCash and bank transfers are unaffected.
-- Next concrete action: owner answers F9, F10, F11 for Phase 4 (messaging). `git push` of the Phase 3 commits waits for the owner.
+- **2026-11-10:** Phase 4 done, verified, committed (`cc27467`) and `0051` live. Apps from before Phase 4 still work (old calls default to the Front desk), but they show Announcements as an ordinary conversation and can't write to Admin or System admin; every phone and desk should get the new build.
+- Next concrete action: owner answers F12, F13, F14 for Phase 5 (amenity booking). `git push` of the Phase 3 and 4 commits waits for the owner.
 - **2026-11-09:** Phases 1 and 2 done, verified, committed, and their migrations (`0048`, `0049`) live. Unrelated, left alone: `2026-10-30-visual-redesign.md`, `.impeccable/config.json` (now also holds the desk-pin mockup's radial-halo ignore), two PDFs in `docs/`.
 - **Since `0049` is live, desk apps from before Phase 2 can't check anyone in** (their scans read "old code", their by-name check-ins have no PIN): every desk needs the new build. Members set their desk PIN in Settings; the demo's Alex has `1234`.
 
@@ -93,7 +94,7 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 | 1 | Discount locks and codes on Packages | 3, 2 (codes) | F5, F7 | DEPLOYED |
 | 2 | Rotating member QR and cheat-proof manual check-in | 2 (QR), 10 | F6, F8 | DEPLOYED |
 | 3 | Cash-drawer shift | 1 | F1, F2, F3 | DEPLOYED |
-| 4 | Messaging: staff chat, announcements and the 1-week alert, requests in chat | 4, 9, 11 | F9, F10, F11 | IN PROGRESS |
+| 4 | Messaging: staff chat, announcements and the 1-week alert, requests in chat | 4, 9, 11 | F9, F10, F11 | DEPLOYED |
 | 5 | Amenity booking, payment, refunds, coach-assigned amenities | 8, 12 | F12, F13, F14 | WAITING |
 | 6 | Member calendar, menu order, coach Profile & settings | 6, 7, 5 | F15, F16, F17 | WAITING |
 | 7 | Live records; today's check-ins on the Check-in page | 2 (real-time), 13 | F4, F19 | WAITING |
@@ -184,4 +185,5 @@ Owner, same day: same branch as the 2026-11-05 plan, a separate plan; use the ri
 - **2026-11-09:** Owner: "start phase 1" (F5, F7 accepted as recommended). Phase 1 built test-first and verified locally: xUnit 898/898, DB 24/24 files, three UI scripts pass, Windows and Pixel 7 checked. Real Android app rebuilt with `--no-incremental` after the demo APK. Not committed; `0048` not live yet.
 - **2026-11-09:** Owner: F6, F8 as recommended, "start phase 2"; mockup approved. Phase 2 built test-first: DB 25/25 files, xUnit 912/912, three UI scripts pass, Windows and Pixel 7 checked. `0049` pushed live; committed.
 - **2026-11-10:** Owner: "start phase 3" (F1, F2, F3 as recommended); mockup approved as shown. Phase 3 built test-first: DB 26/26 files, xUnit 927/927, three UI scripts pass, Windows checked at 1600 dark and 1100 light. `ponytail-review` cut `open_shift_of()` (one caller), the demo's field-nulling, and `CashSummaryAsync`/`CashRow` (no app caller once "Net cash today" went; `daily_cash_summary` stays in the database).
+- **2026-11-10:** Owner: "start phase 4" (F9, F10, F11 as recommended); mockup approved as shown. Phase 4 built: DB 27/27 files (messaging.mjs 9/9), xUnit 935/935, three UI scripts pass, Windows and Pixel 7 checked (member dark, light, 1.3; coach dark). Fixed on the way: chips that had been chosen turned into black boxes (six pages). `0051` pushed live; committed.
 - **2026-11-10:** Owner added item 13 (today's check-ins on the Check-in page for front desk, Admin, System admin). Recorded as F19 and placed in Phase 7 with the live check-in updates. No code yet.
