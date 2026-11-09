@@ -250,9 +250,26 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
 
     /// <summary>The QR payment the member still has to pay and send proof for, if any.</summary>
     [ObservableProperty] private PaymentItem? payNow;
-    /// <summary>The member's permanent QR code (D12): identification at the front desk, never payment.</summary>
+    /// <summary>F6: the member's one-use QR pass for the front desk, good for 5 minutes; never payment.</summary>
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasCode))] private string? myCode;
     public bool HasCode => !string.IsNullOrEmpty(MyCode);
+    DateTime? _passExpires;
+    [ObservableProperty] private string passLeftText = "";
+
+    /// <summary>The page reloads every 20 seconds and calls this: it renews the pass 30 seconds before it runs out, so it never lapses between ticks, and says when it changes.</summary>
+    public async Task TickPassAsync(DateTime utcNow)
+    {
+        if (codes is null) return;
+        if (_passExpires is not { } until || utcNow >= until.AddSeconds(-30))
+        {
+            var pass = await codes.MyPassAsync();
+            if (!pass.Ok) return;   // quiet: a staff account has no pass, and offline the next tick tries again
+            // counted on this device's clock from now: only the 5-minute length (0049) matters, so a phone clock that differs from the server's can't skew it
+            (MyCode, _passExpires) = (pass.Value!.Code, utcNow.AddMinutes(5));
+        }
+        var left = _passExpires!.Value - utcNow;
+        PassLeftText = left.TotalSeconds < 60 ? "New code in under a minute" : $"New code in {(int)Math.Ceiling(left.TotalMinutes)} minutes";
+    }
     [ObservableProperty] private string referenceNo = "";
     [ObservableProperty] private string? accountName;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasQr))] private string? qrUrl;
@@ -267,7 +284,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
         _loading = true;
         try
         {
-            if (codes is not null && MyCode is null) await RunAsync(codes.MyCodeAsync, c => MyCode = c);   // never changes, so read once
+            await TickPassAsync(DateTime.UtcNow);
             if (!await RunAsync(subscription.TermsAsync, rows =>
             {
                 Fill(Terms, rows);
@@ -913,6 +930,7 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
     public override async Task OnAppearingAsync()
     {
         await LoadAsync();
+        await RunAsync(settings.IsMemberAsync, m => IsMember = m);
         await RunAsync(auth.MustChangePasswordAsync, m => MustChange = m);
         await LoadPhotoAsync(names: true);
         await LoadEmailAsync();
@@ -961,6 +979,21 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
         Notice = "Password changed.";
     }
 
+
+    // ---------- F8: the desk PIN, members only; typed twice because a typo shows up only at the desk ----------
+    [ObservableProperty] private bool isMember;
+    [ObservableProperty] private string deskPin = "";
+    [ObservableProperty] private string deskPinAgain = "";
+
+    [RelayCommand]
+    private async Task SaveDeskPinAsync()
+    {
+        Notice = null;
+        if (DeskPin != DeskPinAgain) { ErrorMessage = "The two PINs don't match."; return; }
+        if (!await RunAsync(() => settings.SetDeskPinAsync(DeskPin))) return;
+        DeskPin = DeskPinAgain = "";
+        Notice = "Desk PIN saved. Type it at the front desk if you check in without your phone.";
+    }
 
     // ---------- name: shown only, locked after sign-up (0040) ----------
     [ObservableProperty] private string firstName = "";

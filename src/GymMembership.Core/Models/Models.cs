@@ -155,6 +155,8 @@ public class NotifiedMember : BaseModel
 [Table("gym_check_ins")] public class GymCheckIn : BaseModel
 { [Column("method", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? Method { get; set; }
   [Column("client_ref", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? ClientRef { get; set; }
+  [Column("recorded_by", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? RecordedBy { get; set; }
+  [Column("reason", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? Reason { get; set; }   // F8: why an Admin skipped the PIN
   [PrimaryKey("check_in_id")] public int Id { get; set; } [Column("member_id")] public string? MemberId { get; set; } [Column("payment_id")] public int? PaymentId { get; set; }
   [Column("checked_in_at")] public DateTime CheckedInAt { get; set; } }
 
@@ -266,9 +268,13 @@ public class ChatSearchHit : BaseModel
   [Column("checked_in_by")] public string CheckedInBy { get; set; } = ""; [Column("checked_out_at")] public DateTime? CheckedOutAt { get; set; }
   [Column("checked_out_by")] public string? CheckedOutBy { get; set; } [Column("auto_closed")] public bool AutoClosed { get; set; } }
 
-// a member's permanent QR code (0034). Each member reads only their own row; staff look codes up through scan_member.
+// a member's old permanent QR code (0034). F6 (0049): no longer scans; kept for history.
 [Table("member_codes")] public class MemberCode : BaseModel
 { [PrimaryKey("user_id")] public string UserId { get; set; } = ""; [Column("code")] public string Code { get; set; } = ""; }
+
+/// <summary>F6 (0049): the one-use QR pass from issue_member_pass(), good for 5 minutes.</summary>
+public sealed class MemberPass : BaseModel
+{ [Column("code")] public string Code { get; set; } = ""; [Column("expires_at")] public DateTime ExpiresAt { get; set; } }
 
 // one amenity booking (0029). Written only through book_slots / cancel_reservation / end_reservation / extend_reservation.
 [Table("reservations")] public class Reservation : BaseModel

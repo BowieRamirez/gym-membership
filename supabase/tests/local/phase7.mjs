@@ -40,6 +40,10 @@ async function fixture(pkg = monthly, discount = null) {
 async function request(uid, term) { return (await as(uid,'select * from request_membership_refund($1,$2,$3)',[term.term_id,'Changed my plans','change_of_mind']))[0]; }
 async function decide(id, approve = true) { await as(admin,'select decide_membership_refund($1,$2,$3)',[id,approve,approve ? 'Approved' : 'Not approved']); }
 async function paid(id, method = 'cash', reference = null) { await as(admin,'select record_membership_refund_paid($1,$2,$3)',[id,method,reference]); }
+async function checkIn(uid) {   // F6 (0049): a QR check-in needs a pass this desk has just scanned
+  await as(desk,'select scan_member($1)',[(await as(uid,'select code from issue_member_pass()'))[0].code]);
+  await as(desk,'select record_check_in($1)',[uid]);
+}
 
 try {
   await test('unverified extension grants no term or access and another pending purchase is refused', async () => {
@@ -87,13 +91,13 @@ try {
   });
   await test('a check-in before the term does not activate it', async () => {
     const {uid,term} = await fixture();
-    await as(desk,'select record_check_in($1)',[uid]);
+    await checkIn(uid);
     await db.query("update gym_check_ins set checked_in_at=$2::timestamptz-interval '1 second' where member_id=$1",[uid,term.starts_at]);
     assert.equal((await as(uid,'select * from request_membership_refund($1,$2)',[term.term_id,'Before']))[0].was_activated,false);
   });
   await test('a term with a check-in goes to review: it needs a reason category, and 24 hours no longer matters', async () => {
     const {uid,pay,term} = await fixture();
-    await as(desk,'select record_check_in($1)',[uid]);
+    await checkIn(uid);
     await assert.rejects(as(uid,'select * from request_membership_refund($1,$2)',[term.term_id,'No category']),/refund_reason_required/);
     await assert.rejects(as(uid,'select * from request_membership_refund($1,$2,$3)',[term.term_id,'Bad category','because']),/bad_input/);
     await db.query("update payments set verified_at=now()-interval '25 hours' where payment_id=$1",[pay.payment_id]);

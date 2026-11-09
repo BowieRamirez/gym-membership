@@ -28,22 +28,24 @@ async function paid(name) {
   const uid = await user('member', name);
   const pay = (await as(uid, 'select * from extend_membership($1,null)', [pack]))[0];
   await as(desk, 'select verify_payment($1,true)', [pay.payment_id]);
+  await as(uid, `select set_desk_pin('1234')`);   // F8 (0049): by name and offline need the PIN
   return uid;
 }
 const hoursAgo = h => new Date(Date.now() - h * 3600000).toISOString();
-const queued = (uid, at, ref = randomUUID(), actor = desk) => as(actor, `select record_check_in($1,'offline',$2,$3) id`, [uid, at, ref]);
+const queued = (uid, at, ref = randomUUID(), actor = desk) => as(actor, `select record_check_in($1,'offline',$2,$3,'1234') id`, [uid, at, ref]);
 const rows = async uid => (await db.query('select * from gym_check_ins where member_id=$1 order by check_in_id', [uid])).rows;
 
 try {
-  await test('an installed app sending only the member still checks in', async () => {
+  await test('no method means QR (F6): once this desk has scanned a pass, it records qr', async () => {
     const uid = await paid();
+    await as(desk, 'select scan_member($1)', [(await as(uid, 'select code from issue_member_pass()'))[0].code]);
     await as(desk, 'select record_check_in($1)', [uid]);
     const [r] = await rows(uid);
-    assert.deepEqual([r.method, r.recorded_by, r.client_ref], [null, desk, null]);
+    assert.deepEqual([r.method, r.recorded_by, r.client_ref], ['qr', desk, null]);
   });
   await test('forgot phone: a manual check-in records how and who, and is refused without a membership', async () => {
     const uid = await paid(), none = await user();
-    await as(desk, `select record_check_in($1,'manual')`, [uid]);
+    await as(desk, `select record_check_in(p_member_id=>$1, p_method=>'manual', p_pin=>'1234')`, [uid]);
     const [r] = await rows(uid);
     assert.deepEqual([r.method, r.recorded_by], ['manual', desk]);
     await assert.rejects(as(desk, `select record_check_in($1,'manual')`, [none]), /no_active_membership/);
@@ -100,12 +102,12 @@ try {
     await assert.rejects(as(desk, 'select record_check_in($1,$2)', [uid, `x'; drop table profiles; --`]), /bad_input/);
     assert.ok((await db.query(`select to_regclass('public.profiles') as t`)).rows[0].t);
   });
-  await test('the saved list holds active accounts with their code, name and running or later terms, for staff only', async () => {
+  await test('the saved list holds active accounts with their name and running or later terms (no codes, F6), for staff only', async () => {
     const uid = await paid('Listed Person'), gone = await paid('Gone Person');
     await db.query('update profiles set is_active=false where id=$1', [gone]);
     const list = (await as(desk, 'select desk_member_snapshot() s'))[0].s;
     const me = list.find(r => r.member === uid);
-    assert.equal(me.name, 'Listed Person'); assert.match(me.code, /^GYM1-/); assert.equal(me.terms.length, 1);
+    assert.equal(me.name, 'Listed Person'); assert.equal(me.code, undefined); assert.equal(me.terms.length, 1);
     assert.ok(!list.some(r => r.member === gone));
     for (const actor of [uid, coach]) await assert.rejects(as(actor, 'select desk_member_snapshot()'), /forbidden|permission/);
     await db.query('begin'); await db.query('set local role anon');

@@ -254,7 +254,8 @@
                         </VerticalStackLayout>
                     </Border>
 
-                    <!-- D12: the member's permanent ID code, kept apart from the gym's pay-by-QR panel. Always dark on white so any scanner reads it. -->
+                    <!-- F6 (0049): a one-use pass for the front desk, good for 5 minutes and renewed by the 20-second refresh before it runs out;
+                         kept apart from the gym's pay-by-QR panel. Always dark on white so any scanner reads it. -->
                     <!-- A one-line row whose Show button opens the code in place, so the code never fills the first screen
                          (owner, 2026-11-07: folded on Windows too, where nobody scans it from a PC) -->
                     <Border Style="{StaticResource SidePanel}" IsVisible="{Binding HasCode}">
@@ -262,7 +263,7 @@
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                                 <VerticalStackLayout Spacing="2" VerticalOptions="Center">
                                     <c:CardTitle Text="Your member QR" />
-                                    <Label Text="Show it at the front desk when you arrive." Style="{StaticResource Caption}" />
+                                    <Label Text="Show it at the front desk when you arrive. It works once, so a screenshot won't." Style="{StaticResource Caption}" />
                                 </VerticalStackLayout>
                                 <Button x:Name="QrToggle" Grid.Column="1" Text="Show" Style="{StaticResource FilterChip}" VerticalOptions="Center" Clicked="OnToggleQr"
                                         SemanticProperties.Hint="Shows or hides your member QR code" />
@@ -274,7 +275,8 @@
                                     <zxing:BarcodeGeneratorView Format="QrCode" Value="{Binding MyCode}" HorizontalOptions="Fill" VerticalOptions="Fill"
                                                                 ForegroundColor="Black" BackgroundColor="White" />
                                 </Border>
-                                <Label Text="Show this at the front desk when you arrive. It only identifies you; it is not for paying." Style="{StaticResource Caption}" />
+                                <Label Text="{Binding PassLeftText}" FontFamily="BarlowSemiBold" HorizontalOptions="Center" AutomationId="PassLeft" />
+                                <Label Text="It identifies you at the front desk; it is not for paying." Style="{StaticResource Caption}" HorizontalOptions="Center" />
                             </VerticalStackLayout>
                         </VerticalStackLayout>
                     </Border>

@@ -10,14 +10,18 @@ public interface IDeskStore
 }
 
 public sealed class SavedTerm { public DateTime Starts { get; set; } public DateTime Ends { get; set; } }
+/// <summary>F6 (0049): names and paid terms only. A QR pass can't be checked offline, so the copy keeps no codes.</summary>
 public sealed class SavedMember
 {
-    public string Code { get; set; } = "";
     public string Member { get; set; } = "";
     public string Name { get; set; } = "";
     public List<SavedTerm> Terms { get; set; } = new();
 }
-public sealed record QueuedCheckIn(Guid Ref, string MemberId, string Name, DateTime AtUtc);
+/// <summary>
+/// F8: the PIN the member typed (or an Admin's reason) goes with the queue, because only the server can check it.
+/// ponytail: the PIN sits in plain text in the desk's local file until it is sent (minutes, usually); encrypt the store if desks stay offline for long.
+/// </summary>
+public sealed record QueuedCheckIn(Guid Ref, string MemberId, string Name, DateTime AtUtc, string? Pin = null, string? Reason = null);
 public sealed record RefusedCheckIn(string Name, DateTime AtUtc, string Why);
 
 /// <summary>
@@ -78,24 +82,14 @@ public sealed class OfflineDesk
         return null;
     }
 
-    /// <summary>What the saved list says about a scanned code. Never "active": it can't know that.</summary>
-    public MemberScan Find(string code)
-    {
-        if (!IsFresh) return new MemberScan { Result = "saved_stale" };
-        var m = _state.Members.FirstOrDefault(x => x.Code == code.Trim());
-        if (m is null) return new MemberScan { Result = "saved_unknown", SavedNote = LastUpdated };
-        var term = Covering(m, Now);
-        return new MemberScan { Result = term is null ? "saved_unpaid" : "saved", Member = m.Member, Name = m.Name, Expires = term?.Ends, SavedNote = LastUpdated };
-    }
-
-    /// <summary>Forgot phone while offline: the saved list by name. An out-of-date list finds nobody.</summary>
+    /// <summary>Offline the desk finds members by name only: the saved list. An out-of-date list finds nobody.</summary>
     public IReadOnlyList<MemberHit> Search(string fragment) => !IsFresh ? [] : _state.Members
         .Where(m => m.Name.Contains(fragment.Trim(), StringComparison.OrdinalIgnoreCase)).Take(20)
         .Select(m => Covering(m, Now) is { } term ? new MemberHit(m.Member, m.Name, true, term.Ends) : new MemberHit(m.Member, m.Name, false)).ToList();
 
-    public void Queue(string memberId, string name)
+    public void Queue(string memberId, string name, string? pin, string? reason = null)
     {
-        _state.Queue.Add(new QueuedCheckIn(Guid.NewGuid(), memberId, name, Now));
+        _state.Queue.Add(new QueuedCheckIn(Guid.NewGuid(), memberId, name, Now, pin, reason));
         Write();
     }
 
@@ -105,10 +99,15 @@ public sealed class OfflineDesk
         var (sent, refused) = (0, 0);
         foreach (var item in _state.Queue.ToList())
         {
-            var result = await Safe.RunAsync(() => _gw.RpcAsync<int>("record_check_in", new()
+            Dictionary<string, object> args = new()
             {
                 ["p_member_id"] = item.MemberId, ["p_method"] = "offline", ["p_at"] = item.AtUtc.ToString("O"), ["p_client_ref"] = item.Ref.ToString(),
-            }));
+            };
+            if (item.Pin is not null) args["p_pin"] = item.Pin;
+            if (item.Reason is not null) args["p_reason"] = item.Reason;
+            var id = await Safe.RunAsync(() => _gw.RpcAsync<int?>("record_check_in", args));
+            // 0049: a wrong PIN comes back as no id
+            var result = id is { Ok: true, Value: null } ? AppResult<int?>.Fail(AppErrorKind.Validation, "wrong_pin") : id;
             if (!result.Ok && result.Error != AppErrorKind.Validation) break;
             if (result.Ok) sent++;
             else { refused++; _state.Refused.Add(new RefusedCheckIn(item.Name, item.AtUtc, ErrorText.For(result.Error, result.Message))); }

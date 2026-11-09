@@ -252,7 +252,7 @@ public partial class VoidPaymentsViewModel(IPaymentStaffService svc) : LoadableV
     }
 }
 
-public partial class CheckInViewModel(IAttendanceService svc, ICoachService coaches, OfflineDesk? offline = null) : LoadableViewModel
+public partial class CheckInViewModel(IAttendanceService svc, ICoachService coaches, OfflineDesk? offline = null, IProfileService? profile = null) : LoadableViewModel
 {
     public ObservableCollection<MemberHit> Hits { get; } = new();
     public ObservableCollection<CoachPresenceRow> Coaches { get; } = new();
@@ -280,15 +280,19 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
         OnPropertyChanged(nameof(OfflineText));
     }
 
-    void QueueFor(string memberId, string name)
+    void QueueFor(string memberId, string name, string? pin, string? reason)
     {
-        offline!.Queue(memberId, name);
+        offline!.Queue(memberId, name, pin, reason);
         IsOffline = true; ErrorMessage = null;
         Notice = $"{name} is saved and will be sent when the connection is back.";
         ShowQueue();
     }
 
-    public override async Task OnAppearingAsync() { await SearchAsync(); await LoadCoachesAsync(); await SendQueueAsync(); }
+    public override async Task OnAppearingAsync()
+    {
+        if ((await svc.CanSkipPinAsync()) is { Ok: true } skip) CanSkipPin = skip.Value;   // quiet: offline it stays as it was
+        await SearchAsync(); await LoadCoachesAsync(); await SendQueueAsync();
+    }
 
     /// <summary>Sends anything queued and keeps the saved list up to date. Quiet when offline: the next tick tries again.</summary>
     [RelayCommand]
@@ -305,7 +309,7 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
 
     [RelayCommand] private void ToggleCamera() => IsScanning = !IsScanning;
 
-    /// <summary>D12: shows who the code belongs to and their live status, or the saved list when offline. Never checks in by itself.</summary>
+    /// <summary>D12: shows who the code belongs to and their live status. Never checks in by itself. F6: a pass can't be checked offline.</summary>
     [RelayCommand]
     private async Task ScanAsync(string? code)
     {
@@ -313,7 +317,7 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
         if (code.Length == 0) return;
         Notice = null; IsScanning = false; ScanInput = "";
         var result = await svc.ScanAsync(code);
-        if (WentOffline(result)) { IsOffline = true; ErrorMessage = null; Scan = offline!.Find(code); ShowQueue(); return; }
+        if (WentOffline(result)) { IsOffline = true; ErrorMessage = null; Scan = new MemberScan { Result = "saved_no_qr" }; ShowQueue(); return; }
         await RunAsync(() => Task.FromResult(result), s => { Scan = s; IsOffline = false; });
     }
 
@@ -322,9 +326,13 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
     {
         if (Scan is not { CanCheckIn: true, Member: { } id } s) return;
         Notice = null;
-        if (s.IsSaved) { QueueFor(id, s.Name ?? "This member"); Scan = null; return; }
         var result = await svc.CheckInAsync(id, "qr");
-        if (WentOffline(result)) { QueueFor(id, s.Name ?? "This member"); Scan = null; return; }
+        if (WentOffline(result))
+        {   // the pass is used up and can't be checked offline (F6), so the name and PIN are the way in
+            IsOffline = true; Scan = null;
+            ErrorMessage = $"The connection dropped. Find {s.Name} by name and check them in with their desk PIN.";
+            return;
+        }
         if (await RunAsync(() => Task.FromResult(result))) { Notice = $"{s.Name} is checked in."; Scan = null; }
     }
 
@@ -334,9 +342,12 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
     private async Task SearchAsync()
     {
         var result = await svc.FindMembersAsync(Search);
-        if (WentOffline(result)) { IsOffline = true; ErrorMessage = null; Fill(Hits, offline!.Search(Search)); ShowQueue(); return; }
-        await RunAsync(() => Task.FromResult(result), rows => { Fill(Hits, rows); IsOffline = false; });
+        if (WentOffline(result)) { IsOffline = true; ErrorMessage = null; Fill(Hits, Listed(offline!.Search(Search))); ShowQueue(); return; }
+        await RunAsync(() => Task.FromResult(result), rows => { Fill(Hits, Listed(rows)); IsOffline = false; });
     }
+
+    /// <summary>While the PIN step is open it stands in for that member's row, so the member isn't listed twice.</summary>
+    IEnumerable<MemberHit> Listed(IEnumerable<MemberHit> rows) => rows.Where(h => h.MemberId != PinFor?.MemberId);
 
     async Task LoadCoachesAsync()
     {
@@ -345,16 +356,62 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
         await RunAsync(() => Task.FromResult(result), rows => Fill(Coaches, rows));
     }
 
-    /// <summary>Forgot phone: staff find the member by name, see their status, and check them in. The server still decides.</summary>
+    // ---- F8: check-in by name asks for the member's desk PIN first; only Admin and System admin may give a reason instead ----
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPinStep))] private MemberHit? pinFor;
+    public bool HasPinStep => PinFor is not null;
+    [ObservableProperty] private string pin = "";
+    [ObservableProperty] private string reason = "";
+    [ObservableProperty] private bool canSkipPin;
+    /// <summary>F8: the member's photo, so staff can compare the face; the initials when there is none.</summary>
+    [ObservableProperty] private string? pinPhoto;
+    [ObservableProperty] private string pinLetters = "";
+
+    /// <summary>Forgot phone: staff find the member by name and see their status; Check in opens the PIN step. The server still decides.</summary>
     [RelayCommand]
     private async Task CheckInAsync(MemberHit hit)
     {
+        Notice = null; ErrorMessage = null;
+        if (!hit.CanCheckIn)
+        {
+            ErrorMessage = IsOffline ? $"The saved list shows no paid term for {hit.Username}." : $"{hit.Username} has no active membership.";
+            return;
+        }
+        ClosePin();   // another member's step, if one was open, gives its row back
+        _pinRow = Math.Max(0, Hits.IndexOf(hit));
+        Hits.Remove(hit);
+        (PinFor, Pin, Reason, PinPhoto, PinLetters) = (hit, "", "", null, Initials.From(hit.Username));
+        if (profile is not null && hit.AvatarPath is not null && !IsOffline
+            && (await profile.AvatarUrlAsync(hit.AvatarPath)) is { Ok: true, Value: { } url } && PinFor == hit) PinPhoto = url;
+    }
+    int _pinRow;
+
+    void ClosePin()
+    {
+        if (PinFor is { } hit && Hits.All(h => h.MemberId != hit.MemberId)) Hits.Insert(Math.Min(_pinRow, Hits.Count), hit);
+        (PinFor, Pin, Reason, PinPhoto) = (null, "", "", null);
+    }
+
+    [RelayCommand] private void CancelPin() { ClosePin(); ErrorMessage = null; }
+
+    [RelayCommand]
+    private async Task ConfirmPinAsync()
+    {
+        if (PinFor is not { } hit) return;
         Notice = null;
-        if (IsOffline && !hit.CanCheckIn) { ErrorMessage = $"The saved list shows no paid term for {hit.Username}."; return; }
-        if (IsOffline) { QueueFor(hit.MemberId, hit.Username); return; }
-        var result = await svc.CheckInAsync(hit.MemberId, "manual");
-        if (WentOffline(result) && hit.CanCheckIn) { QueueFor(hit.MemberId, hit.Username); return; }
-        if (await RunAsync(() => Task.FromResult(result))) Notice = $"{hit.Username} is checked in.";
+        var (pin, reason) = (Pin.Trim(), Reason.Trim());
+        if (pin.Length == 0 && !(CanSkipPin && reason.Length > 0))
+        {
+            ErrorMessage = CanSkipPin ? "Enter the member's desk PIN, or a reason for checking them in without it." : "Enter the member's desk PIN.";
+            return;
+        }
+        string? p = pin.Length > 0 ? pin : null, r = p is null ? reason : null;
+        if (IsOffline) { QueueFor(hit.MemberId, hit.Username, p, r); ClosePin(); return; }
+        var result = await svc.CheckInAsync(hit.MemberId, "manual", p, r);
+        if (WentOffline(result)) { QueueFor(hit.MemberId, hit.Username, p, r); ClosePin(); return; }
+        Pin = "";
+        if (!result.Ok) { ErrorMessage = ErrorText.For(result.Error, result.Message); return; }
+        ClosePin(); ErrorMessage = null;
+        Notice = $"{hit.Username} is checked in.";
     }
 
     [RelayCommand]

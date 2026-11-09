@@ -1043,7 +1043,7 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
 }
 
 // ===================== Attendance and check-ins =====================
-public sealed record MemberHit(string MemberId, string Username, bool HasActiveMembership, DateTime? PaidUntil = null)
+public sealed record MemberHit(string MemberId, string Username, bool HasActiveMembership, DateTime? PaidUntil = null, string? AvatarPath = null)
 {
     public string PlanStatus => HasActiveMembership ? "active" : "inactive";
     /// <summary>Forgot phone: what staff check before letting someone in without a QR.</summary>
@@ -1055,18 +1055,22 @@ public interface IAttendanceService
 {
     /// <summary>The coach records how a member did at a session: present, late, absent or excused.</summary>
     Task<AppResult<bool>> RecordAsync(int sessionId, string status);
-    /// <param name="method">How it was made, for the record: qr or manual (0044).</param>
-    Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null);
+    /// <param name="method">qr (the default: needs a pass this desk just scanned), manual or offline (0044, 0049).</param>
+    /// <param name="pin">The member's desk PIN, for manual (F8). A wrong one fails as wrong_pin.</param>
+    /// <param name="reason">Admin and System admin only: why they check in by name without the PIN.</param>
+    Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null, string? pin = null, string? reason = null);
+    /// <summary>F8: true for Admin and System admin, who may check in by name without the PIN, with a reason.</summary>
+    Task<AppResult<bool>> CanSkipPinAsync();
     Task<AppResult<IReadOnlyList<MemberHit>>> FindMembersAsync(string usernameFragment);
-    /// <summary>The signed-in member's permanent QR code (0034), or null for anyone who is not a member.</summary>
-    Task<AppResult<string?>> MyCodeAsync();
+    /// <summary>F6: a new one-use QR pass for the signed-in member, good for 5 minutes. The previous unused one stops working.</summary>
+    Task<AppResult<MemberPass>> MyPassAsync();
     /// <summary>Front desk and admins: who a scanned code belongs to and their live status. Every scan is logged by the server.</summary>
     Task<AppResult<MemberScan>> ScanAsync(string code);
     /// <summary>Gym check-ins on one Manila day, earliest first.</summary>
     Task<AppResult<IReadOnlyList<CheckInRow>>> CheckInsOnAsync(DateOnly manilaDay);
 }
 
-/// <summary>What scan_member says about a code: result is active, pending, expired, inactive or not_found.</summary>
+/// <summary>What scan_member says about a code: result is active, pending, expired, inactive, old_code or not_found.</summary>
 public sealed class MemberScan
 {
     public string Result { get; set; } = "";
@@ -1084,17 +1088,21 @@ public sealed class MemberScan
         "saved_unpaid" => $"No paid term on the saved list. {SavedNote}",
         "saved_unknown" => $"Not on the saved list. {SavedNote}",
         "saved_stale" => "Can't check right now: the saved list is out of date or missing.",
+        "saved_no_qr" => "Offline, so a QR code can't be checked. Find the member by name and ask for their desk PIN.",
+        "old_code" => "Old code: it was already scanned or has run out. Ask the member to open their QR again.",
         "active" => "Active", "pending" => "Pending: a membership payment is waiting to be verified", "expired" => "Expired: no active membership",
         "inactive" => "Inactive: this account is archived", _ => "Not found: this code does not belong to any member"
     };
     public string ExpiryText => Expires is { } e ? (Result is "active" or "saved" ? "Membership ends " : "Membership ended ") + RevenuePdf.Manila(e) + " (Manila)" : IsSaved ? "" : "No end date";
 }
 
-public sealed record CheckInRow(string Name, DateTime At, string? Method = null)
+public sealed record CheckInRow(string Name, DateTime At, string? Method = null, string? By = null, string? Reason = null)
 {
     public string TimeText => At.AddHours(8).ToString("h:mm tt", CultureInfo.InvariantCulture);   // Manila has no daylight saving
-    /// <summary>How it came in (0044); blank for check-ins recorded before that.</summary>
-    public string HowText => Method switch { "qr" => "QR", "manual" => "By name", "offline" => "Sent later", _ => "" };
+    /// <summary>How it came in (0044); blank for check-ins recorded before that. A reason means an Admin skipped the PIN (F8).</summary>
+    public string HowText => Method switch { "qr" => "QR", "manual" when Reason is not null => "By name, no PIN", "manual" => "By name", "offline" => "Sent later", _ => "" };
+    /// <summary>F8: who recorded it, and why an Admin skipped the PIN; blank for check-ins from before this was kept.</summary>
+    public string ByText => By is null ? "" : Reason is null ? $"By {By}" : $"By {By}. Reason: {Reason}";
 }
 
 public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = null) : IAttendanceService
@@ -1107,12 +1115,22 @@ public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = 
         return true;
     });
 
-    public Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null) => Safe.RunAsync(async () =>
+    public async Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null, string? pin = null, string? reason = null)
     {
         Dictionary<string, object> args = new() { ["p_member_id"] = memberId };
         if (method is not null) args["p_method"] = method;
-        await gw.RpcAsync<int>("record_check_in", args);
-        return true;
+        if (!string.IsNullOrEmpty(pin)) args["p_pin"] = pin;
+        if (!string.IsNullOrWhiteSpace(reason)) args["p_reason"] = reason.Trim();
+        var id = await Safe.RunAsync(() => gw.RpcAsync<int?>("record_check_in", args));
+        // 0049: a wrong PIN comes back as no id, not an error, so the server can keep its count of wrong tries
+        return !id.Ok ? AppResult<bool>.Fail(id.Error, id.Message) : id.Value is null ? AppResult<bool>.Fail(AppErrorKind.Validation, "wrong_pin") : AppResult<bool>.Success(true);
+    }
+
+    public Task<AppResult<bool>> CanSkipPinAsync() => Safe.RunAsync(async () =>
+    {
+        var uid = gw.CurrentUserId;
+        var mine = (await gw.ListAsync<UserRole>(u => u.UserId == uid)).Select(u => u.RoleId).ToHashSet();
+        return (await gw.ListAsync<Role>()).Any(r => r.Name is "admin" or "subadmin" && mine.Contains(r.RoleId));
     });
 
     public Task<AppResult<IReadOnlyList<MemberHit>>> FindMembersAsync(string fragment) => Safe.RunAsync<IReadOnlyList<MemberHit>>(async () =>
@@ -1121,12 +1139,12 @@ public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = 
         var profiles = await gw.ListAsync<Profile>();
         var now = clock.GetUtcNow().UtcDateTime;
         var active = (await gw.ListAsync<UserMembershipPackage>(m => m.Status == "active")).Where(m => m.EndsAt > now).GroupBy(m => m.MemberId).ToDictionary(g => g.Key, g => g.Max(m => m.EndsAt));
-        return members.Join(profiles, m => m.UserId, p => p.Id, (m, p) => new MemberHit(m.UserId, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName, active.ContainsKey(m.UserId), active.GetValueOrDefault(m.UserId)))
+        return members.Join(profiles, m => m.UserId, p => p.Id, (m, p) => new MemberHit(m.UserId, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName, active.ContainsKey(m.UserId), active.GetValueOrDefault(m.UserId), p.AvatarPath))
             .Where(h => h.Username.Contains(fragment, StringComparison.OrdinalIgnoreCase)).Take(20).ToList();
     });
 
-    public Task<AppResult<string?>> MyCodeAsync() => Safe.RunAsync<string?>(async () =>
-    { var uid = gw.CurrentUserId; return (await gw.ListAsync<MemberCode>(c => c.UserId == uid)).FirstOrDefault()?.Code; });
+    public Task<AppResult<MemberPass>> MyPassAsync() =>
+        Safe.RunAsync(async () => (await gw.RpcAsync<List<MemberPass>>("issue_member_pass", new())).Single());
 
     public Task<AppResult<MemberScan>> ScanAsync(string code) =>
         Safe.RunAsync(() => gw.RpcAsync<MemberScan>("scan_member", new() { ["p_code"] = code.Trim() }));
@@ -1138,7 +1156,8 @@ public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = 
         var rows = await gw.ListAsync<GymCheckIn>(c => c.CheckedInAt >= from && c.CheckedInAt < to);
         var names = await Directory_.UserNamesAsync(gw);
         return rows.OrderBy(c => c.CheckedInAt)
-            .Select(c => new CheckInRow(c.MemberId is { } m ? names.GetValueOrDefault(m, "Member") : "Walk-in", c.CheckedInAt, c.Method)).ToList();
+            .Select(c => new CheckInRow(c.MemberId is { } m ? names.GetValueOrDefault(m, "Member") : "Walk-in", c.CheckedInAt, c.Method,
+                c.RecordedBy is { } by ? names.GetValueOrDefault(by) : null, c.Reason)).ToList();
     });
 }
 
@@ -1444,6 +1463,10 @@ public interface ISettingsService
 {
     Task<AppResult<UserSettings>> LoadAsync();
     Task<AppResult<bool>> SaveThemeAsync(string theme);
+    /// <summary>True when the signed-in user is a member (only members have a desk PIN).</summary>
+    Task<AppResult<bool>> IsMemberAsync();
+    /// <summary>F8: the 4-digit PIN the member types at the front desk when they check in without their phone.</summary>
+    Task<AppResult<bool>> SetDeskPinAsync(string pin);
 }
 
 public sealed class SettingsService(ISupabaseGateway gw) : ISettingsService
@@ -1463,5 +1486,14 @@ public sealed class SettingsService(ISupabaseGateway gw) : ISettingsService
             await gw.UpdateAsync(s);
             return true;
         });
+    }
+
+    public Task<AppResult<bool>> IsMemberAsync() => Safe.RunAsync(async () =>
+    { var uid = gw.CurrentUserId; return (await gw.ListAsync<Member>(m => m.UserId == uid)).Count > 0; });
+
+    public async Task<AppResult<bool>> SetDeskPinAsync(string pin)
+    {
+        if (pin.Length != 4 || !pin.All(char.IsAsciiDigit)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_pin");   // the server checks too
+        return await Safe.RunAsync(async () => { await gw.RpcAsync("set_desk_pin", new() { ["p_pin"] = pin }); return true; });
     }
 }

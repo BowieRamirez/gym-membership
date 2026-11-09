@@ -39,7 +39,7 @@ public class DeskHomeTests
     {
         var (gw, _, svc) = await As("employee@demo.io");
         var before = (await svc.SummaryAsync()).Value!.CheckInsToday;
-        Assert.True((await new AttendanceService(gw).CheckInAsync("u-alex")).Ok);
+        Assert.True((await new AttendanceService(gw).CheckInAsync("u-alex", "manual", pin: "1234")).Ok);   // the demo's Alex has PIN 1234 (F8)
         Assert.Equal(before + 1, (await svc.SummaryAsync()).Value!.CheckInsToday);
     }
 

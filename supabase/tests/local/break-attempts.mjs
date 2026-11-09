@@ -34,7 +34,7 @@ async function paid() {
   await as(desk, 'select verify_payment($1,true)', [(await buy(uid)).payment_id]);
   return uid;
 }
-const codeOf = async uid => id('select code from member_codes where user_id=$1', [uid]);
+const codeOf = async uid => (await as(uid, 'select code from issue_member_pass()'))[0].code;   // F6: a fresh one-use pass
 const scan = async c => (await as(desk, 'select scan_member($1) s', [c]))[0].s.result;
 const checkIn = uid => as(desk, `select record_check_in($1,'manual')`, [uid]);
 
@@ -96,9 +96,9 @@ try {
     await assert.rejects(checkIn(uid), /no_active_membership/);
   });
   await test('check-in: an archived account is refused even with time left on its membership', async () => {
-    const uid = await paid();
+    const uid = await paid(), code = await codeOf(uid);   // taken before archiving: an archived account can't ask for one
     await as(owner, 'select archive_account($1,$2)', [uid, 'Phase 10 check']);
-    assert.equal(await scan(await codeOf(uid)), 'inactive');
+    assert.equal(await scan(code), 'inactive');
     await assert.rejects(checkIn(uid), /no_active_membership|account_archived|inactive/);
   });
   await test('check-in: an unknown member id is refused, and only staff can check anyone in', async () => {

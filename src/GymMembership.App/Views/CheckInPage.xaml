@@ -76,12 +76,46 @@
         <VerticalStackLayout Grid.Row="1" Spacing="10" Padding="0,0,0,10">
             <Label Text="Members" Style="{StaticResource SectionTitle}" Margin="0" />
                         <Border Style="{StaticResource Field}"><SearchBar Placeholder="Search members by name" Text="{Binding Search}" SearchCommand="{Binding SearchCommand}" /></Border>
-                        <c:Banner Message="{Binding ErrorMessage}" />
+                        <!-- while the PIN step is open it shows its own error, next to the PIN -->
+                        <ContentView IsVisible="{Binding HasPinStep, Converter={StaticResource Not}}"><c:Banner Message="{Binding ErrorMessage}" /></ContentView>
                         <c:Banner Kind="notice" Message="{Binding Notice}" />
         </VerticalStackLayout>
 
         <Border Grid.Row="2" Style="{StaticResource Panel}" Padding="12" Margin="0,0,0,16">
-        <CollectionView ItemsSource="{Binding Hits}">
+        <Grid RowDefinitions="Auto,*">
+        <!-- F8 (mockup docs/mockups/desk-pin.html): Check in by name opens this step; nothing is recorded until the PIN is right.
+             It sits at the top of the list rather than inside the row: binding a row to the page's view model breaks while the list reloads (BasePage.Row) -->
+        <Border Style="{StaticResource Row}" Stroke="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" StrokeThickness="2" Padding="14" Margin="0,0,0,8" IsVisible="{Binding HasPinStep}">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                <c:Avatar Letters="{Binding PinLetters}" Url="{Binding PinPhoto}" Diameter="64" VerticalOptions="Start" />
+                <VerticalStackLayout Grid.Column="1" Spacing="6">
+                    <Label Text="{Binding PinFor.Username}" Style="{StaticResource Heading}" AutomationId="PinName" />
+                    <Label Text="Check the photo matches the person, then ask them to type their desk PIN." Style="{StaticResource Caption}" />
+                    <FlexLayout Wrap="Wrap" AlignItems="End">
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                            <Label Text="Desk PIN" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}" WidthRequest="132">
+                                <Entry Text="{Binding Pin}" IsPassword="True" Keyboard="Numeric" MaxLength="4" ReturnCommand="{Binding ConfirmPinCommand}"
+                                       AutomationId="DeskPin" SemanticProperties.Description="The member's 4-digit desk PIN" />
+                            </Border>
+                        </VerticalStackLayout>
+                        <Button Text="Check in" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Command="{Binding ConfirmPinCommand}" AutomationId="ConfirmPin" />
+                        <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding CancelPinCommand}" AutomationId="CancelPin" />
+                    </FlexLayout>
+                    <Label Text="{Binding ErrorMessage}" Style="{StaticResource FieldError}" IsVisible="{Binding ErrorMessage, Converter={StaticResource HasText}}" AutomationId="PinError" />
+                    <VerticalStackLayout Spacing="6" IsVisible="{Binding CanSkipPin}">
+                        <BoxView Style="{StaticResource Hairline}" Margin="0,4,0,4" />
+                        <Label Text="No PIN? Reason for checking them in without it" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}" MaximumWidthRequest="420" HorizontalOptions="Start">
+                            <Entry Text="{Binding Reason}" Placeholder="For example: known member, phone broken" MaxLength="500" AutomationId="PinReason"
+                                   SemanticProperties.Description="Reason for checking in without the PIN" />
+                        </Border>
+                        <Label Text="Saved with the check-in. Admins see it in the day's check-ins." Style="{StaticResource Caption}" />
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Grid>
+        </Border>
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Hits}">
             <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="8" /></CollectionView.ItemsLayout>
             <CollectionView.EmptyView><Label Text="No members match that name." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
             <CollectionView.ItemTemplate>
@@ -102,6 +136,7 @@
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
+        </Grid>
         </Border>
     </Grid>
 </v:BasePage>

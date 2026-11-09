@@ -192,8 +192,8 @@ public class BehaviorTests
         var gw = await As("employee@demo.io");
         var svc = new AttendanceService(gw);
         var hits = (await svc.FindMembersAsync("")).Value!;
-        Assert.True((await svc.CheckInAsync(hits.First(h => h.Username == "Alex Tan").MemberId)).Ok);
-        Assert.Equal(AppErrorKind.Validation, (await svc.CheckInAsync(hits.First(h => h.Username == "Carlo Diaz").MemberId)).Error);
+        Assert.True((await svc.CheckInAsync(hits.First(h => h.Username == "Alex Tan").MemberId, "manual", pin: "1234")).Ok);   // demo PIN (F8)
+        Assert.Equal("no_active_membership", (await svc.CheckInAsync(hits.First(h => h.Username == "Carlo Diaz").MemberId, "manual", pin: "1234")).Message);
         Assert.Single(await gw.ListAsync<GymCheckIn>(c => c.MemberId == "u-alex"));
     }
 

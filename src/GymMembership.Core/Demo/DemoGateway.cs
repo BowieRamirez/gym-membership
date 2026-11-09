@@ -44,6 +44,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
 
     readonly TimeProvider _clock;
     readonly object _rpcLock = new();
+    // F6, F8 (0049): no table the app can read, so plain fields. The demo's Alex has desk PIN 1234.
+    sealed class DemoPass { public string Code = "", Member = ""; public DateTime Expires; public DateTime? ScannedAt; public string? ScannedBy; public int? CheckInId; }
+    readonly List<DemoPass> _passes = new();
+    readonly Dictionary<string, (string Pin, int Fails, DateTime? LockedUntil)> _pins = new() { ["u-alex"] = ("1234", 0, null) };
     DateTime SubscriptionNow => _clock.GetUtcNow().UtcDateTime;
     public DemoGateway(bool seed = true, TimeProvider? clock = null)
     { _clock = clock ?? TimeProvider.System; if (seed) { Seed(); SeedMembershipTerms(); } }
@@ -789,12 +793,35 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (manila < g.OpensAt || manila >= g.ClosesAt) throw Err("gym_closed");
                 return Add(new CoachVisit { CoachId = coachId, CheckedInBy = uid, CheckedInAt = now }).Id;
             }
-            // 0034: inactive > active > pending > expired; the demo keeps no scan log (there is no audit screen for it)
+            case "issue_member_pass":   // F6, 0049
+            {
+                RequireActive();
+                if (All<Member>().All(m => m.UserId != uid)) throw Err("forbidden");
+                foreach (var old in _passes.Where(x => x.Member == uid && x.ScannedAt is null && x.Expires > now)) old.Expires = now;
+                var pass = new DemoPass { Code = "GYM2-" + Guid.NewGuid().ToString("N"), Member = uid!, Expires = now.AddMinutes(5) };
+                _passes.Add(pass);
+                return new List<MemberPass> { new() { Code = pass.Code, ExpiresAt = pass.Expires } };
+            }
+            case "set_desk_pin":        // F8, 0049
+            {
+                RequireActive();
+                if (All<Member>().All(m => m.UserId != uid)) throw Err("forbidden");
+                var pin = Opt("p_pin");
+                if (pin is not { Length: 4 } || !pin.All(char.IsAsciiDigit)) throw Err("bad_pin");
+                _pins[uid!] = (pin, 0, null);
+                return null;
+            }
+            // 0034, 0049: inactive > active > pending > expired; a used, expired or replaced pass, or a permanent code, is old_code.
+            // The demo keeps no scan log (there is no audit screen for it)
             case "scan_member":
             {
                 Require("check_ins:record");
                 var code = (Opt("p_code") ?? "").Trim();
-                var member = All<MemberCode>().FirstOrDefault(c => c.Code == code)?.UserId;
+                var pass = _passes.FirstOrDefault(x => x.Code == code);
+                if (pass is not { ScannedAt: null } || pass.Expires <= now)
+                    return new MemberScan { Result = pass is not null || All<MemberCode>().Any(c => c.Code == code) ? "old_code" : "not_found" };
+                (pass.ScannedAt, pass.ScannedBy) = (now, uid);
+                var member = pass.Member;
                 var p = All<Profile>().FirstOrDefault(x => x.Id == member);
                 var terms = All<MembershipTerm>().Where(t => t.MemberId == member && t.CancelledAt is null).OrderBy(t => t.StartsAt).ToList();
                 string result; DateTime? expires = null;
@@ -956,24 +983,44 @@ public sealed partial class DemoGateway : ISupabaseGateway
             {
                 Require("check_ins:record");
                 var memberId = S("p_member_id");
-                var method = Opt("p_method");
+                var method = Opt("p_method") ?? "qr";
                 var at = Opt("p_at") is { } when ? DateTime.Parse(when, null, System.Globalization.DateTimeStyles.AdjustToUniversal) : (DateTime?)null;
                 var clientRef = Opt("p_client_ref");
-                if (method is not (null or "qr" or "manual" or "offline")) throw Err("bad_input");
+                var (pin, reason) = (Opt("p_pin"), Opt("p_reason")?.Trim() is { Length: > 0 } r ? r : null);
+                if (method is not ("qr" or "manual" or "offline")) throw Err("bad_input");
                 if (at is { } t0 && (method != "offline" || t0 > now.AddMinutes(5) || t0 < now.AddHours(-48))) throw Err("bad_input");
+                if (reason?.Length > 500) throw Err("bad_reason");
                 if (clientRef is not null && All<GymCheckIn>().FirstOrDefault(c => c.ClientRef == clientRef) is { } again) return again.Id;
                 if (All<Member>().All(m => m.UserId != memberId)) throw Err("not_found");
                 if (at is { } t1
                     ? !(All<Profile>().Any(p => p.Id == memberId && p.IsActive) && All<MembershipTerm>().Any(x => x.MemberId == memberId && x.CancelledAt is null && x.StartsAt <= t1 && t1 < x.EndsAt))
                     : !ActiveMember(memberId)) throw Err("no_active_membership");
-                return Add(new GymCheckIn { MemberId = memberId, CheckedInAt = at ?? now, Method = method, ClientRef = clientRef }).Id;
+                // 0049: qr needs this desk's fresh scan; manual and offline need the PIN, or an Admin or System admin with a reason
+                DemoPass? scanned = null;
+                if (method == "qr")
+                    scanned = _passes.Where(x => x.Member == memberId && x.ScannedBy == uid && x.ScannedAt > now.AddMinutes(-10) && x.CheckInId is null)
+                        .OrderByDescending(x => x.ScannedAt).FirstOrDefault() ?? throw Err("scan_required");
+                else if (pin is null)
+                {
+                    if (reason is null || !RolesOf(uid).Any(x => x is "admin" or "subadmin")) throw Err("pin_required");
+                }
+                else
+                {
+                    if (!_pins.TryGetValue(memberId, out var saved)) throw Err("no_desk_pin");
+                    if (saved.LockedUntil > now) throw Err("pin_locked");
+                    if (saved.Pin != pin) { _pins[memberId] = saved.Fails >= 4 ? (saved.Pin, 0, now.AddMinutes(15)) : (saved.Pin, saved.Fails + 1, saved.LockedUntil); return null; }
+                    _pins[memberId] = (saved.Pin, 0, saved.LockedUntil);
+                }
+                var row = Add(new GymCheckIn { MemberId = memberId, CheckedInAt = at ?? now, Method = method, ClientRef = clientRef, RecordedBy = uid, Reason = reason });
+                if (scanned is not null) scanned.CheckInId = row.Id;
+                return row.Id;
             }
             case "desk_member_snapshot":
             {
                 Require("check_ins:record");
-                return All<Member>().Where(m => All<Profile>().Any(p => p.Id == m.UserId && p.IsActive) && All<MemberCode>().Any(c => c.UserId == m.UserId)).Select(m => new SavedMember
+                return All<Member>().Where(m => All<Profile>().Any(p => p.Id == m.UserId && p.IsActive)).Select(m => new SavedMember
                 {
-                    Code = All<MemberCode>().First(c => c.UserId == m.UserId).Code, Member = m.UserId, Name = All<Profile>().First(p => p.Id == m.UserId).FullName,
+                    Member = m.UserId, Name = All<Profile>().First(p => p.Id == m.UserId).FullName,
                     Terms = All<MembershipTerm>().Where(x => x.MemberId == m.UserId && x.CancelledAt is null && x.EndsAt > now).Select(x => new SavedTerm { Starts = x.StartsAt, Ends = x.EndsAt }).ToList(),
                 }).ToList();
             }

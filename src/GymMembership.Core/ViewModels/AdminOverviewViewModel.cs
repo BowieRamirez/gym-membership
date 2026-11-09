@@ -25,6 +25,9 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
     [ObservableProperty] DateTime checkInDay = DateTime.UtcNow.AddHours(8).Date;
     [ObservableProperty] string checkInsText = "Loading check-ins…";
     partial void OnCheckInDayChanged(DateTime value) => _ = LoadCheckInsAsync();
+    /// <summary>F8: the "Manual check-ins" list: only those made by name, with who recorded each and any reason.</summary>
+    [ObservableProperty] bool byNameOnly;
+    partial void OnByNameOnlyChanged(bool value) => _ = LoadCheckInsAsync();
 
     public async Task LoadCheckInsAsync()
     {
@@ -33,8 +36,10 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
         var r = await checkIns.CheckInsOnAsync(DateOnly.FromDateTime(CheckInDay));
         CheckIns.Clear();
         if (!r.Ok) { CheckInsText = ErrorText.For(r.Error, r.Message); return; }
-        foreach (var row in r.Value!) CheckIns.Add(row);
-        CheckInsText = r.Value.Count switch { 0 => "No check-ins on this day.", 1 => "1 check-in", var n => $"{n} check-ins" };
+        var rows = r.Value!.Where(c => !ByNameOnly || c.Method == "manual").ToList();
+        foreach (var row in rows) CheckIns.Add(row);
+        var kind = ByNameOnly ? " by name" : "";
+        CheckInsText = rows.Count switch { 0 => $"No check-ins{kind} on this day.", 1 => $"1 check-in{kind}", var n => $"{n} check-ins{kind}" };
     }
 
     public IReadOnlyList<AdminOverviewCard> Cards { get; } = [

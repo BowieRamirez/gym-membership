@@ -81,6 +81,32 @@
                         </VerticalStackLayout>
                     </Border>
 
+                    <!-- F8 (mockup docs/mockups/desk-pin.html): members only; typed twice because a typo only shows up at the desk -->
+                    <Border Style="{StaticResource SidePanel}" IsVisible="{Binding IsMember}">
+                        <VerticalStackLayout Spacing="12">
+                            <VerticalStackLayout Spacing="2">
+                                <c:CardTitle Text="Desk PIN" />
+                                <Label Text="4 digits you type at the front desk if you check in without your phone." Style="{StaticResource Caption}" />
+                            </VerticalStackLayout>
+                            <FlexLayout Wrap="Wrap">
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                                    <Label Text="New PIN" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}" WidthRequest="132">
+                                        <Grid ColumnDefinitions="*,Auto"><Entry x:Name="DeskPinBox" Text="{Binding DeskPin}" IsPassword="True" Keyboard="Numeric" MaxLength="4" AutomationId="NewDeskPin" SemanticProperties.Description="New desk PIN, 4 digits" /><c:EyeButton Grid.Column="1" Entry="{x:Reference DeskPinBox}" /></Grid>
+                                    </Border>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                                    <Label Text="Type it again" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}" WidthRequest="132">
+                                        <Grid ColumnDefinitions="*,Auto"><Entry x:Name="DeskPinAgainBox" Text="{Binding DeskPinAgain}" IsPassword="True" Keyboard="Numeric" MaxLength="4" ReturnCommand="{Binding SaveDeskPinCommand}"
+                                               AutomationId="RepeatDeskPin" SemanticProperties.Description="Repeat the desk PIN" /><c:EyeButton Grid.Column="1" Entry="{x:Reference DeskPinAgainBox}" /></Grid>
+                                    </Border>
+                                </VerticalStackLayout>
+                            </FlexLayout>
+                            <Button Text="Save PIN" Style="{StaticResource SmallOutlineButton}" Command="{Binding SaveDeskPinCommand}" HorizontalOptions="Start" AutomationId="SaveDeskPin" />
+                        </VerticalStackLayout>
+                    </Border>
+
                     <Border Style="{StaticResource SidePanel}">
                         <VerticalStackLayout Spacing="12">
                             <c:CardTitle Text="Change password" />

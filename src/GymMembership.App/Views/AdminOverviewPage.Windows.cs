@@ -179,23 +179,30 @@ public sealed class AdminOverviewPage : BasePage
 
     static View CheckIns(AdminOverviewViewModel vm)
     {
-        // D12: who came in on a chosen day, and how (QR, by name, or sent later from an offline desk)
-        var bar = new Grid { Padding = new Thickness(14, 10), ColumnDefinitions = { new(GridLength.Auto), new(GridLength.Star) } };
+        // D12: who came in on a chosen day, and how (QR, by name, or sent later from an offline desk).
+        // F8: who recorded each and why a PIN was skipped; "By name only" is the Manual check-ins list (mockup docs/mockups/desk-pin.html)
+        var bar = new Grid { Padding = new Thickness(14, 10), ColumnSpacing = 14, ColumnDefinitions = { new(GridLength.Auto), new(GridLength.Auto), new(GridLength.Star) } };
         var day = new DatePicker { MaximumDate = DateTime.Today.AddDays(1), AutomationId = "AdminCheckInDay" };
         day.SetBinding(DatePicker.DateProperty, nameof(vm.CheckInDay));
         bar.Add(new Border { Style = Resource<Style>("Field"), Content = day });
+        var byName = new Switch { AutomationId = "AdminCheckInsByName", VerticalOptions = LayoutOptions.Center };
+        SemanticProperties.SetDescription(byName, "Show only check-ins made by name");
+        byName.SetBinding(Switch.IsToggledProperty, nameof(vm.ByNameOnly));
+        bar.Add(new HorizontalStackLayout { Spacing = 8, VerticalOptions = LayoutOptions.Center, Children = { byName, Text("By name only", "BaseLabel") } }, 1);
         var count = Text("", "Heading", "AdminCheckInCount");
         count.HorizontalOptions = LayoutOptions.End;
         count.VerticalOptions = LayoutOptions.Center;
         count.SetBinding(Label.TextProperty, nameof(vm.CheckInsText));
-        bar.Add(count, 1);
+        bar.Add(count, 2);
         var list = new VerticalStackLayout();
         BindableLayout.SetItemsSource(list, vm.CheckIns);
         BindableLayout.SetItemTemplate(list, new DataTemplate(() =>
         {
             var row = new Grid { Style = Resource<Style>("TableRow"), ColumnDefinitions = { new(52), new(GridLength.Star), new(GridLength.Auto) } };
             row.Add(Bound("Muted", nameof(CheckInRow.TimeText)));
-            row.Add(Bound("BaseLabel", nameof(CheckInRow.Name)), 1);
+            var by = Bound("Caption", nameof(CheckInRow.ByText));
+            by.SetBinding(IsVisibleProperty, nameof(CheckInRow.ByText), converter: Resource<IValueConverter>("HasText"));
+            row.Add(new VerticalStackLayout { Spacing = 2, VerticalOptions = LayoutOptions.Center, Children = { Bound("BaseLabel", nameof(CheckInRow.Name)), by } }, 1);
             row.Add(Bound("Caption", nameof(CheckInRow.HowText)), 2);
             return new VerticalStackLayout { Children = { new BoxView { Style = Resource<Style>("Hairline") }, row } };
         }));

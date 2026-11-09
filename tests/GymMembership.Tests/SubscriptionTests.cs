@@ -28,7 +28,9 @@ public class SubscriptionTests
     static async Task CheckIn(DemoGateway gw)
     {
         var me = gw.CurrentUserId!;
+        var pass = (await new AttendanceService(gw).MyPassAsync()).Value!.Code;   // F6: the desk scans a fresh pass, then checks in
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        await new AttendanceService(gw).ScanAsync(pass);
         Assert.True((await new AttendanceService(gw).CheckInAsync(me)).Ok);
         await gw.SignInAsync("phase7@demo.io", "secret12");
     }
