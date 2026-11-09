@@ -179,6 +179,8 @@ public class ConfirmationTests
         public void GoToLogin() { }
         public void GoToRegister() { }
         public void GoToMessages() { }
+        public int Requests;
+        public void GoToRequests() => Requests++;
         public void GoToMembership() { }
         public void ApplyTheme(string theme) { }
     }

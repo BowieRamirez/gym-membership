@@ -127,7 +127,7 @@ public class NewFeatureTests
     {
         var gw = await As("member@demo.io");
         var svc = new ChatService(gw, new NotificationService(gw));
-        var thread = (await svc.ThreadsAsync()).Value!.Single(t => !t.IsSupport);
+        var thread = (await svc.ThreadsAsync()).Value!.Single(t => t.Kind == "coach");
         Assert.True(thread.CanSend);
         Assert.True((await svc.SendAsync(thread, "  See you at 9  ")).Ok);
 
@@ -144,18 +144,18 @@ public class NewFeatureTests
     {
         var gw = await As("member@demo.io");
         var svc = new ChatService(gw, new NotificationService(gw));
-        var thread = (await svc.ThreadsAsync()).Value!.Single(t => !t.IsSupport);
+        var thread = (await svc.ThreadsAsync()).Value!.Single(t => t.Kind == "coach");
         Assert.Equal(AppErrorKind.Validation, (await svc.SendAsync(thread, "   ")).Error);
 
         await gw.SignInAsync("carlo@demo.io", DemoGateway.DemoPassword); // never hired Lena
-        Assert.DoesNotContain((await svc.ThreadsAsync()).Value!, t => !t.IsSupport);                       // no coach conversations of their own
+        Assert.DoesNotContain((await svc.ThreadsAsync()).Value!, t => t.Kind == "coach");                       // no coach conversations of their own
         Assert.Equal(AppErrorKind.Unauthorized, (await svc.MessagesAsync(thread)).Error);                  // and Alex and Lena's is not readable
         Assert.Equal(AppErrorKind.Validation, (await svc.SendAsync(thread, "hi")).Error);                  // not one of the two people in it
 
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         var hire = (await gw.ListAsync<CoachHire>()).First(h => h.Status == "active");
         Assert.True((await new CoachService(gw).EndHireAsync(hire.Id)).Ok);
-        Assert.False((await svc.ThreadsAsync()).Value!.Single(t => !t.IsSupport).CanSend); // history stays, sending stops
+        Assert.False((await svc.ThreadsAsync()).Value!.Single(t => t.Kind == "coach").CanSend); // history stays, sending stops
         Assert.NotEmpty((await svc.MessagesAsync(thread)).Value!.Bubbles);
         Assert.Equal(AppErrorKind.Unauthorized, (await svc.SendAsync(thread, "still there?")).Error);
     }

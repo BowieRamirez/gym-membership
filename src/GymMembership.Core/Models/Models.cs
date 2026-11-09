@@ -215,21 +215,33 @@ public sealed class PackageCode : BaseModel
   [Column("sender_id")] public string SenderId { get; set; } = ""; [Column("body")] public string Body { get; set; } = "";
   [Column("sent_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime SentAt { get; set; } [Column("read_at", ignoreOnInsert: true)] public DateTime? ReadAt { get; set; }
   [Column("delivered_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? DeliveredAt { get; set; }
-  [Column("attachment_path", ignoreOnUpdate: true)] public string? AttachmentPath { get; set; } }
+  [Column("attachment_path", ignoreOnUpdate: true)] public string? AttachmentPath { get; set; }
+  // F11 (0051): set only by the server for a time request's message; the app may not write them (0006 grants only the columns above)
+  [Column("kind", ignoreOnInsert: true, ignoreOnUpdate: true)] public string Kind { get; set; } = "text";
+  [Column("time_request_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? TimeRequestId { get; set; } }
 
 // the front desk conversation: one thread per member. The app never reads these tables; it uses chat_threads, chat_messages and send_support_message.
 // The demo keeps its data here.
 [Table("support_threads")] public class SupportThread : BaseModel
-{ [PrimaryKey("member_id")] public string MemberId { get; set; } = ""; [Column("claimed_by")] public string? ClaimedBy { get; set; } [Column("status")] public string Status { get; set; } = "open";
+{ [PrimaryKey("member_id")] public string MemberId { get; set; } = ""; [Column("queue")] public string Queue { get; set; } = ChatQueue.FrontDesk; [Column("claimed_by")] public string? ClaimedBy { get; set; } [Column("status")] public string Status { get; set; } = "open";
   [Column("last_message_at")] public DateTime LastMessageAt { get; set; } = DateTime.UtcNow; }
 
 [Table("support_messages")] public class SupportMessage : BaseModel
 { [PrimaryKey("message_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("sender_id")] public string SenderId { get; set; } = "";
+  [Column("queue")] public string Queue { get; set; } = ChatQueue.FrontDesk;
   [Column("body")] public string Body { get; set; } = ""; [Column("sent_at")] public DateTime SentAt { get; set; } [Column("delivered_at")] public DateTime? DeliveredAt { get; set; }
   [Column("read_at")] public DateTime? ReadAt { get; set; }
   [Column("attachment_path")] public string? AttachmentPath { get; set; } }
 
-// one row of chat_threads(): a coach chat ("coach") or a front desk thread ("support"). A function result, never written.
+/// <summary>F9 (0051): the gym's three queues a member or coach can write to. Front desk is the old front desk thread.</summary>
+public static class ChatQueue
+{
+    public const string FrontDesk = "front_desk", Admin = "admin", SystemAdmin = "system_admin";
+    public static readonly string[] All = [FrontDesk, Admin, SystemAdmin];
+    public static string Name(string? queue) => queue switch { Admin => "Admin", SystemAdmin => "System admin", _ => "Front desk" };
+}
+
+// one row of chat_threads(): a coach chat ("coach"), a gym thread ("support", with its queue) or the read-only "announcements". A function result, never written.
 public class ChatThread : BaseModel
 {
   [Column("kind")] public string Kind { get; set; } = "coach";
@@ -247,9 +259,17 @@ public class ChatThread : BaseModel
   [Column("claimed_by")] public string? ClaimedBy { get; set; }
   [Column("claimed_by_name")] public string? ClaimedByName { get; set; }
   [Column("with_last_seen")] public DateTime? WithLastSeen { get; set; }
+  [Column("queue")] public string? Queue { get; set; }
 
-  public string Key => $"{Kind}|{CoachId}|{MemberId}";
+  /// <summary>The queue is added only past the Front desk, so coach and Front desk keys stay as before (the typing channel is named by it).</summary>
+  public string Key => Queue is null or ChatQueue.FrontDesk ? $"{Kind}|{CoachId}|{MemberId}" : $"{Kind}|{CoachId}|{MemberId}|{Queue}";
   public bool IsSupport => Kind == "support";
+  public bool IsAnnouncements => Kind == "announcements";
+  /// <summary>A gym thread of the signed-in member or coach themself (WithId null), not one in a staff inbox.</summary>
+  public bool IsMyGymThread => IsSupport && WithId is null;
+  /// <summary>Before anything is written to Admin or System admin there is no thread yet: this stands in for it until the first message.</summary>
+  public static ChatThread ForQueue(string me, string queue) =>
+      new() { Kind = "support", MemberId = me, Queue = queue, WithName = ChatQueue.Name(queue), CanSend = true, Status = "open" };
   public bool HasUnread => Unread > 0;
   /// <summary>Whether to show online / last active for the other person: not for a member's own "Front desk" thread (staff come and go) and not once a hire has ended.</summary>
   public bool ShowsPresence => WithId is not null && (IsSupport || CanSend);
@@ -268,6 +288,8 @@ public class ChatLine : BaseModel
   [Column("read_at")] public DateTime? ReadAt { get; set; }
   [Column("sender_name")] public string? SenderName { get; set; }
   [Column("attachment_path")] public string? AttachmentPath { get; set; }
+  [Column("kind")] public string Kind { get; set; } = "text";                 // F11: "request" for an automatic message about a time request
+  [Column("time_request_id")] public long? TimeRequestId { get; set; }
 }
 
 // one row of chat_search()
@@ -280,6 +302,19 @@ public class ChatSearchHit : BaseModel
   [Column("with_name")] public string WithName { get; set; } = "";
   [Column("snippet")] public string? Snippet { get; set; }
   [Column("sent_at")] public DateTime? SentAt { get; set; }
+  [Column("queue")] public string? Queue { get; set; }
+}
+
+/// <summary>F10 (0051): one posted announcement, from announcements_list(), for the staff Announcements page.</summary>
+public sealed class AnnouncementRow : BaseModel
+{
+  [Column("announcement_id")] public long Id { get; set; }
+  [Column("author_name")] public string? AuthorName { get; set; }
+  [Column("audience")] public string Audience { get; set; } = "everyone";
+  [Column("body")] public string Body { get; set; } = "";
+  [Column("posted_at")] public DateTime PostedAt { get; set; }
+  [System.Text.Json.Serialization.JsonIgnore] public string AudienceText => Audience switch { "members" => "Members", "coaches" => "Coaches", _ => "Everyone" };
+  [System.Text.Json.Serialization.JsonIgnore] public string WhenText => $"{PostedAt.ToLocalTime():ddd d MMM, h:mm tt}";
 }
 
 [Table("shift_posts")] public class ShiftPost : BaseModel

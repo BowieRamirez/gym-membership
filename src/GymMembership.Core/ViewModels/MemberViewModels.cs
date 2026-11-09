@@ -446,13 +446,19 @@ public partial class ThreadItem(ChatThread thread) : ObservableObject
     [ObservableProperty] private bool isOnline; // the other person is in the app right now (set only where the thread allows it)
     public string Letters => Initials.From(Thread.WithName);
 
+    /// <summary>Staff only: the queue a conversation was sent to, past the Front desk (F9). Empty otherwise.</summary>
+    public string QueueTag => Thread.IsSupport && Thread.WithId is not null && Thread.Queue is ChatQueue.Admin or ChatQueue.SystemAdmin ? "To " + ChatQueue.Name(Thread.Queue) : "";
+    public bool HasQueueTag => QueueTag != "";
+
     /// <summary>Staff only: who has taken a member's front desk conversation, and whether it is closed.</summary>
     public string Subtitle => !Thread.IsSupport || Thread.WithId is null ? ""
         : (Thread.ClaimedByName is { } n ? $"Taken by {n}" : "Not taken yet") + (Thread.Status == "closed" ? ", closed" : "");
 }
 
-public partial class MessengerViewModel(IChatService chat, IProfileService profile, IAuthService auth, IProofPicker picker, IRealtimeChat? live = null) : LoadableViewModel
+public partial class MessengerViewModel(IChatService chat, IProfileService profile, IAuthService auth, IProofPicker picker, IRealtimeChat? live = null, IAppNavigator? nav = null) : LoadableViewModel
 {
+    /// <summary>Set by the page from the shell it is in: a coach's first tab is "Trainees", a member's "Coach".</summary>
+    public bool IsCoach { get; set; }
     List<ChatThread> all = [];
     string? myId;
     int openTicket, listTicket, searchTicket;
@@ -470,7 +476,9 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowChat), nameof(ShowList))] private bool isCompact;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowChat), nameof(ShowList))] private bool showingChat;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasChat), nameof(CanSend), nameof(ReadOnly), nameof(CanTake), nameof(CanRelease), nameof(CanClose), nameof(CanReopen), nameof(StatusLine))] private ThreadItem? selected;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasChat), nameof(CanSend), nameof(ReadOnly), nameof(ReadOnlyText), nameof(CanTake), nameof(CanRelease), nameof(CanClose), nameof(CanReopen), nameof(StatusLine), nameof(WritingTo))] private ThreadItem? selected;
+    /// <summary>F10: Announcements, pinned above the tabs for members and coaches; null for staff.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPinned))] private ThreadItem? pinned;
     [ObservableProperty] private string draft = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPhoto), nameof(PhotoName))] private (string Name, byte[] Data)? pendingPhoto;   // chosen, not sent yet
     [ObservableProperty] private bool hasMore;
@@ -490,16 +498,24 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     public bool CanSend => Selected?.Thread.CanSend == true;
     /// <summary>A conversation is open but nobody can add to it now (the hire ended, or no active plan): history only.</summary>
     public bool ReadOnly => Selected is not null && !CanSend;
+    public string ReadOnlyText => Selected?.Thread.IsAnnouncements == true
+        ? "Announcements are from the gym. You can't reply here; write to the Front desk in the Gym tab."
+        : "You can read this conversation, but you can't send new messages in it right now.";
+    public bool HasPinned => Pinned is not null;
+    /// <summary>The queue of your own gym conversation on screen, so its Write to chip shows as chosen.</summary>
+    public string? WritingTo => Selected?.Thread is { IsMyGymThread: true } t ? t.Queue ?? ChatQueue.FrontDesk : null;
     public bool HasHits => Hits.Count > 0;
     public bool HasPhoto => PendingPhoto is not null;
     public string PhotoName => PendingPhoto?.Name ?? "";
-    public string CoachTabText => CoachTabBadge > 0 ? $"Coach ({CoachTabBadge})" : "Coach";   // the count is in words, not only a coloured dot
-    public string StaffTabText => StaffTabBadge > 0 ? $"Staff ({StaffTabBadge})" : "Staff";
+    public string CoachTabText => (IsCoach ? "Trainees" : "Coach") + (CoachTabBadge > 0 ? $" ({CoachTabBadge})" : "");   // the count is in words, not only a coloured dot
+    public string StaffTabText => StaffTabBadge > 0 ? $"Gym ({StaffTabBadge})" : "Gym";   // F9: was "Staff"
     public bool CanTake => HasFilters && Selected?.Thread is { IsSupport: true, ClaimedBy: null };
     public bool CanRelease => HasFilters && Selected?.Thread is { IsSupport: true, ClaimedBy: not null } t && t.ClaimedBy == myId;
     public bool CanClose => HasFilters && Selected?.Thread is { IsSupport: true, Status: "open" };
     public bool CanReopen => HasFilters && Selected?.Thread is { IsSupport: true, Status: "closed" };
-    public string EmptyListText => HasFilters ? "No conversations here." : Tab == "coach" && HasTabs ? "You have no coach yet. Hire one from the Coaches page to start a conversation." : "No conversations yet.";
+    public string EmptyListText => HasFilters ? "No conversations here."
+        : Tab == "coach" && HasTabs ? (IsCoach ? "No trainees yet. Members who hire you appear here." : "You have no coach yet. Hire one from the Coaches page to start a conversation.")
+        : "No conversations yet.";
 
     // ---- live updates. Every Realtime event is a hint; the answer always comes from the server through AutoRefreshAsync.
     /// <summary>Realtime calls back on its own thread, and the lists must change on the UI thread. The page sets this; with none (tests) the work runs where it is.</summary>
@@ -626,7 +642,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         openTicket++; listTicket++; searchTicket++;   // an answer still on its way for the last person is dropped when it lands
         Threads.Clear(); Bubbles.Clear(); SetHits([]);
         Selected = null; drafts.Clear(); Draft = ""; PendingPhoto = null; SearchText = ""; HasMore = false; ShowingChat = false;
-        Tab = "coach"; Filter = "open"; HasTabs = false; HasFilters = false; CoachTabBadge = 0; StaffTabBadge = 0;
+        Tab = "coach"; Filter = "open"; HasTabs = false; HasFilters = false; CoachTabBadge = 0; StaffTabBadge = 0; Pinned = null;
         ErrorMessage = null;
     }
 
@@ -637,11 +653,11 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         if (!result.Ok) { if (first) ErrorMessage = ErrorText.For(result.Error, result.Message); return; }
         if (ticket != listTicket) return;   // a newer load is on its way
         all = result.Value!.ToList();
-        // a member has their own "Front desk" thread and gets the Coach and Staff tabs; staff see member threads and get the Open, Mine and Closed filters; a coach gets neither
-        var member = all.Any(t => t.IsSupport && t.WithName == "Front desk");
-        HasTabs = member;
-        HasFilters |= !member && all.Any(t => t.IsSupport);   // once on, stays on, so an emptied inbox keeps its filters
-        CoachTabBadge = all.Where(t => !t.IsSupport).Sum(t => t.Unread);
+        // members and coaches have their own gym threads and get the Coach (or Trainees) and Gym tabs; staff see others' threads and get the Open, Mine and Closed filters
+        var writer = all.Any(t => t.IsMyGymThread);
+        HasTabs = writer;
+        HasFilters |= !writer && all.Any(t => t.IsSupport);   // once on, stays on, so an emptied inbox keeps its filters
+        CoachTabBadge = all.Where(t => t.Kind == "coach").Sum(t => t.Unread);
         StaffTabBadge = all.Where(t => t.IsSupport).Sum(t => t.Unread);
         _ = chat.MarkDeliveredAsync();   // what was sent to you is at least delivered once your list has loaded
         Rebuild();
@@ -654,7 +670,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     {
         IEnumerable<ChatThread> shown = HasFilters
             ? all.Where(t => t.IsSupport && Filter switch { "mine" => t.ClaimedBy == myId && t.Status == "open", "closed" => t.Status == "closed", _ => t.Status == "open" })
-            : HasTabs ? all.Where(t => t.IsSupport == (Tab == "support")) : all;
+            : HasTabs ? all.Where(t => !t.IsAnnouncements && t.IsSupport == (Tab == "support")) : all.Where(t => !t.IsAnnouncements);
         if (IsSearching) shown = shown.Where(t => t.WithName.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase));
 
         ThreadItem Item(ChatThread t)
@@ -663,6 +679,8 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
             return old is not null && Same(old.Thread, t) ? old : new ThreadItem(t) { AvatarUrl = old?.AvatarUrl };
         }
         Sync(Threads, shown.Select(Item).ToList(), x => x.Thread.Key, ReferenceEquals);
+        var news = all.FirstOrDefault(t => t.IsAnnouncements);
+        Pinned = news is null ? null : Pinned is { } p && Same(p.Thread, news) ? p : new ThreadItem(news) { IsOpen = Selected?.Thread.Key == news.Key };
 
         // the open conversation follows the server's latest word about it (unread count, who took it, closed)
         if (Selected is { } open && all.FirstOrDefault(t => t.Key == open.Thread.Key) is { } fresh && !Same(open.Thread, fresh))
@@ -723,11 +741,25 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         await ShowAsync(item, markRead: true);
     }
 
+    /// <summary>F9: open your conversation with a gym queue, or a fresh one that is created by its first message.</summary>
+    [RelayCommand]
+    private async Task WriteToAsync(string queue)
+    {
+        if (myId is null) return;
+        if (HasTabs) Tab = "support";
+        Rebuild();
+        var thread = all.FirstOrDefault(t => t.IsMyGymThread && (t.Queue ?? ChatQueue.FrontDesk) == queue) ?? ChatThread.ForQueue(myId, queue);
+        await OpenAsync(Threads.FirstOrDefault(x => x.Thread.Key == thread.Key) ?? new ThreadItem(thread));
+    }
+
+    /// <summary>F11: a request message's link. The buttons to answer stay on Time requests.</summary>
+    [RelayCommand] private void OpenRequests() => nav?.GoToRequests();
+
     [RelayCommand]
     private async Task OpenHitAsync(ChatSearchHit hit)
     {
         SearchText = "";
-        var thread = all.FirstOrDefault(t => t.Kind == hit.Kind && t.CoachId == hit.CoachId && t.MemberId == hit.MemberId);
+        var thread = all.FirstOrDefault(t => t.Kind == hit.Kind && t.CoachId == hit.CoachId && t.MemberId == hit.MemberId && t.Queue == hit.Queue);
         if (thread is null) return;
         if (HasTabs) Tab = thread.IsSupport ? "support" : "coach";
         if (HasFilters) Filter = thread.Status == "closed" ? "closed" : "open";   // show the list the conversation is in

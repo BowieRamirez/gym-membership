@@ -16,6 +16,7 @@ public class SettingsPictureTests
         public void GoToLogin() { }
         public void GoToRegister() { }
         public void GoToMessages() { }
+        public void GoToRequests() { }
         public void GoToMembership() { }
         public void ApplyTheme(string theme) { }
     }

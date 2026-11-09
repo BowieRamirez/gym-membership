@@ -206,6 +206,8 @@ public interface IAppNavigator
     void GoToLogin();
     void GoToRegister();
     void GoToMessages();
+    /// <summary>Time requests, for a member or a coach (F11: a request message links there).</summary>
+    void GoToRequests();
     void GoToMembership();
     void ApplyTheme(string theme);
 }

@@ -22,6 +22,6 @@
     <FlyoutItem Title="Coaches &amp; amenities"><ShellContent ContentTemplate="{DataTemplate views:CoachesPage}" /></FlyoutItem>
     <FlyoutItem Title="Messages" Route="messages"><ShellContent ContentTemplate="{DataTemplate views:MessagesPage}" /></FlyoutItem>
     <FlyoutItem Title="Sessions" ClassId="members-only"><ShellContent ContentTemplate="{DataTemplate views:SessionsPage}" /></FlyoutItem>
-    <FlyoutItem Title="Time requests" ClassId="members-only"><ShellContent ContentTemplate="{DataTemplate views:RequestsPage}" /></FlyoutItem>
+    <FlyoutItem Title="Time requests" ClassId="members-only" Route="requests"><ShellContent ContentTemplate="{DataTemplate views:RequestsPage}" /></FlyoutItem>
     <FlyoutItem Title="Settings" Route="settings"><ShellContent ContentTemplate="{DataTemplate views:SettingsPage}" /></FlyoutItem>
 </Shell>

@@ -436,14 +436,15 @@ public sealed partial class DemoGateway : ISupabaseGateway
     // ---------- chat photos (mirrors 0016: can_use_chat_file) ----------
     readonly Dictionary<string, byte[]> _files = new();
     const string FilePart = @"[A-Za-z0-9_-][A-Za-z0-9._-]{0,119}";
-    static readonly System.Text.RegularExpressions.Regex SupportFile = new(@$"^support/(?<m>[A-Za-z0-9_-]+)/{FilePart}$");
+    // support/{person}/{file} is the Front desk; support/{queue}/{person}/{file} the Admin and System admin queues (0051)
+    static readonly System.Text.RegularExpressions.Regex SupportFile = new(@$"^support/((?<q>admin|system_admin)/)?(?<m>[A-Za-z0-9_-]+)/{FilePart}$");
     static readonly System.Text.RegularExpressions.Regex CoachFile = new(@$"^(?<c>[A-Za-z0-9_-]+)/(?<m>[A-Za-z0-9_-]+)/{FilePart}$");
 
     bool CanUseChatFile(string path, bool write)
     {
         var uid = CurrentUserId;
         if (uid is null || !IsActiveUser) return false;
-        if (SupportFile.Match(path) is { Success: true } s) return s.Groups["m"].Value == uid || Has("support:reply");
+        if (SupportFile.Match(path) is { Success: true } s) return s.Groups["m"].Value == uid || CanAnswer(s.Groups["q"].Success ? s.Groups["q"].Value : ChatQueue.FrontDesk);
         if (CoachFile.Match(path) is { Success: true } c)
         {
             var coach = c.Groups["c"].Value; var member = c.Groups["m"].Value;
@@ -593,8 +594,17 @@ public sealed partial class DemoGateway : ISupabaseGateway
         All<TrainingSession>().Any(s => s.Id != ignore && s.Status == Status.Scheduled && (coach ? s.CoachId : s.MemberId) == who && s.ScheduledStart < end && start < s.ScheduledEnd);
 
     // ---------- functions (mirror 0005_functions.sql) ----------
+    // F11: like the deferred trigger in 0051, each change a call made to a time request is told in the chat once the call has succeeded
     object? Call(string fn, Dictionary<string, object> a)
-    { lock (_rpcLock) return CallLocked(fn, a); }
+    {
+        lock (_rpcLock)
+        {
+            var before = All<TimeRequest>().ToDictionary(r => r.Id, Clone);
+            var result = CallLocked(fn, a);
+            PostRequestMessages(before);
+            return result;
+        }
+    }
 
     object? CallLocked(string fn, Dictionary<string, object> a)
     {
@@ -602,6 +612,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         if (ReservationCall(fn, a, out var reservationResult)) return reservationResult;
         if (RequestCall(fn, a, out var requestResult)) return requestResult;
         if (CashShiftCall(fn, a, out var shiftResult)) return shiftResult;
+        if (MessengerCall(fn, a, out var chatResult)) return chatResult;
         var now = SubscriptionNow;
         int I(string k) => Convert.ToInt32(a[k]);
         bool B(string k) => Convert.ToBoolean(a[k]);
@@ -1122,185 +1133,6 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     told.Add(new NotifiedMember(f.MemberId, person.FullName));
                 }
                 return told.OrderBy(t => t.Name).ToList();
-            }
-            // ---- messenger (mirrors 0015_messenger.sql)
-            case "chat_threads":
-            {
-                RequireActive();
-                string NameOf(string id) => All<Profile>().FirstOrDefault(p => p.Id == id)?.FullName ?? "Unknown";
-                var rows = new List<ChatThread>();
-
-                // coach chats: every hire (current or ended) and every pair already written to
-                var pairs = All<CoachHire>().Select(h => (h.CoachId, h.MemberId)).Union(All<ChatMessage>().Select(m => (m.CoachId, m.MemberId)))
-                    .Where(p => p.CoachId == uid || p.MemberId == uid).ToList();
-                foreach (var (coachId, memberId) in pairs)
-                {
-                    var withId = coachId == uid ? memberId : coachId;
-                    var msgs = All<ChatMessage>().Where(m => m.CoachId == coachId && m.MemberId == memberId).OrderBy(m => m.Id).ToList();
-                    var last = msgs.LastOrDefault();
-                    rows.Add(new ChatThread
-                    {
-                        Kind = "coach", CoachId = coachId, MemberId = memberId, WithId = withId, WithName = NameOf(withId),
-                        WithAvatar = All<Profile>().FirstOrDefault(p => p.Id == withId)?.AvatarPath,
-                        LastBody = last is null ? null : Preview(last.Body, last.AttachmentPath), LastAt = last?.SentAt, LastFromMe = last?.SenderId == uid,
-                        Unread = msgs.Count(m => m.SenderId != uid && m.ReadAt is null),
-                        CanSend = CoachesMember(coachId, memberId) && ActiveMember(memberId)
-                    });
-                }
-
-                // a member's own front desk thread is always there
-                if (All<Member>().Any(m => m.UserId == uid))
-                {
-                    var msgs = All<SupportMessage>().Where(m => m.MemberId == uid).OrderBy(m => m.Id).ToList();
-                    var last = msgs.LastOrDefault();
-                    rows.Add(new ChatThread
-                    {
-                        Kind = "support", MemberId = uid, WithName = "Front desk", LastBody = last is null ? null : Preview(last.Body, last.AttachmentPath), LastAt = last?.SentAt, LastFromMe = last?.SenderId == uid,
-                        Unread = msgs.Count(m => m.SenderId != uid && m.ReadAt is null), CanSend = true,
-                        Status = All<SupportThread>().FirstOrDefault(t => t.MemberId == uid)?.Status ?? "open"
-                    });
-                }
-
-                // the inbox, for staff who may answer
-                if (Has("support:reply"))
-                    foreach (var t in All<SupportThread>().Where(t => t.MemberId != uid).OrderByDescending(t => t.LastMessageAt).Take(500))
-                    {
-                        var msgs = All<SupportMessage>().Where(m => m.MemberId == t.MemberId).OrderBy(m => m.Id).ToList();
-                        var last = msgs.LastOrDefault();
-                        rows.Add(new ChatThread
-                        {
-                            Kind = "support", MemberId = t.MemberId, WithId = t.MemberId, WithName = NameOf(t.MemberId),
-                            WithAvatar = All<Profile>().FirstOrDefault(p => p.Id == t.MemberId)?.AvatarPath,
-                            LastBody = last is null ? null : Preview(last.Body, last.AttachmentPath), LastAt = last?.SentAt, LastFromMe = last is not null && last.SenderId != t.MemberId,
-                            Unread = msgs.Count(m => m.SenderId == t.MemberId && m.ReadAt is null), CanSend = true,
-                            Status = t.Status, ClaimedBy = t.ClaimedBy, ClaimedByName = t.ClaimedBy is null ? null : NameOf(t.ClaimedBy)
-                        });
-                    }
-                return rows.OrderByDescending(r => r.LastAt ?? DateTime.MinValue).ToList();
-            }
-            case "chat_messages":
-            {
-                RequireActive();
-                var kind = S("p_kind"); var member = Opt("p_member"); var coach = Opt("p_coach");
-                long? before = a.TryGetValue("p_before", out var bv) && bv is not null ? Convert.ToInt64(bv) : null;
-                var limit = Math.Clamp(a.TryGetValue("p_limit", out var lv) && lv is not null ? Convert.ToInt32(lv) : 50, 1, 100);
-                if (kind == "coach")
-                {
-                    if (uid != coach && uid != member) throw Err("forbidden");
-                    return All<ChatMessage>().Where(m => m.CoachId == coach && m.MemberId == member && (before is null || m.Id < before)).OrderByDescending(m => m.Id).Take(limit)
-                        .Select(m => new ChatLine { MessageId = m.Id, SenderId = m.SenderId, Body = m.Body, SentAt = m.SentAt, DeliveredAt = m.DeliveredAt, ReadAt = m.ReadAt, AttachmentPath = m.AttachmentPath }).ToList();
-                }
-                if (kind == "support")
-                {
-                    if (uid != member && !Has("support:reply")) throw Err("forbidden");
-                    return All<SupportMessage>().Where(m => m.MemberId == member && (before is null || m.Id < before)).OrderByDescending(m => m.Id).Take(limit)
-                        .Select(m => new ChatLine
-                        {
-                            MessageId = m.Id, SenderId = m.SenderId, Body = m.Body, SentAt = m.SentAt, DeliveredAt = m.DeliveredAt, ReadAt = m.ReadAt, AttachmentPath = m.AttachmentPath,
-                            // a member never learns which staff member answered; staff do
-                            SenderName = uid == member || m.SenderId == member ? null : All<Profile>().FirstOrDefault(p => p.Id == m.SenderId)?.FullName
-                        }).ToList();
-                }
-                throw Err("bad_input");
-            }
-            case "mark_chat_read":
-            {
-                RequireActive();
-                var kind = S("p_kind"); var member = Opt("p_member"); var coach = Opt("p_coach");
-                if (kind == "coach")
-                {
-                    if (uid != coach && uid != member) throw Err("forbidden");
-                    foreach (var m in All<ChatMessage>().Where(m => m.CoachId == coach && m.MemberId == member && m.SenderId != uid && m.ReadAt is null)) { m.DeliveredAt ??= now; m.ReadAt = now; }
-                    ClearChatAlerts(uid, $"c|{coach}|{member}");
-                }
-                else if (kind == "support")
-                {
-                    if (uid != member && !Has("support:reply")) throw Err("forbidden");
-                    foreach (var m in All<SupportMessage>().Where(m => m.MemberId == member && m.ReadAt is null && (uid == member ? m.SenderId != member : m.SenderId == member))) { m.DeliveredAt ??= now; m.ReadAt = now; }
-                    ClearChatAlerts(uid, $"s|{member}");
-                }
-                else throw Err("bad_input");
-                return null;
-            }
-            case "mark_chats_delivered":
-            {
-                RequireActive();
-                foreach (var m in All<ChatMessage>().Where(m => (m.CoachId == uid || m.MemberId == uid) && m.SenderId != uid && m.DeliveredAt is null)) m.DeliveredAt = now;
-                foreach (var m in All<SupportMessage>().Where(m => m.DeliveredAt is null && m.SenderId != uid && (m.MemberId == uid || (Has("support:reply") && m.SenderId == m.MemberId)))) m.DeliveredAt = now;
-                return null;
-            }
-            case "send_support_message":
-            {
-                RequireActive();
-                var member = S("p_member");
-                var body = (a["p_body"] as string)?.Trim() ?? "";
-                var att = Opt("p_attachment");
-                if (body == "" && att is null) throw Err("empty_message");
-                if (body.Length > 2000) throw Err("message_too_long");
-                if (uid == member) { if (!All<Member>().Any(m => m.UserId == uid)) throw Err("forbidden"); }
-                else if (Has("support:reply")) { if (!All<Member>().Any(m => m.UserId == member)) throw Err("not_found"); }
-                else throw Err("forbidden");
-                // the photo has to be in this member's front desk folder
-                if (att is not null && !System.Text.RegularExpressions.Regex.IsMatch(att, $"^support/{member}/{FilePart}$")) throw Err("forbidden");
-
-                var thread = All<SupportThread>().FirstOrDefault(t => t.MemberId == member) ?? Add(new SupportThread { MemberId = member });
-                var msg = Add(new SupportMessage { MemberId = member, SenderId = uid, Body = body, SentAt = now, AttachmentPath = att });
-                thread.LastMessageAt = now;
-                var shown = Preview(body, att) ?? "";
-                var key = $"s|{member}"; var preview = shown.Length > 80 ? shown[..80] : shown;
-                if (uid == member)
-                {
-                    thread.Status = "open";   // writing again reopens it
-                    var title = $"New message from {All<Profile>().First(p => p.Id == uid).FullName}";
-                    if (thread.ClaimedBy is { } taker && All<Profile>().Any(p => p.Id == taker && p.IsActive)) NotifyChat(taker, title, preview, key);
-                    else foreach (var id in All<UserRole>().Where(u => RolesOf(u.UserId).Any(r => r is "admin" or "subadmin" or "employee")).Select(u => u.UserId).Distinct().ToList())
-                        if (All<Profile>().Any(p => p.Id == id && p.IsActive)) NotifyChat(id, title, preview, key);
-                }
-                else NotifyChat(member, "Message from the front desk", preview, key);
-                return (long)msg.Id;
-            }
-            case "claim_support_thread":
-            {
-                Require("support:reply");
-                var thread = All<SupportThread>().FirstOrDefault(t => t.MemberId == S("p_member")) ?? throw Err("not_found");
-                if (B("p_claim"))
-                {
-                    if (thread.ClaimedBy is not null && thread.ClaimedBy != uid && All<Profile>().Any(p => p.Id == thread.ClaimedBy && p.IsActive)) throw Err("already_processed");
-                    thread.ClaimedBy = uid;
-                }
-                else
-                {
-                    if (thread.ClaimedBy is not null && thread.ClaimedBy != uid && !RolesOf(uid).Contains("admin") && All<Profile>().Any(p => p.Id == thread.ClaimedBy && p.IsActive)) throw Err("forbidden");
-                    thread.ClaimedBy = null;
-                }
-                return null;
-            }
-            case "set_support_status":
-            {
-                Require("support:reply");
-                (All<SupportThread>().FirstOrDefault(t => t.MemberId == S("p_member")) ?? throw Err("not_found")).Status = B("p_open") ? "open" : "closed";
-                return null;
-            }
-            case "chat_search":
-            {
-                RequireActive();
-                var q = ((a.TryGetValue("p_query", out var qv) ? qv as string : null) ?? "").Trim();
-                var hits = new List<ChatSearchHit>();
-                if (q.Length < 2) return hits;
-                bool Has_(string? s) => s?.Contains(q, StringComparison.OrdinalIgnoreCase) == true;   // % and _ are plain characters here, like in the database
-                foreach (var t in (List<ChatThread>)Call("chat_threads", new())!)
-                {
-                    var found = t.IsSupport
-                        ? All<SupportMessage>().Where(m => m.MemberId == t.MemberId && Has_(m.Body)).OrderByDescending(m => m.SentAt).Select(m => (m.Body, m.SentAt)).FirstOrDefault()
-                        : All<ChatMessage>().Where(m => m.CoachId == t.CoachId && m.MemberId == t.MemberId && Has_(m.Body)).OrderByDescending(m => m.SentAt).Select(m => (m.Body, m.SentAt)).FirstOrDefault();
-                    if (found.Body is null && !Has_(t.WithName)) continue;
-                    hits.Add(new ChatSearchHit
-                    {
-                        Kind = t.Kind, CoachId = t.CoachId, MemberId = t.MemberId, WithId = t.WithId, WithName = t.WithName,
-                        Snippet = found.Body ?? t.LastBody, SentAt = found.Body is null ? t.LastAt : found.SentAt
-                    });
-                }
-                return hits.OrderByDescending(h => h.SentAt ?? DateTime.MinValue).Take(30).ToList();
             }
             case "set_my_avatar":
             {

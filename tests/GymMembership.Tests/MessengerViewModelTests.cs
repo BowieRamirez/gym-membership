@@ -33,8 +33,10 @@ public class MessengerViewModelTests
     public async Task A_coach_with_no_conversations_is_told_so()
     {
         var (_, _, vm) = await Open("kai@demo.io");   // 9.6 polish: the list was blank
+        vm.IsCoach = true;                              // F9: coaches have the Gym tab too, so the first tab is theirs, "Trainees"
         Assert.Empty(vm.Threads);
-        Assert.Equal("No conversations yet.", vm.EmptyListText);
+        Assert.Equal("Trainees", vm.CoachTabText);
+        Assert.Equal("No trainees yet. Members who hire you appear here.", vm.EmptyListText);
     }
 
     [Fact]
@@ -248,7 +250,7 @@ public class MessengerViewModelTests
         Assert.Equal("Coach", bea.CoachTabText);   // nothing unread on the coach side: no count
         desk.Draft = "on it"; await desk.SendCommand.ExecuteAsync(null);
         var (_, _, beaLater) = await Open("bea@demo.io", gw);
-        Assert.Equal("Staff (1)", beaLater.StaffTabText);
+        Assert.Equal("Gym (1)", beaLater.StaffTabText);   // F9: was "Staff"
     }
     // ---- fixes from the whole-branch review
 

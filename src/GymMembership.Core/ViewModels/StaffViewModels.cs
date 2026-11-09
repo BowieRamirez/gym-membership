@@ -1699,3 +1699,32 @@ public partial class AmenityStatusViewModel(IAmenityService svc) : LoadableViewM
         return $"{now} Alerted {told.Count} {(told.Count == 1 ? "member" : "members")}: {names}.";
     }
 }
+
+// F10 (0051): Admin and System admin write to members, coaches or both; it lands in their read-only Announcements conversation.
+public partial class AnnouncementsViewModel(IAnnouncementService svc) : LoadableViewModel
+{
+    public ObservableCollection<AnnouncementRow> Posted { get; } = new();
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CountText)), NotifyCanExecuteChangedFor(nameof(PostCommand))] private string body = "";
+    [ObservableProperty] private string audience = "everyone";
+
+    public string CountText => $"{Body.Trim().Length} / 2000";
+    static string Words(string audience) => audience switch { "members" => "members", "coaches" => "coaches", _ => "members and coaches" };
+
+    public override Task OnAppearingAsync() => LoadAsync();
+
+    [RelayCommand] private Task LoadAsync() => RunAsync(svc.ListAsync, rows => Fill(Posted, rows));
+    [RelayCommand] private void PickAudience(string value) => Audience = value;
+
+    bool CanPost() => Body.Trim().Length is > 0 and <= 2000;
+
+    [RelayCommand(CanExecute = nameof(CanPost))]
+    private async Task PostAsync()
+    {
+        Notice = null;
+        if (!await Confirm.AskAsync("Post this announcement?", $"It goes to all {Words(Audience)}, with a notification. It can't be edited or removed afterwards.", "Post")) return;
+        if (!await RunAsync(() => svc.PostAsync(Body, Audience))) return;
+        Notice = $"Posted to all {Words(Audience)}.";
+        Body = ""; Audience = "everyone";
+        await LoadAsync();
+    }
+}

@@ -12,6 +12,7 @@ public class HeaderTests
         public void GoToLogin() => AtLogin = true;
         public void GoToRegister() { }
         public void GoToMessages() { }
+        public void GoToRequests() { }
         public void GoToMembership() { }
         public void ApplyTheme(string theme) { }
     }

@@ -18,7 +18,7 @@
 
     <FlyoutItem Title="Dashboard" Route="dashboard"><ShellContent ContentTemplate="{DataTemplate views:AttendancePage}" /></FlyoutItem>
     <FlyoutItem Title="Sessions"><ShellContent ContentTemplate="{DataTemplate views:SessionsPage}" /></FlyoutItem>
-    <FlyoutItem Title="Time requests"><ShellContent ContentTemplate="{DataTemplate views:RequestsPage}" /></FlyoutItem>
+    <FlyoutItem Title="Time requests" Route="requests"><ShellContent ContentTemplate="{DataTemplate views:RequestsPage}" /></FlyoutItem>
     <FlyoutItem Title="Trainees &amp; shifts"><ShellContent ContentTemplate="{DataTemplate views:TraineesPage}" /></FlyoutItem>
     <FlyoutItem Title="Messages" Route="messages"><ShellContent ContentTemplate="{DataTemplate views:MessagesPage}" /></FlyoutItem>
     <FlyoutItem Title="My coach profile"><ShellContent ContentTemplate="{DataTemplate views:CoachProfilePage}" /></FlyoutItem>
