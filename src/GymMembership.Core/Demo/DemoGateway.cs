@@ -372,6 +372,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 case (Discount d, Discount old):
                     if (!Has("discounts:manage")) throw Err(Rls);
                     if (!string.Equals(d.Code, old.Code, StringComparison.OrdinalIgnoreCase) || d.Percent != old.Percent) throw Err("discount_fixed");   // 0041
+                    if ((d.StartsAt, d.ExpiresAt, d.MaxUses, d.ShowOnPackages) != (old.StartsAt, old.ExpiresAt, old.MaxUses, old.ShowOnPackages) && Held(old) > 0)
+                        throw Err("discount_locked");   // F7, 0048
                     GuardDiscountLimit(old, d); list[index] = Clone(d); ArchiveUsedUpCodes();
                     break;
                 case (GymSettings, _): if (!Has("gym_settings:manage")) throw Err(Rls); list[index] = Clone(row); break;
@@ -610,6 +612,11 @@ public sealed partial class DemoGateway : ISupabaseGateway
             case "discount_usage":
                 Require("discounts:manage"); ArchiveUsedUpCodes();
                 return All<Discount>().Select(d => new DiscountUse(d.Id, Consumed(d), All<Payment>().Count(p => p.DiscountId == d.Id && p.Status == Status.Pending))).ToList();
+            case "packages_codes":   // F5, 0048
+                RequireActive();
+                return All<Discount>().Where(d => d.ShowOnPackages && d.IsActive && d.StartsAt <= now && d.ExpiresAt > now && (d.MaxUses is not { } max || Held(d) < max)
+                        && !All<Payment>().Any(p => p.MemberId == uid && p.DiscountId == d.Id && p.Status is Status.Pending or Status.Verified or Status.Voided))
+                    .OrderBy(d => d.ExpiresAt).ThenBy(d => d.Code).Select(d => new PackageCode { Code = d.Code, Percent = d.Percent, ExpiresAt = d.ExpiresAt }).ToList();
             case "archive_catalog_record": ArchiveCatalog(S("p_type"), I("p_id"), S("p_reason")); return null;
             case "restore_archived_record": RestoreArchived(S("p_type"), S("p_id")); return null;
             case "avail_membership":
@@ -1387,7 +1394,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         Add(new UserNotification { UserId = "u-coach1", Type = "time_request", Title = "New time request", CreatedAt = now.AddHours(-1) });
         Add(new UserNotification { UserId = "u-emp", Type = "payment", Title = "Payment waiting for review", Body = "GYM-7F3K2", CreatedAt = now.AddHours(-3) });
 
-        Add(new Discount { Code = "WELCOME10", Percent = 10, StartsAt = now.AddDays(-1), ExpiresAt = now.AddDays(60) });
+        Add(new Discount { Code = "WELCOME10", Percent = 10, StartsAt = now.AddDays(-1), ExpiresAt = now.AddDays(60), ShowOnPackages = true });
         Add(new Discount { Code = "NEWYEAR20", Percent = 20, StartsAt = now.AddDays(-40), ExpiresAt = now.AddDays(-5) });
 
         Add(new ShiftPost { CoachId = "u-coach1", Start = At(1, 6), End = At(1, 14), Note = "Strength floor, squat rack priority" });

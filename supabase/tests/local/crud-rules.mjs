@@ -75,7 +75,7 @@ try {
     await assert.rejects(as(coach, 'delete from user_notifications where user_id=$1', [coach]), /permission denied/);
     await as(coach, 'update user_notifications set read_at=now() where user_id=$1', [coach]);
   });
-  await test('a discount code and percent are fixed; its end date, limit and on/off can change (D19)', async () => {
+  await test('a discount code and percent are fixed; while unused, its end date, limit and on/off can change (D19, F7)', async () => {
     const owner = await person('admin');
     const code = (await as(owner, `insert into discounts(code,percent,expires_at,max_uses) values('FIXED10',10,now()+interval '30 days',5) returning discount_id`)).rows[0].discount_id;
     const later = new Date(Date.now() + 60 * 86400000).toISOString();

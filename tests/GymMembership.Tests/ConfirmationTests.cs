@@ -173,7 +173,7 @@ public class ConfirmationTests
         Assert.Contains("Confirm.AskAsync(", end.Success && end.Index > 0 ? rest[..end.Index] : rest);
     }
 
-    sealed class Nav : IAppNavigator
+    internal sealed class Nav : IAppNavigator
     {
         public void GoTo(AppRole role, bool changePassword = false) { }
         public void GoToLogin() { }

@@ -53,12 +53,34 @@
             </VerticalStackLayout>
         </VerticalStackLayout>
 
-        <ScrollView Grid.Row="1"><c:CardGrid Columns="{OnIdiom Phone=1, Default=3}" MinColumnWidth="260" Padding="0,0,0,16" BindableLayout.ItemsSource="{Binding Packages}"
+        <ScrollView Grid.Row="1"><VerticalStackLayout Spacing="10">
+            <!-- F5: codes the gym chose to show; "Use code" fills the box above. Hidden when there are none -->
+            <VerticalStackLayout Spacing="6" IsVisible="{Binding HasCodes}">
+                <Label Text="Codes you can use" Style="{StaticResource Caption}" />
+                <!-- CardGrid, not FlexLayout: a column FlexLayout clipped the card's height on Android -->
+                <c:CardGrid Columns="{OnIdiom Phone=1, Default=4}" MinColumnWidth="260" BindableLayout.ItemsSource="{Binding Codes}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="m:PackageCode">
+                            <Border Style="{StaticResource Panel}" Padding="14,10">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                    <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                                        <Label Text="{Binding Code}" FontFamily="BarlowSemiBold" />
+                                        <Label Text="{Binding Summary}" Style="{StaticResource Caption}" />
+                                    </VerticalStackLayout>
+                                    <Button Grid.Column="1" Text="Use code" Style="{StaticResource FilterChip}" VerticalOptions="Center" Clicked="OnUseCode"
+                                            SemanticProperties.Description="{Binding Code, StringFormat='Use code {0}'}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </c:CardGrid>
+            </VerticalStackLayout>
+            <c:CardGrid Columns="{OnIdiom Phone=1, Default=3}" MinColumnWidth="260" Padding="0,0,0,16" BindableLayout.ItemsSource="{Binding Packages}"
                      BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource PackagePhone}, Default={StaticResource PackageWide}}">
             <BindableLayout.EmptyView>
                 <Label Text="No packages are on sale right now. Check back soon." Style="{StaticResource Muted}" />
             </BindableLayout.EmptyView>
 
-        </c:CardGrid></ScrollView>
+        </c:CardGrid></VerticalStackLayout></ScrollView>
     </Grid>
 </v:BasePage>

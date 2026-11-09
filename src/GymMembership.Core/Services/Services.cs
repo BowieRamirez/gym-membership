@@ -274,6 +274,8 @@ public sealed record PaymentItem(int Id, string What, string PaymentCode, string
 public interface IMembershipService
 {
     Task<AppResult<IReadOnlyList<MembershipPackage>>> ListPackagesAsync();
+    /// <summary>F5: codes staff chose to show on Packages that this member can still use.</summary>
+    Task<AppResult<IReadOnlyList<PackageCode>>> PackageCodesAsync();
     Task<AppResult<IReadOnlyList<MembershipRow>>> MyMembershipsAsync();
     Task<AppResult<IReadOnlyList<PaymentItem>>> MyPaymentsAsync();
     Task<AppResult<Access>> AccessAsync();
@@ -304,6 +306,9 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
 
     public Task<AppResult<IReadOnlyList<MembershipPackage>>> ListPackagesAsync() =>
         Safe.RunAsync(() => gw.ListAsync<MembershipPackage>(p => p.IsActive == true));
+
+    public Task<AppResult<IReadOnlyList<PackageCode>>> PackageCodesAsync() =>
+        Safe.RunAsync<IReadOnlyList<PackageCode>>(async () => await gw.RpcAsync<List<PackageCode>>("packages_codes", new()) ?? []);
 
     public static MembershipRow ToRow(UserMembershipPackage m, MembershipPackage? p, DateTime now)
     {
@@ -1223,6 +1228,8 @@ public sealed record DiscountRow(Discount Discount, string State, long Used = 0,
     /// <summary>The last day it works: ExpiresAt is the midnight that ends that day, so showing it directly reads one day late.</summary>
     public DateTime LastDay => Discount.ExpiresAt.AddTicks(-1);
     public string Usage => (Discount.MaxUses is { } max ? $"{Used} of {max} used" : $"{Used} used, no limit") + (Pending > 0 ? $", {Pending} pending" : "");
+    /// <summary>F7: once any payment holds a place, nothing about the code can change; it can only be turned off.</summary>
+    public bool CanEdit => Used + Pending == 0;
 }
 public sealed record DiscountUse(long Id, long Used, long Pending);
 

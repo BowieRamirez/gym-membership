@@ -12,13 +12,16 @@
         <DataTemplate x:Key="CodeRow" x:DataType="svc:DiscountRow">
             <VerticalStackLayout>
                 <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,90,130,*,110,1.4*">
-                    <Label Text="{Binding Discount.Code}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                    <VerticalStackLayout VerticalOptions="Center" Spacing="2">
+                        <Label Text="{Binding Discount.Code}" FontFamily="BarlowSemiBold" />
+                        <Label Text="Shown on Packages" Style="{StaticResource Caption}" IsVisible="{Binding Discount.ShowOnPackages}" />
+                    </VerticalStackLayout>
                     <Label Grid.Column="1" Text="{Binding Discount.Percent, StringFormat='{0}%'}" VerticalOptions="Center" />
                     <Label Grid.Column="2" Text="{Binding LastDay, Converter={StaticResource LocalDate}, ConverterParameter='d MMM yyyy'}" VerticalOptions="Center" />
                     <Label Grid.Column="3" Text="{Binding Usage}" Style="{StaticResource Muted}" VerticalOptions="Center" />
                     <c:StatusChip Grid.Column="4" Status="{Binding StatusText}" VerticalOptions="Center" />
                     <FlexLayout Grid.Column="5" Wrap="Wrap" JustifyContent="End" Margin="0,8,0,0">
-                        <Button Text="Edit" Style="{StaticResource FilterChip}" Margin="8,0,0,8" Clicked="OnEditCode" AutomationId="DiscountEdit" />
+                        <Button Text="Edit" Style="{StaticResource FilterChip}" Margin="8,0,0,8" Clicked="OnEditCode" AutomationId="DiscountEdit" IsVisible="{Binding CanEdit}" />
                         <Button Text="Deactivate" Style="{StaticResource FilterChip}" Margin="8,0,0,8" Clicked="OnToggle">
                             <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Discount.IsActive}" Value="False"><Setter Property="Text" Value="Activate" /></DataTrigger></Button.Triggers>
                         </Button>
@@ -44,8 +47,9 @@
                         </Label.Text>
                     </Label>
                     <Label Text="{Binding Usage}" Style="{StaticResource Caption}" />
+                    <Label Text="Shown on Packages" Style="{StaticResource Caption}" IsVisible="{Binding Discount.ShowOnPackages}" />
                     <FlexLayout Wrap="Wrap" Margin="0,4,0,0">
-                        <Button Text="Edit" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnEditCode" AutomationId="DiscountEdit" />
+                        <Button Text="Edit" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnEditCode" AutomationId="DiscountEdit" IsVisible="{Binding CanEdit}" />
                         <Button Text="Deactivate" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnToggle">
                             <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Discount.IsActive}" Value="False"><Setter Property="Text" Value="Activate" /></DataTrigger></Button.Triggers>
                         </Button>
@@ -59,7 +63,7 @@
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='20,16,20,24', Default='16,12,16,20'}" Spacing="14">
-            <Label Text="Percent-off codes. Members type a code when they buy or renew a package." Style="{StaticResource Muted}" />
+            <Label Text="Percent-off codes. Members type a code when they buy or renew a package. Once a code has been used, it can't be edited, only turned off." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
@@ -86,8 +90,12 @@
                             <Label Text="Valid until" Style="{StaticResource Caption}" />
                             <Border Style="{StaticResource Field}"><DatePicker Date="{Binding EditUntil}" MinimumDate="{x:Static x:DateTime.Today}" SemanticProperties.Description="Last day the code works" AutomationId="EditCodeUntil" /></Border>
                         </VerticalStackLayout>
+                        <HorizontalStackLayout Margin="0,0,12,14" Spacing="8">
+                            <Switch IsToggled="{Binding EditShowOnPackages}" AutomationId="EditCodeShowOnPackages" SemanticProperties.Description="Show on Packages" />
+                            <Label Text="Show on Packages" VerticalOptions="Center" />
+                        </HorizontalStackLayout>
                     </FlexLayout>
-                    <Label Text="The code and percent can't change, because people may have used it at that value." Style="{StaticResource Caption}" />
+                    <Label Text="The code and percent can't change. After the code's first use, nothing else can change either." Style="{StaticResource Caption}" />
                     <HorizontalStackLayout Spacing="8">
                         <Button Text="Save changes" Style="{StaticResource SmallButton}" Command="{Binding SaveEditCommand}" AutomationId="SaveEditCode" />
                         <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelEditCommand}" />
@@ -113,6 +121,10 @@
                         <Label Text="Valid until" Style="{StaticResource Caption}" />
                         <Border Style="{StaticResource Field}"><DatePicker Date="{Binding ValidUntil}" MinimumDate="{x:Static x:DateTime.Today}" /></Border>
                     </VerticalStackLayout>
+                    <HorizontalStackLayout Margin="0,0,12,14" Spacing="8">
+                        <Switch IsToggled="{Binding NewShowOnPackages}" AutomationId="NewCodeShowOnPackages" SemanticProperties.Description="Show on Packages, so members can see and use it" />
+                        <Label Text="Show on Packages" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
                     <Button Text="Add code" Style="{StaticResource SmallButton}" Margin="0,0,0,8" Command="{Binding AddCommand}" />
                 </FlexLayout>
             </Border>

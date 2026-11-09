@@ -1236,6 +1236,8 @@ public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
     [ObservableProperty] private int newPercent = 10;
     [ObservableProperty] private DateTime validUntil = DateTime.Today.AddDays(30);
     [ObservableProperty] private int newLimit = 100;
+    /// <summary>F5: off by default, so a code made for one person stays private.</summary>
+    [ObservableProperty] private bool newShowOnPackages;
 
     public override Task OnAppearingAsync() => LoadAsync();
 
@@ -1251,10 +1253,10 @@ public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
     {
         Notice = null;
         // valid through the end of the chosen day, local time
-        var d = new Discount { Code = NewCode, Percent = NewPercent, MaxUses = NewLimit, ExpiresAt = ValidUntil.Date.AddDays(1).ToUniversalTime() };
+        var d = new Discount { Code = NewCode, Percent = NewPercent, MaxUses = NewLimit, ExpiresAt = ValidUntil.Date.AddDays(1).ToUniversalTime(), ShowOnPackages = NewShowOnPackages };
         if (!await RunAsync(() => svc.SaveDiscountAsync(d))) return;
-        Notice = $"Code {d.Code} is live.";
-        NewCode = "";
+        Notice = $"Code {d.Code} is live." + (d.ShowOnPackages ? " Members see it on Packages." : "");
+        NewCode = ""; NewShowOnPackages = false;
         await LoadAsync();
     }
 
@@ -1271,12 +1273,14 @@ public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
     [ObservableProperty] private DiscountRow? editing;
     [ObservableProperty] private int editLimit;
     [ObservableProperty] private DateTime editUntil;
+    [ObservableProperty] private bool editShowOnPackages;
     int _limitShown;
 
     [RelayCommand]
     private void EditCode(DiscountRow row)
     {
-        (Editing, EditLimit, EditUntil) = (row, row.Discount.MaxUses ?? Math.Max(1, (int)(row.Used + row.Pending)), row.LastDay.ToLocalTime().Date);
+        if (!row.CanEdit) return;   // F7: the page offers no Edit on a used code; the database refuses it too
+        (Editing, EditLimit, EditUntil, EditShowOnPackages) = (row, row.Discount.MaxUses ?? Math.Max(1, (int)(row.Used + row.Pending)), row.LastDay.ToLocalTime().Date, row.Discount.ShowOnPackages);
         _limitShown = EditLimit;
         Notice = null; ErrorMessage = null;
     }
@@ -1291,11 +1295,12 @@ public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
         // a field left alone keeps its value: changing only the date must not put a limit on an old unlimited code
         int? limit = EditLimit == _limitShown ? d.MaxUses : EditLimit;
         var expires = EditUntil.Date == row.LastDay.ToLocalTime().Date ? d.ExpiresAt : EditUntil.Date.AddDays(1).ToUniversalTime();
-        var summary = $"{(limit is { } uses ? $"Up to {uses} uses" : "No limit on uses")}, until {EditUntil:d MMM yyyy}.";
+        var summary = $"{(limit is { } uses ? $"Up to {uses} uses" : "No limit on uses")}, until {EditUntil:d MMM yyyy}. "
+            + (EditShowOnPackages ? "Shown on Packages." : "Not shown on Packages.");
         if (!await Confirm.AskAsync($"Save changes to {d.Code}?", summary, "Save changes")) return;
-        var (oldLimit, oldExpires) = (d.MaxUses, d.ExpiresAt);
-        (d.MaxUses, d.ExpiresAt) = (limit, expires);
-        if (!await RunAsync(() => svc.SaveDiscountAsync(d))) { (d.MaxUses, d.ExpiresAt) = (oldLimit, oldExpires); return; }
+        var (oldLimit, oldExpires, oldShown) = (d.MaxUses, d.ExpiresAt, d.ShowOnPackages);
+        (d.MaxUses, d.ExpiresAt, d.ShowOnPackages) = (limit, expires, EditShowOnPackages);
+        if (!await RunAsync(() => svc.SaveDiscountAsync(d))) { (d.MaxUses, d.ExpiresAt, d.ShowOnPackages) = (oldLimit, oldExpires, oldShown); return; }
         Editing = null;
         Notice = $"Code {d.Code} saved. {summary}";
         await LoadAsync();

@@ -200,11 +200,21 @@ public partial class RegisterViewModel(IAuthService auth, IAppNavigator nav) : L
 public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav, ISubscriptionService subscription) : LoadableViewModel
 {
     public ObservableCollection<MembershipPackage> Packages { get; } = new();
+    /// <summary>F5: codes staff chose to show here that this member can still use. The section hides when there are none.</summary>
+    public ObservableCollection<PackageCode> Codes { get; } = new();
+    [ObservableProperty] private bool hasCodes;
     [ObservableProperty] private string? discountCode;
 
     public override Task OnAppearingAsync() => LoadAsync();
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.ListPackagesAsync, rows => Fill(Packages, rows));
+    [RelayCommand]
+    private async Task LoadAsync()
+    {
+        if (!await RunAsync(svc.ListPackagesAsync, rows => Fill(Packages, rows))) return;
+        await RunAsync(svc.PackageCodesAsync, rows => { Fill(Codes, rows); HasCodes = Codes.Count > 0; });
+    }
+
+    [RelayCommand] private void UseCode(PackageCode code) => DiscountCode = code.Code;
 
     // avail creates a pending QR payment; paying it and sending the proof happens on My membership
     [RelayCommand]
