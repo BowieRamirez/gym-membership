@@ -1,8 +1,8 @@
 # Features and improvements — implementation and progress plan
 
 Created: 2026-11-09
-Last updated: 2026-11-09 (F5, F7 answered; Phase 1 in progress)
-Status: Phase 1 IN PROGRESS. Other phases wait on their decisions in section 2.
+Last updated: 2026-11-09 (Phases 1 and 2 deployed and pushed; Phase 3 waits on F1, F2, F3)
+Status: Phases 1 and 2 DEPLOYED (`0048`, `0049` live; branch pushed at `6a4742c`). Phases 3 to 8 wait on their decisions in section 2.
 Branch: `security-admin-cleanup-2026-11-05`, the same branch as the finished 2026-11-05 plan (owner, 2026-11-09). Not merged to `main` yet; the owner merges when this plan is done.
 
 **Goal:** Work through the owner's 12-item list of features and improvements (received 2026-11-09): a cashier drawer shift, live records and rotating member QR codes, discount locks, chat with every staff role, a merged coach profile, a member calendar, a membership-aware menu, a new amenity booking flow with desk payment and refunds, announcements, a cheat-proof manual check-in, time requests in chat, and coach-assigned amenities.
