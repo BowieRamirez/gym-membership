@@ -1,0 +1,177 @@
+# Features and improvements — implementation and progress plan
+
+Created: 2026-11-09
+Last updated: 2026-11-09 (plan written; decisions open)
+Status: PLANNED. No code changes yet. Every phase waits on its decisions in section 2.
+Branch: `security-admin-cleanup-2026-11-05`, the same branch as the finished 2026-11-05 plan (owner, 2026-11-09). Not merged to `main` yet; the owner merges when this plan is done.
+
+**Goal:** Work through the owner's 12-item list of features and improvements (received 2026-11-09): a cashier drawer shift, live records and rotating member QR codes, discount locks, chat with every staff role, a merged coach profile, a member calendar, a membership-aware menu, a new amenity booking flow with desk payment and refunds, announcements, a cheat-proof manual check-in, time requests in chat, and coach-assigned amenities.
+
+**Separate from** `docs/superpowers/plans/2026-11-05-security-and-admin-cleanup.md`, which is done. Its decisions are numbered D1 to D31; this plan's decisions are numbered **F1 onward** so the two never clash. Where an item here reverses a D decision, the F decision says so.
+
+## How to use this plan
+
+This is the restartable checklist for the 2026-11-09 list. The original item numbers are kept. Mark things here when you stop and read here when you continue.
+
+1. **Decisions first.** A phase starts only when every F decision it lists under "Needs" has the owner's answer recorded in section 2, with the date. Ask the open ones for a phase together, each with its recommendation, before writing code for it.
+2. Work on one phase at a time, in the order below. Before starting, read `CLAUDE.md` and the current code; the paths here are starting points, not promises.
+3. Change the phase status in the table to `IN PROGRESS`, fill in "Current work", and tick a task only when it is actually finished (`- [ ]` to `- [x]`, with the date and the test or commit that proves it).
+4. Keep code, automated tests, manual checks and live deployment separate. Code written is not the same as verified or deployed.
+5. Before stopping, update "Current work" and the session log: exact failing tests, uncommitted files, and the next concrete action.
+6. Before resuming, read this file, run `git status --short`, check the branch and the last commit, and continue from the next action. Do not overwrite unfamiliar changes.
+7. **Database changes (owner's standing rule from the 2026-11-05 plan):** when a phase changes the database, push its migrations and Edge Functions to the live project as part of finishing the phase; no need to ask each time. Dry-run first, and push only that phase's own changes. Real account or payment operations, data edits, destructive changes to existing data, `git push`, merging and releases still need the owner's go-ahead.
+
+Status vocabulary: `PLANNED`, `WAITING` (decisions open), `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED`, `DEPLOYED`. A ticked task does not mean the phase is accepted.
+
+**Rules**
+- Business rules live in the database and are mirrored in `DemoGateway`; hiding something in the UI is not enough.
+- New migrations continue from the latest number: **next is `0048`**. Never rewrite an applied migration.
+- Logic goes in Core with an xUnit test in `tests/GymMembership.Tests`; database rules get a check in `supabase/tests/local` (and `rules.mjs` keeps failing when an app-called function has no break attempt, D16).
+- **Skills, every phase:** `superpowers:test-driven-development` for each Core and database rule (failing test first); `superpowers:systematic-debugging` for any bug met on the way; `superpowers:verification-before-completion` before ticking a task; `ponytail:ponytail-review` on the phase diff before finishing (`CLAUDE.md`); context-mode tools for large outputs.
+- **Skills, every screen (owner, 2026-11-09):** every task that adds or changes a screen uses the **`impeccable`** skill, together with `frontend-design:frontend-design` (`CLAUDE.md`). For a new screen or flow: `impeccable shape`, then a mockup in `docs/mockups/` the owner approves before the app changes (as in 9.1 and Phase 7). For a changed screen: capture it first, then `impeccable critique`, fixes, and `impeccable polish` on every page the phase touched. Copy goes through `impeccable clarify`. Snapshots stay in `.impeccable/critique/`.
+- **Platforms:** member and coach screens are checked on Windows (about 1100 px light and 1600 px dark) and on the Pixel 7 emulator in light and dark, scrolled, plus font scale 1.3, as real phone layouts (two-line rows, folded rules, chips), not recoloured desktop layouts. **Staff pages (System admin, Admin, front desk) are Windows only**: no Android design work or phone checks.
+- UI work: AutomationIds used by the UI scripts stay on the same controls. `scripts/Test-WindowsAdminNavigation.ps1`, `Test-WindowsArchive.ps1` and `Test-WindowsSessionRequests.ps1` must still pass at the end of each phase that touches their pages; confirm dialogs are pressed through WinUI's `PrimaryButton`.
+- Each new decision goes in section 2 with the owner's answer and the date.
+
+### Current work / restart here
+
+- **2026-11-09:** Plan written from the owner's list and a read of the code. No code, database or git changes beyond this file. Branch is at `429007f` (pushed).
+- Next concrete action: the owner answers the decisions for Phase 1 (F7, F5), or all of section 2 at once; then start Phase 1.
+
+## 1. Repository findings
+
+From reading the code on 2026-11-09. Verify before relying on these; line numbers drift.
+
+| Item | What exists today | Consequence |
+| --- | --- | --- |
+| 1 Shift in / out | The Cashier page shows "Net cash today" (`CashierViewModel`, `StaffViewModels.cs:142`). There is no drawer, opening float or closing count. Members check in only (`gym_check_ins` has `checked_in_at`, no exit time); only coaches check out (`coach_visits`). | A cash-drawer shift is new data (open, float, cash taken, count, difference). The item's title also says "members' gym entry and exit times", which would be a member check-out, also new (F1). |
+| 2 Real-time | Realtime is used only for chat (`0017_realtime_chat.sql` publishes `messages` and `support_messages`; `SupabaseRealtimeChat`). Other pages load their data when opened (verify per page before Phase 7). | Live membership, attendance and payment records means publishing more tables and refreshing those pages on change (F4). |
+| 2 Codes on Packages | Members type a code at purchase; nothing lists codes. Codes are private by design. | Showing codes makes them public; some codes may be meant for one person (F5). |
+| 2 QR per session | One permanent code per member, `GYM1-` plus a UUID (`0034_member_qr.sql`, `member_codes`); `scan_member` looks it up. The offline desk keeps a local copy of codes and statuses (D12, `OfflineDesk.cs`). | A code that changes means a short-lived code issued by the server. The offline copy can't know a fresh code, which reverses part of D12 (F6). |
+| 3 Discounts | Code and percent can never change (`guard_discount_fixed`, `0041`, D19); end date, limit and on/off can, even after use. A code whose verified plus voided uses reach `max_uses` is archived "Limit reached" (`0026`). | Auto-deactivate at the limit mostly exists; a test should pin it. Locking all edits after the first use is new and changes D19 (F7). |
+| 4 Messaging | Two kinds of chat: member with hired coach (`messages`, needs an active hire) and member with the front desk (`support_threads` / `support_messages`, `0015`, one shared desk queue that any staff can claim). Coaches can't chat with staff; nobody can pick Admin or System admin. | Coaches need a staff chat, and members and coaches need to reach a chosen role (F9). |
+| 5 Coach profile | Coach menu has "My coach profile" (`CoachProfilePage`) and "Settings" (`SettingsPage`) as separate items. | One merged page; a menu and phone More list change. |
+| 6 Member calendar | Members have Sessions (a list) and Time requests. The coach Dashboard has the month calendar (`AttendanceCalendar.cs`, `AttendancePage.xaml`), with day entries, today on yellow and the chosen day outlined (9.6). | The calendar logic exists in Core and can be reused; what a member can book from it needs deciding (F15). |
+| 7 Menu order | Member menu, in this order: My membership, Packages, Book an amenity, Coaches & amenities, Messages, Sessions, Time requests, Settings (`MemberShell.xaml`), the same with or without a membership. Packages have no levels, types or benefits in the data (`membership_packages`: name, description, price, days). | Ordering by membership state is a menu change; ordering by "levels, types and benefits" has no data to read (F16). |
+| 8 Amenities | Members: an Amenities half on "Coaches & amenities" (9.10, D30) with Buy pass / Notify me, and "Book an amenity", a grid of every amenity's half-hours (`BookAmenityPage.xaml`, `BookingViewModels.cs`). Booking needs a session bought and paid first (`avail_amenity`, then `book_slots`, `0043`). Reservations are `confirmed` or `cancelled`, no payment state (`0029`). Desk verifies amenity payments in Payments to verify. No amenity refunds or no-show claims exist. | The asked order (pick amenity, pick day and time, then pay and have the desk approve) reverses D11's buy-first flow and D30's combined page. Reservations need a waiting-for-payment state and a hold time, and amenity refunds are new (F12, F13). |
+| 9 Announcements | `send_expiry_reminders` (cron, nightly) notifies 3 days before a term ends. No announcements exist. Notifications are a list (`user_notifications`). | An announcement channel is new; a 7-day reminder is a small change to the existing job (F10). |
+| 10 Manual check-in | Name search with Check in, recorded with `method = 'manual'` (`0044`); the desk sees status first. Nothing proves the member is the person at the desk. | Needs a check the front desk can't fake alone (F8). |
+| 11 Requests in chat | Requests and answers live in `time_requests` / `time_request_events` (`0031`, `request_session`, `respond_time_request`); the chat knows nothing about them. A member must have hired the coach to chat. | Post an automatic message into the member–coach chat on request and on each answer (F11). |
+| 12 Coach amenities | Coach menu has an Amenities page (view only). Any checked-in coach counts as present for any amenity (D11, `coach_in_gym()`, `0043`). | Assigning coaches to amenities is new data; whether it changes the presence rule is a decision (F14). |
+
+## 2. Decisions to settle
+
+Recommendations are proposals, not approved requirements. Record the answer and date beside each. Block only the phases affected.
+
+- [ ] **F1 — item 1 scope:** The title says "record members' gym entry and exit times", the text describes the front-desk cash drawer. Recommend: build the **cash-drawer shift** described in the text; leave member exit times out (members don't check out today, and asking every member to check out at a busy desk rarely holds). Say so if exit times are wanted too.
+- [ ] **F2 — how a drawer shift works:** Recommend: the opening float is a Gym settings value, **₱5,000** by default; the cashier opens a shift by confirming the counted float (a different amount needs a note). While a shift is open, every cash payment and cash refund paid out is tied to it; cash can't be taken without an open shift. Closing: the cashier types the counted cash, the app shows expected (float + cash in − cash out), the difference (over or short) and a required note when they differ; the closed shift is read-only. System admin and Admin see every shift on a "Cash shifts" list (Revenue page), with a printable summary. One open shift **per cashier**, not one shared drawer.
+- [ ] **F3 — who can run a shift:** Recommend: front desk, Admin and System admin, whoever takes cash at the Cashier page.
+- [ ] **F4 — real-time scope:** Recommend: live updates (Realtime) for payments, check-ins and membership terms on the pages that show them (member My membership; desk Home, Payments to verify, Check-in; System admin Overview), plus an "Updated 6:40 PM" line and a Refresh button where it's missing. Other pages keep loading when opened.
+- [ ] **F5 — codes on Packages:** Recommend: each code gets a **"Show on Packages"** switch, off by default; Packages lists only codes that are switched on, active, inside their dates and under their limit, with percent off and end date, and a Copy button. Codes made for one person stay private.
+- [ ] **F6 — QR not permanent:** Recommend: the member's QR is a **one-use code from the server that lasts 5 minutes** from when they open it, with a new one after each scan or when it runs out (a screenshot is useless). Reverses `0034`'s permanent code. **Changes D12:** the offline desk can't check a fresh code, so offline check-in becomes name search only, with the F8 check; the offline copy keeps names and statuses, not codes. Alternative: a new code each day (offline QR keeps working, weaker).
+- [ ] **F7 — discount locks:** Recommend: once a code has been used even once (any pending, verified or voided payment), **nothing can be edited**: the Edit action disappears and the database refuses it; only Turn off and Archive remain, so a leaked code can still be stopped. Changes D19, which let end date and limit change after use. Unused codes stay fully editable except code and percent. At the limit the code is archived "Limit reached", as `0026` does today; a test pins it.
+- [ ] **F8 — manual check-in proof (item 10):** Recommend: each member sets a **4-digit desk PIN** in Settings (stored hashed). A manual check-in needs the member to type their PIN on the desk screen, and the desk sees the member's photo when there is one. Five wrong PINs lock manual check-in for that member for 15 minutes. A member with no PIN can only be checked in manually by Admin or System admin, with a reason. Every manual check-in shows on a "Manual check-ins" list for Admin and System admin with who recorded it. Alternatives: Admin approval for every manual check-in (slow at a busy desk), or a code emailed to the member (they usually have no phone with them).
+- [ ] **F9 — who can chat with whom (item 4):** Recommend: members **and coaches** get a staff chat in Messages, where they choose who it goes to: **Front desk, Admin or System admin**. Each is a shared queue for that role (anyone in the role can answer and claim it), like the desk queue today; front desk sees only the Front desk queue, Admin sees Front desk and Admin, System admin sees all three. Not one-to-one with a named staff member (staff change shifts). Member–coach chat stays as it is.
+- [ ] **F10 — announcements and the 1-week alert (item 9):** Recommend: System admin and Admin post announcements from a new staff page; members (and coaches, say if not) see them in a read-only **"Announcements"** conversation pinned at the top of Messages, with a notification for each. The membership alert: **7 days before a term ends** (no renewal waiting) a personal message in the same read-only conversation plus a notification; the existing 3-day reminder stays.
+- [ ] **F11 — requests in chat (item 11):** Recommend: when a member sends a time request, an **automatic message** appears in their chat with that coach, in the member's name ("I would like to request a training session: Wed 11 Nov, 9:00 to 10:00 AM, at the Pool. Note: …"); when the coach accepts, declines or proposes another time, an automatic message in the coach's name says so with the details. Automatic messages look like a small card with a link to Time requests, where the buttons stay. Coach invitations get the same treatment.
+- [ ] **F12 — amenity booking flow (item 8):** Reverses D30 (the Amenities half leaves "Coaches & amenities", which goes back to **Coaches**) and D11's buy-a-session-first rule. Recommend: **Book an amenity** opens on amenity cards (status, price per session, Notify me). Choosing one opens a calendar sheet in the coach Dashboard's month style: pick a day on the left, then on the right a start time and how long (30 minutes to 2 hours, the D11 limits, 30 minutes of cooldown after). **Book and pay** holds the slot as "waiting for payment" and creates the payment (GCash/QR proof, or pay at the desk). The front desk approves it in Payments to verify; the booking becomes confirmed and the member is notified. An unpaid hold ends after the gym's payment expiry hours, or 1 hour before the start, whichever comes first, and frees the slot. Passes already sold still book without paying until they expire.
+- [ ] **F13 — amenity refunds and no-shows (item 8):** Recommend: a member can **cancel a paid booking up to 1 hour before it starts** and gets a full refund request automatically. After the slot, a member who did not go can send a **"I didn't use it"** claim within 24 hours with a short reason; the front desk checks (check-ins, amenity status) and approves or declines with a reason. Approved refunds are repaid by hand and recorded, as membership refunds are (the app sends no money). Refunds use the existing Refunds & voids page.
+- [ ] **F14 — coach-assigned amenities (item 12):** Recommend: on the coach's Amenities page each amenity has an **"I run this"** switch (many coaches per amenity, many amenities per coach). Members see the assigned coaches on each amenity card. The presence rule changes only where an amenity has assigned coaches: then one of **them** must be checked in at the time of use; amenities with no one assigned keep D11's "any checked-in coach". Alternative: show the names only and keep D11 as is.
+- [ ] **F15 — member schedule calendar (item 6):** Recommend: a member **Calendar** page in the coach Dashboard's month style showing, per day: their sessions, their amenity bookings, and their hired coach's shifts and open times. Tapping an open time starts a time request for it (same rules as Time requests); tapping an amenity booking opens it. A member without a coach sees their bookings and the gym's hours. It does not add general "gym visit" booking (no capacity limits exist).
+- [ ] **F16 — menu order (item 7):** Packages have no levels, types or benefits in the data. Recommend: two orders. **With an active membership:** My membership, Calendar, Sessions, Book an amenity, Coaches, Time requests, Messages, then Packages (named "Renew or change"), Settings. **Without one:** Packages first, then My membership, then the rest (members-only items keep their locked notice). Phone tab bar follows the same order. Package levels and benefits would be new fields on packages: say if wanted.
+- [ ] **F17 — coach Profile & settings (item 5):** Recommend: one page, **"Profile & settings"**, with the coach profile first (photo, bio, specialty, rate, taking new members) and the account settings after (email, theme, password). One menu item instead of two, on Windows and the phone.
+- [ ] **F18 — order of the phases:** Recommend the order in section 3: rules and safety first (discounts, QR and manual check-in), then cash, then chat, then amenities, then member pages, then live data, then testing and the final check.
+
+## 3. Phases and item coverage
+
+| Phase | Scope | Items | Needs | Status |
+| --- | --- | --- | --- | --- |
+| 1 | Discount locks and codes on Packages | 3, 2 (codes) | F5, F7 | WAITING |
+| 2 | Rotating member QR and cheat-proof manual check-in | 2 (QR), 10 | F6, F8 | WAITING |
+| 3 | Cash-drawer shift | 1 | F1, F2, F3 | WAITING |
+| 4 | Messaging: staff chat, announcements and the 1-week alert, requests in chat | 4, 9, 11 | F9, F10, F11 | WAITING |
+| 5 | Amenity booking, payment, refunds, coach-assigned amenities | 8, 12 | F12, F13, F14 | WAITING |
+| 6 | Member calendar, menu order, coach Profile & settings | 6, 7, 5 | F15, F16, F17 | WAITING |
+| 7 | Live records | 2 (real-time) | F4 | WAITING |
+| 8 | Try to break the new parts; final check and report | All | Phases 1-7 | WAITING |
+
+### Phase 1: discount locks and codes on Packages (items 3, 2)
+- [ ] Baseline before any change: xUnit count, all database test files (run one by one; the full run can stall on Windows), Windows and Android builds, the three UI scripts.
+- [ ] Database (`0048`): F7 — a trigger refuses any update to a used code except `is_active` off and archiving (`discount_locked`); `discount_held` already counts uses. F5 — `discounts.show_on_packages boolean not null default false`; a function `packages_codes()` for signed-in members returning code, percent and end date of codes that are on, shown, inside their dates and under their limit. Tests in `supabase/tests/local/discount-limits.mjs`: edit refused after one pending payment; turn off still allowed; at the limit the code is archived "Limit reached"; a hidden code never listed. Mirror in `DemoGateway`.
+- [ ] Core: `DiscountRow.CanEdit` (false once used); `ErrorText` for `discount_locked`; xUnit in the discount tests.
+- [ ] Screens (`impeccable` + `frontend-design`; Discounts is Windows only, Packages Windows and Android): Discounts table drops Edit on used codes and gains the "Show on Packages" switch in Add and Edit; member Packages shows "Codes you can use" (percent, until, Copy) only when there are any. Capture before, `impeccable critique`, fixes, `impeccable polish`; Packages on the emulator light/dark and at font 1.3.
+- [ ] Push `0048` live (dry run first); `ponytail-review`; plan updated.
+
+### Phase 2: rotating member QR and cheat-proof manual check-in (items 2, 10)
+- [ ] Database: F6 — `member_passes` (one-use code, member, issued, expires, used) and `issue_member_pass()` for the signed-in member (5 minutes, the old unused one cancelled); `scan_member` accepts only an unexpired, unused pass and marks it used; `member_codes` codes stop working (kept for history). F8 — `members.desk_pin_hash`, `set_desk_pin(p_pin)` (4 digits, hashed with `pgcrypto`), `record_check_in(... 'manual')` needs `p_pin` and locks after 5 wrong tries for 15 minutes; Admin and System admin may record a manual check-in without a PIN only with a reason. Tests: an expired or reused pass refused; a screenshot (same code twice) refused; wrong PIN five times locks; the front desk can't skip the PIN; old permanent codes refused. Mirror in `DemoGateway`.
+- [ ] Core: `OfflineDesk` keeps names and statuses only (F6), offline check-in by name with the PIN check queued; `CheckInViewModel` PIN step; member QR view model refreshes the pass before it runs out. xUnit for each.
+- [ ] Screens (`impeccable` + `frontend-design`): member QR (Windows and Android: the code, a countdown in words, refreshes itself), Settings "Desk PIN" (member, both platforms), desk Check-in PIN pad with the member's photo, "Manual check-ins" list for Admin and System admin (Windows only). Shape and mockup first for the PIN step, owner approves; then critique and polish.
+- [ ] Push live; `Test-WindowsAdminNavigation.ps1` passes; `ponytail-review`; plan updated.
+
+### Phase 3: cash-drawer shift (item 1)
+- [ ] Database: `cash_shifts` (cashier, opened_at, float, closed_at, counted, expected, note) and `gym_settings.opening_float numeric(12,2) default 5000`; `open_cash_shift(p_float, p_note)`, `close_cash_shift(p_counted, p_note)`; cash payments and cash refunds paid out get `cash_shift_id`, and taking cash without an open shift is refused (`no_open_shift`). Tests: two open shifts for one cashier refused; cash refused with no shift; expected = float + cash in − cash out; a closed shift can't change. Mirror in `DemoGateway`.
+- [ ] Core: `CashShift` model, `CashierViewModel` open/close states, the expected total in Core with an xUnit test including a refund paid out.
+- [ ] Screens (Windows only; `impeccable shape`, mockup, owner approves): Cashier opens on "Start shift" when none is open (float prefilled from Gym settings); a shift strip while open (since, float, cash in, expected); "End shift" with the count, difference and note; Revenue gets "Cash shifts" with a printable summary; Gym settings gets the opening float. Then critique and polish.
+- [ ] Push live; `ponytail-review`; plan updated.
+
+### Phase 4: messaging (items 4, 9, 11)
+- [ ] Database: F9 — staff threads for members and coaches with a target role (`front_desk`, `admin`, `system_admin`), visibility by role as in F9 (extends `support_threads` rather than a second chat system). F10 — `announcements` (author, body, audience, posted_at) readable by the audience only, insert by Admin and System admin; `send_expiry_reminders` adds the 7-day message. F11 — `messages.kind` (`text` or `request`) with a reference to the request; `request_session` and `respond_time_request` (and the invitation path) insert the automatic message in the right person's name. Tests: a coach reaches the Admin queue; front desk can't read the System admin queue; nobody but Admin and System admin posts announcements; a member can't post into Announcements; one request makes exactly one message; the 7-day reminder fires once. Realtime publication for the new tables.
+- [ ] Core: `MessagesViewModel` conversation list with Announcements pinned and read-only, staff-target picker, request cards; xUnit for ordering, read-only and the request card text.
+- [ ] Screens (`impeccable` + `frontend-design`; member and coach on Windows and Android, staff pages Windows only): Messages list and chat (Announcements read-only, "Message the gym" with the three choices, request cards with a link to Time requests), staff Announcements page. Shape and mockup first; then critique and polish.
+- [ ] Push live; `Test-WindowsSessionRequests.ps1` passes; `ponytail-review`; plan updated.
+
+### Phase 5: amenity booking, payment, refunds, coach-assigned amenities (items 8, 12)
+- [ ] Database: F12 — `reservations.status` gains `awaiting_payment` with `hold_until`; `book_amenity(p_amenity, p_start, p_minutes, p_method)` holds the slot and creates the payment; verifying the payment confirms it, rejecting or expiring frees it (`expire_payments` cron frees holds); passes still book directly. F13 — amenity refund requests (cancel up to 1 hour before; no-show claim within 24 hours after) reviewed in the existing refunds flow. F14 — `coach_amenities` (coach, amenity) with insert and delete by the coach for themselves; the presence rule per F14. Tests: two members can't hold the same slot; an unpaid hold frees the slot when it runs out; cancel 59 minutes before refused; a no-show claim after 24 hours refused; with an assigned coach, an unassigned checked-in coach doesn't count. Mirror in `DemoGateway`.
+- [ ] Core: booking view model for amenity → day → time and length, the hold and payment states, refund and claim actions; `AttendanceCalendar` reused for the month view. xUnit per rule.
+- [ ] Screens (`impeccable shape` and a mockup of the whole flow first, owner approves): member Book an amenity (cards, the calendar sheet, time and length, Book and pay, waiting-for-payment state, cancel and "I didn't use it"), Coaches page without the Amenities half (D30 reversed), coach Amenities with "I run this", desk Payments to verify showing amenity bookings, refunds list showing amenity claims. Member and coach on Windows and Android; desk Windows only. Then critique and polish.
+- [ ] Push live; `ponytail-review`; plan updated.
+
+### Phase 6: member calendar, menu order, coach Profile & settings (items 6, 7, 5)
+- [ ] Core: member calendar view model built on `AttendanceCalendar` with sessions, bookings and the coach's shifts and open times (F15); menu order from membership state (F16) as a tested function in Core, so Windows and Android read the same list. xUnit for both.
+- [ ] Screens (`impeccable` + `frontend-design`, Windows and Android): member Calendar (mockup first), the menu and phone tab bar in both orders, coach "Profile & settings" (`CoachProfilePage` and `SettingsPage` content on one page; menus, icon map and phone More list updated). Critique and polish on each, including a member with and without a membership and a coach with no photo.
+- [ ] No database change expected; if one appears, push it. `Test-WindowsAdminNavigation.ps1` passes; `ponytail-review`; plan updated.
+
+### Phase 7: live records (item 2)
+- [ ] Database: add `payments`, `gym_check_ins` and `membership_terms` to the Realtime publication with row-level security unchanged (members get only their own rows).
+- [ ] Core: one shared live-refresh helper next to `SupabaseRealtimeChat` that tells a page to reload; pages listed in F4 use it; "Updated" time and Refresh where missing. xUnit with the demo gateway raising changes.
+- [ ] Screens (`impeccable polish` on each page touched): the "Updated" line and Refresh look the same everywhere.
+- [ ] Push live; `ponytail-review`; plan updated.
+
+### Phase 8: try to break the new parts; final check and report
+- [ ] Break attempts for every new function and rule (direct calls, other people's ids, expired passes, wrong PINs, shifts, holds, claims); `rules.mjs` finds no app-called function without one.
+- [ ] xUnit and every database test file pass; Windows and Android builds pass; all three UI scripts pass.
+- [ ] `impeccable critique` of every screen this plan changed, side by side, both platforms where they apply; fixes made; `ponytail-review` on the whole plan diff.
+- [ ] Report to the owner: which items are done, which need clarification, which to check by hand on the real backend.
+- [ ] With the owner, separately: open the PR to `main`, merge, release.
+
+## How to check (demo mode)
+- Real config `src/GymMembership.App/Resources/Raw/supabase.json` must be moved out of the project before a demo build and put back right after (never commit it, never leave a `.bak` in the repo). Android demo builds also need `--no-incremental`; to see a demo APK on the emulator build it with `-p:EmbedAssembliesIntoApk=true`; after a demo Android build, build the real app with `--no-incremental` so `supabase.json` is packed again.
+- A demo Windows build can go to a separate folder so Visual Studio's lock on `bin\Debug` doesn't matter: `dotnet build ... -f net10.0-windows10.0.19041.0 -p:OutDir=<folder>\`.
+- Demo sign-in buttons on the login page: Member, Coach, Front desk, System admin, Admin. A coach with no trainees: kai@demo.io / demo1234.
+- Windows captures: `PrintWindow` (flag 2), not `CopyFromScreen`; for light theme, set `AppsUseLightTheme` to 1 briefly and restore it. Android: `uiautomator dump` plus `input tap`; adb is under `C:\Program Files (x86)\Android\android-sdk`, and Git Bash needs `MSYS_NO_PATHCONV=1`.
+- The owner often runs the app from Visual Studio, which locks `bin\Debug`. Ask before closing it.
+
+## To-do list as received
+
+Received 2026-11-09, as sent (spelling kept).
+
+Gym Membership Management System – Features and Improvements make sure to use the right skills.
+
+1. shift in / shiftout – Add a feature to record members' gym entry and exit times. this is for frontdesk employee  cashier where he will start at 5k when checking in and when he checkout for the day he will out the money. this like the pos system in cashier.
+2. Real-Time Data– Display actual and updated membership, attendance, and payment records also add the active codes in packages to see what codes can be redeemed and can you make the qr to be different per session of the members should not be permanent.
+3. Discount changes – Automatically deactivate discounts once the maximum number of uses has been reached. when the code is used by a member it cant be edited since its already used like when i put 20 percent off and make the code active once it got used once it cant be edited to be changed.
+4. Messaging System– NEED ALL COACH OR MEMBER CAN CHAT SYSTEM ADMIN, ADMIN, RECEPTION DESK.
+5. Combined Settings and Profile – Combine the Settings and Profile sections into one menu. this is for the profile in coach to make it one since it make sense that way.
+6. Membership Schedule Calendar – Add a calendar where members can view available schedules and book their gym sessions page make the design same with the calender that coaches have in dashboard.
+7. nav bar Hierarchy – Organize membership nav bar according to their levels, types, and benefits. like when the member got an active membership in the nav bar the package pages where he will buy the membership should not be on top.
+8. update the amenities pages for members. remove the amenities pages that is combined with coaches, make add it to book amenities, the process should be when user go to book amenities he will choose what amenities to book, when he already chose one a calendar page same design with coaches calendar in dashboard should popup to click what date he wanted and in right what time he chose and how many hours. when he booked it it should be approved for payment in the front desk employee and when approve it will notify. also add a refund when members did not go to the amenity at the time members can cancel the already paid amenity and when he did not show up members can say he did not and front desk will check for validiation and approve it.
+9. alert in chat – for members have an announcement in chat and notification when the members got 1 week left to there membership members cant chat in this he should just view.
+10. Manual Attendance Scanning – improve the manually member's attendance if the member does not have their phone to qr to not get cheated by the frontdesk.
+11. add when members requested an time req for a coach it will autimatically go to the chat of the coach. it will work like this when members time requested for a coach it will go to the chat of coach like "I would like to request a training session at this time" and other details. and when the coach accepted it it would autimatically also go to the chat of members that the coach has accepted and add the details.
+12. coach can set what amenity he is assigned. add this in amenity pages in coach
+
+Owner, same day: same branch as the 2026-11-05 plan, a separate plan; use the right skills, and always `impeccable` for UI; phases and decisions before proceeding.
+
+## Session log
+
+- **2026-11-09:** Plan created from the owner's 12-item list and a read of the code. Decisions F1 to F18 open. No code, database or git changes beyond this file.
