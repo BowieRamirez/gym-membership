@@ -2,7 +2,7 @@
 
 Created: 2026-11-09
 Last updated: 2026-11-09 (Phases 1 and 2 deployed and pushed; Phase 3 waits on F1, F2, F3)
-Status: Phases 1 to 4 DEPLOYED (`0048` to `0051` live; Phase 3 and 4 commits not pushed to GitHub yet). Phases 5 to 8 wait on their decisions in section 2.
+Status: Phases 1 to 4 DEPLOYED (`0048` to `0051` live) and pushed to the branch on GitHub (2026-11-10). Phases 5 to 8 wait on their decisions in section 2.
 Branch: `security-admin-cleanup-2026-11-05`, the same branch as the finished 2026-11-05 plan (owner, 2026-11-09). Not merged to `main` yet; the owner merges when this plan is done.
 
 **Goal:** Work through the owner's 12-item list of features and improvements (received 2026-11-09): a cashier drawer shift, live records and rotating member QR codes, discount locks, chat with every staff role, a merged coach profile, a member calendar, a membership-aware menu, a new amenity booking flow with desk payment and refunds, announcements, a cheat-proof manual check-in, time requests in chat, and coach-assigned amenities.
@@ -35,11 +35,11 @@ Status vocabulary: `PLANNED`, `WAITING` (decisions open), `IN PROGRESS`, `BLOCKE
 
 ### Current work / restart here
 
-- **2026-11-10:** Phase 3 done, verified, committed (`ba91955`) and `0050` live. **Since `0050` is live, desk apps from before Phase 3 can't take cash** (they have no Start shift, so every cash payment and cash refund is refused with "no_open_shift"): every desk needs the new build, and each cashier starts a shift at the Cashier page. GCash and bank transfers are unaffected.
-- **2026-11-10:** Phase 4 done, verified, committed (`cc27467`) and `0051` live. Apps from before Phase 4 still work (old calls default to the Front desk), but they show Announcements as an ordinary conversation and can't write to Admin or System admin; every phone and desk should get the new build.
-- Next concrete action: owner answers F12, F13, F14 for Phase 5 (amenity booking). `git push` of the Phase 3 and 4 commits waits for the owner.
-- **2026-11-09:** Phases 1 and 2 done, verified, committed, and their migrations (`0048`, `0049`) live. Unrelated, left alone: `2026-10-30-visual-redesign.md`, `.impeccable/config.json` (now also holds the desk-pin mockup's radial-halo ignore), two PDFs in `docs/`.
-- **Since `0049` is live, desk apps from before Phase 2 can't check anyone in** (their scans read "old code", their by-name check-ins have no PIN): every desk needs the new build. Members set their desk PIN in Settings; the demo's Alex has `1234`.
+- **Where it stands (2026-11-10):** Phases 1 to 4 done, verified, committed and pushed to `security-admin-cleanup-2026-11-05`; their migrations `0048` to `0051` are live ("Remote database is up to date"). Nothing is half-built. Next migration is `0052`.
+- **Next concrete action:** the owner answers F12, F13 and F14 (Phase 5, amenity booking: section 2 has each recommendation), then "start phase 5". Phase 7 now also carries item 13 (today's check-ins on the Check-in page, F19).
+- **Every desk and phone needs the new build:** since `0049` older desk apps can't check anyone in (no PIN, old codes); since `0050` they can't take cash (no Start shift); since `0051` older apps show Announcements as an ordinary chat and can't write to Admin or System admin. Members set their desk PIN in Settings (the demo's Alex has `1234`); each cashier starts a shift on the Cashier page.
+- **Left open on purpose (P3):** the Android Back key doesn't leave a conversation (the on-screen arrow does; older than this plan); the three Write to chips can wrap onto two lines in the Windows list.
+- **Unrelated, left alone:** `2026-10-30-visual-redesign.md` (modified), `.impeccable/config.json` (also holds the desk-pin mockup's radial-halo ignore), two PDFs in `docs/`.
 
 ## 1. Repository findings
 
