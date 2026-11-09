@@ -59,6 +59,7 @@ From reading the code on 2026-11-09. Verify before relying on these; line number
 | 9 Announcements | `send_expiry_reminders` (cron, nightly) notifies 3 days before a term ends. No announcements exist. Notifications are a list (`user_notifications`). | An announcement channel is new; a 7-day reminder is a small change to the existing job (F10). |
 | 10 Manual check-in | Name search with Check in, recorded with `method = 'manual'` (`0044`); the desk sees status first. Nothing proves the member is the person at the desk. | Needs a check the front desk can't fake alone (F8). |
 | 11 Requests in chat | Requests and answers live in `time_requests` / `time_request_events` (`0031`, `request_session`, `respond_time_request`); the chat knows nothing about them. A member must have hired the coach to chat. | Post an automatic message into the member–coach chat on request and on each answer (F11). |
+| 13 Today's check-ins on Check-in | The data exists: `AttendanceService.CheckInsOnAsync(day)` lists a Manila day's check-ins with time, method, who recorded them and the reason (Phase 2), and the row rule already lets every staff role read `gym_check_ins` (`check_ins_select`, `0006`: own rows or `is_staff()`). Only the admin Overview shows it today; the desk Check-in page shows the scan, the member search and the coaches present, not who already came in. | A screen change only, no database change; it rides on Phase 7's live updates for check-ins (F4), so the list fills in as people arrive (F19). |
 | 12 Coach amenities | Coach menu has an Amenities page (view only). Any checked-in coach counts as present for any amenity (D11, `coach_in_gym()`, `0043`). | Assigning coaches to amenities is new data; whether it changes the presence rule is a decision (F14). |
 
 ## 2. Decisions to settle
@@ -82,6 +83,7 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 - [ ] **F15 — member schedule calendar (item 6):** Recommend: a member **Calendar** page in the coach Dashboard's month style showing, per day: their sessions, their amenity bookings, and their hired coach's shifts and open times. Tapping an open time starts a time request for it (same rules as Time requests); tapping an amenity booking opens it. A member without a coach sees their bookings and the gym's hours. It does not add general "gym visit" booking (no capacity limits exist).
 - [ ] **F16 — menu order (item 7):** Packages have no levels, types or benefits in the data. Recommend: two orders. **With an active membership:** My membership, Calendar, Sessions, Book an amenity, Coaches, Time requests, Messages, then Packages (named "Renew or change"), Settings. **Without one:** Packages first, then My membership, then the rest (members-only items keep their locked notice). Phone tab bar follows the same order. Package levels and benefits would be new fields on packages: say if wanted.
 - [ ] **F17 — coach Profile & settings (item 5):** Recommend: one page, **"Profile & settings"**, with the coach profile first (photo, bio, specialty, rate, taking new members) and the account settings after (email, theme, password). One menu item instead of two, on Windows and the phone.
+- [ ] **F19 — today's check-ins on the Check-in page (item 13, owner 2026-11-10):** Recommend: a **"Checked in today"** list on the desk Check-in page for front desk, Admin and System admin (Windows only), newest first: time, name (or "Walk-in: name"), how (QR scan, by name with PIN, by name without PIN, sent later), and who recorded it. A count in the heading ("Checked in today: 42") and a name filter for a busy day. Members only, as the page is about members; coaches stay in the existing "Coaches" section. Today only on this page; other days stay on the Overview. It updates live in Phase 7 (a new check-in appears without Refresh). Alternative: show it on the desk Home page instead.
 - [ ] **F18 — order of the phases:** Recommend the order in section 3: rules and safety first (discounts, QR and manual check-in), then cash, then chat, then amenities, then member pages, then live data, then testing and the final check.
 
 ## 3. Phases and item coverage
@@ -94,7 +96,7 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 | 4 | Messaging: staff chat, announcements and the 1-week alert, requests in chat | 4, 9, 11 | F9, F10, F11 | WAITING |
 | 5 | Amenity booking, payment, refunds, coach-assigned amenities | 8, 12 | F12, F13, F14 | WAITING |
 | 6 | Member calendar, menu order, coach Profile & settings | 6, 7, 5 | F15, F16, F17 | WAITING |
-| 7 | Live records | 2 (real-time) | F4 | WAITING |
+| 7 | Live records; today's check-ins on the Check-in page | 2 (real-time), 13 | F4, F19 | WAITING |
 | 8 | Try to break the new parts; final check and report | All | Phases 1-7 | WAITING |
 
 ### Phase 1: discount locks and codes on Packages (items 3, 2)
@@ -133,10 +135,11 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 - [ ] Screens (`impeccable` + `frontend-design`, Windows and Android): member Calendar (mockup first), the menu and phone tab bar in both orders, coach "Profile & settings" (`CoachProfilePage` and `SettingsPage` content on one page; menus, icon map and phone More list updated). Critique and polish on each, including a member with and without a membership and a coach with no photo.
 - [ ] No database change expected; if one appears, push it. `Test-WindowsAdminNavigation.ps1` passes; `ponytail-review`; plan updated.
 
-### Phase 7: live records (item 2)
+### Phase 7: live records and today's check-ins (items 2, 13)
 - [ ] Database: add `payments`, `gym_check_ins` and `membership_terms` to the Realtime publication with row-level security unchanged (members get only their own rows).
 - [ ] Core: one shared live-refresh helper next to `SupabaseRealtimeChat` that tells a page to reload; pages listed in F4 use it; "Updated" time and Refresh where missing. xUnit with the demo gateway raising changes.
 - [ ] Screens (`impeccable polish` on each page touched): the "Updated" line and Refresh look the same everywhere.
+- [ ] F19 (item 13): Core `CheckInViewModel` loads today's check-ins through `CheckInsOnAsync` (reused, no new query), newest first, with the count and a name filter, and reloads after each check-in and on the live-refresh signal. xUnit: a scan and a by-name check-in each appear at the top; the filter narrows by name; front desk, Admin and System admin all see it. Screen (`impeccable shape`, mockup, owner approves; Windows only): "Checked in today" on the Check-in page, then critique and polish at 1600 dark and 1100 light. No database change expected (staff already read `gym_check_ins`).
 - [ ] Push live; `ponytail-review`; plan updated.
 
 ### Phase 8: try to break the new parts; final check and report
@@ -171,6 +174,7 @@ Gym Membership Management System – Features and Improvements make sure to use 
 10. Manual Attendance Scanning – improve the manually member's attendance if the member does not have their phone to qr to not get cheated by the frontdesk.
 11. add when members requested an time req for a coach it will autimatically go to the chat of the coach. it will work like this when members time requested for a coach it will go to the chat of coach like "I would like to request a training session at this time" and other details. and when the coach accepted it it would autimatically also go to the chat of members that the coach has accepted and add the details.
 12. coach can set what amenity he is assigned. add this in amenity pages in coach
+13. (added 2026-11-10) frontdesk, admin, system admin can see the people who got checkin within the day. add this into check in page. add this to the recommended phase to add.
 
 Owner, same day: same branch as the 2026-11-05 plan, a separate plan; use the right skills, and always `impeccable` for UI; phases and decisions before proceeding.
 
@@ -179,4 +183,5 @@ Owner, same day: same branch as the 2026-11-05 plan, a separate plan; use the ri
 - **2026-11-09:** Plan created from the owner's 12-item list and a read of the code. Decisions F1 to F18 open. No code, database or git changes beyond this file.
 - **2026-11-09:** Owner: "start phase 1" (F5, F7 accepted as recommended). Phase 1 built test-first and verified locally: xUnit 898/898, DB 24/24 files, three UI scripts pass, Windows and Pixel 7 checked. Real Android app rebuilt with `--no-incremental` after the demo APK. Not committed; `0048` not live yet.
 - **2026-11-09:** Owner: F6, F8 as recommended, "start phase 2"; mockup approved. Phase 2 built test-first: DB 25/25 files, xUnit 912/912, three UI scripts pass, Windows and Pixel 7 checked. `0049` pushed live; committed.
+- **2026-11-10:** Owner added item 13 (today's check-ins on the Check-in page for front desk, Admin, System admin). Recorded as F19 and placed in Phase 7 with the live check-in updates. No code yet.
 - **2026-11-10:** Owner: "start phase 3" (F1, F2, F3 as recommended); mockup approved as shown. Phase 3 built test-first: DB 26/26 files, xUnit 927/927, three UI scripts pass, Windows checked at 1600 dark and 1100 light. `ponytail-review` cut `open_shift_of()` (one caller), the demo's field-nulling, and `CashSummaryAsync`/`CashRow` (no app caller once "Net cash today" went; `daily_cash_summary` stays in the database).
