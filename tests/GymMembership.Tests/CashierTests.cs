@@ -155,7 +155,8 @@ public class CashierTests
         Assert.Null(vm.Item);
         Assert.False(vm.RecordCommand.CanExecute(null));
         Assert.Equal(before + 1, (await gw.ListAsync<Payment>(p => p.MemberId == "u-carlo" && p.Status == "verified")).Count);
-        Assert.NotEmpty(vm.CashToday);
+        Assert.Equal(vm.Shift!.OpeningFloat + vm.Shift.CashIn, vm.Shift.Expected);   // F2: the drawer, not "Net cash today"
+        Assert.True(vm.Shift.CashIn > 0);
     }
 
     [Fact]
@@ -193,7 +194,6 @@ public class CashierTests
         public Task<AppResult<bool>> VerifyAsync(int paymentId, bool approve, string? reason = null) => throw new NotSupportedException();
         public Task<AppResult<Payment>> RecordCounterAsync(string kind, string method, string? memberId, int? itemId, string? walkInName, string? referenceNo, string? discountCode) => throw new NotSupportedException();
         public Task<AppResult<bool>> VoidAsync(int paymentId, string reason) => throw new NotSupportedException();
-        public Task<AppResult<IReadOnlyList<CashRow>>> CashSummaryAsync(DateOnly day) => Task.FromResult(AppResult<IReadOnlyList<CashRow>>.Success([]));
         public Task<AppResult<string?>> ProofUrlAsync(string proofPath) => throw new NotSupportedException();
         public Task<AppResult<(CashShift? Open, decimal DefaultFloat)>> ShiftAsync() => Task.FromResult(AppResult<(CashShift?, decimal)>.Success((null, 5000m)));
         public Task<AppResult<CashShift>> OpenShiftAsync(decimal openingFloat, string? note) => throw new NotSupportedException();

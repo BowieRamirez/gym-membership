@@ -104,6 +104,19 @@ public class CashShiftTests
     }
 
     [Fact]
+    public async Task Without_a_shift_Complete_payment_waits_for_cash_but_not_for_GCash()
+    {
+        var (_, vm) = await Cashier();
+        vm.Kind = "Walk-in"; vm.WalkInName = "Pedro Ramos";
+        Assert.True(vm.CashNeedsShift); Assert.False(vm.RecordCommand.CanExecute(null));
+        vm.Method = "GCash"; vm.ReferenceNo = "GC-1";
+        Assert.False(vm.CashNeedsShift); Assert.True(vm.RecordCommand.CanExecute(null));
+        vm.Method = "Cash";
+        await vm.StartShiftCommand.ExecuteAsync(null);
+        Assert.False(vm.CashNeedsShift); Assert.True(vm.RecordCommand.CanExecute(null));
+    }
+
+    [Fact]
     public async Task Cash_taken_shows_on_the_shift_and_ending_it_shows_the_difference_and_needs_a_note()
     {
         var (_, vm) = await Cashier();

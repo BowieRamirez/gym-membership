@@ -36,12 +36,6 @@ alter table public.refund_requests add column cash_shift_id bigint references pu
 create index payments_cash_shift on public.payments(cash_shift_id) where cash_shift_id is not null;
 create index refund_requests_cash_shift on public.refund_requests(cash_shift_id) where cash_shift_id is not null;
 
-create function public.open_shift_of(p_cashier uuid) returns bigint
-language sql stable security definer set search_path='' as $$
-  select shift_id from public.cash_shifts where cashier_id = p_cashier and closed_at is null;
-$$;
-revoke all on function public.open_shift_of(uuid) from public, anon, authenticated;
-
 create function public.tie_cash_to_shift() returns trigger
 language plpgsql security definer set search_path='' as $$
 declare v_taken boolean; v_by uuid;
@@ -55,7 +49,7 @@ begin
     v_by := new.paid_by;
   end if;
   if not v_taken then return new; end if;
-  new.cash_shift_id := public.open_shift_of(coalesce(v_by, auth.uid()));
+  select shift_id into new.cash_shift_id from public.cash_shifts where cashier_id = coalesce(v_by, auth.uid()) and closed_at is null;
   if new.cash_shift_id is null then raise exception 'no_open_shift' using errcode = 'P0002'; end if;
   return new;
 end $$;

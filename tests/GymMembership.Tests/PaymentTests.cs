@@ -132,8 +132,7 @@ public class PaymentTests
         Assert.Equal((150m, "Pedro Ramos", null), (paid.Amount, paid.WalkInName, paid.MemberId));
         Assert.Single(await gw.ListAsync<GymCheckIn>(c => c.PaymentId == paid.Id));
 
-        var cash = (await staff.CashSummaryAsync(DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8)))).Value!;
-        Assert.Contains(cash, r => r.Kind == PayKind.WalkIn && r.Total >= 150m);
+        Assert.Equal(150m, (await staff.ShiftAsync()).Value.Open!.CashIn);   // into the cashier's drawer
     }
 
     [Fact]

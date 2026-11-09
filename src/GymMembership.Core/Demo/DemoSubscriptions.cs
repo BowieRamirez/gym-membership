@@ -171,20 +171,16 @@ public sealed partial class DemoGateway
                 return true;
             }
             case "revenue_summary":
-            case "daily_cash_summary":
             {
-                var cash=fn=="daily_cash_summary";Require(cash?"reports:cash":"reports:revenue");
-                var from=DateTime.Parse(Text(cash?"p_day":"p_from")!).Date;
-                var to=cash?from:DateTime.Parse(Text("p_to")!).Date;
+                Require("reports:revenue");
+                var from=DateTime.Parse(Text("p_from")!).Date;var to=DateTime.Parse(Text("p_to")!).Date;
                 var amounts=All<Payment>().Where(p=>p.Status==Status.Verified && p.VerifiedAt is not null)
                     .Select(p=>(Day:p.VerifiedAt!.Value.AddHours(8).Date,Kind:p.Kind,Method:p.Method,Count:1L,Amount:p.Amount))
-                    .Concat(All<RefundRequest>().Where(r=>cash ? r.Status=="paid" : r.Status is "approved" or "paid").Select(r=>
-                        (Day:(cash ? r.PaidAt! : r.DecidedAt!).Value.AddHours(8).Date,Kind:All<Payment>().First(p=>p.Id==r.PaymentId).Kind,
-                         Method:cash ? r.RepaymentMethod! : All<Payment>().First(p=>p.Id==r.PaymentId).Method,Count:0L,Amount:-r.Amount)))
-                    .Where(r=>r.Day>=from&&r.Day<=to&&(!cash||r.Method==PayMethod.Cash)).ToList();
-                result=cash ? amounts.GroupBy(r=>r.Kind).OrderBy(g=>g.Key).Select(g=>new CashRow(g.Key,g.Sum(r=>r.Count),g.Sum(r=>r.Amount))).ToList()
-                    : (object)amounts.GroupBy(r=>(r.Day,r.Kind,r.Method)).OrderBy(g=>g.Key.Day).ThenBy(g=>g.Key.Kind).ThenBy(g=>g.Key.Method)
-                        .Select(g=>new RevenueRow(g.Key.Day,g.Key.Kind,g.Key.Method,g.Sum(r=>r.Count),g.Sum(r=>r.Amount))).ToList();
+                    .Concat(All<RefundRequest>().Where(r=>r.Status is "approved" or "paid").Select(r=>All<Payment>().First(p=>p.Id==r.PaymentId) is var p
+                        ? (Day:r.DecidedAt!.Value.AddHours(8).Date,Kind:p.Kind,Method:p.Method,Count:0L,Amount:-r.Amount) : default))
+                    .Where(r=>r.Day>=from&&r.Day<=to).ToList();
+                result=amounts.GroupBy(r=>(r.Day,r.Kind,r.Method)).OrderBy(g=>g.Key.Day).ThenBy(g=>g.Key.Kind).ThenBy(g=>g.Key.Method)
+                    .Select(g=>new RevenueRow(g.Key.Day,g.Key.Kind,g.Key.Method,g.Sum(r=>r.Count),g.Sum(r=>r.Amount))).ToList();
                 return true;
             }
             default:return false;

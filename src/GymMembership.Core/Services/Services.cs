@@ -384,7 +384,6 @@ public sealed record PaymentRow(Payment Payment, string Payer, string Item, bool
 {
     public string MethodText => PayMethod.Name(Payment.Method);   // 9.8: Void showed "cash" and "qr"
 }
-public sealed record CashRow(string Kind, long Payments, decimal Total);
 /// <summary>Something the counter can take a payment for: a package, a membership to renew, or an amenity.</summary>
 public sealed record CounterItem(int Id, string Label, decimal? Price = null);
 
@@ -397,7 +396,6 @@ public interface IPaymentStaffService
     /// <summary>Cash or GCash at the counter, verified at once. itemId is a package id, a membership id or an amenity id depending on kind.</summary>
     Task<AppResult<Payment>> RecordCounterAsync(string kind, string method, string? memberId, int? itemId, string? walkInName, string? referenceNo, string? discountCode);
     Task<AppResult<bool>> VoidAsync(int paymentId, string reason);
-    Task<AppResult<IReadOnlyList<CashRow>>> CashSummaryAsync(DateOnly day);
     Task<AppResult<string?>> ProofUrlAsync(string proofPath);
     /// <summary>What can be sold for a kind of payment. Renewals are the member's own memberships, so they need a memberId.</summary>
     Task<AppResult<IReadOnlyList<CounterItem>>> ItemsAsync(string kind, string? memberId);
@@ -452,8 +450,6 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
         return await Safe.RunAsync(async () => { await gw.RpcAsync("void_payment", new() { ["p_payment_id"] = paymentId, ["p_reason"] = reason.Trim() }); return true; });
     }
 
-    public Task<AppResult<IReadOnlyList<CashRow>>> CashSummaryAsync(DateOnly day) => Safe.RunAsync(async () =>
-        (IReadOnlyList<CashRow>)(await gw.RpcAsync<List<CashRow>>("daily_cash_summary", new() { ["p_day"] = day.ToString("yyyy-MM-dd") }) ?? []));
 
     public Task<AppResult<string?>> ProofUrlAsync(string proofPath) => Safe.RunAsync(() => gw.SignedUrlAsync("payment-proofs", proofPath));
 

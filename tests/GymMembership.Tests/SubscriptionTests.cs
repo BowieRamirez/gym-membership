@@ -328,13 +328,12 @@ public class SubscriptionTests
         Assert.True((await svc.RequestRefundAsync(term.Id,"Changed plans","change_of_mind")).Ok);
         var request=Assert.Single((await svc.RefundsAsync()).Value!).Request;
         var day=DateOnly.FromDateTime(clock.Now.UtcDateTime.AddHours(8));
-        await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
+        await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword); await gw.OpenDrawerAsync();
         async Task<decimal> Net()=>(await new AdminService(gw).RevenueAsync(day,day)).Value!.Sum(r=>r.Total);
-        async Task<decimal> Cash()=>(await new PaymentStaffService(gw).CashSummaryAsync(day)).Value!.Sum(r=>r.Total);
+        async Task<decimal> Cash()=>(await new PaymentStaffService(gw).ShiftAsync()).Value.Open!.Expected;   // the admin's drawer
         var received=await Net(); Assert.Equal(monthly.Price,received); var cash=await Cash();
         Assert.True((await svc.DecideAsync(request.Id,true,"Approved")).Ok);
         Assert.Equal(0m,await Net()); Assert.Equal(cash,await Cash());
-        await gw.OpenDrawerAsync();
         Assert.True((await svc.MarkPaidAsync(request.Id,PayMethod.Cash,null)).Ok);
         Assert.Equal(0m,await Net()); Assert.Equal(cash-monthly.Price,await Cash());
     }

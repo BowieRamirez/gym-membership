@@ -4,7 +4,6 @@
             xmlns:v="clr-namespace:GymMembership.App.Views"
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
-            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.CashierPage" x:DataType="vm:CashierViewModel" Title="Cashier">
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
@@ -12,6 +11,83 @@
             <Label Text="Payments taken here count as verified at once and get a receipt number for the paper receipt." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+            <!-- F2 (0050): the cashier's own drawer, before the sale. No shift: count the float and start one (outlined, ink in light and yellow in dark as the Check-in PIN step: it's the next step). -->
+            <Border Style="{StaticResource Panel}" Stroke="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" StrokeThickness="2" IsVisible="{Binding NeedsShift}">
+                <VerticalStackLayout Spacing="10">
+                    <c:CardTitle Text="Start your shift" />
+                    <Label Text="Count the cash in the drawer before your first sale. Cash you take and pay back is added to this shift." Style="{StaticResource Caption}" />
+                    <FlexLayout Wrap="Wrap" AlignItems="End">
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                            <Label Text="Float you counted (₱)" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}" WidthRequest="170"><Entry Text="{Binding StartFloat}" Keyboard="Numeric" AutomationId="ShiftFloat" ReturnCommand="{Binding StartShiftCommand}" SemanticProperties.Description="Float you counted, in pesos" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="360" IsVisible="{Binding StartNeedsNote}">
+                            <Label Text="{Binding FloatNoteLabel}" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding StartNote}" ReturnCommand="{Binding StartShiftCommand}" Placeholder="For example: short float from the safe" SemanticProperties.Description="Why the float is different" /></Border>
+                        </VerticalStackLayout>
+                        <Button Text="Start shift" Margin="0,0,0,8" Command="{Binding StartShiftCommand}" AutomationId="StartShift" />
+                    </FlexLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- shift open: the figures in a row, expected last and largest; End shift opens the count in place -->
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding HasShift}">
+                <VerticalStackLayout Spacing="12">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="14">
+                        <c:CardTitle Text="Your drawer" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="{Binding ShiftSince}" Style="{StaticResource Caption}" VerticalOptions="Center" />
+                        <Button Grid.Column="2" Text="End shift" Style="{StaticResource SmallOutlineButton}" Command="{Binding BeginCloseCommand}" AutomationId="EndShift"
+                                IsVisible="{Binding IsClosing, Converter={StaticResource Not}}" />
+                    </Grid>
+                    <FlexLayout Wrap="Wrap" AlignItems="End">
+                        <VerticalStackLayout Margin="0,0,34,6">
+                            <Label Text="Float" Style="{StaticResource Caption}" />
+                            <Label Text="{Binding Shift.OpeningFloat, StringFormat='₱{0:N2}', FallbackValue=''}" FontFamily="BarlowMedium" FontSize="20" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Margin="0,0,34,6">
+                            <Label Text="Cash taken" Style="{StaticResource Caption}" />
+                            <Label Text="{Binding Shift.CashIn, StringFormat='₱{0:N2}', FallbackValue=''}" FontFamily="BarlowMedium" FontSize="20" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Margin="0,0,34,6">
+                            <Label Text="Paid back" Style="{StaticResource Caption}" />
+                            <Label Text="{Binding Shift.CashOut, StringFormat='₱{0:N2}', FallbackValue=''}" FontFamily="BarlowMedium" FontSize="20" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Margin="0,0,0,6">
+                            <Label Text="Expected in the drawer" Style="{StaticResource Caption}" />
+                            <Label Text="{Binding Shift.Expected, StringFormat='₱{0:N2}', FallbackValue=''}" Style="{StaticResource KpiValue}" />
+                        </VerticalStackLayout>
+                    </FlexLayout>
+
+                    <VerticalStackLayout Spacing="10" IsVisible="{Binding IsClosing}">
+                        <BoxView Style="{StaticResource Hairline}" />
+                        <FlexLayout Wrap="Wrap" AlignItems="End">
+                            <VerticalStackLayout Spacing="4" Margin="0,0,14,0">
+                                <Label Text="Cash you counted (₱)" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}" WidthRequest="170"><Entry Text="{Binding CountedText}" Keyboard="Numeric" AutomationId="ShiftCounted" ReturnCommand="{Binding EndShiftCommand}" SemanticProperties.Description="Cash you counted, in pesos" /></Border>
+                            </VerticalStackLayout>
+                            <!-- matches in green, over or short in red; the words say which, so colour is never the only signal -->
+                            <Label Text="{Binding CountText}" FontFamily="BarlowSemiBold" FontSize="18" MinimumHeightRequest="44" VerticalTextAlignment="Center"
+                                   TextColor="{AppThemeBinding Light={StaticResource GoodLight}, Dark={StaticResource GoodDark}}">
+                                <Label.Triggers>
+                                    <DataTrigger TargetType="Label" Binding="{Binding CloseNeedsNote}" Value="True">
+                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
+                                    </DataTrigger>
+                                </Label.Triggers>
+                            </Label>
+                        </FlexLayout>
+                        <VerticalStackLayout Spacing="4" WidthRequest="360" HorizontalOptions="Start" IsVisible="{Binding CloseNeedsNote}">
+                            <Label Text="What happened? (needed when the count differs)" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding CloseNote}" ReturnCommand="{Binding EndShiftCommand}" Placeholder="For example: gave change twice" SemanticProperties.Description="Why the count differs" /></Border>
+                        </VerticalStackLayout>
+                        <HorizontalStackLayout Spacing="10">
+                            <Button Text="End shift" Command="{Binding EndShiftCommand}" AutomationId="ConfirmEndShift" />
+                            <Button Text="Keep shift open" Style="{StaticResource OutlineButton}" Command="{Binding KeepShiftCommand}" />
+                        </HorizontalStackLayout>
+                        <Label Text="After you end it, the shift can't be changed. Admin and System admin see it under Revenue." Style="{StaticResource Caption}" />
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
 
             <c:SideLayout SideFirst="False" StackedSideWidth="{OnIdiom Phone=10000, Default=600}">
                 <!-- main: what they pay for, who, which item; then today's cash -->
@@ -120,37 +196,11 @@
                                     </VerticalStackLayout>
 
                                     <Button Text="Complete payment" Command="{Binding RecordCommand}" MinimumHeightRequest="56" FontSize="18" />
+                                    <Label Text="Start your shift above to take cash. GCash and bank transfers don't need one." FontFamily="BarlowMedium" FontSize="13" IsVisible="{Binding CashNeedsShift}" />
                                 </VerticalStackLayout>
                             </Border>
             </c:SideLayout>
 
-            <!-- today's cash in one panel, under the order so a stacked window keeps the order right after the choices (9.7: was a title,
-                 a panel with a long rule and a second panel for the rows, all between the choices and the order) -->
-            <Border Style="{StaticResource Panel}">
-                <VerticalStackLayout Spacing="8">
-                    <c:CardTitle Text="Net cash today" />
-                    <Label Text="{Binding CashTotal}" Style="{StaticResource KpiValue}" />
-                    <Label Text="Cash taken minus cash refunds paid back today. It should match the drawer." Style="{StaticResource Caption}" />
-                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding CashToday}">
-                        <BindableLayout.EmptyView><Label Text="No cash taken or paid back yet today." Style="{StaticResource Muted}" Margin="0,4,0,0" /></BindableLayout.EmptyView>
-                        <BindableLayout.ItemTemplate>
-                            <DataTemplate x:DataType="svc:CashRow">
-                                <VerticalStackLayout>
-                                    <BoxView Style="{StaticResource Hairline}" />
-                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="0,10">
-                                        <Label VerticalOptions="Center">
-                                            <Label.Text>
-                                                <MultiBinding StringFormat="{}{0}  ({1})"><Binding Path="Kind" /><Binding Path="Payments" /></MultiBinding>
-                                            </Label.Text>
-                                        </Label>
-                                        <Label Grid.Column="1" Text="{Binding Total, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
-                                    </Grid>
-                                </VerticalStackLayout>
-                            </DataTemplate>
-                        </BindableLayout.ItemTemplate>
-                    </VerticalStackLayout>
-                </VerticalStackLayout>
-            </Border>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

@@ -60,12 +60,11 @@ public sealed partial class DemoGateway
                 if (counted != s.Float + cashIn - cashOut && note is null) throw Err("note_required");
                 s.ClosedAt = SubscriptionNow; s.CashIn = cashIn; s.CashOut = cashOut; s.Expected = s.Float + cashIn - cashOut; s.Counted = counted; s.CloseNote = note;
                 Audit("cash_shift.close", "cash_shifts", s.Id.ToString());
-                var row = Row(s); row.Difference = null; row.Cashier = null;   // as the function: the table row, without the list's extras
-                result = row; return true;
+                result = Row(s); return true;
             }
             case "my_cash_shift":
                 Require("payments:record");
-                result = _shifts.Where(s => s.Cashier == Uid && s.ClosedAt is null).Select(s => { var r = Row(s); r.Cashier = null; r.Difference = null; return r; }).ToList();
+                result = _shifts.Where(s => s.Cashier == Uid && s.ClosedAt is null).Select(Row).ToList();
                 return true;
             case "cash_shifts_list":
             {

@@ -145,37 +145,41 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     public string[] Methods { get; } = ["Cash", "GCash", "Bank transfer"];
     public ObservableCollection<MemberHit> Hits { get; } = new();
     public ObservableCollection<ItemOption> Options { get; } = new();
-    public ObservableCollection<CashRow> CashToday { get; } = new();
     int itemsTicket;
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWalkIn), nameof(NeedsMember), nameof(NeedsReference), nameof(OrderWho), nameof(OrderWhat), nameof(OrderHow), nameof(TotalText), nameof(TotalNote), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))]
     private string kind = "Membership";
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(NeedsReference), nameof(OrderHow)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string method = "Cash";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(NeedsReference), nameof(OrderHow), nameof(CashNeedsShift)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string method = "Cash";
     [ObservableProperty] private string search = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private MemberHit? member;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWhat), nameof(TotalText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private CounterItem? item;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string walkInName = "";
     [ObservableProperty, NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string referenceNo = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(TotalNote))] private string discountCode = "";
-    [ObservableProperty] private string cashTotal = "₱0.00";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ItemsEmptyText))] private bool loadingItems;
 
     // F2 (0050): the cashier's own drawer shift. Cash needs an open one; GCash and bank transfers don't.
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasShift), nameof(NeedsShift), nameof(ShiftSince), nameof(CountText), nameof(CloseNeedsNote))] private CashShift? shift;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasShift), nameof(NeedsShift), nameof(ShiftSince), nameof(CountText), nameof(CloseNeedsNote), nameof(CashNeedsShift)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private CashShift? shift;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(NeedsShift))] private bool shiftChecked;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(StartNeedsNote))] private decimal startFloat;
     [ObservableProperty] private string startNote = "";
     [ObservableProperty] private bool isClosing;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CountText), nameof(CloseNeedsNote))] private decimal? counted;
+    [ObservableProperty] private string countedText = "";   // the box: an empty or unreadable count is no count, not the last number typed
     [ObservableProperty] private string closeNote = "";
     decimal defaultFloat;
 
     public bool HasShift => Shift is not null;
     public bool NeedsShift => ShiftChecked && Shift is null;
     public bool StartNeedsNote => StartFloat != defaultFloat;
+    public string FloatNoteLabel => $"Why is it different from ₱{defaultFloat:N2}?";
     public string ShiftSince => Shift is { } s ? $"Since {s.OpenedAt.ToLocalTime():h:mm tt}" : "";
     public string CountText => Counted is { } c && Shift is { } s ? CashCount.Words(c - s.Expected) : "";
     public bool CloseNeedsNote => Counted is { } c && Shift is { } s && c != s.Expected;
+    partial void OnCountedTextChanged(string value) =>
+        Counted = decimal.TryParse(value.Replace("₱", "").Trim(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.CurrentCulture, out var d) && d >= 0 ? d : null;
+    /// <summary>Cash is chosen but no shift is open: Complete payment waits, and the order says why.</summary>
+    public bool CashNeedsShift => Method == "Cash" && Shift is null;
 
     public bool IsWalkIn => Kind == "Walk-in";
     public bool NeedsMember => !IsWalkIn;
@@ -195,13 +199,13 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     static string KindKey(string k) => k switch { "Renewal" => PayKind.Renewal, "Amenity" => PayKind.Amenity, "Walk-in" => PayKind.WalkIn, _ => PayKind.Membership };
     static string MethodKey(string m) => m switch { "GCash" => PayMethod.Gcash, "Bank transfer" => PayMethod.BankTransfer, _ => PayMethod.Cash };
 
-    public override async Task OnAppearingAsync() { await RefreshItemsAsync(); await LoadCashAsync(); await LoadShiftAsync(); }
+    public override async Task OnAppearingAsync() { await RefreshItemsAsync(); await LoadShiftAsync(); }
 
     Task<bool> LoadShiftAsync() => RunAsync(svc.ShiftAsync, state =>
     {
         defaultFloat = state.DefaultFloat; Shift = state.Open; ShiftChecked = true;
         if (Shift is null) StartFloat = state.DefaultFloat;
-        OnPropertyChanged(nameof(StartNeedsNote));
+        OnPropertyChanged(nameof(StartNeedsNote)); OnPropertyChanged(nameof(FloatNoteLabel));
     });
 
     [RelayCommand]
@@ -214,7 +218,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         Notice = $"Shift started with a float of ₱{StartFloat:N2}.";
     }
 
-    [RelayCommand] private void BeginClose() { IsClosing = true; Counted = null; CloseNote = ""; Notice = null; }
+    [RelayCommand] private void BeginClose() { IsClosing = true; CountedText = ""; Counted = null; CloseNote = ""; Notice = null; }
     [RelayCommand] private void KeepShift() => IsClosing = false;
 
     [RelayCommand]
@@ -225,10 +229,10 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         if (Counted is not { } count) { ErrorMessage = "Type the cash you counted in the drawer."; return; }
         if (!await Confirm.AskAsync("End your shift?", $"Expected ₱{open.Expected:N2}\nCounted ₱{count:N2}\n{CountText}", "End shift")) return;
         if (!await RunAsync(() => svc.CloseShiftAsync(count, CloseNote), _ => { })) return;
-        var words = CountText;
-        IsClosing = false; Counted = null; CloseNote = "";
+        var notice = count == open.Expected ? $"Shift ended. Your count matches the expected ₱{count:N2}." : $"Shift ended. Counted ₱{count:N2}: {CountText}.";
+        IsClosing = false; CountedText = ""; Counted = null; CloseNote = "";
         await LoadShiftAsync();
-        Notice = $"Shift ended. Counted ₱{count:N2}: {words}.";
+        Notice = notice;
     }
 
     // an item belongs to the kind (and member) it was listed for: change either and the pick goes
@@ -250,10 +254,6 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         Fill(Options, result.Value!.Select(r => new ItemOption(r)));
     }
 
-    async Task LoadCashAsync() =>
-        await RunAsync(() => svc.CashSummaryAsync(DateOnly.FromDateTime(DateTime.Today)), rows =>
-        { Fill(CashToday, rows); CashTotal = $"₱{rows.Sum(r => r.Total):N2}"; });
-
     [RelayCommand] private Task FindAsync() => RunAsync(() => members.FindMembersAsync(Search), rows => Fill(Hits, rows));
     [RelayCommand] private void PickKind(string value) => Kind = value;
     [RelayCommand] private void PickMethod(string value) => Method = value;
@@ -261,7 +261,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
 
     bool CanComplete() =>
         (IsWalkIn ? !string.IsNullOrWhiteSpace(WalkInName) : Member is not null && Item is not null)
-        && (!NeedsReference || !string.IsNullOrWhiteSpace(ReferenceNo));
+        && (!NeedsReference || !string.IsNullOrWhiteSpace(ReferenceNo)) && !CashNeedsShift;
 
     // The command is off while it runs, so a double tap records one payment.
     [RelayCommand(CanExecute = nameof(CanComplete))]
@@ -275,7 +275,6 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
                 IsWalkIn ? WalkInName : null, NeedsReference ? ReferenceNo : null, IsWalkIn ? null : DiscountCode), p => paid = p)) return;
         Notice = $"Payment complete: ₱{paid!.Amount:N2}. Receipt {paid.ReceiptNo}.";
         Item = null; ReferenceNo = ""; DiscountCode = ""; WalkInName = "";
-        await LoadCashAsync();
         var notice = Notice; await LoadShiftAsync(); Notice = notice;
     }
 }
@@ -1437,6 +1436,7 @@ public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
 public partial class RevenueViewModel(IAdminService svc, IReportFiles? files = null) : LoadableViewModel
 {
     public ObservableCollection<RevenueRow> Rows { get; } = new();
+    public ObservableCollection<CashShift> Shifts { get; } = new();   // F2: drawer shifts opened in the same dates
     [ObservableProperty] private DateTime from = DateTime.Today.AddDays(-30);
     [ObservableProperty] private DateTime to = DateTime.Today;
     [ObservableProperty] private string totalText = "₱0.00";
@@ -1448,13 +1448,26 @@ public partial class RevenueViewModel(IAdminService svc, IReportFiles? files = n
     [RelayCommand]
     private Task LoadAsync() => LoadRangeAsync(DateOnly.FromDateTime(From), DateOnly.FromDateTime(To));
 
-    Task<bool> LoadRangeAsync(DateOnly from, DateOnly to) => RunAsync(() => svc.RevenueAsync(from, to), rows =>
+    async Task<bool> LoadRangeAsync(DateOnly from, DateOnly to) => await RunAsync(() => svc.RevenueAsync(from, to), rows =>
     {
         Fill(Rows, rows);
         TotalText = $"₱{rows.Sum(r => r.Total):N2}";
         _loaded = (from, to, rows.Sum(r => r.Total));
-        ExportPdfCommand.NotifyCanExecuteChanged();
-    });
+        ExportPdfCommand.NotifyCanExecuteChanged(); ExportShiftsPdfCommand.NotifyCanExecuteChanged();
+    }) && await RunAsync(() => svc.CashShiftsAsync(from, to), shifts => Fill(Shifts, shifts));
+
+    [RelayCommand(CanExecute = nameof(CanExport))]
+    private async Task ExportShiftsPdfAsync()
+    {
+        if (files is null || _loaded is not { } shown) return;
+        Notice = null;
+        IReadOnlyList<CashShift> shifts = [];
+        if (!await RunAsync(() => svc.CashShiftsAsync(shown.From, shown.To), s => shifts = s)) return;   // fresh: an open shift's figures move
+        Fill(Shifts, shifts);
+        var name = $"cash-shifts-{shown.From:yyyy-MM-dd}-to-{shown.To:yyyy-MM-dd}.pdf";
+        if (await RunAsync(() => Safe.RunAsync(async () => { await files.ShareAsync(name, CashShiftPdf.Build(shown.From, shown.To, shifts, DateTime.UtcNow, await files.FontAsync())); return true; })))
+            Notice = "Cash shifts PDF created. Choose where to save or send it.";
+    }
 
     bool CanExport() => files is not null && _loaded is not null;
 

@@ -96,7 +96,14 @@ public sealed class CashShift : BaseModel
   [Column("opened_at")] public DateTime OpenedAt { get; set; } [Column("closed_at")] public DateTime? ClosedAt { get; set; }
   [Column("opening_float")] public decimal OpeningFloat { get; set; } [Column("cash_in")] public decimal CashIn { get; set; } [Column("cash_out")] public decimal CashOut { get; set; }
   [Column("expected")] public decimal Expected { get; set; } [Column("counted")] public decimal? Counted { get; set; } [Column("difference")] public decimal? Difference { get; set; }
-  [Column("open_note")] public string? OpenNote { get; set; } [Column("close_note")] public string? CloseNote { get; set; } }
+  [Column("open_note")] public string? OpenNote { get; set; } [Column("close_note")] public string? CloseNote { get; set; }
+  // the Revenue table's words
+  [System.Text.Json.Serialization.JsonIgnore] public bool IsOpen => ClosedAt is null;
+  [System.Text.Json.Serialization.JsonIgnore] public bool IsOff => Difference is { } d && d != 0;
+  [System.Text.Json.Serialization.JsonIgnore] public string SpanText => $"{OpenedAt.ToLocalTime():ddd d MMM, h:mm tt}" + (ClosedAt is { } c ? $" to {c.ToLocalTime():h:mm tt}" : "");
+  [System.Text.Json.Serialization.JsonIgnore] public string DifferenceText => Difference is { } d ? d == 0 ? "Matches" : CashCount.Words(d) : "–";
+  [System.Text.Json.Serialization.JsonIgnore] public string NoteText =>
+      string.Join(" · ", new[] { CloseNote, OpenNote is null ? null : "Opened: " + OpenNote }.Where(n => n is not null)) is { Length: > 0 } t ? t : "–"; }
 
 public static class CashCount
 {
