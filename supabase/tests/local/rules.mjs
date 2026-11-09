@@ -307,7 +307,7 @@ await test('a coach posts a shift, trainees are told, overlap is refused', async
 await test('ending a hire closes chat for new messages but keeps history', async () => {
   await run(alex, `select end_hire($1)`, [hire]);
   assert.match(await code(run(alex, `insert into messages (coach_id, member_id, sender_id, body) values ($1,$2,$2,'still there?')`, [coach, alex])), /42501/);
-  assert.equal((await run(alex, `select * from messages`)).rowCount, 2);
+  assert.equal((await run(alex, `select * from messages where kind = 'text'`)).rowCount, 2);   // F11 (0051) adds request messages beside these
 });
 
 console.log('\naccounts and admin');
@@ -601,7 +601,7 @@ await test('any member, even a guest, can write to the front desk; staff are ale
 });
 await test('a member sees one front-desk thread even with no messages; coaches and members cannot read or write other threads', async () => {
   assert.equal((await threads(bea)).filter(r => r.kind === 'support').length, 1);
-  assert.equal((await threads(coach)).filter(r => r.kind === 'support').length, 0);
+  assert.equal((await threads(coach)).filter(r => r.kind === 'support' && r.member_id === coach).length, 1);   // F9 (0051): coaches write to the gym too
   assert.match(await code(run(bea, `select send_support_message($1, 'hi')`, [alex])), /42501/);
   assert.match(await code(run(coach, `select send_support_message($1, 'hi')`, [alex])), /42501/);
   assert.match(await code(page(bea, 'support', null, alex)), /42501/);
