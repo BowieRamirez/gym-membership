@@ -194,16 +194,16 @@
                     <!-- status filter chips; they wrap onto a second line on a narrow phone; the yellow one is in use -->
                     <FlexLayout Wrap="Wrap">
                             <Button Text="All" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="All">
-                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="All"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /></DataTrigger></Button.Triggers>
+                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="All"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" /></DataTrigger></Button.Triggers>
                             </Button>
                             <Button Text="Verified" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Verified">
-                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Verified"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /></DataTrigger></Button.Triggers>
+                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Verified"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" /></DataTrigger></Button.Triggers>
                             </Button>
                             <Button Text="Pending" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Pending">
-                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Pending"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /></DataTrigger></Button.Triggers>
+                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Pending"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" /></DataTrigger></Button.Triggers>
                             </Button>
                             <Button Text="Expired or rejected" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Expired">
-                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Expired"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /></DataTrigger></Button.Triggers>
+                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Expired"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" /></DataTrigger></Button.Triggers>
                             </Button>
                     </FlexLayout>
                     <Border Style="{StaticResource TablePanel}">

@@ -141,9 +141,9 @@ public class MessengerViewModelTests
 
         await vm.LoadEarlierCommand.ExecuteAsync(null);
 
-        Assert.Equal(73, vm.Bubbles.Count);   // 3 seeded + 70 sent
+        Assert.Equal(74, vm.Bubbles.Count);   // 4 seeded (one a request message, F11) + 70 sent
         Assert.False(vm.HasMore);
-        Assert.Equal(73, vm.Bubbles.Select(b => b.Line.MessageId).Distinct().Count());
+        Assert.Equal(74, vm.Bubbles.Select(b => b.Line.MessageId).Distinct().Count());
         Assert.Equal("m69", vm.Bubbles.Last().Line.Body);
     }
 

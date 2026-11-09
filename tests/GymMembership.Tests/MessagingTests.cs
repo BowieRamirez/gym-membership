@@ -31,12 +31,12 @@ public class MessagingTests
         await Post(gw, "Closed on Monday for repairs");
         var (_, member, _) = await Open("member@demo.io", gw);
         Assert.NotNull(member.Pinned);
-        Assert.Equal((1, "Closed on Monday for repairs"), (member.Pinned!.Thread.Unread, member.Pinned.Thread.LastBody));
+        Assert.Equal((2, "Closed on Monday for repairs"), (member.Pinned!.Thread.Unread, member.Pinned.Thread.LastBody));   // the demo starts with one
         Assert.DoesNotContain(member.Threads, t => t.Thread.IsAnnouncements);   // above the tabs, not in them
         await member.OpenCommand.ExecuteAsync(member.Pinned);
         Assert.True(member.ReadOnly);
         Assert.StartsWith("Announcements are from the gym.", member.ReadOnlyText);
-        Assert.Equal(("Closed on Monday for repairs", "Announcement"), (member.Bubbles.Single().Line.Body, member.Bubbles.Single().Line.SenderName));
+        Assert.Equal(("Closed on Monday for repairs", "Announcement"), (member.Bubbles.Last().Line.Body, member.Bubbles.Last().Line.SenderName));
         await member.AutoRefreshAsync();
         Assert.Equal(0, member.Pinned!.Thread.Unread);
 
@@ -51,8 +51,8 @@ public class MessagingTests
     {
         var gw = new DemoGateway();
         await Post(gw, "Members' night on Friday", "members");
-        Assert.Equal(1, (await Open("member@demo.io", gw)).Vm.Pinned!.Thread.Unread);
-        Assert.Equal(0, (await Open("kai@demo.io", gw, coach: true)).Vm.Pinned!.Thread.Unread);
+        Assert.Equal(2, (await Open("member@demo.io", gw)).Vm.Pinned!.Thread.Unread);   // with the demo's one for everyone
+        Assert.Equal(1, (await Open("kai@demo.io", gw, coach: true)).Vm.Pinned!.Thread.Unread);
     }
 
     [Fact]
@@ -135,7 +135,7 @@ public class MessagingTests
         await vm.PostCommand.ExecuteAsync(null);
         Assert.Equal("Posted to all members.", vm.Notice);
         Assert.Equal(("", "everyone"), (vm.Body, vm.Audience));
-        var row = vm.Posted.Single();
+        var row = vm.Posted.First();   // newest first
         Assert.Equal(("New yoga class on Thursdays", "Members", "Sam Villanueva"), (row.Body, row.AudienceText, row.AuthorName));
 
         foreach (var who in new[] { "employee@demo.io", "coach@demo.io", "member@demo.io" })

@@ -18,7 +18,7 @@ public partial class AdminOverviewCard(string key, string title, string? label =
     [ObservableProperty] bool isUnavailable;
 }
 
-public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionService subscriptions, IAttendanceService? checkIns = null) : LoadableViewModel
+public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionService subscriptions, IAttendanceService? checkIns = null, IAnnouncementService? announcements = null) : LoadableViewModel
 {
     /// <summary>D12: who checked in on the chosen Manila day, earliest first.</summary>
     public ObservableCollection<CheckInRow> CheckIns { get; } = new();
@@ -45,7 +45,7 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
     public IReadOnlyList<AdminOverviewCard> Cards { get; } = [
         new("users", "Users and roles", "Accounts"), new("catalog", "Packages and amenities", "Packages"),
         new("discounts", "Discounts", "Discount codes"), new("refunds", "Refunds & voids"),
-        new("revenue", "Revenue", "Revenue today"),
+        new("revenue", "Revenue", "Revenue today"), new("announcements", "Announcements"),
         new("gym", "Gym settings"), new("audit", "Logs & Archive")];
     /// <summary>The number strip, in the order shown; every role on the overview has these four pages.</summary>
     public IEnumerable<AdminOverviewCard> Figures => new[] { "revenue", "users", "catalog", "discounts" }.Select(k => Cards.Single(c => c.Key == k));
@@ -116,6 +116,12 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
                     var daily = Require(await admin.RevenueAsync(today, today));
                     var monthly = Require(await admin.RevenueAsync(month, today));
                     return (Money(daily.Sum(r => r.Total)), $"{Money(monthly.Sum(r => r.Total))} this month");
+                }),
+                Load("announcements", async () =>
+                {
+                    if (announcements is null) return ("Write to members and coaches", "");
+                    var last = Require(await announcements.ListAsync()).FirstOrDefault();   // newest first
+                    return (last is null ? "Nothing posted yet" : $"Last posted {last.WhenText}", "");
                 }),
                 Load("gym", async () =>
                 {

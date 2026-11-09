@@ -28,28 +28,32 @@ public sealed partial class DemoGateway
     void PostRequestMessages(Dictionary<int, TimeRequest> before)
     {
         if (CurrentUserId is not { } actor) return;
-        string Words(DateTime s, DateTime e, int? amenity) =>
-            $"{s.AddHours(8):ddd d MMM, h:mm tt} to {e.AddHours(8):h:mm tt}" + (All<Amenity>().FirstOrDefault(x => x.Id == amenity) is { } am ? $", at {am.Name}" : "");
         foreach (var r in All<TimeRequest>().Where(r => r.MemberId is not null && (actor == r.CoachId || actor == r.MemberId)).ToList())
         {
             before.TryGetValue(r.Id, out var old);
             if (old is not null && old.Status == r.Status && old.Version == r.Version) continue;
-            var note = string.IsNullOrWhiteSpace(r.Message) ? "" : $" Note: {r.Message.Trim()}";
-            var body = old is null
-                ? (r.RequestedBy == "member" ? "I would like to request a training session: " : "I would like to invite you to a training session: ") + Words(r.RequestedStart, r.RequestedEnd, r.AmenityId) + "." + note
-                : r.Status switch
-                {
-                    "approved" when old.Status == "proposed" => $"I accepted the new time: {Words(old.ProposedStart!.Value, old.ProposedEnd!.Value, old.ProposedAmenityId)}.",
-                    "approved" => $"I accepted the training session: {Words(r.RequestedStart, r.RequestedEnd, r.AmenityId)}.",
-                    "rejected" => $"I declined the training session on {Words(r.RequestedStart, r.RequestedEnd, r.AmenityId)}." + (string.IsNullOrWhiteSpace(r.DeclineReason) ? "" : $" Reason: {r.DeclineReason.Trim()}"),
-                    "proposed" => $"Could we do another time? {Words(r.ProposedStart!.Value, r.ProposedEnd!.Value, r.ProposedAmenityId)}." + (string.IsNullOrWhiteSpace(r.ProposalReason) ? "" : $" Reason: {r.ProposalReason.Trim()}"),
-                    "pending" => $"Could we do this time instead? {Words(r.RequestedStart, r.RequestedEnd, r.AmenityId)}.",
-                    "cancelled" => $"I cancelled the training session request for {Words(r.RequestedStart, r.RequestedEnd, r.AmenityId)}.",
-                    _ => null
-                };
-            if (body is not null)
+            if (RequestWords(r, old) is { } body)
                 Add(new ChatMessage { CoachId = r.CoachId, MemberId = r.MemberId!, SenderId = actor, Body = body, SentAt = SubscriptionNow, Kind = "request", TimeRequestId = r.Id });
         }
+    }
+
+    string? RequestWords(TimeRequest r, TimeRequest? old)
+    {
+        string Words(DateTime s, DateTime e, int? amenity) =>
+            $"{s.AddHours(8):ddd d MMM, h:mm tt} to {e.AddHours(8):h:mm tt}" + (All<Amenity>().FirstOrDefault(x => x.Id == amenity) is { } am ? $", at {am.Name}" : "");
+        var note = string.IsNullOrWhiteSpace(r.Message) ? "" : $" Note: {r.Message.Trim()}";
+        return old is null
+            ? (r.RequestedBy == "member" ? "I would like to request a training session: " : "I would like to invite you to a training session: ") + Words(r.RequestedStart, r.RequestedEnd, r.AmenityId) + "." + note
+            : r.Status switch
+            {
+                "approved" when old.Status == "proposed" => $"I accepted the new time: {Words(old.ProposedStart!.Value, old.ProposedEnd!.Value, old.ProposedAmenityId)}.",
+                "approved" => $"I accepted the training session: {Words(r.RequestedStart, r.RequestedEnd, r.AmenityId)}.",
+                "rejected" => $"I declined the training session on {Words(r.RequestedStart, r.RequestedEnd, r.AmenityId)}." + (string.IsNullOrWhiteSpace(r.DeclineReason) ? "" : $" Reason: {r.DeclineReason.Trim()}"),
+                "proposed" => $"Could we do another time? {Words(r.ProposedStart!.Value, r.ProposedEnd!.Value, r.ProposedAmenityId)}." + (string.IsNullOrWhiteSpace(r.ProposalReason) ? "" : $" Reason: {r.ProposalReason.Trim()}"),
+                "pending" => $"Could we do this time instead? {Words(r.RequestedStart, r.RequestedEnd, r.AmenityId)}.",
+                "cancelled" => $"I cancelled the training session request for {Words(r.RequestedStart, r.RequestedEnd, r.AmenityId)}.",
+                _ => null
+            };
     }
 
     bool MessengerCall(string fn, Dictionary<string, object> a, out object? result)

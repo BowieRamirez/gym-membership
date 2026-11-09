@@ -20,7 +20,14 @@
                          Color="{AppThemeBinding Light={StaticResource GoodLight}, Dark={StaticResource GoodDark}}" />
             </Grid>
             <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
-                <Label Text="{Binding Thread.WithName}" FontFamily="BarlowSemiBold" LineBreakMode="TailTruncation" />
+                <HorizontalStackLayout Spacing="8">
+                    <Label Text="{Binding Thread.WithName}" FontFamily="BarlowSemiBold" LineBreakMode="TailTruncation" VerticalOptions="Center" />
+                    <!-- F9, staff only: a conversation sent to Admin or System admin says so -->
+                    <Border IsVisible="{Binding QueueTag, Converter={StaticResource HasText}}" StrokeThickness="0" StrokeShape="RoundRectangle 10" Padding="8,2" VerticalOptions="Center"
+                            BackgroundColor="{AppThemeBinding Light={StaticResource IconChipLight}, Dark={StaticResource IconChipDark}}">
+                        <Label Text="{Binding QueueTag}" FontSize="11.5" FontFamily="BarlowMedium" />
+                    </Border>
+                </HorizontalStackLayout>
                 <Label Text="{Binding Thread.Preview}" Style="{StaticResource Muted}" LineBreakMode="TailTruncation" MaxLines="1" />
                 <Label Text="Online" Style="{StaticResource Caption}" IsVisible="{Binding IsOnline}" />
             </VerticalStackLayout>

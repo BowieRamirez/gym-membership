@@ -23,16 +23,16 @@
                 </Grid>
                 <FlexLayout Wrap="Wrap" IsVisible="{Binding CanMark}">
                     <Button Text="Present" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnMarkPresent">
-                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="present"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /></DataTrigger></Button.Triggers>
+                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="present"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" /></DataTrigger></Button.Triggers>
                     </Button>
                     <Button Text="Late" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnMarkLate">
-                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="late"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /></DataTrigger></Button.Triggers>
+                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="late"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" /></DataTrigger></Button.Triggers>
                     </Button>
                     <Button Text="Absent" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnMarkAbsent">
-                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="absent"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /></DataTrigger></Button.Triggers>
+                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="absent"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" /></DataTrigger></Button.Triggers>
                     </Button>
                     <Button Text="Excused" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnMarkExcused">
-                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="excused"><Setter Property="Style" Value="{StaticResource FilterChipOn}" /></DataTrigger></Button.Triggers>
+                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="excused"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" /></DataTrigger></Button.Triggers>
                     </Button>
                 </FlexLayout>
             </VerticalStackLayout>

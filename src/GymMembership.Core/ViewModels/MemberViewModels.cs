@@ -448,7 +448,6 @@ public partial class ThreadItem(ChatThread thread) : ObservableObject
 
     /// <summary>Staff only: the queue a conversation was sent to, past the Front desk (F9). Empty otherwise.</summary>
     public string QueueTag => Thread.IsSupport && Thread.WithId is not null && Thread.Queue is ChatQueue.Admin or ChatQueue.SystemAdmin ? "To " + ChatQueue.Name(Thread.Queue) : "";
-    public bool HasQueueTag => QueueTag != "";
 
     /// <summary>Staff only: who has taken a member's front desk conversation, and whether it is closed.</summary>
     public string Subtitle => !Thread.IsSupport || Thread.WithId is null ? ""
@@ -458,7 +457,7 @@ public partial class ThreadItem(ChatThread thread) : ObservableObject
 public partial class MessengerViewModel(IChatService chat, IProfileService profile, IAuthService auth, IProofPicker picker, IRealtimeChat? live = null, IAppNavigator? nav = null) : LoadableViewModel
 {
     /// <summary>Set by the page from the shell it is in: a coach's first tab is "Trainees", a member's "Coach".</summary>
-    public bool IsCoach { get; set; }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CoachTabText), nameof(EmptyListText))] private bool isCoach;
     List<ChatThread> all = [];
     string? myId;
     int openTicket, listTicket, searchTicket;
@@ -476,17 +475,17 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowChat), nameof(ShowList))] private bool isCompact;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowChat), nameof(ShowList))] private bool showingChat;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasChat), nameof(CanSend), nameof(ReadOnly), nameof(ReadOnlyText), nameof(CanTake), nameof(CanRelease), nameof(CanClose), nameof(CanReopen), nameof(StatusLine), nameof(WritingTo))] private ThreadItem? selected;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasChat), nameof(CanSend), nameof(ReadOnly), nameof(ReadOnlyText), nameof(CanTake), nameof(CanRelease), nameof(CanClose), nameof(CanReopen), nameof(StatusLine), nameof(WritingTo), nameof(ChatEmptyText))] private ThreadItem? selected;
     /// <summary>F10: Announcements, pinned above the tabs for members and coaches; null for staff.</summary>
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPinned))] private ThreadItem? pinned;
     [ObservableProperty] private string draft = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPhoto), nameof(PhotoName))] private (string Name, byte[] Data)? pendingPhoto;   // chosen, not sent yet
     [ObservableProperty] private bool hasMore;
-    [ObservableProperty] private string tab = "coach";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowWriteTo))] private string tab = "coach";
     [ObservableProperty] private string filter = "open";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsSearching))] private string searchText = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CanTake), nameof(CanRelease), nameof(CanClose), nameof(CanReopen))] private bool hasFilters;
-    [ObservableProperty] private bool hasTabs;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowWriteTo))] private bool hasTabs;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CoachTabText))] private int coachTabBadge;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(StaffTabText))] private int staffTabBadge;
 
@@ -502,6 +501,16 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         ? "Announcements are from the gym. You can't reply here; write to the Front desk in the Gym tab."
         : "You can read this conversation, but you can't send new messages in it right now.";
     public bool HasPinned => Pinned is not null;
+    /// <summary>F9: the Gym tab starts with "Write to" Front desk, Admin or System admin.</summary>
+    public bool ShowWriteTo => HasTabs && Tab == "support";
+    /// <summary>What an empty conversation says: who reads a new gym thread, or that Announcements has nothing yet.</summary>
+    public string ChatEmptyText => Selected?.Thread switch
+    {
+        { IsAnnouncements: true } => "No announcements yet.",
+        { IsMyGymThread: true, Queue: ChatQueue.Admin } => "Write to the Admin team about your account, payments or anything the front desk can't sort out. Anyone on the team can answer.",
+        { IsMyGymThread: true, Queue: ChatQueue.SystemAdmin } => "Write to the System admin about anything the Admin team can't sort out.",
+        _ => "No messages yet. Say hello below."
+    };
     /// <summary>The queue of your own gym conversation on screen, so its Write to chip shows as chosen.</summary>
     public string? WritingTo => Selected?.Thread is { IsMyGymThread: true } t ? t.Queue ?? ChatQueue.FrontDesk : null;
     public bool HasHits => Hits.Count > 0;
@@ -684,7 +693,8 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
 
         // the open conversation follows the server's latest word about it (unread count, who took it, closed)
         if (Selected is { } open && all.FirstOrDefault(t => t.Key == open.Thread.Key) is { } fresh && !Same(open.Thread, fresh))
-            Selected = Threads.FirstOrDefault(x => x.Thread.Key == fresh.Key) ?? new ThreadItem(fresh) { AvatarUrl = open.AvatarUrl };
+            Selected = Threads.FirstOrDefault(x => x.Thread.Key == fresh.Key) ?? (Pinned?.Thread.Key == fresh.Key ? Pinned : null)
+                ?? new ThreadItem(fresh) { AvatarUrl = open.AvatarUrl };   // Announcements stays the pinned row, so that row shows as open
         OnPropertyChanged(nameof(EmptyListText));
         ApplyOnline();   // rows built by this reload get their dot
     }

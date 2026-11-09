@@ -271,7 +271,9 @@
 
     <!-- Chips (Material 3 filter / assist chips): status filters and small actions inside list rows. Rounded rectangles, not pills, so a
          filter never reads as a main action; 48 tall on phones (Android's touch minimum; they were 40 until the 9.6 polish) and 34 on
-         Windows. FilterChipOn is the filter in use.
+         Windows. The filter in use is yellow: its DataTrigger sets BackgroundColor and BorderColor to Signal and TextColor to Black. It
+         sets those three, not a whole "on" style: a style swapped in by a trigger did not come back off cleanly (the chip turned into a black
+         box on Android and lost its outline on Windows once another chip was chosen).
          Never shrunk in a wrapping FlexLayout: it wraps to the next line instead of cutting the word ("Declin"). -->
     <Style x:Key="FilterChip" TargetType="Button" BasedOn="{StaticResource OutlineButton}">
         <Setter Property="FlexLayout.Shrink" Value="0" />
@@ -283,11 +285,6 @@
         <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource EdgeLight}, Dark={StaticResource EdgeDark}}" />
         <Setter Property="FontFamily" Value="BarlowMedium" />
         <Setter Property="FontSize" Value="14" />
-    </Style>
-    <Style x:Key="FilterChipOn" TargetType="Button" BasedOn="{StaticResource FilterChip}">
-        <Setter Property="BackgroundColor" Value="{StaticResource Signal}" />
-        <Setter Property="TextColor" Value="{StaticResource Black}" />
-        <Setter Property="BorderColor" Value="{StaticResource Signal}" />
     </Style>
 
     <!-- A two-way view switch (the coach Dashboard's Month | Week, as approved): a quiet track, the chosen side a darker or lighter

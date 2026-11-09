@@ -92,11 +92,11 @@ public class IconTests
     [Fact]
     public void Selected_choice_buttons_are_yellow_not_black()
     {
-        // 9.7: the Cashier's choices are the app's chips (IconButton is gone); the chosen one is FilterChipOn (yellow) and says "selected"
+        // 9.7: the Cashier's choices are the app's chips (IconButton is gone); the chosen one turns yellow and says "selected"
         var cashier = File.ReadAllText(AppFile("Views", "CashierPage.xaml"));
         Assert.DoesNotContain("c:IconButton", cashier);
         foreach (var choice in new[] { "Membership", "Renewal", "Amenity", "Walk-in", "Cash", "GCash", "Bank transfer" })
-            Assert.Contains($"Value=\"{{StaticResource FilterChipOn}}\" /><Setter Property=\"SemanticProperties.Description\" Value=\"{choice}, selected\" />", cashier);
+            Assert.Contains($"<Setter Property=\"BorderColor\" Value=\"{{StaticResource Signal}}\" /><Setter Property=\"SemanticProperties.Description\" Value=\"{choice}, selected\" />", cashier);
     }
 
     [Fact]

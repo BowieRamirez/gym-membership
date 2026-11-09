@@ -60,9 +60,9 @@ public class ChatServiceTests
         Assert.Equal(50, second.Bubbles.Count);
         Assert.True(second.HasMore);
         var third = (await svc.MessagesAsync(coach, second.Bubbles[0].Line.MessageId)).Value!;
-        Assert.False(third.HasMore);   // 3 seeded + 120 sent = 123; the last page is the 23 oldest
-        Assert.Equal(123, first.Bubbles.Count + second.Bubbles.Count + third.Bubbles.Count);
-        Assert.Equal(123, first.Bubbles.Concat(second.Bubbles).Concat(third.Bubbles).Select(b => b.Line.MessageId).Distinct().Count());
+        Assert.False(third.HasMore);   // 4 seeded (one a request message, F11) + 120 sent = 124; the last page is the 24 oldest
+        Assert.Equal(124, first.Bubbles.Count + second.Bubbles.Count + third.Bubbles.Count);
+        Assert.Equal(124, first.Bubbles.Concat(second.Bubbles).Concat(third.Bubbles).Select(b => b.Line.MessageId).Distinct().Count());
     }
 
     [Fact]

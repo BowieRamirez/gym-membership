@@ -29,6 +29,7 @@
     <FlyoutItem Title="Refunds &amp; voids" ClassId="super"><ShellContent ContentTemplate="{DataTemplate views:RefundsPage}" /></FlyoutItem>
     <FlyoutItem Title="Gym settings" ClassId="super"><ShellContent ContentTemplate="{DataTemplate views:GymSettingsPage}" /></FlyoutItem>
     <FlyoutItem Title="Revenue" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:RevenuePage}" /></FlyoutItem>
+    <FlyoutItem Title="Announcements" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:AnnouncementsPage}" /></FlyoutItem>
     <FlyoutItem Title="Logs &amp; Archive" ClassId="super"><ShellContent ContentTemplate="{DataTemplate views:AuditPage}" /></FlyoutItem>
 
     <FlyoutItem Title="Messages" Route="messages"><ShellContent ContentTemplate="{DataTemplate views:MessagesPage}" /></FlyoutItem>

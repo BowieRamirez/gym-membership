@@ -96,6 +96,7 @@ public static class MauiProgram
 		s.AddSingleton<OfflineDesk>();
 		s.AddSingleton<INotificationService, NotificationService>();
 		s.AddSingleton<IChatService, ChatService>();
+		s.AddSingleton<IAnnouncementService, AnnouncementService>();
 		// live updates need the real project; the demo and the tests use the do-nothing version
 		s.AddSingleton<IRealtimeChat>(sp => sp.GetRequiredService<ISupabaseGateway>() is SupabaseGateway g ? new SupabaseRealtimeChat(g) : NoRealtime.Instance);
 		s.AddSingleton<IDeskHomeService, DeskHomeService>();

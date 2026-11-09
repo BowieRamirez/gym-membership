@@ -1190,6 +1190,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
         var now = DateTime.UtcNow;
         DateTime At(int days, double hour) => DateTime.Today.AddDays(days).AddHours(hour).ToUniversalTime(); // seed in the viewer's local time
         foreach (var r in new[] { "admin", "employee", "coach", "member", "subadmin" }) Add(new Role { Name = r });
+        // F10: one announcement, so Messages shows the pinned conversation with something in it
+        _announcements.Add(new DemoAnnouncement { Id = 1, Author = "u-admin", Body = "New yoga class on Thursdays at 6:00 PM. Sign up at the front desk.", Posted = now.AddDays(-1) });
         Add(new GymSettings { GymName = "Health & Fitness Gym Center", QrAccountName = "Demo Gym (GCash)", WalkInPrice = 150, PaymentExpiryHours = 48 });
 
         AddUser("u-admin", "Dana Reyes", "admin@demo.io", "admin");
@@ -1249,7 +1251,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
         Add(new CoachHire { MemberId = "u-bea", CoachId = "u-coach1", HiredAt = now.AddDays(-2) });
 
         Add(new TimeRequest { CoachId = "u-coach1", MemberId = null, RequestedBy = "coach", RequestedStart = At(1, 10), RequestedEnd = At(1, 11), Message = "Open slot, strength session" });
-        Add(new TimeRequest { CoachId = "u-coach1", MemberId = "u-alex", RequestedBy = "member", RequestedStart = At(2, 17), RequestedEnd = At(2, 18), Message = "Evening session after work?" });
+        var alexAsks = Add(new TimeRequest { CoachId = "u-coach1", MemberId = "u-alex", RequestedBy = "member", RequestedStart = At(2, 17), RequestedEnd = At(2, 18), Message = "Evening session after work?" });
+        Add(new ChatMessage { CoachId = "u-coach1", MemberId = "u-alex", SenderId = "u-alex", Body = RequestWords(alexAsks, null)!, SentAt = now.AddDays(-10), ReadAt = now.AddDays(-10), Kind = "request", TimeRequestId = alexAsks.Id });   // F11, as 0051 would have posted it
 
         Add(new TrainingSession { CoachId = "u-coach1", MemberId = "u-alex", Title = "Squat technique", ScheduledStart = At(2, 9), ScheduledEnd = At(2, 10) });
         Add(new TrainingSession { CoachId = "u-coach1", MemberId = "u-alex", Title = "Upper body", ScheduledStart = At(-3, 9), ScheduledEnd = At(-3, 10), Status = Status.Completed });
