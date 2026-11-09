@@ -1,5 +1,5 @@
 // Item 7 (0043): an amenity sold per session uses up one session per booking, and amenities are used only while a coach is in the gym.
-import { start } from './harness.mjs';
+import { start, openCashShifts } from './harness.mjs';
 import assert from 'node:assert/strict';
 
 const { server, client: db } = await start();
@@ -21,6 +21,7 @@ async function test(name, fn) {
   catch (e) { failed++; console.log('  FAIL', name, e.message); }
 }
 const desk = await user('employee'), coach = await user('coach');
+await openCashShifts(db);
 const pack = (await db.query(`insert into membership_packages(name,price,duration_days) values('S Monthly',1000,30) returning membership_package_id id`)).rows[0].id;
 const amenity = async (name, days) => (await db.query('insert into amenities(name,price,duration_days) values($1,150,$2) returning amenity_id id', [name, days])).rows[0].id;
 const pay = p => as(desk, 'select verify_payment($1,true)', [p.payment_id]);

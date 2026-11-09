@@ -1,6 +1,6 @@
 // Phase 10: trying to break the system through direct calls, as a modified app could. Paying 0 (D4, 0046), check-in without a valid
 // membership, buying with a bad package or account, and the functions that had no refusal test yet (D16).
-import { start } from './harness.mjs';
+import { start, openCashShifts } from './harness.mjs';
 import assert from 'node:assert/strict';
 
 const { server, client: db } = await start();
@@ -23,6 +23,7 @@ async function test(name, fn) {
 }
 const id = async (sql, args = []) => Object.values((await db.query(sql, args)).rows[0])[0];
 const owner = await user('admin'), desk = await user('employee');
+await openCashShifts(db);
 const pack = await id(`insert into membership_packages(name,price,duration_days) values('B Monthly',1000,30) returning membership_package_id`);
 const freePack = await id(`insert into membership_packages(name,price,duration_days) values('B Free',0,30) returning membership_package_id`);
 const oldPack = await id(`insert into membership_packages(name,price,duration_days,is_active) values('B Old',500,30,false) returning membership_package_id`);

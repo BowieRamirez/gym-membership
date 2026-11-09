@@ -1,6 +1,6 @@
 // Phase 3 (D4/D5): discount codes have a use limit. Pending, verified and voided payments hold a place;
 // rejected, expired and member-cancelled ones give it back. A code that reaches its limit is archived for good.
-import { start } from './harness.mjs';
+import { start, openCashShifts } from './harness.mjs';
 import assert from 'node:assert/strict';
 import pg from 'pg';
 
@@ -41,6 +41,7 @@ async function waitBlocked(client) {
   throw new Error('Expected concurrent checkout to wait for the code lock');
 }
 const admin = await user('admin'), desk = await user('employee');
+await openCashShifts(db);
 const monthly = (await db.query(`insert into membership_packages(name,price,duration_days)
   values('Phase Three Monthly',1000,30) returning membership_package_id`)).rows[0].membership_package_id;
 const addCode = (code, limit) => as(admin, `insert into discounts(code,percent,expires_at,max_uses) values($1,10,now()+interval '30 days',$2) returning *`, [code, limit]);

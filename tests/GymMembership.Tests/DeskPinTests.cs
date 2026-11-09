@@ -30,7 +30,7 @@ public class DeskPinTests
     /// <summary>Carlo bought a month at the counter: an active member who never set a PIN.</summary>
     static async Task MakeCarloActive(DemoGateway gw, string back)
     {
-        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();
         var monthly = (await new MembershipService(gw).ListPackagesAsync()).Value!.First(p => p.Name == "Monthly");
         Assert.True((await new PaymentStaffService(gw).RecordCounterAsync("membership", "cash", "u-carlo", monthly.Id, null, null, null)).Ok);
         await gw.SignInAsync(back, DemoGateway.DemoPassword);

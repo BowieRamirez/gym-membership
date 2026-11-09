@@ -36,6 +36,7 @@ const expected = {
   training_sessions: 'S---', time_requests: 'S---', time_request_events: 'S---', reservations: 'S---', coach_hires: 'S---', coach_visits: 'S---',
   support_threads: 'S---', support_messages: 'S---', amenity_follows: 'S---',
   member_passes: '----', desk_pins: '----',                // F6, F8 (0049): only server functions touch them
+  cash_shifts: '----',                                     // F2 (0050): open, close and list through server functions only
   roles: 'S---', permissions: 'S---', role_permissions: 'S---', user_roles: 'S---',
   // server only
   email_checks: '----', user_last_seen: '----',

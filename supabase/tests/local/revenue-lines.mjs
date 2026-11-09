@@ -1,6 +1,6 @@
 // Phase 4 (D11): receipt-level revenue lines for the PDF. They must add up to revenue_summary for the same range:
 // verified payments on their Manila verification day, minus approved/paid refunds on their Manila approval day, voids excluded.
-import { start } from './harness.mjs';
+import { start, openCashShifts } from './harness.mjs';
 import assert from 'node:assert/strict';
 
 const { server, client: db } = await start();
@@ -24,6 +24,7 @@ async function test(name, fn) {
   catch (e) { failed++; console.error('  FAIL', name, e.message); }
 }
 const admin = await user('admin'), desk = await user('employee');
+await openCashShifts(db);
 const monthly = (await db.query(`insert into membership_packages(name,price,duration_days)
   values('Phase Four Monthly',1000,30) returning membership_package_id`)).rows[0].membership_package_id;
 async function paid(name) {

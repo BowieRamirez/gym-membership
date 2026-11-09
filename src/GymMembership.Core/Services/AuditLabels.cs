@@ -23,13 +23,14 @@ public static class AuditLabels
         ["reservation.extend"] = "Booking extended",
         ["amenity.status"] = "Amenity status changed",
         ["catalog.archive"] = "Archived", ["catalog.restore"] = "Restored from archive",
+        ["cash_shift.open"] = "Cash shift started", ["cash_shift.close"] = "Cash shift ended",
     };
 
     /// <summary>Action type: the part of the code before the dot. The filter sends the key.</summary>
     public static readonly IReadOnlyDictionary<string, string> Areas = new Dictionary<string, string>
     {
         ["user"] = "Account", ["role"] = "Role", ["payment"] = "Payment", ["refund"] = "Refund",
-        ["reservation"] = "Booking", ["amenity"] = "Amenity", ["catalog"] = "Catalog",
+        ["reservation"] = "Booking", ["amenity"] = "Amenity", ["catalog"] = "Catalog", ["cash_shift"] = "Cash shift",
     };
 
     /// <summary>Object type: the table the entry is about. The filter sends the key.</summary>
@@ -37,6 +38,7 @@ public static class AuditLabels
     {
         ["profiles"] = "Account", ["user_roles"] = "Role", ["payments"] = "Payment", ["refund_requests"] = "Refund request",
         ["reservations"] = "Booking", ["amenities"] = "Amenity", ["membership_packages"] = "Package", ["discounts"] = "Discount code",
+        ["cash_shifts"] = "Cash shift",
     };
 
     public static string Action(string code) => Actions.GetValueOrDefault(code, code);

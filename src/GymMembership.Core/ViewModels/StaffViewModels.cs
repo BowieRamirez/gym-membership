@@ -160,6 +160,23 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     [ObservableProperty] private string cashTotal = "₱0.00";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ItemsEmptyText))] private bool loadingItems;
 
+    // F2 (0050): the cashier's own drawer shift. Cash needs an open one; GCash and bank transfers don't.
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasShift), nameof(NeedsShift), nameof(ShiftSince), nameof(CountText), nameof(CloseNeedsNote))] private CashShift? shift;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(NeedsShift))] private bool shiftChecked;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(StartNeedsNote))] private decimal startFloat;
+    [ObservableProperty] private string startNote = "";
+    [ObservableProperty] private bool isClosing;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CountText), nameof(CloseNeedsNote))] private decimal? counted;
+    [ObservableProperty] private string closeNote = "";
+    decimal defaultFloat;
+
+    public bool HasShift => Shift is not null;
+    public bool NeedsShift => ShiftChecked && Shift is null;
+    public bool StartNeedsNote => StartFloat != defaultFloat;
+    public string ShiftSince => Shift is { } s ? $"Since {s.OpenedAt.ToLocalTime():h:mm tt}" : "";
+    public string CountText => Counted is { } c && Shift is { } s ? CashCount.Words(c - s.Expected) : "";
+    public bool CloseNeedsNote => Counted is { } c && Shift is { } s && c != s.Expected;
+
     public bool IsWalkIn => Kind == "Walk-in";
     public bool NeedsMember => !IsWalkIn;
     public bool NeedsReference => Method != "Cash";
@@ -178,7 +195,41 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     static string KindKey(string k) => k switch { "Renewal" => PayKind.Renewal, "Amenity" => PayKind.Amenity, "Walk-in" => PayKind.WalkIn, _ => PayKind.Membership };
     static string MethodKey(string m) => m switch { "GCash" => PayMethod.Gcash, "Bank transfer" => PayMethod.BankTransfer, _ => PayMethod.Cash };
 
-    public override async Task OnAppearingAsync() { await RefreshItemsAsync(); await LoadCashAsync(); }
+    public override async Task OnAppearingAsync() { await RefreshItemsAsync(); await LoadCashAsync(); await LoadShiftAsync(); }
+
+    Task<bool> LoadShiftAsync() => RunAsync(svc.ShiftAsync, state =>
+    {
+        defaultFloat = state.DefaultFloat; Shift = state.Open; ShiftChecked = true;
+        if (Shift is null) StartFloat = state.DefaultFloat;
+        OnPropertyChanged(nameof(StartNeedsNote));
+    });
+
+    [RelayCommand]
+    private async Task StartShiftAsync()
+    {
+        Notice = null;
+        if (!await RunAsync(() => svc.OpenShiftAsync(StartFloat, StartNote), _ => { })) return;
+        StartNote = "";
+        await LoadShiftAsync();
+        Notice = $"Shift started with a float of ₱{StartFloat:N2}.";
+    }
+
+    [RelayCommand] private void BeginClose() { IsClosing = true; Counted = null; CloseNote = ""; Notice = null; }
+    [RelayCommand] private void KeepShift() => IsClosing = false;
+
+    [RelayCommand]
+    private async Task EndShiftAsync()
+    {
+        Notice = null;
+        if (Shift is not { } open) return;
+        if (Counted is not { } count) { ErrorMessage = "Type the cash you counted in the drawer."; return; }
+        if (!await Confirm.AskAsync("End your shift?", $"Expected ₱{open.Expected:N2}\nCounted ₱{count:N2}\n{CountText}", "End shift")) return;
+        if (!await RunAsync(() => svc.CloseShiftAsync(count, CloseNote), _ => { })) return;
+        var words = CountText;
+        IsClosing = false; Counted = null; CloseNote = "";
+        await LoadShiftAsync();
+        Notice = $"Shift ended. Counted ₱{count:N2}: {words}.";
+    }
 
     // an item belongs to the kind (and member) it was listed for: change either and the pick goes
     partial void OnKindChanged(string value) { Item = null; _ = RefreshItemsAsync(); }
@@ -225,6 +276,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         Notice = $"Payment complete: ₱{paid!.Amount:N2}. Receipt {paid.ReceiptNo}.";
         Item = null; ReferenceNo = ""; DiscountCode = ""; WalkInName = "";
         await LoadCashAsync();
+        var notice = Notice; await LoadShiftAsync(); Notice = notice;
     }
 }
 
@@ -1433,6 +1485,7 @@ public partial class GymSettingsViewModel(IAdminService svc, IProofPicker picker
     [ObservableProperty] private decimal walkInPrice;
     [ObservableProperty] private TimeSpan opensAt = TimeSpan.FromHours(6);
     [ObservableProperty] private TimeSpan closesAt = TimeSpan.FromHours(22);
+    [ObservableProperty] private decimal openingFloat = 5000;   // F2: what each cashier's drawer starts with
     [ObservableProperty] private string qrStatus = "No QR uploaded yet. Members can't pay until you add one.";
     GymSettings? _loaded;
     (string FileName, byte[] Data)? _newQr;
@@ -1442,7 +1495,7 @@ public partial class GymSettingsViewModel(IAdminService svc, IProofPicker picker
     [RelayCommand]
     private Task LoadAsync() => RunAsync(svc.GymSettingsAsync, g =>
     {
-        _loaded = g; GymName = g.GymName; QrAccountName = g.QrAccountName; WalkInPrice = g.WalkInPrice; OpensAt = g.OpensAt; ClosesAt = g.ClosesAt;
+        _loaded = g; GymName = g.GymName; QrAccountName = g.QrAccountName; WalkInPrice = g.WalkInPrice; OpensAt = g.OpensAt; ClosesAt = g.ClosesAt; OpeningFloat = g.OpeningFloat;
         QrStatus = string.IsNullOrWhiteSpace(g.QrImagePath) ? "No QR uploaded yet. Members can't pay until you add one." : "A payment QR is set. Choose a new image to replace it.";
     });
 
@@ -1462,7 +1515,7 @@ public partial class GymSettingsViewModel(IAdminService svc, IProofPicker picker
         var qr = _newQr is null ? "" : "\nThe payment QR members scan will change.";
         if (!await Confirm.AskAsync("Save gym settings?", $"Open {DateTime.Today.Add(OpensAt):h:mm tt} to {DateTime.Today.Add(ClosesAt):h:mm tt} every day.{qr}", "Save settings")) return;
         _loaded.GymName = GymName.Trim(); _loaded.QrAccountName = string.IsNullOrWhiteSpace(QrAccountName) ? null : QrAccountName.Trim(); _loaded.WalkInPrice = WalkInPrice;
-        _loaded.OpensAt = OpensAt; _loaded.ClosesAt = ClosesAt;
+        _loaded.OpensAt = OpensAt; _loaded.ClosesAt = ClosesAt; _loaded.OpeningFloat = OpeningFloat;
         if (!await RunAsync(() => svc.SaveGymSettingsAsync(_loaded, _newQr))) return;
         _newQr = null;
         Notice = "Saved.";

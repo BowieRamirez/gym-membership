@@ -601,6 +601,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         if (SubscriptionCall(fn, a, out var subscriptionResult)) return subscriptionResult;
         if (ReservationCall(fn, a, out var reservationResult)) return reservationResult;
         if (RequestCall(fn, a, out var requestResult)) return requestResult;
+        if (CashShiftCall(fn, a, out var shiftResult)) return shiftResult;
         var now = SubscriptionNow;
         int I(string k) => Convert.ToInt32(a[k]);
         bool B(string k) => Convert.ToBoolean(a[k]);
@@ -671,6 +672,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (B("p_approve"))
                 {
                     if (pay.Method == PayMethod.Qr && pay.ExpiresAt <= now) throw Err("payment_expired");
+                    if (pay.Method == PayMethod.Cash) pay.CashShiftId = OpenShiftOf(uid);   // 0050
                     pay.Status = Status.Verified; pay.VerifiedBy = uid; pay.VerifiedAt = now; pay.ReceiptNo = ReceiptNo();
                     ActivateTarget(pay);
                     Notify(pay.MemberId, "payment", "Payment approved", pay.PaymentCode);
@@ -694,6 +696,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (memberId == uid) throw Err("self_verify");
                 var reference = Opt("p_reference_no");
                 if (method is PayMethod.Gcash or PayMethod.BankTransfer && reference is null) throw Err("bad_input");
+                int? shift = method == PayMethod.Cash ? OpenShiftOf(uid) : null;   // 0050: cash goes into the cashier's open drawer
                 var itemId = a.ContainsKey("p_item_id") ? I("p_item_id") : 0;
                 var d = (Id: (int?)null, Cut: 0m, Amount: 0m);
                 int? ump = null, ren = null, ua = null;
@@ -741,7 +744,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 {
                     PaymentCode = PaymentCode(), Kind = kind, Method = method, Status = Status.Verified, Amount = d.Amount, DiscountId = d.Id, DiscountAmount = d.Cut,
                     MemberId = memberId, WalkInName = walkIn, UserMembershipPackageId = ump, RenewalId = ren, UserAmenityId = ua, ReferenceNo = reference,
-                    RecordedBy = uid, VerifiedBy = uid, VerifiedAt = now, ReceiptNo = ReceiptNo(), CreatedAt = now
+                    RecordedBy = uid, VerifiedBy = uid, VerifiedAt = now, ReceiptNo = ReceiptNo(), CreatedAt = now, CashShiftId = shift
                 });
                 if (kind == PayKind.WalkIn) Add(new GymCheckIn { PaymentId = pay.Id, CheckedInAt = now });
                 else { ActivateTarget(pay); Notify(memberId, "payment", "Payment received", pay.PaymentCode); }

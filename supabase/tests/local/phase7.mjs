@@ -1,4 +1,4 @@
-import { start } from './harness.mjs';
+import { start, openCashShifts } from './harness.mjs';
 import assert from 'node:assert/strict';
 import pg from 'pg';
 
@@ -24,6 +24,7 @@ async function test(name, fn) {
   catch (e) { failed++; console.error('  FAIL', name, e.message); }
 }
 const admin = await user('admin'), desk = await user('employee'), stranger = await user();
+await openCashShifts(db);
 const [monthly, annual] = (await db.query(`insert into membership_packages(name,price,duration_days)
   values('Phase Seven Monthly',1000,30),('Phase Seven Annual',10000,365) returning membership_package_id`)).rows.map(x => x.membership_package_id);
 await db.query(`insert into discounts(code,percent,starts_at,expires_at,max_uses) values('PHASE7',10,now()-interval '1 day',now()+interval '1 day',100)`);

@@ -37,6 +37,7 @@ public class RefundRequest : BaseModel
     /// <summary>Had the term started when this was asked? Null: asked before the rule existed (0042).</summary>
     [Column("was_activated")] public bool? WasActivated { get; set; }
     [Column("review_reason")] public string? ReviewReason { get; set; }
+    [Column("cash_shift_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? CashShiftId { get; set; }   // F2 (0050): the drawer a cash refund came out of
     [Column("decided_by")] public string? DecidedBy { get; set; }
     [Column("decided_at")] public DateTime? DecidedAt { get; set; }
     [Column("decision_reason")] public string? DecisionReason { get; set; }

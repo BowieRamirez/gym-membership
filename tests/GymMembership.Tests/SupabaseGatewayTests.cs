@@ -538,6 +538,21 @@ public sealed class SupabaseGatewayTests : IDisposable
     }
 
     [Fact]
+    public async Task Cash_shift_rows_and_the_closed_shift_come_back_typed()
+    {
+        var gw = await SignedInAsync();
+        _reply = _ => (200, """[{"shift_id":7,"cashier":"Marco Santos","opened_at":"2026-11-09T01:00:00+00:00","closed_at":"2026-11-09T09:00:00+00:00","opening_float":5000.00,"cash_in":150.00,"cash_out":0,"expected":5150.00,"counted":5100.00,"difference":-50.00,"open_note":null,"close_note":"Gave change twice"}]""");
+        var row = (await new AdminService(gw).CashShiftsAsync(new(2026, 11, 9), new(2026, 11, 9))).Value!.Single();
+        Assert.Equal((7, "Marco Santos", 5150m, 5100m, -50m, "Gave change twice"), (row.Id, row.Cashier, row.Expected, row.Counted, row.Difference, row.CloseNote));
+        Assert.Equal("/rest/v1/rpc/cash_shifts_list", Last.Path);
+
+        _reply = _ => (200, """{"shift_id":7,"cashier_id":"u-emp","opened_at":"2026-11-09T01:00:00+00:00","opening_float":5000.00,"open_note":null,"closed_at":"2026-11-09T09:00:00+00:00","cash_in":150.00,"cash_out":0,"expected":5150.00,"counted":5100.00,"close_note":"Gave change twice"}""");
+        var closed = (await new PaymentStaffService(gw).CloseShiftAsync(5100, "Gave change twice")).Value!;
+        Assert.Equal((5150m, -50m), (closed.Expected, closed.Difference));
+        Assert.Equal(new[] { "p_counted", "p_note" }, Columns(Last.Body).Order());
+    }
+
+    [Fact]
     public async Task Reports_come_back_as_typed_rows_and_a_number_function_returns_a_number()
     {
         var gw = await SignedInAsync();

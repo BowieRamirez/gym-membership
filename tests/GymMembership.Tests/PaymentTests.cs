@@ -10,6 +10,7 @@ public class PaymentTests
     {
         gw ??= new DemoGateway();
         await gw.SignInAsync(email, DemoGateway.DemoPassword);
+        if (email is "employee@demo.io" or "admin@demo.io") await gw.OpenDrawerAsync();
         return gw;
     }
 
@@ -144,7 +145,7 @@ public class PaymentTests
         var free = (await gw.ListAsync<MembershipPackage>()).First(p => p.Name == "Monthly"); free.Price = 0; await gw.UpdateAsync(free);
         Assert.True((await new AdminService(gw).SaveDiscountAsync(new Discount { Code = "ALLFREE", Percent = 100, MaxUses = 5, ExpiresAt = DateTime.UtcNow.AddDays(1) })).Ok);
 
-        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();
         var staff = new PaymentStaffService(gw);
         Assert.Equal("zero_amount", (await staff.RecordCounterAsync(PayKind.WalkIn, PayMethod.Cash, null, null, "Pedro Ramos", null, null)).Message);
 

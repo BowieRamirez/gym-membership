@@ -43,7 +43,7 @@ public class CashierTests
 
     static async Task<(DemoGateway Gw, CashierViewModel Vm)> Open()
     {
-        var gw = new DemoGateway(); await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        var gw = new DemoGateway(); await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();
         var vm = new CashierViewModel(new PaymentStaffService(gw), new AttendanceService(gw));
         await vm.OnAppearingAsync();
         return (gw, vm);
@@ -195,6 +195,9 @@ public class CashierTests
         public Task<AppResult<bool>> VoidAsync(int paymentId, string reason) => throw new NotSupportedException();
         public Task<AppResult<IReadOnlyList<CashRow>>> CashSummaryAsync(DateOnly day) => Task.FromResult(AppResult<IReadOnlyList<CashRow>>.Success([]));
         public Task<AppResult<string?>> ProofUrlAsync(string proofPath) => throw new NotSupportedException();
+        public Task<AppResult<(CashShift? Open, decimal DefaultFloat)>> ShiftAsync() => Task.FromResult(AppResult<(CashShift?, decimal)>.Success((null, 5000m)));
+        public Task<AppResult<CashShift>> OpenShiftAsync(decimal openingFloat, string? note) => throw new NotSupportedException();
+        public Task<AppResult<CashShift>> CloseShiftAsync(decimal counted, string? note) => throw new NotSupportedException();
     }
 
     [Fact]

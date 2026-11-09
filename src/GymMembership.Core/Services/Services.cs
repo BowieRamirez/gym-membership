@@ -401,6 +401,10 @@ public interface IPaymentStaffService
     Task<AppResult<string?>> ProofUrlAsync(string proofPath);
     /// <summary>What can be sold for a kind of payment. Renewals are the member's own memberships, so they need a memberId.</summary>
     Task<AppResult<IReadOnlyList<CounterItem>>> ItemsAsync(string kind, string? memberId);
+    /// <summary>F2 (0050): the caller's open drawer shift (null when none) and the gym's opening float to start one with.</summary>
+    Task<AppResult<(CashShift? Open, decimal DefaultFloat)>> ShiftAsync();
+    Task<AppResult<CashShift>> OpenShiftAsync(decimal openingFloat, string? note);
+    Task<AppResult<CashShift>> CloseShiftAsync(decimal counted, string? note);
 }
 
 public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffService
@@ -452,6 +456,22 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
         (IReadOnlyList<CashRow>)(await gw.RpcAsync<List<CashRow>>("daily_cash_summary", new() { ["p_day"] = day.ToString("yyyy-MM-dd") }) ?? []));
 
     public Task<AppResult<string?>> ProofUrlAsync(string proofPath) => Safe.RunAsync(() => gw.SignedUrlAsync("payment-proofs", proofPath));
+
+    public Task<AppResult<(CashShift? Open, decimal DefaultFloat)>> ShiftAsync() => Safe.RunAsync(async () =>
+        ((await gw.RpcAsync<List<CashShift>>("my_cash_shift", new()) ?? []).FirstOrDefault(), (await gw.ListAsync<GymSettings>()).First().OpeningFloat));
+
+    public Task<AppResult<CashShift>> OpenShiftAsync(decimal openingFloat, string? note) => openingFloat < 0
+        ? Task.FromResult(AppResult<CashShift>.Fail(AppErrorKind.Validation, "bad_input"))
+        : Safe.RunAsync(() => gw.RpcAsync<CashShift>("open_cash_shift", new() { ["p_float"] = openingFloat, ["p_note"] = note?.Trim() ?? "" }));
+
+    public Task<AppResult<CashShift>> CloseShiftAsync(decimal counted, string? note) => counted < 0
+        ? Task.FromResult(AppResult<CashShift>.Fail(AppErrorKind.Validation, "bad_input"))
+        : Safe.RunAsync(async () =>
+        {
+            var closed = await gw.RpcAsync<CashShift>("close_cash_shift", new() { ["p_counted"] = counted, ["p_note"] = note?.Trim() ?? "" });
+            closed.Difference = closed.Counted - closed.Expected;   // the table row has no difference column; the list function adds it
+            return closed;
+        });
 
     public Task<AppResult<IReadOnlyList<CounterItem>>> ItemsAsync(string kind, string? memberId) => Safe.RunAsync<IReadOnlyList<CounterItem>>(async () =>
     {
@@ -1278,6 +1298,8 @@ public interface IAdminService
     Task<AppResult<IReadOnlyList<RevenueRow>>> RevenueAsync(DateOnly from, DateOnly to);
     /// <summary>Every receipt and approved refund in the range, all pages, for the PDF export.</summary>
     Task<AppResult<IReadOnlyList<RevenueLine>>> RevenueLinesAsync(DateOnly from, DateOnly to);
+    /// <summary>F2 (0050): every drawer shift opened in the range (Manila days), newest first. Admin and System admin.</summary>
+    Task<AppResult<IReadOnlyList<CashShift>>> CashShiftsAsync(DateOnly from, DateOnly to);
     /// <summary>One page of the audit log, newest first, filtered on the server (0045). Page 0 is the newest.</summary>
     Task<AppResult<AuditPage>> AuditPageAsync(AuditFilter filter, int page);
     /// <summary>Every row the filter matches, for the CSV export, read in pages of 1000.</summary>
@@ -1391,6 +1413,13 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
     {
         if (to < from) return AppResult<IReadOnlyList<RevenueRow>>.Fail(AppErrorKind.Validation, "to before from");
         return await Safe.RunAsync(async () => (IReadOnlyList<RevenueRow>)(await gw.RpcAsync<List<RevenueRow>>("revenue_summary",
+            new() { ["p_from"] = from.ToString("yyyy-MM-dd"), ["p_to"] = to.ToString("yyyy-MM-dd") }) ?? []));
+    }
+
+    public async Task<AppResult<IReadOnlyList<CashShift>>> CashShiftsAsync(DateOnly from, DateOnly to)
+    {
+        if (to < from) return AppResult<IReadOnlyList<CashShift>>.Fail(AppErrorKind.Validation, "to before from");
+        return await Safe.RunAsync(async () => (IReadOnlyList<CashShift>)(await gw.RpcAsync<List<CashShift>>("cash_shifts_list",
             new() { ["p_from"] = from.ToString("yyyy-MM-dd"), ["p_to"] = to.ToString("yyyy-MM-dd") }) ?? []));
     }
 

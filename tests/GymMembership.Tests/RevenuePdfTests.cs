@@ -111,7 +111,7 @@ public class RevenuePdfTests
         await vm.LoadCommand.ExecuteAsync(null);
         var before = vm.TotalText;
 
-        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);   // a walk-in is paid after the screen loaded
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();   // a walk-in is paid after the screen loaded
         Assert.True((await new PaymentStaffService(gw).RecordCounterAsync(PayKind.WalkIn, PayMethod.Cash, null, null, "Late Walk-in", null, null)).Ok);
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
 

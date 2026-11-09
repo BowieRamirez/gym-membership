@@ -5,20 +5,20 @@ using Xunit;
 
 public class SubscriptionTests
 {
-    sealed class Clock : TimeProvider
+    internal sealed class Clock : TimeProvider
     {
         public DateTimeOffset Now = new(2026, 10, 17, 4, 0, 0, TimeSpan.Zero);
         public override DateTimeOffset GetUtcNow() => Now;
     }
 
-    static async Task<(DemoGateway Gw, Clock Clock, SubscriptionService Svc, MembershipPackage Monthly, MembershipPackage Annual)> Setup()
+    internal static async Task<(DemoGateway Gw, Clock Clock, SubscriptionService Svc, MembershipPackage Monthly, MembershipPackage Annual)> Setup()
     {
         var clock = new Clock(); var gw = new DemoGateway(clock: clock);
         await gw.SignUpAsync("phase7@demo.io", "secret12", "Ana", "Reyes");
         var packages = await gw.ListAsync<MembershipPackage>();
         return (gw, clock, new SubscriptionService(gw, clock), packages.First(p => p.Name == "Monthly"), packages.First(p => p.Name == "Annual"));
     }
-    static async Task Verify(DemoGateway gw, Payment pay)
+    internal static async Task Verify(DemoGateway gw, Payment pay)
     {
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         Assert.True((await new PaymentStaffService(gw).VerifyAsync(pay.Id, true)).Ok);
@@ -133,6 +133,7 @@ public class SubscriptionTests
         Assert.False(row.CanDecide); Assert.True(row.CanRepay);
         Assert.Contains("manual repayment",vm.Notice); Assert.Contains("no transfer",vm.Notice);
         Assert.Null(row.Request.PaidAt);
+        await gw.OpenDrawerAsync();
         await vm.MarkPaidAsync(row,PayMethod.Cash,null);
         Assert.Equal("paid",Assert.Single(vm.Requests).Request.Status);
         Assert.False(Assert.Single(vm.Requests).CanRepay);
@@ -333,6 +334,7 @@ public class SubscriptionTests
         var received=await Net(); Assert.Equal(monthly.Price,received); var cash=await Cash();
         Assert.True((await svc.DecideAsync(request.Id,true,"Approved")).Ok);
         Assert.Equal(0m,await Net()); Assert.Equal(cash,await Cash());
+        await gw.OpenDrawerAsync();
         Assert.True((await svc.MarkPaidAsync(request.Id,PayMethod.Cash,null)).Ok);
         Assert.Equal(0m,await Net()); Assert.Equal(cash-monthly.Price,await Cash());
     }

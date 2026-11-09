@@ -1,5 +1,5 @@
 // Phase 2 (D3): voiding a payment and deciding/repaying a refund all need the payments:void grant.
-import { start } from './harness.mjs';
+import { start, openCashShifts } from './harness.mjs';
 import assert from 'node:assert/strict';
 
 const { server, client: db } = await start();
@@ -24,6 +24,7 @@ async function test(name, fn) {
 }
 const admin = await user('admin'), desk = await user('employee'), coach = await user('coach'), member = await user();
 const archivedAdmin = await user('admin');
+await openCashShifts(db);
 await db.query('update profiles set is_active=false where id=$1', [archivedAdmin]);
 const monthly = (await db.query(`insert into membership_packages(name,price,duration_days)
   values('Phase Two Monthly',1000,30) returning membership_package_id`)).rows[0].membership_package_id;

@@ -1,5 +1,5 @@
 // Behaviour tests for the migrations, run against the throwaway Postgres.
-import { start } from './harness.mjs';
+import { start, openCashShifts } from './harness.mjs';
 import assert from 'node:assert/strict';
 
 const { server, client: db } = await start();
@@ -33,6 +33,7 @@ const desk = await user('desk@t.io', 'employee', 'Desk');
 const coach = await user('coach@t.io', 'coach', 'Coach Kuts');
 const alex = await user('alex@t.io', 'member', 'Alex');
 const bea = await user('bea@t.io', 'member', 'Bea');
+await openCashShifts(db);
 await db.query(`insert into membership_packages (name, price, duration_days) values ('Monthly', 1000, 30), ('Annual', 10000, 365)`);
 await db.query(`insert into amenities (name, price, duration_days) values ('Boxing', 300, 30)`);
 await db.query(`insert into discounts (code, percent, starts_at, expires_at, max_uses) values ('WELCOME10', 10, now() - interval '1 day', now() + interval '30 days', 100),
