@@ -252,20 +252,6 @@ public partial class VoidPaymentsViewModel(IPaymentStaffService svc) : LoadableV
     }
 }
 
-public partial class VerifyAmenityUsagesViewModel(IAmenityService svc) : LoadableViewModel
-{
-    public ObservableCollection<UsageRow> Pending { get; } = new();
-
-    public override Task OnAppearingAsync() => LoadAsync();
-
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.PendingUsagesAsync, rows => Fill(Pending, rows));
-    [RelayCommand] private Task ApproveAsync(UsageRow row) => DecideAsync(row, true);
-    [RelayCommand] private Task RejectAsync(UsageRow row) => DecideAsync(row, false);
-
-    async Task DecideAsync(UsageRow row, bool approve)
-    { if (await RunAsync(() => svc.VerifyUsageAsync(row.Usage.Id, approve))) Pending.Remove(row); }
-}
-
 public partial class CheckInViewModel(IAttendanceService svc, ICoachService coaches, OfflineDesk? offline = null) : LoadableViewModel
 {
     public ObservableCollection<MemberHit> Hits { get; } = new();

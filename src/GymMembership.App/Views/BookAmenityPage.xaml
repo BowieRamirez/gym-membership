@@ -53,10 +53,13 @@
                     <Setter Property="BackgroundColor" Value="Transparent" />
                     <Setter Property="BorderColor" Value="Transparent" />
                 </DataTrigger>
-                <!-- can't be picked and has no plate colour: faded, so it never passes for a free cell -->
+                <!-- over: no box at all (D31), so on an evening visit only real choices have edges -->
                 <DataTrigger TargetType="Button" Binding="{Binding State}" Value="past">
-                    <Setter Property="Opacity" Value="0.3" />
+                    <Setter Property="BackgroundColor" Value="Transparent" />
+                    <Setter Property="BorderColor" Value="Transparent" />
                 </DataTrigger>
+                <!-- can't be picked and has no plate colour: faded, so it never passes for a free cell -->
+
                 <DataTrigger TargetType="Button" Binding="{Binding State}" Value="blocked">
                     <Setter Property="Opacity" Value="0.3" />
                 </DataTrigger>

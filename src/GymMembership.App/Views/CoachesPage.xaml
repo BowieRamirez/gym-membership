@@ -47,8 +47,8 @@
                             <FlexLayout Wrap="Wrap">
                                 <Button Text="Hire" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
                                         IsVisible="{Binding Hired, Converter={StaticResource Not}}" IsEnabled="{Binding Closed, Converter={StaticResource Not}}" Clicked="OnHire" />
-                                <Button Text="Message" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding Hired}" Clicked="OnMessage" />
-                                <Button Text="End hire" Style="{StaticResource FilterChip}" Margin="0,4,8,8" VerticalOptions="Start" IsVisible="{Binding Hired}" Clicked="OnEndHire" />
+                                <Button Text="Message" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding Hired}" Clicked="OnMessage" />
+                                <Button Text="End hire" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding Hired}" Clicked="OnEndHire" />
                             </FlexLayout>
                         </VerticalStackLayout>
                     </Border>

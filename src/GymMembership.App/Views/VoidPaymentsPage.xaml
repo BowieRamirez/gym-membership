@@ -52,7 +52,7 @@
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="12">
-            <Label Text="Payments are never edited: void a wrong one with a reason (it switches off what it paid for), then record it again correctly." Style="{StaticResource Muted}" />
+            <Label Text="Payments are never edited: void a wrong one with a reason (it switches off what it paid for), then record it again correctly." Style="{StaticResource Muted}" MaximumWidthRequest="760" HorizontalOptions="Start" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 

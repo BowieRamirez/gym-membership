@@ -89,6 +89,8 @@ try {
     $null = Wait-Id 'ArchiveEmpty'
     Write-Output 'PASS read-only details restore the archived plan; it disappears from the archive'
     Invoke-Name 'Sign out'
+    # sign-out asks first ("Sign out?"); WinUI names the dialog's confirm button PrimaryButton
+    Invoke-Element (Wait-Id 'PrimaryButton')
     Invoke-Name 'Front desk'
     $archiveLink = $root.FindFirst([Windows.Automation.TreeScope]::Descendants,
         (New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::NameProperty, 'Logs & Archive')))
