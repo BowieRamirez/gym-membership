@@ -2,7 +2,7 @@
 
 Created: 2026-11-09
 Last updated: 2026-11-09 (Phases 1 and 2 deployed and pushed; Phase 3 waits on F1, F2, F3)
-Status: Phases 1 and 2 DEPLOYED (`0048`, `0049` live; branch pushed at `6a4742c`). Phases 3 to 8 wait on their decisions in section 2.
+Status: Phases 1, 2 and 3 DEPLOYED (`0048`, `0049`, `0050` live; Phase 3 commits not pushed to GitHub yet). Phases 4 to 8 wait on their decisions in section 2.
 Branch: `security-admin-cleanup-2026-11-05`, the same branch as the finished 2026-11-05 plan (owner, 2026-11-09). Not merged to `main` yet; the owner merges when this plan is done.
 
 **Goal:** Work through the owner's 12-item list of features and improvements (received 2026-11-09): a cashier drawer shift, live records and rotating member QR codes, discount locks, chat with every staff role, a merged coach profile, a member calendar, a membership-aware menu, a new amenity booking flow with desk payment and refunds, announcements, a cheat-proof manual check-in, time requests in chat, and coach-assigned amenities.
@@ -35,10 +35,10 @@ Status vocabulary: `PLANNED`, `WAITING` (decisions open), `IN PROGRESS`, `BLOCKE
 
 ### Current work / restart here
 
-- **2026-11-10 (Phase 3):** database, Core and screens done, verified and committed; `0050` push is the last step (see the Phase 3 push line).
+- **2026-11-10:** Phase 3 done, verified, committed (`ba91955`) and `0050` live. **Since `0050` is live, desk apps from before Phase 3 can't take cash** (they have no Start shift, so every cash payment and cash refund is refused with "no_open_shift"): every desk needs the new build, and each cashier starts a shift at the Cashier page. GCash and bank transfers are unaffected.
+- Next concrete action: owner answers F9, F10, F11 for Phase 4 (messaging). `git push` of the Phase 3 commits waits for the owner.
 - **2026-11-09:** Phases 1 and 2 done, verified, committed, and their migrations (`0048`, `0049`) live. Unrelated, left alone: `2026-10-30-visual-redesign.md`, `.impeccable/config.json` (now also holds the desk-pin mockup's radial-halo ignore), two PDFs in `docs/`.
 - **Since `0049` is live, desk apps from before Phase 2 can't check anyone in** (their scans read "old code", their by-name check-ins have no PIN): every desk needs the new build. Members set their desk PIN in Settings; the demo's Alex has `1234`.
-- Next concrete action: owner answers F1, F2, F3 for Phase 3 (cash-drawer shift).
 
 ## 1. Repository findings
 
@@ -90,7 +90,7 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 | --- | --- | --- | --- | --- |
 | 1 | Discount locks and codes on Packages | 3, 2 (codes) | F5, F7 | DEPLOYED |
 | 2 | Rotating member QR and cheat-proof manual check-in | 2 (QR), 10 | F6, F8 | DEPLOYED |
-| 3 | Cash-drawer shift | 1 | F1, F2, F3 | IN PROGRESS |
+| 3 | Cash-drawer shift | 1 | F1, F2, F3 | DEPLOYED |
 | 4 | Messaging: staff chat, announcements and the 1-week alert, requests in chat | 4, 9, 11 | F9, F10, F11 | WAITING |
 | 5 | Amenity booking, payment, refunds, coach-assigned amenities | 8, 12 | F12, F13, F14 | WAITING |
 | 6 | Member calendar, menu order, coach Profile & settings | 6, 7, 5 | F15, F16, F17 | WAITING |
@@ -114,7 +114,7 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 - [x] Database (`0050`), 2026-11-09: `cash_shifts` (no grants: functions only; one open per cashier by a partial unique index), `gym_settings.opening_float` (5000), `payments.cash_shift_id` and `refund_requests.cash_shift_id` set by triggers (every path that takes or pays back cash, not each function; writes with no signed-in user are left alone), `open_cash_shift`, `close_cash_shift` (stores cash in, out, expected, count), `my_cash_shift`, `cash_shifts_list` (reports:revenue, so Admin and System admin). `cash-shifts.mjs` 11/11 (watched fail first); seven older DB files open shifts for their cashiers (`openCashShifts` in `harness.mjs`), `crud-rules` approves `cash_shifts` as `----`; all 26 DB files pass. Original text: `cash_shifts` (cashier, opened_at, float, closed_at, counted, expected, note) and `gym_settings.opening_float numeric(12,2) default 5000`; `open_cash_shift(p_float, p_note)`, `close_cash_shift(p_counted, p_note)`; cash payments and cash refunds paid out get `cash_shift_id`, and taking cash without an open shift is refused (`no_open_shift`). Tests: two open shifts for one cashier refused; cash refused with no shift; expected = float + cash in − cash out; a closed shift can't change. Mirror in `DemoGateway`.
 - [x] Core, 2026-11-09: `CashShift`, `CashCount.Words`, `IPaymentStaffService.ShiftAsync/OpenShiftAsync/CloseShiftAsync`, `IAdminService.CashShiftsAsync`, `ErrorText` for `no_open_shift`, `shift_open`, `note_required`, Cashier start/end states, Gym settings `OpeningFloat`, audit labels; demo mirror in `DemoCashShifts.cs`. `CashShiftTests` (incl. expected with a cash refund paid out) and a gateway JSON test; 11 older tests open a drawer first (`TestDrawer.OpenDrawerAsync`). xUnit 924/924; mutation check (demo shift rule and expected switched off) fails 3 tests. Original text: `CashShift` model, `CashierViewModel` open/close states, the expected total in Core with an xUnit test including a refund paid out.
 - [x] Screens, 2026-11-10: mockup `docs/mockups/cash-shift.html` approved by the owner ("Approve as shown": the drawer strip replaces "Net cash today", which summed every cashier). Built to it; captured on Windows (System admin at the Cashier: start, different float, open, ending short, ending matches, ended; Revenue; Gym settings) at 1600 dark and 1100 light, where the Cash shifts table folds into cards (`TableBody`). Critique snapshot `.impeccable/critique/2026-11-10T00-05-00Z__src-gymmembership-app-views-cashierpage-xaml.md` (32/40); fixed: Note header crowding, light-theme outline (ink, as the PIN step), end notice wording, Gym settings caption spacing; polish: Enter starts and ends the shift. Complete payment waits for a shift when Cash is chosen. Cash shifts PDF: `CashShiftPdf` on the revenue PDF's table code (`RevenuePdf.Document`). The cashier's role under the name (mockup) is not shown: the list returns names only. All three UI scripts pass. Original text: Screens (Windows only; `impeccable shape`, mockup, owner approves): Cashier opens on "Start shift" when none is open (float prefilled from Gym settings); a shift strip while open (since, float, cash in, expected); "End shift" with the count, difference and note; Revenue gets "Cash shifts" with a printable summary; Gym settings gets the opening float. Then critique and polish.
-- [ ] Push live; `ponytail-review`; plan updated.
+- [x] Push live; `ponytail-review`; plan updated. 2026-11-10: dry run listed only `0050`; pushed with `--remote --yes` (standing rule); follow-up dry run "Remote database is up to date". `ponytail-review`: three cuts applied (see the session log). All three UI scripts pass.
 
 ### Phase 4: messaging (items 4, 9, 11)
 - [ ] Database: F9 — staff threads for members and coaches with a target role (`front_desk`, `admin`, `system_admin`), visibility by role as in F9 (extends `support_threads` rather than a second chat system). F10 — `announcements` (author, body, audience, posted_at) readable by the audience only, insert by Admin and System admin; `send_expiry_reminders` adds the 7-day message. F11 — `messages.kind` (`text` or `request`) with a reference to the request; `request_session` and `respond_time_request` (and the invitation path) insert the automatic message in the right person's name. Tests: a coach reaches the Admin queue; front desk can't read the System admin queue; nobody but Admin and System admin posts announcements; a member can't post into Announcements; one request makes exactly one message; the 7-day reminder fires once. Realtime publication for the new tables.
