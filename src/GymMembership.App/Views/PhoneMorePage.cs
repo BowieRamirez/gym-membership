@@ -9,7 +9,7 @@ public sealed class PhoneMorePage : ContentPage
     static readonly Dictionary<string, string> Icons = new()
     {
         ["Amenities"] = "waves", ["Book an amenity"] = "calendar-plus", ["Coaches"] = "users", ["Time requests"] = "calendar-clock",
-        ["My coach profile"] = "user-round",
+        ["Profile & settings"] = "user-round", ["Renew or change"] = "package", ["Calendar"] = "calendar",
     };
 
     public PhoneMorePage((string Title, string Route)[] destinations, Func<string, Task> open)

@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.MemberCalendarPage" x:DataType="vm:MemberCalendarViewModel" Title="Calendar">
+
+    <v:BasePage.Resources>
+        <!-- a seventh of the month's width, less the gap (set in OnMonthSized), so a long label is cut inside its day, not drawn past it -->
+        <x:Double x:Key="TileWidth">40</x:Double>
+        <!-- one dot per kind (approved mockup): your session yellow (ink in light), booking green, your coach's open time a blue ring,
+             your coach on the floor grey. The kind rides on ClassId so one style serves every dot. -->
+        <Style x:Key="KindDot" TargetType="Ellipse">
+            <Setter Property="WidthRequest" Value="7" />
+            <Setter Property="HeightRequest" Value="7" />
+            <Setter Property="VerticalOptions" Value="Center" />
+            <Setter Property="StrokeThickness" Value="0" />
+            <Setter Property="Fill" Value="{AppThemeBinding Light={StaticResource EdgeLight}, Dark={StaticResource EdgeDark}}" />
+            <Style.Triggers>
+                <Trigger TargetType="Ellipse" Property="ClassId" Value="session"><Setter Property="Fill" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /></Trigger>
+                <Trigger TargetType="Ellipse" Property="ClassId" Value="booking"><Setter Property="Fill" Value="{AppThemeBinding Light={StaticResource GoodLight}, Dark={StaticResource GoodDark}}" /></Trigger>
+                <Trigger TargetType="Ellipse" Property="ClassId" Value="open">
+                    <Setter Property="Fill" Value="Transparent" />
+                    <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource ScheduledLight}, Dark={StaticResource ScheduledDark}}" />
+                    <Setter Property="StrokeThickness" Value="1.5" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </v:BasePage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="12" MaximumWidthRequest="{StaticResource PageWidth}">
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+            <!-- Windows: the month, the chosen day beside it; phones: one column -->
+            <Grid ColumnDefinitions="{OnIdiom Phone='*', Default='*,300'}" RowDefinitions="{OnIdiom Phone='Auto,Auto', Default='Auto'}" ColumnSpacing="16" RowSpacing="12">
+                <Border Style="{StaticResource Panel}" Padding="{OnIdiom Phone=10, Default=14}" VerticalOptions="Start">
+                    <VerticalStackLayout Spacing="8">
+                        <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" ColumnSpacing="6">
+                            <Button Text="‹" Style="{StaticResource FilterChip}" WidthRequest="44" Padding="0" Command="{Binding PreviousMonthCommand}" SemanticProperties.Description="Previous month" />
+                            <Label Grid.Column="1" Text="{Binding MonthText}" FontFamily="BarlowSemiBold" FontSize="18" VerticalOptions="Center" Margin="6,0" />
+                            <Button Grid.Column="2" Text="›" Style="{StaticResource FilterChip}" WidthRequest="44" Padding="0" Command="{Binding NextMonthCommand}" SemanticProperties.Description="Next month" />
+                            <Button Grid.Column="4" Text="Today" Style="{StaticResource FilterChip}" Command="{Binding TodayCommand}" />
+                        </Grid>
+                        <Grid ColumnDefinitions="*,*,*,*,*,*,*">
+                            <Label Text="{OnIdiom Phone=M, Default=Mon}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                            <Label Grid.Column="1" Text="{OnIdiom Phone=T, Default=Tue}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                            <Label Grid.Column="2" Text="{OnIdiom Phone=W, Default=Wed}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                            <Label Grid.Column="3" Text="{OnIdiom Phone=T, Default=Thu}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                            <Label Grid.Column="4" Text="{OnIdiom Phone=F, Default=Fri}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                            <Label Grid.Column="5" Text="{OnIdiom Phone=S, Default=Sat}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                            <Label Grid.Column="6" Text="{OnIdiom Phone=S, Default=Sun}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                        </Grid>
+                        <FlexLayout x:Name="Month" Wrap="Wrap" AlignContent="Start" BindableLayout.ItemsSource="{Binding Days}" SizeChanged="OnMonthSized">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="svc:MemberDay">
+                                    <!-- the coach Dashboard's day tile: today on a yellow block, the chosen day outlined -->
+                                    <Border Style="{StaticResource Row}" WidthRequest="{DynamicResource TileWidth}" Padding="{OnIdiom Phone='4,6', Default=6}" HeightRequest="{OnIdiom Phone=52, Default=86}"
+                                            Margin="2" StrokeShape="RoundRectangle 10" StrokeThickness="2" Stroke="Transparent">
+                                        <Border.Triggers>
+                                            <DataTrigger TargetType="Border" Binding="{Binding Dimmed}" Value="True"><Setter Property="Opacity" Value="0.45" /></DataTrigger>
+                                            <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
+                                                <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
+                                            </DataTrigger>
+                                        </Border.Triggers>
+                                        <Grid RowDefinitions="Auto,*">
+                                            <Border StrokeThickness="0" StrokeShape="RoundRectangle 6" Padding="5,0" HorizontalOptions="Start" BackgroundColor="Transparent">
+                                                <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding IsToday}" Value="True"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /></DataTrigger></Border.Triggers>
+                                                <Label Text="{Binding Number}" FontFamily="BarlowSemiBold" FontSize="14">
+                                                    <Label.Triggers><DataTrigger TargetType="Label" Binding="{Binding IsToday}" Value="True"><Setter Property="TextColor" Value="{StaticResource Black}" /></DataTrigger></Label.Triggers>
+                                                </Label>
+                                            </Border>
+                                            <!-- Windows: the first two entries in a word, then "+n more" -->
+                                            <VerticalStackLayout Grid.Row="1" Spacing="2" Margin="5,3,0,0" IsVisible="{OnIdiom Phone=False, Default=True}">
+                                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="5" IsVisible="{Binding Entry1, Converter={StaticResource HasText}}">
+                                                    <Ellipse Style="{StaticResource KindDot}" ClassId="{Binding Kind1}" />
+                                                    <Label Grid.Column="1" Text="{Binding Entry1}" Style="{StaticResource Caption}" FontSize="12" LineBreakMode="TailTruncation" MaxLines="1" />
+                                                </Grid>
+                                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="5" IsVisible="{Binding Entry2, Converter={StaticResource HasText}}">
+                                                    <Ellipse Style="{StaticResource KindDot}" ClassId="{Binding Kind2}" />
+                                                    <Label Grid.Column="1" Text="{Binding Entry2}" Style="{StaticResource Caption}" FontSize="12" LineBreakMode="TailTruncation" MaxLines="1" />
+                                                </Grid>
+                                                <Label Text="{Binding More}" Style="{StaticResource Caption}" FontSize="12" IsVisible="{Binding More, Converter={StaticResource HasText}}" />
+                                            </VerticalStackLayout>
+                                            <!-- phones: a dot per kind, no names -->
+                                            <HorizontalStackLayout Grid.Row="1" Spacing="3" Margin="5,0,0,2" VerticalOptions="End" IsVisible="{OnIdiom Phone=True, Default=False}">
+                                                <Ellipse Style="{StaticResource KindDot}" ClassId="session" WidthRequest="6" HeightRequest="6" IsVisible="{Binding HasSession}" />
+                                                <Ellipse Style="{StaticResource KindDot}" ClassId="booking" WidthRequest="6" HeightRequest="6" IsVisible="{Binding HasBooking}" />
+                                                <Ellipse Style="{StaticResource KindDot}" ClassId="open" WidthRequest="6" HeightRequest="6" IsVisible="{Binding HasOpen}" />
+                                            </HorizontalStackLayout>
+                                            <!-- a clear button over the whole day: keyboard and screen readers reach every day, not just a tap -->
+                                            <Button Grid.RowSpan="2" BackgroundColor="Transparent" BorderWidth="0" Text=""
+                                                    SemanticProperties.Description="{Binding Description}" Clicked="OnDay" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </FlexLayout>
+                        <!-- the key: shown on Windows; on a phone the day list below says what each thing is -->
+                        <FlexLayout Wrap="Wrap" Margin="4,2,0,0" IsVisible="{OnIdiom Phone=False, Default=True}">
+                            <HorizontalStackLayout Spacing="6" Margin="0,0,16,4"><Ellipse Style="{StaticResource KindDot}" ClassId="session" /><Label Text="Your session" Style="{StaticResource Caption}" /></HorizontalStackLayout>
+                            <HorizontalStackLayout Spacing="6" Margin="0,0,16,4"><Ellipse Style="{StaticResource KindDot}" ClassId="booking" /><Label Text="Amenity booking" Style="{StaticResource Caption}" /></HorizontalStackLayout>
+                            <HorizontalStackLayout Spacing="6" Margin="0,0,16,4" IsVisible="{Binding HasCoach}"><Ellipse Style="{StaticResource KindDot}" ClassId="open" /><Label Text="Your coach's open time" Style="{StaticResource Caption}" /></HorizontalStackLayout>
+                            <HorizontalStackLayout Spacing="6" Margin="0,0,16,4" IsVisible="{Binding HasCoach}"><Ellipse Style="{StaticResource KindDot}" ClassId="shift" /><Label Text="Your coach on the floor" Style="{StaticResource Caption}" /></HorizontalStackLayout>
+                        </FlexLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- the chosen day: each thing on it, and the one thing you can do with it -->
+                <Border Grid.Column="{OnIdiom Phone=0, Default=1}" Grid.Row="{OnIdiom Phone=1, Default=0}" Style="{StaticResource Panel}" VerticalOptions="Start">
+                    <VerticalStackLayout Spacing="0">
+                        <Label Text="{Binding DayText}" FontFamily="BarlowSemiBold" FontSize="18" />
+                        <Label Text="Nothing this day." Style="{StaticResource Muted}" Margin="0,8,0,4" IsVisible="{Binding DayIsEmpty}" />
+                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding DayEntries}" Margin="0,4,0,0">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="svc:CalendarEntry">
+                                    <VerticalStackLayout>
+                                        <BoxView Style="{StaticResource Hairline}" />
+                                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="2" Padding="0,12">
+                                            <Ellipse Style="{StaticResource KindDot}" ClassId="{Binding Kind}" VerticalOptions="Start" Margin="0,6,0,0" />
+                                            <Label Grid.Column="1" Text="{Binding Title}" FontFamily="BarlowSemiBold" LineBreakMode="WordWrap" />
+                                            <Label Grid.Column="1" Grid.Row="1" Text="{Binding Time}" Style="{StaticResource Caption}" />
+                                            <HorizontalStackLayout Grid.Column="1" Grid.Row="2" Margin="0,6,0,0" IsVisible="{Binding CanRequest}">
+                                                <Button Text="Ask for this time" Style="{StaticResource SmallButton}" Clicked="OnRequest"
+                                                        SemanticProperties.Hint="Sends a time request to your coach, as on Time requests." />
+                                            </HorizontalStackLayout>
+                                            <HorizontalStackLayout Grid.Column="1" Grid.Row="2" Margin="0,6,0,0" IsVisible="{Binding CanOpen}">
+                                                <Button Text="Open" Style="{StaticResource SmallOutlineButton}" Clicked="OnOpen" SemanticProperties.Hint="Opens Book an amenity." />
+                                            </HorizontalStackLayout>
+                                        </Grid>
+                                    </VerticalStackLayout>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+                        <BoxView Style="{StaticResource Hairline}" />
+                        <Label Text="{Binding HoursText}" Style="{StaticResource Caption}" Margin="0,10,0,0" />
+                    </VerticalStackLayout>
+                </Border>
+            </Grid>
+        </VerticalStackLayout>
+    </ScrollView>
+</v:BasePage>

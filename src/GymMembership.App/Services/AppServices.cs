@@ -41,6 +41,8 @@ public sealed class AppNavigator(IServiceProvider sp) : IAppNavigator
 
     public void GoToMessages() => MainThread.BeginInvokeOnMainThread(async () => await GymMembership.App.Controls.PhoneNavigation.GoToAsync(Shell.Current, "//messages"));
 
+    public void GoToBookings() => MainThread.BeginInvokeOnMainThread(async () => await GymMembership.App.Controls.PhoneNavigation.GoToAsync(Shell.Current, "//bookings"));
+
     public void GoToRequests() => MainThread.BeginInvokeOnMainThread(async () => await GymMembership.App.Controls.PhoneNavigation.GoToAsync(Shell.Current, "//requests"));
 
     public void ApplyTheme(string theme) => MainThread.BeginInvokeOnMainThread(() =>

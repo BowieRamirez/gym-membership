@@ -13,6 +13,10 @@ public partial class MemberShell : Shell
 	{
 		InitializeComponent();
 		_sp = sp; _access = access;
+		// F16: the menu follows the membership (Core.Services.MemberMenu, the same list the phone reads)
+		var byPage = Items.ToDictionary(i => i.Title);
+		Items.Clear();
+		foreach (var entry in MemberMenu.Order(access.Active)) { var item = byPage[entry.Page]; item.Title = entry.Title; Items.Add(item); }
 		((Controls.HeaderBar)GetTitleView(this)).Attach(this, sp);
 		if (!access.Active)
 			foreach (var item in Items.Where(i => i.ClassId == "members-only"))

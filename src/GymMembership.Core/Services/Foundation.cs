@@ -213,6 +213,8 @@ public interface IAppNavigator
     /// <summary>Time requests, for a member or a coach (F11: a request message links there).</summary>
     void GoToRequests();
     void GoToMembership();
+    /// <summary>Book an amenity, for a member (F15: a booking on the Calendar opens it).</summary>
+    void GoToBookings() { }
     void ApplyTheme(string theme);
 }
 

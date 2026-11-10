@@ -21,7 +21,7 @@
     <FlyoutItem Title="Time requests" Route="requests"><ShellContent ContentTemplate="{DataTemplate views:RequestsPage}" /></FlyoutItem>
     <FlyoutItem Title="Trainees &amp; shifts"><ShellContent ContentTemplate="{DataTemplate views:TraineesPage}" /></FlyoutItem>
     <FlyoutItem Title="Messages" Route="messages"><ShellContent ContentTemplate="{DataTemplate views:MessagesPage}" /></FlyoutItem>
-    <FlyoutItem Title="My coach profile"><ShellContent ContentTemplate="{DataTemplate views:CoachProfilePage}" /></FlyoutItem>
     <FlyoutItem Title="Amenities"><ShellContent ContentTemplate="{DataTemplate views:AmenitiesPage}" /></FlyoutItem>
-    <FlyoutItem Title="Settings" Route="settings"><ShellContent ContentTemplate="{DataTemplate views:SettingsPage}" /></FlyoutItem>
+    <!-- F17: the coach profile and the account settings are one page; the account menu's Settings opens it -->
+    <FlyoutItem Title="Profile &amp; settings" Route="settings"><ShellContent ContentTemplate="{DataTemplate views:CoachProfilePage}" /></FlyoutItem>
 </Shell>

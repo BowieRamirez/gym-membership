@@ -159,12 +159,11 @@
                                 <BindableLayout.ItemTemplate>
                                     <DataTemplate x:DataType="svc:CalendarDay">
                                         <Border Style="{StaticResource Row}" FlexLayout.Basis="14.2857%" Padding="{OnIdiom Phone='4,6', Default=6}" HeightRequest="{OnIdiom Phone=58, Default=86}"
-                                                Margin="2" StrokeShape="RoundRectangle 10" SemanticProperties.Description="{Binding Description}">
+                                                Margin="2" StrokeShape="RoundRectangle 10" StrokeThickness="2" Stroke="Transparent" SemanticProperties.Description="{Binding Description}">
                                             <Border.Triggers>
                                                 <DataTrigger TargetType="Border" Binding="{Binding Dimmed}" Value="True"><Setter Property="Opacity" Value="0.45" /></DataTrigger>
                                                 <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
                                                     <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
-                                                    <Setter Property="StrokeThickness" Value="2" />
                                                 </DataTrigger>
                                             </Border.Triggers>
                                             <Border.GestureRecognizers><TapGestureRecognizer Tapped="OnDay" /></Border.GestureRecognizers>

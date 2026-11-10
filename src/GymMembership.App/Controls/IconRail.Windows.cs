@@ -31,7 +31,7 @@ public static class IconRail
         ["Messages"] = "message-square",
         ["Settings"] = "settings",
         ["My membership"] = "id-card",
-        ["Packages"] = "package",
+        ["Packages"] = "package", ["Renew or change"] = "package", ["Calendar"] = "calendar",
         ["Amenities"] = "waves",
         ["Book an amenity"] = "calendar-plus",
         ["Coaches"] = "dumbbell",
@@ -39,7 +39,7 @@ public static class IconRail
         ["Time requests"] = "clock",
         ["Dashboard"] = "layout-dashboard",
         ["Trainees & shifts"] = "users",
-        ["My coach profile"] = "user-round",
+        ["Profile & settings"] = "user-round",
     };
 
     public static void Install(Shell shell, string roleName, HeaderViewModel header, bool groupFrontDesk)

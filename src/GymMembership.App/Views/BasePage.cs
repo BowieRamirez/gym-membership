@@ -52,6 +52,20 @@ public class BasePage : ContentPage
         host.Content = content;
     }
 
+    /// <summary>
+    /// F17: another page's content shown below this one's (no switch), loaded and released with this page. Its scroll view is dropped and
+    /// its padding zeroed, so the combined page scrolls as one.
+    /// </summary>
+    protected void HostBelow(ContentView host, ContentPage part)
+    {
+        _part = part;
+        var content = part.Content;
+        if (content is ScrollView { Content: { } inner } scroll) { scroll.Content = null; content = inner; } else part.Content = null;
+        if (content is Layout layout) layout.Padding = 0;
+        content.BindingContext = part.BindingContext;
+        host.Content = content;
+    }
+
     /// <summary>A page that shows live data returns how often to reload while it is open; null means only when it opens.</summary>
     protected virtual TimeSpan? AutoRefresh => null;
 

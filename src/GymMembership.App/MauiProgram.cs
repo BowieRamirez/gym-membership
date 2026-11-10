@@ -89,6 +89,7 @@ public static class MauiProgram
 		s.AddSingleton<IPaymentStaffService, PaymentStaffService>();
 		s.AddSingleton<IAmenityService, AmenityService>();
 		s.AddSingleton<IReservationService, ReservationService>();
+		s.AddSingleton<IMemberCalendarService, MemberCalendarService>();
 		s.AddSingleton<ICoachService, CoachService>();
 		s.AddSingleton<ISessionService, SessionService>();
 		s.AddSingleton<IAttendanceService, AttendanceService>();

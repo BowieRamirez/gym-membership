@@ -43,7 +43,7 @@ public class PhoneNavigationTests
         var source = Read("Controls/PhoneNavigation.cs");
         Assert.Contains("(\"Dashboard\", \"Dashboard\", \"overview\"), (\"Sessions\", \"Sessions\", \"sessions\"), (\"Trainees & shifts\", \"Trainees\", \"trainees\"), (\"Messages\", \"Messages\", \"messages\")", source);
         Assert.Contains("<FlyoutItem Title=\"Dashboard\" Route=\"dashboard\"><ShellContent ContentTemplate=\"{DataTemplate views:AttendancePage}\" />", Read("CoachShell.xaml"));
-        Assert.Contains("(\"My membership\", \"Membership\", \"membership\"), (\"Packages\", \"Packages\", \"packages\"), (\"Sessions\", \"Sessions\", \"sessions\"), (\"Messages\", \"Messages\", \"messages\")", source);
+        Assert.Contains("MemberMenu.Tabs(access?.Active ?? true)", source);   // F16: member tabs follow the membership (MemberCalendarTests pins the order)
         Assert.Contains("_bar.Items.Add(_more)", source);
         Assert.Contains("new PhoneMorePage", source);
         Assert.Contains("FlyoutBehavior.Disabled", source);
@@ -55,7 +55,9 @@ public class PhoneNavigationTests
     [InlineData("Amenities", "AmenitiesPage")]
     [InlineData("Coaches", "CoachesPage")]
     [InlineData("Time requests", "RequestsPage")]
-    [InlineData("My coach profile", "CoachProfilePage")]
+    [InlineData("Profile & settings", "CoachProfilePage")]
+    [InlineData("Calendar", "MemberCalendarPage")]
+    [InlineData("Renew or change", "PackagesPage")]
     [InlineData("Settings", "SettingsPage")]
     public void Every_more_destination_has_an_explicit_dependency_injected_page_factory(string title, string page)
     {
@@ -128,6 +130,7 @@ public class PhoneNavigationTests
 
     [Theory]
     [InlineData("membership")]
+    [InlineData("calendar")]
     [InlineData("packages")]
     [InlineData("sessions")]
     [InlineData("requests")]

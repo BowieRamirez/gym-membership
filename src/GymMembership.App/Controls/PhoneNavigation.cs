@@ -43,6 +43,13 @@ public sealed class PhoneNavigation
 #endif
     }
 
+    // a member menu page that can be a tab: its short tab title and its icon (phone_<icon>.png)
+    static readonly Dictionary<string, (string, string, string)> MemberTabs = new()
+    {
+        ["My membership"] = ("My membership", "Membership", "membership"), ["Packages"] = ("Packages", "Packages", "packages"),
+        ["Calendar"] = ("Calendar", "Calendar", "calendar"), ["Sessions"] = ("Sessions", "Sessions", "sessions"), ["Messages"] = ("Messages", "Messages", "messages"),
+    };
+
     public static void Attach(Shell shell, bool coach, IServiceProvider services, Access? access = null)
     {
         if (!IsSupported) return;
@@ -56,18 +63,19 @@ public sealed class PhoneNavigation
         var original = shell.Items.ToList();
         var primary = coach
             ? new[] { ("Dashboard", "Dashboard", "overview"), ("Sessions", "Sessions", "sessions"), ("Trainees & shifts", "Trainees", "trainees"), ("Messages", "Messages", "messages") }
-            : new[] { ("My membership", "Membership", "membership"), ("Packages", "Packages", "packages"), ("Sessions", "Sessions", "sessions"), ("Messages", "Messages", "messages") };
+            : MemberMenu.Tabs(access?.Active ?? true).Select(t => MemberTabs[t.Page]).ToArray();   // F16: the order follows the membership
         var pageTypes = new Dictionary<string, Type>
         {
             ["Amenities"] = typeof(AmenitiesPage), ["Book an amenity"] = typeof(BookAmenityPage), ["Coaches"] = typeof(CoachesPage),
             ["Time requests"] = typeof(RequestsPage),
-            ["My coach profile"] = typeof(CoachProfilePage),
+            ["Profile & settings"] = typeof(CoachProfilePage), ["Calendar"] = typeof(MemberCalendarPage), ["Renew or change"] = typeof(PackagesPage),
             ["Settings"] = typeof(SettingsPage)
         };
         var secondary = original.Where(item => !primary.Any(p => p.Item1 == item.Title)).ToList();
         foreach (var item in secondary)
         {
-            var route = item.Title == "Settings" ? "settings" : item.Title;
+            // a page with its own route (settings, packages, requests, bookings) opens by it, wherever it sits in the order
+            var route = string.IsNullOrEmpty(item.Route) || item.Route.StartsWith("D_FAULT", StringComparison.Ordinal) ? item.Title : item.Route;
             var source = item.Items[0].Items[0];
             // Locked templates are closures; ordinary pages need their registered view models.
             if (item.ClassId != "members-only" || access?.Active != false)
@@ -93,7 +101,7 @@ public sealed class PhoneNavigation
         {
             Route = "menu",
             ContentTemplate = new DataTemplate(() => new PhoneMorePage(moreItems.Select(item =>
-                (item.Title, item.Title == "Settings" ? "settings" : item.Title)).ToArray(), OpenSecondaryAsync))
+                (item.Title, string.IsNullOrEmpty(item.Route) || item.Route.StartsWith("D_FAULT", StringComparison.Ordinal) ? item.Title : item.Route)).ToArray(), OpenSecondaryAsync))
         });
         _bar.Items.Add(_more);
         shell.Items.Clear();

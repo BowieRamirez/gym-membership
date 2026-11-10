@@ -153,12 +153,11 @@
                                     <BindableLayout.ItemTemplate>
                                         <DataTemplate x:DataType="vm:BookDay">
                                             <Border Style="{StaticResource Row}" FlexLayout.Basis="14.2857%" Padding="{OnIdiom Phone='4,4', Default=6}" HeightRequest="{OnIdiom Phone=46, Default=58}"
-                                                    Margin="2" StrokeShape="RoundRectangle 10">
+                                                    Margin="2" StrokeShape="RoundRectangle 10" StrokeThickness="2" Stroke="Transparent">
                                                 <Border.Triggers>
                                                     <DataTrigger TargetType="Border" Binding="{Binding Dimmed}" Value="True"><Setter Property="Opacity" Value="0.38" /></DataTrigger>
                                                     <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
                                                         <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
-                                                        <Setter Property="StrokeThickness" Value="2" />
                                                     </DataTrigger>
                                                 </Border.Triggers>
                                                 <Grid RowDefinitions="Auto,*">

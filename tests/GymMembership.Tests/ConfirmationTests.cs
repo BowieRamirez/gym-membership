@@ -184,6 +184,8 @@ public class ConfirmationTests
         public int Requests;
         public void GoToRequests() => Requests++;
         public void GoToMembership() { }
+        public int Bookings;
+        public void GoToBookings() => Bookings++;
         public void ApplyTheme(string theme) { }
     }
 }
