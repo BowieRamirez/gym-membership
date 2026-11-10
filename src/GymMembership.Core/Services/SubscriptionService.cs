@@ -34,7 +34,13 @@ public sealed record RefundCard(RefundRequest Request, string Member, string Pac
 {
     /// <summary>A term the member has used is only asked for until staff decide, so it must not read as a refund already owed.</summary>
     public string AmountLabel => Request.WasActivated == true ? "Refund requested" : "Full refund";
-    public string ReviewText => Request.WasActivated switch
+    public string ReviewText => Request.Kind switch
+    {
+        "cancel" => "Booking cancelled 1 hour or more before the start: full refund owed.",
+        "no_show" => Request.Status == "pending" ? "The member says they didn't use the booking." : $"Didn't use it: {(Request.Status == "rejected" ? "declined" : "approved")} by the front desk.",
+        _ => MembershipReview
+    };
+    string MembershipReview => Request.WasActivated switch
     {
         false => "No check-in during this term: full refund owed.",
         true => $"Checked in during this term, needs review: {RefundReasons.StaffText(Request.ReviewReason)}.",
@@ -44,11 +50,14 @@ public sealed record RefundCard(RefundRequest Request, string Member, string Pac
     public string? LaterTermsWarning => !CanDecide || LaterTerms == 0 ? null : LaterTerms == 1
         ? "This member also has 1 later paid term. It stays and is not refunded."
         : $"This member also has {LaterTerms} later paid terms. They stay and are not refunded.";
-    public bool CanDecide => Request.Status == "pending";
+    public bool CanDecide => Request.Status == "pending" && !Request.IsBooking;   // F13: the front desk decides booking claims on Payments to verify
     public bool CanRepay => Request.Status == "approved";
     public string State => StateText(Request);
     public static string StateText(RefundRequest r) => r.Status switch
     {
+        "pending" when r.IsBooking => "Waiting for the front desk to check",
+        "approved" when r.IsBooking => "Awaiting manual repayment: " + r.DecisionReason,
+        "rejected" when r.IsBooking => "Declined by the front desk: " + r.DecisionReason,
         "pending" => "Pending admin review — access unchanged",
         "approved" => "Cancelled — awaiting manual repayment",
         "rejected" => "Rejected — term unchanged: " + r.DecisionReason,
@@ -100,8 +109,13 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
         var requests = await gw.ListAsync<RefundRequest>();
         var terms = await gw.ListAsync<MembershipTerm>();
         var names = await Directory_.UserNamesAsync(gw);
+        var bookings = requests.Any(r => r.IsBooking) ? (await gw.ListAsync<Reservation>()).ToDictionary(r => r.Id) : [];
+        var amenities = bookings.Count > 0 ? (await gw.ListAsync<Amenity>()).ToDictionary(a => a.Id, a => a.Name) : [];
         return requests.OrderBy(r => r.Status is "paid" or "rejected").ThenBy(r => r.RequestedAt).Select(r =>
         {
+            if (r.IsBooking && bookings.GetValueOrDefault(r.ReservationId ?? 0) is { } b)   // F13: a booking refund names the amenity and the booked time
+                return new RefundCard(r, names.GetValueOrDefault(r.MemberId, "Member"), $"{amenities.GetValueOrDefault(b.AmenityId, "Amenity")} booking",
+                    $"{b.StartsAt.ToUniversalTime().AddHours(8):d MMM yyyy, h:mm tt} – {b.EndsAt.ToUniversalTime().AddHours(8):h:mm tt} (Manila)");
             var term = terms.FirstOrDefault(t => t.Id == r.TermId);
             var dates = term is null ? "" : $"{term.StartsAt.AddHours(8):d MMM yyyy, h:mm tt} – {term.EndsAt.AddHours(8):d MMM yyyy, h:mm tt} (Manila)";
             var later = term is null ? 0 : terms.Count(t => t.MemberId == r.MemberId && t.CancelledAt is null && t.StartsAt >= term.EndsAt);

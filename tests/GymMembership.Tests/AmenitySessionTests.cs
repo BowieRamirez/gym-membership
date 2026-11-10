@@ -42,7 +42,8 @@ public class AmenitySessionTests
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
     }
 
-    static Task<AppResult<int>> Book(DemoGateway gw, int id, params DateTime[] starts) => new ReservationService(gw).BookAsync(starts.Select(s => (id, s)).ToList());
+    static Task<AppResult<int>> Book(DemoGateway gw, int id, params DateTime[] starts) => Safe.RunAsync(async () => (await gw.RpcAsync<List<Reservation>>("book_slots",
+        new() { ["p_slots"] = starts.Select(s => new Dictionary<string, object> { ["amenity"] = id, ["start"] = s.ToString("yyyy-MM-ddTHH:mm:ssZ") }).ToList() }) ?? []).Count);
     static async Task<AmenityCard> Card(DemoGateway gw) => (await new AmenityService(gw).BoardAsync()).Value!.Cards.Single(c => c.Amenity.Name == "Crud room");
 
     [Fact]
@@ -50,15 +51,15 @@ public class AmenitySessionTests
     {
         var (gw, id) = await WithAmenity();
         var card = await Card(gw);
-        Assert.Equal(("₱150.00 per session", "Buy a session"), (card.PassText, card.BuyText));
+        Assert.Equal("₱150.00 per session, up to 2 hours", card.PassText);
 
         await Buy(gw, id);
         card = await Card(gw);
-        Assert.Equal(("1 session ready to book", ""), (card.PassText, card.BuyText));
+        Assert.Equal("1 session ready to book", card.PassText);
 
         var booked = await Book(gw, id, Tomorrow10, Tomorrow10.AddMinutes(30));   // touching slots are one session
         Assert.True(booked.Ok, booked.Message);
-        Assert.Equal("Buy a session", (await Card(gw)).BuyText);
+        Assert.Equal("₱150.00 per session, up to 2 hours", (await Card(gw)).PassText);
         Assert.Equal("no_pass", (await Book(gw, id, Tomorrow10.AddHours(4))).Message);
     }
 
@@ -88,7 +89,7 @@ public class AmenitySessionTests
     public async Task A_timed_pass_still_books_many_times()
     {
         var (gw, id) = await WithAmenity(days: 30);
-        Assert.Equal(("₱150.00 for 30 days", "Buy pass"), ((await Card(gw)).PassText, (await Card(gw)).BuyText));
+        Assert.Equal("₱150.00 for 30 days", (await Card(gw)).PassText);
         await Buy(gw, id);
         Assert.True((await Book(gw, id, Tomorrow10)).Ok);
         Assert.True((await Book(gw, id, Tomorrow10.AddHours(4))).Ok);

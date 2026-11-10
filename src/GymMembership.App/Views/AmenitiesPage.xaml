@@ -23,7 +23,7 @@
             <BindableLayout.ItemTemplate>
                 <DataTemplate x:DataType="svc:AmenityCard">
                     <!-- the button text is empty for coaches, which hides the button -->
-                    <c:AmenityCardView ActionText="{Binding FollowText}" ActionClicked="OnFollow" BuyClicked="OnBuy" />
+                    <c:AmenityCardView ActionText="{Binding FollowText}" ActionClicked="OnFollow" RunsToggled="OnRuns" />
                 </DataTemplate>
             </BindableLayout.ItemTemplate>
         </c:CardGrid></ScrollView>

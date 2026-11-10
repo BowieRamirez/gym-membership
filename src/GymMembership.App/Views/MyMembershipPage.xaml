@@ -250,7 +250,8 @@
                                 <Border Style="{StaticResource Field}"><Entry Text="{Binding ReferenceNo}" SemanticProperties.Description="Reference number from your receipt" /></Border>
                             </VerticalStackLayout>
                             <Button Text="Choose screenshot and send" Style="{StaticResource SmallButton}" Command="{Binding SendProofCommand}" />
-                            <Button Text="Cancel this payment" Style="{StaticResource SmallOutlineButton}" Clicked="OnCancelPayment" />
+                            <!-- membership payments only: a booking is cancelled on Book an amenity (F12), which also releases its time -->
+                            <Button Text="Cancel this payment" Style="{StaticResource SmallOutlineButton}" Clicked="OnCancelPayment" IsVisible="{Binding PayNow.CanCancel}" />
                         </VerticalStackLayout>
                     </Border>
 

@@ -80,6 +80,12 @@ public sealed partial class DemoGateway : ISupabaseGateway
     string? MainRole(string? user) => new[] { "admin", "subadmin", "employee", "coach", "member" }.FirstOrDefault(RolesOf(user).Contains);
     bool Has(string permission) => RolesOf(CurrentUserId).Any(r => RolePermissions[r].Contains(permission));
     bool CoachInGym => All<CoachVisit>().Any(v => v.CheckedOutAt is null && All<Profile>().Any(p => p.Id == v.CoachId && p.IsActive));
+    // F14 (0052): where coaches run an amenity, one of them must be in; otherwise any coach counts
+    bool CoachInGymFor(int amenityId)
+    {
+        var runners = All<CoachAmenity>().Where(c => c.AmenityId == amenityId).Select(c => c.CoachId).ToHashSet();
+        return All<CoachVisit>().Any(v => v.CheckedOutAt is null && All<Profile>().Any(p => p.Id == v.CoachId && p.IsActive) && (runners.Count == 0 || runners.Contains(v.CoachId)));
+    }
     bool IsStaff => RolesOf(CurrentUserId).Any(r => r is "admin" or "subadmin" or "employee");
     /// <summary>can_manage_person (0036): the super admin manages anyone; others with users:manage, members and coaches only.</summary>
     bool CanManagePerson(string user) => IsActiveUser && Has("users:manage") &&
@@ -257,7 +263,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             Member m => m.UserId == uid || staff || All<CoachHire>().Any(h => h.CoachId == uid && h.MemberId == m.UserId),
             Payment p => p.MemberId == uid || staff,
             MembershipTerm t => t.MemberId == uid || staff,
-            RefundRequest r => r.MemberId == uid || RolesOf(uid).Contains("admin"),
+            RefundRequest r => r.MemberId == uid || RolesOf(uid).Contains("admin") || (r.Kind == "no_show" && Has("payments:verify")),   // 0052: the desk reads the claims it decides
             UserMembershipPackage m => m.MemberId == uid || staff,
             MembershipRenewal r => staff || All<UserMembershipPackage>().Any(m => m.Id == r.UserMembershipPackageId && m.MemberId == uid),
             UserAmenity a => a.MemberId == uid || staff,
@@ -320,7 +326,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                         throw Err("new row for relation \"messages\" violates check constraint (23514)");
                     break;
                 case AmenityUsage u:
-                    if (!CoachInGym) throw Err("no_coach_present");   // 0043
+                    if (!CoachInGymFor(All<UserAmenity>().FirstOrDefault(a => a.Id == u.UserAmenityId)?.AmenityId ?? 0)) throw Err("no_coach_present");   // 0043, 0052
                     if (!ActiveMember(Uid) || !All<UserAmenity>().Any(a => a.Id == u.UserAmenityId && a.MemberId == Uid && a.Status == Status.Active && (a.ExpiresAt is null || a.ExpiresAt > DateTime.UtcNow)))
                         throw Err(Rls);
                     break;
@@ -579,6 +585,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             var ua = All<UserAmenity>().First(a => a.Id == uaId);
             var days = All<Amenity>().First(a => a.Id == ua.AmenityId).DurationDays;
             ua.Status = Status.Active; ua.ExpiresAt = days is null ? null : now.AddDays(days.Value);
+            SettleHold(ua);
         }
     }
 
@@ -587,7 +594,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     {
         foreach (var m in All<UserMembershipPackage>().Where(m => m.Id == pay.UserMembershipPackageId && m.Status == Status.Pending)) m.Status = Status.Cancelled;
         foreach (var r in All<MembershipRenewal>().Where(r => r.Id == pay.RenewalId && r.Status == Status.Pending)) r.Status = Status.Cancelled;
-        foreach (var a in All<UserAmenity>().Where(a => a.Id == pay.UserAmenityId && a.Status == Status.Pending)) a.Status = Status.Cancelled;
+        foreach (var a in All<UserAmenity>().Where(a => a.Id == pay.UserAmenityId && a.Status == Status.Pending)) { a.Status = Status.Cancelled; SettleHold(a); }
     }
 
     bool Overlap(string who, bool coach, DateTime start, DateTime end, int ignore = 0) =>
@@ -682,7 +689,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (pay.MemberId == uid) throw Err("self_verify");
                 if (B("p_approve"))
                 {
-                    if (pay.Method == PayMethod.Qr && pay.ExpiresAt <= now) throw Err("payment_expired");
+                    if ((pay.Method == PayMethod.Qr || HoldOf(pay) is not null) && pay.ExpiresAt <= now) throw Err("payment_expired");   // 0052: a cash hold runs out too
                     if (pay.Method == PayMethod.Cash) pay.CashShiftId = OpenShiftOf(uid);   // 0050
                     pay.Status = Status.Verified; pay.VerifiedBy = uid; pay.VerifiedAt = now; pay.ReceiptNo = ReceiptNo();
                     ActivateTarget(pay);

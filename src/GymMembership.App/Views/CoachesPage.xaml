@@ -5,14 +5,10 @@
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
-            x:Class="GymMembership.App.Views.CoachesPage" x:DataType="vm:CoachesViewModel" Title="Coaches &amp; amenities">
+            x:Class="GymMembership.App.Views.CoachesPage" x:DataType="vm:CoachesViewModel" Title="Coaches">
 
-    <!-- D30: Coaches and Amenities are one page with the switch; the Amenities half is AmenitiesPage's content (BasePage.HostPart) -->
-    <Grid RowDefinitions="Auto,*" MaximumWidthRequest="{StaticResource PageWidth}">
-    <c:PartSwitch x:Name="Switch" First="Coaches" Second="Amenities" Margin="16,12,16,0" />
-    <ContentView x:Name="Part" Grid.Row="1" IsVisible="{Binding ShowSecond, Source={x:Reference Switch}, x:DataType=c:PartSwitch}" />
-    <Grid Grid.Row="1" RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='16,12,16,0'}"
-          IsVisible="{Binding ShowSecond, Source={x:Reference Switch}, x:DataType=c:PartSwitch, Converter={StaticResource Not}}">
+    <!-- F12 reverses D30: amenities moved to Book an amenity, so this page is coaches only again -->
+    <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='16,12,16,0'}" MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
             <Label Text="Hire a coach to request one-to-one sessions. Needs an active membership." Style="{StaticResource Muted}" IsVisible="{OnIdiom Phone=False, Default=True}" />
             <c:Banner Message="{Binding ErrorMessage}" />
@@ -55,6 +51,5 @@
                 </DataTemplate>
             </BindableLayout.ItemTemplate>
         </c:CardGrid></ScrollView>
-    </Grid>
     </Grid>
 </v:BasePage>

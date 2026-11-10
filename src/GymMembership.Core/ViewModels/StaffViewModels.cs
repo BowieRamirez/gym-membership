@@ -87,6 +87,15 @@ public partial class HomeViewModel(IDeskHomeService svc, IPaymentStaffService? p
 public partial class VerifyPaymentsViewModel(IPaymentStaffService svc) : LoadableViewModel
 {
     public ObservableCollection<PaymentRow> Pending { get; } = new();
+    /// <summary>F13: booking refund claims ("I didn't use it") the front desk decides, each with a reason.</summary>
+    public ObservableCollection<ClaimRow> Claims { get; } = new();
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsDeciding), nameof(DecideTitle), nameof(DecideText))] private ClaimRow? deciding;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(DecideTitle), nameof(DecideText))] private bool decideApprove;
+    [ObservableProperty] private string decideReason = "";
+    public bool IsDeciding => Deciding is not null;
+    public bool HasClaims => Claims.Count > 0;
+    public string DecideTitle => Deciding is null ? "" : $"{(DecideApprove ? "Approve" : "Decline")} {Deciding.Member}'s refund of {Deciding.Price}?";
+    public string DecideText => DecideApprove ? "Approve refund" : "Decline";
     [ObservableProperty] private PaymentRow? rejecting;
     [ObservableProperty] private string rejectReason = "";
     [ObservableProperty] private PaymentRow? viewing;
@@ -94,7 +103,26 @@ public partial class VerifyPaymentsViewModel(IPaymentStaffService svc) : Loadabl
 
     public override Task OnAppearingAsync() => LoadAsync();
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.PendingAsync, rows => Fill(Pending, rows));
+    [RelayCommand]
+    private async Task LoadAsync()
+    {
+        if (!await RunAsync(svc.PendingAsync, rows => Fill(Pending, rows))) return;
+        await RunAsync(svc.ClaimsAsync, rows => Fill(Claims, rows));
+        OnPropertyChanged(nameof(HasClaims));
+    }
+
+    [RelayCommand] private void ApproveClaim(ClaimRow row) { Notice = null; Deciding = row; DecideApprove = true; DecideReason = ""; }
+    [RelayCommand] private void DeclineClaim(ClaimRow row) { Notice = null; Deciding = row; DecideApprove = false; DecideReason = ""; }
+    [RelayCommand] private void KeepClaim() => Deciding = null;
+
+    [RelayCommand]
+    private async Task ConfirmDecisionAsync()
+    {
+        if (Deciding is not { } row) return;
+        if (!await RunAsync(() => svc.DecideClaimAsync(row.Claim.Id, DecideApprove, DecideReason))) return;
+        Claims.Remove(row); OnPropertyChanged(nameof(HasClaims)); Deciding = null;
+        Notice = DecideApprove ? $"Refund approved. Admin repays {row.Member} from Refunds & voids." : $"Declined. {row.Member} is told why.";
+    }
 
     [RelayCommand]
     private async Task ApproveAsync(PaymentRow row)

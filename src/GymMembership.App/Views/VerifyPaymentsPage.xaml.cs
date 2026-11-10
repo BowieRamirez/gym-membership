@@ -13,4 +13,6 @@ public partial class VerifyPaymentsPage : BasePage
 	void OnViewProof(object? sender, EventArgs e) => Row<VerifyPaymentsViewModel>(sender, v => v.ViewProofCommand);
 	void OnApprove(object? sender, EventArgs e) => Row<VerifyPaymentsViewModel>(sender, v => v.ApproveCommand);
 	void OnReject(object? sender, EventArgs e) => Row<VerifyPaymentsViewModel>(sender, v => v.RejectCommand);
+	void OnApproveClaim(object? sender, EventArgs e) => Row<VerifyPaymentsViewModel>(sender, v => v.ApproveClaimCommand);
+	void OnDeclineClaim(object? sender, EventArgs e) => Row<VerifyPaymentsViewModel>(sender, v => v.DeclineClaimCommand);
 }

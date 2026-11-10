@@ -493,7 +493,7 @@ public class PasswordStrength : VerticalStackLayout
 }
 
 /// <summary>
-/// The quiet two-way switch at the top of a combined page (Refunds &amp; voids, Coaches &amp; amenities, Trainees &amp; shifts), drawn like
+/// The quiet two-way switch at the top of a combined page (Refunds &amp; voids, Trainees &amp; shifts), drawn like
 /// Logs &amp; Archive's: the open side bold and filled. Pages show their halves from ShowSecond.
 /// </summary>
 public class PartSwitch : ContentView

@@ -117,7 +117,7 @@ public sealed partial class DemoGateway
             case "decide_membership_refund":
             {
                 Require("payments:void");var reason=Reason();var approve=Convert.ToBoolean(a["p_approve"]);
-                var r=All<RefundRequest>().FirstOrDefault(r=>r.Id==I("p_request_id"))??throw Err("not_found");
+                var r=All<RefundRequest>().FirstOrDefault(r=>r.Id==I("p_request_id")&&r.Kind=="membership")??throw Err("not_found");   // 0052: booking claims are decide_amenity_refund
                 if(r.MemberId==Uid) throw Err("self_decision");
                 if(r.Status!="pending") throw Err("already_processed");
                 var p=All<Payment>().First(p=>p.Id==r.PaymentId);

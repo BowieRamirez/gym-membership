@@ -14,7 +14,7 @@
         
             <VerticalStackLayout Spacing="10" Padding="0,0,0,16">
                 <!-- 9.8: no heading repeating the page title; the rules in two sentences (were five) -->
-                <Label Text="An unused term is owed a full refund; a used one needs your review (guidance, not legal advice), and approving cancels only that term. The app sends no money: return it yourself, then record the repayment." Style="{StaticResource Muted}" MaximumWidthRequest="760" HorizontalOptions="Start" />
+                <Label Text="An unused term is owed a full refund; a used one needs your review (guidance, not legal advice), and approving cancels only that term. Amenity bookings are refunded when cancelled 1 hour or more before, or when the front desk approves a claim. The app sends no money: return it yourself, then record the repayment." Style="{StaticResource Muted}" MaximumWidthRequest="760" HorizontalOptions="Start" />
                 <c:Banner Message="{Binding ErrorMessage}" />
                 <c:Banner Kind="notice" Message="{Binding Notice}" />
             </VerticalStackLayout>

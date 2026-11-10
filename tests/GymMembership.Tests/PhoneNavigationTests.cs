@@ -53,7 +53,7 @@ public class PhoneNavigationTests
 
     [Theory]
     [InlineData("Amenities", "AmenitiesPage")]
-    [InlineData("Coaches & amenities", "CoachesPage")]
+    [InlineData("Coaches", "CoachesPage")]
     [InlineData("Time requests", "RequestsPage")]
     [InlineData("My coach profile", "CoachProfilePage")]
     [InlineData("Settings", "SettingsPage")]

@@ -34,7 +34,7 @@ public static class IconRail
         ["Packages"] = "package",
         ["Amenities"] = "waves",
         ["Book an amenity"] = "calendar-plus",
-        ["Coaches & amenities"] = "dumbbell",
+        ["Coaches"] = "dumbbell",
         ["Sessions"] = "calendar-days",
         ["Time requests"] = "clock",
         ["Dashboard"] = "layout-dashboard",

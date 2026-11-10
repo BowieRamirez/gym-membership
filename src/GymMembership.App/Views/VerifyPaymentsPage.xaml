@@ -13,15 +13,18 @@
             <VerticalStackLayout>
                 <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,*,110,170,120,110,320">
                     <Label Text="{Binding Payer}" FontFamily="BarlowMedium" VerticalOptions="Center" />
-                    <Label Grid.Column="1" Text="{Binding Item}" VerticalOptions="Center" />
+                    <!-- F12: a booking shows its time under the amenity -->
+                    <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                        <Label Text="{Binding Item}" />
+                        <Label Text="{Binding Booking}" Style="{StaticResource Caption}" IsVisible="{Binding HasBooking}" />
+                    </VerticalStackLayout>
                     <Label Grid.Column="2" Text="{Binding Payment.PaymentCode}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
-                    <Label Grid.Column="3" Text="{Binding Payment.ReferenceNo}" Style="{StaticResource Muted}" VerticalOptions="Center" IsVisible="{Binding HasProof}" />
-                    <Label Grid.Column="3" Text="No proof yet" Style="{StaticResource Muted}" VerticalOptions="Center" IsVisible="{Binding HasProof, Converter={StaticResource Not}}" />
+                    <Label Grid.Column="3" Text="{Binding ProofText}" Style="{StaticResource Muted}" VerticalOptions="Center" />
                     <Label Grid.Column="4" Text="{Binding Payment.CreatedAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM, h:mm tt'}" Style="{StaticResource Muted}" VerticalOptions="Center" />
                     <Label Grid.Column="5" Text="{Binding Payment.Amount, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center" />
                     <HorizontalStackLayout Grid.Column="6" Spacing="6" HorizontalOptions="End" VerticalOptions="Center">
                         <Button Text="View screenshot" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding HasProof}" Clicked="OnViewProof" />
-                        <Button Text="Verify" Style="{StaticResource SmallOutlineButton}" Clicked="OnApprove" />
+                        <Button Text="{Binding ApproveText}" Style="{StaticResource SmallOutlineButton}" Clicked="OnApprove" />
                         <Button Text="Reject" Style="{StaticResource SmallOutlineButton}" Clicked="OnReject" />
                     </HorizontalStackLayout>
                 </Grid>
@@ -52,11 +55,51 @@
                             </MultiBinding>
                         </Label.Text>
                     </Label>
-                    <Label Text="Waiting for the member to pay and send proof" Style="{StaticResource Caption}" IsVisible="{Binding HasProof, Converter={StaticResource Not}}" />
+                    <Label Text="{Binding Booking}" Style="{StaticResource Caption}" IsVisible="{Binding HasBooking}" />
+                    <Label Text="{Binding WaitText}" Style="{StaticResource Caption}" IsVisible="{Binding HasProof, Converter={StaticResource Not}}" />
                     <FlexLayout Wrap="Wrap" Margin="0,4,0,0">
                         <Button Text="View screenshot" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding HasProof}" Clicked="OnViewProof" />
-                        <Button Text="Verify" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnApprove" />
+                        <Button Text="{Binding ApproveText}" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnApprove" />
                         <Button Text="Reject" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnReject" />
+                    </FlexLayout>
+                </VerticalStackLayout>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+        <!-- F13: "I didn't use it" claims, with what the desk checks beside what the member said -->
+        <DataTemplate x:Key="ClaimRow" x:DataType="svc:ClaimRow">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,*,1.4*,1.4*,250" ColumnSpacing="12">
+                    <VerticalStackLayout Spacing="2" VerticalOptions="Center"><Label Text="{Binding Member}" FontFamily="BarlowMedium" /><Label Text="{Binding Sent}" Style="{StaticResource Caption}" /></VerticalStackLayout>
+                    <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center"><Label Text="{Binding Amenity, StringFormat='{0} booking'}" /><Label Text="{Binding When}" Style="{StaticResource Caption}" /></VerticalStackLayout>
+                    <Label Grid.Column="2" Text="{Binding Claim.Reason, StringFormat='“{0}”'}" LineBreakMode="WordWrap" VerticalOptions="Center" />
+                    <VerticalStackLayout Grid.Column="3" Spacing="2" VerticalOptions="Center">
+                        <Label Text="{Binding CheckIns, StringFormat='Check-ins that day: {0}'}" Style="{StaticResource Caption}" />
+                        <Label Text="{Binding AmenityNow, StringFormat='Amenity now: {0}'}" Style="{StaticResource Caption}" />
+                    </VerticalStackLayout>
+                    <HorizontalStackLayout Grid.Column="4" Spacing="6" HorizontalOptions="End" VerticalOptions="Center">
+                        <Label Text="{Binding Price}" FontFamily="BarlowSemiBold" VerticalOptions="Center" Margin="0,0,6,0" />
+                        <Button Text="Approve" Style="{StaticResource SmallOutlineButton}" Clicked="OnApproveClaim" />
+                        <Button Text="Decline" Style="{StaticResource SmallOutlineButton}" Clicked="OnDeclineClaim" />
+                    </HorizontalStackLayout>
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+        <DataTemplate x:Key="ClaimCard" x:DataType="svc:ClaimRow">
+            <VerticalStackLayout>
+                <VerticalStackLayout Spacing="4" Padding="14,12">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <Label Text="{Binding Member}" FontFamily="BarlowSemiBold" />
+                        <Label Grid.Column="1" Text="{Binding Price}" FontFamily="BarlowSemiBold" />
+                    </Grid>
+                    <Label Text="{Binding When, StringFormat='{0}'}" Style="{StaticResource Caption}" />
+                    <Label Text="{Binding Claim.Reason, StringFormat='“{0}”'}" LineBreakMode="WordWrap" />
+                    <Label Text="{Binding CheckIns, StringFormat='Check-ins that day: {0}'}" Style="{StaticResource Caption}" />
+                    <Label Text="{Binding AmenityNow, StringFormat='Amenity now: {0}'}" Style="{StaticResource Caption}" />
+                    <FlexLayout Wrap="Wrap" Margin="0,4,0,0">
+                        <Button Text="Approve" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnApproveClaim" />
+                        <Button Text="Decline" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnDeclineClaim" />
                     </FlexLayout>
                 </VerticalStackLayout>
                 <BoxView Style="{StaticResource Hairline}" />
@@ -66,7 +109,7 @@
 
     <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='20,16,20,0', Default='16,12,16,0'}" MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
-            <Label Text="Oldest first. Match the code and amount in the gym's e-wallet; Verify turns the membership on and issues a receipt number." Style="{StaticResource Muted}" />
+            <Label Text="Oldest first. Match the code and amount in the gym's e-wallet; Verify turns the membership or booking on and issues a receipt number. Take cash puts a desk payment in your drawer." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
@@ -95,16 +138,31 @@
                     </HorizontalStackLayout>
                 </VerticalStackLayout>
             </Border>
+
+            <!-- F13: a claim is decided with a reason the member reads -->
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding IsDeciding}">
+                <VerticalStackLayout Spacing="10">
+                    <c:CardTitle Text="{Binding DecideTitle}" />
+                    <Label Text="Say what you checked, for example the check-ins that day or the amenity's log. The member reads this." Style="{StaticResource Caption}" />
+                    <Border Style="{StaticResource Field}" WidthRequest="420" HorizontalOptions="Start">
+                        <Entry Text="{Binding DecideReason}" Placeholder="No check-in that day; pool closed for cleaning" SemanticProperties.Description="Reason for the decision" />
+                    </Border>
+                    <HorizontalStackLayout Spacing="8">
+                        <Button Text="{Binding DecideText}" Style="{StaticResource SmallButton}" Command="{Binding ConfirmDecisionCommand}" />
+                        <Button Text="Back" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepClaimCommand}" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
         </VerticalStackLayout>
 
         <!-- 9.7: the queue is a table (as on Home), stacked rows on narrow windows and phones; the actions are outline, one set per row -->
-        <ScrollView Grid.Row="1">
+        <ScrollView Grid.Row="1"><VerticalStackLayout>
             <Border Style="{StaticResource TablePanel}" Margin="0,0,0,16" VerticalOptions="Start">
                 <VerticalStackLayout>
                     <VerticalStackLayout x:Name="QueueHead" IsVisible="{OnIdiom Phone=False, Default=True}">
                         <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,*,110,170,120,110,320">
                             <Label Text="Payer" Style="{StaticResource Caption}" />
-                            <Label Grid.Column="1" Text="Package" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="1" Text="For" Style="{StaticResource Caption}" />
                             <Label Grid.Column="2" Text="Code" Style="{StaticResource Caption}" />
                             <Label Grid.Column="3" Text="Reference" Style="{StaticResource Caption}" />
                             <Label Grid.Column="4" Text="Sent" Style="{StaticResource Caption}" />
@@ -119,6 +177,24 @@
                     </c:TableBody>
                 </VerticalStackLayout>
             </Border>
-        </ScrollView>
+
+            <Border Style="{StaticResource TablePanel}" Margin="0,0,0,16" VerticalOptions="Start" IsVisible="{Binding HasClaims}">
+                <VerticalStackLayout>
+                    <c:CardTitle Text="Booking refund claims" Margin="14,12,14,4" />
+                    <VerticalStackLayout x:Name="ClaimHead" IsVisible="{OnIdiom Phone=False, Default=True}">
+                        <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,*,1.4*,1.4*,250" ColumnSpacing="12">
+                            <Label Text="Member" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="1" Text="Booking" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="2" Text="They said" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="3" Text="To check" Style="{StaticResource Caption}" />
+                        </Grid>
+                        <BoxView Style="{StaticResource Hairline}" />
+                    </VerticalStackLayout>
+                    <c:TableBody BindableLayout.ItemsSource="{Binding Claims}" Header="{x:Reference ClaimHead}" WideFrom="1100"
+                                 RowTemplate="{StaticResource ClaimRow}" CardTemplate="{StaticResource ClaimCard}"
+                                 BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource ClaimCard}, Default={StaticResource ClaimRow}}" />
+                </VerticalStackLayout>
+            </Border>
+        </VerticalStackLayout></ScrollView>
     </Grid>
 </v:BasePage>

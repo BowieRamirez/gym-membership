@@ -38,6 +38,7 @@ const expected = {
   member_passes: '----', desk_pins: '----',                // F6, F8 (0049): only server functions touch them
   cash_shifts: '----',                                     // F2 (0050): open, close and list through server functions only
   announcements: '----', announcement_reads: '----',      // F10 (0051): posted, listed and read through server functions only
+  coach_amenities: 'S---',                                 // F14 (0052): read by all; written only by set_runs_amenity
   roles: 'S---', permissions: 'S---', role_permissions: 'S---', user_roles: 'S---',
   // server only
   email_checks: '----', user_last_seen: '----',

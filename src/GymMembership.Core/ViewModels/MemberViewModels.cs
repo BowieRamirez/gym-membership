@@ -391,16 +391,10 @@ public partial class AmenityBoardViewModel(IAmenityService svc) : LoadableViewMo
     private async Task ToggleFollowAsync(AmenityCard card)
     { if (await RunAsync(() => svc.SetFollowedAsync(card.Amenity.Id, !card.Followed))) await LoadAsync(); }
 
-    // the existing purchase: a pending QR payment that turns the pass on when staff verify it
+    // F14: a coach's "I run this" switch; members see the names on the card
     [RelayCommand]
-    private async Task BuyAsync(AmenityCard card)
-    {
-        Notice = null;
-        if (!await Confirm.AskAsync($"Buy a {card.Amenity.Name} pass?", $"{card.PassText}.\nYou pay by QR on My membership.", "Buy pass")) return;
-        if (!await RunAsync(() => svc.AvailAsync(card.Amenity.Id), _ => { })) return;
-        await LoadAsync();
-        Notice = $"Pass for {card.Amenity.Name} ordered. Pay it from My membership; it starts when staff verify the payment.";
-    }
+    private async Task ToggleRunsAsync(AmenityCard card)
+    { Notice = null; if (await RunAsync(() => svc.SetRunsAsync(card.Amenity.Id, !card.RunsThis))) await LoadAsync(); }
 }
 
 public partial class CoachesViewModel(ICoachService svc, IChatService messages, IAppNavigator nav) : LoadableViewModel

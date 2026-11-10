@@ -30,15 +30,11 @@ public class AmenityPassTests
         var vm = new AmenityBoardViewModel(new AmenityService(gw));
         var card = await Card(vm, "Steam Room");
         Assert.Equal("₱300.00 for 30 days", card.PassText);
-        Assert.Equal("Buy pass", card.BuyText);
         Assert.Equal("Dry sauna, 6 seats", card.Amenity.Description);
 
-        await vm.BuyCommand.ExecuteAsync(card);
-        Assert.Null(vm.ErrorMessage);
-        Assert.NotNull(vm.Notice);
-        card = vm.Cards.Single(c => c.Amenity.Name == "Steam Room");
+        Assert.True((await new AmenityService(gw).AvailAsync(card.Amenity.Id)).Ok);   // a pass bought earlier, or at the counter
+        card = await Card(vm, "Steam Room");
         Assert.Equal("Waiting for your payment to be verified", card.PassText);
-        Assert.Equal("", card.BuyText);
 
         var pay = (await new MembershipService(gw).MyPaymentsAsync()).Value!.Single(p => p.Kind == PayKind.Amenity && p.Status == Status.Pending);
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
@@ -47,7 +43,7 @@ public class AmenityPassTests
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         card = await Card(vm, "Steam Room");
         Assert.StartsWith("Pass active until ", card.PassText);
-        Assert.Equal("", card.BuyText);
+        Assert.True(card.HasPass);
     }
 
     [Theory]
@@ -58,17 +54,16 @@ public class AmenityPassTests
         var gw = await As(email, await WithSauna());
         var card = await Card(new AmenityBoardViewModel(new AmenityService(gw)), "Steam Room");
         Assert.Equal("", card.PassText);
-        Assert.Equal("", card.BuyText);
+        Assert.False(card.CanBook);
     }
 
     [Fact]
     public async Task A_member_without_an_active_membership_is_told_why_they_cannot_buy()
     {
         var gw = await As("carlo@demo.io", await WithSauna());   // membership expired
-        var vm = new AmenityBoardViewModel(new AmenityService(gw));
-        await vm.BuyCommand.ExecuteAsync(await Card(vm, "Steam Room"));
-        Assert.Contains("active membership", vm.ErrorMessage);
-        Assert.Null(vm.Notice);
+        var card = await Card(new AmenityBoardViewModel(new AmenityService(gw)), "Steam Room");
+        var booked = await new ReservationService(gw).BookAsync(card.Amenity.Id, DateTime.UtcNow.Date.AddDays(2).AddHours(2), 60, PayMethod.Qr);
+        Assert.Contains("active membership", ErrorText.For(booked.Error, booked.Message));
     }
 
     [Fact]

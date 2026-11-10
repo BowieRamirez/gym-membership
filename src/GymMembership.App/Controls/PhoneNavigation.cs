@@ -59,7 +59,7 @@ public sealed class PhoneNavigation
             : new[] { ("My membership", "Membership", "membership"), ("Packages", "Packages", "packages"), ("Sessions", "Sessions", "sessions"), ("Messages", "Messages", "messages") };
         var pageTypes = new Dictionary<string, Type>
         {
-            ["Amenities"] = typeof(AmenitiesPage), ["Book an amenity"] = typeof(BookAmenityPage), ["Coaches & amenities"] = typeof(CoachesPage),
+            ["Amenities"] = typeof(AmenitiesPage), ["Book an amenity"] = typeof(BookAmenityPage), ["Coaches"] = typeof(CoachesPage),
             ["Time requests"] = typeof(RequestsPage),
             ["My coach profile"] = typeof(CoachProfilePage),
             ["Settings"] = typeof(SettingsPage)

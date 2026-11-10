@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Amenity booking (Phase 5 mockup)</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Tokens from src/GymMembership.App/Resources/Styles/Colors.xaml (as the other mockups in this folder) */
+  :root, [data-theme="dark"] {
+    --page: #0E0E0E; --card: #1A1A1A; --surface: #242424; --line: #2A2A2A; --edge: #757575;
+    --ink: #F2F2F2; --muted: #A6A6A6; --signal: #FFEC00; --good: #4CC585; --bad: #FF7B70; --rail: #161616; --chip: #2A2A2A;
+    --sel: #FFEC00; --solid: #FFEC00; --solid-ink: #111111; --scrim: rgba(0,0,0,.62);
+  }
+  [data-theme="light"] {
+    --page: #EEEEEE; --card: #FFFFFF; --surface: #F5F5F5; --line: #E4E4E4; --edge: #808080;
+    --ink: #111111; --muted: #5B5B5B; --signal: #FFEC00; --good: #1B7A3E; --bad: #C42B21; --rail: #FFEC00; --chip: #E4E4E4;
+    --sel: #111111; --solid: #111111; --solid-ink: #FFFFFF; --scrim: rgba(0,0,0,.38);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #2b2b2b; color: var(--ink); font: 14px/1.45 Barlow, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+  ::selection { background: var(--signal); color: #111; }
+  button, input, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--sel); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  .mock { position: sticky; top: 0; z-index: 9; display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: center; padding: 12px 18px; background: #151515; color: #ddd; font-size: 13px; border-bottom: 1px solid #333; }
+  .mock b { font-weight: 600; margin-right: 6px; }
+  .seg { display: inline-flex; border: 1px solid #444; border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; background: none; padding: 5px 11px; cursor: pointer; color: #bbb; border-right: 1px solid #444; }
+  .seg button:last-child { border-right: 0; }
+  .seg button[aria-pressed="true"] { background: var(--signal); color: #111; }
+  .note { max-width: 1180px; margin: 26px auto 8px; padding: 0 22px; color: #cfcfcf; }
+  .note h2 { font: 600 18px/1.3 Barlow, sans-serif; margin: 0 0 6px; color: #fff; }
+  .note p { margin: 0 0 5px; max-width: 80ch; }
+  .note .ask { border: 1px solid #555; border-radius: 10px; padding: 8px 12px; margin-top: 8px; max-width: 80ch; }
+  .stage { padding: 10px 22px 26px; display: flex; gap: 22px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+
+  .app { position: relative; display: grid; grid-template-columns: 72px 1fr; background: var(--page); border-radius: 10px; overflow: hidden; width: 100%; max-width: 1180px; }
+  .rail { background: var(--rail); display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 0; }
+  .rail i { width: 38px; height: 38px; border-radius: 11px; background: var(--chip); display: block; opacity: .55; }
+  .rail i.on { background: var(--signal); opacity: 1; }
+  [data-theme="light"] .rail i { background: rgba(0,0,0,.12); }
+  [data-theme="light"] .rail i.on { background: #111; }
+  .page { padding: 18px 24px 26px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+  h1 { margin: 0; font: 500 28px/1.1 Barlow, sans-serif; }
+  h2 { margin: 0; font: 500 20px/1.2 Barlow, sans-serif; }
+  h3, .t3 { margin: 0; font: 600 16px/1.25 Barlow, sans-serif; }
+  .cap { font-size: 12.5px; color: var(--muted); font-weight: 500; }
+  .muted { color: var(--muted); }
+  .lead { color: var(--muted); max-width: 70ch; }
+
+  .chip { height: 34px; padding: 0 14px; border-radius: 999px; border: 0; background: var(--chip); font-weight: 500; cursor: pointer; white-space: nowrap; }
+  .chip.on { background: var(--solid); color: var(--solid-ink); }
+  .chip:disabled { opacity: .38; cursor: not-allowed; text-decoration: line-through; }
+  .btn { height: 40px; padding: 0 18px; border-radius: 999px; border: 2px solid var(--ink); background: none; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .btn.y { background: var(--solid); border-color: var(--solid); color: var(--solid-ink); }
+  .btn.sm { height: 34px; padding: 0 14px; }
+  .btn.ghost { border-color: var(--edge); }
+  .tag { display: inline-flex; align-items: center; gap: 6px; font: 600 12px/1 Barlow; padding: 6px 10px; border-radius: 999px; background: var(--chip); white-space: nowrap; }
+  .tag .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .tag.ok { color: var(--good); } .tag.bad { color: var(--bad); }
+  .tag.wait { background: var(--signal); color: #111; }
+
+  /* amenity cards: the same card as today's Amenities half (name, status, price, Notify me), plus who runs it and Book */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+  .card { background: var(--card); border-radius: 16px; padding: 14px 16px; display: grid; gap: 8px; }
+  .card .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .card .price { font: 600 20px/1 Barlow; }
+  .card .price small { font: 500 12.5px Barlow; color: var(--muted); }
+  .card .runs { font-size: 13px; color: var(--muted); }
+  .card .acts { display: flex; gap: 8px; margin-top: 2px; }
+  .card.off { opacity: .6; }
+
+  /* My bookings: two-line rows, status chip, the one action that fits the state */
+  .panel { background: var(--card); border-radius: 16px; padding: 6px 0; }
+  .panel > h2 { padding: 10px 16px 6px; }
+  .brow { display: grid; grid-template-columns: 1fr auto; gap: 4px 14px; padding: 12px 16px; border-top: 1px solid var(--line); align-items: center; }
+  .brow .w { font-weight: 600; }
+  .brow .s { color: var(--muted); font-size: 13px; }
+  .brow .r { grid-row: span 2; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+
+  /* the booking sheet: opens over the page from the amenity card */
+  .scrim { position: absolute; inset: 0; background: var(--scrim); display: grid; place-items: center; padding: 24px; z-index: 3; }
+  .sheet { background: var(--card); border-radius: 18px; width: min(920px, 100%); display: grid; grid-template-columns: 1.15fr 1fr; overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,.45); }
+  .sheet .head { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .sheet .head .t { flex: 1; }
+  .x { width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--chip); cursor: pointer; display: grid; place-items: center; }
+  .x svg { width: 18px; height: 18px; }
+  .left, .right { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+  .right { border-left: 1px solid var(--line); }
+  .monthbar { display: flex; align-items: center; gap: 6px; }
+  .monthbar .m { flex: 1; text-align: center; font: 600 16px Barlow; }
+  .nav { width: 40px; height: 40px; border-radius: 50%; border: 0; background: none; cursor: pointer; display: grid; place-items: center; }
+  .nav svg { width: 20px; height: 20px; }
+  .wk { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .wk span { text-align: center; font: 500 12px Barlow; color: var(--muted); padding-bottom: 2px; }
+  /* the Dashboard's day cell: a rounded tile, today's number on a yellow block, the chosen day outlined */
+  .d { height: 58px; border-radius: 10px; background: var(--surface); border: 2px solid transparent; padding: 5px 6px; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; text-align: left; }
+  .d .n { align-self: flex-start; padding: 0 5px; border-radius: 6px; font: 600 14px/20px Barlow; }
+  .d.today .n { background: var(--signal); color: #111; }
+  .d.on { border-color: var(--sel); }
+  .d.dim { opacity: .38; cursor: default; }
+  .d .mine { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .d .mine::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--sel); margin-right: 4px; vertical-align: 1px; }
+  .group { display: grid; gap: 8px; }
+  .times { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .times .chip { padding: 0 8px; }
+  .lens { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pay { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .opt { border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; text-align: left; background: none; cursor: pointer; }
+  .opt b { display: block; }
+  .opt span { font-size: 12.5px; color: var(--muted); }
+  .opt.on { border-color: var(--sel); }
+  .sum { background: var(--surface); border-radius: 12px; padding: 12px 14px; display: grid; gap: 3px; }
+  .sum .big { font: 600 16px Barlow; }
+  .foot { display: flex; gap: 10px; align-items: center; margin-top: auto; }
+  .foot .cap { flex: 1; }
+
+  /* phone */
+  .phone { width: 380px; background: var(--page); border-radius: 26px; padding: 14px; border: 8px solid #000; display: flex; flex-direction: column; gap: 10px; }
+  .phone h1 { font-size: 22px; }
+  .phone .card { padding: 12px 14px; }
+  .phone .d { height: 44px; padding: 4px; }
+  .phone .d .mine { display: none; }
+  .phone .times { grid-template-columns: repeat(4, 1fr); }
+  .phone .brow { grid-template-columns: 1fr; }
+  .phone .brow .r { grid-row: auto; justify-content: flex-start; }
+  .sticky { position: sticky; bottom: 0; background: var(--page); padding-top: 8px; display: grid; gap: 6px; }
+
+  /* coach switch */
+  .sw { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 500; background: none; border: 0; padding: 4px 0; justify-self: start; }
+  .app.tall { min-height: 860px; }
+  .sw i { width: 46px; height: 26px; border-radius: 999px; background: var(--chip); position: relative; transition: background .2s cubic-bezier(.2,.8,.2,1); }
+  .sw i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--edge); transition: transform .2s cubic-bezier(.2,.8,.2,1), background .2s; }
+  .sw[aria-checked="true"] i { background: var(--solid); }
+  .sw[aria-checked="true"] i::after { transform: translateX(20px); background: var(--solid-ink); }
+
+  /* staff */
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font: 500 12.5px Barlow, sans-serif; color: var(--muted); padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  td { padding: 11px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td .s { color: var(--muted); font-size: 13px; }
+  .facts { display: grid; gap: 3px; font-size: 13px; }
+  .facts b { font-weight: 600; }
+  .area { border: 2px solid var(--edge); border-radius: 12px; min-height: 64px; padding: 8px 12px; color: var(--muted); }
+  .dialog { background: var(--card); border-radius: 18px; padding: 18px; width: 420px; display: grid; gap: 12px; box-shadow: 0 18px 50px rgba(0,0,0,.45); }
+</style>
+</head>
+<body data-theme="dark">
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="l" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></symbol>
+  <symbol id="r" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></symbol>
+</svg>
+<div class="mock">
+  <span><b>Theme</b><span class="seg" data-set="theme"><button aria-pressed="true" data-v="dark">Dark</button><button data-v="light">Light</button></span></span>
+  <span><b>Member, Windows</b><span class="seg" data-set="view"><button aria-pressed="true" data-v="sheet">Booking sheet open</button><button data-v="wait">After Book and pay</button><button data-v="list">Bookings over time</button></span></span>
+</div>
+
+<div class="note"><h2>1. Member: Book an amenity (Windows)</h2>
+<p>The page opens on the amenity cards: status, <b>price per session</b>, the coaches who run it (F14) and <b>Notify me</b>, as on today's Amenities half, plus <b>Book</b>. "Coaches &amp; amenities" goes back to plain <b>Coaches</b> (D30 reversed); the old half-hour grid goes.</p>
+<p><b>Book</b> opens a sheet. Left: the month in the coach Dashboard's style (today on yellow, the chosen day outlined, days outside the next 14 dimmed, a dot on days you already have a booking). Right: the start times still free that day, how long (30 minutes to 2 hours), how you'll pay, and the total. Times that are taken, in a cooldown, or under 1 hour away are struck through.</p>
+<p><b>Book and pay</b> holds the time. Paying by GCash or QR opens the same "send proof" step as Packages; "Pay at the desk" just shows the code to give the cashier. The desk approves it in Payments to verify, and you get "Booking confirmed".</p>
+<div class="ask"><b>One thing to confirm:</b> because an unpaid hold ends 1 hour before the start (F12), a time less than 1 hour away can't be booked online. A member with a pass or an unused session still books right up to the start, as today.</div></div>
+<div class="stage">
+  <div class="app"><nav class="rail"><i></i><i></i><i class="on"></i><i></i><i></i><i></i></nav>
+    <main class="page">
+      <h1>Book an amenity</h1>
+      <p class="lead" style="margin:0">Pick an amenity, then a day and time. A coach who runs it must be in the gym when you use it.</p>
+      <div class="cards">
+        <article class="card"><div class="top"><h2 class="t3">Pool</h2><span class="tag ok"><span class="dot"></span>Available</span></div>
+          <div class="price">₱150 <small>per session, up to 2 hours</small></div>
+          <div class="runs">Run by Lena Cruz, Marco Diaz</div>
+          <div class="acts"><button class="btn y sm" data-open>Book</button><button class="btn ghost sm">Notify me</button></div></article>
+        <article class="card"><div class="top"><h2 class="t3">Boxing ring</h2><span class="tag ok"><span class="dot"></span>Available</span></div>
+          <div class="price">₱200 <small>per session, up to 2 hours</small></div>
+          <div class="runs">Any coach in the gym</div>
+          <div class="acts"><button class="btn y sm" data-open>Book</button><button class="btn ghost sm">Notify me</button></div></article>
+        <article class="card off"><div class="top"><h2 class="t3">Sauna</h2><span class="tag bad"><span class="dot"></span>Closed until Fri 13 Nov</span></div>
+          <div class="price">₱120 <small>per session, up to 2 hours</small></div>
+          <div class="runs">Run by Marco Diaz</div>
+          <div class="acts"><button class="btn sm ghost" disabled style="opacity:.5">Book</button><button class="btn ghost sm">Notify me</button></div></article>
+      </div>
+
+      <section class="panel" id="mine">
+        <h2>My bookings</h2>
+        <div class="brow" id="rowWait" hidden><div class="w">Pool · Thu 12 Nov, 10:00 to 11:00 AM</div>
+          <div class="r"><span class="tag wait">Waiting for payment</span><button class="btn y sm">Send proof</button><button class="btn ghost sm">Cancel</button></div>
+          <div class="s">₱150 by GCash. Pay by Wed 11 Nov, 6:40 PM or the time is released.</div></div>
+        <div class="brow" id="rowConf"><div class="w">Boxing ring · Sat 14 Nov, 4:00 to 5:30 PM</div>
+          <div class="r"><span class="tag ok"><span class="dot"></span>Confirmed</span><button class="btn ghost sm">Cancel</button></div>
+          <div class="s">Paid ₱200. Cancel by 3:00 PM on Sat for a full refund.</div></div>
+        <div class="brow" id="rowEnded" hidden><div class="w">Pool · Tue 10 Nov, 7:00 to 8:00 AM</div>
+          <div class="r"><span class="tag">Ended</span><button class="btn ghost sm">I didn't use it</button></div>
+          <div class="s">Didn't go? Tell the front desk by Wed 11 Nov, 8:00 AM and they'll check for a refund.</div></div>
+        <div class="brow" id="rowRefund" hidden><div class="w">Sauna · Mon 9 Nov, 6:00 to 7:00 PM</div>
+          <div class="r"><span class="tag ok"><span class="dot"></span>Refund approved</span></div>
+          <div class="s">₱120 to be repaid at the front desk. "Sauna was closed that evening." (Front desk)</div></div>
+        <div class="brow" id="rowClaim" hidden><div class="w">Boxing ring · Sun 8 Nov, 9:00 to 10:00 AM</div>
+          <div class="r"><span class="tag">Refund claim sent</span></div>
+          <div class="s">The front desk is checking it. You'll get a notification.</div></div>
+      </section>
+    </main>
+
+    <div class="scrim" id="sheet">
+      <section class="sheet" role="dialog" aria-label="Book Pool">
+        <div class="head"><div class="t"><h2>Book Pool</h2><div class="cap">₱150 per session · run by Lena Cruz, Marco Diaz</div></div><button class="x" aria-label="Close"><svg><use href="#x"/></svg></button></div>
+        <div class="left">
+          <div class="monthbar"><button class="nav" aria-label="Previous month"><svg><use href="#l"/></svg></button><span class="m">November 2026</span><button class="nav" aria-label="Next month"><svg><use href="#r"/></svg></button></div>
+          <div class="wk"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+          <div class="wk" id="month"></div>
+          <div class="cap">You can book up to 14 days ahead.</div>
+        </div>
+        <div class="right">
+          <div class="group"><h2 class="t3" id="dayname">Thursday 12 November</h2><span class="cap">Start time</span><div class="times" id="times"></div></div>
+          <div class="group"><span class="cap">How long</span><div class="lens" id="lens"><button class="chip">30 min</button><button class="chip on">1 hour</button><button class="chip">1½ hours</button><button class="chip">2 hours</button></div></div>
+          <div class="group"><span class="cap">Pay with</span><div class="pay"><button class="opt on"><b>GCash or QR</b><span>Send proof now</span></button><button class="opt"><b>At the desk</b><span>Cash, before the hold ends</span></button></div></div>
+          <div class="sum"><span class="big" id="when">Thu 12 Nov, 10:00 to 11:00 AM</span><span class="muted">₱150 · The pool cools down for 30 minutes after.</span></div>
+          <div class="foot"><span class="cap">Held for you until paid, up to 1 hour before it starts.</span><button class="btn y">Book and pay</button></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div class="note"><h2>2. Member on the phone</h2>
+<p>The cards stack. <b>Book</b> opens the sheet full screen: the month on top (numbers only, plus the dot), then times, length and payment, with the total and <b>Book and pay</b> fixed at the bottom. Bookings are two-line rows with the action under them.</p></div>
+<div class="stage">
+  <div class="phone"><h1>Book Pool</h1>
+    <div class="monthbar"><button class="nav" aria-label="Previous month"><svg><use href="#l"/></svg></button><span class="m">November 2026</span><button class="nav" aria-label="Next month"><svg><use href="#r"/></svg></button></div>
+    <div class="wk"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+    <div class="wk" id="pmonth"></div>
+    <h2 class="t3">Thursday 12 November</h2>
+    <div class="times" id="ptimes"></div>
+    <div class="lens"><button class="chip">30 min</button><button class="chip on">1 hour</button><button class="chip">1½ h</button><button class="chip">2 h</button></div>
+    <div class="pay"><button class="opt on"><b>GCash or QR</b><span>Send proof</span></button><button class="opt"><b>At the desk</b><span>Cash</span></button></div>
+    <div class="sticky"><div class="sum"><span class="big">Thu 12 Nov, 10:00 to 11:00 AM</span><span class="muted">₱150</span></div><button class="btn y" style="width:100%">Book and pay</button></div>
+  </div>
+  <div class="phone"><h1>Book an amenity</h1>
+    <article class="card"><div class="top"><h2 class="t3">Pool</h2><span class="tag ok"><span class="dot"></span>Available</span></div>
+      <div class="price">₱150 <small>per session</small></div><div class="runs">Run by Lena Cruz, Marco Diaz</div>
+      <div class="acts"><button class="btn y sm">Book</button><button class="btn ghost sm">Notify me</button></div></article>
+    <section class="panel"><h2>My bookings</h2>
+      <div class="brow"><div class="w">Pool · Thu 12 Nov<br>10:00 to 11:00 AM</div><div class="s">Pay ₱150 by Wed 6:40 PM.</div>
+        <div class="r"><span class="tag wait">Waiting for payment</span><button class="btn y sm">Send proof</button><button class="btn ghost sm">Cancel</button></div></div>
+      <div class="brow"><div class="w">Pool · Tue 10 Nov<br>7:00 to 8:00 AM</div><div class="s">Didn't go? Tell us by Wed 8:00 AM.</div>
+        <div class="r"><span class="tag">Ended</span><button class="btn ghost sm">I didn't use it</button></div></div>
+    </section>
+  </div>
+</div>
+
+<div class="note"><h2>3. Cancel and "I didn't use it"</h2>
+<p><b>Cancel</b> on a paid booking 1 hour or more before: one confirm, and the refund is approved at once ("₱150 will be repaid at the front desk"). Within the hour the button is gone and the row says why. Cancelling an unpaid hold just releases the time.</p>
+<p><b>I didn't use it</b> appears from the end of the booking for 24 hours and asks for a short reason.</p></div>
+<div class="stage">
+  <div class="dialog" role="dialog" aria-label="I didn't use it"><h2>You didn't use the pool?</h2>
+    <div class="muted">Pool · Tue 10 Nov, 7:00 to 8:00 AM · paid ₱150</div>
+    <span class="cap">What happened? The front desk checks it against check-ins and the pool's status.</span>
+    <div class="area">For example: The pool was closed for cleaning when I arrived.</div>
+    <div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn ghost">Back</button><button class="btn y">Send to front desk</button></div></div>
+</div>
+
+<div class="note"><h2>4. Coach: Amenities with "I run this" (Windows and phone)</h2>
+<p>Each card gets a switch. Members see the names on the amenity card. Where at least one coach runs an amenity, one of them must be in the gym when it's used; an amenity nobody runs works with any coach, as now.</p></div>
+<div class="stage">
+  <div class="app" style="max-width:860px"><nav class="rail"><i></i><i></i><i></i><i class="on"></i><i></i></nav>
+    <main class="page"><h1>Amenities</h1>
+      <div class="cards">
+        <article class="card"><div class="top"><h2 class="t3">Pool</h2><span class="tag ok"><span class="dot"></span>Available</span></div>
+          <div class="runs">Also run by Marco Diaz</div>
+          <button class="sw" role="switch" aria-checked="true"><i></i>I run this</button></article>
+        <article class="card"><div class="top"><h2 class="t3">Boxing ring</h2><span class="tag ok"><span class="dot"></span>Available</span></div>
+          <div class="runs">Nobody yet: any coach in the gym counts</div>
+          <button class="sw" role="switch" aria-checked="false"><i></i>I run this</button></article>
+        <article class="card"><div class="top"><h2 class="t3">Sauna</h2><span class="tag bad"><span class="dot"></span>Closed until Fri 13 Nov</span></div>
+          <div class="runs">Run by Marco Diaz</div>
+          <button class="sw" role="switch" aria-checked="false"><i></i>I run this</button></article>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="note"><h2>5. Front desk: Payments to verify (Windows only)</h2>
+<p>Amenity bookings join the list, with the booked time and how they'll pay. Approving a "Pay at the desk" one takes the cash into your drawer (it needs an open shift, as at the Cashier).</p>
+<p>Below it, <b>Booking refund claims</b>: what the member wrote, next to what the desk needs to check (check-ins that day and the amenity's status), with Approve and Decline, each with a reason.</p>
+<div class="ask"><b>One thing to confirm:</b> F13 said claims use Refunds &amp; voids, but that page is for Admin and System admin only. So the front desk decides claims here; approved refunds (from claims and from cancels) then show in Refunds &amp; voids, where they're repaid and recorded as membership refunds are.</div></div>
+<div class="stage">
+  <div class="app"><nav class="rail"><i></i><i class="on"></i><i></i><i></i><i></i></nav>
+    <main class="page"><h1>Payments to verify</h1>
+      <section class="panel" style="padding:0 0 4px">
+        <table><thead><tr><th>Member</th><th>For</th><th>How</th><th>Amount</th><th>Hold ends</th><th></th></tr></thead>
+          <tbody>
+            <tr><td>Alex Tan<div class="s">PAY-7F3K2</div></td><td>Pool booking<div class="s">Thu 12 Nov, 10:00 to 11:00 AM</div></td><td>GCash<div class="s">Ref 1029 3384 · proof sent</div></td><td>₱150</td><td>Wed 6:40 PM</td><td><div style="display:flex;gap:8px"><button class="btn y sm">Approve</button><button class="btn ghost sm">Reject</button></div></td></tr>
+            <tr><td>Bea Lim<div class="s">PAY-Q81LD</div></td><td>Boxing ring booking<div class="s">Today, 5:00 to 6:30 PM</div></td><td>At the desk<div class="s">Cash</div></td><td>₱200</td><td>Today 4:00 PM</td><td><div style="display:flex;gap:8px"><button class="btn y sm">Take cash</button><button class="btn ghost sm">Reject</button></div></td></tr>
+            <tr><td>Kai Mendoza<div class="s">PAY-2MZ90</div></td><td>Monthly membership</td><td>QR<div class="s">Ref 5512 · proof sent</div></td><td>₱1,500</td><td>Thu 9:15 AM</td><td><div style="display:flex;gap:8px"><button class="btn y sm">Approve</button><button class="btn ghost sm">Reject</button></div></td></tr>
+          </tbody></table>
+      </section>
+      <section class="panel" style="padding:0 0 4px">
+        <h2>Booking refund claims</h2>
+        <table><thead><tr><th>Member</th><th>Booking</th><th>They said</th><th>To check</th><th></th></tr></thead>
+          <tbody>
+            <tr><td>Alex Tan<div class="s">Sent Tue 10 Nov, 9:20 AM</div></td><td>Pool, ₱150<div class="s">Tue 10 Nov, 7:00 to 8:00 AM</div></td><td style="max-width:28ch">"The pool was closed for cleaning when I arrived."</td>
+              <td><div class="facts"><span><b>Check-ins that day:</b> 6:52 AM, QR scan</span><span><b>Pool status:</b> Closed 6:30 to 9:00 AM (cleaning)</span></div></td>
+              <td><div style="display:flex;gap:8px"><button class="btn y sm">Approve</button><button class="btn ghost sm">Decline</button></div></td></tr>
+          </tbody></table>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div class="note"><h2>6. Refunds &amp; voids (Admin and System admin, Windows only)</h2>
+<p>Booking refunds sit in the same list as membership refunds, labelled by what they're for, and are marked repaid the same way (cash goes out of your drawer).</p></div>
+<div class="stage">
+  <section class="panel" style="width:100%;max-width:1180px;padding:0 0 4px">
+    <table><thead><tr><th>Member</th><th>For</th><th>Why</th><th>Status</th><th>Amount</th><th></th></tr></thead>
+      <tbody>
+        <tr><td>Alex Tan</td><td>Pool booking<div class="s">Tue 10 Nov, 7:00 to 8:00 AM</div></td><td>Didn't use it · approved by the front desk<div class="s">"Pool log shows cleaning"</div></td><td><span class="tag ok"><span class="dot"></span>To repay</span></td><td>₱150</td><td><button class="btn y sm">Mark repaid</button></td></tr>
+        <tr><td>Bea Lim</td><td>Boxing ring booking<div class="s">Sat 14 Nov, 4:00 to 5:30 PM</div></td><td>Cancelled 1 hour or more before</td><td><span class="tag ok"><span class="dot"></span>To repay</span></td><td>₱200</td><td><button class="btn y sm">Mark repaid</button></td></tr>
+        <tr><td>Kai Mendoza</td><td>Monthly membership<div class="s">1 Nov to 1 Dec 2026</div></td><td>Not used: full refund</td><td><span class="tag">Waiting for decision</span></td><td>₱1,500</td><td><button class="btn ghost sm">Decide</button></td></tr>
+      </tbody></table>
+  </section>
+</div>
+
+<script>
+  // November 2026 starts on a Sunday; "today" is Tue 10 Nov; bookable through Tue 24 Nov
+  const today = 10, last = 24, booked = { 14: 'Boxing ring 4 PM' };
+  function month(el, phone) {
+    el.innerHTML = '';
+    for (let d = 1; d <= 30; d++) {
+      const b = document.createElement('button');
+      b.className = 'd' + (d === today ? ' today' : '') + (d < today || d > last ? ' dim' : '') + (d === 12 ? ' on' : '');
+      b.innerHTML = `<span class="n">${d}</span>` + (booked[d] ? `<span class="mine">${phone ? '' : booked[d]}</span>` : '');
+      if (booked[d] && phone) b.innerHTML += '<span class="mine"></span>';
+      b.setAttribute('aria-label', `${d} November` + (d === today ? ', today' : '') + (booked[d] ? ', you have a booking' : ''));
+      if (d < today || d > last) b.disabled = true;
+      b.onclick = () => { el.querySelectorAll('.d').forEach(x => x.classList.toggle('on', x === b));
+        const name = new Date(2026, 10, d).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+        const dn = document.getElementById('dayname'); if (!phone && dn) dn.textContent = name; };
+      el.appendChild(b);
+    }
+  }
+  const slots = ['6:00','6:30','7:00','7:30','8:00','8:30','9:00','9:30','10:00','10:30','11:00','11:30','1:00','1:30','2:00','2:30'];
+  const taken = new Set(['7:00','7:30','8:00','8:30']);   // someone's 7:00-8:00 plus its 30-minute cooldown
+  function times(el) {
+    el.innerHTML = '';
+    slots.forEach(t => { const b = document.createElement('button'); b.className = 'chip' + (t === '10:00' ? ' on' : ''); b.textContent = t;
+      if (taken.has(t)) { b.disabled = true; b.setAttribute('aria-label', t + ' taken'); }
+      b.onclick = () => { el.querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x === b));
+        const w = document.getElementById('when'); if (w && el.id === 'times') w.textContent = `Thu 12 Nov, ${t} to ${t.replace(/^(\d+)/, h => +h + 1)} ${+t.split(':')[0] < 12 && +t.split(':')[0] >= 6 ? 'AM' : 'PM'}`; };
+      el.appendChild(b); });
+  }
+  month(document.getElementById('month')); month(document.getElementById('pmonth'), true);
+  times(document.getElementById('times')); times(document.getElementById('ptimes'));
+  document.querySelectorAll('.lens, .pay').forEach(g => g.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; g.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); }));
+  document.querySelectorAll('.sw').forEach(s => s.onclick = () => s.setAttribute('aria-checked', s.getAttribute('aria-checked') !== 'true'));
+
+  function show(v) {
+    document.getElementById('sheet').hidden = v !== 'sheet';
+    document.getElementById('sheet').parentElement.classList.toggle('tall', v === 'sheet');
+    document.getElementById('rowWait').hidden = v === 'sheet';
+    ['rowEnded', 'rowRefund', 'rowClaim'].forEach(id => document.getElementById(id).hidden = v !== 'list');
+  }
+  document.querySelectorAll('[data-open]').forEach(b => b.onclick = () => show('sheet'));
+  document.querySelector('.sheet .x').onclick = () => show('wait');
+  document.querySelector('.sheet .foot .btn').onclick = () => show('wait');
+  document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', ev => {
+    const b = ev.target.closest('button'); if (!b) return;
+    seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    if (seg.dataset.set === 'theme') document.body.dataset.theme = b.dataset.v; else show(b.dataset.v);
+  }));
+  const q = new URLSearchParams(location.search);
+  if (q.get('theme')) document.body.dataset.theme = q.get('theme');
+  show(q.get('view') || 'sheet');
+</script>
+</body>
+</html>

@@ -327,6 +327,10 @@ public sealed class AnnouncementRow : BaseModel
   [Column("checked_in_by")] public string CheckedInBy { get; set; } = ""; [Column("checked_out_at")] public DateTime? CheckedOutAt { get; set; }
   [Column("checked_out_by")] public string? CheckedOutBy { get; set; } [Column("auto_closed")] public bool AutoClosed { get; set; } }
 
+// F14 (0052): a coach who runs an amenity. Written only through set_runs_amenity.
+[Table("coach_amenities")] public class CoachAmenity : BaseModel
+{ [PrimaryKey("amenity_id")] public int AmenityId { get; set; } [Column("coach_id")] public string CoachId { get; set; } = ""; }
+
 // a member's old permanent QR code (0034). F6 (0049): no longer scans; kept for history.
 [Table("member_codes")] public class MemberCode : BaseModel
 { [PrimaryKey("user_id")] public string UserId { get; set; } = ""; [Column("code")] public string Code { get; set; } = ""; }
@@ -338,6 +342,7 @@ public sealed class MemberPass : BaseModel
 // one amenity booking (0029). Written only through book_slots / cancel_reservation / end_reservation / extend_reservation.
 [Table("reservations")] public class Reservation : BaseModel
 { [Column("user_amenity_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? UserAmenityId { get; set; }
+  [Column("payment_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? PaymentId { get; set; }   // F12 (0052): a booking paid for on its own; null for pass and coach bookings
   [PrimaryKey("reservation_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("amenity_id")] public int AmenityId { get; set; }
   [Column("coach_id")] public string? CoachId { get; set; } [Column("training_session_id")] public int? TrainingSessionId { get; set; }
   [Column("starts_at")] public DateTime StartsAt { get; set; } [Column("ends_at")] public DateTime EndsAt { get; set; } [Column("status")] public string Status { get; set; } = "confirmed";

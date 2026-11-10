@@ -260,7 +260,7 @@ public sealed record PaymentItem(int Id, string What, string PaymentCode, string
     /// <summary>A membership or extension payment nobody has verified yet: the member can still withdraw it.</summary>
     public bool CanCancel => Status == Models.Status.Pending && Kind is PayKind.Membership or PayKind.Renewal;
     /// <summary>Rejected and expired payments are final; the member pays again with a fresh one.</summary>
-    public bool CanPayAgain => Status is Models.Status.Rejected or Models.Status.Expired && ItemId is not null;
+    public bool CanPayAgain => Status is Models.Status.Rejected or Models.Status.Expired && ItemId is not null && Kind != PayKind.Amenity;   // F12: an amenity is booked again on Book an amenity
     public string Detail => Status switch
     {
         Models.Status.Rejected => RejectedReason ?? "Rejected",
@@ -366,7 +366,6 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
         {
             PayKind.Membership => await AvailAsync(id),
             PayKind.Renewal => await RenewAsync(id),
-            PayKind.Amenity => await Safe.RunAsync(() => gw.RpcAsync<Payment>("avail_amenity", new() { ["p_amenity_id"] = id })),
             _ => AppResult<Payment>.Fail(AppErrorKind.Validation, "not_found")
         };
 
@@ -380,9 +379,23 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
 }
 
 // ===================== Payment verification and the counter (staff) =====================
-public sealed record PaymentRow(Payment Payment, string Payer, string Item, bool HasProof)
+public sealed record PaymentRow(Payment Payment, string Payer, string Item, bool HasProof, string? Booking = null)
 {
-    public string MethodText => PayMethod.Name(Payment.Method);   // 9.8: Void showed "cash" and "qr"
+    public string MethodText => Booking is not null && Payment.Method == PayMethod.Cash ? "At the desk" : PayMethod.Name(Payment.Method);   // 9.8: Void showed "cash" and "qr"
+    public bool HasBooking => Booking is not null;
+    /// <summary>F12: a "pay at the desk" booking is approved by taking the cash (into the cashier's drawer, 0050).</summary>
+    public string ApproveText => PaysAtDesk ? "Take cash" : "Verify";
+    bool PaysAtDesk => Booking is not null && Payment.Method == PayMethod.Cash;
+    /// <summary>The reference column: the e-wallet reference, or what is still missing.</summary>
+    public string ProofText => HasProof ? Payment.ReferenceNo ?? "" : PaysAtDesk ? "Pays at the desk" : "No proof yet";
+    public string WaitText => PaysAtDesk ? "Pays at the desk in cash" : "Waiting for the member to pay and send proof";
+}
+
+/// <summary>F13: a member's "I didn't use it", next to what the desk checks: their check-ins that day and the amenity's status now.</summary>
+public sealed record ClaimRow(RefundRequest Claim, string Member, string Amenity, string When, string CheckIns, string AmenityNow)
+{
+    public string Price => $"₱{Claim.Amount:N2}";
+    public string Sent => $"Sent {Claim.RequestedAt.ToUniversalTime().AddHours(8).ToString("ddd d MMM, h:mm tt", System.Globalization.CultureInfo.InvariantCulture)}";
 }
 /// <summary>Something the counter can take a payment for: a package, a membership to renew, or an amenity.</summary>
 public sealed record CounterItem(int Id, string Label, decimal? Price = null);
@@ -393,6 +406,9 @@ public interface IPaymentStaffService
     /// <summary>Verified payments, newest first. For finding a payment to void.</summary>
     Task<AppResult<IReadOnlyList<PaymentRow>>> RecentAsync();
     Task<AppResult<bool>> VerifyAsync(int paymentId, bool approve, string? reason = null);
+    /// <summary>F13 (0052): "I didn't use it" claims waiting for the front desk, oldest first.</summary>
+    Task<AppResult<IReadOnlyList<ClaimRow>>> ClaimsAsync();
+    Task<AppResult<bool>> DecideClaimAsync(int requestId, bool approve, string reason);
     /// <summary>Cash or GCash at the counter, verified at once. itemId is a package id, a membership id or an amenity id depending on kind.</summary>
     Task<AppResult<Payment>> RecordCounterAsync(string kind, string method, string? memberId, int? itemId, string? walkInName, string? referenceNo, string? discountCode);
     Task<AppResult<bool>> VoidAsync(int paymentId, string reason);
@@ -411,7 +427,48 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
     {
         var names = await Directory_.UserNamesAsync(gw);
         var look = await PaymentLookup.LoadAsync(gw);
-        return payments.Select(p => new PaymentRow(p, p.WalkInName ?? names.GetValueOrDefault(p.MemberId ?? "", "Unknown"), look.Item(p), p.ProofPath is not null)).ToList();
+        var held = (await gw.ListAsync<Reservation>(r => r.Status == "awaiting_payment")).Where(r => r.PaymentId is not null).ToDictionary(r => r.PaymentId!.Value);
+        return payments.Select(p => held.GetValueOrDefault(p.Id) is { } r
+            ? new PaymentRow(p, names.GetValueOrDefault(p.MemberId ?? "", "Unknown"), $"{look.Item(p)} booking", p.ProofPath is not null, BookingTime(r.StartsAt, r.EndsAt))
+            : new PaymentRow(p, p.WalkInName ?? names.GetValueOrDefault(p.MemberId ?? "", "Unknown"), look.Item(p), p.ProofPath is not null)).ToList();
+    }
+
+    static string BookingTime(DateTime start, DateTime end)
+    {
+        var en = System.Globalization.CultureInfo.InvariantCulture;
+        return $"{start.ToUniversalTime().AddHours(8).ToString("ddd d MMM, h:mm tt", en)} to {end.ToUniversalTime().AddHours(8).ToString("h:mm tt", en)}";
+    }
+
+    public Task<AppResult<IReadOnlyList<ClaimRow>>> ClaimsAsync() => Safe.RunAsync<IReadOnlyList<ClaimRow>>(async () =>
+    {
+        var claims = await gw.ListAsync<RefundRequest>(r => r.Kind == "no_show" && r.Status == "pending");
+        if (claims.Count == 0) return [];
+        var names = await Directory_.UserNamesAsync(gw);
+        var bookings = (await gw.ListAsync<Reservation>()).ToDictionary(r => r.Id);
+        var catalog = (await gw.ListAsync<Amenity>()).ToDictionary(a => a.Id);
+        var en = System.Globalization.CultureInfo.InvariantCulture;
+        var rows = new List<ClaimRow>();
+        foreach (var c in claims.OrderBy(c => c.RequestedAt))
+        {
+            var r = bookings.GetValueOrDefault(c.ReservationId ?? 0);
+            if (r is null) continue;
+            var dayStart = r.StartsAt.ToUniversalTime().AddHours(8).Date.AddHours(-8);   // midnight in Manila, as UTC
+            var dayEnd = dayStart.AddDays(1);
+            var ins = (await gw.ListAsync<GymCheckIn>(x => x.MemberId == c.MemberId)).Where(x => x.CheckedInAt.ToUniversalTime() >= dayStart && x.CheckedInAt.ToUniversalTime() < dayEnd)
+                .OrderBy(x => x.CheckedInAt).Select(x => x.CheckedInAt.ToUniversalTime().AddHours(8).ToString("h:mm tt", en) + (x.Method == "qr" ? ", QR scan" : x.Method is null ? "" : ", by name")).ToList();
+            var am = catalog.GetValueOrDefault(r.AmenityId);
+            var now = am is null ? "" : am.Availability == "unavailable" ? $"Unavailable{(string.IsNullOrWhiteSpace(am.StatusReason) ? "" : $": {am.StatusReason}")}" : am.Availability == "in_use" ? "In use" : "Available";
+            rows.Add(new ClaimRow(c, names.GetValueOrDefault(c.MemberId, "Member"), am?.Name ?? "Amenity", BookingTime(r.StartsAt, r.EndsAt),
+                ins.Count == 0 ? "None that day" : string.Join("; ", ins), now));
+        }
+        return rows;
+    });
+
+    public async Task<AppResult<bool>> DecideClaimAsync(int requestId, bool approve, string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
+        return await Safe.RunAsync(async () =>
+        { await gw.RpcAsync("decide_amenity_refund", new() { ["p_request_id"] = requestId, ["p_approve"] = approve, ["p_reason"] = reason.Trim() }); return true; });
     }
 
     public Task<AppResult<IReadOnlyList<PaymentRow>>> PendingAsync() => Safe.RunAsync(async () =>
@@ -501,7 +558,8 @@ public sealed record AmenityRow(Amenity Amenity, int? UserAmenityId, string? Sta
 }
 public sealed record UsageRow(AmenityUsage Usage, string Member, string Amenity);
 
-public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow, string? PhotoUrl = null, string? PassStatus = null, DateTime? PassUntil = null, bool PassIsSession = false)
+public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow, string? PhotoUrl = null, string? PassStatus = null, DateTime? PassUntil = null, bool PassIsSession = false,
+    IReadOnlyList<string>? Runners = null, bool RunsThis = false, bool IsCoach = false)
 {
     // members only (CanFollow): what a pass costs, or where theirs stands; empty hides it for coaches and staff
     public string PassText => !CanFollow ? "" : PassStatus switch
@@ -509,10 +567,22 @@ public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow,
         Models.Status.Pending => "Waiting for your payment to be verified",
         Models.Status.Active when PassIsSession => "1 session ready to book",
         Models.Status.Active => PassUntil is { } until ? $"Pass active until {until.ToLocalTime():d MMM yyyy}" : "Pass active",
-        _ => Amenity.DurationDays is { } days ? $"₱{Amenity.Price:N2} for {days} days" : $"₱{Amenity.Price:N2} per session"
+        _ => Amenity.DurationDays is { } days ? $"₱{Amenity.Price:N2} for {days} days" : $"₱{Amenity.Price:N2} per session, up to 2 hours"
     };
-    public string BuyText => !CanFollow || PassStatus is Models.Status.Pending or Models.Status.Active ? "" : Amenity.DurationDays is null ? "Buy a session" : "Buy pass";
-    public bool CanBuy => BuyText.Length > 0;
+    /// <summary>F12: a pass or a session already paid books without paying again.</summary>
+    public bool HasPass => PassStatus == Models.Status.Active;
+    public bool CanBook => CanFollow && !IsUnavailable;
+
+    /// <summary>F14: who runs it (other coaches, when a coach is looking). An amenity nobody runs works with any coach in the gym.</summary>
+    public string RunText
+    {
+        get
+        {
+            var names = string.Join(", ", Runners ?? []);
+            if (IsCoach) return RunsThis ? (names.Length > 0 ? $"Also run by {names}" : "Only you run this") : names.Length > 0 ? $"Run by {names}" : "Nobody yet: any coach in the gym counts";
+            return names.Length > 0 ? $"Run by {names}" : CanFollow ? "Any coach in the gym" : "";
+        }
+    }
 
     public string Availability => Amenity.Availability;
     public bool IsUnavailable => Amenity.Availability == "unavailable";
@@ -526,7 +596,7 @@ public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow,
     /// <summary>Everything the card shows is the same, so a refresh can leave it alone.</summary>
     public bool SameAs(AmenityCard o) => Followed == o.Followed && CanFollow == o.CanFollow && Amenity.Name == o.Amenity.Name && Amenity.Description == o.Amenity.Description
         && Availability == o.Availability && Reason == o.Reason && BackAt == o.BackAt
-        && Amenity.ImagePath == o.Amenity.ImagePath && PhotoUrl == o.PhotoUrl && PassText == o.PassText && BuyText == o.BuyText;
+        && Amenity.ImagePath == o.Amenity.ImagePath && PhotoUrl == o.PhotoUrl && PassText == o.PassText && RunText == o.RunText && RunsThis == o.RunsThis;
 }
 
 /// <summary>What a status change did: whether the amenity really changed, and the members who were alerted.</summary>
@@ -539,6 +609,8 @@ public interface IAmenityService
     /// <summary>Every amenity that is switched on, with its live status and whether this member saved it. CanFollow is false for coaches and staff.</summary>
     Task<AppResult<AmenityBoard>> BoardAsync();
     Task<AppResult<bool>> SetFollowedAsync(int amenityId, bool follow);
+    /// <summary>F14 (0052): a coach says they run an amenity, or no longer do.</summary>
+    Task<AppResult<bool>> SetRunsAsync(int amenityId, bool on);
     /// <summary>Front desk and admin only. Says whether anything really changed (judged against the amenity as it is now, not an older card) and who was alerted.</summary>
     Task<AppResult<AmenityChange>> SetStatusAsync(int amenityId, string status, string? reason, DateTime? backAtUtc);
 
@@ -561,14 +633,22 @@ public sealed class AmenityService(ISupabaseGateway gw) : IAmenityService
         var saved = (await gw.ListAsync<AmenityFollow>(f => f.MemberId == uid)).Select(f => f.AmenityId).ToHashSet();
         var isMember = (await gw.ListAsync<Member>(m => m.UserId == uid)).Count > 0;
         var passes = isMember ? (await CatalogAsync()).Value?.ToDictionary(r => r.Amenity.Id) ?? [] : [];
+        var isCoach = (await gw.ListAsync<Coach>(c => c.UserId == uid)).Count > 0;
+        var runs = await gw.ListAsync<CoachAmenity>();
+        var names = runs.Count == 0 ? new Dictionary<string, string>() : await Directory_.UserNamesAsync(gw);
         var cards = await Task.WhenAll(amenities.Select(async a =>
             new AmenityCard(a, saved.Contains(a.Id), isMember, (await Safe.RunAsync(() => photos.UrlAsync(a.ImagePath))).Value,
-                passes.GetValueOrDefault(a.Id)?.Status, passes.GetValueOrDefault(a.Id)?.ExpiresAt, passes.GetValueOrDefault(a.Id)?.IsSession ?? false)));
+                passes.GetValueOrDefault(a.Id)?.Status, passes.GetValueOrDefault(a.Id)?.ExpiresAt, passes.GetValueOrDefault(a.Id)?.IsSession ?? false,
+                runs.Where(r => r.AmenityId == a.Id && r.CoachId != uid).Select(r => names.GetValueOrDefault(r.CoachId, "A coach")).Order().ToList(),
+                runs.Any(r => r.AmenityId == a.Id && r.CoachId == uid), isCoach)));
         return new AmenityBoard(cards, isMember, (await gw.ListAsync<CoachVisit>(v => v.CheckedOutAt == null)).Count > 0);
     });
 
     public Task<AppResult<bool>> SetFollowedAsync(int amenityId, bool follow) => Safe.RunAsync(async () =>
     { await gw.RpcAsync("set_amenity_followed", new() { ["p_amenity_id"] = amenityId, ["p_follow"] = follow }); return true; });
+
+    public Task<AppResult<bool>> SetRunsAsync(int amenityId, bool on) => Safe.RunAsync(async () =>
+    { await gw.RpcAsync("set_runs_amenity", new() { ["p_amenity"] = amenityId, ["p_on"] = on }); return true; });
 
     public async Task<AppResult<AmenityChange>> SetStatusAsync(int amenityId, string status, string? reason, DateTime? backAtUtc)
     {
@@ -600,7 +680,9 @@ public sealed class AmenityService(ISupabaseGateway gw) : IAmenityService
         var uid = gw.CurrentUserId;
         var now = DateTime.UtcNow;
         var catalog = await gw.ListAsync<Amenity>(a => a.IsActive == true);
-        var mine = await gw.ListAsync<UserAmenity>(a => a.MemberId == uid);
+        // F12: a session bought with a booking, or one still waiting for its payment, belongs to that booking, not to a pass
+        var booked = (await gw.ListAsync<Reservation>(r => r.MemberId == uid)).Where(r => r.PaymentId is not null).Select(r => r.UserAmenityId).ToHashSet();
+        var mine = (await gw.ListAsync<UserAmenity>(a => a.MemberId == uid)).Where(a => !booked.Contains(a.Id) || (!a.IsSession && a.Status != Status.Pending)).ToList();
         // the latest entry per amenity tells where the member stands; an active one that ran out counts as expired
         return catalog.Select(a =>
         {

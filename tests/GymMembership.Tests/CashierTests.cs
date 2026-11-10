@@ -192,6 +192,8 @@ public class CashierTests
         public Task<AppResult<IReadOnlyList<PaymentRow>>> PendingAsync() => throw new NotSupportedException();
         public Task<AppResult<IReadOnlyList<PaymentRow>>> RecentAsync() => throw new NotSupportedException();
         public Task<AppResult<bool>> VerifyAsync(int paymentId, bool approve, string? reason = null) => throw new NotSupportedException();
+        public Task<AppResult<IReadOnlyList<ClaimRow>>> ClaimsAsync() => throw new NotSupportedException();
+        public Task<AppResult<bool>> DecideClaimAsync(int requestId, bool approve, string reason) => throw new NotSupportedException();
         public Task<AppResult<Payment>> RecordCounterAsync(string kind, string method, string? memberId, int? itemId, string? walkInName, string? referenceNo, string? discountCode) => throw new NotSupportedException();
         public Task<AppResult<bool>> VoidAsync(int paymentId, string reason) => throw new NotSupportedException();
         public Task<AppResult<string?>> ProofUrlAsync(string proofPath) => throw new NotSupportedException();

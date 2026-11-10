@@ -55,17 +55,20 @@ public class ConfirmationTests
     }
 
     [Fact]
-    public async Task Going_back_on_an_amenity_pass_buys_nothing()
+    public async Task Going_back_on_a_booking_books_and_charges_nothing()
     {
         var asked = Answer(false);
         var gw = await As("member@demo.io");
-        var vm = new AmenityBoardViewModel(new AmenityService(gw));
+        var vm = new BookAmenityViewModel(new ReservationService(gw), new AmenityService(gw), new Nav());
         await vm.LoadCommand.ExecuteAsync(null);
-        var card = vm.Cards.First(c => c.BuyText == "Buy pass");
+        await vm.OpenCommand.ExecuteAsync(vm.Cards.First(c => c.Amenity.Name == "Group classes"));
+        await vm.PickDayCommand.ExecuteAsync(vm.Days.First(d => d.CanPick && d.Date > DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8))));
+        vm.PickTimeCommand.Execute(vm.Times.First(t => t.CanPick));
         var before = (await new MembershipService(gw).MyPaymentsAsync()).Value!.Count;
-        await vm.BuyCommand.ExecuteAsync(card);
-        Assert.Contains(card.Amenity.Name, Assert.Single(asked));
+        await vm.BookCommand.ExecuteAsync(null);
+        Assert.Contains("Group classes", Assert.Single(asked));
         Assert.Equal(before, (await new MembershipService(gw).MyPaymentsAsync()).Value!.Count);
+        Assert.Empty(vm.Bookings);
     }
 
     [Theory]
@@ -121,7 +124,6 @@ public class ConfirmationTests
         { "MemberViewModels.cs", "HeaderViewModel", "SignOut" },
         { "MemberViewModels.cs", "SettingsViewModel", "ChangePassword" },
         { "MemberViewModels.cs", "PackagesViewModel", "Avail" },
-        { "MemberViewModels.cs", "AmenityBoardViewModel", "Buy" },
         { "MemberViewModels.cs", "MyMembershipViewModel", "PayAgain" },
         { "MemberViewModels.cs", "MyMembershipViewModel", "SendProof" },
         { "MemberViewModels.cs", "CoachesViewModel", "Hire" },
