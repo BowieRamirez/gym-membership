@@ -144,8 +144,14 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 
 ### Phase 6: member calendar, menu order, coach Profile & settings (items 6, 7, 5)
 - [x] Core, 2026-11-10: `MemberMenu.Order/Tabs` (F16: both orders; phone tabs are the first three plus Messages), `CalendarEntry`/`MemberDay`/`MemberCalendar.Days` (tiles name entries in a word, times in the day list), `MemberCalendarService.RangeAsync` (sessions, own bookings not tied to a session, hired coaches' shifts and open slots, gym hours), `MemberCalendarViewModel` (month, day list, Ask for this time through `RequestAsync` with the Time requests rules, Open goes to Book an amenity via a default `IAppNavigator.GoToBookings`). `MemberCalendarTests` 6, xUnit 948/948. No database change. Original text: member calendar view model built on `AttendanceCalendar` with sessions, bookings and the coach's shifts and open times (F15); menu order from membership state (F16) as a tested function in Core, so Windows and Android read the same list. xUnit for both.
-- [ ] Screens: Windows done 2026-11-10 (mockup approved as shown; captured member Calendar 1600 dark and 1100 light/dark, guest menu and locked Calendar, coach Profile & settings); Android and critique/polish left (see Current work). Original text: Screens (`impeccable` + `frontend-design`, Windows and Android): member Calendar (mockup first), the menu and phone tab bar in both orders, coach "Profile & settings" (`CoachProfilePage` and `SettingsPage` content on one page; menus, icon map and phone More list updated). Critique and polish on each, including a member with and without a membership and a coach with no photo.
-- [ ] No database change expected; if one appears, push it. `Test-WindowsAdminNavigation.ps1` passes; `ponytail-review`; plan updated.
+- [ ] Screens (`impeccable` + `frontend-design`, Windows and Android): member Calendar (mockup first), the menu and phone tab bar in both orders, coach "Profile & settings" (`CoachProfilePage` and `SettingsPage` content on one page; menus, icon map and phone More list updated). See Current work for the verification limits.
+  - [x] 2026-11-10: Calendar mockup approved; screen and menu changes implemented. Member Calendar moved under Windows Sessions and the Cashier shift card aligned beside Order in commit `447a8a5`.
+  - [x] 2026-11-10: Windows demo automation checked calendar navigation and day selection, Cashier layout and shift actions. xUnit 954/954 and Windows build passed.
+  - [x] 2026-11-10: Real Android `--no-incremental` build passed; partial isolated demo hierarchy checks are recorded in Current work.
+  - [ ] Remaining Android checks skipped at owner's request; do not treat them as passed.
+  - [ ] Full visual critique and polish, including the outstanding Windows light/dark inspection. Captures could not be viewed through this connection; `frontend-design` was unavailable.
+- [x] 2026-11-10: No database changes in Phase 6; all three Windows UI scripts passed with the emulator stopped; plan updated.
+- [ ] `ponytail-review`: skill unavailable in this session.
 
 ### Phase 7: live records and today's check-ins (items 2, 13)
 - [ ] Database: add `payments`, `gym_check_ins` and `membership_terms` to the Realtime publication with row-level security unchanged (members get only their own rows).
