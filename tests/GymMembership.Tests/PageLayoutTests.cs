@@ -8,6 +8,38 @@ public class PageLayoutTests
     static string AppFile(params string[] parts) => Path.Combine(new[] { TestPaths.AppFolder() }.Concat(parts).ToArray());
 
     [Fact]
+    public void Windows_member_sessions_hosts_calendar_and_removes_its_separate_menu_item()
+    {
+        var xaml = File.ReadAllText(AppFile("Views", "SessionsPage.xaml"));
+        var code = File.ReadAllText(AppFile("Views", "SessionsPage.xaml.cs"));
+        var shell = File.ReadAllText(AppFile("MemberShell.xaml.cs"));
+        Assert.True(xaml.IndexOf("</c:SideLayout>", StringComparison.Ordinal) < xaml.IndexOf("x:Name=\"CalendarSection\"", StringComparison.Ordinal));
+        Assert.Contains("x:Name=\"CalendarHost\"", xaml);
+        Assert.Contains("Shell.Current is MemberShell", code);
+        Assert.Contains("HostBelow(CalendarHost", code);
+        Assert.Contains("RefreshOwnViewModel => false", code);
+        Assert.Contains("Items.Remove(byPage[\"Calendar\"])", shell);
+        var calendar = File.ReadAllText(AppFile("Views", "MemberCalendarPage.xaml"));
+        Assert.Contains("<VerticalStackLayout.Resources>", calendar);
+        Assert.Contains("x:Key=\"TileWidth\"", calendar);
+    }
+
+    [Fact]
+    public void Cashier_shift_and_sale_are_in_main_column_with_order_beside_them()
+    {
+        var doc = System.Xml.Linq.XDocument.Load(AppFile("Views", "CashierPage.xaml"));
+        var side = doc.Descendants().Single(e => e.Name.LocalName == "SideLayout");
+        var columns = side.Elements().ToArray();
+        Assert.Equal(2, columns.Length);
+        Assert.Equal("VerticalStackLayout", columns[0].Name.LocalName);
+        Assert.Contains(columns[0].Elements(), e => (string?)e.Attribute("IsVisible") == "{Binding NeedsShift}");
+        Assert.Contains(columns[0].Elements(), e => (string?)e.Attribute("IsVisible") == "{Binding HasShift}");
+        Assert.Contains(columns[0].Elements(), e => (string?)e.Attribute("Text") == "What are they paying for?");
+        Assert.Contains(columns[1].Descendants(), e => (string?)e.Attribute("Text") == "Order");
+        Assert.Equal("False", (string?)side.Attribute("SideFirst"));
+    }
+
+    [Fact]
     public void Shared_pieces_exist()
     {
         var controls = File.ReadAllText(AppFile("Controls", "Controls.cs"));

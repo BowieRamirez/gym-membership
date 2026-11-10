@@ -17,6 +17,9 @@ public partial class MemberShell : Shell
 		var byPage = Items.ToDictionary(i => i.Title);
 		Items.Clear();
 		foreach (var entry in MemberMenu.Order(access.Active)) { var item = byPage[entry.Page]; item.Title = entry.Title; Items.Add(item); }
+#if WINDOWS
+		Items.Remove(byPage["Calendar"]);   // the member calendar lives below Sessions on Windows
+#endif
 		((Controls.HeaderBar)GetTitleView(this)).Attach(this, sp);
 		if (!access.Active)
 			foreach (var item in Items.Where(i => i.ClassId == "members-only"))

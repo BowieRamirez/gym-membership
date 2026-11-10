@@ -68,6 +68,7 @@ public class BasePage : ContentPage
 
     /// <summary>A page that shows live data returns how often to reload while it is open; null means only when it opens.</summary>
     protected virtual TimeSpan? AutoRefresh => null;
+    protected virtual bool RefreshOwnViewModel => true;
 
     IDispatcherTimer? _refresh;
 
@@ -75,7 +76,7 @@ public class BasePage : ContentPage
     {
         if (AutoRefresh is { } every && _refresh is not null) _refresh.Interval = every;   // a page whose pace depends on its connection
         var part = _part is BasePage { AutoRefresh: not null } ? _part.BindingContext : null;   // a part refreshes only if it did on its own
-        await Task.WhenAll(new[] { BindingContext, part }.OfType<LoadableViewModel>().Select(vm => vm.AutoRefreshAsync()));
+        await Task.WhenAll(new[] { RefreshOwnViewModel ? BindingContext : null, part }.OfType<LoadableViewModel>().Select(vm => vm.AutoRefreshAsync()));
     }
 
     /// <summary>

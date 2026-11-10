@@ -7,7 +7,9 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.MemberCalendarPage" x:DataType="vm:MemberCalendarViewModel" Title="Calendar">
 
-    <v:BasePage.Resources>
+    <ScrollView>
+        <VerticalStackLayout x:Name="CalendarContent" Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="12" MaximumWidthRequest="{StaticResource PageWidth}">
+    <VerticalStackLayout.Resources>
         <!-- a seventh of the month's width, less the gap (set in OnMonthSized), so a long label is cut inside its day, not drawn past it -->
         <x:Double x:Key="TileWidth">40</x:Double>
         <!-- one dot per kind (approved mockup): your session yellow (ink in light), booking green, your coach's open time a blue ring,
@@ -28,10 +30,7 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
-    </v:BasePage.Resources>
-
-    <ScrollView>
-        <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="12" MaximumWidthRequest="{StaticResource PageWidth}">
+    </VerticalStackLayout.Resources>
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 

@@ -12,6 +12,9 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
+            <c:SideLayout SideFirst="False" StackedSideWidth="{OnIdiom Phone=10000, Default=600}">
+                <!-- main: the drawer and sale; order stays beside both on wide windows -->
+                <VerticalStackLayout Spacing="12">
             <!-- F2 (0050): the cashier's own drawer, before the sale. No shift: count the float and start one (outlined, ink in light and yellow in dark as the Check-in PIN step: it's the next step). -->
             <Border Style="{StaticResource Panel}" Stroke="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" StrokeThickness="2" IsVisible="{Binding NeedsShift}">
                 <VerticalStackLayout Spacing="10">
@@ -89,9 +92,6 @@
                 </VerticalStackLayout>
             </Border>
 
-            <c:SideLayout SideFirst="False" StackedSideWidth="{OnIdiom Phone=10000, Default=600}">
-                <!-- main: what they pay for, who, which item; then today's cash -->
-                <VerticalStackLayout Spacing="12">
                     <Label Text="What are they paying for?" Style="{StaticResource SectionTitle}" Margin="0" />
                                 <!-- 9.7: the app's chips (were icon pills); the chosen one is yellow and says "selected" to a screen reader -->
                                 <FlexLayout Wrap="Wrap">
@@ -196,7 +196,7 @@
                                     </VerticalStackLayout>
 
                                     <Button Text="Complete payment" Command="{Binding RecordCommand}" MinimumHeightRequest="56" FontSize="18" />
-                                    <Label Text="Start your shift above to take cash. GCash and bank transfers don't need one." FontFamily="BarlowMedium" FontSize="13" IsVisible="{Binding CashNeedsShift}" />
+                                    <Label Text="Start your shift to take cash. GCash and bank transfers don't need one." FontFamily="BarlowMedium" FontSize="13" IsVisible="{Binding CashNeedsShift}" />
                                 </VerticalStackLayout>
                             </Border>
             </c:SideLayout>

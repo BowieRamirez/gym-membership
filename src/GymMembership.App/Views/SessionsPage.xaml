@@ -138,6 +138,11 @@
 
                 </VerticalStackLayout>
             </c:SideLayout>
+
+            <VerticalStackLayout x:Name="CalendarSection" IsVisible="False" Spacing="12" Margin="0,12,0,0">
+                <Label Text="Calendar" Style="{StaticResource SectionTitle}" />
+                <ContentView x:Name="CalendarHost" />
+            </VerticalStackLayout>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>
