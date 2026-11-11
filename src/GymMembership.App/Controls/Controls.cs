@@ -224,12 +224,15 @@ public class CardGrid : Layout
     public double Spacing { get; set; } = 12;
     /// <summary>Columns is a most: a narrow window gets fewer, so no card is squeezed below this width.</summary>
     public double MinColumnWidth { get; set; } = 320;
+    /// <summary>No more columns than visible cards, so a short set fills its row instead of leaving an empty column (Settings, 2026-11-11).</summary>
+    public bool FillRow { get; set; }
 
     int Fit(double width)
     {
         var room = width - Padding.HorizontalThickness;
         var fit = double.IsFinite(room) ? (int)((room + Spacing) / (MinColumnWidth + Spacing)) : Columns;
-        return Math.Clamp(fit, 1, Math.Max(1, Columns));
+        var most = FillRow ? Math.Min(Columns, this.Count(v => ((IView)v).Visibility != Visibility.Collapsed)) : Columns;
+        return Math.Clamp(fit, 1, Math.Max(1, most));
     }
 
     protected override Microsoft.Maui.Layouts.ILayoutManager CreateLayoutManager() => new Manager(this);

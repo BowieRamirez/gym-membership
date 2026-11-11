@@ -18,7 +18,7 @@
             <VerticalStackLayout x:Name="CoachSection" Spacing="12" Margin="0,8,0,0">
             <Label Text="Your coach profile" Style="{StaticResource SectionTitle}" />
             <!-- the profile form, and beside it (above it on phones and narrow windows) check-in -->
-            <c:SideLayout x:Name="CoachColumn" SideWidth="420" Spacing="16" StackedSideWidth="720">
+            <c:SideLayout x:Name="CoachColumn" SideWidth="420" Spacing="16">
             <Border Style="{StaticResource Panel}">
             <VerticalStackLayout Spacing="16">
 

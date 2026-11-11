@@ -28,7 +28,7 @@
                 </Grid>
             </Border>
 
-            <c:SideLayout SideFirst="False" StackedSideWidth="600">
+            <c:SideLayout SideFirst="False">
                 <!-- main: name and email in one panel, side by side when there is room; below it, a coach's profile (CoachProfilePage) -->
                 <VerticalStackLayout Spacing="12">
                 <Border Style="{StaticResource Panel}" Padding="0">
@@ -70,10 +70,11 @@
                 <ContentView x:Name="CoachSlot" x:FieldModifier="internal" />
                 </VerticalStackLayout>
 
-                <!-- side: the two short settings; stacked on a narrower window they stop at a readable width (StackedSideWidth).
+                <!-- side: the short settings, one column beside the main part; stacked on a narrower window they share one row across the
+                     width, each at its own height, so nothing leaves an empty half (owner, 2026-11-11).
                      Their buttons are outline: Settings has no single main action, and three yellow buttons shouted in dark (Phase 9 critique) -->
-                <VerticalStackLayout Spacing="12">
-                    <Border Style="{StaticResource SidePanel}">
+                <c:CardGrid x:Name="ShortSettings" Columns="3" FillRow="True" MinColumnWidth="320">
+                    <Border Style="{StaticResource SidePanel}" VerticalOptions="Start">
                         <VerticalStackLayout Spacing="10">
                             <c:CardTitle Text="Theme" />
                             <!-- three short choices: the field is as wide as the longest, not the panel (9.6 polish) -->
@@ -85,7 +86,7 @@
                     </Border>
 
                     <!-- F8 (mockup docs/mockups/desk-pin.html): members only; typed twice because a typo only shows up at the desk -->
-                    <Border Style="{StaticResource SidePanel}" IsVisible="{Binding IsMember}">
+                    <Border Style="{StaticResource SidePanel}" VerticalOptions="Start" IsVisible="{Binding IsMember}">
                         <VerticalStackLayout Spacing="12">
                             <VerticalStackLayout Spacing="2">
                                 <c:CardTitle Text="Desk PIN" />
@@ -110,7 +111,7 @@
                         </VerticalStackLayout>
                     </Border>
 
-                    <Border Style="{StaticResource SidePanel}">
+                    <Border Style="{StaticResource SidePanel}" VerticalOptions="Start">
                         <VerticalStackLayout Spacing="12">
                             <c:CardTitle Text="Change password" />
                             <VerticalStackLayout Spacing="4">
@@ -128,7 +129,7 @@
                             <Button Text="Change password" Style="{StaticResource SmallOutlineButton}" Command="{Binding ChangePasswordCommand}" HorizontalOptions="Start" />
                         </VerticalStackLayout>
                     </Border>
-                </VerticalStackLayout>
+                </c:CardGrid>
             </c:SideLayout>
 
         </VerticalStackLayout>

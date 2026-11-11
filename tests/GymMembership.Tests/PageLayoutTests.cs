@@ -153,4 +153,16 @@ public class PageLayoutTests
         Assert.True(settings.IndexOf("x:Name=\"CoachSlot\"", StringComparison.Ordinal) < settings.IndexOf("Text=\"Theme\"", StringComparison.Ordinal));
         Assert.Contains("settings.CoachSlot.Content = CoachSection", File.ReadAllText(AppFile("Views", "CoachProfilePage.xaml.cs")));
     }
+
+    [Fact]
+    public void Settings_stays_compact_on_a_narrower_window()
+    {
+        // owner, 2026-11-11: stacked, the short settings sit side by side across the width, and At the gym spans it, no empty right half
+        var settings = File.ReadAllText(AppFile("Views", "SettingsPage.xaml"));
+        Assert.DoesNotContain("StackedSideWidth", settings);
+        Assert.Contains("<c:CardGrid x:Name=\"ShortSettings\" Columns=\"3\" FillRow=\"True\"", settings);   // members' 3 cards in one row, coaches' 2
+        var controls = File.ReadAllText(AppFile("Controls", "Controls.cs"));
+        Assert.Contains("public bool FillRow", controls);
+        Assert.DoesNotContain("StackedSideWidth", File.ReadAllText(AppFile("Views", "CoachProfilePage.xaml")));
+    }
 }
