@@ -507,9 +507,8 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
 }
 
 // ---------- coach ----------
-public partial class CoachProfileViewModel(ICoachService svc, CoachPhotoViewModel? photo = null) : LoadableViewModel
+public partial class CoachProfileViewModel(ICoachService svc) : LoadableViewModel
 {
-    public CoachPhotoViewModel? Photo { get; } = photo;
     [ObservableProperty] private string? bio;
     [ObservableProperty] private string? specialty;
     [ObservableProperty] private string rateInput = "";   // text, parsed by CoachRate: never by the device's own decimal separator
@@ -524,7 +523,6 @@ public partial class CoachProfileViewModel(ICoachService svc, CoachPhotoViewMode
     public override async Task OnAppearingAsync()
     {
         await LoadAsync();
-        if (Photo is not null) await Photo.OnAppearingAsync();
     }
 
     [RelayCommand]

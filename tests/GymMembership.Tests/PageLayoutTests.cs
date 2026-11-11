@@ -141,11 +141,11 @@ public class PageLayoutTests
     }
 
     [Fact]
-    public void Coach_profile_has_one_column_and_one_picture_button_once_a_photo_exists()
+    public void Coach_profile_has_the_form_beside_check_in_and_one_picture_button()
     {
         var xaml = File.ReadAllText(AppFile("Views", "CoachProfilePage.xaml"));
         Assert.DoesNotContain("c:CardGrid", xaml);   // the form no longer sits alone in half a row
         Assert.Contains("<c:SideLayout x:Name=\"CoachColumn\"", xaml);   // form, with check-in beside it
-        Assert.Contains("IsVisible=\"{Binding NeedsPhoto}\"", xaml);   // the reminder goes once a photo exists; Account's "Change picture" stays
+        Assert.DoesNotContain("CoachPhoto", xaml);   // owner, 2026-11-11: one picture button, Account's "Change picture"
     }
 }

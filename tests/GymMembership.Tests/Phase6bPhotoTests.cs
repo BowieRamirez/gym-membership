@@ -21,9 +21,6 @@ public class Phase6bPhotoTests
             ? throw new IOException("picker failed") : Task.FromResult(File);
     }
 
-    static CoachPhotoViewModel Photo(DemoGateway gw, Picker? picker = null) =>
-        new(new CoachService(gw), new ProfileService(gw), picker ?? new Picker());
-
     [Fact]
     public async Task Admin_upload_changes_only_the_photo_and_keeps_live_status()
     {
@@ -115,56 +112,9 @@ public class Phase6bPhotoTests
         Assert.NotEmpty((await new CoachService(gw).ListCoachesAsync()).Value!);
     }
 
-    [Fact]
-    public async Task A_coach_is_prompted_until_the_photo_upload_succeeds()
-    {
-        var gw = await As("coach");
-        var vm = Photo(gw);
-        await vm.OnAppearingAsync();
-        Assert.True(vm.IsCoach);
-        Assert.True(vm.NeedsPhoto);
-        await vm.ChangePhotoCommand.ExecuteAsync(null);
-        Assert.False(vm.NeedsPhoto);
-        Assert.NotNull(vm.PhotoUrl);
-        Assert.Null(vm.ErrorMessage);
-        Assert.NotNull((await new ProfileService(gw).MeAsync()).Value!.AvatarPath);
-    }
 
-    [Fact]
-    public async Task Members_never_see_the_coach_prompt()
-    {
-        var vm = Photo(await As("member"));
-        await vm.OnAppearingAsync();
-        Assert.False(vm.IsCoach);
-        Assert.False(vm.NeedsPhoto);
-    }
 
-    [Fact]
-    public async Task Cancelling_or_failing_the_picker_preserves_the_reminder()
-    {
-        var gw = await As("coach");
-        var picker = new Picker { File = null };
-        var vm = Photo(gw, picker);
-        await vm.OnAppearingAsync();
-        await vm.ChangePhotoCommand.ExecuteAsync(null);
-        Assert.True(vm.NeedsPhoto);
-        Assert.Null(vm.ErrorMessage);
-        picker.Throw = true;
-        await vm.ChangePhotoCommand.ExecuteAsync(null);
-        Assert.True(vm.NeedsPhoto);
-        Assert.NotNull(vm.ErrorMessage);
-        Assert.False(vm.IsBusy);
-    }
 
-    [Fact]
-    public async Task Profile_loads_the_shared_photo_model()
-    {
-        // 9.6 (owner, 2026-11-08): the prompt lives on My coach profile only, no longer above the sessions list
-        var gw = await As("coach");
-        var profile = new CoachProfileViewModel(new CoachService(gw), Photo(gw));
-        await profile.OnAppearingAsync();
-        Assert.True(profile.Photo!.NeedsPhoto);
-    }
 
     [Fact]
     public async Task A_stale_catalog_toggle_does_not_clear_a_newer_photo()
@@ -190,21 +140,6 @@ public class Phase6bPhotoTests
         Assert.NotEqual(first.Value, second.Value);
     }
 
-    [Fact]
-    public async Task Failed_coach_upload_keeps_the_reminder_and_can_be_retried()
-    {
-        var gw = await As("coach");
-        var vm = Photo(gw);
-        await vm.OnAppearingAsync();
-        gw.FailWith = new HttpRequestException("offline");
-        await vm.ChangePhotoCommand.ExecuteAsync(null);
-        Assert.True(vm.NeedsPhoto);
-        Assert.NotNull(vm.ErrorMessage);
-        gw.FailWith = null;
-        await vm.ChangePhotoCommand.ExecuteAsync(null);
-        Assert.False(vm.NeedsPhoto);
-        Assert.Null(vm.ErrorMessage);
-    }
 
     [Fact]
     public async Task An_inactive_admin_cannot_upload_photos()
