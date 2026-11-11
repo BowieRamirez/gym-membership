@@ -38,8 +38,12 @@ public class AndroidAccountMenuTests
         Assert.Contains("new PopupMenu(anchor.Context!, anchor, GravityFlags.End)", source);
         Assert.Contains("items.Add(0, 1, 0, \"Settings\")", source);
         Assert.Contains("items.Add(0, 2, 1, \"Sign out\")", source);
-        Assert.Contains("shell.CurrentPage is not SettingsPage", source);
-        Assert.Contains("shell.GoToAsync(\"header-settings\")", source);
+        Assert.Contains("await OpenSettingsAsync(shell)", source);
+        // owner, 2026-11-11: a coach's Settings (their profile and account in one page) opens from this menu, like everyone else's
+        var header = Read("Controls/HeaderBar.xaml.cs");
+        Assert.Contains("shell is CoachShell", header);
+        Assert.Contains("Routing.RegisterRoute(\"header-coach-settings\", typeof(CoachProfilePage))", header);
+        Assert.Contains("shell.GoToAsync(\"header-settings\")", header);
         Assert.Contains("vm.SignOutCommand.ExecuteAsync(null)", source);
         Assert.Contains("_accountActionRunning", source);
         Assert.Contains("shell.Unloaded += (_, _) => _accountMenu?.Dismiss()", source);
@@ -51,7 +55,7 @@ public class AndroidAccountMenuTests
         var source = Read("Controls/PhoneNavigation.cs");
         Assert.Contains("#if ANDROID\n        moreItems = moreItems.Where(item => item.Title != \"Settings\");\n#endif", source);
         Assert.Contains("new PhoneMorePage(moreItems.Select", source);
-        Assert.Contains("[\"Settings\"] = typeof(SettingsPage)", source);
+        Assert.Contains("[\"Settings\"] = coach ? typeof(CoachProfilePage) : typeof(SettingsPage)", source);
         Assert.Contains("_secondary.Add(route, source)", source);
     }
 }

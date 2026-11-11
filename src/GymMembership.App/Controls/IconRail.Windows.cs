@@ -39,7 +39,6 @@ public static class IconRail
         ["Time requests"] = "clock",
         ["Dashboard"] = "layout-dashboard",
         ["Trainees & shifts"] = "users",
-        ["Profile & settings"] = "user-round",
     };
 
     public static void Install(Shell shell, string roleName, HeaderViewModel header, bool groupFrontDesk)

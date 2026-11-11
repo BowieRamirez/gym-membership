@@ -57,9 +57,7 @@ public class PhoneNavigationTests
     [InlineData("Amenities", "AmenitiesPage")]
     [InlineData("Coaches", "CoachesPage")]
     [InlineData("Time requests", "RequestsPage")]
-    [InlineData("Profile & settings", "CoachProfilePage")]
     [InlineData("Renew or change", "PackagesPage")]
-    [InlineData("Settings", "SettingsPage")]
     public void Every_more_destination_has_an_explicit_dependency_injected_page_factory(string title, string page)
     {
         var source = Read("Controls/PhoneNavigation.cs");
@@ -181,5 +179,16 @@ public class PhoneNavigationTests
         Assert.Contains("x:Name=\"CalendarToggle\"", xaml);
         Assert.Contains("CalendarSection.IsVisible = !CalendarSection.IsVisible", Read("Views/SessionsPage.xaml.cs"));
         Assert.DoesNotContain("MemberCalendarPage", Read("MemberShell.xaml"));
+    }
+
+    [Fact]
+    public void A_coach_has_settings_named_and_drawn_like_everyone_elses()
+    {
+        // owner, 2026-11-11: "Settings", not "Profile & settings"; on phones only in the account menu (More drops Settings), the same icon on Windows
+        Assert.Contains("<FlyoutItem Title=\"Settings\" Route=\"settings\"><ShellContent ContentTemplate=\"{DataTemplate views:CoachProfilePage}\" />", Read("CoachShell.xaml"));
+        Assert.Contains("moreItems.Where(item => item.Title != \"Settings\")", Read("Controls/PhoneNavigation.cs"));
+        Assert.Contains("[\"Settings\"] = coach ? typeof(CoachProfilePage) : typeof(SettingsPage)", Read("Controls/PhoneNavigation.cs"));
+        Assert.DoesNotContain("Profile & settings", Read("Controls/IconRail.Windows.cs"));
+        Assert.Contains("Title=\"Settings\"", Read("Views/CoachProfilePage.xaml"));
     }
 }

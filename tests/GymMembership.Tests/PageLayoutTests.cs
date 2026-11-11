@@ -147,5 +147,10 @@ public class PageLayoutTests
         Assert.DoesNotContain("c:CardGrid", xaml);   // the form no longer sits alone in half a row
         Assert.Contains("<c:SideLayout x:Name=\"CoachColumn\"", xaml);   // form, with check-in beside it
         Assert.DoesNotContain("CoachPhoto", xaml);   // owner, 2026-11-11: one picture button, Account's "Change picture"
+        // owner's sketch, 2026-11-11: Account first, then the coach profile under name and email, Theme and password in the right column
+        var settings = File.ReadAllText(AppFile("Views", "SettingsPage.xaml"));
+        Assert.True(settings.IndexOf("Text=\"Sign-in email\"", StringComparison.Ordinal) < settings.IndexOf("x:Name=\"CoachSlot\"", StringComparison.Ordinal));
+        Assert.True(settings.IndexOf("x:Name=\"CoachSlot\"", StringComparison.Ordinal) < settings.IndexOf("Text=\"Theme\"", StringComparison.Ordinal));
+        Assert.Contains("settings.CoachSlot.Content = CoachSection", File.ReadAllText(AppFile("Views", "CoachProfilePage.xaml.cs")));
     }
 }

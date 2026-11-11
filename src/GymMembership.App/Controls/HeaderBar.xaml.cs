@@ -12,7 +12,11 @@ public partial class HeaderBar : ContentView
 {
 	// The picture opens Settings as a page on top of whatever you are on, with a back arrow. Switching shell items instead would
 	// leave the front desk's bottom bar behind with no way back to it. The bell opens the alerts panel (below).
-	static HeaderBar() => Routing.RegisterRoute("header-settings", typeof(SettingsPage));
+	static HeaderBar()
+	{
+		Routing.RegisterRoute("header-settings", typeof(SettingsPage));
+		Routing.RegisterRoute("header-coach-settings", typeof(CoachProfilePage));   // a coach's Settings holds their coach profile too (F17)
+	}
 
 	IServiceProvider? _sp;
 	bool _panelOpen;
@@ -75,10 +79,9 @@ public partial class HeaderBar : ContentView
 #endif
 
 	// already looking at it: do nothing, so repeated taps do not stack copies
-	static void Open<TPage>(string route) where TPage : Page => MainThread.BeginInvokeOnMainThread(async () =>
-	{
-		if (Shell.Current.CurrentPage is not TPage) await Shell.Current.GoToAsync(route);
-	});
+	internal static Task OpenSettingsAsync(Shell shell) => shell is CoachShell
+		? shell.CurrentPage is CoachProfilePage ? Task.CompletedTask : shell.GoToAsync("header-coach-settings")
+		: shell.CurrentPage is SettingsPage ? Task.CompletedTask : shell.GoToAsync("header-settings");
 	// the same flat, hairline-edged box as the app's other panels, in the colors of the theme that is showing
 	static RoundRectangle HairlineBox()
 	{
@@ -87,7 +90,7 @@ public partial class HeaderBar : ContentView
 		return new RoundRectangle { CornerRadius = 6, StrokeThickness = 1, Stroke = line };
 	}
 
-	void OnAvatarTapped(object? sender, TappedEventArgs e) => Open<SettingsPage>("header-settings");
+	void OnAvatarTapped(object? sender, TappedEventArgs e) => MainThread.BeginInvokeOnMainThread(async () => await OpenSettingsAsync(Shell.Current));
 
 	async void OnBellClicked(object? sender, EventArgs e)
 	{

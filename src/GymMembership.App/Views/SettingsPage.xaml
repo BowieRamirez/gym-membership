@@ -29,7 +29,8 @@
             </Border>
 
             <c:SideLayout SideFirst="False" StackedSideWidth="600">
-                <!-- main: name and email in one panel, side by side when there is room -->
+                <!-- main: name and email in one panel, side by side when there is room; below it, a coach's profile (CoachProfilePage) -->
+                <VerticalStackLayout Spacing="12">
                 <Border Style="{StaticResource Panel}" Padding="0">
                     <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" MinColumnWidth="340" Spacing="0">
                         <VerticalStackLayout Spacing="14" Padding="18">
@@ -66,6 +67,8 @@
                         </VerticalStackLayout>
                     </c:CardGrid>
                 </Border>
+                <ContentView x:Name="CoachSlot" x:FieldModifier="internal" />
+                </VerticalStackLayout>
 
                 <!-- side: the two short settings; stacked on a narrower window they stop at a readable width (StackedSideWidth).
                      Their buttons are outline: Settings has no single main action, and three yellow buttons shouted in dark (Phase 9 critique) -->

@@ -58,7 +58,7 @@ public partial class HeaderBar
             {
                 if (e.Item?.ItemId == 1)
                 {
-                    if (shell.CurrentPage is not SettingsPage) await shell.GoToAsync("header-settings");
+                    await OpenSettingsAsync(shell);
                 }
                 else if (e.Item?.ItemId == 2 && BindingContext is HeaderViewModel vm && vm.SignOutCommand.CanExecute(null))
                     await vm.SignOutCommand.ExecuteAsync(null);
