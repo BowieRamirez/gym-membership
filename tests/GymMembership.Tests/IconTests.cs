@@ -96,7 +96,7 @@ public class IconTests
         var cashier = File.ReadAllText(AppFile("Views", "CashierPage.xaml"));
         Assert.DoesNotContain("c:IconButton", cashier);
         foreach (var choice in new[] { "Membership", "Renewal", "Amenity", "Walk-in", "Cash", "GCash" })
-            Assert.Contains($"<Setter Property=\"BorderColor\" Value=\"{{StaticResource Signal}}\" /><Setter Property=\"SemanticProperties.Description\" Value=\"{choice}, selected\" />", cashier);
+            Assert.Contains($"<Setter Property=\"BorderColor\" Value=\"{{AppThemeBinding Light={{StaticResource ChosenLight}}, Dark={{StaticResource Signal}}}}\" /><Setter Property=\"SemanticProperties.Description\" Value=\"{choice}, selected\" />", cashier);
     }
 
     [Fact]

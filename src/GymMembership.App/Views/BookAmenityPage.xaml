@@ -13,9 +13,9 @@
             <Setter Property="Margin" Value="0,0,6,6" />
             <Style.Triggers>
                 <DataTrigger TargetType="Button" Binding="{Binding IsPicked}" Value="True">
-                    <Setter Property="BackgroundColor" Value="{StaticResource Signal}" />
-                    <Setter Property="TextColor" Value="{StaticResource Black}" />
-                    <Setter Property="BorderColor" Value="{StaticResource Signal}" />
+                    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
+                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" />
+                    <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
                 </DataTrigger>
                 <DataTrigger TargetType="Button" Binding="{Binding CanPick}" Value="False">
                     <Setter Property="Opacity" Value="0.38" />

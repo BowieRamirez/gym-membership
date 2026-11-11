@@ -109,12 +109,12 @@ public sealed class PhoneNavigation
         shell.Items.Add(_bar);
         shell.CurrentItem = _bar;
         _bar.CurrentItem = _bar.Items[0];
-        // Phase 9 (D23, approved mockup): a white bar (light) or near-black (dark); the current tab is a black pill with a yellow icon
-        // (light) or a yellow pill with a black icon (dark); other tabs muted.
-        shell.SetAppThemeColor(Shell.TabBarBackgroundColorProperty, Color.FromArgb("#FFFFFF"), Color.FromArgb("#161616"));
+        // Phase 9 (D23): a near-black bar in dark; owner 2026-11-12 (docs/mockups/phone-light-yellow.html, B): a yellow bar in light. The
+        // current tab is a black pill with a yellow icon (light) or a yellow pill with a black icon (dark); other tabs dark olive / muted.
+        shell.SetAppThemeColor(Shell.TabBarBackgroundColorProperty, Color.FromArgb("#FFEC00"), Color.FromArgb("#161616"));
         shell.SetAppThemeColor(Shell.TabBarForegroundColorProperty, Color.FromArgb("#FFEC00"), Color.FromArgb("#111111"));
         shell.SetAppThemeColor(Shell.TabBarTitleColorProperty, Color.FromArgb("#111111"), Color.FromArgb("#F2F2F2"));
-        shell.SetAppThemeColor(Shell.TabBarUnselectedColorProperty, Color.FromArgb("#5B5B5B"), Color.FromArgb("#A6A6A6"));
+        shell.SetAppThemeColor(Shell.TabBarUnselectedColorProperty, Color.FromArgb("#3D3A00"), Color.FromArgb("#A6A6A6"));
         var app = Application.Current;
         void ThemeChanged(object? sender, AppThemeChangedEventArgs e) => shell.Dispatcher.Dispatch(StyleBar);
         shell.Loaded += (_, _) =>
@@ -183,7 +183,7 @@ public sealed class PhoneNavigation
             {
                 var background = new Android.Graphics.Drawables.GradientDrawable();
                 var dark = Application.Current?.RequestedTheme == AppTheme.Dark;
-                var surface = Shell.GetTabBarBackgroundColor(_shell) ?? Color.FromArgb(dark ? "#161616" : "#FFFFFF");
+                var surface = Shell.GetTabBarBackgroundColor(_shell) ?? Color.FromArgb(dark ? "#161616" : "#FFEC00");
                 var pageBackground = _shell.CurrentPage?.BackgroundColor ?? _shell.BackgroundColor ?? surface;
                 background.SetColor(surface.ToPlatform());
                 background.SetCornerRadius(0);

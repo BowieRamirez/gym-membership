@@ -50,14 +50,14 @@
                 <Button Text="{Binding CoachTabText}" Style="{StaticResource FilterChip}" Command="{Binding ShowTabCommand}" CommandParameter="coach">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Tab}" Value="coach">
-                            <Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
                 <Button Text="{Binding StaffTabText}" Style="{StaticResource FilterChip}" Command="{Binding ShowTabCommand}" CommandParameter="support">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Tab}" Value="support">
-                            <Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
@@ -68,21 +68,21 @@
                 <Button Text="Open" Style="{StaticResource FilterChip}" Command="{Binding ShowFilterCommand}" CommandParameter="open">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="open">
-                            <Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
                 <Button Text="Mine" Style="{StaticResource FilterChip}" Command="{Binding ShowFilterCommand}" CommandParameter="mine">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="mine">
-                            <Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
                 <Button Text="Closed" Style="{StaticResource FilterChip}" Command="{Binding ShowFilterCommand}" CommandParameter="closed">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="closed">
-                            <Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>

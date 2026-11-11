@@ -23,16 +23,16 @@
                 </Grid>
                 <FlexLayout Wrap="Wrap" IsVisible="{Binding CanMark}">
                     <Button Text="Present" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnMarkPresent">
-                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="present"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" /></DataTrigger></Button.Triggers>
+                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="present"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
                     </Button>
                     <Button Text="Late" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnMarkLate">
-                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="late"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" /></DataTrigger></Button.Triggers>
+                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="late"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
                     </Button>
                     <Button Text="Absent" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnMarkAbsent">
-                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="absent"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" /></DataTrigger></Button.Triggers>
+                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="absent"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
                     </Button>
                     <Button Text="Excused" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnMarkExcused">
-                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="excused"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" /></DataTrigger></Button.Triggers>
+                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Mark}" Value="excused"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
                     </Button>
                 </FlexLayout>
             </VerticalStackLayout>
@@ -48,11 +48,11 @@
             <c:CardGrid Columns="{OnIdiom Phone=1, Default=4}" MinColumnWidth="180">
                 <Border Style="{StaticResource HeroPanel}">
                     <VerticalStackLayout Spacing="6">
-                        <c:CardTitle Text="Next session" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
-                        <Label Text="{Binding NextTimeText}" Style="{StaticResource Numeral}" IsVisible="{Binding HasNext}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+                        <c:CardTitle Text="Next session" TextColor="{AppThemeBinding Light={StaticResource OnAccentLight}, Dark={StaticResource Black}}" />
+                        <Label Text="{Binding NextTimeText}" Style="{StaticResource Numeral}" IsVisible="{Binding HasNext}" TextColor="{AppThemeBinding Light={StaticResource OnAccentLight}, Dark={StaticResource Black}}" />
                         <!-- nothing booked: "None booked" at heading size, so it stays on one line in a narrow card -->
-                        <Label Text="{Binding NextTimeText}" Style="{StaticResource Heading}" FontSize="26" IsVisible="{Binding HasNext, Converter={StaticResource Not}}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
-                        <Label Text="{Binding NextWhenText}" FontFamily="BarlowMedium" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+                        <Label Text="{Binding NextTimeText}" Style="{StaticResource Heading}" FontSize="26" IsVisible="{Binding HasNext, Converter={StaticResource Not}}" TextColor="{AppThemeBinding Light={StaticResource OnAccentLight}, Dark={StaticResource Black}}" />
+                        <Label Text="{Binding NextWhenText}" FontFamily="BarlowMedium" TextColor="{AppThemeBinding Light={StaticResource OnAccentLight}, Dark={StaticResource Black}}" />
                     </VerticalStackLayout>
                 </Border>
                 <Border Style="{StaticResource Panel}" IsVisible="{OnIdiom Phone=False, Default=True}">

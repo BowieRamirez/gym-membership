@@ -144,16 +144,16 @@ public class PhoneNavigationTests
         Assert.NotEmpty(svg.Root.Elements());
     }
 
-    // Phase 9 (D23, approved mockup): a white bar in light mode, near-black in dark; the selected tab is a black pill with a yellow
-    // icon in light and a yellow pill with a black icon in dark.
+    // Phase 9 (D23): near-black in dark; owner 2026-11-12 (mockup phone-light-yellow.html, B): yellow in light. The selected tab is a
+    // black pill with a yellow icon in light and a yellow pill with a black icon in dark.
     [Fact]
     public void Bottom_bar_is_yellow_and_black_with_the_selected_tab_on_a_pill()
     {
         var source = Read("Controls/PhoneNavigation.cs");
-        Assert.Contains("TabBarBackgroundColorProperty, Color.FromArgb(\"#FFFFFF\"), Color.FromArgb(\"#161616\")", source);
+        Assert.Contains("TabBarBackgroundColorProperty, Color.FromArgb(\"#FFEC00\"), Color.FromArgb(\"#161616\")", source);
         Assert.Contains("TabBarForegroundColorProperty, Color.FromArgb(\"#FFEC00\"), Color.FromArgb(\"#111111\")", source);
         Assert.Contains("TabBarTitleColorProperty, Color.FromArgb(\"#111111\"), Color.FromArgb(\"#F2F2F2\")", source);
-        Assert.Contains("TabBarUnselectedColorProperty, Color.FromArgb(\"#5B5B5B\"), Color.FromArgb(\"#A6A6A6\")", source);
+        Assert.Contains("TabBarUnselectedColorProperty, Color.FromArgb(\"#3D3A00\"), Color.FromArgb(\"#A6A6A6\")", source);
         Assert.Contains("ItemActiveIndicatorColor", source);
         // the app's MaterialComponents theme gives the indicator no shape or size, so without these it never draws
         Assert.Contains("ItemActiveIndicatorShapeAppearance", source);
@@ -162,7 +162,7 @@ public class PhoneNavigationTests
         Assert.Contains("ItemActiveIndicatorColor = Android.Content.Res.ColorStateList.ValueOf(Color.FromArgb(dark ? \"#FFEC00\" : \"#111111\")", source);
         // the front desk's phone bar comes from the shared Shell style (layout unchanged, D22): the same colours, no pill
         var styles = Read("Resources/Styles/Styles.xaml");
-        Assert.Contains("<Setter Property=\"Shell.TabBarBackgroundColor\" Value=\"{AppThemeBinding Light={StaticResource CardLight}, Dark={StaticResource RailDark}}\" />", styles);
+        Assert.Contains("<Setter Property=\"Shell.TabBarBackgroundColor\" Value=\"{AppThemeBinding Light={StaticResource Signal}, Dark={StaticResource RailDark}}\" />", styles);
         Assert.Contains("<Setter Property=\"Shell.TabBarForegroundColor\" Value=\"{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}\" />", styles);
         Assert.Contains("<Setter Property=\"Shell.TabBarTitleColor\" Value=\"{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}\" />", styles);
         foreach (var old in new[] { "#24282C", "#1F2226", "#ECEEF0", "#5C646C", "#9AA3AB", "#E4F58A", "#2C302B", "#EEF1EC", "#5A6159", "#A3AAA1" })

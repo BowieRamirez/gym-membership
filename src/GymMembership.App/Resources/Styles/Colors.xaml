@@ -33,6 +33,17 @@
     <!-- The signal colour: the selected item, the highlight (dark), attention, the main action. Text on it is always black.
          On white it is 1.2:1, so in light mode it is only ever a filled surface, never text, a thin line or a focus ring. -->
     <Color x:Key="Signal">#FFEC00</Color>
+    <!-- Phone light mode carries the yellow too (owner 2026-11-12, docs/mockups/phone-light-yellow.html option B): main buttons and the
+         highlight card yellow as in dark mode, the chosen chip black with yellow words. Windows light keeps ink. Tablets count as Windows. -->
+    <OnIdiom x:Key="AccentLight" x:TypeArguments="Color" Phone="#FFEC00" Default="#111111" />
+    <OnIdiom x:Key="OnAccentLight" x:TypeArguments="Color" Phone="#111111" Default="#FFFFFF" />
+    <OnIdiom x:Key="ChosenLight" x:TypeArguments="Color" Phone="#111111" Default="#FFEC00" />
+    <OnIdiom x:Key="OnChosenLight" x:TypeArguments="Color" Phone="#FFEC00" Default="#111111" />
+    <OnIdiom x:Key="HeroActionLight" x:TypeArguments="Color" Phone="#111111" Default="#FFEC00" />
+    <OnIdiom x:Key="OnHeroActionLight" x:TypeArguments="Color" Phone="#FFFFFF" Default="#111111" />
+    <!-- the membership card's days-left lane: black pills on a darker yellow when the card is yellow (as in dark mode) -->
+    <OnIdiom x:Key="LaneDashLight" x:TypeArguments="Color" Phone="#111111" Default="#FFEC00" />
+    <OnIdiom x:Key="LaneTrackLight" x:TypeArguments="Color" Phone="#D6C700" Default="#3A3A3A" />
 
     <!-- Icons: black on a light chip (light), light on a dark chip (dark) -->
     <Color x:Key="IconInk">#111111</Color>

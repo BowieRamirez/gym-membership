@@ -24,7 +24,7 @@
         <Setter Property="Shell.ForegroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
         <Setter Property="Shell.TitleColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
         <!-- the front desk's phone bar (layout unchanged, D22): white or near-black, the current tab in ink (light) or yellow (dark) -->
-        <Setter Property="Shell.TabBarBackgroundColor" Value="{AppThemeBinding Light={StaticResource CardLight}, Dark={StaticResource RailDark}}" />
+        <Setter Property="Shell.TabBarBackgroundColor" Value="{AppThemeBinding Light={StaticResource Signal}, Dark={StaticResource RailDark}}" />
         <Setter Property="Shell.TabBarForegroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
         <Setter Property="Shell.TabBarTitleColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
         <Setter Property="Shell.TabBarUnselectedColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
@@ -105,8 +105,8 @@
 
     <!-- ===== Buttons: pills. The main action is black (light) or yellow (dark); outline is secondary ===== -->
     <Style x:Key="BaseButton" TargetType="Button">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource AccentLight}, Dark={StaticResource Signal}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnAccentLight}, Dark={StaticResource Black}}" />
         <Setter Property="FontFamily" Value="BarlowSemiBold" />
         <Setter Property="FontSize" Value="{StaticResource TextBody}" />
         <Setter Property="CornerRadius" Value="24" />
@@ -160,7 +160,7 @@
         <Setter Property="StrokeShape" Value="RoundRectangle 16" />
         <Setter Property="StrokeThickness" Value="0" />
         <Setter Property="Padding" Value="14" />
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource AccentLight}, Dark={StaticResource Signal}}" />
     </Style>
 
 
@@ -256,12 +256,12 @@
 
     <!-- The buttons on a highlight card: yellow on the black card (light), black on the yellow card (dark) -->
     <Style x:Key="HeroButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Signal}, Dark={StaticResource Black}}" />
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource HeroActionLight}, Dark={StaticResource Black}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnHeroActionLight}, Dark={StaticResource White}}" />
     </Style>
     <Style x:Key="HeroSmallButton" TargetType="Button" BasedOn="{StaticResource SmallButton}">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Signal}, Dark={StaticResource Black}}" />
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource HeroActionLight}, Dark={StaticResource Black}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnHeroActionLight}, Dark={StaticResource White}}" />
     </Style>
     <!-- Yellow in both themes: the one main action of a sign-in or registration page (black text, so it works in light too) -->
     <Style x:Key="SignalButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">

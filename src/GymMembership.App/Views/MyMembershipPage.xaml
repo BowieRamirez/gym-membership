@@ -114,15 +114,15 @@
             <Grid ColumnDefinitions="{OnIdiom Phone='*', Default='*,*,*'}" ColumnSpacing="12" RowSpacing="12">
                 <Border Style="{StaticResource HeroPanel}" Padding="{OnIdiom Phone='18,16', Default='18,14'}">
                     <VerticalStackLayout Spacing="{OnIdiom Phone=4, Default=8}">
-                        <c:CardTitle Text="{Binding HeroCaption}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+                        <c:CardTitle Text="{Binding HeroCaption}" TextColor="{AppThemeBinding Light={StaticResource OnAccentLight}, Dark={StaticResource Black}}" />
                         <!-- the days, end date and lane only while a term runs; otherwise the sentence above and the action say it all -->
-                        <Label Text="{Binding HeroNumber}" Style="{StaticResource Numeral}" FontSize="{OnIdiom Phone=56, Default=60}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}"
+                        <Label Text="{Binding HeroNumber}" Style="{StaticResource Numeral}" FontSize="{OnIdiom Phone=56, Default=60}" TextColor="{AppThemeBinding Light={StaticResource OnAccentLight}, Dark={StaticResource Black}}"
                                SemanticProperties.Description="Days left on your membership" IsVisible="{Binding HasActiveTerm}" />
                         <ContentView IsVisible="{OnIdiom Phone=True, Default=False}">
                             <ContentView.Triggers><DataTrigger TargetType="ContentView" Binding="{Binding HasActiveTerm}" Value="False"><Setter Property="IsVisible" Value="False" /></DataTrigger></ContentView.Triggers>
-                            <Label Text="{Binding TermEndsText, StringFormat='Ends {0}'}" Style="{StaticResource Caption}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" Margin="0,0,0,6" />
+                            <Label Text="{Binding TermEndsText, StringFormat='Ends {0}'}" Style="{StaticResource Caption}" TextColor="{AppThemeBinding Light={StaticResource OnAccentLight}, Dark={StaticResource Black}}" Margin="0,0,0,6" />
                         </ContentView>
-                        <c:LaneView IsVisible="{Binding HasActiveTerm}" Fraction="{Binding LaneFraction}" HeightRequest="26" DashColor="{AppThemeBinding Light={StaticResource Signal}, Dark={StaticResource Black}}" TrackColor="{AppThemeBinding Light=#3A3A3A, Dark=#D6C700}" />
+                        <c:LaneView IsVisible="{Binding HasActiveTerm}" Fraction="{Binding LaneFraction}" HeightRequest="26" DashColor="{AppThemeBinding Light={StaticResource LaneDashLight}, Dark={StaticResource Black}}" TrackColor="{AppThemeBinding Light={StaticResource LaneTrackLight}, Dark=#D6C700}" />
                         <!-- phones: the one action sits on the highlight card, so a yellow card and a yellow button never stack -->
                         <ContentView IsVisible="{OnIdiom Phone=True, Default=False}">
                             <ContentView.Triggers><DataTrigger TargetType="ContentView" Binding="{Binding PayNow, Converter={StaticResource IsNotNull}}" Value="True"><Setter Property="IsVisible" Value="False" /></DataTrigger></ContentView.Triggers>
@@ -195,16 +195,16 @@
                     <!-- status filter chips; they wrap onto a second line on a narrow phone; the yellow one is in use -->
                     <FlexLayout Wrap="Wrap">
                             <Button Text="All" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="All">
-                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="All"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" /></DataTrigger></Button.Triggers>
+                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="All"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
                             </Button>
                             <Button Text="Verified" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Verified">
-                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Verified"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" /></DataTrigger></Button.Triggers>
+                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Verified"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
                             </Button>
                             <Button Text="Pending" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Pending">
-                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Pending"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" /></DataTrigger></Button.Triggers>
+                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Pending"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
                             </Button>
                             <Button Text="Expired or rejected" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Expired">
-                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Expired"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" /></DataTrigger></Button.Triggers>
+                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Expired"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
                             </Button>
                     </FlexLayout>
                     <Border Style="{StaticResource TablePanel}">

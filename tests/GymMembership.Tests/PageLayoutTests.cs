@@ -3,7 +3,8 @@ using Xunit;
 /// <summary>The redesign's page layout: wide canvas, plain card titles, panels with dividers, one highlight card whose words flip with it, pill lanes.</summary>
 public class PageLayoutTests
 {
-    const string OnHero = "TextColor=\"{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}\"";
+    // owner 2026-11-12: the card is yellow on a phone in light too, so its words use OnAccentLight (white on Windows, ink on a phone)
+    const string OnHero = "TextColor=\"{AppThemeBinding Light={StaticResource OnAccentLight}, Dark={StaticResource Black}}\"";
 
     static string AppFile(params string[] parts) => Path.Combine(new[] { TestPaths.AppFolder() }.Concat(parts).ToArray());
 
