@@ -34,8 +34,8 @@ public partial class RefundsPage : BasePage
         vm.DialogOpen=true;
         try
         {
-            var choice=await DisplayActionSheetAsync("How did you return the money?","Go back",null,"Cash","GCash","Bank transfer");
-            var method=choice switch {"Cash"=>PayMethod.Cash,"GCash"=>PayMethod.Gcash,"Bank transfer"=>PayMethod.BankTransfer,_=>null};
+            var choice=await DisplayActionSheetAsync("How did you return the money?","Go back",null,"Cash","GCash");   // no bank transfer (0054)
+            var method=choice switch {"Cash"=>PayMethod.Cash,"GCash"=>PayMethod.Gcash,_=>null};
             if(method is null) return;
             string? reference=null;
             if(method!=PayMethod.Cash)

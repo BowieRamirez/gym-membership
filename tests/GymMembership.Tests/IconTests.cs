@@ -95,7 +95,7 @@ public class IconTests
         // 9.7: the Cashier's choices are the app's chips (IconButton is gone); the chosen one turns yellow and says "selected"
         var cashier = File.ReadAllText(AppFile("Views", "CashierPage.xaml"));
         Assert.DoesNotContain("c:IconButton", cashier);
-        foreach (var choice in new[] { "Membership", "Renewal", "Amenity", "Walk-in", "Cash", "GCash", "Bank transfer" })
+        foreach (var choice in new[] { "Membership", "Renewal", "Amenity", "Walk-in", "Cash", "GCash" })
             Assert.Contains($"<Setter Property=\"BorderColor\" Value=\"{{StaticResource Signal}}\" /><Setter Property=\"SemanticProperties.Description\" Value=\"{choice}, selected\" />", cashier);
     }
 

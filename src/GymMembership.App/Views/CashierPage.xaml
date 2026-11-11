@@ -175,9 +175,6 @@
                                         <Button Text="GCash" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="GCash">
                                             <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Method}" Value="GCash"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" /><Setter Property="SemanticProperties.Description" Value="GCash, selected" /></DataTrigger></Button.Triggers>
                                         </Button>
-                                        <Button Text="Bank transfer" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="Bank transfer">
-                                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Method}" Value="Bank transfer"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" /><Setter Property="SemanticProperties.Description" Value="Bank transfer, selected" /></DataTrigger></Button.Triggers>
-                                        </Button>
                                     </FlexLayout>
 
                                     <VerticalStackLayout Spacing="4" WidthRequest="260" HorizontalOptions="Start" IsVisible="{Binding NeedsReference}">
@@ -196,7 +193,7 @@
                                     </VerticalStackLayout>
 
                                     <Button Text="Complete payment" Command="{Binding RecordCommand}" MinimumHeightRequest="56" FontSize="18" />
-                                    <Label Text="Start your shift to take cash. GCash and bank transfers don't need one." FontFamily="BarlowMedium" FontSize="13" IsVisible="{Binding CashNeedsShift}" />
+                                    <Label Text="Start your shift to take cash. GCash doesn't need one." FontFamily="BarlowMedium" FontSize="13" IsVisible="{Binding CashNeedsShift}" />
                                 </VerticalStackLayout>
                             </Border>
             </c:SideLayout>

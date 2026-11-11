@@ -166,11 +166,11 @@ public partial class ItemOption(CounterItem item) : ObservableObject
     [ObservableProperty] private bool isPicked;
 }
 
-// front desk: cash, GCash and bank transfers at the counter, and walk-ins. Verified straight away with a receipt number
+// front desk: cash and GCash at the counter, and walk-ins. Verified straight away with a receipt number
 public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceService members) : LoadableViewModel
 {
     public string[] Kinds { get; } = ["Membership", "Renewal", "Amenity", "Walk-in"];
-    public string[] Methods { get; } = ["Cash", "GCash", "Bank transfer"];
+    public string[] Methods { get; } = ["Cash", "GCash"];   // owner, 2026-11-11: no bank transfer (0054)
     public ObservableCollection<MemberHit> Hits { get; } = new();
     public ObservableCollection<ItemOption> Options { get; } = new();
     int itemsTicket;
@@ -186,7 +186,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     [ObservableProperty, NotifyPropertyChangedFor(nameof(TotalNote))] private string discountCode = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ItemsEmptyText))] private bool loadingItems;
 
-    // F2 (0050): the cashier's own drawer shift. Cash needs an open one; GCash and bank transfers don't.
+    // F2 (0050): the cashier's own drawer shift. Cash needs an open one; GCash doesn't.
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasShift), nameof(NeedsShift), nameof(ShiftSince), nameof(CountText), nameof(CloseNeedsNote), nameof(CashNeedsShift)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private CashShift? shift;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(NeedsShift))] private bool shiftChecked;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(StartNeedsNote))] private decimal startFloat;
@@ -225,7 +225,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     public string OrderHow => $"{Kind}, paid with {Method}";
 
     static string KindKey(string k) => k switch { "Renewal" => PayKind.Renewal, "Amenity" => PayKind.Amenity, "Walk-in" => PayKind.WalkIn, _ => PayKind.Membership };
-    static string MethodKey(string m) => m switch { "GCash" => PayMethod.Gcash, "Bank transfer" => PayMethod.BankTransfer, _ => PayMethod.Cash };
+    static string MethodKey(string m) => m == "GCash" ? PayMethod.Gcash : PayMethod.Cash;
 
     public override async Task OnAppearingAsync() { await RefreshItemsAsync(); await LoadShiftAsync(); }
 

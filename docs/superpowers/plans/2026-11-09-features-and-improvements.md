@@ -25,7 +25,7 @@ Status vocabulary: `PLANNED`, `WAITING` (decisions open), `IN PROGRESS`, `BLOCKE
 
 **Rules**
 - Business rules live in the database and are mirrored in `DemoGateway`; hiding something in the UI is not enough.
-- New migrations continue from the latest number: **next is `0053`**. Never rewrite an applied migration.
+- New migrations continue from the latest number: **next is `0055`**. Never rewrite an applied migration.
 - Logic goes in Core with an xUnit test in `tests/GymMembership.Tests`; database rules get a check in `supabase/tests/local` (and `rules.mjs` keeps failing when an app-called function has no break attempt, D16).
 - **Skills, every phase:** `superpowers:test-driven-development` for each Core and database rule (failing test first); `superpowers:systematic-debugging` for any bug met on the way; `superpowers:verification-before-completion` before ticking a task; `ponytail:ponytail-review` on the phase diff before finishing (`CLAUDE.md`); context-mode tools for large outputs.
 - **Skills, every screen (owner, 2026-11-09):** every task that adds or changes a screen uses the **`impeccable`** skill, together with `frontend-design:frontend-design` (`CLAUDE.md`). For a new screen or flow: `impeccable shape`, then a mockup in `docs/mockups/` the owner approves before the app changes (as in 9.1 and Phase 7). For a changed screen: capture it first, then `impeccable critique`, fixes, and `impeccable polish` on every page the phase touched. Copy goes through `impeccable clarify`. Snapshots stay in `.impeccable/critique/`.
@@ -218,3 +218,4 @@ Owner, same day: same branch as the 2026-11-05 plan, a separate plan; use the ri
 - **2026-11-11:** Owner: "start phase 7"; F4 and F19 answered as recommended. Phase 7 IN PROGRESS.
 - **2026-11-11:** Owner: remove the Phase 8 task "Full `impeccable critique` and `impeccable polish` on every UI change from this plan"; removed.
 - **2026-11-11:** Phase 7 built, checked and `0053` pushed live (F4 live records on the five decided pages with one shared Updated line; F19 Checked in today on Check-in, mockup approved). Phase 7 DEPLOYED; committed, not pushed to GitHub.
+- **2026-11-11 (before Phase 8):** Owner: the desk takes Cash and GCash only, no bank transfer. Cashier choices and the Refunds "How did you return the money?" list lose Bank transfer; `0054_cash_and_gcash_only.sql` refuses any new payment or refund repayment by bank transfer (a trigger, so rows already recorded stay as history and can still be updated); the demo mirrors it. `cash-and-gcash-only.mjs` 4/4, `CashAndGcashOnlyTests` 3, xUnit 969/969, three UI scripts pass. `0054` pushed live ("Remote database is up to date"). Committed, not pushed to GitHub.

@@ -728,10 +728,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
             {
                 Require("payments:record");
                 var kind = S("p_kind"); var method = S("p_method"); var memberId = Opt("p_member_id");
-                if (method == PayMethod.Qr) throw Err("bad_input");
+                if (method is PayMethod.Qr or PayMethod.BankTransfer) throw Err("bad_input");   // 0054: cash or GCash at the desk
                 if (memberId == uid) throw Err("self_verify");
                 var reference = Opt("p_reference_no");
-                if (method is PayMethod.Gcash or PayMethod.BankTransfer && reference is null) throw Err("bad_input");
+                if (method == PayMethod.Gcash && reference is null) throw Err("bad_input");
                 int? shift = method == PayMethod.Cash ? OpenShiftOf(uid) : null;   // 0050: cash goes into the cashier's open drawer
                 var itemId = a.ContainsKey("p_item_id") ? I("p_item_id") : 0;
                 var d = (Id: (int?)null, Cut: 0m, Amount: 0m);

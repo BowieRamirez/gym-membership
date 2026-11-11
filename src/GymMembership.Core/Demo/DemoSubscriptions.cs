@@ -132,7 +132,7 @@ public sealed partial class DemoGateway
             case "record_membership_refund_paid":
             {
                 Require("payments:void");var method=Text("p_method");var reference=Text("p_reference");
-                if(method is not (PayMethod.Cash or PayMethod.Gcash or PayMethod.BankTransfer) || method!=PayMethod.Cash&&string.IsNullOrWhiteSpace(reference)) throw Err("bad_input");
+                if(method is not (PayMethod.Cash or PayMethod.Gcash) || method!=PayMethod.Cash&&string.IsNullOrWhiteSpace(reference)) throw Err("bad_input");   // 0054: no bank transfer
                 var r=All<RefundRequest>().FirstOrDefault(r=>r.Id==I("p_request_id"))??throw Err("not_found");
                 if(r.MemberId==Uid) throw Err("self_decision");
                 if(r.Status!="approved") throw Err("already_processed");
