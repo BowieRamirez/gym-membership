@@ -728,7 +728,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             {
                 Require("payments:record");
                 var kind = S("p_kind"); var method = S("p_method"); var memberId = Opt("p_member_id");
-                if (method is PayMethod.Qr or PayMethod.BankTransfer) throw Err("bad_input");   // 0054: cash or GCash at the desk
+                if (method is not (PayMethod.Cash or PayMethod.Gcash)) throw Err("bad_input");   // 0055: cash or GCash at the desk
                 if (memberId == uid) throw Err("self_verify");
                 var reference = Opt("p_reference_no");
                 if (method == PayMethod.Gcash && reference is null) throw Err("bad_input");

@@ -23,9 +23,9 @@ public static class PayKind
 }
 public static class PayMethod
 {
-    public const string Qr = "qr", Cash = "cash", Gcash = "gcash", BankTransfer = "bank_transfer";
+    public const string Qr = "qr", Cash = "cash", Gcash = "gcash";   // 0055: no bank transfer
     /// <summary>What a method is called on screen and in the PDF.</summary>
-    public static string Name(string m) => m switch { Cash => "Cash", Gcash => "GCash", Qr => "QR", BankTransfer => "Bank transfer", _ => m };
+    public static string Name(string m) => m switch { Cash => "Cash", Gcash => "GCash", Qr => "QR", _ => m };
 }
 
 [Table("profiles")] public class Profile : BaseModel

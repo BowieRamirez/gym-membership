@@ -1,9 +1,14 @@
-// Owner, 2026-11-11 (before Phase 8): the desk takes Cash or GCash only. Bank transfer is refused for any new payment or refund
-// repayment; payments and refunds already recorded as bank transfer stay as history and can still be voided or changed otherwise.
+// Owner, 2026-11-11 (before Phase 8): the desk takes Cash or GCash only. 0054 blocked bank transfer; 0055 removes it from the
+// payment_method type altogether (the live database had no bank-transfer rows). Everything built on the type must still work, with the
+// same rules and the same execute grants.
 import { start, openCashShifts } from './harness.mjs';
 import assert from 'node:assert/strict';
 
-const { server, client: db } = await start();
+// Supabase grants execute to anon, authenticated and service_role on every new function (its default privileges). 0055 recreated
+// functions under that, which the plain harness doesn't do; switch it on before 0055 so this test sees what the live project saw.
+const { server, client: db } = await start({ beforeMigration: async (db, name) => {
+  if (name.startsWith('0055_')) await db.query('alter default privileges in schema public grant execute on functions to anon, authenticated, service_role');
+} });
 let passed = 0, failed = 0, serial = 0;
 async function as(uid, sql, args = []) {
   await db.query('begin');
@@ -29,8 +34,15 @@ try {
   await openCashShifts(db);
   const monthly = (await db.query(`insert into membership_packages(name,price,duration_days) values('Monthly',1500,30) returning membership_package_id`)).rows[0].membership_package_id;
 
+  await test('the payment method list is QR, cash and GCash: bank transfer is gone, with no old type left over', async () => {
+    const labels = (await db.query(`select enumlabel from pg_enum where enumtypid = 'public.payment_method'::regtype order by enumsortorder`)).rows.map(r => r.enumlabel);
+    assert.deepEqual(labels, ['qr', 'cash', 'gcash']);
+    assert.equal((await db.query(`select count(*)::int n from pg_type where typname like 'payment_method_old%'`)).rows[0].n, 0);
+    assert.equal((await db.query(`select count(*)::int n from pg_trigger where tgname like '%no_bank_transfer'`)).rows[0].n, 0);   // 0054's guard is not needed
+  });
+
   await test('the desk can no longer take a bank transfer', async () => {
-    await assert.rejects(as(desk, `select * from record_counter_payment('walk_in','bank_transfer',null,null,'Bank Ben','BT-1',null)`), /bad_input/);
+    await assert.rejects(as(desk, `select * from record_counter_payment('walk_in','bank_transfer',null,null,'Bank Ben','BT-1',null)`), /invalid input value for enum/);
   });
 
   await test('cash and GCash still work at the desk', async () => {
@@ -38,27 +50,42 @@ try {
     await as(desk, `select * from record_counter_payment('walk_in','gcash',null,null,'G Gina','REF-G-1',null)`);
   });
 
-  await test('a refund cannot be repaid by bank transfer, but by cash or GCash it can', async () => {
+  await test('a refund is repaid by cash or GCash, never by bank transfer', async () => {
     const member = await user('member', 'Refund Rita');
     const pay = (await as(member, 'select * from extend_membership($1,null)', [monthly]))[0];
     await as(desk, 'select verify_payment($1,true)', [pay.payment_id]);
     const term = (await as(member, 'select * from membership_terms'))[0];
     const req = (await as(member, 'select * from request_membership_refund($1,$2,$3)', [term.term_id, 'Moving away', 'change_of_mind']))[0];
     await as(admin, 'select decide_membership_refund($1,true,$2)', [req.refund_request_id, 'Approved']);
-    await assert.rejects(as(admin, `select record_membership_refund_paid($1,'bank_transfer','BT-9')`, [req.refund_request_id]), /bad_input/);
+    await assert.rejects(as(admin, `select record_membership_refund_paid($1,'bank_transfer','BT-9')`, [req.refund_request_id]), /invalid input value for enum/);
     await as(admin, `select record_membership_refund_paid($1,'gcash','REF-R-1')`, [req.refund_request_id]);
   });
 
-  await test('a bank transfer recorded before stays and can still be updated', async () => {
-    const insert = `insert into payments(payment_code,kind,method,status,amount,walk_in_name,reference_no,recorded_by)
-      values($1,'walk_in','bank_transfer','pending',150,'Old Transfer','BT-OLD',$2) returning payment_id`;
-    await assert.rejects(db.query(insert, ['GYM-NEWBT', desk]), /bad_input/);   // even written straight to the table
-    await db.query(`alter table payments disable trigger payments_no_bank_transfer`);   // stands in for a row from before 0054
-    const old = (await db.query(insert, ['GYM-OLDBT', desk])).rows[0].payment_id;
-    await db.query(`alter table payments enable trigger payments_no_bank_transfer`);
-    // an update that names the method (same value) runs the guard, and passes: the row was bank transfer already
-    await db.query(`update payments set method = method, reference_no = 'BT-OLD-2' where payment_id=$1`, [old]);
-    assert.equal((await db.query(`select reference_no from payments where payment_id=$1`, [old])).rows[0].reference_no, 'BT-OLD-2');
+  await test('the revenue reports still run and show the method', async () => {
+    const day = d => new Date(Date.now() + d * 864e5).toISOString().slice(0, 10);   // yesterday to tomorrow: Manila's day whatever the clock
+    await as(admin, `select * from revenue_summary($1,$2)`, [day(-1), day(1)]);
+    const lines = await as(admin, `select * from revenue_lines($1,$2,0,100)`, [day(-1), day(1)]);
+    assert.ok(lines.some(l => l.method === 'gcash'));
+    await as(admin, `select * from membership_refund_outflows($1,$2)`, [day(-1), day(1)]);
+  });
+
+  await test('the table rules came back unchanged: a walk-in cannot be a QR payment', async () => {
+    await assert.rejects(db.query(`insert into payments(payment_code,kind,method,status,amount,walk_in_name,expires_at)
+      values('GYM-QRWLK','walk_in','qr','pending',150,'QR Walk',now()+interval '1 day')`), /payments_walk_in_at_counter/);
+  });
+
+  await test('execute grants are as before 0055 (0056): signed-in users only, never anon; the old counter function closed to both', async () => {
+    const can = async (role, fn) => (await db.query(`select has_function_privilege($1, $2, 'execute') ok`, [role, fn])).rows[0].ok;
+    const app = ['public.record_counter_payment(public.payment_kind,public.payment_method,uuid,bigint,text,text,text)',
+      'public.book_amenity(bigint,timestamptz,integer,public.payment_method)', 'public.record_membership_refund_paid(bigint,public.payment_method,text)',
+      'public.revenue_lines(date,date,integer,integer)', 'public.revenue_summary(date,date)', 'public.membership_refund_outflows(date,date)'];
+    for (const fn of app) {
+      assert.equal(await can('authenticated', fn), true, `${fn} closed to signed-in users`);
+      assert.equal(await can('anon', fn), false, `${fn} open to anon`);
+    }
+    const old = 'public.record_counter_payment_before_terms(public.payment_kind,public.payment_method,uuid,bigint,text,text,text)';
+    assert.equal(await can('authenticated', old), false, 'old counter function open to signed-in users');
+    assert.equal(await can('anon', old), false, 'old counter function open to anon');
   });
 } finally {
   await db.end(); await server.stop();
