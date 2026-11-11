@@ -113,18 +113,18 @@ public class MessengerViewModelTests
         var gw = new DemoGateway(); await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         var vm = new MessengerViewModel(chat, new ProfileService(gw), new AuthService(gw), new DemoPhotoPicker());
         var loading = vm.OnAppearingAsync();
-        await Task.Delay(50);
+        await Eventually.Until(() => chat.Waiting.Count > 0);
         var first = chat.Waiting.Dequeue();          // Anna's messages are being fetched
         var anna = vm.Threads.First(t => t.Thread.WithName == "Anna"); var ben = vm.Threads.First(t => t.Thread.WithName == "Ben");
 
         var openBen = vm.OpenCommand.ExecuteAsync(ben);   // the person switches before Anna's answer arrives
-        await Task.Delay(50);
+        await Eventually.Until(() => chat.Waiting.Count > 0);
         var second = chat.Waiting.Dequeue();
         second.Reply.SetResult(AppResult<ChatPage>.Success(PageOf("Ben's message")));
         await openBen;
         first.Reply.SetResult(AppResult<ChatPage>.Success(PageOf("Anna's message")));   // the stale answer lands last
         await loading;
-        await Task.Delay(50);
+        await Eventually.Until(() => vm.Selected?.Thread.WithName == "Ben");
 
         Assert.Equal("Ben", vm.Selected!.Thread.WithName);
         Assert.Equal(["Ben's message"], vm.Bubbles.Select(b => b.Line.Body));
@@ -217,16 +217,16 @@ public class MessengerViewModelTests
     {
         var (_, _, vm) = await Open("coach@demo.io");
         vm.SearchText = "alex";
-        await Task.Delay(700);   // the server search waits for a short pause in typing
+        await Eventually.Until(() => vm.Threads.All(t => t.Thread.WithName.Contains("alex", StringComparison.OrdinalIgnoreCase)));   // the server search waits for a short pause in typing
         Assert.True(vm.IsSearching);
         Assert.All(vm.Threads, t => Assert.Contains("alex", t.Thread.WithName, StringComparison.OrdinalIgnoreCase));
 
         vm.SearchText = "flat-soled";
-        await Task.Delay(700);
+        await Eventually.Until(() => vm.Hits.Count == 1);
         Assert.Contains("flat-soled", vm.Hits.Single().Snippet);
 
         vm.SearchText = "";
-        await Task.Delay(100);
+        await Eventually.Until(() => vm.Hits.Count == 0);
         Assert.False(vm.IsSearching);
         Assert.Empty(vm.Hits);
     }
@@ -283,7 +283,7 @@ public class MessengerViewModelTests
         var (_, _, desk) = await Open("employee@demo.io", gw);
         Assert.Empty(desk.Threads);
         desk.SearchText = "refund";
-        await Task.Delay(700);
+        await Eventually.Until(() => desk.Hits.Count == 1);
         await desk.OpenHitCommand.ExecuteAsync(desk.Hits.Single());
 
         Assert.Equal("Bea Lim", desk.Selected!.Thread.WithName);
@@ -298,7 +298,7 @@ public class MessengerViewModelTests
         var gw = new DemoGateway(); await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         var vm = new MessengerViewModel(chat, new ProfileService(gw), new AuthService(gw), new DemoPhotoPicker());
         var loading = vm.OnAppearingAsync();
-        await Task.Delay(50);
+        await Eventually.Until(() => chat.Waiting.Count > 0);
         var stale = chat.Waiting.Dequeue();                      // the first person's messages are still on their way
 
         await gw.SignOutAsync(); await gw.SignInAsync("carlo@demo.io", DemoGateway.DemoPassword);

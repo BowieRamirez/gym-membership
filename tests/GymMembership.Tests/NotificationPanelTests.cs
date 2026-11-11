@@ -33,7 +33,7 @@ public class NotificationPanelTests
         var unread = vm.Items.First(n => n.ReadAt is null);
 
         await vm.MarkReadCommand.ExecuteAsync(unread);
-        await Task.Delay(100);   // the redraw is triggered by the service's change notice
+        await Eventually.Until(() => vm.UnreadCount == before - 1);   // the redraw is triggered by the service's change notice
 
         Assert.Equal(before - 1, vm.UnreadCount);
         Assert.NotNull(vm.Items.First(n => n.Id == unread.Id).ReadAt);
@@ -44,7 +44,7 @@ public class NotificationPanelTests
     {
         var (_, _, vm) = await Open();
         await vm.MarkAllReadCommand.ExecuteAsync(null);
-        await Task.Delay(100);
+        await Eventually.Until(() => vm.UnreadCount == 0);
 
         Assert.Equal(0, vm.UnreadCount);
         Assert.All(vm.Items, n => Assert.NotNull(n.ReadAt));
@@ -69,7 +69,7 @@ public class NotificationPanelTests
     {
         var (_, svc, vm) = await Open();
         await svc.MarkAllReadAsync();
-        await Task.Delay(100);
+        await Eventually.Until(() => vm.UnreadCount == 0);
         Assert.Equal(0, vm.UnreadCount);
 
         var (_, svc2, vm2) = await Open();
@@ -127,7 +127,7 @@ public class NotificationPanelTests
         Assert.True(unread > 0);
 
         await vm.MarkAllReadCommand.ExecuteAsync(null);
-        await Task.Delay(100);
+        await Eventually.Until(() => actions.Count == unread);
 
         Assert.Equal(unread, actions.Count);
         Assert.All(actions, a => Assert.Equal(System.Collections.Specialized.NotifyCollectionChangedAction.Replace, a));   // no Reset, no Clear and re-add

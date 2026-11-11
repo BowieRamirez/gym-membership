@@ -87,7 +87,7 @@ public class HeaderTests
         Assert.Equal("?", vm2.Letters);
 
         await profile.SetAvatarAsync("a.jpg", [1]);   // raises AvatarChanged, which makes the bar reload
-        await Task.Delay(100);
+        await Eventually.Until(() => vm2.Letters == "AT");
 
         Assert.Equal("AT", vm2.Letters);
     }
@@ -181,7 +181,7 @@ public class HeaderTests
         closed.Dispose();
 
         await notes.MarkAllReadAsync();
-        await Task.Delay(100);
+        await Eventually.Until(() => vm.UnreadCount == 0);
         Assert.Equal(0, vm.UnreadCount);   // the live header followed at once: no page change was needed
         Assert.Equal(before, closed.UnreadCount);   // the disposed one did not react
     }
