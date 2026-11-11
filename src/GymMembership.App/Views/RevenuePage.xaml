@@ -81,6 +81,11 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
+            <!-- Windows: the detailed page (RevenuePage.Windows.cs, mockup docs/mockups/revenue.html) -->
+            <ContentView x:Name="Dashboard" IsVisible="{OnPlatform WinUI=True, Default=False}" />
+
+            <!-- Android keeps the simple page: dates, the total and a row per day -->
+            <VerticalStackLayout Spacing="14" IsVisible="{OnPlatform WinUI=False, Default=True}">
             <FlexLayout Wrap="Wrap" AlignItems="End">
                 <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
                     <Label Text="From" Style="{StaticResource Caption}" />
@@ -123,6 +128,7 @@
                 </BindableLayout.ItemTemplate>
             </VerticalStackLayout>
             </Border>
+            </VerticalStackLayout>
 
             <!-- F2 (0050): every cashier's drawer shift opened in the same dates, newest first; over or short in red with the note beside it -->
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="0,8,0,0">

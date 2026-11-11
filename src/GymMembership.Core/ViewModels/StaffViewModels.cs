@@ -1496,7 +1496,7 @@ public partial class RevenueViewModel(IAdminService svc, IReportFiles? files = n
 {
     public ObservableCollection<RevenueRow> Rows { get; } = new();
     public ObservableCollection<CashShift> Shifts { get; } = new();   // F2: drawer shifts opened in the same dates
-    [ObservableProperty] private DateTime from = DateTime.Today.AddDays(-30);
+    [ObservableProperty] private DateTime from = DateTime.Today.AddDays(-29);   // 30 days with today
     [ObservableProperty] private DateTime to = DateTime.Today;
     [ObservableProperty] private string totalText = "₱0.00";
     // what the screen shows; the PDF uses this, not dates edited since
@@ -1513,7 +1513,95 @@ public partial class RevenueViewModel(IAdminService svc, IReportFiles? files = n
         TotalText = $"₱{rows.Sum(r => r.Total):N2}";
         _loaded = (from, to, rows.Sum(r => r.Total));
         ExportPdfCommand.NotifyCanExecuteChanged(); ExportShiftsPdfCommand.NotifyCanExecuteChanged();
-    }) && await RunAsync(() => svc.CashShiftsAsync(from, to), shifts => Fill(Shifts, shifts));
+    }) && await RunAsync(() => svc.CashShiftsAsync(from, to), shifts => Fill(Shifts, shifts))
+       && await LoadDashboardAsync(from, to);
+
+    // ---------- the Windows page (owner 2026-11-12, mockup docs/mockups/revenue.html); Android shows only the parts above ----------
+    public ObservableCollection<RevenueFigure> Figures { get; } = new();
+    public ObservableCollection<RevenueShare> ByItem { get; } = new();
+    public ObservableCollection<RevenueShare> ByMethod { get; } = new();
+    public ObservableCollection<RevenueDayRow> DayRows { get; } = new();
+    /// <summary>Each day of the period shown, oldest first, for the chart.</summary>
+    [ObservableProperty] private IReadOnlyList<RevenueDay> chart = [];
+    /// <summary>"revenue" or "visits": what the chart's columns show.</summary>
+    [ObservableProperty] private string metric = "revenue";
+    /// <summary>7, 30 or 90 when the period is that many days up to today; 0 for other dates.</summary>
+    [ObservableProperty] private int rangeDays = 30;
+    [ObservableProperty] private string chartTotalText = "";
+    [ObservableProperty] private string chartSubText = "";
+    [ObservableProperty] private string methodsFoot = "";
+    [ObservableProperty] private string moreDaysText = "";
+    [ObservableProperty] private bool hasMoreDays;
+    bool _allDays;
+    List<RevenueDayRow> _days = [];
+    const int DaysShown = 7;
+
+    [RelayCommand]
+    private Task ShowRangeAsync(string days)
+    {
+        var n = int.Parse(days, System.Globalization.CultureInfo.InvariantCulture);
+        To = DateTime.Today; From = DateTime.Today.AddDays(1 - n);
+        return LoadAsync();
+    }
+
+    [RelayCommand]
+    private void ShowMetric(string metric) { Metric = metric == "visits" ? "visits" : "revenue"; ChartTexts(); }
+
+    [RelayCommand]
+    private void ToggleAllDays() { _allDays = !_allDays; ShowDays(); }
+
+    async Task<bool> LoadDashboardAsync(DateOnly from, DateOnly to)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var span = to.DayNumber - from.DayNumber + 1;
+        RangeDays = to == today && span is 7 or 30 or 90 ? span : 0;
+        return await RunAsync(() => svc.RevenueDaysAsync(RevenueDashboard.FiguresFrom(today), today), days => Fill(Figures, RevenueDashboard.Figures(days, today)))
+            && await RunAsync(() => svc.RevenueDaysAsync(from, to), days =>
+            {
+                Chart = days;
+                ChartTexts();
+                Fill(ByItem, RevenueDashboard.Shares(Rows.Select(r => (PayKind.Name(r.Kind), r.Total))));
+                Fill(ByMethod, RevenueDashboard.Shares(Rows.Select(r => (PayMethod.Name(r.Method), r.Total))));
+                var payments = days.Sum(d => d.Payments); var refunds = days.Sum(d => d.Refunds); var gross = days.Sum(d => d.Net) + refunds;
+                MethodsFoot = $"{payments:N0} {(payments == 1 ? "payment" : "payments")}"
+                    + (payments > 0 ? $" · {RevenueDashboard.Peso(gross / payments)} on average" : "")
+                    + (refunds > 0 ? $" · {RevenueDashboard.Peso(refunds)} refunded" : " · no refunds");
+                _days = days.Reverse().Select(d =>
+                {
+                    var that = Rows.Where(r => r.Day.Date == d.Day.Date).ToList();
+                    var caption = that.Count == 0 ? "No payments"
+                        : string.Join(", ", that.Select(r => PayKind.Name(r.Kind)).Distinct()) + " · " + string.Join(", ", that.Select(r => PayMethod.Name(r.Method)).Distinct());
+                    return new RevenueDayRow(d.Day, d.Payments, d.Visits, d.Refunds, d.Net, caption);
+                }).ToList();
+                _allDays = false;
+                ShowDays();
+            });
+    }
+
+    void ChartTexts()
+    {
+        var days = Math.Max(1, Chart.Count);
+        var label = RangeDays == 90 ? "3 months" : $"{Chart.Count} {(Chart.Count == 1 ? "day" : "days")}";
+        if (Metric == "visits")
+        {
+            var visits = Chart.Sum(d => d.Visits);
+            ChartTotalText = $"{visits:N0} check-ins";
+            ChartSubText = $"in {label} · {visits / (double)days:0.#} a day on average";
+        }
+        else
+        {
+            var net = Chart.Sum(d => d.Net);
+            ChartTotalText = RevenueDashboard.Peso(net);
+            ChartSubText = $"net in {label} · {RevenueDashboard.Peso(net / days)} a day on average";
+        }
+    }
+
+    void ShowDays()
+    {
+        Fill(DayRows, _allDays ? _days : _days.Take(DaysShown).ToList());
+        HasMoreDays = _days.Count > DaysShown;
+        MoreDaysText = _allDays ? "Show the 7 latest days" : $"Show all {_days.Count} days";
+    }
 
     [RelayCommand(CanExecute = nameof(CanExport))]
     private async Task ExportShiftsPdfAsync()

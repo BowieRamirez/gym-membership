@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Revenue: detailed (mockup)</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600&display=swap" rel="stylesheet">
+<style>
+  /* Tokens from src/GymMembership.App/Resources/Styles/Colors.xaml */
+  :root, [data-theme="dark"] {
+    --page: #0E0E0E; --card: #1A1A1A; --surface: #242424; --line: #2A2A2A; --edge: #757575;
+    --ink: #F2F2F2; --muted: #A6A6A6; --signal: #FFEC00; --good: #4CC585; --bad: #FF7B70; --rail: #161616;
+    --bar: #3a3a3a; --bar-hi: #FFEC00;
+  }
+  [data-theme="light"] {
+    --page: #EEEEEE; --card: #FFFFFF; --surface: #F5F5F5; --line: #E4E4E4; --edge: #808080;
+    --ink: #111111; --muted: #5B5B5B; --signal: #FFEC00; --good: #1B7A3E; --bad: #C42B21; --rail: #FFEC00;
+    --bar: #CFCFCF; --bar-hi: #111111;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #2a2a2a; color: var(--ink); font: 14px/1.45 Barlow, system-ui, sans-serif; }
+  ::selection { background: var(--signal); color: #111; }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; border-radius: 6px; }
+  .num, td.r, .tab { font-variant-numeric: tabular-nums; }
+
+  /* ---- mockup controls (not part of the app) ---- */
+  .mock { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center; padding: 12px 18px; background: #1a1a1a; color: #ddd; font-size: 13px; }
+  .mock b { font-weight: 600; margin-right: 6px; }
+  .mock .note { color: #999; }
+  .seg { display: inline-flex; border: 1px solid var(--edge); border-radius: 999px; overflow: hidden; }
+  .seg button { border: 0; background: none; padding: 5px 13px; cursor: pointer; color: inherit; }
+  .seg button + button { border-left: 1px solid var(--edge); }
+  .seg button[aria-pressed="true"] { background: var(--signal); color: #111; font-weight: 600; }
+  .mock .seg { border-color: #555; }
+  .mock .seg button + button { border-color: #555; }
+  .stage { padding: 22px; display: flex; justify-content: center; }
+
+  /* ---- app frame ---- */
+  .app { display: grid; grid-template-columns: 72px 1fr; background: var(--page); width: 100%; max-width: 1500px; border-radius: 10px; overflow: hidden; }
+  .app.narrow { max-width: 920px; }
+  .rail { background: var(--rail); display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 14px 0; }
+  .rail .logo { width: 38px; height: 38px; border-radius: 50%; background: #111; border: 2px solid #FFEC00; }
+  .rail .ico { width: 36px; height: 36px; border-radius: 10px; background: rgba(0,0,0,.08); }
+  [data-theme="dark"] .rail .ico { background: #2A2A2A; }
+  .rail .ico.on { background: #111; outline: 2px solid #FFEC00; }
+  .page { padding: 18px 26px 32px; min-width: 0; }
+  h1 { margin: 0 0 4px; font: 500 30px/1.1 Barlow, sans-serif; }
+  .lede { color: var(--muted); margin: 0 0 18px; max-width: 75ch; }
+  h2 { font: 500 20px/1.2 Barlow, sans-serif; margin: 0; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+  section { margin-top: 26px; }
+  .sechead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .sechead .end { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn { height: 34px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--edge); background: transparent; cursor: pointer; font-weight: 500; }
+  .btn:hover { background: var(--surface); }
+
+  /* the four figures the owner asked for: one panel divided by hairlines (as Overview), not four cards */
+  .strip { display: grid; grid-template-columns: repeat(4, 1fr); }
+  .fig { padding: 16px 20px 18px; border-left: 1px solid var(--line); min-width: 0; }
+  .fig:first-child { border-left: 0; }
+  .fig .label { color: var(--muted); font-weight: 500; }
+  .fig .num { font: 600 42px/1.05 "Barlow Condensed", sans-serif; margin: 6px 0 4px; letter-spacing: -0.01em; white-space: nowrap; }
+  .fig .num small { font-size: 24px; margin-right: 1px; }
+  .fig .vs { font-weight: 500; }
+  .fig .vs.up { color: var(--good); } .fig .vs.down { color: var(--bad); } .fig .vs.flat { color: var(--muted); }
+  .fig .sub { color: var(--muted); }
+  .narrow .strip { grid-template-columns: repeat(2, 1fr); }
+  .narrow .fig:nth-child(3) { border-left: 0; }
+  .narrow .fig:nth-child(n+3) { border-top: 1px solid var(--line); }
+
+  /* period bar: presets plus the exact dates */
+  .period { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+  .dates { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+  .dates input { height: 34px; border: 1px solid var(--edge); border-radius: 8px; background: var(--card); color: var(--ink); padding: 0 10px; font: inherit; color-scheme: dark; }
+  [data-theme="light"] .dates input { color-scheme: light; }
+
+  /* chart */
+  .chart { padding: 16px 18px 12px; }
+  .chart .top { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .chart .total { font: 600 30px/1.1 "Barlow Condensed", sans-serif; }
+  .chart .top .muted { color: var(--muted); }
+  .chart .top .seg { margin-left: auto; }
+  .plot { position: relative; margin-top: 14px; }
+  svg.cols { display: block; width: 100%; height: 240px; overflow: visible; }
+  svg.cols .grid { stroke: var(--line); stroke-width: 1; }
+  svg.cols .axis { fill: var(--muted); font: 12px Barlow, sans-serif; }
+  svg.cols rect.c { fill: var(--bar); }
+  svg.cols rect.c.today { fill: var(--signal); }
+  svg.cols rect.c.neg { fill: var(--bad); }
+  svg.cols g.d:hover rect.c, svg.cols g.d.on rect.c { fill: var(--bar-hi); }
+  [data-theme="light"] svg.cols g.d:hover rect.c.today { fill: #111; }
+  svg.cols line.avg { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 4 4; opacity: .55; }
+  svg.cols text.avgl { fill: var(--muted); font: 500 12px Barlow, sans-serif; }
+  .tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--page); border-radius: 10px; padding: 8px 11px; font-size: 13px; line-height: 1.35; white-space: nowrap; transform: translate(-50%, calc(-100% - 10px)); opacity: 0; transition: opacity .12s; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+  .tip b { font-weight: 600; }
+  .tip.show { opacity: 1; }
+
+  /* where it came from */
+  .split { display: grid; grid-template-columns: 1fr 1fr; }
+  .narrow .split { grid-template-columns: 1fr; }
+  .split > div { padding: 14px 18px 16px; }
+  .split > div + div { border-left: 1px solid var(--line); }
+  .narrow .split > div + div { border-left: 0; border-top: 1px solid var(--line); }
+  .split h3 { margin: 0 0 10px; font: 600 15px/1.3 Barlow, sans-serif; }
+  .share { display: grid; grid-template-columns: 96px 1fr auto; gap: 6px 12px; align-items: center; padding: 6px 0; }
+  .share .name { font-weight: 500; }
+  .share .track { height: 10px; border-radius: 5px; background: var(--surface); overflow: hidden; }
+  .share .fill { display: block; height: 100%; border-radius: 5px; background: var(--ink); }
+  .share:first-of-type .fill { background: var(--signal); }
+  [data-theme="light"] .share:first-of-type .fill { background: #111; }
+  .share .amt { text-align: right; white-space: nowrap; }
+  .share .amt span { color: var(--muted); margin-left: 6px; display: inline-block; min-width: 3.2em; }
+  .split .foot { color: var(--muted); margin-top: 8px; }
+
+  /* day by day */
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 13px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  th.r, td.r { text-align: right; white-space: nowrap; }
+  td .cap { color: var(--muted); font-size: 13px; }
+  td.net { font-weight: 600; }
+  td .neg { color: var(--bad); }
+  .narrow .hide-n { display: none; }
+  .more { padding: 10px 14px; border-top: 1px solid var(--line); color: var(--muted); }
+  .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="mock">
+  <span><b>Theme</b><span class="seg" id="theme"><button aria-pressed="true" data-v="dark">Dark</button><button aria-pressed="false" data-v="light">Light</button></span></span>
+  <span><b>Window</b><span class="seg" id="width"><button aria-pressed="true" data-v="wide">Wide</button><button aria-pressed="false" data-v="narrow">Narrow</button></span></span>
+  <span class="note">Mockup: made-up figures. Hover the columns. The period buttons work.</span>
+</div>
+
+<div class="stage">
+<div class="app" id="app" data-theme="dark">
+  <nav class="rail" aria-hidden="true"><div class="logo"></div><div class="ico"></div><div class="ico"></div><div class="ico on"></div><div class="ico"></div><div class="ico"></div></nav>
+  <main class="page">
+    <h1>Revenue</h1>
+    <p class="lede">Verified payments minus approved refunds, by Manila day. Voided payments are left out.</p>
+
+    <!-- 1. the figures that don't depend on the period below -->
+    <div class="panel strip" aria-label="Revenue at a glance">
+      <div class="fig">
+        <div class="label">Today</div>
+        <div class="num"><small>₱</small>4,350</div>
+        <div class="vs up">▲ ₱1,150 more than last Thursday</div>
+        <div class="sub">6 payments · 23 check-ins so far</div>
+      </div>
+      <div class="fig">
+        <div class="label">This week</div>
+        <div class="num"><small>₱</small>21,900</div>
+        <div class="vs up">▲ 8% on the same days last week</div>
+        <div class="sub">Mon 9 – Thu 12 Nov</div>
+      </div>
+      <div class="fig">
+        <div class="label">This month</div>
+        <div class="num"><small>₱</small>58,400</div>
+        <div class="vs down">▼ 4% on 1–12 Oct</div>
+        <div class="sub">1 refund, ₱1,000</div>
+      </div>
+      <div class="fig">
+        <div class="label">Check-ins a day</div>
+        <div class="num">31</div>
+        <div class="vs flat">About the same as the 30 days before</div>
+        <div class="sub">Average, last 30 days · busiest Mon</div>
+      </div>
+    </div>
+
+    <!-- 2. the period: presets, or exact dates -->
+    <section>
+      <div class="sechead">
+        <h2>Period</h2>
+        <div class="end">
+          <button class="btn">Export PDF</button>
+        </div>
+      </div>
+      <div class="period">
+        <span class="seg" id="range"><button aria-pressed="false" data-d="7">7 days</button><button aria-pressed="true" data-d="30">30 days</button><button aria-pressed="false" data-d="90">3 months</button></span>
+        <span class="dates"><input type="date" value="2026-10-14" aria-label="From"> to <input type="date" value="2026-11-12" aria-label="To"></span>
+      </div>
+    </section>
+
+    <!-- 3. day by day, with a switch between money and visits -->
+    <section class="panel chart">
+      <div class="top">
+        <span class="total" id="total">₱171,250</span>
+        <span class="muted" id="totalsub">net in 30 days · ₱5,708 a day on average</span>
+        <span class="seg" id="metric"><button aria-pressed="true" data-m="rev">Revenue</button><button aria-pressed="false" data-m="vis">Check-ins</button></span>
+      </div>
+      <div class="plot" id="plot"><svg class="cols" id="cols" role="img" aria-label="Net revenue per day"></svg><div class="tip" id="tip"></div></div>
+    </section>
+
+    <!-- 4. where it came from -->
+    <section>
+      <div class="sechead"><h2>Where it came from</h2></div>
+      <div class="panel split">
+        <div>
+          <h3>By item</h3>
+          <div class="share"><span class="name">Membership</span><span class="track"><span class="fill" style="width:62%"></span></span><span class="amt tab">₱106,000<span>62%</span></span></div>
+          <div class="share"><span class="name">Extension</span><span class="track"><span class="fill" style="width:18%"></span></span><span class="amt tab">₱30,900<span>18%</span></span></div>
+          <div class="share"><span class="name">Walk-in</span><span class="track"><span class="fill" style="width:13%"></span></span><span class="amt tab">₱22,350<span>13%</span></span></div>
+          <div class="share"><span class="name">Amenity</span><span class="track"><span class="fill" style="width:7%"></span></span><span class="amt tab">₱12,000<span>7%</span></span></div>
+          <div class="foot">Refunds are taken off the item they paid for.</div>
+        </div>
+        <div>
+          <h3>By method</h3>
+          <div class="share"><span class="name">Cash</span><span class="track"><span class="fill" style="width:49%"></span></span><span class="amt tab">₱83,900<span>49%</span></span></div>
+          <div class="share"><span class="name">GCash</span><span class="track"><span class="fill" style="width:33%"></span></span><span class="amt tab">₱56,500<span>33%</span></span></div>
+          <div class="share"><span class="name">QR</span><span class="track"><span class="fill" style="width:18%"></span></span><span class="amt tab">₱30,850<span>18%</span></span></div>
+          <div class="foot">148 payments · ₱1,157 on average · 2 refunds, ₱1,600</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. day by day, newest first (the old list, now a table) -->
+    <section>
+      <div class="sechead"><h2>Day by day</h2></div>
+      <div class="panel">
+        <table>
+          <thead><tr><th>Day</th><th class="r">Payments</th><th class="r hide-n">Check-ins</th><th class="r hide-n">Refunds</th><th class="r">Net</th></tr></thead>
+          <tbody id="days"></tbody>
+        </table>
+        <div class="more">Showing the 7 latest days · <u>Show all 30</u></div>
+      </div>
+    </section>
+
+    <!-- 6. unchanged -->
+    <section>
+      <div class="sechead"><h2>Cash shifts</h2><div class="end"><button class="btn">Export shifts PDF</button></div></div>
+      <div class="panel" style="padding:14px;color:var(--muted)">The cash shifts table stays as it is today.</div>
+    </section>
+  </main>
+</div>
+</div>
+
+<script>
+// made-up but believable: a small Manila gym, busier on Mondays, quiet on Sundays, payday bumps on the 15th and 30th
+const DAYS = 90, end = new Date('2026-11-12T00:00:00');
+let seed = 7; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+const data = [];
+for (let i = DAYS - 1; i >= 0; i--) {
+  const d = new Date(end); d.setDate(end.getDate() - i);
+  const dow = d.getDay(), dom = d.getDate();
+  let rev = 3200 + rnd() * 5200 + (dow === 1 ? 2600 : 0) - (dow === 0 ? 2400 : 0) + ((dom === 15 || dom === 30 || dom === 1) ? 5200 : 0);
+  let vis = Math.round(24 + rnd() * 12 + (dow === 1 ? 9 : 0) - (dow === 0 ? 11 : 0));
+  let refund = (i === 20 ? 1000 : i === 47 ? 600 : 0);
+  if (i === 0) { rev = 4350; vis = 23; }
+  rev = Math.round(rev / 50) * 50;
+  data.push({ d, rev: rev - refund, refund, pays: Math.max(1, Math.round(rev / 1150)), vis });
+}
+const peso = v => (v < 0 ? '-₱' : '₱') + Math.abs(v).toLocaleString('en-PH');
+const fmt = d => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+let range = 30, metric = 'rev';
+
+function draw() {
+  const rows = data.slice(-range), svg = document.getElementById('cols'), W = svg.clientWidth || 900, H = 240, padL = 46, padB = 24, padT = 8;
+  const val = r => metric === 'rev' ? r.rev : r.vis;
+  const max = Math.max(...rows.map(val)) * 1.12, step = (W - padL) / rows.length, bw = Math.max(3, Math.min(28, step * 0.62));
+  const y = v => padT + (H - padB - padT) * (1 - v / max);
+  const avg = rows.reduce((s, r) => s + val(r), 0) / rows.length;
+  let s = '';
+  for (let k = 0; k <= 3; k++) { const v = max / 1.12 * k / 3, yy = y(v); s += `<line class="grid" x1="${padL}" x2="${W}" y1="${yy}" y2="${yy}"/><text class="axis" x="${padL - 8}" y="${yy + 4}" text-anchor="end">${metric === 'rev' ? (v >= 1000 ? '₱' + Math.round(v / 1000) + 'k' : '₱0') : Math.round(v)}</text>`; }
+  rows.forEach((r, i) => {
+    const x = padL + i * step + (step - bw) / 2, v = val(r), today = i === rows.length - 1;
+    s += `<g class="d" data-i="${i}"><rect x="${padL + i * step}" y="${padT}" width="${step}" height="${H - padB - padT}" fill="transparent"/><rect class="c${today ? ' today' : ''}" x="${x}" y="${y(v)}" width="${bw}" height="${y(0) - y(v)}" rx="${Math.min(4, bw / 3)}"/></g>`;
+    const every = range <= 7 ? 1 : range <= 30 ? 5 : 14;
+    if ((rows.length - 1 - i) % every === 0) s += `<text class="axis" x="${x + bw / 2}" y="${H - 6}" text-anchor="middle">${r.d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</text>`;
+  });
+  s += `<line class="avg" x1="${padL}" x2="${W}" y1="${y(avg)}" y2="${y(avg)}"/><text class="avgl" x="${W}" y="${y(avg) - 6}" text-anchor="end">average ${metric === 'rev' ? peso(Math.round(avg)) : Math.round(avg)}</text>`;
+  svg.innerHTML = s; svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('aria-label', metric === 'rev' ? 'Net revenue per day' : 'Check-ins per day');
+  const tot = rows.reduce((a, r) => a + val(r), 0), label = range === 90 ? '3 months' : range + ' days';
+  document.getElementById('total').textContent = metric === 'rev' ? peso(tot) : tot.toLocaleString('en-PH') + ' check-ins';
+  document.getElementById('totalsub').textContent = metric === 'rev' ? `net in ${label} · ${peso(Math.round(tot / rows.length))} a day on average` : `in ${label} · ${Math.round(tot / rows.length)} a day on average`;
+  const tip = document.getElementById('tip');
+  svg.querySelectorAll('g.d').forEach(g => {
+    g.addEventListener('mouseenter', () => {
+      const r = rows[+g.dataset.i], c = g.querySelector('rect.c'), plot = document.getElementById('plot').getBoundingClientRect(), b = c.getBoundingClientRect();
+      tip.innerHTML = `<b>${fmt(r.d)}</b><br>Net ${peso(r.rev)} · ${r.pays} payments${r.refund ? `<br>Refund ${peso(r.refund)}` : ''}<br>${r.vis} check-ins`;
+      tip.style.left = (b.left - plot.left + b.width / 2) + 'px'; tip.style.top = (b.top - plot.top) + 'px'; tip.classList.add('show');
+    });
+    g.addEventListener('mouseleave', () => tip.classList.remove('show'));
+  });
+  document.getElementById('days').innerHTML = rows.slice(-7).reverse().map(r =>
+    `<tr><td>${fmt(r.d)}<div class="cap">Membership, Walk-in · Cash, GCash</div></td><td class="r">${r.pays}</td><td class="r hide-n">${r.vis}</td><td class="r hide-n">${r.refund ? `<span class="neg">-${peso(r.refund)}</span>` : '<span class="muted">–</span>'}</td><td class="r net">${peso(r.rev)}</td></tr>`).join('');
+}
+function seg(id, fn) { document.querySelectorAll(`#${id} button`).forEach(b => b.onclick = () => { document.querySelectorAll(`#${id} button`).forEach(x => x.setAttribute('aria-pressed', x === b)); fn(b); }); }
+seg('range', b => { range = +b.dataset.d; draw(); });
+seg('metric', b => { metric = b.dataset.m; draw(); });
+seg('theme', b => { document.getElementById('app').dataset.theme = b.dataset.v; });
+seg('width', b => { document.getElementById('app').classList.toggle('narrow', b.dataset.v === 'narrow'); draw(); });
+addEventListener('resize', draw); draw();
+</script>
+</body>
+</html>

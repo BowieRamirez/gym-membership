@@ -1369,6 +1369,8 @@ public interface IAdminService
     Task<AppResult<IReadOnlyList<MembershipPackage>>> AllPackagesAsync();
     Task<AppResult<IReadOnlyList<Amenity>>> AllAmenitiesAsync();
     Task<AppResult<IReadOnlyList<RevenueRow>>> RevenueAsync(DateOnly from, DateOnly to);
+    /// <summary>0058: one row per Manila day (net, payments, refunds, check-ins) for the Windows Revenue page.</summary>
+    Task<AppResult<IReadOnlyList<RevenueDay>>> RevenueDaysAsync(DateOnly from, DateOnly to);
     /// <summary>Every receipt and approved refund in the range, all pages, for the PDF export.</summary>
     Task<AppResult<IReadOnlyList<RevenueLine>>> RevenueLinesAsync(DateOnly from, DateOnly to);
     /// <summary>F2 (0050): every drawer shift opened in the range (Manila days), newest first. Admin and System admin.</summary>
@@ -1486,6 +1488,13 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
     {
         if (to < from) return AppResult<IReadOnlyList<RevenueRow>>.Fail(AppErrorKind.Validation, "to before from");
         return await Safe.RunAsync(async () => (IReadOnlyList<RevenueRow>)(await gw.RpcAsync<List<RevenueRow>>("revenue_summary",
+            new() { ["p_from"] = from.ToString("yyyy-MM-dd"), ["p_to"] = to.ToString("yyyy-MM-dd") }) ?? []));
+    }
+
+    public async Task<AppResult<IReadOnlyList<RevenueDay>>> RevenueDaysAsync(DateOnly from, DateOnly to)
+    {
+        if (to < from) return AppResult<IReadOnlyList<RevenueDay>>.Fail(AppErrorKind.Validation, "to before from");
+        return await Safe.RunAsync(async () => (IReadOnlyList<RevenueDay>)(await gw.RpcAsync<List<RevenueDay>>("revenue_days",
             new() { ["p_from"] = from.ToString("yyyy-MM-dd"), ["p_to"] = to.ToString("yyyy-MM-dd") }) ?? []));
     }
 

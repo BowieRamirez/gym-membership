@@ -183,6 +183,22 @@ public sealed partial class DemoGateway
                     .Select(g=>new RevenueRow(g.Key.Day,g.Key.Kind,g.Key.Method,g.Sum(r=>r.Count),g.Sum(r=>r.Amount))).ToList();
                 return true;
             }
+            case "revenue_days":   // 0058
+            {
+                Require("reports:revenue");
+                var from=DateTime.Parse(Text("p_from")!).Date;var to=DateTime.Parse(Text("p_to")!).Date;
+                if(from>to||(to-from).TotalDays>366) throw Err("bad_input");
+                var pays=All<Payment>().Where(p=>p.Status==Status.Verified&&p.VerifiedAt is not null).ToList();
+                var refunds=All<RefundRequest>().Where(r=>r.Status is "approved" or "paid"&&r.DecidedAt is not null).ToList();
+                var visits=All<GymCheckIn>().ToList();
+                result=Enumerable.Range(0,(int)(to-from).TotalDays+1).Select(i=>from.AddDays(i)).Select(d=>
+                {
+                    var paid=pays.Where(p=>p.VerifiedAt!.Value.AddHours(8).Date==d).ToList();
+                    var back=refunds.Where(r=>r.DecidedAt!.Value.AddHours(8).Date==d).Sum(r=>r.Amount);
+                    return new RevenueDay(d,paid.Sum(p=>p.Amount)-back,paid.Count,back,visits.LongCount(c=>c.CheckedInAt.AddHours(8).Date==d));
+                }).ToList();
+                return true;
+            }
             default:return false;
         }
     }
