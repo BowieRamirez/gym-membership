@@ -554,7 +554,6 @@ public sealed record AmenityRow(Amenity Amenity, int? UserAmenityId, string? Sta
 {
     public bool IsActive => Status == Models.Status.Active;
     public bool IsPending => Status == Models.Status.Pending;
-    public bool CanBuy => Status is null or Models.Status.Expired or Models.Status.Cancelled;
 }
 public sealed record UsageRow(AmenityUsage Usage, string Member, string Amenity);
 
@@ -615,7 +614,6 @@ public interface IAmenityService
     Task<AppResult<AmenityChange>> SetStatusAsync(int amenityId, string status, string? reason, DateTime? backAtUtc);
 
     Task<AppResult<IReadOnlyList<AmenityRow>>> CatalogAsync();
-    Task<AppResult<Payment>> AvailAsync(int amenityId, string? discountCode = null);
     Task<AppResult<bool>> LogUsageAsync(int userAmenityId, (string FileName, byte[] Data)? proof);
     Task<AppResult<IReadOnlyList<UsageRow>>> PendingUsagesAsync();
     Task<AppResult<bool>> VerifyUsageAsync(int usageId, bool approve);
@@ -691,13 +689,6 @@ public sealed class AmenityService(ISupabaseGateway gw) : IAmenityService
             return new AmenityRow(a, e?.Id, status, e?.ExpiresAt, e?.IsSession ?? false);
         }).ToList();
     });
-
-    public Task<AppResult<Payment>> AvailAsync(int amenityId, string? discountCode = null)
-    {
-        var args = new Dictionary<string, object> { ["p_amenity_id"] = amenityId };
-        if (!string.IsNullOrWhiteSpace(discountCode)) args["p_discount_code"] = discountCode.Trim();
-        return Safe.RunAsync(() => gw.RpcAsync<Payment>("avail_amenity", args));
-    }
 
     public Task<AppResult<bool>> LogUsageAsync(int userAmenityId, (string FileName, byte[] Data)? proof) => Safe.RunAsync(async () =>
     {

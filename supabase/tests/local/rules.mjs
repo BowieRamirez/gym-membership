@@ -79,8 +79,9 @@ await test('every function the app calls has a test that tries to break it', asy
   const walk = d => readdirSync(d, { withFileTypes: true }).flatMap(e =>
     ['bin', 'obj'].includes(e.name) ? [] : e.isDirectory() ? walk(join(d, e.name)) : e.name.endsWith('.cs') ? [join(d, e.name)] : []);
   const app = walk(join(root, 'src')).map(f => readFileSync(f, 'utf8')).join('\n');
-  const called = [...new Set([...app.matchAll(/Rpc[A-Za-z]*(?:<[^>]*>)?\(\s*"([a-z_0-9]+)"/g)].map(m => m[1]))];
-  assert.ok(called.length > 40, `found only ${called.length} calls; has the gateway's Rpc method been renamed?`);
+  // RpcAsync<List<Row>>("f") has nested <>; Change("f") is SubscriptionService's wrapper (both were missed before Phase 8)
+  const called = [...new Set([...app.matchAll(/(?<![A-Za-z])(?:Rpc[A-Za-z]*|Change)(?:<[^(]*?>)?\(\s*"([a-z_0-9]+)"/g)].map(m => m[1]))];
+  assert.ok(called.length > 70, `found only ${called.length} calls; has the gateway's Rpc method been renamed?`);
   const lines = readdirSync(here).filter(f => f.endsWith('.mjs')).flatMap(f => readFileSync(join(here, f), 'utf8').split('\n'));
   const refused = /assert\.rejects|code\(|\/[a-z_|]{3,}\/\)/;
   const untried = called.filter(fn => !lines.some((l, i) =>

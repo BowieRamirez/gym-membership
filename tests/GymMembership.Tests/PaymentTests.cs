@@ -220,7 +220,7 @@ public class PaymentTests
         var gw = new DemoGateway();
         await new AuthService(gw).RegisterAsync("Guest", "User", "guest@demo.io", "secret12");
 
-        Assert.Equal(AppErrorKind.Validation, (await new AmenityService(gw).AvailAsync(1)).Error);
+        Assert.Equal(AppErrorKind.Validation, (await Safe.RunAsync(() => gw.RpcAsync<Payment>("avail_amenity", new() { ["p_amenity_id"] = 1 }))).Error);
         Assert.Equal(AppErrorKind.Validation, (await new CoachService(gw).HireAsync("u-coach1")).Error);
         var t = DateTime.UtcNow.AddDays(3);
         Assert.Equal(AppErrorKind.Validation, (await new SessionService(gw).RequestAsync("u-coach1", t, t.AddHours(1), null)).Error);
@@ -237,11 +237,11 @@ public class PaymentTests
         var gw = await As("member@demo.io");
         var amenities = new AmenityService(gw);
         var sauna = (await amenities.CatalogAsync()).Value!.First(a => a.Amenity.Name == "Sauna");
-        Assert.True(sauna.CanBuy);
-        var pay = (await amenities.AvailAsync(sauna.Amenity.Id)).Value!;
+        Assert.Null(sauna.Status);   // nothing bought yet
+        var pay = (await Safe.RunAsync(() => gw.RpcAsync<Payment>("avail_amenity", new() { ["p_amenity_id"] = sauna.Amenity.Id }))).Value!;
         Assert.Equal((PayKind.Amenity, 200m), (pay.Kind, pay.Amount));
         Assert.True((await amenities.CatalogAsync()).Value!.First(a => a.Amenity.Name == "Sauna").IsPending);
-        Assert.Equal(AppErrorKind.Conflict, (await amenities.AvailAsync(sauna.Amenity.Id)).Error);
+        Assert.Equal(AppErrorKind.Conflict, (await Safe.RunAsync(() => gw.RpcAsync<Payment>("avail_amenity", new() { ["p_amenity_id"] = sauna.Amenity.Id }))).Error);
 
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         await new PaymentStaffService(gw).VerifyAsync(pay.Id, true);

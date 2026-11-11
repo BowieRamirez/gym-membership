@@ -28,7 +28,7 @@ public class AmenitySessionTests
 
     static async Task Buy(DemoGateway gw, int id)
     {
-        var pay = await new AmenityService(gw).AvailAsync(id);
+        var pay = await Safe.RunAsync(() => gw.RpcAsync<Payment>("avail_amenity", new() { ["p_amenity_id"] = id }));
         Assert.True(pay.Ok, pay.Message);
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         Assert.True((await new PaymentStaffService(gw).VerifyAsync(pay.Value!.Id, true)).Ok);

@@ -32,7 +32,7 @@ public class AmenityPassTests
         Assert.Equal("₱300.00 for 30 days", card.PassText);
         Assert.Equal("Dry sauna, 6 seats", card.Amenity.Description);
 
-        Assert.True((await new AmenityService(gw).AvailAsync(card.Amenity.Id)).Ok);   // a pass bought earlier, or at the counter
+        Assert.True((await Safe.RunAsync(() => gw.RpcAsync<Payment>("avail_amenity", new() { ["p_amenity_id"] = card.Amenity.Id }))).Ok);   // a pass bought earlier, or at the counter
         card = await Card(vm, "Steam Room");
         Assert.Equal("Waiting for your payment to be verified", card.PassText);
 
