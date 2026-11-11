@@ -31,7 +31,7 @@ public partial class UsersPage : BasePage
 		{
 			if (!vm.CanManage(user))
 			{
-				vm.ErrorMessage = "Only the super admin can change front-desk, sub-admin and super admin accounts.";
+				vm.ErrorMessage = "Only a System admin can change front desk, Admin and System admin accounts.";
 				return;
 			}
 			// D15: roles and deleting are the super admin's; a deactivated account can only be switched back on
@@ -40,6 +40,7 @@ public partial class UsersPage : BasePage
 				: user.IsSuperAdmin ? new List<string> { "Reset password" }
 				: vm.IsSuperAdmin ? new List<string> { user.CoachActionText, user.EmployeeActionText, user.SubAdminActionText, "Reset password", user.ActiveActionText }
 				: new List<string> { "Reset password", user.ActiveActionText };
+			if (vm.CanCorrectName(user)) actions.Add("Correct name");
 			if (vm.CanDeleteAccounts && user.IsActive && !user.IsSuperAdmin) actions.Add("Delete Account");
 			var action = await ShowAccountMenuAsync(button, user.Username, actions);
 			_dismissMenu = null;
@@ -47,6 +48,7 @@ public partial class UsersPage : BasePage
 			else if (action == user.EmployeeActionText) await vm.ToggleRoleCommand.ExecuteAsync($"{user.UserId}|employee");
 			else if (action == user.SubAdminActionText) await vm.ToggleRoleCommand.ExecuteAsync($"{user.UserId}|subadmin");
 			else if (action == "Reset password") vm.StartResetCommand.Execute(user);
+			else if (action == "Correct name") vm.StartCorrectNameCommand.Execute(user);
 			else if (action == user.ActiveActionText) await vm.ToggleActiveCommand.ExecuteAsync(user);
 			else if (action == "Delete Account" && vm.DeletionFor(user) is { } deletion)
 			{

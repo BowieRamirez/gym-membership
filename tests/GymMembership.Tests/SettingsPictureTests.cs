@@ -16,6 +16,7 @@ public class SettingsPictureTests
         public void GoToLogin() { }
         public void GoToRegister() { }
         public void GoToMessages() { }
+        public void GoToRequests() { }
         public void GoToMembership() { }
         public void ApplyTheme(string theme) { }
     }
@@ -26,6 +27,17 @@ public class SettingsPictureTests
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         var profile = new ProfileService(gw);
         return (new SettingsViewModel(new SettingsService(gw), new AuthService(gw), new Nav(), profile, new Picker(pick)), profile);
+    }
+
+    [Fact]
+    public async Task The_theme_picker_shows_words_and_stores_the_code()
+    {
+        var (vm, _) = await Build(null);   // 9.6 polish: the picker showed "system"
+        Assert.Equal("Same as device", vm.ThemeNames[vm.ThemeIndex]);
+        vm.ThemeIndex = 2;
+        Assert.Equal("dark", vm.Theme);
+        vm.Theme = "light";
+        Assert.Equal(1, vm.ThemeIndex);
     }
 
     [Fact]

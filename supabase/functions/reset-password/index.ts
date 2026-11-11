@@ -1,6 +1,7 @@
 // POST { user_id, password }
 // The owner sets a new temporary password for someone who forgot theirs (plan 4.4).
-import { adminClient, cors, reply, requireAdmin, STAFF_ROLES } from '../_shared/admin.ts';
+import { adminClient, auditBy, cors, reply, requireAdmin, STAFF_ROLES } from '../_shared/admin.ts';
+import { isPassword } from '../_shared/rules.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -13,7 +14,8 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   const userId = String(body.user_id ?? '');
   const password = String(body.password ?? '');
-  if (!userId || password.length < 6) return reply({ error: 'bad_input' }, 400);
+  if (!userId) return reply({ error: 'bad_input' }, 400);
+  if (!isPassword(password)) return reply({ error: 'bad_password' }, 400);   // D5, as the app checks
 
   const { data: target, error: targetError } = await admin.from('profiles').select('is_active').eq('id', userId).maybeSingle();
   if (targetError) return reply({ error: 'bad_input' }, 400);
@@ -31,6 +33,6 @@ Deno.serve(async (req) => {
   await admin.from('user_notifications').insert({
     user_id: userId, type: 'system', title: 'Your password was reset. Sign in with the new one.',
   });
-  await admin.from('audit_log').insert({ actor_id: caller.id, action: 'user.reset_password', entity: 'profiles', entity_id: userId });
+  await admin.from('audit_log').insert({ ...auditBy(req, caller), action: 'user.reset_password', entity: 'profiles', entity_id: userId });
   return reply({ ok: true });
 });

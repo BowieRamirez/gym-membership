@@ -63,3 +63,8 @@ if (process.argv[1].endsWith('harness.mjs')) {
   const { server, client } = await start();
   await client.end(); await server.stop();
 }
+
+// 0050: cash is only taken inside the cashier's open shift. Files that are not about shifts open one for every staff member so far.
+export const openCashShifts = db => db.query(`insert into cash_shifts(cashier_id, opening_float)
+  select ur.user_id, 5000 from user_roles ur join roles r using (role_id) where r.name in ('admin', 'subadmin', 'employee')
+    and not exists (select 1 from cash_shifts s where s.cashier_id = ur.user_id and s.closed_at is null)`);

@@ -58,7 +58,7 @@ try {
     const s = (await post('08:00', '12:00'))[0];
     await session('10:00', '11:00');
     await assert.rejects(as(coach, `update shift_posts set status='cancelled' where shift_post_id=$1`, [s.shift_post_id]), /shift_has_sessions/);
-    await assert.rejects(as(coach, `delete from shift_posts where shift_post_id=$1`, [s.shift_post_id]), /shift_has_sessions/);
+    await assert.rejects(as(coach, `delete from shift_posts where shift_post_id=$1`, [s.shift_post_id]), /permission denied/);   // 0041: never erased
     await assert.rejects(as(coach, `update shift_posts set ends_at=$2 where shift_post_id=$1`, [s.shift_post_id, at('10:30')]), /shift_has_sessions/);
     await as(coach, `update shift_posts set starts_at=$2, note='Later start' where shift_post_id=$1`, [s.shift_post_id, at('09:00')]);   // still covers it
     assert.equal((await db.query('select status from shift_posts where shift_post_id=$1', [s.shift_post_id])).rows[0].status, 'scheduled');

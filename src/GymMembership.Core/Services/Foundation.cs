@@ -34,8 +34,8 @@ public static class ErrorMapper
         var m = message.ToLowerInvariant();
         if (Has(m, "forbidden", "42501", "jwt", "row-level security", "invalid login", "invalid_credentials", "not authenticated")) return AppErrorKind.Unauthorized;
         if (Has(m, "account_has_commitments", "account_archived", "record_archived", "record_not_restorable", "code_limit_reached", "shift_has_sessions", "slot_taken", "member_busy", "stale_proposal", "coach_unavailable", "coach_busy", "already_started", "not_in_use", "amenity_unavailable", "not_archived", "already_processed", "already_availed", "renewal_pending", "already_requested", "refund_in_progress", "not_refundable", "pending_session_request", "active_coaching_session", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
-        if (Has(m, "account_inactive", "bad_archive_reason", "self_archive", "last_active_admin", "no_active_membership", "self_verify", "self_decision", "not_renewable", "wrong_member", "not_found", "23514",
-                   "refund_window_closed", "payment_expired", "gym_closed", "coach_not_in_gym", "bad_rate", "invite_member_inactive", "invalid_code", "limit_required", "bad_hours", "off_grid", "outside_gym_hours", "too_long", "past_slot", "too_far_ahead", "no_pass", "limit_below_used", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "super_admin_protected", "bad_code", "code_not_verified", "resend_wait", "same_password", "end must be after start")) return AppErrorKind.Validation;
+        if (Has(m, "account_inactive", "no_open_shift", "shift_open", "note_required", "bad_archive_reason", "bad_correction_reason", "discount_fixed", "discount_locked", "wrong_pin", "pin_locked", "no_desk_pin", "pin_required", "scan_required", "bad_pin", "refund_reason_required", "no_coach_present", "self_archive", "last_active_admin", "no_active_membership", "self_verify", "self_decision", "not_renewable", "wrong_member", "not_found", "23514",
+                   "refund_window_closed", "too_soon", "too_late_to_cancel", "not_ended", "claim_window_closed", "payment_expired", "gym_closed", "coach_not_in_gym", "bad_rate", "invite_member_inactive", "invalid_code", "limit_required", "bad_hours", "off_grid", "outside_gym_hours", "too_long", "past_slot", "too_far_ahead", "no_pass", "limit_below_used", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "super_admin_protected", "bad_code", "code_not_verified", "resend_wait", "same_password", "end must be after start")) return AppErrorKind.Validation;
         return AppErrorKind.Unknown;
     }
 
@@ -58,6 +58,18 @@ public static class ErrorText
     public static string For(AppErrorKind kind, string? raw) => raw switch
     {
         "bad_archive_reason" => "Enter a reason for deletion, from 1 to 500 characters.",
+        "bad_correction_reason" => "Enter a reason for the correction, from 1 to 500 characters.",
+        "discount_fixed" => "A code and its percent can't change. To change them, archive this code and add a new one.",
+        "discount_locked" => "This code has been used, so it can't be changed. Turn it off and add a new code if you need different terms.",
+        "wrong_pin" => "That PIN is wrong. Ask the member to try again. After 5 wrong tries it locks for 15 minutes.",
+        "pin_locked" => "Too many wrong PINs: this member's desk PIN is locked for 15 minutes. Scan their QR code instead, or ask an Admin.",
+        "no_desk_pin" => "This member hasn't set a desk PIN yet (Settings in their app). An Admin or System admin can check them in with a reason.",
+        "pin_required" => "Enter the member's desk PIN.",
+        "no_open_shift" => "Start your cash shift on the Cashier page first: cash you take or pay back goes through your drawer.",
+        "shift_open" => "Your shift is already open. End it before starting a new one.",
+        "note_required" => "Add a note: the amount differs from what's expected.",
+        "scan_required" => "Scan the member's QR code again, then check them in.",
+        "bad_pin" => "Choose 4 digits for your desk PIN.",
         "self_archive" => "You can't delete your own account.",
         "last_active_admin" => "Keep at least one active administrator.",
         "account_has_commitments" => "Resolve this account's scheduled sessions, active coaching hires and pending payments before deleting it.",
@@ -76,7 +88,11 @@ public static class ErrorText
         "too_long" => "A booking can be at most 2 hours (four touching slots).",
         "past_slot" => "That time has already started. Pick a later slot.",
         "too_far_ahead" => "You can book up to 14 days ahead.",
-        "no_pass" => "You need an active pass for this amenity. Buy one on the Amenities page.",
+        "too_soon" => "Online bookings need to start more than 1 hour from now. Pick a later time.",
+        "too_late_to_cancel" => "It starts within the hour, so it can't be cancelled now.",
+        "not_ended" => "You can say you didn't use it once the booking has ended.",
+        "claim_window_closed" => "It's more than 24 hours since the booking ended, so it can't be claimed now.",
+        "no_pass" => "You need an active pass or session for this amenity. Book it on Book an amenity and pay for it there.",
         "amenity_unavailable" => "This amenity is closed at that time.",
         "already_started" => "This booking has already started. Use End now instead.",
         "not_in_use" => "This booking is not in use right now.",
@@ -92,10 +108,14 @@ public static class ErrorText
         "bad_archive_filter" => "Check the archive filters and date range, then try again.",
         "account_inactive" => "This account is inactive and cannot receive a new booking, coaching hire or pending payment.",
         "invalid_code" => "That discount code isn't valid, or it has expired.",
-        "bad_input" => "Fill in every field. The password needs at least 6 characters.",
+        "bad_walk_in_price" => "Enter a walk-in price above ₱0.",
+        "zero_amount" => "A payment of ₱0 can't be recorded. Ask an administrator to set a price above ₱0.",
+        "bad_input" => "Fill in every field, then try again.",
         "bad_name" => "Enter a first and a last name in letters. Spaces, hyphens and apostrophes are fine. At least 2 letters each, 60 characters together.",
         "bad_email" => "Enter a valid email address, for example name@example.com. Up to 100 characters.",
-        "bad_password" => "Use 6 to 64 characters for your password.",
+        "bad_password" => "Use 8 to 64 characters for your password, with at least one letter and one number.",
+        // Supabase Auth's own refusal (D5: minimum 8, letters_digits), in case the app's check was older than the server's
+        _ when raw?.Contains("weak_password", StringComparison.OrdinalIgnoreCase) == true => For(kind, "bad_password"),
         "bad_image" => "Choose a JPG, PNG or WebP picture under 5 MB.",
         "message_too_long" => "Keep a message under 2000 characters.",
         "bad_back_at" => "Pick a return time that is still ahead.",
@@ -105,7 +125,7 @@ public static class ErrorText
         "email_confirmation_required" => "Check your email and confirm your address, then sign in.",
         _ when raw?.Contains("invalid login credentials", StringComparison.OrdinalIgnoreCase) == true || raw?.Contains("invalid_credentials", StringComparison.OrdinalIgnoreCase) == true => "Email or password is incorrect. Try again, or use Forgot password? to reset your password.",
         "wrong_password" => "Your current password isn't right.",
-        "super_admin_protected" => "Super admin accounts can't have their roles changed, be deactivated or be deleted.",
+        "super_admin_protected" => "System admin accounts can't have their roles changed, be deactivated or be deleted.",
         "bad_code" or "code_not_verified" => "That code is wrong, already used or expired. Check the latest email, or send a new code.",
         "resend_wait" => "A code was just sent. Wait a minute before asking for another one.",
         "same_password" => "Pick a password that's different from your old one.",
@@ -113,7 +133,9 @@ public static class ErrorText
         "in_use" => "Existing records use this, so it can't be deleted. Turn it off instead.",
         "already_availed" => "You already have this, or a payment for it is waiting. Renew it, or wait for the payment to be reviewed.",
         "renewal_pending" => "A membership or extension payment is already waiting. Finish that payment first.",
-        "refund_window_closed" => "The 24-hour cancellation and refund request window has closed.",
+        "refund_window_closed" => "This term has ended, so a refund can't be requested.",
+        "refund_reason_required" => "Choose why you are asking for a refund.",
+        "no_coach_present" => "Amenities can only be used while a coach is in the gym, and no coach is here right now.",
         "payment_expired" => "That unpaid payment has expired. Create a fresh payment.",
         "already_requested" => "A cancellation and refund request already exists for this term.",
         "active_coaching_session" => "You already have an active session together. Open Sessions to reschedule or cancel it. Finish, cancel or mark that session no-show before requesting another.",
@@ -139,7 +161,16 @@ public static class ErrorText
     };
 }
 
-/// <summary>Admin is the super admin (D15); SubAdmin does desk work plus some admin pages.</summary>
+/// <summary>
+/// Item 15, D13: the one status word for master data (accounts, packages, amenities, discount codes). Deleted means archived as deleted;
+/// anything turned off, expired or archived otherwise is Inactive. Memberships, payments and refunds keep their own statuses.
+/// </summary>
+public static class RecordStatus
+{
+    public static string Of(bool active, bool deleted = false) => deleted ? "Deleted" : active ? "Active" : "Inactive";
+}
+
+/// <summary>Admin is the System admin (D15, D17); SubAdmin is the Admin on screen: desk work plus some admin pages.</summary>
 public enum AppRole { Member, Coach, Employee, Admin, SubAdmin }
 
 public static class RoleResolver
@@ -179,7 +210,11 @@ public interface IAppNavigator
     void GoToLogin();
     void GoToRegister();
     void GoToMessages();
+    /// <summary>Time requests, for a member or a coach (F11: a request message links there).</summary>
+    void GoToRequests();
     void GoToMembership();
+    /// <summary>Book an amenity, for a member (F15: a booking on the Calendar opens it).</summary>
+    void GoToBookings() { }
     void ApplyTheme(string theme);
 }
 
@@ -201,6 +236,8 @@ public interface ISupabaseGateway
     string? CurrentUserId { get; }
     Task SignInAsync(string email, string password);
     Task SignUpAsync(string email, string password, string firstName, string lastName);
+    /// <summary>Whether an account uses this address. Works signed out; the server limits how often it can be asked.</summary>
+    Task<bool> EmailInUseAsync(string email);
     /// <summary>The signed-in person's sign-in email, or null when nobody is signed in.</summary>
     string? CurrentEmail { get; }
     /// <summary>Emails a 6-digit code. For a new address, it first becomes the sign-in email (or Supabase sends its change code).</summary>
@@ -218,7 +255,6 @@ public interface ISupabaseGateway
     Task<IReadOnlyList<T>> ListAsync<T>(Expression<Func<T, bool>>? where = null) where T : BaseModel, new();
     Task<T> InsertAsync<T>(T row) where T : BaseModel, new();
     Task UpdateAsync<T>(T row) where T : BaseModel, new();
-    Task DeleteAsync<T>(T row) where T : BaseModel, new();
     /// <summary>Sets one column on every row that matches, in a single request; rows the filter does not match are left alone.</summary>
     Task UpdateWhereAsync<T, TValue>(Expression<Func<T, bool>> where, Expression<Func<T, TValue>> column, TValue value) where T : BaseModel, new();
     Task<TResult> RpcAsync<TResult>(string function, Dictionary<string, object>? args = null);

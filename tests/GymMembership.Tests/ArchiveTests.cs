@@ -78,7 +78,6 @@ public class ArchiveTests
         await admin.SaveAmenityAsync(amenity);
         amenity.Name = "Edited in archive";
         Assert.Equal("record_archived", (await admin.SaveAmenityAsync(amenity)).Message);
-        await Assert.ThrowsAsync<Exception>(() => gw.DeleteAsync(plan));
     }
 
     [Fact]

@@ -164,10 +164,32 @@ public partial class RegisterViewModel(IAuthService auth, IAppNavigator nav) : L
     [ObservableProperty] private string email = "";
     [ObservableProperty] private string password = "";
     [ObservableProperty] private string confirmPassword = "";
+    /// <summary>Set when the address already has an account. Only a hint: submitting is still allowed, and the server decides.</summary>
+    [ObservableProperty] private string? emailTaken;
+
+    /// <summary>How long typing must pause before the address is looked up.</summary>
+    public TimeSpan EmailCheckDelay { get; init; } = TimeSpan.FromMilliseconds(400);
+    CancellationTokenSource? _emailCheck;
+
+    partial void OnEmailChanged(string value) => _ = CheckEmailAsync(value.Trim());
+
+    async Task CheckEmailAsync(string address)
+    {
+        _emailCheck?.Cancel();
+        var check = _emailCheck = new CancellationTokenSource();
+        EmailTaken = null;
+        if (!AccountRules.IsEmail(address)) return;
+        try { await Task.Delay(EmailCheckDelay, check.Token); }
+        catch (OperationCanceledException) { return; }
+        var result = await auth.EmailInUseAsync(address);   // a refusal or lost connection shows nothing: this must never block registering
+        if (!check.IsCancellationRequested && result is { Ok: true, Value: true })
+            EmailTaken = "This email already has an account. Sign in, or use a different email.";
+    }
 
     [RelayCommand]
     private async Task RegisterAsync()
     {
+        _emailCheck?.Cancel();   // otherwise the new account's own address could come back as "in use" while the page changes
         if (Password != ConfirmPassword) { ErrorMessage = "The passwords don't match."; return; }
         if (await RunAsync(() => auth.RegisterAsync(FirstName, LastName, Email, Password))) nav.GoTo(AppRole.Member);
     }
@@ -178,11 +200,21 @@ public partial class RegisterViewModel(IAuthService auth, IAppNavigator nav) : L
 public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav, ISubscriptionService subscription) : LoadableViewModel
 {
     public ObservableCollection<MembershipPackage> Packages { get; } = new();
+    /// <summary>F5: codes staff chose to show here that this member can still use. The section hides when there are none.</summary>
+    public ObservableCollection<PackageCode> Codes { get; } = new();
+    [ObservableProperty] private bool hasCodes;
     [ObservableProperty] private string? discountCode;
 
     public override Task OnAppearingAsync() => LoadAsync();
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.ListPackagesAsync, rows => Fill(Packages, rows));
+    [RelayCommand]
+    private async Task LoadAsync()
+    {
+        if (!await RunAsync(svc.ListPackagesAsync, rows => Fill(Packages, rows))) return;
+        await RunAsync(svc.PackageCodesAsync, rows => { Fill(Codes, rows); HasCodes = Codes.Count > 0; });
+    }
+
+    [RelayCommand] private void UseCode(PackageCode code) => DiscountCode = code.Code;
 
     // avail creates a pending QR payment; paying it and sending the proof happens on My membership
     [RelayCommand]
@@ -211,12 +243,33 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
     [ObservableProperty] private string heroNumber = "–";
     [ObservableProperty] private string heroCaption = "Pick a package to get started.";
     [ObservableProperty] private double laneFraction;
+    /// <summary>A term is running now: only then do the days, the end date and the lane mean anything (a new member saw "–" and "Ends None").</summary>
+    [ObservableProperty] private bool hasActiveTerm;
+    /// <summary>Nothing running and no payment in progress (to pay or being checked): the highlight card itself offers the way in.</summary>
+    [ObservableProperty] private bool canStart;
 
     /// <summary>The QR payment the member still has to pay and send proof for, if any.</summary>
     [ObservableProperty] private PaymentItem? payNow;
-    /// <summary>The member's permanent QR code (D12): identification at the front desk, never payment.</summary>
+    /// <summary>F6: the member's one-use QR pass for the front desk, good for 5 minutes; never payment.</summary>
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasCode))] private string? myCode;
     public bool HasCode => !string.IsNullOrEmpty(MyCode);
+    DateTime? _passExpires;
+    [ObservableProperty] private string passLeftText = "";
+
+    /// <summary>The page reloads every 20 seconds and calls this: it renews the pass 30 seconds before it runs out, so it never lapses between ticks, and says when it changes.</summary>
+    public async Task TickPassAsync(DateTime utcNow)
+    {
+        if (codes is null) return;
+        if (_passExpires is not { } until || utcNow >= until.AddSeconds(-30))
+        {
+            var pass = await codes.MyPassAsync();
+            if (!pass.Ok) return;   // quiet: a staff account has no pass, and offline the next tick tries again
+            // counted on this device's clock from now: only the 5-minute length (0049) matters, so a phone clock that differs from the server's can't skew it
+            (MyCode, _passExpires) = (pass.Value!.Code, utcNow.AddMinutes(5));
+        }
+        var left = _passExpires!.Value - utcNow;
+        PassLeftText = left.TotalSeconds < 60 ? "New code in under a minute" : $"New code in {(int)Math.Ceiling(left.TotalMinutes)} minutes";
+    }
     [ObservableProperty] private string referenceNo = "";
     [ObservableProperty] private string? accountName;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasQr))] private string? qrUrl;
@@ -231,11 +284,11 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
         _loading = true;
         try
         {
-            if (codes is not null && MyCode is null) await RunAsync(codes.MyCodeAsync, c => MyCode = c);   // never changes, so read once
+            await TickPassAsync(DateTime.UtcNow);
             if (!await RunAsync(subscription.TermsAsync, rows =>
             {
                 Fill(Terms, rows);
-                TermEndsText = rows.FirstOrDefault(t => t.State == Status.Active) is { } t ? $"{t.Term.EndsAt.AddHours(8):d MMM yyyy}" : "None";   // Manila, as the terms table
+                TermEndsText = rows.FirstOrDefault(t => t.State == Status.Active) is { } t ? $"{t.Term.EndsAt.AddHours(8):d MMM yyyy}" : "No active term";   // Manila, as the terms table
             })) return;
             var waiting = false;
             if (!await RunAsync(svc.MyPaymentsAsync, rows =>
@@ -269,16 +322,18 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
     {
         var active = rows.FirstOrDefault(r => r.Status == Status.Active);
         var expired = rows.FirstOrDefault(r => r.Status == Status.Expired);
+        HasActiveTerm = active is { DaysLeft: not null };
+        CanStart = !HasActiveTerm && !waitingOnPayment;
         if (active is { DaysLeft: { } left })
         {
             HeroNumber = left.ToString();
-            HeroCaption = left == 1 ? $"day left on {active.PackageName}" : $"days left on {active.PackageName}";
+            HeroCaption = left == 1 ? $"Day left on {active.PackageName}" : $"Days left on {active.PackageName}";
             LaneFraction = Math.Clamp((double)left / Math.Max(1, active.DurationDays), 0, 1);
         }
         else if (waitingOnPayment)
         { HeroNumber = "–"; HeroCaption = PayNow is not null ? "Pay by QR and send your proof to start your membership." : "Waiting for staff to verify your payment."; LaneFraction = 0; }
         else if (Terms.FirstOrDefault(t => t.State == Status.Scheduled) is { } next)
-        { HeroNumber = "0"; HeroCaption = $"No active access. Your next paid term starts {next.Term.StartsAt.AddHours(8):dd MMM yyyy, HH:mm} (Manila)."; LaneFraction = 0; }
+        { HeroNumber = "0"; HeroCaption = $"No active access. Your next paid term starts {next.Term.StartsAt.AddHours(8):d MMM yyyy, h:mm tt} (Manila)."; LaneFraction = 0; }
         else if (expired is not null)
         { HeroNumber = "0"; HeroCaption = $"{expired.PackageName} has expired. Choose a package to extend."; LaneFraction = 0; }
         else
@@ -316,10 +371,11 @@ public partial class AmenityBoardViewModel(IAmenityService svc) : LoadableViewMo
 {
     public ObservableCollection<AmenityCard> Cards { get; } = new();
     [ObservableProperty] private bool canFollow;
+    [ObservableProperty] private bool noCoachInGym;
 
     public override Task OnAppearingAsync() => LoadAsync();
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.BoardAsync, board => { Fill(Cards, board.Cards); CanFollow = board.CanFollow; });
+    [RelayCommand] private Task LoadAsync() => RunAsync(svc.BoardAsync, board => { Fill(Cards, board.Cards); CanFollow = board.CanFollow; NoCoachInGym = !board.CoachInGym; });
 
     public override async Task AutoRefreshAsync()
     {
@@ -328,22 +384,17 @@ public partial class AmenityBoardViewModel(IAmenityService svc) : LoadableViewMo
         if (!board.Ok) return;   // stay quiet: the next tick tries again
         Sync(Cards, board.Value!.Cards, c => c.Amenity.Id, (a, b) => a.SameAs(b));
         CanFollow = board.Value.CanFollow;
+        NoCoachInGym = !board.Value.CoachInGym;
     }
 
     [RelayCommand]
     private async Task ToggleFollowAsync(AmenityCard card)
     { if (await RunAsync(() => svc.SetFollowedAsync(card.Amenity.Id, !card.Followed))) await LoadAsync(); }
 
-    // the existing purchase: a pending QR payment that turns the pass on when staff verify it
+    // F14: a coach's "I run this" switch; members see the names on the card
     [RelayCommand]
-    private async Task BuyAsync(AmenityCard card)
-    {
-        Notice = null;
-        if (!await Confirm.AskAsync($"Buy a {card.Amenity.Name} pass?", $"{card.PassText}.\nYou pay by QR on My membership.", "Buy pass")) return;
-        if (!await RunAsync(() => svc.AvailAsync(card.Amenity.Id), _ => { })) return;
-        await LoadAsync();
-        Notice = $"Pass for {card.Amenity.Name} ordered. Pay it from My membership; it starts when staff verify the payment.";
-    }
+    private async Task ToggleRunsAsync(AmenityCard card)
+    { Notice = null; if (await RunAsync(() => svc.SetRunsAsync(card.Amenity.Id, !card.RunsThis))) await LoadAsync(); }
 }
 
 public partial class CoachesViewModel(ICoachService svc, IChatService messages, IAppNavigator nav) : LoadableViewModel
@@ -389,13 +440,18 @@ public partial class ThreadItem(ChatThread thread) : ObservableObject
     [ObservableProperty] private bool isOnline; // the other person is in the app right now (set only where the thread allows it)
     public string Letters => Initials.From(Thread.WithName);
 
+    /// <summary>Staff only: the queue a conversation was sent to, past the Front desk (F9). Empty otherwise.</summary>
+    public string QueueTag => Thread.IsSupport && Thread.WithId is not null && Thread.Queue is ChatQueue.Admin or ChatQueue.SystemAdmin ? "To " + ChatQueue.Name(Thread.Queue) : "";
+
     /// <summary>Staff only: who has taken a member's front desk conversation, and whether it is closed.</summary>
     public string Subtitle => !Thread.IsSupport || Thread.WithId is null ? ""
         : (Thread.ClaimedByName is { } n ? $"Taken by {n}" : "Not taken yet") + (Thread.Status == "closed" ? ", closed" : "");
 }
 
-public partial class MessengerViewModel(IChatService chat, IProfileService profile, IAuthService auth, IProofPicker picker, IRealtimeChat? live = null) : LoadableViewModel
+public partial class MessengerViewModel(IChatService chat, IProfileService profile, IAuthService auth, IProofPicker picker, IRealtimeChat? live = null, IAppNavigator? nav = null) : LoadableViewModel
 {
+    /// <summary>Set by the page from the shell it is in: a coach's first tab is "Trainees", a member's "Coach".</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CoachTabText), nameof(EmptyListText))] private bool isCoach;
     List<ChatThread> all = [];
     string? myId;
     int openTicket, listTicket, searchTicket;
@@ -413,7 +469,9 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowChat), nameof(ShowList))] private bool isCompact;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowChat), nameof(ShowList))] private bool showingChat;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasChat), nameof(CanSend), nameof(ReadOnly), nameof(CanTake), nameof(CanRelease), nameof(CanClose), nameof(CanReopen), nameof(StatusLine))] private ThreadItem? selected;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasChat), nameof(CanSend), nameof(ReadOnly), nameof(ReadOnlyText), nameof(CanTake), nameof(CanRelease), nameof(CanClose), nameof(CanReopen), nameof(StatusLine), nameof(ChatEmptyText))] private ThreadItem? selected;
+    /// <summary>F10: Announcements, pinned above the tabs for members and coaches; null for staff.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPinned))] private ThreadItem? pinned;
     [ObservableProperty] private string draft = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPhoto), nameof(PhotoName))] private (string Name, byte[] Data)? pendingPhoto;   // chosen, not sent yet
     [ObservableProperty] private bool hasMore;
@@ -433,16 +491,30 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     public bool CanSend => Selected?.Thread.CanSend == true;
     /// <summary>A conversation is open but nobody can add to it now (the hire ended, or no active plan): history only.</summary>
     public bool ReadOnly => Selected is not null && !CanSend;
+    public string ReadOnlyText => Selected?.Thread.IsAnnouncements == true
+        ? "Announcements are from the gym. You can't reply here; write to the Front desk in the Gym tab."
+        : "You can read this conversation, but you can't send new messages in it right now.";
+    public bool HasPinned => Pinned is not null;
+    /// <summary>What an empty conversation says: who reads a new gym thread, or that Announcements has nothing yet.</summary>
+    public string ChatEmptyText => Selected?.Thread switch
+    {
+        { IsAnnouncements: true } => "No announcements yet.",
+        { IsMyGymThread: true, Queue: ChatQueue.Admin } => "Write to the Admin team about your account, payments or anything the front desk can't sort out. Anyone on the team can answer.",
+        { IsMyGymThread: true, Queue: ChatQueue.SystemAdmin } => "Write to the System admin about anything the Admin team can't sort out.",
+        _ => "No messages yet. Say hello below."
+    };
     public bool HasHits => Hits.Count > 0;
     public bool HasPhoto => PendingPhoto is not null;
     public string PhotoName => PendingPhoto?.Name ?? "";
-    public string CoachTabText => CoachTabBadge > 0 ? $"Coach ({CoachTabBadge})" : "Coach";   // the count is in words, not only a coloured dot
-    public string StaffTabText => StaffTabBadge > 0 ? $"Staff ({StaffTabBadge})" : "Staff";
+    public string CoachTabText => (IsCoach ? "Trainees" : "Coach") + (CoachTabBadge > 0 ? $" ({CoachTabBadge})" : "");   // the count is in words, not only a coloured dot
+    public string StaffTabText => StaffTabBadge > 0 ? $"Gym ({StaffTabBadge})" : "Gym";   // F9: was "Staff"
     public bool CanTake => HasFilters && Selected?.Thread is { IsSupport: true, ClaimedBy: null };
     public bool CanRelease => HasFilters && Selected?.Thread is { IsSupport: true, ClaimedBy: not null } t && t.ClaimedBy == myId;
     public bool CanClose => HasFilters && Selected?.Thread is { IsSupport: true, Status: "open" };
     public bool CanReopen => HasFilters && Selected?.Thread is { IsSupport: true, Status: "closed" };
-    public string EmptyListText => HasFilters ? "No conversations here." : Tab == "coach" && HasTabs ? "You have no coach yet. Hire one from the Coaches page to start a conversation." : "";
+    public string EmptyListText => HasFilters ? "No conversations here."
+        : Tab == "coach" && HasTabs ? (IsCoach ? "No trainees yet. Members who hire you appear here." : "You have no coach yet. Hire one from the Coaches page to start a conversation.")
+        : "No conversations yet.";
 
     // ---- live updates. Every Realtime event is a hint; the answer always comes from the server through AutoRefreshAsync.
     /// <summary>Realtime calls back on its own thread, and the lists must change on the UI thread. The page sets this; with none (tests) the work runs where it is.</summary>
@@ -569,7 +641,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         openTicket++; listTicket++; searchTicket++;   // an answer still on its way for the last person is dropped when it lands
         Threads.Clear(); Bubbles.Clear(); SetHits([]);
         Selected = null; drafts.Clear(); Draft = ""; PendingPhoto = null; SearchText = ""; HasMore = false; ShowingChat = false;
-        Tab = "coach"; Filter = "open"; HasTabs = false; HasFilters = false; CoachTabBadge = 0; StaffTabBadge = 0;
+        Tab = "coach"; Filter = "open"; HasTabs = false; HasFilters = false; CoachTabBadge = 0; StaffTabBadge = 0; Pinned = null;
         ErrorMessage = null;
     }
 
@@ -580,11 +652,14 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         if (!result.Ok) { if (first) ErrorMessage = ErrorText.For(result.Error, result.Message); return; }
         if (ticket != listTicket) return;   // a newer load is on its way
         all = result.Value!.ToList();
-        // a member has their own "Front desk" thread and gets the Coach and Staff tabs; staff see member threads and get the Open, Mine and Closed filters; a coach gets neither
-        var member = all.Any(t => t.IsSupport && t.WithName == "Front desk");
-        HasTabs = member;
-        HasFilters |= !member && all.Any(t => t.IsSupport);   // once on, stays on, so an emptied inbox keeps its filters
-        CoachTabBadge = all.Where(t => !t.IsSupport).Sum(t => t.Unread);
+        // members and coaches have their own gym threads and get the Coach (or Trainees) and Gym tabs; staff see others' threads and get the Open, Mine and Closed filters
+        var writer = all.Any(t => t.IsMyGymThread);
+        // Front desk, Admin and System admin are always there to open; one not written to yet is started by its first message
+        if (writer && myId is { } me)
+            all.AddRange(ChatQueue.All.Where(q => !all.Any(t => t.IsMyGymThread && (t.Queue ?? ChatQueue.FrontDesk) == q)).Select(q => ChatThread.ForQueue(me, q)));
+        HasTabs = writer;
+        HasFilters |= !writer && all.Any(t => t.IsSupport);   // once on, stays on, so an emptied inbox keeps its filters
+        CoachTabBadge = all.Where(t => t.Kind == "coach").Sum(t => t.Unread);
         StaffTabBadge = all.Where(t => t.IsSupport).Sum(t => t.Unread);
         _ = chat.MarkDeliveredAsync();   // what was sent to you is at least delivered once your list has loaded
         Rebuild();
@@ -597,7 +672,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     {
         IEnumerable<ChatThread> shown = HasFilters
             ? all.Where(t => t.IsSupport && Filter switch { "mine" => t.ClaimedBy == myId && t.Status == "open", "closed" => t.Status == "closed", _ => t.Status == "open" })
-            : HasTabs ? all.Where(t => t.IsSupport == (Tab == "support")) : all;
+            : HasTabs ? all.Where(t => !t.IsAnnouncements && t.IsSupport == (Tab == "support")) : all.Where(t => !t.IsAnnouncements);
         if (IsSearching) shown = shown.Where(t => t.WithName.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase));
 
         ThreadItem Item(ChatThread t)
@@ -606,10 +681,13 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
             return old is not null && Same(old.Thread, t) ? old : new ThreadItem(t) { AvatarUrl = old?.AvatarUrl };
         }
         Sync(Threads, shown.Select(Item).ToList(), x => x.Thread.Key, ReferenceEquals);
+        var news = all.FirstOrDefault(t => t.IsAnnouncements);
+        Pinned = news is null ? null : Pinned is { } p && Same(p.Thread, news) ? p : new ThreadItem(news) { IsOpen = Selected?.Thread.Key == news.Key };
 
         // the open conversation follows the server's latest word about it (unread count, who took it, closed)
         if (Selected is { } open && all.FirstOrDefault(t => t.Key == open.Thread.Key) is { } fresh && !Same(open.Thread, fresh))
-            Selected = Threads.FirstOrDefault(x => x.Thread.Key == fresh.Key) ?? new ThreadItem(fresh) { AvatarUrl = open.AvatarUrl };
+            Selected = Threads.FirstOrDefault(x => x.Thread.Key == fresh.Key) ?? (Pinned?.Thread.Key == fresh.Key ? Pinned : null)
+                ?? new ThreadItem(fresh) { AvatarUrl = open.AvatarUrl };   // Announcements stays the pinned row, so that row shows as open
         OnPropertyChanged(nameof(EmptyListText));
         ApplyOnline();   // rows built by this reload get their dot
     }
@@ -666,11 +744,14 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         await ShowAsync(item, markRead: true);
     }
 
+    /// <summary>F11: a request message's link. The buttons to answer stay on Time requests.</summary>
+    [RelayCommand] private void OpenRequests() => nav?.GoToRequests();
+
     [RelayCommand]
     private async Task OpenHitAsync(ChatSearchHit hit)
     {
         SearchText = "";
-        var thread = all.FirstOrDefault(t => t.Kind == hit.Kind && t.CoachId == hit.CoachId && t.MemberId == hit.MemberId);
+        var thread = all.FirstOrDefault(t => t.Kind == hit.Kind && t.CoachId == hit.CoachId && t.MemberId == hit.MemberId && t.Queue == hit.Queue);
         if (thread is null) return;
         if (HasTabs) Tab = thread.IsSupport ? "support" : "coach";
         if (HasFilters) Filter = thread.Status == "closed" ? "closed" : "open";   // show the list the conversation is in
@@ -859,7 +940,10 @@ public partial class NotificationsViewModel : LoadableViewModel, IDisposable
 public partial class SettingsViewModel(ISettingsService settings, IAuthService auth, IAppNavigator nav, IProfileService profile, IProofPicker picker, ISupabaseGateway? gateway = null) : LoadableViewModel
 {
     public string[] Themes { get; } = ["system", "light", "dark"];
-    [ObservableProperty] private string theme = "system";
+    /// <summary>What the picker shows, in the same order as <see cref="Themes"/> (9.6 polish: it showed the stored code, "system").</summary>
+    public string[] ThemeNames { get; } = ["Same as device", "Light", "Dark"];
+    public int ThemeIndex { get => Math.Max(0, Array.IndexOf(Themes, Theme)); set { if (value >= 0) Theme = Themes[value]; } }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ThemeIndex))] private string theme = "system";
     [ObservableProperty] private bool mustChange;
     [ObservableProperty] private string letters = "?";
     [ObservableProperty] private string? avatarUrl;
@@ -870,6 +954,7 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
     public override async Task OnAppearingAsync()
     {
         await LoadAsync();
+        await RunAsync(settings.IsMemberAsync, m => IsMember = m);
         await RunAsync(auth.MustChangePasswordAsync, m => MustChange = m);
         await LoadPhotoAsync(names: true);
         await LoadEmailAsync();
@@ -919,18 +1004,24 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
     }
 
 
-    // ---------- name ----------
-    [ObservableProperty] private string firstName = "";
-    [ObservableProperty] private string lastName = "";
+    // ---------- F8: the desk PIN, members only; typed twice because a typo shows up only at the desk ----------
+    [ObservableProperty] private bool isMember;
+    [ObservableProperty] private string deskPin = "";
+    [ObservableProperty] private string deskPinAgain = "";
 
     [RelayCommand]
-    private async Task SaveNameAsync()
+    private async Task SaveDeskPinAsync()
     {
         Notice = null;
-        if (!await RunAsync(() => profile.SetNameAsync(FirstName, LastName))) return;
-        await LoadPhotoAsync(names: true);
-        Notice = "Name saved.";
+        if (DeskPin != DeskPinAgain) { ErrorMessage = "The two PINs don't match."; return; }
+        if (!await RunAsync(() => settings.SetDeskPinAsync(DeskPin))) return;
+        DeskPin = DeskPinAgain = "";
+        Notice = "Desk PIN saved. Type it at the front desk if you check in without your phone.";
     }
+
+    // ---------- name: shown only, locked after sign-up (0040) ----------
+    [ObservableProperty] private string firstName = "";
+    [ObservableProperty] private string lastName = "";
 
     // ---------- email: send a code to it, then type the code ----------
     [ObservableProperty] private string emailAddress = "";

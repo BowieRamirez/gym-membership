@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desk PIN and member pass (Phase 2 mockup)</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600&display=swap" rel="stylesheet">
+<style>
+  /* Tokens from src/GymMembership.App/Resources/Styles/Colors.xaml */
+  :root, [data-theme="dark"] {
+    --page: #0E0E0E; --card: #1A1A1A; --surface: #242424; --line: #2A2A2A; --edge: #757575;
+    --ink: #F2F2F2; --muted: #A6A6A6; --signal: #FFEC00; --good: #4CC585; --bad: #FF7B70; --rail: #161616; --chip: #2A2A2A;
+  }
+  [data-theme="light"] {
+    --page: #EEEEEE; --card: #FFFFFF; --surface: #F5F5F5; --line: #E4E4E4; --edge: #808080;
+    --ink: #111111; --muted: #5B5B5B; --signal: #FFEC00; --good: #1B7A3E; --bad: #C42B21; --rail: #FFEC00; --chip: #EEEEEE;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #2b2b2b; color: var(--ink); font: 14px/1.45 Barlow, system-ui, sans-serif; }
+  ::selection { background: var(--signal); color: #111; }
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+  /* ---- mockup controls (not part of the app) ---- */
+  .mock { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: center; padding: 12px 18px; background: #151515; color: #ddd; font-size: 13px; border-bottom: 1px solid #333; }
+  .mock b { font-weight: 600; margin-right: 6px; }
+  .seg { display: inline-flex; border: 1px solid #444; border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; background: none; padding: 5px 11px; cursor: pointer; color: #bbb; border-right: 1px solid #444; }
+  .seg button:last-child { border-right: 0; }
+  .seg button[aria-pressed="true"] { background: var(--signal); color: #111; }
+  .note { max-width: 1180px; margin: 22px auto 8px; padding: 0 22px; color: #cfcfcf; }
+  .note h2 { font: 600 18px/1.3 Barlow, sans-serif; margin: 0 0 4px; color: #fff; }
+  .note p { margin: 0; max-width: 70ch; }
+  .stage { padding: 10px 22px 26px; display: flex; gap: 22px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+
+  /* ---- app frame ---- */
+  .app { display: grid; grid-template-columns: 72px 1fr; background: var(--page); border-radius: 10px; overflow: hidden; width: 100%; max-width: 1180px; }
+  .rail { background: var(--rail); display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 0; }
+  .rail i { width: 38px; height: 38px; border-radius: 11px; background: var(--chip); display: block; opacity: .55; }
+  .rail i.on { background: var(--signal); opacity: 1; }
+  [data-theme="light"] .rail i { background: rgba(0,0,0,.12); }
+  [data-theme="light"] .rail i.on { background: #111; }
+  .page { padding: 18px 24px 26px; min-width: 0; }
+  h1 { margin: 0 0 16px; font: 500 28px/1.1 Barlow, sans-serif; }
+  .app h2, .card h2, .qrcard h2, .phone h2 { font: 500 20px/1.2 Barlow, sans-serif; margin: 0 0 10px; }
+  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+  .card { background: var(--card); border-radius: 16px; padding: 14px; }
+  .search { border: 2px solid var(--edge); border-radius: 999px; padding: 7px 16px; color: var(--muted); margin-bottom: 12px; }
+  .row { background: var(--surface); border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .row .who { flex: 1; min-width: 0; }
+  .row .name { font: 500 19px/1.2 Barlow, sans-serif; }
+  .cap { font-size: 12.5px; color: var(--muted); font-weight: 500; }
+  .dot { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  .dot::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--good); }
+  .dot.off::before { background: var(--bad); }
+  .btn { height: 36px; padding: 0 16px; border-radius: 999px; border: 2px solid var(--ink); background: none; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .btn.y { background: var(--signal); border-color: var(--signal); color: #111; }
+  .btn.link { border: 0; padding: 0 4px; text-decoration: underline; text-underline-offset: 3px; }
+  .muted { color: var(--muted); }
+
+  /* the PIN step: opens inside the member's row, so staff never lose their place in the list */
+  .pinstep { background: var(--surface); border: 2px solid var(--signal); border-radius: 12px; padding: 14px; margin-bottom: 10px; display: grid; grid-template-columns: 64px 1fr; gap: 6px 14px; }
+  .avatar { width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #6b6b6b, #3a3a3a); display: grid; place-items: center; font: 600 22px Barlow, sans-serif; color: #fff; grid-row: span 3; }
+  .avatar.photo { background: radial-gradient(circle at 50% 38%, #c9a27c 0 22%, transparent 23%), radial-gradient(ellipse at 50% 100%, #3d5a80 0 48%, transparent 49%), #9fb3c8; }
+  .pinstep .name { font: 500 19px/1.2 Barlow, sans-serif; }
+  .pinline { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 12.5px; color: var(--muted); font-weight: 500; }
+  .box { border: 2px solid var(--edge); border-radius: 12px; height: 44px; padding: 0 14px; background: var(--card); display: flex; align-items: center; min-width: 120px; }
+  .box.pin { width: 132px; letter-spacing: .5em; font-size: 20px; }
+  .box.reason { width: 320px; color: var(--muted); font-size: 14px; }
+  .err { color: var(--bad); font-weight: 500; }
+  .or { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }
+
+  /* the member's pass */
+  .qrcard { background: var(--card); border-radius: 16px; padding: 14px 16px; }
+  .qr { width: 196px; height: 196px; background: #fff; border-radius: 12px; padding: 10px; margin: 10px 0; }
+  .qr svg { width: 100%; height: 100%; display: block; }
+  .left { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  .ring { width: 18px; height: 18px; border-radius: 50%; background: conic-gradient(var(--ink) var(--p, 80%), var(--line) 0); }
+  .phone { width: 360px; background: var(--page); border-radius: 26px; padding: 16px; border: 8px solid #000; }
+  .phone h1 { font-size: 22px; margin-bottom: 12px; }
+
+  /* staff list */
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font: 500 12.5px Barlow, sans-serif; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td .cap { display: block; }
+  .tag { display: inline-block; font-size: 12.5px; padding: 2px 9px; border-radius: 999px; background: var(--chip); font-weight: 500; }
+  .tag.warn { background: var(--signal); color: #111; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body data-theme="dark">
+<div class="mock">
+  <span><b>Theme</b><span class="seg" data-set="theme"><button aria-pressed="true" data-v="dark">Dark</button><button data-v="light">Light</button></span></span>
+  <span><b>PIN step</b><span class="seg" data-set="state">
+    <button aria-pressed="true" data-v="enter">Enter PIN</button><button data-v="wrong">Wrong PIN</button><button data-v="locked">Locked</button><button data-v="nopin">No PIN set</button><button data-v="admin">Admin: no PIN, reason</button>
+  </span></span>
+</div>
+
+<div class="note"><h2>1. Front desk Check-in: the PIN step (Windows only)</h2>
+<p>Check in on a member found by name no longer checks them in straight away. The row opens a PIN step in place, with the member's photo
+(or initials) so staff can compare the face. The member types their 4-digit desk PIN on the desk keyboard; it shows as dots. Nothing is recorded until the PIN is right.
+Admin and System admin also see a reason field for a member with no PIN. While the step is open, its Check in is yellow; the step closes on success or Cancel.</p></div>
+<div class="stage">
+  <div class="app"><nav class="rail"><i></i><i></i><i></i><i class="on"></i><i></i><i></i></nav>
+    <main class="page"><h1>Check-in</h1>
+      <div class="cols">
+        <section><h2>Members</h2>
+          <div class="search">Search members by name</div>
+          <div class="card">
+            <div class="pinstep">
+              <div class="avatar photo" id="avatar" aria-label="Alex Tan's photo"></div>
+              <div class="name" id="pinwho">Alex Tan</div>
+              <div class="cap" id="pinask">Check the photo matches the person, then ask them to type their desk PIN.</div>
+              <div id="pinbody">
+                <div class="pinline" id="pinfields">
+                  <div class="field"><label for="p">Desk PIN</label><div class="box pin" id="p">••<span class="muted">••</span></div></div>
+                  <button class="btn y">Check in</button>
+                  <button class="btn">Cancel</button>
+                </div>
+                <p class="err" id="pinerr" hidden></p>
+                <div class="or" id="reasonbox" hidden>
+                  <div class="pinline">
+                    <div class="field"><label>No PIN? Reason for checking them in without it</label><div class="box reason">For example: known member, phone broken</div></div>
+                  </div>
+                  <p class="cap" style="margin:6px 0 0">Saved with the check-in. Admins see it in the day's check-ins.</p>
+                </div>
+              </div>
+            </div>
+            <div class="row"><div class="who"><div class="name">Bea Lim</div><div class="cap">No active membership</div></div><span class="dot off">Inactive</span></div>
+            <div class="row"><div class="who"><div class="name">Carlo Diaz</div><div class="cap">Paid until 9 Dec 2026</div></div><span class="dot">Active</span><button class="btn">Check in</button></div>
+          </div>
+        </section>
+        <aside>
+          <div class="card"><h2>Scan a member</h2><button class="btn y">Scan member QR</button>
+            <div class="box" style="margin-top:12px;color:var(--muted)">Or use a QR scanner device here</div></div>
+          <div class="card" style="margin-top:12px"><h2>Last scan</h2>
+            <div class="name" style="font:500 19px Barlow">Unknown code</div>
+            <div style="font-weight:500">Old code: it was already scanned or has run out. Ask the member to open their QR again.</div>
+            <button class="btn" style="margin-top:10px">Done</button></div>
+        </aside>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="note"><h2>2. Member QR: one use, five minutes (Windows side card and phone)</h2>
+<p>The QR on My membership is now a pass that works once and lasts 5 minutes. It renews itself 15 seconds before it runs out, so the member never has to press anything.
+The line under it says when it changes, in words. A screenshot or the old permanent code scans as "Old code".</p></div>
+<div class="stage">
+  <div class="qrcard" style="width:320px"><h2 style="margin:0">Your member QR</h2>
+    <div class="cap">Show it at the front desk when you arrive. It works once, so a screenshot won't.</div>
+    <div class="qr"><svg id="qr1" viewBox="0 0 25 25" shape-rendering="crispEdges"></svg></div>
+    <div class="left"><span class="ring" style="--p:78%"></span>New code in 4 minutes</div>
+  </div>
+  <div class="phone"><h1>My membership</h1>
+    <div class="qrcard"><div style="display:flex;align-items:center;gap:10px"><h2 style="margin:0;flex:1">Your member QR</h2><button class="btn">Hide</button></div>
+      <div class="qr" style="margin:12px auto;width:240px;height:240px"><svg id="qr2" viewBox="0 0 25 25" shape-rendering="crispEdges"></svg></div>
+      <div class="left" style="justify-content:center"><span class="ring" style="--p:15%"></span>New code in under a minute</div>
+      <div class="cap" style="text-align:center;margin-top:6px">Works once. A screenshot won't.</div>
+    </div>
+  </div>
+</div>
+
+<div class="note"><h2>3. Settings: Desk PIN (members only, Windows and phone)</h2>
+<p>Typed twice, because a typo only shows up at the desk. Staff and coaches don't see this section.</p></div>
+<div class="stage">
+  <div class="card" style="width:420px"><h2>Desk PIN</h2>
+    <p class="cap" style="margin:0 0 10px">4 digits you type at the front desk if you check in without your phone.</p>
+    <div class="pinline">
+      <div class="field"><label>New PIN</label><div class="box pin">••••</div></div>
+      <div class="field"><label>Type it again</label><div class="box pin">••••</div></div>
+      <button class="btn">Save PIN</button>
+    </div>
+  </div>
+  <div class="phone"><h1>Settings</h1>
+    <div class="card"><h2>Desk PIN</h2>
+      <p class="cap" style="margin:0 0 10px">4 digits you type at the front desk if you check in without your phone.</p>
+      <div class="field"><label>New PIN</label><div class="box pin" style="width:100%">••••</div></div>
+      <div class="field" style="margin-top:10px"><label>Type it again</label><div class="box pin" style="width:100%">••••</div></div>
+      <button class="btn" style="margin-top:12px">Save PIN</button>
+    </div>
+  </div>
+</div>
+
+<div class="note"><h2>4. Admin and System admin: who checked in by name (Windows only)</h2>
+<p>The Overview's check-ins for a day gain two columns: who recorded each one, and the reason when an Admin skipped the PIN.
+A "By name only" switch narrows the list to manual check-ins, which is the "Manual check-ins" list from F8 without a new page.</p></div>
+<div class="stage">
+  <div class="card" style="width:100%;max-width:1180px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><h2 style="margin:0;flex:1">Check-ins, Mon 9 Nov 2026</h2>
+      <label class="cap" style="display:flex;align-items:center;gap:8px"><span style="width:38px;height:20px;border-radius:999px;background:var(--signal);display:inline-block"></span>By name only</label></div>
+    <table>
+      <thead><tr><th>Time</th><th>Member</th><th>How</th><th>Recorded by</th><th>Reason</th></tr></thead>
+      <tbody>
+        <tr><td>7:12 AM</td><td>Alex Tan</td><td><span class="tag">By name</span></td><td>Marco Santos <span class="cap">Front desk</span></td><td class="muted">–</td></tr>
+        <tr><td>9:40 AM</td><td>Carlo Diaz</td><td><span class="tag warn">By name, no PIN</span></td><td>Sam Villanueva <span class="cap">Admin</span></td><td>Known member, phone broken</td></tr>
+        <tr><td>6:05 PM</td><td>Alex Tan</td><td><span class="tag">Sent later</span></td><td>Marco Santos <span class="cap">Front desk</span></td><td class="muted">–</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  // a stand-in QR pattern (not a real code)
+  function qr(id, seed) {
+    const s = document.getElementById(id); let x = seed, out = '';
+    const finder = (cx, cy) => { for (let y = 0; y < 7; y++) for (let x2 = 0; x2 < 7; x2++) {
+      const ring = x2 === 0 || y === 0 || x2 === 6 || y === 6, core = x2 > 1 && x2 < 5 && y > 1 && y < 5;
+      if (ring || core) out += `<rect x="${cx + x2}" y="${cy + y}" width="1" height="1"/>`; } };
+    finder(0, 0); finder(18, 0); finder(0, 18);
+    for (let y = 0; y < 25; y++) for (let x2 = 0; x2 < 25; x2++) {
+      if ((x2 < 8 && y < 8) || (x2 > 16 && y < 8) || (x2 < 8 && y > 16)) continue;
+      x = (x * 1103515245 + 12345) & 0x7fffffff; if (x % 3 === 0) out += `<rect x="${x2}" y="${y}" width="1" height="1"/>`; }
+    s.innerHTML = `<g fill="#111">${out}</g>`;
+  }
+  qr('qr1', 7); qr('qr2', 19);
+
+  const states = {
+    enter:  { who: 'Alex Tan', photo: true, ask: 'Check the photo matches the person, then ask them to type their desk PIN.', err: '', fields: true, reason: false },
+    wrong:  { who: 'Alex Tan', photo: true, ask: 'Check the photo matches the person, then ask them to type their desk PIN.', err: 'That PIN is wrong. Ask the member to try again. After 5 wrong tries it locks for 15 minutes.', fields: true, reason: false },
+    locked: { who: 'Alex Tan', photo: true, ask: 'Check the photo matches the person, then ask them to type their desk PIN.', err: 'Too many wrong PINs: this member’s desk PIN is locked for 15 minutes. Scan their QR code instead, or ask an Admin.', fields: true, reason: false },
+    nopin:  { who: 'Carlo Diaz', photo: false, ask: 'Check the person, then ask them to type their desk PIN.', err: 'This member hasn’t set a desk PIN yet (Settings in their app). An Admin or System admin can check them in with a reason.', fields: true, reason: false },
+    admin:  { who: 'Carlo Diaz', photo: false, ask: 'Check the person, then ask them to type their desk PIN.', err: '', fields: true, reason: true },
+  };
+  function show(k) {
+    const st = states[k], av = document.getElementById('avatar');
+    document.getElementById('pinwho').textContent = st.who;
+    document.getElementById('pinask').textContent = st.ask;
+    av.className = 'avatar' + (st.photo ? ' photo' : ''); av.textContent = st.photo ? '' : st.who.split(' ').map(w => w[0]).join('');
+    const e = document.getElementById('pinerr'); e.textContent = st.err; e.hidden = !st.err;
+    document.getElementById('reasonbox').hidden = !st.reason;
+  }
+  document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', ev => {
+    const b = ev.target.closest('button'); if (!b) return;
+    seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    if (seg.dataset.set === 'theme') document.body.dataset.theme = b.dataset.v; else show(b.dataset.v);
+  }));
+</script>
+</body>
+</html>

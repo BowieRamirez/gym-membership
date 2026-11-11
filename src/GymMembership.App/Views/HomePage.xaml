@@ -70,12 +70,13 @@
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='20,16,20,24', Default='16,12,16,20'}" Spacing="14">
-            <Label Text="Today at the desk" Style="{StaticResource Title}" />
-            <Label Text="Tap a number to open the screen that handles it." Style="{StaticResource Muted}" />
+            <!-- 9.7: no second heading under the "Home" header; the one line says the figures open their pages -->
+            <c:UpdatedBar x:Name="UpdatedLine" />   <!-- F4: when it last loaded, with Refresh; it also reloads by itself on a change -->
+            <Label Text="Tap a figure to open its page." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <!-- A tile with something to do turns lime AND says what in words, so colour is never the only signal -->
+            <!-- The one tile with the desk's next task turns yellow AND says what in words, so colour is never the only signal (HomeViewModel.Build) -->
             <c:CardGrid Columns="{OnIdiom Phone=2, Default=4}" MinColumnWidth="150" BindableLayout.ItemsSource="{Binding Tiles}">
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="vm:HomeTile">
@@ -83,15 +84,15 @@
                                 SemanticProperties.Description="{Binding Description}" SemanticProperties.Hint="{Binding Detail}">
                             <Border.Triggers>
                                 <DataTrigger TargetType="Border" Binding="{Binding NeedsAttention}" Value="True">
-                                    <Setter Property="BackgroundColor" Value="{StaticResource Lime}" />
+                                    <Setter Property="BackgroundColor" Value="{StaticResource Signal}" />
                                 </DataTrigger>
                             </Border.Triggers>
                             <Border.GestureRecognizers>
                                 <TapGestureRecognizer Tapped="OnTile" />
                             </Border.GestureRecognizers>
-                            <!-- on lime every word is black, in both themes -->
+                            <!-- on yellow every word is black, in both themes -->
                             <VerticalStackLayout Spacing="8">
-                                <c:CardTitle Icon="{Binding Icon}" Text="{Binding Title}">
+                                <c:CardTitle Text="{Binding Title}">
                                     <c:CardTitle.Triggers><DataTrigger TargetType="c:CardTitle" Binding="{Binding NeedsAttention}" Value="True"><Setter Property="TextColor" Value="{StaticResource Black}" /></DataTrigger></c:CardTitle.Triggers>
                                 </c:CardTitle>
                                 <Label Text="{Binding Count}" Style="{StaticResource Numeral}">
@@ -110,7 +111,7 @@
             <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" MinColumnWidth="420" IsVisible="{Binding HasLists}">
                 <Border Style="{StaticResource TablePanel}">
                     <VerticalStackLayout>
-                        <c:CardTitle Icon="receipt" Text="Payments to verify" Margin="14,12,14,4" />
+                        <c:CardTitle Text="Payments to verify" Margin="14,12,14,4" />
                         <VerticalStackLayout x:Name="PayHead" IsVisible="{OnIdiom Phone=False, Default=True}">
                             <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,*,110,100,90">
                                 <Label Text="Payer" Style="{StaticResource Caption}" />
@@ -130,7 +131,7 @@
 
                 <Border Style="{StaticResource TablePanel}">
                     <VerticalStackLayout>
-                        <c:CardTitle Icon="users" Text="Coaches in the gym now" Margin="14,12,14,4" />
+                        <c:CardTitle Text="Coaches in the gym now" Margin="14,12,14,4" />
                         <VerticalStackLayout x:Name="CoachHead" IsVisible="{OnIdiom Phone=False, Default=True}">
                             <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,*,110">
                                 <Label Text="Coach" Style="{StaticResource Caption}" />

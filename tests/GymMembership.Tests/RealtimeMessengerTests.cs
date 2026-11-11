@@ -268,7 +268,7 @@ public class RealtimeMessengerTests
         var (_, _, rt, vm) = await Open();
         Assert.Equal(vm.Selected!.Thread.Key, rt.Watched.Last());
         await vm.ShowTabCommand.ExecuteAsync("support");
-        await vm.OpenCommand.ExecuteAsync(vm.Threads.Single());
+        await vm.OpenCommand.ExecuteAsync(vm.Threads.First());
         Assert.Equal(vm.Selected!.Thread.Key, rt.Watched.Last());
         Assert.StartsWith("support|", rt.Watched.Last());
     }
@@ -335,7 +335,7 @@ public class RealtimeMessengerTests
         var (_, _, rt, vm) = await Open("carlo@demo.io");
         vm.TypingEvery = TimeSpan.Zero;
         await vm.ShowTabCommand.ExecuteAsync("support");
-        await vm.OpenCommand.ExecuteAsync(vm.Threads.Single());
+        await vm.OpenCommand.ExecuteAsync(vm.Threads.First());
         vm.Draft = "my payment is stuck";
         var pings = rt.TypingSent.Count;
         rt.RaiseTyping(vm.Selected!.Thread.Key);
@@ -344,7 +344,7 @@ public class RealtimeMessengerTests
         await vm.ShowTabCommand.ExecuteAsync("coach");   // leave: the draft is kept, the line goes
         Assert.False(vm.OtherTyping);
         await vm.ShowTabCommand.ExecuteAsync("support");
-        await vm.OpenCommand.ExecuteAsync(vm.Threads.Single());   // back: the draft returns by itself
+        await vm.OpenCommand.ExecuteAsync(vm.Threads.First());   // back: the draft returns by itself
         Assert.Equal("my payment is stuck", vm.Draft);
         Assert.Equal(pings, rt.TypingSent.Count);
     }
@@ -396,7 +396,7 @@ public class RealtimeMessengerTests
     {
         var (_, _, rt, vm) = await Open("carlo@demo.io");
         await vm.ShowTabCommand.ExecuteAsync("support");
-        var desk = vm.Threads.Single();
+        var desk = vm.Threads.First();
         Assert.Null(desk.Thread.WithId);
         rt.RaiseOnline("", "u-emp", "u-admin");
         Assert.False(desk.IsOnline);

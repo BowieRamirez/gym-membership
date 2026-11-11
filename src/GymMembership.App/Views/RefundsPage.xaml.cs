@@ -6,7 +6,7 @@ namespace GymMembership.App.Views;
 
 public partial class RefundsPage : BasePage
 {
-    public RefundsPage(RefundsViewModel vm) {InitializeComponent();BindingContext=vm;}
+    public RefundsPage(RefundsViewModel vm, VoidPaymentsPage voids) {InitializeComponent();BindingContext=vm;HostPart(Switch, Part, voids);}
     protected override TimeSpan? AutoRefresh => TimeSpan.FromSeconds(20);
     async void OnApprove(object? sender, EventArgs e) => await DecideAsync(sender,true);
     async void OnReject(object? sender, EventArgs e) => await DecideAsync(sender,false);
@@ -22,7 +22,7 @@ public partial class RefundsPage : BasePage
             if(!await DisplayAlertAsync(approve?"Approve cancellation?":"Reject request?",
                 $"{row.Member} · {row.PackageName}\n{row.Dates}\n₱{row.Request.Amount:N2}\n\n"+(approve
                     ?"Only this term stops granting access immediately. Other paid terms keep their dates. The refund will await manual repayment — no money is sent by approving."
-                    :"The selected term and access will remain unchanged."),approve?"Approve":"Reject","Go back")) return;
+                    :"The selected term and access will remain unchanged.")+(approve&&row.LaterTermsWarning is { } later?"\n\n"+later:""),approve?"Approve":"Reject","Go back")) return;
             await vm.DecideAsync(row,approve,reason);
         }
         finally {vm.DialogOpen=false;}
@@ -34,8 +34,8 @@ public partial class RefundsPage : BasePage
         vm.DialogOpen=true;
         try
         {
-            var choice=await DisplayActionSheetAsync("How did you return the money?","Go back",null,"Cash","GCash","Bank transfer");
-            var method=choice switch {"Cash"=>PayMethod.Cash,"GCash"=>PayMethod.Gcash,"Bank transfer"=>PayMethod.BankTransfer,_=>null};
+            var choice=await DisplayActionSheetAsync("How did you return the money?","Go back",null,"Cash","GCash");   // no bank transfer (0054)
+            var method=choice switch {"Cash"=>PayMethod.Cash,"GCash"=>PayMethod.Gcash,_=>null};
             if(method is null) return;
             string? reference=null;
             if(method!=PayMethod.Cash)

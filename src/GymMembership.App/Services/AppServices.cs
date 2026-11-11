@@ -41,6 +41,10 @@ public sealed class AppNavigator(IServiceProvider sp) : IAppNavigator
 
     public void GoToMessages() => MainThread.BeginInvokeOnMainThread(async () => await GymMembership.App.Controls.PhoneNavigation.GoToAsync(Shell.Current, "//messages"));
 
+    public void GoToBookings() => MainThread.BeginInvokeOnMainThread(async () => await GymMembership.App.Controls.PhoneNavigation.GoToAsync(Shell.Current, "//bookings"));
+
+    public void GoToRequests() => MainThread.BeginInvokeOnMainThread(async () => await GymMembership.App.Controls.PhoneNavigation.GoToAsync(Shell.Current, "//requests"));
+
     public void ApplyTheme(string theme) => MainThread.BeginInvokeOnMainThread(() =>
         Application.Current!.UserAppTheme = theme switch { "dark" => AppTheme.Dark, "light" => AppTheme.Light, _ => AppTheme.Unspecified });
 
@@ -79,6 +83,19 @@ public static class SupabaseConfig
 }
 
 // the PDF font ships in Resources/Raw (Barlow has no peso sign); the file goes to the cache folder, then the system share sheet
+/// <summary>The desk's saved member list and queue. ponytail: a plain file in this Windows user's app data holding names and member codes; encrypt it if desks are shared across Windows accounts.</summary>
+public sealed class FileDeskStore : IDeskStore
+{
+    static string FilePath => Path.Combine(FileSystem.AppDataDirectory, "desk-offline.json");
+    public string? Load() { try { return File.Exists(FilePath) ? File.ReadAllText(FilePath) : null; } catch (IOException) { return null; } }
+    public void Save(string text)
+    {
+        var temp = FilePath + ".tmp";   // written whole first, so a power cut can't leave half a queue
+        File.WriteAllText(temp, text);
+        File.Move(temp, FilePath, overwrite: true);
+    }
+}
+
 public sealed class MauiReportFiles : IReportFiles
 {
     public async Task<byte[]> FontAsync()

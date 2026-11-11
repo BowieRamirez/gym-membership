@@ -33,7 +33,7 @@
                         <!-- unread: a blue dot and a darker row; read: neither -->
                         <Border.Triggers>
                             <DataTrigger TargetType="Border" Binding="{Binding ReadAt, Converter={StaticResource IsNull}}" Value="True">
-                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChalkLight}, Dark={StaticResource ChalkDark}}" />
+                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource PageLight}, Dark={StaticResource PageDark}}" />
                                 <Setter Property="SemanticProperties.Hint" Value="Unread. Double tap to mark as read." />
                             </DataTrigger>
                         </Border.Triggers>

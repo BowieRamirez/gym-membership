@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!-- The dumbbell logo on the black splash colour set in the project file -->
+<!-- The HF monogram on the black splash colour set in the project file. Same shapes as Controls/LogoMark.cs on its 64-unit grid. -->
 <svg width="456" height="456" viewBox="0 0 456 456" version="1.1" xmlns="http://www.w3.org/2000/svg">
-    <rect x="114" y="171" width="45.6" height="114" rx="17.1" fill="#E4F58A" />
-    <rect x="296.4" y="171" width="45.6" height="114" rx="17.1" fill="#E4F58A" />
-    <rect x="159.6" y="210.9" width="136.8" height="34.2" rx="11.4" fill="#E4F58A" />
+    <g transform="translate(86.64 86.64) scale(4.4175)">
+        <circle cx="32" cy="32" r="24.8" fill="none" stroke="#FFEC00" stroke-width="3.2" />
+        <rect x="17.5" y="22" width="4.5" height="20" rx="0.8" fill="#FFEC00" />
+        <rect x="26" y="22" width="4.5" height="20" rx="0.8" fill="#FFEC00" />
+        <rect x="17.5" y="29.75" width="13" height="4.5" rx="0.8" fill="#FFEC00" />
+        <rect x="34" y="22" width="4.5" height="20" rx="0.8" fill="#FFEC00" />
+        <rect x="34" y="22" width="12.5" height="4.5" rx="0.8" fill="#FFEC00" />
+        <rect x="34" y="29.75" width="10" height="4.5" rx="0.8" fill="#FFEC00" />
+    </g>
 </svg>

@@ -7,12 +7,85 @@
             xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.RevenuePage" x:DataType="vm:RevenueViewModel" Title="Revenue">
 
+    <v:BasePage.Resources>
+        <DataTemplate x:Key="ShiftRow" x:DataType="m:CashShift">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,1.4*,92,92,92,98,98,110,1.2*">
+                    <Label Text="{Binding Cashier}" FontFamily="BarlowMedium" VerticalOptions="Center" />
+                    <HorizontalStackLayout Grid.Column="1" Spacing="8" VerticalOptions="Center">
+                        <Label Text="{Binding SpanText}" VerticalOptions="Center" LineBreakMode="WordWrap" />
+                        <!-- an open shift: yellow chip with the word, figures so far -->
+                        <Border BackgroundColor="{StaticResource Signal}" StrokeThickness="0" StrokeShape="RoundRectangle 10" Padding="9,2" VerticalOptions="Center" IsVisible="{Binding IsOpen}">
+                            <Label Text="Open" TextColor="{StaticResource Black}" FontFamily="BarlowMedium" FontSize="12.5" />
+                        </Border>
+                    </HorizontalStackLayout>
+                    <Label Grid.Column="2" Text="{Binding OpeningFloat, StringFormat='₱{0:N2}'}" HorizontalOptions="End" VerticalOptions="Center" />
+                    <Label Grid.Column="3" Text="{Binding CashIn, StringFormat='₱{0:N2}'}" HorizontalOptions="End" VerticalOptions="Center" />
+                    <Label Grid.Column="4" Text="{Binding CashOut, StringFormat='₱{0:N2}'}" HorizontalOptions="End" VerticalOptions="Center" />
+                    <Label Grid.Column="5" Text="{Binding Expected, StringFormat='₱{0:N2}'}" HorizontalOptions="End" VerticalOptions="Center" />
+                    <Label Grid.Column="6" Text="{Binding Counted, StringFormat='₱{0:N2}', TargetNullValue='–'}" HorizontalOptions="End" VerticalOptions="Center" />
+                    <Label Grid.Column="7" Text="{Binding DifferenceText}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource GoodLight}, Dark={StaticResource GoodDark}}">
+                        <Label.Triggers>
+                            <DataTrigger TargetType="Label" Binding="{Binding IsOff}" Value="True">
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
+                            </DataTrigger>
+                            <DataTrigger TargetType="Label" Binding="{Binding IsOpen}" Value="True">
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                                <Setter Property="FontFamily" Value="Barlow" />
+                            </DataTrigger>
+                        </Label.Triggers>
+                    </Label>
+                    <Label Grid.Column="8" Text="{Binding NoteText}" VerticalOptions="Center" LineBreakMode="WordWrap" Margin="14,0,0,0" />
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+
+        <!-- narrow window: one card per shift, the figures folded into lines -->
+        <DataTemplate x:Key="ShiftCard" x:DataType="m:CashShift">
+            <VerticalStackLayout>
+                <VerticalStackLayout Spacing="4" Padding="14,12">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <Label Text="{Binding Cashier}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="{Binding DifferenceText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" IsVisible="{Binding IsOpen, Converter={StaticResource Not}}"
+                               TextColor="{AppThemeBinding Light={StaticResource GoodLight}, Dark={StaticResource GoodDark}}">
+                            <Label.Triggers>
+                                <DataTrigger TargetType="Label" Binding="{Binding IsOff}" Value="True">
+                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
+                                </DataTrigger>
+                            </Label.Triggers>
+                        </Label>
+                        <Border Grid.Column="1" BackgroundColor="{StaticResource Signal}" StrokeThickness="0" StrokeShape="RoundRectangle 10" Padding="9,2" VerticalOptions="Center" IsVisible="{Binding IsOpen}">
+                            <Label Text="Open" TextColor="{StaticResource Black}" FontFamily="BarlowMedium" FontSize="12.5" />
+                        </Border>
+                    </Grid>
+                    <Label Text="{Binding SpanText}" Style="{StaticResource Caption}" />
+                    <Label LineBreakMode="WordWrap">
+                        <Label.Text>
+                            <MultiBinding StringFormat="{}Float ₱{0:N2} · taken ₱{1:N2} · paid back ₱{2:N2} · expected ₱{3:N2}"><Binding Path="OpeningFloat" /><Binding Path="CashIn" /><Binding Path="CashOut" /><Binding Path="Expected" /></MultiBinding>
+                        </Label.Text>
+                    </Label>
+                    <Label Text="{Binding Counted, StringFormat='Counted ₱{0:N2}'}" IsVisible="{Binding IsOpen, Converter={StaticResource Not}}" />
+                    <Label Text="{Binding NoteText}" Style="{StaticResource Caption}" LineBreakMode="WordWrap" />
+                </VerticalStackLayout>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+    </v:BasePage.Resources>
+
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='20,16,20,24', Default='16,12,16,20'}" Spacing="14">
-            <Label Text="Net receipts: verified payments minus approved refunds, grouped by Manila day, item and payment method. A refund counts on the day it was approved, and is shown against the method the member paid with. The cash drawer on the Cashier page drops only when the repayment is recorded. Payment counts count receipts, not refunds. Voids are excluded." Style="{StaticResource Muted}" />
+            <!-- 9.8: one sentence (was five); the cash-drawer timing is said on the Cashier page, where the drawer is -->
+            <Label Text="Verified payments minus refunds (counted on the day they were approved), by Manila day, item and method; voided payments are left out." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
+            <!-- Windows: the detailed page (RevenuePage.Windows.cs, mockup docs/mockups/revenue.html) -->
+            <ContentView x:Name="Dashboard" IsVisible="{OnPlatform WinUI=True, Default=False}" />
+
+            <!-- Android keeps the simple page: dates, the total and a row per day -->
+            <VerticalStackLayout Spacing="14" IsVisible="{OnPlatform WinUI=False, Default=True}">
             <FlexLayout Wrap="Wrap" AlignItems="End">
                 <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
                     <Label Text="From" Style="{StaticResource Caption}" />
@@ -22,7 +95,7 @@
                     <Label Text="To" Style="{StaticResource Caption}" />
                     <Border Style="{StaticResource Field}"><DatePicker Date="{Binding To}" /></Border>
                 </VerticalStackLayout>
-                <Button Text="Show revenue" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Command="{Binding LoadCommand}" />
+                <Button Text="Show revenue" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding LoadCommand}" />
                 <!-- exports the period shown below, even if the dates above were changed since -->
                 <Button Text="Export PDF" Style="{StaticResource SmallOutlineButton}" Margin="0,0,0,8" Command="{Binding ExportPdfCommand}"
                         SemanticProperties.Hint="Creates a PDF of the receipts and refunds shown and opens the share sheet" />
@@ -30,34 +103,61 @@
 
             <Border Style="{StaticResource HeroPanel}" Padding="24,20">
                 <VerticalStackLayout Spacing="8">
-                    <c:CardTitle Icon="chart-line" Text="Net in this period" TextColor="{StaticResource Black}" />
-                    <Label Text="{Binding TotalText}" Style="{StaticResource Numeral}" TextColor="{StaticResource Black}" />
+                    <c:CardTitle Text="Net in this period" TextColor="{AppThemeBinding Light={StaticResource OnAccentLight}, Dark={StaticResource Black}}" />
+                    <Label Text="{Binding TotalText}" Style="{StaticResource Numeral}" TextColor="{AppThemeBinding Light={StaticResource OnAccentLight}, Dark={StaticResource Black}}" />
                 </VerticalStackLayout>
             </Border>
 
-            <Border Style="{StaticResource Panel}" Padding="12">
-            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Rows}" Spacing="8">
-                <BindableLayout.EmptyView><Label Text="No receipts or approved refunds in this period." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+            <!-- 9.8: rows divided by hairlines in one panel (were a card per row) -->
+            <Border Style="{StaticResource TablePanel}">
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Rows}">
+                <BindableLayout.EmptyView><Label Text="No receipts or approved refunds in this period." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="m:RevenueRow">
-                        <Border Style="{StaticResource Row}" Padding="16,12">
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <VerticalStackLayout>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="14,10">
                                 <VerticalStackLayout Spacing="2">
-                                    <Label Text="{Binding Day, StringFormat='{0:ddd d MMM}'}" />
-                                    <Label Style="{StaticResource Caption}">
-                                        <Label.Text>
-                                            <MultiBinding StringFormat="{}{0} · {1} · {2} payment(s)">
-                                                <Binding Path="Kind" /><Binding Path="Method" /><Binding Path="Payments" />
-                                            </MultiBinding>
-                                        </Label.Text>
-                                    </Label>
+                                    <Label Text="{Binding Day, StringFormat='{0:ddd d MMM}'}" FontFamily="BarlowMedium" />
+                                    <Label Text="{Binding Summary}" Style="{StaticResource Caption}" />
                                 </VerticalStackLayout>
-                                <Label Grid.Column="1" Text="{Binding Total, StringFormat='₱{0:N2}'}" Style="{StaticResource Heading}" VerticalOptions="Center" />
+                                <Label Grid.Column="1" Text="{Binding Total, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" FontSize="17" VerticalOptions="Center" />
                             </Grid>
-                        </Border>
+                            <BoxView Style="{StaticResource Hairline}" />
+                        </VerticalStackLayout>
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
             </VerticalStackLayout>
+            </Border>
+            </VerticalStackLayout>
+
+            <!-- F2 (0050): every cashier's drawer shift opened in the same dates, newest first; over or short in red with the note beside it -->
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="0,8,0,0">
+                <Label Text="Cash shifts" Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
+                <Button Grid.Column="1" Text="Export shifts PDF" Style="{StaticResource SmallOutlineButton}" Command="{Binding ExportShiftsPdfCommand}"
+                        SemanticProperties.Hint="Creates a PDF of the cash shifts shown and opens the share sheet" />
+            </Grid>
+            <Border Style="{StaticResource TablePanel}">
+                <VerticalStackLayout>
+                    <VerticalStackLayout x:Name="ShiftHead">
+                        <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,1.4*,92,92,92,98,98,110,1.2*">
+                            <Label Text="Cashier" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="1" Text="Shift" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="2" Text="Float" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                            <Label Grid.Column="3" Text="Cash taken" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                            <Label Grid.Column="4" Text="Paid back" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                            <Label Grid.Column="5" Text="Expected" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                            <Label Grid.Column="6" Text="Counted" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                            <Label Grid.Column="7" Text="Over / short" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                            <Label Grid.Column="8" Text="Note" Style="{StaticResource Caption}" Margin="14,0,0,0" />
+                        </Grid>
+                        <BoxView Style="{StaticResource Hairline}" />
+                    </VerticalStackLayout>
+                    <c:TableBody BindableLayout.ItemsSource="{Binding Shifts}" Header="{x:Reference ShiftHead}" WideFrom="1050"
+                                 RowTemplate="{StaticResource ShiftRow}" CardTemplate="{StaticResource ShiftCard}"
+                                 BindableLayout.ItemTemplate="{StaticResource ShiftRow}">
+                        <BindableLayout.EmptyView><Label Text="No cash shifts were opened in this period." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                    </c:TableBody>
+                </VerticalStackLayout>
             </Border>
         </VerticalStackLayout>
     </ScrollView>

@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cash-drawer shift (Phase 3 mockup)</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Tokens from src/GymMembership.App/Resources/Styles/Colors.xaml (as docs/mockups/desk-pin.html) */
+  :root, [data-theme="dark"] {
+    --page: #0E0E0E; --card: #1A1A1A; --surface: #242424; --line: #2A2A2A; --edge: #757575;
+    --ink: #F2F2F2; --muted: #A6A6A6; --signal: #FFEC00; --good: #4CC585; --bad: #FF7B70; --rail: #161616; --chip: #2A2A2A;
+    --hero: #FFEC00; --hero-ink: #111111;
+  }
+  [data-theme="light"] {
+    --page: #EEEEEE; --card: #FFFFFF; --surface: #F5F5F5; --line: #E4E4E4; --edge: #808080;
+    --ink: #111111; --muted: #5B5B5B; --signal: #FFEC00; --good: #1B7A3E; --bad: #C42B21; --rail: #FFEC00; --chip: #EEEEEE;
+    --hero: #111111; --hero-ink: #FFFFFF;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #2b2b2b; color: var(--ink); font: 14px/1.45 Barlow, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+  ::selection { background: var(--signal); color: #111; }
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+  /* ---- mockup controls (not part of the app) ---- */
+  .mock { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: center; padding: 12px 18px; background: #151515; color: #ddd; font-size: 13px; border-bottom: 1px solid #333; }
+  .mock b { font-weight: 600; margin-right: 6px; }
+  .seg { display: inline-flex; border: 1px solid #444; border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; background: none; padding: 5px 11px; cursor: pointer; color: #bbb; border-right: 1px solid #444; }
+  .seg button:last-child { border-right: 0; }
+  .seg button[aria-pressed="true"] { background: var(--signal); color: #111; }
+  .note { max-width: 1180px; margin: 22px auto 8px; padding: 0 22px; color: #cfcfcf; }
+  .note h2 { font: 600 18px/1.3 Barlow, sans-serif; margin: 0 0 4px; color: #fff; }
+  .note p { margin: 0 0 4px; max-width: 75ch; }
+  .stage { padding: 10px 22px 26px; display: flex; gap: 22px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+
+  /* ---- app frame ---- */
+  .app { display: grid; grid-template-columns: 72px 1fr; background: var(--page); border-radius: 10px; overflow: hidden; width: 100%; max-width: 1180px; }
+  .rail { background: var(--rail); display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 0; }
+  .rail i { width: 38px; height: 38px; border-radius: 11px; background: var(--chip); display: block; opacity: .55; }
+  .rail i.on { background: var(--signal); opacity: 1; }
+  [data-theme="light"] .rail i { background: rgba(0,0,0,.12); }
+  [data-theme="light"] .rail i.on { background: #111; }
+  .page { padding: 18px 24px 26px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+  h1 { margin: 0; font: 500 28px/1.1 Barlow, sans-serif; }
+  h2 { font: 500 20px/1.2 Barlow, sans-serif; margin: 0; }
+  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+  .card { background: var(--card); border-radius: 16px; padding: 14px 16px; }
+  .cap { font-size: 12.5px; color: var(--muted); font-weight: 500; }
+  .muted { color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { height: 34px; padding: 0 14px; border-radius: 999px; border: 0; background: var(--chip); font-weight: 500; }
+  .chip.on { background: var(--signal); color: #111; }
+  .items { display: flex; flex-wrap: wrap; gap: 12px; }
+  .item { width: 200px; background: var(--card); border-radius: 16px; padding: 12px 14px; }
+  .item b { display: block; font-weight: 600; }
+  .item .p { font: 500 20px Barlow; }
+  .item.on { outline: 2px solid var(--ink); }
+  [data-theme="dark"] .item.on { outline-color: var(--signal); }
+  .btn { height: 38px; padding: 0 18px; border-radius: 999px; border: 2px solid var(--ink); background: none; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .btn.y { background: var(--signal); border-color: var(--signal); color: #111; }
+  .btn.big { height: 56px; font-size: 18px; width: 100%; }
+  .btn[disabled] { opacity: .45; cursor: not-allowed; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 12.5px; color: var(--muted); font-weight: 500; }
+  .box { border: 2px solid var(--edge); border-radius: 12px; height: 44px; padding: 0 14px; background: var(--card); display: flex; align-items: center; min-width: 120px; }
+  .box.money { width: 170px; font-size: 18px; font-weight: 500; }
+  .box.wide { width: 360px; color: var(--muted); }
+  .line { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; }
+  .num { font: 500 34px/1.05 Barlow, sans-serif; }
+  [hidden] { display: none !important; }
+
+  /* the drawer: one strip across the top, figures in a row the eye can run along */
+  .drawer { background: var(--card); border-radius: 16px; padding: 14px 16px; display: grid; gap: 12px; }
+  .drawer.closed { border: 2px solid var(--signal); }
+  .drawer-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .drawer-head h2 { flex: 1; }
+  .figs { display: grid; grid-template-columns: repeat(4, minmax(0, auto)) 1fr; gap: 6px 34px; align-items: end; }
+  .fig .v { font: 500 20px/1.2 Barlow, sans-serif; }
+  .fig.exp .v { font: 500 34px/1.05 Barlow, sans-serif; }
+  .ending { border-top: 1px solid var(--line); padding-top: 12px; display: grid; gap: 10px; }
+  .diff { font: 600 18px/1.2 Barlow, sans-serif; display: inline-flex; align-items: center; gap: 8px; height: 44px; }
+  .diff.short { color: var(--bad); } .diff.over { color: var(--bad); } .diff.ok { color: var(--good); }
+  .hint { color: var(--muted); font-size: 12.5px; font-weight: 500; }
+  .hint.warn { color: var(--ink); }
+
+  /* revenue: shifts table */
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font: 500 12.5px Barlow, sans-serif; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th.r, td.r { text-align: right; }
+  td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td .cap { display: block; }
+  .tag { display: inline-block; font-size: 12.5px; padding: 2px 9px; border-radius: 999px; background: var(--chip); font-weight: 500; white-space: nowrap; }
+  .tag.open { background: var(--signal); color: #111; }
+  .neg { color: var(--bad); font-weight: 600; } .pos { color: var(--bad); font-weight: 600; } .zero { color: var(--good); font-weight: 600; }
+  .hero { background: var(--hero); color: var(--hero-ink); border-radius: 16px; padding: 20px 24px; }
+  .hero .num { font-size: 40px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-end; }
+</style>
+</head>
+<body data-theme="dark">
+<div class="mock">
+  <span><b>Theme</b><span class="seg" data-set="theme"><button aria-pressed="true" data-v="dark">Dark</button><button data-v="light">Light</button></span></span>
+  <span><b>Cashier</b><span class="seg" data-set="state">
+    <button aria-pressed="true" data-v="none">No shift yet</button><button data-v="float">Different float</button><button data-v="open">Shift open</button><button data-v="match">Ending: matches</button><button data-v="short">Ending: short</button>
+  </span></span>
+</div>
+
+<div class="note"><h2>1. Cashier: your drawer (front desk, Admin, System admin; Windows only)</h2>
+<p>The Cashier page starts with <b>your drawer</b>. With no shift open, it asks for the float you counted (the Gym settings amount is filled in; a different amount needs a note). Sales stay usable for GCash and bank transfers, but Cash says why it can't complete.</p>
+<p>While the shift is open the same strip shows since when, the float, cash taken, cash paid back and the <b>expected cash</b>. It replaces "Net cash today", which added up every cashier's cash and so never matched one drawer. <b>End shift</b> opens the count in place: type what's in the drawer, the difference shows as you type, and a note is asked only when it differs.</p></div>
+<div class="stage">
+  <div class="app"><nav class="rail"><i></i><i></i><i class="on"></i><i></i><i></i><i></i></nav>
+    <main class="page"><h1>Cashier</h1>
+      <div class="cap" style="font-size:14px">Payments taken here count as verified at once and get a receipt number for the paper receipt.</div>
+
+      <!-- no shift: start one -->
+      <section class="drawer closed" id="start">
+        <div class="drawer-head"><h2>Start your shift</h2></div>
+        <div class="hint" style="font-size:14px">Count the cash in the drawer before your first sale. Cash you take and pay back is added to this shift.</div>
+        <div class="line">
+          <div class="field"><label for="f">Float you counted</label><div class="box money" id="f">₱5,000.00</div></div>
+          <div class="field" id="floatnote" hidden><label>Why is it different from ₱5,000.00?</label><div class="box wide">For example: short float from the safe</div></div>
+          <button class="btn y">Start shift</button>
+        </div>
+      </section>
+
+      <!-- shift open -->
+      <section class="drawer" id="open" hidden>
+        <div class="drawer-head"><h2>Your drawer</h2><span class="cap">Since 6:40 AM</span><button class="btn" id="endbtn">End shift</button></div>
+        <div class="figs">
+          <div class="fig"><div class="cap">Float</div><div class="v">₱5,000.00</div></div>
+          <div class="fig"><div class="cap">Cash taken</div><div class="v">₱1,650.00</div></div>
+          <div class="fig"><div class="cap">Paid back</div><div class="v">₱0.00</div></div>
+          <div class="fig exp"><div class="cap">Expected in the drawer</div><div class="v">₱6,650.00</div></div>
+        </div>
+        <div class="ending" id="ending" hidden>
+          <div class="line">
+            <div class="field"><label for="c">Cash you counted</label><div class="box money" id="c">₱6,600.00</div></div>
+            <div class="diff short" id="diff">₱50.00 short</div>
+          </div>
+          <div class="field" id="closenote"><label>What happened? (needed when the count differs)</label><div class="box wide">For example: gave change twice</div></div>
+          <div class="line"><button class="btn y">End shift</button><button class="btn">Keep shift open</button></div>
+          <div class="hint">After you end it, the shift can't be changed. Admin and System admin see it under Revenue.</div>
+        </div>
+      </section>
+
+      <div class="cols">
+        <section style="display:grid;gap:12px">
+          <h2>What are they paying for?</h2>
+          <div class="chips"><button class="chip">Membership</button><button class="chip">Renewal</button><button class="chip">Amenity</button><button class="chip on">Walk-in</button></div>
+          <div class="field" style="width:300px"><label>Name</label><div class="box">Pedro Ramos</div></div>
+        </section>
+        <aside class="card" style="display:grid;gap:12px">
+          <h2>Order</h2>
+          <div><b style="font-weight:600">Pedro Ramos</b><div class="muted">Day pass</div><div class="cap">Walk-in, paid with Cash</div></div>
+          <div class="cap">Paid with</div>
+          <div class="chips"><button class="chip on">Cash</button><button class="chip">GCash</button><button class="chip">Bank transfer</button></div>
+          <div><div class="cap">Total</div><div class="num">Day pass</div><div class="cap">The day pass price is set in Gym settings.</div></div>
+          <button class="btn y big" id="pay">Complete payment</button>
+          <div class="hint warn" id="payhint">Start your shift above to take cash. GCash and bank transfers don't need one.</div>
+        </aside>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="note"><h2>2. Revenue: Cash shifts (Admin and System admin; Windows only)</h2>
+<p>Under the revenue rows, every shift opened in the same dates, newest first, with who ran it. An open shift shows its running expected cash and no count yet. Over or short shows in red with the cashier's note beside it. <b>Export shifts PDF</b> makes the printable summary, the same way Export PDF does for revenue.</p></div>
+<div class="stage">
+  <div class="app"><nav class="rail"><i></i><i></i><i></i><i></i><i class="on"></i><i></i></nav>
+    <main class="page"><h1>Revenue</h1>
+      <div class="filters">
+        <div class="field"><label>From</label><div class="box">10/10/2026</div></div>
+        <div class="field"><label>To</label><div class="box">11/9/2026</div></div>
+        <button class="btn">Show revenue</button><button class="btn">Export PDF</button>
+      </div>
+      <div class="hero"><div class="cap" style="color:inherit;opacity:.8">Net in this period</div><div class="num">₱48,350.00</div></div>
+      <div class="card" style="color:var(--muted)">… revenue rows by day, as today …</div>
+      <section class="card">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><h2 style="flex:1">Cash shifts</h2><button class="btn">Export shifts PDF</button></div>
+        <table>
+          <thead><tr><th>Cashier</th><th>Shift</th><th class="r">Float</th><th class="r">Cash taken</th><th class="r">Paid back</th><th class="r">Expected</th><th class="r">Counted</th><th class="r">Over / short</th><th>Note</th></tr></thead>
+          <tbody>
+            <tr><td>Marco Santos <span class="cap">Front desk</span></td><td>Mon 9 Nov, 2:05 PM <span class="tag open">Open</span></td><td class="r">₱5,000.00</td><td class="r">₱900.00</td><td class="r">₱0.00</td><td class="r">₱5,900.00</td><td class="r muted">–</td><td class="r muted">–</td><td class="muted">–</td></tr>
+            <tr><td>Marco Santos <span class="cap">Front desk</span></td><td>Mon 9 Nov, 6:40 AM to 2:01 PM</td><td class="r">₱5,000.00</td><td class="r">₱1,650.00</td><td class="r">₱0.00</td><td class="r">₱6,650.00</td><td class="r">₱6,600.00</td><td class="r neg">₱50.00 short</td><td>Gave change twice</td></tr>
+            <tr><td>Dana Reyes <span class="cap">System admin</span></td><td>Sun 8 Nov, 9:00 AM to 9:20 AM</td><td class="r">₱4,000.00</td><td class="r">₱0.00</td><td class="r">₱1,500.00</td><td class="r">₱2,500.00</td><td class="r">₱2,500.00</td><td class="r zero">Matches</td><td><span class="cap">Opened: short float from the safe</span></td></tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div class="note"><h2>3. Gym settings: the opening float (System admin; Windows only)</h2>
+<p>One more field next to the walk-in price. It is what Start shift fills in; a cashier can still type a different amount with a note.</p></div>
+<div class="stage">
+  <div class="card" style="width:560px;display:grid;gap:12px">
+    <div class="line">
+      <div class="field"><label>Walk-in price (₱)</label><div class="box money">150</div></div>
+      <div class="field"><label>Opening float (₱)</label><div class="box money">5000</div></div>
+    </div>
+    <div class="cap">The opening float is the cash each cashier counts into their drawer when they start a shift.</div>
+  </div>
+</div>
+
+<script>
+  const states = {
+    none:  { start: true, float: false, open: false, ending: false, pay: false },
+    float: { start: true, float: true,  open: false, ending: false, pay: false },
+    open:  { start: false, float: false, open: true, ending: false, pay: true },
+    match: { start: false, float: false, open: true, ending: true, pay: true, count: '₱6,650.00', diff: ['Matches the expected cash', 'ok'], note: false },
+    short: { start: false, float: false, open: true, ending: true, pay: true, count: '₱6,600.00', diff: ['₱50.00 short', 'short'], note: true },
+  };
+  function show(k) {
+    const s = states[k];
+    document.getElementById('start').hidden = !s.start;
+    document.getElementById('floatnote').hidden = !s.float;
+    document.getElementById('f').textContent = s.float ? '₱4,000.00' : '₱5,000.00';
+    document.getElementById('open').hidden = !s.open;
+    document.getElementById('ending').hidden = !s.ending;
+    document.getElementById('endbtn').hidden = s.ending;
+    document.getElementById('pay').disabled = !s.pay;
+    document.getElementById('payhint').hidden = s.pay;
+    if (s.ending) {
+      document.getElementById('c').textContent = s.count;
+      const d = document.getElementById('diff'); d.textContent = s.diff[0]; d.className = 'diff ' + s.diff[1];
+      document.getElementById('closenote').hidden = !s.note;
+    }
+  }
+  document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', ev => {
+    const b = ev.target.closest('button'); if (!b) return;
+    seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    if (seg.dataset.set === 'theme') document.body.dataset.theme = b.dataset.v; else show(b.dataset.v);
+  }));
+  const q = new URLSearchParams(location.search);
+  if (q.get('theme')) document.body.dataset.theme = q.get('theme');
+  show(q.get('state') || 'none');
+</script>
+</body>
+</html>

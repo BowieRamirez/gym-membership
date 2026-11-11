@@ -1,9 +1,44 @@
 using Xunit;
 
-/// <summary>The redesign's page layout: wide canvas, card titles with icon chips, white rows, a lime card with black text, pill lanes.</summary>
+/// <summary>The redesign's page layout: wide canvas, plain card titles, panels with dividers, one highlight card whose words flip with it, pill lanes.</summary>
 public class PageLayoutTests
 {
+    // owner 2026-11-12: the card is yellow on a phone in light too, so its words use OnAccentLight (white on Windows, ink on a phone)
+    const string OnHero = "TextColor=\"{AppThemeBinding Light={StaticResource OnAccentLight}, Dark={StaticResource Black}}\"";
+
     static string AppFile(params string[] parts) => Path.Combine(new[] { TestPaths.AppFolder() }.Concat(parts).ToArray());
+
+    [Fact]
+    public void Member_sessions_hosts_calendar_and_it_has_no_separate_menu_item()
+    {
+        var xaml = File.ReadAllText(AppFile("Views", "SessionsPage.xaml"));
+        var code = File.ReadAllText(AppFile("Views", "SessionsPage.xaml.cs"));
+        var shell = File.ReadAllText(AppFile("MemberShell.xaml"));
+        Assert.True(xaml.IndexOf("</c:SideLayout>", StringComparison.Ordinal) < xaml.IndexOf("x:Name=\"CalendarSection\"", StringComparison.Ordinal));
+        Assert.Contains("x:Name=\"CalendarHost\"", xaml);
+        Assert.Contains("Shell.Current is MemberShell", code);
+        Assert.Contains("HostBelow(CalendarHost", code);
+        Assert.Contains("RefreshOwnViewModel => false", code);
+        Assert.DoesNotContain("Title=\"Calendar\"", shell);
+        var calendar = File.ReadAllText(AppFile("Views", "MemberCalendarPage.xaml"));
+        Assert.Contains("<VerticalStackLayout.Resources>", calendar);
+        Assert.Contains("x:Key=\"TileWidth\"", calendar);
+    }
+
+    [Fact]
+    public void Cashier_shift_and_sale_are_in_main_column_with_order_beside_them()
+    {
+        var doc = System.Xml.Linq.XDocument.Load(AppFile("Views", "CashierPage.xaml"));
+        var side = doc.Descendants().Single(e => e.Name.LocalName == "SideLayout");
+        var columns = side.Elements().ToArray();
+        Assert.Equal(2, columns.Length);
+        Assert.Equal("VerticalStackLayout", columns[0].Name.LocalName);
+        Assert.Contains(columns[0].Elements(), e => (string?)e.Attribute("IsVisible") == "{Binding NeedsShift}");
+        Assert.Contains(columns[0].Elements(), e => (string?)e.Attribute("IsVisible") == "{Binding HasShift}");
+        Assert.Contains(columns[0].Elements(), e => (string?)e.Attribute("Text") == "What are they paying for?");
+        Assert.Contains(columns[1].Descendants(), e => (string?)e.Attribute("Text") == "Order");
+        Assert.Equal("False", (string?)side.Attribute("SideFirst"));
+    }
 
     [Fact]
     public void Shared_pieces_exist()
@@ -11,7 +46,7 @@ public class PageLayoutTests
         var controls = File.ReadAllText(AppFile("Controls", "Controls.cs"));
         Assert.Contains("public class CardTitle", controls);
         var styles = File.ReadAllText(AppFile("Resources", "Styles", "Styles.xaml"));
-        foreach (var key in new[] { "x:Key=\"Row\"", "x:Key=\"HeroPanel\"", "x:Key=\"InkButton\"", "x:Key=\"InkSmallButton\"", "x:Key=\"PageWidth\"", "x:Key=\"SectionTitle\"" })
+        foreach (var key in new[] { "x:Key=\"Row\"", "x:Key=\"HeroPanel\"", "x:Key=\"HeroButton\"", "x:Key=\"HeroSmallButton\"", "x:Key=\"PageWidth\"", "x:Key=\"SectionTitle\"" })
             Assert.Contains(key, styles);
     }
 
@@ -35,7 +70,7 @@ public class PageLayoutTests
         Assert.Contains("WideFrom", side);
         Assert.Equal(2, side.Split("new[] { side, main }").Length - 1);   // Measure and ArrangeChildren both put the side first
         var styles = File.ReadAllText(AppFile("Resources", "Styles", "Styles.xaml"));
-        foreach (var key in new[] { "x:Key=\"Kpi\"", "x:Key=\"TablePanel\"", "x:Key=\"TableRow\"", "x:Key=\"SidePanel\"", "x:Key=\"Toolbar\"" })
+        foreach (var key in new[] { "x:Key=\"TablePanel\"", "x:Key=\"TableRow\"", "x:Key=\"SidePanel\"" })
             Assert.Contains(key, styles);
     }
 
@@ -88,9 +123,9 @@ public class PageLayoutTests
             Assert.DoesNotContain("MaximumWidthRequest=\"920\"", File.ReadAllText(file));
     }
 
-    // a lime card keeps its words black in dark mode too
+    // the highlight card is black in light and yellow in dark (Phase 9, D23): its words and buttons flip with it
     [Fact]
-    public void Lime_cards_hold_only_black_text_and_ink_buttons()
+    public void Highlight_cards_hold_only_flipping_text_and_hero_buttons()
     {
         foreach (var file in Directory.GetFiles(AppFile("Views"), "*.xaml"))
         {
@@ -99,10 +134,36 @@ public class PageLayoutTests
             {
                 var card = part[..part.IndexOf("</Border>", StringComparison.Ordinal)];
                 foreach (var label in card.Split("<Label").Skip(1).Select(l => l[..l.IndexOf('>')]))
-                    Assert.True(label.Contains("TextColor=\"{StaticResource Black}\""), $"{Path.GetFileName(file)}: lime-card label without black text: {label}");
+                    Assert.True(label.Contains(OnHero), $"{Path.GetFileName(file)}: highlight-card label without the flipping colour: {label}");
                 foreach (var button in card.Split("<Button").Skip(1).Select(b => b[..b.IndexOf('>')]))
-                    Assert.Contains("Ink", button);
+                    Assert.Contains("HeroSmallButton", button);
             }
         }
+    }
+
+    [Fact]
+    public void Coach_profile_has_the_form_beside_check_in_and_one_picture_button()
+    {
+        var xaml = File.ReadAllText(AppFile("Views", "CoachProfilePage.xaml"));
+        Assert.DoesNotContain("c:CardGrid", xaml);   // the form no longer sits alone in half a row
+        Assert.Contains("<c:SideLayout x:Name=\"CoachColumn\"", xaml);   // form, with check-in beside it
+        Assert.DoesNotContain("CoachPhoto", xaml);   // owner, 2026-11-11: one picture button, Account's "Change picture"
+        // owner's sketch, 2026-11-11: Account first, then the coach profile under name and email, Theme and password in the right column
+        var settings = File.ReadAllText(AppFile("Views", "SettingsPage.xaml"));
+        Assert.True(settings.IndexOf("Text=\"Sign-in email\"", StringComparison.Ordinal) < settings.IndexOf("x:Name=\"CoachSlot\"", StringComparison.Ordinal));
+        Assert.True(settings.IndexOf("x:Name=\"CoachSlot\"", StringComparison.Ordinal) < settings.IndexOf("Text=\"Theme\"", StringComparison.Ordinal));
+        Assert.Contains("settings.CoachSlot.Content = CoachSection", File.ReadAllText(AppFile("Views", "CoachProfilePage.xaml.cs")));
+    }
+
+    [Fact]
+    public void Settings_stays_compact_on_a_narrower_window()
+    {
+        // owner, 2026-11-11: stacked, the short settings sit side by side across the width, and At the gym spans it, no empty right half
+        var settings = File.ReadAllText(AppFile("Views", "SettingsPage.xaml"));
+        Assert.DoesNotContain("StackedSideWidth", settings);
+        Assert.Contains("<c:CardGrid x:Name=\"ShortSettings\" Columns=\"3\" FillRow=\"True\"", settings);   // members' 3 cards in one row, coaches' 2
+        var controls = File.ReadAllText(AppFile("Controls", "Controls.cs"));
+        Assert.Contains("public bool FillRow", controls);
+        Assert.DoesNotContain("StackedSideWidth", File.ReadAllText(AppFile("Views", "CoachProfilePage.xaml")));
     }
 }

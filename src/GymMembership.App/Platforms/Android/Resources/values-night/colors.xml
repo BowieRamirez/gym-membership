@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- dark theme: lime cursors and selection, black would vanish on the dark fields -->
-    <color name="colorAccent">#E4F58A</color>
+    <!-- dark theme: the signal yellow (Colors.xaml Signal) for cursors, selection and switches; black would vanish on the dark fields -->
+    <color name="colorAccent">#FFEC00</color>
 </resources>

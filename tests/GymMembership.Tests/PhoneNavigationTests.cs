@@ -41,9 +41,11 @@ public class PhoneNavigationTests
     public void Phone_coach_opens_on_the_dashboard_and_keeps_requests_in_more_with_five_tabs()
     {
         var source = Read("Controls/PhoneNavigation.cs");
-        Assert.Contains("(\"Dashboard\", \"Dashboard\", \"overview\"), (\"Sessions\", \"Sessions\", \"sessions\"), (\"Trainees\", \"Trainees\", \"trainees\"), (\"Messages\", \"Messages\", \"messages\")", source);
+        Assert.Contains("(\"Dashboard\", \"Dashboard\", \"overview\"), (\"Sessions\", \"Sessions\", \"sessions\"), (\"My shifts\", \"Shifts\", \"trainees\"), (\"Messages\", \"Messages\", \"messages\")", source);
         Assert.Contains("<FlyoutItem Title=\"Dashboard\" Route=\"dashboard\"><ShellContent ContentTemplate=\"{DataTemplate views:AttendancePage}\" />", Read("CoachShell.xaml"));
-        Assert.Contains("(\"My membership\", \"Membership\", \"membership\"), (\"Packages\", \"Packages\", \"packages\"), (\"Sessions\", \"Sessions\", \"sessions\"), (\"Messages\", \"Messages\", \"messages\")", source);
+        Assert.Contains("MemberMenu.Tabs(access?.Active ?? true)", source);
+        Assert.Contains("[\"Book an amenity\"] = (\"Book an amenity\", \"Book\", \"bookings\")", source);   // its tab keeps the //bookings route the calendar opens
+        Assert.DoesNotContain("MemberCalendarPage", source);   // the calendar lives inside Sessions, not as its own phone page   // F16: member tabs follow the membership (MemberCalendarTests pins the order)
         Assert.Contains("_bar.Items.Add(_more)", source);
         Assert.Contains("new PhoneMorePage", source);
         Assert.Contains("FlyoutBehavior.Disabled", source);
@@ -55,9 +57,7 @@ public class PhoneNavigationTests
     [InlineData("Amenities", "AmenitiesPage")]
     [InlineData("Coaches", "CoachesPage")]
     [InlineData("Time requests", "RequestsPage")]
-    [InlineData("My shifts", "ShiftsPage")]
-    [InlineData("My coach profile", "CoachProfilePage")]
-    [InlineData("Settings", "SettingsPage")]
+    [InlineData("Renew or change", "PackagesPage")]
     public void Every_more_destination_has_an_explicit_dependency_injected_page_factory(string title, string page)
     {
         var source = Read("Controls/PhoneNavigation.cs");
@@ -129,6 +129,7 @@ public class PhoneNavigationTests
 
     [Theory]
     [InlineData("membership")]
+    [InlineData("bookings")]
     [InlineData("packages")]
     [InlineData("sessions")]
     [InlineData("requests")]
@@ -143,30 +144,51 @@ public class PhoneNavigationTests
         Assert.NotEmpty(svg.Root.Elements());
     }
 
-    // The redesign: a white bar in light mode, SurfaceDark in dark mode (owner, 2026-11-01: one step lighter than the page so it stays
-    // separate); the selected tab sits on lime with a black icon in both.
+    // Phase 9 (D23): near-black in dark; owner 2026-11-12 (mockup phone-light-yellow.html, B): yellow in light. The selected tab is a
+    // black pill with a yellow icon in light and a yellow pill with a black icon in dark.
     [Fact]
-    public void Bottom_bar_follows_the_theme_with_a_black_icon_on_the_lime_selection()
+    public void Bottom_bar_is_yellow_and_black_with_the_selected_tab_on_a_pill()
     {
         var source = Read("Controls/PhoneNavigation.cs");
-        Assert.Contains("TabBarBackgroundColorProperty, Color.FromArgb(\"#FFFFFF\"), Color.FromArgb(\"#2C302B\")", source);
-        Assert.Contains("TabBarForegroundColorProperty, Color.FromArgb(\"#000000\"), Color.FromArgb(\"#000000\")", source);
-        Assert.Contains("TabBarTitleColorProperty, Color.FromArgb(\"#000000\"), Color.FromArgb(\"#EEF1EC\")", source);
+        Assert.Contains("TabBarBackgroundColorProperty, Color.FromArgb(\"#FFEC00\"), Color.FromArgb(\"#161616\")", source);
+        Assert.Contains("TabBarForegroundColorProperty, Color.FromArgb(\"#FFEC00\"), Color.FromArgb(\"#111111\")", source);
+        Assert.Contains("TabBarTitleColorProperty, Color.FromArgb(\"#111111\"), Color.FromArgb(\"#F2F2F2\")", source);
+        Assert.Contains("TabBarUnselectedColorProperty, Color.FromArgb(\"#3D3A00\"), Color.FromArgb(\"#A6A6A6\")", source);
         Assert.Contains("ItemActiveIndicatorColor", source);
         // the app's MaterialComponents theme gives the indicator no shape or size, so without these it never draws
         Assert.Contains("ItemActiveIndicatorShapeAppearance", source);
         Assert.Contains("ItemActiveIndicatorWidth", source);
         Assert.Contains("ItemActiveIndicatorHeight", source);
-        Assert.Contains("#E4F58A", source);
-        // the front desk's phone bar comes from the shared Shell style: light in both themes there too
+        Assert.Contains("ItemActiveIndicatorColor = Android.Content.Res.ColorStateList.ValueOf(Color.FromArgb(dark ? \"#FFEC00\" : \"#111111\")", source);
+        // the front desk's phone bar comes from the shared Shell style (layout unchanged, D22): the same colours, no pill
         var styles = Read("Resources/Styles/Styles.xaml");
-        Assert.Contains("<Setter Property=\"Shell.TabBarBackgroundColor\" Value=\"{AppThemeBinding Light={StaticResource IconChipLight}, Dark={StaticResource IconChipDark}}\" />", styles);
-        Assert.Contains("<Setter Property=\"Shell.TabBarForegroundColor\" Value=\"{StaticResource IconInk}\" />", styles);
-        Assert.Contains("<Setter Property=\"Shell.TabBarTitleColor\" Value=\"{StaticResource IconInk}\" />", styles);
-        foreach (var old in new[] { "#24282C", "#1F2226", "#ECEEF0", "#5C646C", "#9AA3AB" })
+        Assert.Contains("<Setter Property=\"Shell.TabBarBackgroundColor\" Value=\"{AppThemeBinding Light={StaticResource Signal}, Dark={StaticResource RailDark}}\" />", styles);
+        Assert.Contains("<Setter Property=\"Shell.TabBarForegroundColor\" Value=\"{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}\" />", styles);
+        Assert.Contains("<Setter Property=\"Shell.TabBarTitleColor\" Value=\"{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}\" />", styles);
+        foreach (var old in new[] { "#24282C", "#1F2226", "#ECEEF0", "#5C646C", "#9AA3AB", "#E4F58A", "#2C302B", "#EEF1EC", "#5A6159", "#A3AAA1" })
         {
             Assert.DoesNotContain(old, source);
             Assert.DoesNotContain(old, Read("Views/PhoneMorePage.cs"));
         }
+    }
+
+    [Fact]
+    public void Phone_sessions_opens_the_member_calendar_inline_from_a_button()
+    {
+        var xaml = Read("Views/SessionsPage.xaml");
+        Assert.Contains("x:Name=\"CalendarToggle\"", xaml);
+        Assert.Contains("CalendarSection.IsVisible = !CalendarSection.IsVisible", Read("Views/SessionsPage.xaml.cs"));
+        Assert.DoesNotContain("MemberCalendarPage", Read("MemberShell.xaml"));
+    }
+
+    [Fact]
+    public void A_coach_has_settings_named_and_drawn_like_everyone_elses()
+    {
+        // owner, 2026-11-11: "Settings", not "Profile & settings"; on phones only in the account menu (More drops Settings), the same icon on Windows
+        Assert.Contains("<FlyoutItem Title=\"Settings\" Route=\"settings\"><ShellContent ContentTemplate=\"{DataTemplate views:CoachProfilePage}\" />", Read("CoachShell.xaml"));
+        Assert.Contains("moreItems.Where(item => item.Title != \"Settings\")", Read("Controls/PhoneNavigation.cs"));
+        Assert.Contains("[\"Settings\"] = coach ? typeof(CoachProfilePage) : typeof(SettingsPage)", Read("Controls/PhoneNavigation.cs"));
+        Assert.DoesNotContain("Profile & settings", Read("Controls/IconRail.Windows.cs"));
+        Assert.Contains("Title=\"Settings\"", Read("Views/CoachProfilePage.xaml"));
     }
 }

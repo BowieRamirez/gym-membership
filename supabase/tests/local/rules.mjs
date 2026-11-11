@@ -1,5 +1,5 @@
 // Behaviour tests for the migrations, run against the throwaway Postgres.
-import { start } from './harness.mjs';
+import { start, openCashShifts } from './harness.mjs';
 import assert from 'node:assert/strict';
 
 const { server, client: db } = await start();
@@ -33,6 +33,7 @@ const desk = await user('desk@t.io', 'employee', 'Desk');
 const coach = await user('coach@t.io', 'coach', 'Coach Kuts');
 const alex = await user('alex@t.io', 'member', 'Alex');
 const bea = await user('bea@t.io', 'member', 'Bea');
+await openCashShifts(db);
 await db.query(`insert into membership_packages (name, price, duration_days) values ('Monthly', 1000, 30), ('Annual', 10000, 365)`);
 await db.query(`insert into amenities (name, price, duration_days) values ('Boxing', 300, 30)`);
 await db.query(`insert into discounts (code, percent, starts_at, expires_at, max_uses) values ('WELCOME10', 10, now() - interval '1 day', now() + interval '30 days', 100),
@@ -68,6 +69,24 @@ await test('after every migration, anonymous reaches no table and no security de
       where n.nspname = 'public' and c.relkind in ('r', 'v', 'm')
         and has_table_privilege('anon', c.oid, 'select, insert, update, delete')`);
   assert.ok(!r.rows.length, r.rows.map(x => x.name).join(', '));
+});
+// D16 (Phase 10): every database function the app calls has at least one attempt to break it in these tests, i.e. a call with an
+// expected refusal (assert.rejects, code(...) or an error pattern) on the same line or the line after.
+await test('every function the app calls has a test that tries to break it', async () => {
+  const { readdirSync, readFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const here = new URL('.', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'), root = join(here, '../../..');
+  const walk = d => readdirSync(d, { withFileTypes: true }).flatMap(e =>
+    ['bin', 'obj'].includes(e.name) ? [] : e.isDirectory() ? walk(join(d, e.name)) : e.name.endsWith('.cs') ? [join(d, e.name)] : []);
+  const app = walk(join(root, 'src')).map(f => readFileSync(f, 'utf8')).join('\n');
+  // RpcAsync<List<Row>>("f") has nested <>; Change("f") is SubscriptionService's wrapper (both were missed before Phase 8)
+  const called = [...new Set([...app.matchAll(/(?<![A-Za-z])(?:Rpc[A-Za-z]*|Change)(?:<[^(]*?>)?\(\s*"([a-z_0-9]+)"/g)].map(m => m[1]))];
+  assert.ok(called.length > 70, `found only ${called.length} calls; has the gateway's Rpc method been renamed?`);
+  const lines = readdirSync(here).filter(f => f.endsWith('.mjs')).flatMap(f => readFileSync(join(here, f), 'utf8').split('\n'));
+  const refused = /assert\.rejects|code\(|\/[a-z_|]{3,}\/\)/;
+  const untried = called.filter(fn => !lines.some((l, i) =>
+    new RegExp(`(?<![a-z_])${fn}(?![a-z_0-9])`).test(l) && refused.test(l + ' ' + (lines[i + 1] ?? ''))));
+  assert.deepEqual(untried, [], `no break attempt for: ${untried.join(', ')}`);
 });
 await test('a member sees only themself, plus coaches', async () => {
   const r = await run(alex, 'select id from profiles');
@@ -191,12 +210,14 @@ await test('only an admin can void; voiding cancels the membership and is audite
   assert.equal((await run(eve, `select is_active_member() m`)).rows[0].m, false);
   assert.equal((await run(admin, `select * from audit_log where action='payment.void'`)).rowCount, 1);
 });
+const today = `(now() at time zone 'Asia/Manila')::date`;
 await test('revenue excludes voided payments and only admin can read it', async () => {
-  const r = await run(admin, `select kind, total from revenue_summary(current_date - 1, current_date + 1) order by kind`);
+  // the gym's days are Manila days: on a UTC server current_date is a day behind for 8 hours of every day (it failed in CI at 01:21 Manila)
+  const r = await run(admin, `select kind, total from revenue_summary(${today} - 1, ${today} + 1) order by kind`);
   const total = r.rows.reduce((s, x) => s + Number(x.total), 0);
   assert.equal(total, 1000 + 150 + 300);   // alex's QR + walk-in + eve's amenity (eve's membership voided)
-  assert.match(await code(run(desk, `select * from revenue_summary(current_date, current_date)`)), /forbidden/);
-  assert.equal((await run(desk, `select * from daily_cash_summary(current_date)`)).rowCount > 0, true);
+  assert.match(await code(run(desk, `select * from revenue_summary(${today}, ${today})`)), /forbidden/);
+  assert.equal((await run(desk, `select * from daily_cash_summary(${today})`)).rowCount > 0, true);
 });
 await test('renewing an active plan extends from its end date', async () => {
   const ump = (await run(alex, `select user_membership_package_id id, ends_at from user_membership_packages`)).rows[0];
@@ -289,7 +310,7 @@ await test('a coach posts a shift, trainees are told, overlap is refused', async
 await test('ending a hire closes chat for new messages but keeps history', async () => {
   await run(alex, `select end_hire($1)`, [hire]);
   assert.match(await code(run(alex, `insert into messages (coach_id, member_id, sender_id, body) values ($1,$2,$2,'still there?')`, [coach, alex])), /42501/);
-  assert.equal((await run(alex, `select * from messages`)).rowCount, 2);
+  assert.equal((await run(alex, `select * from messages where kind = 'text'`)).rowCount, 2);   // F11 (0051) adds request messages beside these
 });
 
 console.log('\naccounts and admin');
@@ -368,7 +389,8 @@ await test('an account made through the Admin API gets the role written after it
 });
 
 console.log('\nnames are letters only (0012)');
-const setName = (uid, name) => run(uid, `update profiles set full_name = $2 where id = $1`, [uid, name]);
+// names are locked for app users (0040), so this exercises the table's own rules directly
+const setName = (uid, name) => db.query(`update profiles set full_name = $2 where id = $1`, [uid, name]);
 await test('a member can rename themselves to a real name', async () => {
   for (const ok of ["Mary-Ann O'Brien", 'Juan dela Cruz', 'José Peña', 'Al'])
     assert.equal(await code(setName(alex, ok)), 'ok', ok);
@@ -563,6 +585,7 @@ await test('opening a conversation marks what you received delivered and read, a
 });
 await test('delivered is set when the list is loaded, read only when the chat is opened', async () => {
   await say(coach, 'coach', coach, bea, 'one more');
+  assert.match(await code(run(null, `select mark_chats_delivered()`)), /not_authenticated|forbidden|42501/);   // Phase 10: nobody signed in
   await run(bea, `select mark_chats_delivered()`);
   const m = (await page(coach, 'coach', coach, bea, null, 1)).rows[0];
   assert.equal(m.body, 'one more'); assert.ok(m.delivered_at); assert.equal(m.read_at, null);
@@ -581,7 +604,7 @@ await test('any member, even a guest, can write to the front desk; staff are ale
 });
 await test('a member sees one front-desk thread even with no messages; coaches and members cannot read or write other threads', async () => {
   assert.equal((await threads(bea)).filter(r => r.kind === 'support').length, 1);
-  assert.equal((await threads(coach)).filter(r => r.kind === 'support').length, 0);
+  assert.equal((await threads(coach)).filter(r => r.kind === 'support' && r.member_id === coach).length, 1);   // F9 (0051): coaches write to the gym too
   assert.match(await code(run(bea, `select send_support_message($1, 'hi')`, [alex])), /42501/);
   assert.match(await code(run(coach, `select send_support_message($1, 'hi')`, [alex])), /42501/);
   assert.match(await code(page(bea, 'support', null, alex)), /42501/);
@@ -633,6 +656,11 @@ await test('search finds a person by name and a conversation by message text, on
   assert.equal((await run(alex, `select * from chat_search('chat 77')`)).rowCount, 0);   // not Alex's conversation
   assert.equal((await run(bea, `select * from chat_search('c')`)).rowCount, 0);          // under two characters
   assert.equal((await run(bea, `select * from chat_search('%')`)).rowCount, 0);
+  // two characters, so these reach the search: unescaped, each would match all of Bea's conversations
+  assert.equal((await run(bea, `select * from chat_search($1)`, ['%%'])).rowCount, 0);
+  assert.equal((await run(bea, `select * from chat_search($1)`, ['__'])).rowCount, 0);
+  assert.equal((await run(bea, `select * from chat_search($1)`, [`'; drop table profiles; --`])).rowCount, 0);
+  assert.ok((await db.query(`select to_regclass('public.profiles') as t`)).rows[0].t);
   assert.equal((await run(desk, `select * from chat_search('payment is stuck')`)).rowCount, 1);   // staff find front-desk text
 });
 await test('support permission exists for admin, sub-admin and front desk only', async () => {
@@ -755,9 +783,9 @@ await test('a photo whose text is only blanks still reads "Photo" in the list', 
 });
 
 console.log('\nlive chat (0017)');
-await test('messages and support_messages are in the Realtime publication', async () => {
+await test('exactly chat (0017) and the live records (0053) are in the Realtime publication', async () => {
   const r = await db.query(`select tablename from pg_publication_tables where pubname = 'supabase_realtime' order by 1`);
-  assert.deepEqual(r.rows.map(x => x.tablename), ['messages', 'support_messages']);
+  assert.deepEqual(r.rows.map(x => x.tablename), ['gym_check_ins', 'membership_terms', 'messages', 'payments', 'support_messages']);
 });
 const gus = await user('gus@t.io', 'member', 'Gus');
 await db.query(`insert into coach_hires (coach_id, member_id) values ($1, $2)`, [coach, gus]);

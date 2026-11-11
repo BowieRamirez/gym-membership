@@ -43,6 +43,13 @@ public sealed class PhoneNavigation
 #endif
     }
 
+    // a member menu page that can be a tab: its short tab title and its icon (phone_<icon>.png)
+    static readonly Dictionary<string, (string, string, string)> MemberTabs = new()
+    {
+        ["My membership"] = ("My membership", "Membership", "membership"), ["Packages"] = ("Packages", "Packages", "packages"),
+        ["Book an amenity"] = ("Book an amenity", "Book", "bookings"), ["Sessions"] = ("Sessions", "Sessions", "sessions"), ["Messages"] = ("Messages", "Messages", "messages"),
+    };
+
     public static void Attach(Shell shell, bool coach, IServiceProvider services, Access? access = null)
     {
         if (!IsSupported) return;
@@ -55,19 +62,20 @@ public sealed class PhoneNavigation
         _shell = shell;
         var original = shell.Items.ToList();
         var primary = coach
-            ? new[] { ("Dashboard", "Dashboard", "overview"), ("Sessions", "Sessions", "sessions"), ("Trainees", "Trainees", "trainees"), ("Messages", "Messages", "messages") }
-            : new[] { ("My membership", "Membership", "membership"), ("Packages", "Packages", "packages"), ("Sessions", "Sessions", "sessions"), ("Messages", "Messages", "messages") };
+            ? new[] { ("Dashboard", "Dashboard", "overview"), ("Sessions", "Sessions", "sessions"), ("My shifts", "Shifts", "trainees"), ("Messages", "Messages", "messages") }
+            : MemberMenu.Tabs(access?.Active ?? true).Select(t => MemberTabs[t.Page]).ToArray();   // F16: the order follows the membership
         var pageTypes = new Dictionary<string, Type>
         {
             ["Amenities"] = typeof(AmenitiesPage), ["Book an amenity"] = typeof(BookAmenityPage), ["Coaches"] = typeof(CoachesPage),
-            ["Time requests"] = typeof(RequestsPage), ["My shifts"] = typeof(ShiftsPage),
-            ["My coach profile"] = typeof(CoachProfilePage),
-            ["Settings"] = typeof(SettingsPage)
+            ["Time requests"] = typeof(RequestsPage),
+            ["Renew or change"] = typeof(PackagesPage),
+            ["Settings"] = coach ? typeof(CoachProfilePage) : typeof(SettingsPage)
         };
         var secondary = original.Where(item => !primary.Any(p => p.Item1 == item.Title)).ToList();
         foreach (var item in secondary)
         {
-            var route = item.Title == "Settings" ? "settings" : item.Title;
+            // a page with its own route (settings, packages, requests, bookings) opens by it, wherever it sits in the order
+            var route = string.IsNullOrEmpty(item.Route) || item.Route.StartsWith("D_FAULT", StringComparison.Ordinal) ? item.Title : item.Route;
             var source = item.Items[0].Items[0];
             // Locked templates are closures; ordinary pages need their registered view models.
             if (item.ClassId != "members-only" || access?.Active != false)
@@ -93,7 +101,7 @@ public sealed class PhoneNavigation
         {
             Route = "menu",
             ContentTemplate = new DataTemplate(() => new PhoneMorePage(moreItems.Select(item =>
-                (item.Title, item.Title == "Settings" ? "settings" : item.Title)).ToArray(), OpenSecondaryAsync))
+                (item.Title, string.IsNullOrEmpty(item.Route) || item.Route.StartsWith("D_FAULT", StringComparison.Ordinal) ? item.Title : item.Route)).ToArray(), OpenSecondaryAsync))
         });
         _bar.Items.Add(_more);
         shell.Items.Clear();
@@ -101,12 +109,12 @@ public sealed class PhoneNavigation
         shell.Items.Add(_bar);
         shell.CurrentItem = _bar;
         _bar.CurrentItem = _bar.Items[0];
-        // light: white bar, black icons. Dark (owner, 2026-11-01): SurfaceDark, a step lighter than the page so the bar stays separate,
-        // with light names and muted icons. The selected icon is black in both, since it sits on the lime pill.
-        shell.SetAppThemeColor(Shell.TabBarBackgroundColorProperty, Color.FromArgb("#FFFFFF"), Color.FromArgb("#2C302B"));
-        shell.SetAppThemeColor(Shell.TabBarForegroundColorProperty, Color.FromArgb("#000000"), Color.FromArgb("#000000"));
-        shell.SetAppThemeColor(Shell.TabBarTitleColorProperty, Color.FromArgb("#000000"), Color.FromArgb("#EEF1EC"));
-        shell.SetAppThemeColor(Shell.TabBarUnselectedColorProperty, Color.FromArgb("#5A6159"), Color.FromArgb("#A3AAA1"));
+        // Phase 9 (D23): a near-black bar in dark; owner 2026-11-12 (docs/mockups/phone-light-yellow.html, B): a yellow bar in light. The
+        // current tab is a black pill with a yellow icon (light) or a yellow pill with a black icon (dark); other tabs dark olive / muted.
+        shell.SetAppThemeColor(Shell.TabBarBackgroundColorProperty, Color.FromArgb("#FFEC00"), Color.FromArgb("#161616"));
+        shell.SetAppThemeColor(Shell.TabBarForegroundColorProperty, Color.FromArgb("#FFEC00"), Color.FromArgb("#111111"));
+        shell.SetAppThemeColor(Shell.TabBarTitleColorProperty, Color.FromArgb("#111111"), Color.FromArgb("#F2F2F2"));
+        shell.SetAppThemeColor(Shell.TabBarUnselectedColorProperty, Color.FromArgb("#3D3A00"), Color.FromArgb("#A6A6A6"));
         var app = Application.Current;
         void ThemeChanged(object? sender, AppThemeChangedEventArgs e) => shell.Dispatcher.Dispatch(StyleBar);
         shell.Loaded += (_, _) =>
@@ -174,8 +182,8 @@ public sealed class PhoneNavigation
             if (view is Google.Android.Material.BottomNavigation.BottomNavigationView bar)
             {
                 var background = new Android.Graphics.Drawables.GradientDrawable();
-                var surface = Shell.GetTabBarBackgroundColor(_shell) ??
-                    Color.FromArgb(Application.Current?.RequestedTheme == AppTheme.Dark ? "#2C302B" : "#FFFFFF");
+                var dark = Application.Current?.RequestedTheme == AppTheme.Dark;
+                var surface = Shell.GetTabBarBackgroundColor(_shell) ?? Color.FromArgb(dark ? "#161616" : "#FFEC00");
                 var pageBackground = _shell.CurrentPage?.BackgroundColor ?? _shell.BackgroundColor ?? surface;
                 background.SetColor(surface.ToPlatform());
                 background.SetCornerRadius(0);
@@ -190,7 +198,7 @@ public sealed class PhoneNavigation
                 // MAUI's MaterialComponents theme gives the indicator no shape or size, so it is drawn only once both are set here
                 var density = bar.Resources?.DisplayMetrics?.Density ?? 1f;
                 bar.ItemActiveIndicatorEnabled = true;
-                bar.ItemActiveIndicatorColor = Android.Content.Res.ColorStateList.ValueOf(Color.FromArgb("#E4F58A").ToPlatform());
+                bar.ItemActiveIndicatorColor = Android.Content.Res.ColorStateList.ValueOf(Color.FromArgb(dark ? "#FFEC00" : "#111111").ToPlatform());
                 bar.ItemActiveIndicatorShapeAppearance = Google.Android.Material.Shape.ShapeAppearanceModel.InvokeBuilder().SetAllCornerSizes(16 * density).Build();
                 bar.ItemActiveIndicatorWidth = (int)(64 * density);
                 bar.ItemActiveIndicatorHeight = (int)(28 * density);    // 28, not 32: the pill no longer reaches down to the tab name

@@ -27,7 +27,7 @@
                     <HorizontalStackLayout Grid.Column="5" Spacing="6" VerticalOptions="Center" HorizontalOptions="End">
                         <Button Text="Add 30 minutes" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanExtend}" Clicked="OnExtend"
                                 SemanticProperties.Hint="Extends this session and its amenity booking by 30 minutes" />
-                        <Button Text="Mark complete" Style="{StaticResource SmallButton}" IsVisible="{Binding CanManage}" Clicked="OnComplete" />
+                        <Button Text="Mark complete" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanManage}" Clicked="OnComplete" />
                         <Button Text="No-show" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanManage}" Clicked="OnNoShow" />
                         <Button Text="Reschedule" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanChange}" Clicked="OnStartReschedule" />
                         <Button Text="Cancel session" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanChange}" Clicked="OnCancel" />
@@ -36,33 +36,31 @@
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
         </DataTemplate>
-        <!-- phone: the same facts stacked, buttons wrapping underneath -->
+        <!-- phone and narrow windows: two lines (title and status; when and with whom), the amenity only when there is one, actions as chips -->
         <DataTemplate x:Key="SessionCard" x:DataType="svc:SessionRow">
             <VerticalStackLayout>
-                <VerticalStackLayout Spacing="6" Padding="14,10">
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                        <VerticalStackLayout Spacing="2">
-                            <Label Text="{Binding Session.Title}" FontFamily="BarlowSemiBold" />
-                            <Label Text="{Binding With, StringFormat='With {0}'}" />
-                            <Label Style="{StaticResource Caption}">
-                                <Label.Text>
-                                    <MultiBinding StringFormat="{}{0} to {1}">
-                                        <Binding Path="Session.ScheduledStart" Converter="{StaticResource LocalDate}" ConverterParameter="dddd d MMM, h:mm tt" />
-                                        <Binding Path="Session.ScheduledEnd" Converter="{StaticResource LocalDate}" ConverterParameter="h:mm tt" />
-                                    </MultiBinding>
-                                </Label.Text>
-                            </Label>
-                        </VerticalStackLayout>
-                        <c:StatusChip Grid.Column="1" Status="{Binding Session.Status}" VerticalOptions="Start" />
+                <VerticalStackLayout Spacing="4" Padding="14,12">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <Label Text="{Binding Session.Title}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                        <c:StatusChip Grid.Column="1" Status="{Binding Session.Status}" VerticalOptions="Center" />
                     </Grid>
-                    <Label Text="{Binding Amenity, StringFormat='At {0}'}" FontFamily="BarlowMedium" IsVisible="{Binding Amenity, Converter={StaticResource HasText}}" />
-                    <FlexLayout Wrap="Wrap">
-                        <Button Text="Add 30 minutes" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanExtend}" Clicked="OnExtend"
+                    <Label Style="{StaticResource Caption}">
+                        <Label.Text>
+                            <MultiBinding StringFormat="{}{0} to {1}  ·  {2}">
+                                <Binding Path="Session.ScheduledStart" Converter="{StaticResource LocalDate}" ConverterParameter="ddd d MMM, h:mm tt" />
+                                <Binding Path="Session.ScheduledEnd" Converter="{StaticResource LocalDate}" ConverterParameter="h:mm tt" />
+                                <Binding Path="With" />
+                            </MultiBinding>
+                        </Label.Text>
+                    </Label>
+                    <Label Text="{Binding Amenity, StringFormat='At {0}'}" Style="{StaticResource Caption}" IsVisible="{Binding Amenity, Converter={StaticResource HasText}}" />
+                    <FlexLayout Wrap="Wrap" Margin="0,4,0,0">
+                        <Button Text="Add 30 minutes" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanExtend}" Clicked="OnExtend"
                                 SemanticProperties.Hint="Extends this session and its amenity booking by 30 minutes" />
-                        <Button Text="Mark complete" Style="{StaticResource SmallButton}" Margin="0,0,8,8" IsVisible="{Binding CanManage}" Clicked="OnComplete" />
-                        <Button Text="No-show" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanManage}" Clicked="OnNoShow" />
-                        <Button Text="Reschedule" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanChange}" Clicked="OnStartReschedule" />
-                        <Button Text="Cancel session" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" IsVisible="{Binding CanChange}" Clicked="OnCancel" />
+                        <Button Text="Mark complete" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanManage}" Clicked="OnComplete" />
+                        <Button Text="No-show" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanManage}" Clicked="OnNoShow" />
+                        <Button Text="Reschedule" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanChange}" Clicked="OnStartReschedule" />
+                        <Button Text="Cancel session" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanChange}" Clicked="OnCancel" />
                     </FlexLayout>
                 </VerticalStackLayout>
                 <BoxView Style="{StaticResource Hairline}" />
@@ -72,26 +70,28 @@
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="12">
-            <Label Text="Your booked training sessions, soonest first." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
+            <!-- phones (owner, 2026-11-11): the member calendar opens here, inside Sessions, from this button; Windows shows it below the list -->
+            <Button x:Name="CalendarToggle" Text="Show calendar" IsVisible="False" Style="{StaticResource OutlineButton}" Clicked="OnToggleCalendar"
+                    SemanticProperties.Hint="Shows your sessions, bookings and your coach's open times by month" />
 
-            <c:SideLayout>
+            <c:SideLayout StackedSideWidth="600">
                 <VerticalStackLayout Spacing="4">
-                <!-- status filter: the filled button is the one in use -->
-                <FlexLayout Style="{StaticResource Toolbar}">
-                    <Button Text="All" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="All">
-                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="All"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
-                    </Button>
-                    <Button Text="Scheduled" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Scheduled">
-                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Scheduled"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
-                    </Button>
-                    <Button Text="Completed" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Completed">
-                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Completed"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
-                    </Button>
-                    <Button Text="Cancelled or no-show" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Cancelled">
-                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Cancelled"><Setter Property="Style" Value="{StaticResource LimeSmallButton}" /></DataTrigger></Button.Triggers>
-                    </Button>
+                <!-- status filter chips; they wrap onto a second line on a narrow phone; the yellow one is in use -->
+                <FlexLayout Wrap="Wrap">
+                        <Button Text="All" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="All">
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="All"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
+                        </Button>
+                        <Button Text="Scheduled" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Scheduled">
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Scheduled"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
+                        </Button>
+                        <Button Text="Completed" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Completed">
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Completed"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
+                        </Button>
+                        <Button Text="Cancelled or no-show" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Cancelled">
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Cancelled"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
+                        </Button>
                 </FlexLayout>
                 <Border Style="{StaticResource TablePanel}">
                     <VerticalStackLayout>
@@ -115,12 +115,12 @@
                 </Border>
                 </VerticalStackLayout>
 
-                <!-- the side panel: the coach photo prompt, then the session being moved (or how to move one) -->
-                <VerticalStackLayout Spacing="12">
-                    <c:CoachPhotoPrompt x:DataType="vm:CoachPhotoViewModel" BindingContext="{Binding Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}, Path=Photo}" IsVisible="{Binding NeedsPhoto}" />
-                    <Border Style="{StaticResource SidePanel}" IsVisible="{Binding Rescheduling, Converter={StaticResource IsNotNull}}">
+                <!-- the side panel only while a session is being moved; otherwise the list takes the full width. The coach photo
+                     prompt lives on My coach profile only (9.6: here it sat above the sessions that needed action). -->
+                <VerticalStackLayout Spacing="12" IsVisible="{Binding Rescheduling, Converter={StaticResource IsNotNull}}">
+                    <Border Style="{StaticResource SidePanel}">
                         <VerticalStackLayout Spacing="12">
-                                <c:CardTitle Icon="calendar-clock" Text="{Binding Rescheduling.Session.Title, StringFormat='Move “{0}” to a new time'}" />
+                                <c:CardTitle Text="{Binding Rescheduling.Session.Title, StringFormat='Move “{0}” to a new time'}" />
                                 <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                                     <VerticalStackLayout Spacing="4">
                                         <Label Text="New date" Style="{StaticResource Caption}" />
@@ -138,17 +138,14 @@
                                 </FlexLayout>
                             </VerticalStackLayout>
                     </Border>
-                    <!-- desktop only: on phones the side stacks above the list, where a hint would just take room -->
-                    <ContentView IsVisible="{OnIdiom Phone=False, Default=True}">
-                        <Border Style="{StaticResource SidePanel}" IsVisible="{Binding Rescheduling, Converter={StaticResource IsNull}}">
-                            <VerticalStackLayout Spacing="6">
-                                <c:CardTitle Icon="calendar-clock" Text="Move a session" />
-                                <Label Text="Choose Reschedule on a booked session to pick its new time here." Style="{StaticResource Muted}" />
-                            </VerticalStackLayout>
-                        </Border>
-                    </ContentView>
+
                 </VerticalStackLayout>
             </c:SideLayout>
+
+            <VerticalStackLayout x:Name="CalendarSection" IsVisible="False" Spacing="12" Margin="0,12,0,0">
+                <Label Text="Calendar" Style="{StaticResource SectionTitle}" IsVisible="{OnIdiom Phone=False, Default=True}" />
+                <ContentView x:Name="CalendarHost" />
+            </VerticalStackLayout>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

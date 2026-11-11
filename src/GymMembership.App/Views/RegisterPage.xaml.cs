@@ -9,6 +9,11 @@ public partial class RegisterPage : BasePage
 	{
 		InitializeComponent();
 		BindingContext = vm;
+		// it appears without the person leaving the field, so a screen reader has to be told
+		vm.PropertyChanged += (_, e) =>
+		{
+			if (e.PropertyName == nameof(vm.EmailTaken) && vm.EmailTaken is { } message) SemanticScreenReader.Announce(message);
+		};
 	}
 
 	// letters only: anything else is dropped as it is typed or pasted

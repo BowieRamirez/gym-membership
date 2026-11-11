@@ -15,7 +15,7 @@ public class ChatPhotoTests
         return (gw, new ChatService(gw, new NotificationService(gw)));
     }
 
-    static async Task<ChatThread> CoachThread(ChatService svc, string with = "Lena Cruz") => (await svc.ThreadsAsync()).Value!.Single(t => !t.IsSupport && t.WithName == with);
+    static async Task<ChatThread> CoachThread(ChatService svc, string with = "Lena Cruz") => (await svc.ThreadsAsync()).Value!.Single(t => t.Kind == "coach" && t.WithName == with);
     static async Task<ChatThread> DeskThread(ChatService svc) => (await svc.ThreadsAsync()).Value!.Single(t => t.IsSupport);
 
     [Fact]
@@ -93,7 +93,7 @@ public class ChatPhotoTests
         await alex.SendPhotoAsync(thread, "a.png", Photo, "before");
         Assert.True((await new CoachService(gw).EndHireAsync((await gw.ListAsync<CoachHire>()).First(h => h.Status == "active").Id)).Ok);
 
-        Assert.True((await alex.MessagesAsync(thread)).Value!.Bubbles.Last().ShowPhoto);                      // history stays
+        Assert.Contains((await alex.MessagesAsync(thread)).Value!.Bubbles, b => b.ShowPhoto && b.Line.Body == "before");   // history stays (ending the hire may add request messages after it)
         Assert.Equal(AppErrorKind.Unauthorized, (await alex.SendPhotoAsync(thread, "b.png", Photo, "after")).Error);
 
         var (_, bea) = await As("bea@demo.io", gw);   // hired Lena but has no active plan

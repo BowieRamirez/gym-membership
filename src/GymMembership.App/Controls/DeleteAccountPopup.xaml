@@ -26,7 +26,7 @@
                     <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsBusy}" Value="True"><Setter Property="IsEnabled" Value="False" /></DataTrigger></Button.Triggers>
                 </Button>
                 <Button x:Name="ConfirmButton" Text="Confirm" Style="{StaticResource SmallButton}" Clicked="OnConfirm" IsEnabled="False" Margin="0,0,0,8"
-                        BackgroundColor="{StaticResource PlateRedLight}" TextColor="White" AutomationId="ConfirmAccountDeletion" />
+                        BackgroundColor="{StaticResource BadLight}" TextColor="White" AutomationId="ConfirmAccountDeletion" />
             </FlexLayout>
         </VerticalStackLayout>
     </ScrollView>

@@ -25,7 +25,7 @@ public class NewFeatureTests
         Assert.Contains(await gw.ListAsync<Coach>(), c => c.UserId == gw.CurrentUserId);
         Assert.True((await auth.MustChangePasswordAsync()).Value);
 
-        Assert.True((await auth.ChangePasswordAsync("temp1234", "my-own-pass")).Ok);
+        Assert.True((await auth.ChangePasswordAsync("temp1234", "my-own-pass9")).Ok);
         Assert.False((await auth.MustChangePasswordAsync()).Value);
     }
 
@@ -127,7 +127,7 @@ public class NewFeatureTests
     {
         var gw = await As("member@demo.io");
         var svc = new ChatService(gw, new NotificationService(gw));
-        var thread = (await svc.ThreadsAsync()).Value!.Single(t => !t.IsSupport);
+        var thread = (await svc.ThreadsAsync()).Value!.Single(t => t.Kind == "coach");
         Assert.True(thread.CanSend);
         Assert.True((await svc.SendAsync(thread, "  See you at 9  ")).Ok);
 
@@ -144,18 +144,18 @@ public class NewFeatureTests
     {
         var gw = await As("member@demo.io");
         var svc = new ChatService(gw, new NotificationService(gw));
-        var thread = (await svc.ThreadsAsync()).Value!.Single(t => !t.IsSupport);
+        var thread = (await svc.ThreadsAsync()).Value!.Single(t => t.Kind == "coach");
         Assert.Equal(AppErrorKind.Validation, (await svc.SendAsync(thread, "   ")).Error);
 
         await gw.SignInAsync("carlo@demo.io", DemoGateway.DemoPassword); // never hired Lena
-        Assert.DoesNotContain((await svc.ThreadsAsync()).Value!, t => !t.IsSupport);                       // no coach conversations of their own
+        Assert.DoesNotContain((await svc.ThreadsAsync()).Value!, t => t.Kind == "coach");                       // no coach conversations of their own
         Assert.Equal(AppErrorKind.Unauthorized, (await svc.MessagesAsync(thread)).Error);                  // and Alex and Lena's is not readable
         Assert.Equal(AppErrorKind.Validation, (await svc.SendAsync(thread, "hi")).Error);                  // not one of the two people in it
 
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         var hire = (await gw.ListAsync<CoachHire>()).First(h => h.Status == "active");
         Assert.True((await new CoachService(gw).EndHireAsync(hire.Id)).Ok);
-        Assert.False((await svc.ThreadsAsync()).Value!.Single(t => !t.IsSupport).CanSend); // history stays, sending stops
+        Assert.False((await svc.ThreadsAsync()).Value!.Single(t => t.Kind == "coach").CanSend); // history stays, sending stops
         Assert.NotEmpty((await svc.MessagesAsync(thread)).Value!.Bubbles);
         Assert.Equal(AppErrorKind.Unauthorized, (await svc.SendAsync(thread, "still there?")).Error);
     }
@@ -284,20 +284,18 @@ public class NewFeatureTests
         Assert.Contains((await sessions.SessionsAsync()).Value!, r => r.Session.ScheduledStart == slot.Request.RequestedStart && r.Session.MemberId == "u-alex");
     }
 
-    // ---------- coaches can pause hiring ----------
+    // ---------- coaches can pause hiring (9.6: only through the profile's "Taking new members" switch) ----------
     [Fact]
     public async Task A_paused_coach_stays_listed_but_closed_and_cannot_be_hired()
     {
         var gw = await As("kai@demo.io");
         var coaches = new CoachService(gw);
-        var vm = new GymMembership.Core.ViewModels.ShiftsViewModel(coaches);
+        var vm = new GymMembership.Core.ViewModels.CoachProfileViewModel(coaches);
         await vm.OnAppearingAsync();
-        Assert.True(vm.IsOpen);
-        Assert.Equal("Pause hiring", vm.HiringButtonText);
+        Assert.True(vm.IsAvailable);
 
-        await vm.ToggleHiringCommand.ExecuteAsync(null);
-        Assert.False(vm.IsOpen);
-        Assert.Equal("Resume hiring", vm.HiringButtonText);
+        vm.IsAvailable = false;
+        await vm.SaveCommand.ExecuteAsync(null);
 
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         var card = (await coaches.ListCoachesAsync()).Value!.First(c => c.Name == "Kai Mendoza");
@@ -305,7 +303,8 @@ public class NewFeatureTests
         Assert.False((await coaches.HireAsync(card.Coach.UserId)).Ok);
 
         await gw.SignInAsync("kai@demo.io", DemoGateway.DemoPassword);
-        await vm.ToggleHiringCommand.ExecuteAsync(null);
+        vm.IsAvailable = true;
+        await vm.SaveCommand.ExecuteAsync(null);
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         Assert.False((await coaches.ListCoachesAsync()).Value!.First(c => c.Name == "Kai Mendoza").Closed);
     }

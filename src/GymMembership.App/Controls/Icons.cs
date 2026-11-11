@@ -1,4 +1,3 @@
-using System.Windows.Input;
 using Microsoft.Maui.Controls.Shapes;
 
 namespace GymMembership.App.Controls;
@@ -32,7 +31,6 @@ public static class Icons
         ["package"] = "M 11 21.73 C 11.619 22.087 12.381 22.087 13 21.73 L 20 17.73 C 20.618 17.373 20.999 16.714 21 16 L 21 8 C 20.999 7.286 20.618 6.627 20 6.27 L 13 2.27 C 12.381 1.913 11.619 1.913 11 2.27 L 4 6.27 C 3.382 6.627 3.001 7.286 3 8 L 3 16 C 3.001 16.714 3.382 17.373 4 17.73 Z M 12 22 L 12 12 M 3.29 7 L 12 12 L 20.71 7 M 7.5 4.27 L 16.5 9.42",
         ["tag"] = "M 12.586 2.586 C 12.211 2.211 11.702 2 11.172 2 L 4 2 C 2.895 2 2 2.895 2 4 L 2 11.172 C 2 11.702 2.211 12.211 2.586 12.586 L 11.29 21.29 C 12.204 22.198 13.68 22.198 14.594 21.29 L 21.29 14.594 C 22.198 13.68 22.198 12.204 21.29 11.29 Z M 8.5 7.5 C 8.5 8.052 8.052 8.5 7.5 8.5 C 6.948 8.5 6.5 8.052 6.5 7.5 C 6.5 6.948 6.948 6.5 7.5 6.5 C 8.052 6.5 8.5 6.948 8.5 7.5 Z",
         ["undo"] = "M 9 14 L 4 9 L 9 4 M 4 9 L 14.5 9 C 17.538 9 20 11.462 20 14.5 C 20 17.538 17.538 20 14.5 20 L 11 20",
-        ["ban"] = "M 22 12 C 22 17.523 17.523 22 12 22 C 6.477 22 2 17.523 2 12 C 2 6.477 6.477 2 12 2 C 17.523 2 22 6.477 22 12 Z M 4.93 4.93 L 19.07 19.07",
         ["sliders-horizontal"] = "M 21 4 L 14 4 M 10 4 L 3 4 M 21 12 L 12 12 M 8 12 L 3 12 M 21 20 L 16 20 M 12 20 L 3 20 M 14 2 L 14 6 M 8 10 L 8 14 M 16 18 L 16 22",
         ["chart-line"] = "M 3 3 L 3 19 C 3 20.105 3.895 21 5 21 L 21 21 M 7 16 L 11 12 L 15 15 L 20 9",
         ["archive"] = "M 3 3 L 21 3 C 21.552 3 22 3.448 22 4 L 22 7 C 22 7.552 21.552 8 21 8 L 3 8 C 2.448 8 2 7.552 2 7 L 2 4 C 2 3.448 2.448 3 3 3 Z M 4 8 L 4 19 C 4 20.105 4.895 21 6 21 L 18 21 C 19.105 21 20 20.105 20 19 L 20 8 M 10 12 L 14 12",
@@ -54,12 +52,15 @@ public static class Icons
         ["eye-off"] = "M 2 12 C 4.5 7.333 7.833 5 12 5 C 16.167 5 19.5 7.333 22 12 C 19.5 16.667 16.167 19 12 19 C 7.833 19 4.5 16.667 2 12 Z M 9 12 C 9 10.343 10.343 9 12 9 C 13.657 9 15 10.343 15 12 C 15 13.657 13.657 15 12 15 C 10.343 15 9 13.657 9 12 Z M 3 3 L 21 21",
         ["chevron-right"] = "M 9 18 L 15 12 L 9 6",
         ["chevron-down"] = "M 6 9 L 12 15 L 18 9",
+        // megaphone (Lucide's, its handle redrawn as a curve): Announcements in Messages (F10)
+        ["megaphone"] = "M 3 11 L 21 6 L 21 18 L 3 14 Z M 11.6 16.8 C 11.2 18.4 9.6 19.4 8 19 C 6.4 18.6 5.4 17 5.8 15.4",
         ["landmark"] = "M10 18 L 10 11 M 11.119 2.205 C 11.675 1.932 12.325 1.932 12.881 2.205 L 20.721 6.051 C 20.93 6.153 21.041 6.387 20.988 6.613 C 20.935 6.84 20.733 7 20.5 7 L 3.5 7 C 3.267 7 3.065 6.84 3.013 6.613 C 2.96 6.386 3.071 6.153 3.28 6.051 Z M 14 18 L 14 11 M 18 18 L 18 11 M 3 22 L 21 22 M 6 18 L 6 11",
     };
 }
 
 /// <summary>
-/// One of the Icons: drawn black in both themes on a light rounded chip (lime when Selected), so it reads on any surface.
+/// One of the Icons, on a rounded chip: ink on a light chip (light theme), light on a dark chip (dark). Selected: yellow on black (light)
+/// or black on yellow (dark), the side menu's current page (D23). Bare: no chip, for icons sitting on the side menu itself.
 /// Size is the drawing, ChipSize the chip around it. It is decorative (the words beside it say the same) and lets touches through.
 /// </summary>
 public class IconView : ContentView
@@ -83,6 +84,11 @@ public class IconView : ContentView
         propertyChanged: (b, _, _) => ((IconView)b).Recolour());
     public bool Ghost { get => (bool)GetValue(GhostProperty); set => SetValue(GhostProperty, value); }
 
+    /// <summary>No chip, an ink line that follows the theme: the side menu's icons, which sit straight on the yellow or near-black strip.</summary>
+    public static readonly BindableProperty BareProperty = BindableProperty.Create(nameof(Bare), typeof(bool), typeof(IconView), false,
+        propertyChanged: (b, _, _) => ((IconView)b).Recolour());
+    public bool Bare { get => (bool)GetValue(BareProperty); set => SetValue(BareProperty, value); }
+
     readonly Microsoft.Maui.Controls.Shapes.Path _path = new()
     {
         Aspect = Stretch.Uniform, StrokeThickness = 2, StrokeLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round,
@@ -94,7 +100,6 @@ public class IconView : ContentView
     {
         InputTransparent = true;
         AutomationProperties.SetIsInAccessibleTree(this, false);
-        _path.Stroke = new SolidColorBrush(Pick("IconInk", Colors.Black));
         _chip.Content = _path;
         Content = _chip;
         Resize();
@@ -116,15 +121,13 @@ public class IconView : ContentView
 
     void Recolour()
     {
-        if (Ghost)
-        {
-            _chip.BackgroundColor = Colors.Transparent;
-            _path.SetAppTheme<Brush>(Shape.StrokeProperty, new SolidColorBrush(Pick("MutedLight", Colors.Gray)), new SolidColorBrush(Pick("MutedDark", Colors.Gray)));
-            return;
-        }
-        var lime = Pick("Lime", Colors.YellowGreen);
-        _chip.SetAppThemeColor(BackgroundColorProperty,
-            Selected ? lime : Pick("IconChipLight", Colors.White), Selected ? lime : Pick("IconChipDark", Colors.LightGray));
+        var (chipLight, chipDark, lineLight, lineDark) =
+            Ghost ? (Colors.Transparent, Colors.Transparent, Pick("MutedLight", Colors.Gray), Pick("MutedDark", Colors.Gray))
+            : Selected ? (Pick("InkLight", Colors.Black), Pick("Signal", Colors.Yellow), Pick("Signal", Colors.Yellow), Pick("Black", Colors.Black))
+            : Bare ? (Colors.Transparent, Colors.Transparent, Pick("InkLight", Colors.Black), Pick("InkDark", Colors.White))
+            : (Pick("IconChipLight", Colors.White), Pick("IconChipDark", Colors.DimGray), Pick("IconInk", Colors.Black), Pick("InkDark", Colors.White));
+        _chip.SetAppThemeColor(BackgroundColorProperty, chipLight, chipDark);
+        _path.SetAppTheme<Brush>(Shape.StrokeProperty, new SolidColorBrush(lineLight), new SolidColorBrush(lineDark));
     }
 }
 
@@ -155,44 +158,5 @@ public class EyeButton : Grid
         if (Entry is not null) Entry.IsPassword = !visible;
         _icon.Icon = visible ? "eye-off" : "eye";
         SemanticProperties.SetDescription(_button, visible ? "Hide password" : "Show password");
-    }
-}
-
-/// <summary>
-/// A choice button with an icon on its left. It stays a real Button (touch, keyboard, screen reader); IsSelected fills it lime (the icon
-/// stays black) and is announced as "selected".
-/// </summary>
-public class IconButton : ContentView
-{
-    public static readonly BindableProperty TextProperty = Prop<string>(nameof(Text), "");
-    public static readonly BindableProperty IconProperty = Prop<string>(nameof(Icon), "");
-    public static readonly BindableProperty CommandProperty = Prop<ICommand?>(nameof(Command), null);
-    public static readonly BindableProperty CommandParameterProperty = Prop<object?>(nameof(CommandParameter), null);
-    public static readonly BindableProperty IsSelectedProperty = Prop(nameof(IsSelected), false);
-
-    static BindableProperty Prop<T>(string name, T def) =>
-        BindableProperty.Create(name, typeof(T), typeof(IconButton), def, propertyChanged: (b, _, _) => ((IconButton)b).Refresh());
-
-    public string Text { get => (string)GetValue(TextProperty); set => SetValue(TextProperty, value); }
-    public string Icon { get => (string)GetValue(IconProperty); set => SetValue(IconProperty, value); }
-    public ICommand? Command { get => (ICommand?)GetValue(CommandProperty); set => SetValue(CommandProperty, value); }
-    public object? CommandParameter { get => GetValue(CommandParameterProperty); set => SetValue(CommandParameterProperty, value); }
-    public bool IsSelected { get => (bool)GetValue(IsSelectedProperty); set => SetValue(IsSelectedProperty, value); }
-
-    readonly Button _button = new() { Padding = new Thickness(44, 0, 16, 0) };   // room on the left for the icon
-    readonly IconView _icon = new() { Size = 16, ChipSize = 28, HorizontalOptions = LayoutOptions.Start, VerticalOptions = LayoutOptions.Center, Margin = new Thickness(8, 0, 0, 0) };
-
-    public IconButton()
-    {
-        Content = new Grid { Children = { _button, _icon } };
-        Refresh();
-    }
-
-    void Refresh()
-    {
-        _button.Text = Text; _button.Command = Command; _button.CommandParameter = CommandParameter;
-        _icon.Icon = Icon;
-        if (Application.Current!.Resources.TryGetValue(IsSelected ? "LimeSmallButton" : "SmallOutlineButton", out var style)) _button.Style = (Style)style;
-        SemanticProperties.SetDescription(_button, IsSelected ? $"{Text}, selected" : Text);
     }
 }

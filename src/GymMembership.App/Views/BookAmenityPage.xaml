@@ -8,156 +8,249 @@
             x:Class="GymMembership.App.Views.BookAmenityPage" x:DataType="vm:BookAmenityViewModel" Title="Book an amenity">
 
     <v:BasePage.Resources>
-        <!-- cell sizes; on Windows the page resizes these to fill the window (see FitGrid) -->
-        <x:Double x:Key="SlotWidth">46</x:Double>
-        <x:Double x:Key="SlotHeight">26</x:Double>
-        <x:Double x:Key="AmenityWidth">94</x:Double>
-        <x:Double x:Key="SlotFont">11</x:Double>
-        <!-- One half-hour cell. Colour only ever means status: plate colours on the outline and text, a solid fill only for your picks.
-             Always enabled so the disabled look never hides the status; tapping a cell that can't be picked does nothing. -->
-        <Style x:Key="SlotButton" TargetType="Button" x:DataType="vm:SlotCell">
-            <Setter Property="WidthRequest" Value="{DynamicResource SlotWidth}" />
-            <Setter Property="HeightRequest" Value="{DynamicResource SlotHeight}" />
-            <Setter Property="MinimumHeightRequest" Value="26" />
-            <Setter Property="Padding" Value="0" />
-            <Setter Property="FontSize" Value="{DynamicResource SlotFont}" />
-            <Setter Property="CornerRadius" Value="4" />
-            <Setter Property="BorderWidth" Value="1.5" />
-            <Setter Property="BackgroundColor" Value="Transparent" />
-            <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
-            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+        <!-- a start time or a length: a chip; the picked one yellow, as the Cashier's chips; ones that don't fit faded and not tappable -->
+        <Style x:Key="PickChip" TargetType="Button" BasedOn="{StaticResource FilterChip}" x:DataType="vm:PickChip">
+            <Setter Property="Margin" Value="0,0,6,6" />
             <Style.Triggers>
-                <DataTrigger TargetType="Button" Binding="{Binding State}" Value="open">
-                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+                <DataTrigger TargetType="Button" Binding="{Binding IsPicked}" Value="True">
+                    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
+                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" />
+                    <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
                 </DataTrigger>
-                <DataTrigger TargetType="Button" Binding="{Binding State}" Value="yours">
-                    <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource PlateGreenLight}, Dark={StaticResource PlateGreenDark}}" />
-                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource PlateGreenLight}, Dark={StaticResource PlateGreenDark}}" />
-                </DataTrigger>
-                <DataTrigger TargetType="Button" Binding="{Binding State}" Value="booked">
-                    <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource PlateBlueLight}, Dark={StaticResource PlateBlueDark}}" />
-                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource PlateBlueLight}, Dark={StaticResource PlateBlueDark}}" />
-                </DataTrigger>
-                <DataTrigger TargetType="Button" Binding="{Binding State}" Value="cooldown">
-                    <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource PlateYellowLight}, Dark={StaticResource PlateYellowDark}}" />
-                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource PlateYellowLight}, Dark={StaticResource PlateYellowDark}}" />
-                </DataTrigger>
-                <DataTrigger TargetType="Button" Binding="{Binding State}" Value="closed">
-                    <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource PlateRedLight}, Dark={StaticResource PlateRedDark}}" />
-                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource PlateRedLight}, Dark={StaticResource PlateRedDark}}" />
-                </DataTrigger>
-                <DataTrigger TargetType="Button" Binding="{Binding State}" Value="outside">
-                    <Setter Property="BorderColor" Value="Transparent" />
-                </DataTrigger>
-                <!-- can't be picked and has no plate colour: faded, so it never passes for a free cell -->
-                <DataTrigger TargetType="Button" Binding="{Binding State}" Value="past">
-                    <Setter Property="Opacity" Value="0.3" />
-                </DataTrigger>
-                <DataTrigger TargetType="Button" Binding="{Binding State}" Value="blocked">
-                    <Setter Property="Opacity" Value="0.3" />
-                </DataTrigger>
-                <DataTrigger TargetType="Button" Binding="{Binding Selected}" Value="True">
-                    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
-                    <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
-                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}" />
+                <DataTrigger TargetType="Button" Binding="{Binding CanPick}" Value="False">
+                    <Setter Property="Opacity" Value="0.38" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+        <!-- how to pay: an outlined option, the chosen one with the selection outline (ink in light, yellow in dark) -->
+        <Style x:Key="PayOption" TargetType="Border" BasedOn="{StaticResource Row}">
+            <Setter Property="Padding" Value="12,10" />
+            <Setter Property="StrokeShape" Value="RoundRectangle 12" />
+        </Style>
     </v:BasePage.Resources>
 
-    <ScrollView>
-        <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="10">
-            <Label Style="{StaticResource Caption}">
-                <Label.FormattedText>
-                    <FormattedString>
-                        <Span Text="Pick open half-hours, then book them together. Touching slots make one session of up to 2 hours, with 30 minutes of cooldown after it. " />
-                        <Span Text="Yours" TextColor="{AppThemeBinding Light={StaticResource PlateGreenLight}, Dark={StaticResource PlateGreenDark}}" FontFamily="BarlowMedium" />
-                        <Span Text=", " />
-                        <Span Text="booked" TextColor="{AppThemeBinding Light={StaticResource PlateBlueLight}, Dark={StaticResource PlateBlueDark}}" FontFamily="BarlowMedium" />
-                        <Span Text=", " />
-                        <Span Text="cooldown" TextColor="{AppThemeBinding Light={StaticResource PlateYellowLight}, Dark={StaticResource PlateYellowDark}}" FontFamily="BarlowMedium" />
-                        <Span Text=", " />
-                        <Span Text="closed" TextColor="{AppThemeBinding Light={StaticResource PlateRedLight}, Dark={StaticResource PlateRedDark}}" FontFamily="BarlowMedium" />
-                        <Span Text="." />
-                    </FormattedString>
-                </Label.FormattedText>
-            </Label>
-            <c:Banner Message="{Binding ErrorMessage}" />
-            <c:Banner Kind="notice" Message="{Binding Notice}" />
+    <Grid>
+        <!-- ===================== the page: amenity cards, then my bookings ===================== -->
+        <ScrollView x:Name="PageScroll">
+            <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="12" MaximumWidthRequest="{StaticResource PageWidth}">
+                <Label Text="Pick an amenity, then a day and time. A coach who runs it must be in the gym when you use it." Style="{StaticResource Muted}" />
+                <c:Banner Message="{Binding ErrorMessage}" />
+                <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <FlexLayout Wrap="Wrap" AlignItems="Center">
-                <Button Text="Previous day" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,6" Command="{Binding PreviousDayCommand}" />
-                <Label Text="{Binding DayText}" Style="{StaticResource Heading}" Margin="0,0,8,6" VerticalOptions="Center" />
-                <Button Text="Next day" Style="{StaticResource SmallOutlineButton}" Margin="0,0,16,6" Command="{Binding NextDayCommand}" />
-                <Button Text="{Binding BookText}" Style="{StaticResource SmallButton}" Margin="0,0,0,6" Command="{Binding BookCommand}" />
-            </FlexLayout>
+                <c:CardGrid Columns="{OnIdiom Phone=1, Default=3}" MinColumnWidth="250" BindableLayout.ItemsSource="{Binding Cards}">
+                    <BindableLayout.EmptyView><Label Text="No amenities are listed yet." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="svc:AmenityCard">
+                            <c:AmenityCardView ActionText="{Binding FollowText}" ActionClicked="OnFollow" BookClicked="OnOpen" />
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </c:CardGrid>
 
-            <!-- wide screens: grid on the left, your bookings beside it; phones: one column -->
-            <Grid ColumnDefinitions="{OnIdiom Phone='*', Default='*,300'}" RowDefinitions="{OnIdiom Phone='Auto,Auto', Default='Auto'}" ColumnSpacing="20" RowSpacing="16">
-                <!-- a row per hour; each amenity has its :00 and :30 cell side by side. Scrolls sideways when amenities don't fit. -->
-                <ScrollView x:Name="GridArea" Orientation="Horizontal" HorizontalOptions="Fill" SizeChanged="OnGridAreaSized">
-                    <VerticalStackLayout Spacing="3">
-                        <HorizontalStackLayout Spacing="10">
-                            <Label WidthRequest="40" />
-                            <HorizontalStackLayout BindableLayout.ItemsSource="{Binding Amenities}" Spacing="10">
-                                <BindableLayout.ItemTemplate>
-                                    <DataTemplate x:DataType="x:String">
-                                        <Label Text="{Binding .}" WidthRequest="{DynamicResource AmenityWidth}" FontFamily="BarlowMedium" FontSize="13" LineBreakMode="TailTruncation" HorizontalTextAlignment="Center" />
-                                    </DataTemplate>
-                                </BindableLayout.ItemTemplate>
-                            </HorizontalStackLayout>
-                        </HorizontalStackLayout>
-                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Rows}" Spacing="3">
+                <Border Style="{StaticResource Panel}" Padding="0,8,0,4">
+                    <VerticalStackLayout>
+                        <c:CardTitle Text="My bookings" Margin="16,4,16,8" />
+                        <Label Text="No bookings yet. Pick an amenity above to book one." Style="{StaticResource Muted}" Margin="16,0,16,12"
+                               IsVisible="{Binding HasBookings, Converter={StaticResource Not}}" />
+                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Bookings}">
                             <BindableLayout.ItemTemplate>
-                                <DataTemplate x:DataType="vm:SlotRow">
-                                    <HorizontalStackLayout Spacing="10">
-                                        <Label Text="{Binding Time}" WidthRequest="40" FontSize="12" VerticalOptions="Center"
-                                               TextColor="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
-                                        <HorizontalStackLayout BindableLayout.ItemsSource="{Binding Amenities}" Spacing="10">
-                                            <BindableLayout.ItemTemplate>
-                                                <DataTemplate x:DataType="vm:AmenityHour">
-                                                    <HorizontalStackLayout Spacing="2">
-                                                        <ContentView BindingContext="{Binding Early}">
-                                                            <Button x:DataType="vm:SlotCell" Style="{StaticResource SlotButton}" Text="{Binding Short}"
-                                                                    SemanticProperties.Description="{Binding Label}" Clicked="OnCell" />
-                                                        </ContentView>
-                                                        <ContentView BindingContext="{Binding Late}">
-                                                            <Button x:DataType="vm:SlotCell" Style="{StaticResource SlotButton}" Text="{Binding Short}"
-                                                                    SemanticProperties.Description="{Binding Label}" Clicked="OnCell" />
-                                                        </ContentView>
-                                                    </HorizontalStackLayout>
-                                                </DataTemplate>
-                                            </BindableLayout.ItemTemplate>
-                                        </HorizontalStackLayout>
-                                    </HorizontalStackLayout>
+                                <DataTemplate x:DataType="svc:BookingRow">
+                                    <VerticalStackLayout>
+                                        <BoxView Style="{StaticResource Hairline}" />
+                                        <!-- Windows: title and detail, then the status chip and the actions on one line; phones: title, chip, actions as two-line rows -->
+                                        <Grid ColumnDefinitions="{OnIdiom Phone='*', Default='*,Auto,Auto'}" RowDefinitions="{OnIdiom Phone='Auto,Auto,Auto', Default='Auto'}"
+                                              ColumnSpacing="12" RowSpacing="8" Padding="16,12">
+                                            <VerticalStackLayout Spacing="3" VerticalOptions="Center">
+                                                <Label Text="{Binding Title}" FontFamily="BarlowSemiBold" LineBreakMode="WordWrap" />
+                                                <Label Text="{Binding Detail}" Style="{StaticResource Caption}" LineBreakMode="WordWrap"
+                                                       IsVisible="{Binding Detail, Converter={StaticResource HasText}}" />
+                                            </VerticalStackLayout>
+                                                <Border Grid.Column="{OnIdiom Phone=0, Default=1}" Grid.Row="{OnIdiom Phone=1, Default=0}" HorizontalOptions="Start" VerticalOptions="Center"
+                                                        StrokeThickness="0" StrokeShape="RoundRectangle 999" Padding="10,5"
+                                                        BackgroundColor="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}">
+                                                    <Border.Triggers>
+                                                        <DataTrigger TargetType="Border" Binding="{Binding Tone}" Value="wait"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /></DataTrigger>
+                                                    </Border.Triggers>
+                                                    <Label Text="{Binding StatusText}" FontFamily="BarlowSemiBold" FontSize="12.5">
+                                                        <Label.Triggers>
+                                                            <DataTrigger TargetType="Label" Binding="{Binding Tone}" Value="wait"><Setter Property="TextColor" Value="{StaticResource Black}" /></DataTrigger>
+                                                            <DataTrigger TargetType="Label" Binding="{Binding Tone}" Value="good"><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource GoodLight}, Dark={StaticResource GoodDark}}" /></DataTrigger>
+                                                        </Label.Triggers>
+                                                    </Label>
+                                                </Border>
+                                            <HorizontalStackLayout Grid.Column="{OnIdiom Phone=0, Default=2}" Grid.Row="{OnIdiom Phone=2, Default=0}" Spacing="8" VerticalOptions="Center">
+                                                <Button Text="Send proof" Style="{StaticResource SmallButton}" IsVisible="{Binding CanSendProof}" Clicked="OnSendProof"
+                                                        SemanticProperties.Hint="Opens My membership, where you pay by QR and send the screenshot." />
+                                                <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanCancel}" Clicked="OnCancel" />
+                                                <Button Text="End now" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanEnd}" Clicked="OnEnd"
+                                                        SemanticProperties.Hint="Ends the session early. The amenity cools down for 30 minutes from now." />
+                                                <Button Text="I didn't use it" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanClaim}" Clicked="OnClaim" />
+                                            </HorizontalStackLayout>
+                                        </Grid>
+                                    </VerticalStackLayout>
                                 </DataTemplate>
                             </BindableLayout.ItemTemplate>
                         </VerticalStackLayout>
                     </VerticalStackLayout>
-                </ScrollView>
-
-                <VerticalStackLayout Grid.Column="{OnIdiom Phone=0, Default=1}" Grid.Row="{OnIdiom Phone=1, Default=0}" Spacing="8">
-                    <c:CardTitle Icon="calendar-days" Text="Your bookings" />
-                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Bookings}" Spacing="8">
-                        <BindableLayout.EmptyView><Label Text="No upcoming bookings. Pick open slots to book one." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
-                        <BindableLayout.ItemTemplate>
-                            <DataTemplate x:DataType="svc:BookingRow">
-                                <Border Style="{StaticResource Row}" Padding="12,10">
-                                    <VerticalStackLayout Spacing="6">
-                                        <Label Text="{Binding Amenity}" FontFamily="BarlowMedium" />
-                                        <Label Text="{Binding When}" Style="{StaticResource Caption}" />
-                                        <HorizontalStackLayout Spacing="8">
-                                            <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanCancel}" Clicked="OnCancel" />
-                                            <Button Text="End now" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanEnd}" Clicked="OnEnd"
-                                                    SemanticProperties.Hint="Ends the session early. The amenity cools down for 30 minutes from now." />
-                                        </HorizontalStackLayout>
-                                    </VerticalStackLayout>
-                                </Border>
-                            </DataTemplate>
-                        </BindableLayout.ItemTemplate>
+                </Border>
+                <!-- F13: "I didn't use it" asks for a short reason -->
+                <Border x:Name="ClaimPanel" Style="{StaticResource Panel}" IsVisible="{Binding IsClaiming}">
+                    <VerticalStackLayout Spacing="10">
+                        <c:CardTitle Text="{Binding Claiming.Amenity, StringFormat='You didn’t use the {0}?'}" />
+                        <Label Text="{Binding Claiming.Title}" Style="{StaticResource Caption}" />
+                        <Label Text="What happened? The front desk checks it against check-ins and the amenity's status." Style="{StaticResource Muted}" />
+                        <Border Style="{StaticResource Field}" MaximumWidthRequest="520" HorizontalOptions="Fill">
+                            <Editor Text="{Binding ClaimReason}" AutoSize="TextChanges" MinimumHeightRequest="64" MaxLength="1000"
+                                    Placeholder="For example: The pool was closed for cleaning when I arrived." SemanticProperties.Description="What happened" />
+                        </Border>
+                        <FlexLayout Wrap="Wrap">
+                            <Button Text="Send to front desk" Style="{StaticResource SmallButton}" Margin="0,0,8,0" Command="{Binding SendClaimCommand}" />
+                            <Button Text="Back" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepClaimCommand}" />
+                        </FlexLayout>
                     </VerticalStackLayout>
-                </VerticalStackLayout>
-            </Grid>
-        </VerticalStackLayout>
-    </ScrollView>
+                </Border>
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <!-- ===================== the booking sheet (F12): over the page on Windows, the whole screen on a phone ===================== -->
+        <Grid IsVisible="{Binding IsPicking}">
+            <!-- Windows: the page dims behind the sheet, and a tap on it closes the sheet -->
+            <BoxView Color="#9E000000" IsVisible="{OnIdiom Phone=False, Default=True}">
+                <BoxView.GestureRecognizers><TapGestureRecognizer Command="{Binding CloseCommand}" /></BoxView.GestureRecognizers>
+            </BoxView>
+            <Border Style="{StaticResource Panel}" Padding="0" StrokeShape="{OnIdiom Phone='RoundRectangle 0', Default='RoundRectangle 18'}" Margin="{OnIdiom Phone=0, Default=24}"
+                    WidthRequest="{OnIdiom Phone=-1, Default=940}" VerticalOptions="{OnIdiom Phone=Fill, Default=Center}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Center}">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <!-- head: the amenity, its price and who runs it; close -->
+                    <Grid ColumnDefinitions="*,Auto" Padding="18,14" ColumnSpacing="12">
+                        <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                            <Label Text="{Binding SheetTitle}" Style="{StaticResource Heading}" />
+                            <Label Text="{Binding SheetCaption}" Style="{StaticResource Caption}" LineBreakMode="WordWrap" />
+                        </VerticalStackLayout>
+                        <Button Grid.Column="1" Text="Close" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" Command="{Binding CloseCommand}" AutomationId="CloseBookingSheet" />
+                    </Grid>
+
+                    <ScrollView Grid.Row="1">
+                        <Grid ColumnDefinitions="{OnIdiom Phone='*', Default='1.15*,*'}" RowDefinitions="{OnIdiom Phone='Auto,Auto', Default='Auto'}">
+                            <!-- left: the month, as on the coach Dashboard -->
+                            <VerticalStackLayout Padding="{OnIdiom Phone='12,4,12,8', Default='18,8,18,16'}" Spacing="8">
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                    <Button Text="‹" Style="{StaticResource FilterChip}" WidthRequest="44" Padding="0" Command="{Binding PreviousMonthCommand}"
+                                            SemanticProperties.Description="Previous month" />
+                                    <Label Grid.Column="1" Text="{Binding MonthText}" FontFamily="BarlowSemiBold" FontSize="16" HorizontalOptions="Center" VerticalOptions="Center" />
+                                    <Button Grid.Column="2" Text="›" Style="{StaticResource FilterChip}" WidthRequest="44" Padding="0" Command="{Binding NextMonthCommand}"
+                                            SemanticProperties.Description="Next month" />
+                                </Grid>
+                                <Grid ColumnDefinitions="*,*,*,*,*,*,*">
+                                    <Label Text="{OnIdiom Phone=M, Default=Mon}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                                    <Label Grid.Column="1" Text="{OnIdiom Phone=T, Default=Tue}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                                    <Label Grid.Column="2" Text="{OnIdiom Phone=W, Default=Wed}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                                    <Label Grid.Column="3" Text="{OnIdiom Phone=T, Default=Thu}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                                    <Label Grid.Column="4" Text="{OnIdiom Phone=F, Default=Fri}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                                    <Label Grid.Column="5" Text="{OnIdiom Phone=S, Default=Sat}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                                    <Label Grid.Column="6" Text="{OnIdiom Phone=S, Default=Sun}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                                </Grid>
+                                <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Days}">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:BookDay">
+                                            <Border Style="{StaticResource Row}" FlexLayout.Basis="14.2857%" Padding="{OnIdiom Phone='4,4', Default=6}" HeightRequest="{OnIdiom Phone=46, Default=58}"
+                                                    Margin="2" StrokeShape="RoundRectangle 10" StrokeThickness="2" Stroke="Transparent">
+                                                <Border.Triggers>
+                                                    <DataTrigger TargetType="Border" Binding="{Binding Dimmed}" Value="True"><Setter Property="Opacity" Value="0.38" /></DataTrigger>
+                                                    <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
+                                                        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
+                                                    </DataTrigger>
+                                                </Border.Triggers>
+                                                <Grid RowDefinitions="Auto,*">
+                                                    <!-- today: the number on a small yellow block, as the Dashboard -->
+                                                    <Border StrokeThickness="0" StrokeShape="RoundRectangle 6" Padding="5,0" HorizontalOptions="Start" BackgroundColor="Transparent">
+                                                        <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding IsToday}" Value="True"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /></DataTrigger></Border.Triggers>
+                                                        <Label Text="{Binding Number}" FontFamily="BarlowSemiBold" FontSize="14">
+                                                            <Label.Triggers><DataTrigger TargetType="Label" Binding="{Binding IsToday}" Value="True"><Setter Property="TextColor" Value="{StaticResource Black}" /></DataTrigger></Label.Triggers>
+                                                        </Label>
+                                                    </Border>
+                                                    <!-- a dot: you already have a booking that day -->
+                                                    <Ellipse Grid.Row="1" WidthRequest="6" HeightRequest="6" Margin="6,0,0,4" HorizontalOptions="Start" VerticalOptions="End"
+                                                             Fill="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" IsVisible="{Binding HasBooking}" />
+                                                    <!-- a clear button over the whole day, so a day is reachable by keyboard and screen readers, not just a tap. Never disabled: Android paints
+                                                         a disabled button grey over the number; PickDay ignores days that can't be booked, and the description says so. -->
+                                                    <Button Grid.RowSpan="2" Margin="-6" BackgroundColor="Transparent" BorderWidth="0" Text=""
+                                                            SemanticProperties.Description="{Binding Description}" Clicked="OnDay" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </FlexLayout>
+                                <Label Text="You can book up to 14 days ahead." Style="{StaticResource Caption}" />
+                            </VerticalStackLayout>
+
+                            <!-- right: start time, how long, how to pay -->
+                            <VerticalStackLayout Grid.Column="{OnIdiom Phone=0, Default=1}" Grid.Row="{OnIdiom Phone=1, Default=0}"
+                                                 Padding="{OnIdiom Phone='12,0,12,12', Default='18,8,18,16'}" Spacing="12">
+                                <VerticalStackLayout Spacing="6">
+                                    <Label Text="{Binding DayText}" FontFamily="BarlowSemiBold" FontSize="16" />
+                                    <Label Text="Start time" Style="{StaticResource Caption}" />
+                                    <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Times}">
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:PickChip">
+                                                <Button Text="{Binding Text}" Style="{StaticResource PickChip}" WidthRequest="{OnIdiom Phone=84, Default=92}" Padding="0" Clicked="OnTime" />
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
+                                    </FlexLayout>
+                                    <Label Text="{Binding TimesNote}" Style="{StaticResource Caption}" IsVisible="{Binding TimesNote, Converter={StaticResource HasText}}" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="6" IsVisible="{Binding Time, Converter={StaticResource IsNotNull}}">
+                                    <Label Text="How long" Style="{StaticResource Caption}" />
+                                    <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Lengths}">
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:PickChip">
+                                                <Button Text="{Binding Text}" Style="{StaticResource PickChip}" Clicked="OnLength" />
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
+                                    </FlexLayout>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="6" IsVisible="{Binding PayFirst}">
+                                    <Label Text="Pay with" Style="{StaticResource Caption}" />
+                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                        <Border Style="{StaticResource PayOption}">
+                                            <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding PayQr}" Value="True"><Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /><Setter Property="StrokeThickness" Value="2" /></DataTrigger></Border.Triggers>
+                                            <Grid>
+                                                <VerticalStackLayout Spacing="2"><Label Text="GCash or QR" FontFamily="BarlowSemiBold" /><Label Text="Send proof now" Style="{StaticResource Caption}" /></VerticalStackLayout>
+                                                <!-- a clear button over the option, so it works by keyboard and screen reader too -->
+                                                <Button Margin="-12,-10" BackgroundColor="Transparent" BorderWidth="0" Text="" Command="{Binding PickMethodCommand}" CommandParameter="qr"
+                                                        SemanticProperties.Description="Pay by GCash or QR" />
+                                            </Grid>
+                                        </Border>
+                                        <Border Grid.Column="1" Style="{StaticResource PayOption}">
+                                            <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding PayCash}" Value="True"><Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /><Setter Property="StrokeThickness" Value="2" /></DataTrigger></Border.Triggers>
+                                            <Grid>
+                                                <VerticalStackLayout Spacing="2"><Label Text="At the desk" FontFamily="BarlowSemiBold" /><Label Text="Cash, before the hold ends" Style="{StaticResource Caption}" /></VerticalStackLayout>
+                                                <!-- a clear button over the option, so it works by keyboard and screen reader too -->
+                                                <Button Margin="-12,-10" BackgroundColor="Transparent" BorderWidth="0" Text="" Command="{Binding PickMethodCommand}" CommandParameter="cash"
+                                                        SemanticProperties.Description="Pay at the desk in cash" />
+                                            </Grid>
+                                        </Border>
+                                    </Grid>
+                                </VerticalStackLayout>
+                            </VerticalStackLayout>
+                        </Grid>
+                    </ScrollView>
+
+                    <!-- the total and the action: always in view (fixed at the bottom on a phone) -->
+                    <VerticalStackLayout Grid.Row="2" Padding="{OnIdiom Phone='12,8,12,12', Default='18,12,18,16'}" Spacing="10">
+                        <BoxView Style="{StaticResource Hairline}" Margin="{OnIdiom Phone='-12,0,-12,0', Default='-18,0,-18,0'}" />
+                        <Grid ColumnDefinitions="{OnIdiom Phone='*', Default='*,Auto'}" RowDefinitions="{OnIdiom Phone='Auto,Auto', Default='Auto'}" ColumnSpacing="16" RowSpacing="10">
+                            <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                                <Label Text="{Binding Summary}" FontFamily="BarlowSemiBold" FontSize="16" />
+                                <Label Text="{Binding SummaryDetail}" Style="{StaticResource Caption}" IsVisible="{Binding SummaryDetail, Converter={StaticResource HasText}}" />
+                                <Label Text="{Binding HoldText}" Style="{StaticResource Caption}" IsVisible="{Binding Time, Converter={StaticResource IsNotNull}}" />
+                            </VerticalStackLayout>
+                            <Button Grid.Column="{OnIdiom Phone=0, Default=1}" Grid.Row="{OnIdiom Phone=1, Default=0}" Text="{Binding BookText}"
+                                    Style="{OnIdiom Phone={StaticResource SignalButton}, Default={StaticResource SmallButton}}" VerticalOptions="Center"
+                                    IsEnabled="{Binding CanBook}" Command="{Binding BookCommand}" AutomationId="BookAndPay" />
+                        </Grid>
+                    </VerticalStackLayout>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
 </v:BasePage>

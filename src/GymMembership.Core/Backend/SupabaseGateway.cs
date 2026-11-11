@@ -64,6 +64,37 @@ public sealed class SupabaseGateway : ISupabaseGateway
     internal async Task<Client> ClientAsync() => await ReadyAsync();
     internal string? AccessToken => _client.Auth.CurrentSession?.AccessToken;
 
+    // One Realtime socket shared by chat and the live records (F4): the first user connects it, the last one to let go disconnects it,
+    // so leaving Messages never cuts the desk's live check-ins. Each holder calls RealtimeReleaseAsync once per acquire.
+    readonly SemaphoreSlim _realtime = new(1, 1);
+    int _realtimeHolders;
+
+    internal async Task<Supabase.Realtime.Interfaces.IRealtimeClient<Supabase.Realtime.RealtimeSocket, Supabase.Realtime.RealtimeChannel>> RealtimeAcquireAsync()
+    {
+        var rt = (await ReadyAsync()).Realtime;
+        await _realtime.WaitAsync();
+        try
+        {
+            if (AccessToken is { } token) rt.SetAuth(token);   // so the server filters changes by this user's row access
+            if (_realtimeHolders == 0) await rt.ConnectAsync();
+            _realtimeHolders++;
+            return rt;
+        }
+        finally { _realtime.Release(); }
+    }
+
+    internal async Task RealtimeReleaseAsync()
+    {
+        var rt = (await ReadyAsync()).Realtime;
+        await _realtime.WaitAsync();
+        try
+        {
+            if (_realtimeHolders == 0) return;
+            if (--_realtimeHolders == 0) try { rt.Disconnect(); } catch { /* already gone */ }
+        }
+        finally { _realtime.Release(); }
+    }
+
     async Task<Client> ReadyAsync()
     {
         if (_started) return _client;
@@ -184,6 +215,8 @@ public sealed class SupabaseGateway : ISupabaseGateway
     }
 
     // ---------- tables ----------
+    // ponytail: the library doesn't quote values inside a grouped filter (a && b), so a comma starts a new condition. Filters hold only
+    // ids and fixed words today; send typed text to a server function instead. QueryInjectionTests pins this.
     public async Task<IReadOnlyList<T>> ListAsync<T>(Expression<Func<T, bool>>? where = null) where T : BaseModel, new()
     {
         var c = await ReadyAsync();
@@ -213,12 +246,6 @@ public sealed class SupabaseGateway : ISupabaseGateway
         await c.From<T>().Where(where).Set(boxed, value).Update();
     }
 
-    public async Task DeleteAsync<T>(T row) where T : BaseModel, new()
-    {
-        var c = await ReadyAsync();
-        await c.From<T>().Delete(row);
-    }
-
     // ---------- server functions ----------
     public async Task<TResult> RpcAsync<TResult>(string function, Dictionary<string, object>? args = null)
     {
@@ -238,6 +265,17 @@ public sealed class SupabaseGateway : ISupabaseGateway
         // the signed-in admin's own token goes along, and the function checks it is an admin (supabase/functions/_shared/admin.ts)
         try { await c.Functions.Invoke(name, c.Auth.CurrentSession?.AccessToken, new Supabase.Functions.Client.InvokeFunctionOptions { Body = body }); }
         catch (Exception ex) when (ErrorCode(ex.Message) is { } code) { throw new Exception(code, ex); }   // {"error":"email_taken"} -> email_taken
+    }
+
+    public async Task<bool> EmailInUseAsync(string email)
+    {
+        var c = await ReadyAsync();
+        try
+        {
+            var json = await c.Functions.Invoke("check-email", null, new Supabase.Functions.Client.InvokeFunctionOptions { Body = new Dictionary<string, object> { ["email"] = email } });
+            return JsonDocument.Parse(json).RootElement.GetProperty("in_use").GetBoolean();
+        }
+        catch (Exception ex) when (ErrorCode(ex.Message) is { } code) { throw new Exception(code, ex); }
     }
 
     // the functions answer a refusal with {"error": "<code>"}; the app's messages are keyed by that code

@@ -15,5 +15,7 @@ public partial class CatalogAdminPage : BasePage
 	void OnDeletePackage(object? sender, EventArgs e) => Row<CatalogAdminViewModel>(sender, v => v.DeletePackageCommand);
 	void OnEditAmenity(object? sender, EventArgs e) => Row<CatalogAdminViewModel>(sender, v => v.EditAmenityCommand);
 	void OnToggleAmenity(object? sender, EventArgs e) => Row<CatalogAdminViewModel>(sender, v => v.ToggleAmenityCommand);
+	void OnDeleteAmenity(object? sender, EventArgs e) => Row<CatalogAdminViewModel>(sender, v => v.DeleteAmenityCommand);
+	void OnSetSessionPrice(object? sender, EventArgs e) => Row<CatalogAdminViewModel>(sender, v => v.StartSessionPriceCommand);
 	void OnUploadAmenityPhoto(object? sender, EventArgs e) => Row<CatalogAdminViewModel>(sender, v => v.UploadAmenityPhotoCommand);
 }

@@ -1,5 +1,5 @@
-// Phase 10 (D12): every member has one permanent QR code (a random code, nothing else). Only front desk and admins can look
-// it up; the lookup reads live status (inactive > active > pending > expired), never changes the code, and logs every scan.
+// Phase 10 (D12), changed by F6 (0049): the permanent code is still made at sign-up (kept for history), but what is scanned is a
+// one-use pass. Only front desk and admins can scan; a scan reads live status (inactive > active > pending > expired) and is logged.
 import { start } from './harness.mjs';
 import assert from 'node:assert/strict';
 
@@ -26,6 +26,8 @@ async function test(name, fn) {
 const admin = await user('admin'), desk = await user('employee'), coach = await user('coach'), member = await user(), other = await user();
 const codeOf = async uid => (await db.query('select code from member_codes where user_id=$1', [uid])).rows[0]?.code;
 const scan = async (who, code) => (await as(who, 'select scan_member($1) r', [code]))[0].r;
+const pass = async uid => (await as(uid, 'select code from issue_member_pass()'))[0].code;
+const fresh = async (who = desk) => scan(who, await pass(member));   // F6: every scan needs a new pass
 const pack = (await db.query(`insert into membership_packages(name,price,duration_days) values('P10 Monthly',1000,30) returning membership_package_id`)).rows[0].membership_package_id;
 
 try {
@@ -41,20 +43,20 @@ try {
     await assert.rejects(as(member, `update member_codes set code='x' where user_id=$1`, [member]), /permission denied|42501/);
   });
   await test('only front desk and admins can scan; members and coaches are refused', async () => {
-    const code = await codeOf(member);
+    const code = await pass(member);
     await assert.rejects(as(member, 'select scan_member($1)', [code]), /forbidden/);
     await assert.rejects(as(coach, 'select scan_member($1)', [code]), /forbidden/);
     assert.equal((await scan(desk, code)).result, 'expired');   // no membership yet
-    assert.equal((await scan(admin, code)).name, 'Qr Person');
+    assert.equal((await fresh(admin)).name, 'Qr Person');
   });
   const before = await codeOf(member);
   let pay;
   await test('a waiting membership payment scans as pending; once verified, active with its end date', async () => {
     pay = (await as(member, 'select * from extend_membership($1,null)', [pack]))[0];
-    const p = await scan(desk, before);
+    const p = await fresh();
     assert.equal(p.result, 'pending'); assert.equal(p.expires, null);
     await as(desk, 'select verify_payment($1,true)', [pay.payment_id]);
-    const a = await scan(desk, before);
+    const a = await fresh();
     assert.equal(a.result, 'active'); assert.equal(a.member, member);
     const end = (await db.query('select max(ends_at) e from membership_terms where member_id=$1', [member])).rows[0].e;
     assert.equal(new Date(a.expires).getTime(), new Date(end).getTime());
@@ -63,13 +65,15 @@ try {
     const next = (await as(member, 'select * from extend_membership($1,null)', [pack]))[0];
     await as(desk, 'select verify_payment($1,true)', [next.payment_id]);
     const end = (await db.query('select max(ends_at) e from membership_terms where member_id=$1', [member])).rows[0].e;
-    assert.equal(new Date((await scan(desk, before)).expires).getTime(), new Date(end).getTime());
+    assert.equal(new Date((await fresh()).expires).getTime(), new Date(end).getTime());
   });
-  await test('archived scans as inactive, restored as active again, with the same code throughout', async () => {
+  await test('archived scans as inactive, restored as active again; the permanent code is kept', async () => {
+    const taken = await pass(member);                                  // an archived account can't ask for a new pass
     await db.query('update profiles set is_active=false where id=$1', [member]);
-    assert.equal((await scan(desk, before)).result, 'inactive');
+    assert.equal((await scan(desk, taken)).result, 'inactive');
+    await assert.rejects(pass(member), /forbidden/);
     await db.query('update profiles set is_active=true where id=$1', [member]);
-    assert.equal((await scan(desk, before)).result, 'active');
+    assert.equal((await fresh()).result, 'active');
     assert.equal(await codeOf(member), before);
   });
   await test('an unknown or damaged code is not found and does not throw', async () => {

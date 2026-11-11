@@ -106,14 +106,18 @@ public sealed partial class DemoGateway
                 var p=All<Payment>().FirstOrDefault(p=>p.Id==term.PaymentId);
                 if(p?.Status!=Status.Verified||p.Amount<=0||term.CancelledAt is not null) throw Err("not_refundable");
                 if(All<RefundRequest>().Any(r=>r.TermId==term.Id)) throw Err("already_requested");
-                if(p.VerifiedAt is null || now>=p.VerifiedAt.Value.AddHours(24)) throw Err("refund_window_closed");
-                var r=Add(new RefundRequest {TermId=term.Id,PaymentId=p.Id,MemberId=Uid,Amount=p.Amount,Reason=reason,RequestedAt=now});
+                var category=a.GetValueOrDefault("p_category")?.ToString();
+                if(category is not null && RefundReasons.All.All(x=>x.Key!=category)) throw Err("bad_input");
+                if(now>=term.EndsAt) throw Err("refund_window_closed");
+                var activated=All<GymCheckIn>().Any(c=>c.MemberId==Uid&&c.CheckedInAt>=term.StartsAt&&c.CheckedInAt<term.EndsAt);   // 0043
+                if(activated && category is null) throw Err("refund_reason_required");
+                var r=Add(new RefundRequest {TermId=term.Id,PaymentId=p.Id,MemberId=Uid,Amount=p.Amount,Reason=reason,RequestedAt=now,WasActivated=activated,ReviewReason=activated?category:null});
                 Audit("refund.request","refund_requests",r.Id.ToString());result=Clone(r);return true;
             }
             case "decide_membership_refund":
             {
                 Require("payments:void");var reason=Reason();var approve=Convert.ToBoolean(a["p_approve"]);
-                var r=All<RefundRequest>().FirstOrDefault(r=>r.Id==I("p_request_id"))??throw Err("not_found");
+                var r=All<RefundRequest>().FirstOrDefault(r=>r.Id==I("p_request_id")&&r.Kind=="membership")??throw Err("not_found");   // 0052: booking claims are decide_amenity_refund
                 if(r.MemberId==Uid) throw Err("self_decision");
                 if(r.Status!="pending") throw Err("already_processed");
                 var p=All<Payment>().First(p=>p.Id==r.PaymentId);
@@ -128,12 +132,13 @@ public sealed partial class DemoGateway
             case "record_membership_refund_paid":
             {
                 Require("payments:void");var method=Text("p_method");var reference=Text("p_reference");
-                if(method is not (PayMethod.Cash or PayMethod.Gcash or PayMethod.BankTransfer) || method!=PayMethod.Cash&&string.IsNullOrWhiteSpace(reference)) throw Err("bad_input");
+                if(method is not (PayMethod.Cash or PayMethod.Gcash) || method!=PayMethod.Cash&&string.IsNullOrWhiteSpace(reference)) throw Err("bad_input");   // 0054: no bank transfer
                 var r=All<RefundRequest>().FirstOrDefault(r=>r.Id==I("p_request_id"))??throw Err("not_found");
                 if(r.MemberId==Uid) throw Err("self_decision");
                 if(r.Status!="approved") throw Err("already_processed");
                 var p=All<Payment>().First(p=>p.Id==r.PaymentId);
                 if(p.Status!=Status.Verified||r.Amount!=p.Amount) throw Err("not_refundable");
+                if(method==PayMethod.Cash) r.CashShiftId=OpenShiftOf(Uid);   // 0050: cash paid back comes out of the payer's drawer
                 r.Status="paid";r.PaidAt=now;r.PaidBy=Uid;r.RepaymentMethod=method;r.RepaymentReference=reference;
                 Notify(r.MemberId,"payment","Refund repaid",method);Audit("refund.paid","refund_requests",r.Id.ToString());return true;
             }
@@ -166,20 +171,32 @@ public sealed partial class DemoGateway
                 return true;
             }
             case "revenue_summary":
-            case "daily_cash_summary":
             {
-                var cash=fn=="daily_cash_summary";Require(cash?"reports:cash":"reports:revenue");
-                var from=DateTime.Parse(Text(cash?"p_day":"p_from")!).Date;
-                var to=cash?from:DateTime.Parse(Text("p_to")!).Date;
+                Require("reports:revenue");
+                var from=DateTime.Parse(Text("p_from")!).Date;var to=DateTime.Parse(Text("p_to")!).Date;
                 var amounts=All<Payment>().Where(p=>p.Status==Status.Verified && p.VerifiedAt is not null)
                     .Select(p=>(Day:p.VerifiedAt!.Value.AddHours(8).Date,Kind:p.Kind,Method:p.Method,Count:1L,Amount:p.Amount))
-                    .Concat(All<RefundRequest>().Where(r=>cash ? r.Status=="paid" : r.Status is "approved" or "paid").Select(r=>
-                        (Day:(cash ? r.PaidAt! : r.DecidedAt!).Value.AddHours(8).Date,Kind:All<Payment>().First(p=>p.Id==r.PaymentId).Kind,
-                         Method:cash ? r.RepaymentMethod! : All<Payment>().First(p=>p.Id==r.PaymentId).Method,Count:0L,Amount:-r.Amount)))
-                    .Where(r=>r.Day>=from&&r.Day<=to&&(!cash||r.Method==PayMethod.Cash)).ToList();
-                result=cash ? amounts.GroupBy(r=>r.Kind).OrderBy(g=>g.Key).Select(g=>new CashRow(g.Key,g.Sum(r=>r.Count),g.Sum(r=>r.Amount))).ToList()
-                    : (object)amounts.GroupBy(r=>(r.Day,r.Kind,r.Method)).OrderBy(g=>g.Key.Day).ThenBy(g=>g.Key.Kind).ThenBy(g=>g.Key.Method)
-                        .Select(g=>new RevenueRow(g.Key.Day,g.Key.Kind,g.Key.Method,g.Sum(r=>r.Count),g.Sum(r=>r.Amount))).ToList();
+                    .Concat(All<RefundRequest>().Where(r=>r.Status is "approved" or "paid").Select(r=>All<Payment>().First(p=>p.Id==r.PaymentId) is var p
+                        ? (Day:r.DecidedAt!.Value.AddHours(8).Date,Kind:p.Kind,Method:p.Method,Count:0L,Amount:-r.Amount) : default))
+                    .Where(r=>r.Day>=from&&r.Day<=to).ToList();
+                result=amounts.GroupBy(r=>(r.Day,r.Kind,r.Method)).OrderBy(g=>g.Key.Day).ThenBy(g=>g.Key.Kind).ThenBy(g=>g.Key.Method)
+                    .Select(g=>new RevenueRow(g.Key.Day,g.Key.Kind,g.Key.Method,g.Sum(r=>r.Count),g.Sum(r=>r.Amount))).ToList();
+                return true;
+            }
+            case "revenue_days":   // 0058
+            {
+                Require("reports:revenue");
+                var from=DateTime.Parse(Text("p_from")!).Date;var to=DateTime.Parse(Text("p_to")!).Date;
+                if(from>to||(to-from).TotalDays>366) throw Err("bad_input");
+                var pays=All<Payment>().Where(p=>p.Status==Status.Verified&&p.VerifiedAt is not null).ToList();
+                var refunds=All<RefundRequest>().Where(r=>r.Status is "approved" or "paid"&&r.DecidedAt is not null).ToList();
+                var visits=All<GymCheckIn>().ToList();
+                result=Enumerable.Range(0,(int)(to-from).TotalDays+1).Select(i=>from.AddDays(i)).Select(d=>
+                {
+                    var paid=pays.Where(p=>p.VerifiedAt!.Value.AddHours(8).Date==d).ToList();
+                    var back=refunds.Where(r=>r.DecidedAt!.Value.AddHours(8).Date==d).Sum(r=>r.Amount);
+                    return new RevenueDay(d,paid.Sum(p=>p.Amount)-back,paid.Count,back,visits.LongCount(c=>c.CheckedInAt.AddHours(8).Date==d));
+                }).ToList();
                 return true;
             }
             default:return false;

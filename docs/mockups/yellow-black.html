@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gym Center: yellow and black (Phase 9 mockup)</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  /* Phase 9 tokens (design: docs/superpowers/specs/2026-11-06-yellow-black-redesign-design.md). Contrast checked: see the Colours screen. */
+  .light { --y:#FFEC00; --ink:#111111; --on-ink:#FFFFFF; --page:#EEEEEE; --panel:#FFFFFF; --field:#F5F5F5; --line:#E4E4E4; --edge:#8A8A8A;
+    --muted:#5B5B5B; --rail:#FFEC00; --rail-ico:#111111; --rail-on:#111111; --rail-on-ico:#FFEC00; --hl:#111111; --hl-text:#FFFFFF; --hl-sub:#D9D9D9;
+    --attn:#111111; --attn-text:#FFFFFF; --attn-btn:#FFEC00; --attn-btn-text:#111111; --focus:#111111; --good:#1B7A3E; --bad:#C42B21; --tab:#FFFFFF; }
+  .dark { --y:#FFEC00; --ink:#F2F2F2; --on-ink:#111111; --page:#0E0E0E; --panel:#1A1A1A; --field:#242424; --line:#2A2A2A; --edge:#6A6A6A;
+    --muted:#A6A6A6; --rail:#161616; --rail-ico:#F2F2F2; --rail-on:#FFEC00; --rail-on-ico:#111111; --hl:#FFEC00; --hl-text:#111111; --hl-sub:#3A3500;
+    --attn:#FFEC00; --attn-text:#111111; --attn-btn:#111111; --attn-btn-text:#FFFFFF; --focus:#FFEC00; --good:#4CC585; --bad:#FF7B70; --tab:#161616; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; }
+  body { background:#2b2b2b; font:14px/1.45 Barlow, system-ui, sans-serif; }
+  ::selection { background:#FFEC00; color:#111; }
+  button, input { font:inherit; color:inherit; }
+  svg.i { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+
+  /* mockup toolbar, not part of the app */
+  .mock { position:sticky; top:0; z-index:5; display:flex; flex-wrap:wrap; gap:12px 20px; align-items:center; padding:10px 16px; background:#161616; color:#ddd; font-size:13px; }
+  .mock b { margin-right:6px; font-weight:600; }
+  .seg { display:inline-flex; border:1px solid #444; border-radius:8px; overflow:hidden; }
+  .seg button { border:0; background:none; padding:5px 11px; cursor:pointer; color:#bbb; border-right:1px solid #444; }
+  .seg button:last-child { border-right:0; }
+  .seg button[aria-pressed="true"] { background:#FFEC00; color:#111; }
+  .stage { padding:22px; display:flex; justify-content:center; }
+  .screen { display:none; } .screen.on { display:block; width:100%; max-width:1440px; }
+  .narrow .screen.on.win { max-width:900px; }
+
+  /* Windows frame */
+  .win .frame { display:grid; grid-template-columns:72px 1fr; min-height:760px; border-radius:10px; overflow:hidden; background:var(--page); color:var(--ink); }
+  .win .titlebar { grid-column:1 / -1; display:flex; align-items:center; gap:10px; height:34px; padding:0 12px; font-size:12px; background:var(--page); color:var(--muted); border-bottom:1px solid var(--line); }
+  .rail { background:var(--rail); display:flex; flex-direction:column; align-items:center; gap:6px; padding:10px 0; color:var(--rail-ico); }
+  .rail .mark { margin-bottom:8px; }
+  .rail .ico { width:40px; height:40px; border-radius:12px; display:grid; place-items:center; }
+  .rail .ico.on { background:var(--rail-on); color:var(--rail-on-ico); }
+  .rail .sep { width:26px; height:1.5px; background:currentColor; opacity:.25; margin:4px 0; }
+  .rail .end { margin-top:auto; }
+  .page { padding:18px 24px 28px; min-width:0; }
+  .head { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+  .head h1 { margin:0; font:600 26px/1.1 Barlow, sans-serif; letter-spacing:-.01em; }
+  .head .right { margin-left:auto; display:flex; align-items:center; gap:10px; color:var(--muted); }
+  .iconbtn { width:36px; height:36px; border-radius:10px; border:1px solid var(--line); background:var(--panel); display:grid; place-items:center; cursor:pointer; color:var(--ink); }
+
+  /* shared pieces */
+  .btn { height:36px; padding:0 18px; border-radius:999px; border:0; font-weight:600; cursor:pointer; white-space:nowrap; }
+  .btn.main { background:var(--y); color:#111; }
+  .light .btn.main { background:#111; color:#fff; }
+  .light .btn.main.y { background:var(--y); color:#111; }
+  .btn.ghost { background:transparent; color:var(--ink); border:1.5px solid var(--edge); }
+  .btn.small { height:30px; padding:0 12px; font-size:13px; }
+  :focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+  .attn { display:flex; align-items:center; gap:14px; background:var(--attn); color:var(--attn-text); border-radius:14px; padding:10px 10px 10px 18px; margin-bottom:14px; font-weight:500; }
+  .attn .btn { margin-left:auto; background:var(--attn-btn); color:var(--attn-btn-text); }
+  .strip { display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:20px; }
+  .fig { background:var(--panel); border-radius:14px; padding:14px 16px 16px; position:relative; }
+  .fig .l { color:var(--muted); font-weight:500; display:flex; align-items:center; gap:6px; }
+  .fig .n { font:700 38px/1.05 "Barlow Condensed", sans-serif; margin:8px 0 2px; font-variant-numeric:tabular-nums; }
+  .fig .s { color:var(--muted); font-size:13px; }
+  .fig.hl { background:var(--hl); color:var(--hl-text); } .fig.hl .l, .fig.hl .s { color:var(--hl-sub); }
+  .dark .fig.hl .l, .dark .fig.hl .s { color:#3A3500; }
+  .light .fig.hl .l, .light .fig.hl .s { color:#D9D9D9; }
+  h2 { font:600 19px/1.2 Barlow, sans-serif; margin:0 0 10px; }
+  .panel { background:var(--panel); border-radius:14px; overflow:hidden; }
+  .cols { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:22px; align-items:start; }
+  .cols.even { grid-template-columns:1fr 1fr; }
+  section + section { margin-top:22px; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  th { text-align:left; font-weight:500; font-size:12.5px; color:var(--muted); padding:10px 14px; border-bottom:1px solid var(--line); }
+  td { padding:10px 14px; border-top:1px solid var(--line); vertical-align:middle; }
+  tr:first-child td { border-top:0; }
+  td.num, th.num { text-align:right; }
+  .muted { color:var(--muted); }
+  .chip { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:500; padding:4px 11px 4px 9px; border-radius:999px; background:var(--field); }
+  .chip i { width:7px; height:7px; border-radius:50%; display:inline-block; }
+  .chip.good i { background:var(--good); } .chip.bad i { background:var(--bad); } .chip.wait i { background:var(--y); box-shadow:0 0 0 1.5px #111; }
+  .dark .chip.wait i { box-shadow:none; }
+  .tag { font-size:11.5px; font-weight:600; padding:4px 10px; border-radius:999px; background:var(--field); color:var(--ink); }
+  .tag.y { background:var(--y); color:#111; }
+  .rowline { display:flex; align-items:center; gap:12px; padding:10px 14px; }
+  .rowline + .rowline { border-top:1px solid var(--line); }
+  .rowline .r { margin-left:auto; display:flex; align-items:center; gap:10px; }
+  .segf { display:inline-flex; gap:4px; background:var(--field); border-radius:999px; padding:3px; }
+  .segf span { padding:4px 12px; border-radius:999px; font-size:13px; color:var(--muted); cursor:pointer; }
+  .segf span.on { background:var(--panel); color:var(--ink); font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  .dark .segf span.on { background:#333; }
+  .field { display:flex; flex-direction:column; gap:5px; }
+  .field label { font-size:12.5px; color:var(--muted); font-weight:500; }
+  .field .box { height:42px; border-radius:10px; border:1px solid var(--edge); background:var(--panel); display:flex; align-items:center; padding:0 12px; color:var(--muted); }
+  .lane { height:6px; border-radius:6px; background:var(--field); overflow:hidden; margin-top:12px; }
+  .lane b { display:block; height:100%; width:74%; background:var(--hl-text); }
+  .dark .lane b { background:#111; }
+  .light .fig.hl .lane { background:#333; } .light .fig.hl .lane b { background:var(--y); }
+  .dark .fig.hl .lane { background:rgba(0,0,0,.18); }
+  .note { color:var(--muted); font-size:13px; margin:10px 0 0; }
+
+  /* sign-in */
+  .auth { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); min-height:700px; }
+  .auth .brand { background:#111; color:#fff; padding:40px; display:flex; flex-direction:column; align-items:flex-start; }
+  .auth .badge { width:200px; height:200px; border-radius:50%; background:#fff url('../screenshotsforexample/882263184_1999024240766862_3446343023741622644_n.jpg') center/124% no-repeat; box-shadow:0 0 0 6px var(--y); }
+  .auth .brand h2 { font:700 34px/1.1 "Barlow Condensed", sans-serif; letter-spacing:.01em; margin:28px 0 10px; color:#fff; }
+  .auth .brand p { color:#cfcfcf; max-width:34ch; margin:0; }
+  .auth .brand .yline { width:56px; height:4px; background:var(--y); border-radius:4px; margin-top:auto; }
+  .auth .form { padding:56px 64px; display:flex; flex-direction:column; gap:16px; max-width:520px; }
+  .auth .form h1 { margin:0; font:600 30px/1.1 Barlow, sans-serif; }
+  .auth .link { font-weight:600; text-decoration:underline; text-underline-offset:3px; }
+  .narrow .auth { grid-template-columns:1fr; }
+  .narrow .cols { grid-template-columns:1fr; }
+  .narrow .auth .brand { flex-direction:row; align-items:center; gap:20px; padding:24px 28px; }
+  .narrow .auth .badge { width:96px; height:96px; flex:none; }
+  .narrow .auth .brand h2 { margin:0 0 4px; font-size:26px; }
+  .narrow .auth .brand .yline { display:none; }
+  .narrow .auth .form { padding:28px; max-width:none; }
+
+  /* calendar */
+  .cal { display:grid; grid-template-columns:repeat(7,1fr); }
+  .cal .d { min-height:74px; padding:6px 8px; border-top:1px solid var(--line); border-left:1px solid var(--line); font-size:12.5px; }
+  .cal .d:nth-child(7n+1) { border-left:0; }
+  .cal .h { font-size:12px; color:var(--muted); padding:8px; border-top:0; min-height:0; }
+  .cal .d .n { font-weight:600; }
+  .cal .d.out { color:var(--muted); }
+  .cal .d.sel { outline:2px solid var(--focus); outline-offset:-2px; }
+  .cal .d.today .n { background:var(--y); color:#111; border-radius:6px; padding:0 5px; }
+  .cal .ev { display:block; margin-top:4px; font-size:11.5px; padding:3px 8px; border-radius:6px; background:var(--field); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* Android frame */
+  .phone-wrap { display:flex; gap:40px; justify-content:center; flex-wrap:wrap; }
+  .phone { width:380px; height:800px; border-radius:36px; padding:12px; background:#000; }
+  .phone .scr { height:100%; border-radius:26px; overflow:hidden; display:flex; flex-direction:column; background:var(--page); color:var(--ink); }
+  .phone .status { height:28px; display:flex; align-items:center; justify-content:space-between; padding:0 18px; font-size:12px; font-weight:600; }
+  .phone .bar { display:flex; align-items:center; gap:10px; padding:6px 16px 12px; }
+  .phone .bar h1 { margin:0; font:600 22px/1.1 Barlow, sans-serif; }
+  .phone .bar .iconbtn { margin-left:auto; }
+  .phone .body { flex:1; overflow:hidden; padding:0 14px; display:flex; flex-direction:column; gap:14px; }
+  .phone .tabs { display:grid; grid-template-columns:repeat(5,1fr); background:var(--tab); border-top:1px solid var(--line); padding:8px 6px 14px; }
+  .phone .tabs div { display:flex; flex-direction:column; align-items:center; gap:3px; font-size:11px; color:var(--muted); }
+  .phone .tabs .pill { width:52px; height:30px; border-radius:999px; display:grid; place-items:center; color:var(--ink); }
+  .phone .tabs .on { color:var(--ink); font-weight:600; }
+  .phone .tabs .on .pill { background:var(--rail-on); color:var(--rail-on-ico); }
+  .light .phone .tabs .on .pill { background:#111; color:var(--y); }
+
+  /* colours sheet */
+  .sheet { background:#fff; color:#111; border-radius:10px; padding:28px 32px; }
+  .sheet h2 { font-size:22px; margin:0 0 14px; }
+  .sheet h3 { font:600 16px Barlow, sans-serif; margin:26px 0 10px; }
+  .marks { display:flex; gap:36px; align-items:flex-end; flex-wrap:wrap; }
+  .marks figure { margin:0; text-align:center; font-size:12px; color:#555; }
+  .sw { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:10px; }
+  .sw div { border-radius:10px; padding:10px 12px; font-size:12.5px; border:1px solid #ddd; }
+  .sheet table td, .sheet table th { border-color:#e5e5e5; color:#111; }
+  .sheet td.pass { color:#1B7A3E; font-weight:600; } .sheet td.fail { color:#C42B21; font-weight:600; }
+  .rules li { margin:4px 0; max-width:80ch; }
+  @media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="hf" viewBox="0 0 40 40"><circle cx="20" cy="20" r="20" fill="#111"/><circle cx="20" cy="20" r="15.5" fill="none" stroke="#FFEC00" stroke-width="2"/><text x="20" y="25.6" text-anchor="middle" font-family="Barlow Condensed, sans-serif" font-weight="700" font-size="15.5" fill="#FFEC00">HF</text></symbol>
+  <symbol id="dash" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
+  <symbol id="brief" viewBox="0 0 24 24"><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect width="20" height="14" x="2" y="6" rx="2"/></symbol>
+  <symbol id="users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="pkg" viewBox="0 0 24 24"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 8.7 5 8.7-5"/></symbol>
+  <symbol id="tag" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1"/></symbol>
+  <symbol id="chart" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></symbol>
+  <symbol id="undo" viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></symbol>
+  <symbol id="archive" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></symbol>
+  <symbol id="msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></symbol>
+  <symbol id="card" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M6 10h4M6 14h8"/></symbol>
+  <symbol id="waves" viewBox="0 0 24 24"><path d="M2 6c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2 2 2 4 2M2 12c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2 2 2 4 2M2 18c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2 2 2 4 2"/></symbol>
+  <symbol id="cal" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="dumb" viewBox="0 0 24 24"><path d="M6.5 6.5v11M17.5 6.5v11M3 9v6M21 9v6M6.5 12h11"/></symbol>
+  <symbol id="more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+  <symbol id="bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="refresh" viewBox="0 0 24 24"><path d="M21 3v5h-5"/><path d="M21 8A9 9 0 1 0 21 16"/></symbol>
+  <symbol id="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+</svg>
+
+<div class="mock" role="toolbar" aria-label="Mockup controls">
+  <span><b>Screen</b><span class="seg" data-ctl="screen">
+    <button aria-pressed="true" data-v="signin">Sign-in</button><button aria-pressed="false" data-v="overview">Overview (admin)</button>
+    <button aria-pressed="false" data-v="member">My membership (member)</button><button aria-pressed="false" data-v="coach">Dashboard (coach)</button>
+    <button aria-pressed="false" data-v="android">Android</button><button aria-pressed="false" data-v="colours">Logo and colours</button></span></span>
+  <span><b>Theme</b><span class="seg" data-ctl="theme"><button aria-pressed="true" data-v="light">Light</button><button aria-pressed="false" data-v="dark">Dark</button></span></span>
+  <span><b>Width</b><span class="seg" data-ctl="width"><button aria-pressed="false" data-v="narrow">About 900 px</button><button aria-pressed="true" data-v="wide">Maximised</button></span></span>
+</div>
+
+<div class="stage" id="stage">
+<div class="light" id="themed" style="width:100%;display:flex;justify-content:center">
+
+<!-- ============ SIGN-IN ============ -->
+<div class="screen win on" data-screen="signin">
+  <div class="frame" style="grid-template-columns:1fr">
+    <div class="titlebar"><svg width="16" height="16"><use href="#hf"/></svg>Gym Center</div>
+    <div class="auth">
+      <div class="brand">
+        <div class="badge" role="img" aria-label="Health and Fitness Gym Center badge"></div>
+        <div>
+          <h2>Health &amp; Fitness Gym Center</h2>
+          <p>Members, coaches and the front desk, in one place.</p>
+        </div>
+        <span class="yline"></span>
+      </div>
+      <div class="form">
+        <h1>Welcome back</h1>
+        <div class="field"><label>Email</label><div class="box" style="border-color:var(--focus);border-width:2px">&nbsp;</div></div>
+        <div class="field"><label>Password</label><div class="box" style="justify-content:space-between">&nbsp;<svg class="i"><use href="#eye"/></svg></div></div>
+        <div style="text-align:right"><span class="link">Forgot password?</span></div>
+        <button class="btn main y" style="height:44px">Sign in</button>
+        <div class="muted" style="text-align:center">New member? <span class="link" style="color:var(--ink)">Create an account</span></div>
+        <div class="panel" style="padding:14px 16px;margin-top:8px;border:1px solid var(--line)">
+          <div style="font-weight:600;margin-bottom:8px">Demo mode</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <button class="btn ghost small">Member</button><button class="btn ghost small">Coach</button><button class="btn ghost small">Front desk</button><button class="btn ghost small">System admin</button><button class="btn ghost small">Admin</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ OVERVIEW (admin) ============ -->
+<div class="screen win" data-screen="overview">
+  <div class="frame">
+    <div class="titlebar"><svg width="16" height="16"><use href="#hf"/></svg>Gym Center</div>
+    <nav class="rail" data-rail="admin"></nav>
+    <main class="page">
+      <div class="head"><h1>Overview</h1><div class="right">Friday, 06 Nov 2026 · checked 22:02<button class="iconbtn" aria-label="Refresh overview"><svg class="i"><use href="#refresh"/></svg></button></div></div>
+      <div class="attn">2 refund requests are waiting for review, 1 of them for a term the member has used.<button class="btn small">Review refunds</button></div>
+      <div class="strip">
+        <div class="fig hl"><div class="l">Revenue today</div><div class="n">₱ 4,850.00</div><div class="s">₱ 62,300.00 this month</div></div>
+        <div class="fig"><div class="l">Accounts</div><div class="n">214</div><div class="s">198 active, 16 inactive</div></div>
+        <div class="fig"><div class="l">Packages</div><div class="n">6</div><div class="s">active, plus 4 amenities</div></div>
+        <div class="fig"><div class="l">Discount codes</div><div class="n">3</div><div class="s">usable now, of 7</div></div>
+      </div>
+      <div class="cols even">
+        <section><h2>Check-ins</h2><div class="panel">
+          <div class="rowline"><span class="field" style="flex-direction:row"><span class="box" style="height:34px;color:var(--ink)">06/11/2026</span></span><b class="r">12 check-ins</b></div>
+          <div class="rowline"><span class="muted">06:04</span>Andrea Villanueva<span class="r"><span class="tag">QR</span></span></div>
+          <div class="rowline"><span class="muted">06:40</span>Jessa Ramos<span class="r"><span class="tag">By name</span></span></div>
+          <div class="rowline"><span class="muted">08:02</span>Kristine Lim<span class="r"><span class="tag y">Sent later</span></span></div>
+        </div></section>
+        <div>
+          <section><h2>Other pages</h2><div class="panel">
+            <div class="rowline"><svg class="i"><use href="#undo"/></svg><span><b>Cancellations &amp; refunds</b><br><span class="muted">2 to review, 1 waiting for repayment</span></span><span class="r muted"><svg class="i"><use href="#chev"/></svg></span></div>
+            <div class="rowline"><svg class="i"><use href="#archive"/></svg><span><b>Logs &amp; Archive</b><br><span class="muted">Full audit log and archived records</span></span><span class="r muted"><svg class="i"><use href="#chev"/></svg></span></div>
+          </div></section>
+          <section><h2>Recent activity</h2><div class="panel">
+            <div class="rowline"><b>Account deleted</b><span class="muted">by Bowie R.</span><span class="r muted">13:48</span></div>
+            <div class="rowline"><b>Refund approved</b><span class="muted">by Bowie R.</span><span class="r muted">11:20</span></div>
+          </div></section>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ============ MY MEMBERSHIP (member, Windows) ============ -->
+<div class="screen win" data-screen="member">
+  <div class="frame">
+    <div class="titlebar"><svg width="16" height="16"><use href="#hf"/></svg>Gym Center</div>
+    <nav class="rail" data-rail="member"></nav>
+    <main class="page">
+      <div class="head"><h1>My membership</h1><div class="right"><button class="btn main y">Choose a package / extend</button></div></div>
+      <div class="strip" style="grid-template-columns:1.6fr 1fr 1fr">
+        <div class="fig hl"><div class="l">Quarterly</div><div class="n">23 days left</div><div class="lane"><b></b></div></div>
+        <div class="fig"><div class="l">Current term ends</div><div class="n">29 Nov</div><div class="s">2026, 23:59 Manila</div></div>
+        <div class="fig"><div class="l">Payments waiting</div><div class="n">0</div><div class="s">to pay or to be verified</div></div>
+      </div>
+      <section><h2>Your paid terms</h2><div class="panel"><table>
+        <tr><th>Package</th><th>Dates (Manila)</th><th>Status</th><th class="num">Paid</th><th></th></tr>
+        <tr><td><b>Quarterly</b></td><td>30 Aug – 29 Nov 2026</td><td><span class="chip good"><i></i>Active</span></td><td class="num">₱ 3,600.00</td><td class="num"><button class="btn ghost small">Request refund</button></td></tr>
+        <tr><td><b>Monthly</b></td><td>30 Nov – 29 Dec 2026</td><td><span class="chip"><i style="background:var(--muted)"></i>Scheduled</span></td><td class="num">₱ 1,400.00</td><td class="num"><button class="btn ghost small">Request refund</button></td></tr>
+      </table></div>
+      <p class="note">Extensions start after your last paid term.</p></section>
+      <section><div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><h2 style="margin:0">Payments</h2><span class="segf" style="margin-left:auto"><span class="on">All</span><span>Verified</span><span>Pending</span><span>Expired or rejected</span></span></div>
+      <div class="panel"><table>
+        <tr><th>Item</th><th>Status</th><th>Payment code</th><th>Date</th><th class="num">Amount</th></tr>
+        <tr><td>Monthly renewal</td><td><span class="chip good"><i></i>Verified</span></td><td class="muted">GYM-7F3K2</td><td class="muted">02 Nov, 18:40</td><td class="num">₱ 1,400.00</td></tr>
+        <tr><td>Quarterly</td><td><span class="chip good"><i></i>Verified</span></td><td class="muted">GYM-QH8D4</td><td class="muted">30 Aug, 09:12</td><td class="num">₱ 3,600.00</td></tr>
+        <tr><td>Pool pass</td><td><span class="chip bad"><i></i>Rejected</span></td><td class="muted">GYM-P2M9X</td><td class="muted">21 Aug, 16:03</td><td class="num">₱ 500.00</td></tr>
+      </table></div></section>
+    </main>
+  </div>
+</div>
+
+<!-- ============ COACH DASHBOARD (Windows) ============ -->
+<div class="screen win" data-screen="coach">
+  <div class="frame">
+    <div class="titlebar"><svg width="16" height="16"><use href="#hf"/></svg>Gym Center</div>
+    <nav class="rail" data-rail="coach"></nav>
+    <main class="page">
+      <div class="head"><h1>Dashboard</h1><div class="right"><span class="segf"><span class="on">Month</span><span>Week</span></span></div></div>
+      <div class="strip">
+        <div class="fig hl"><div class="l">Next session</div><div class="n">17:00</div><div class="s">today with Alex Tan</div></div>
+        <div class="fig"><div class="l">Sessions this month</div><div class="n">18</div><div class="s">4 still to come</div></div>
+        <div class="fig"><div class="l">Attendance rate</div><div class="n">92%</div><div class="s">of sessions held</div></div>
+        <div class="fig"><div class="l">Trainees</div><div class="n">7</div><div class="s">with you now</div></div>
+      </div>
+      <div class="cols">
+        <section><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><h2 style="margin:0">November 2026</h2><span class="muted" style="margin-left:auto">Choose a day to post a shift or see its sessions</span></div>
+          <div class="panel"><div class="cal" id="month"></div></div></section>
+        <div>
+          <section><h2>Thursday 6 November</h2><div class="panel">
+            <div class="rowline"><span class="muted">09:00</span>Alex Tan<span class="r"><span class="chip good"><i></i>Present</span></span></div>
+            <div class="rowline"><span class="muted">11:00</span>Jessa Ramos<span class="r"><span class="chip wait"><i></i>Late</span></span></div>
+            <div class="rowline"><span class="muted">17:00</span>Alex Tan<span class="r"><button class="btn ghost small">Mark attendance</button></span></div>
+          </div></section>
+          <section><h2>Post a shift</h2><div class="panel" style="padding:14px 16px;display:grid;grid-template-columns:1fr 90px;gap:12px">
+            <div class="field"><label>Starts</label><div class="box" style="color:var(--ink)">18:00</div></div>
+            <div class="field"><label>Hours</label><div class="box" style="color:var(--ink)">3</div></div>
+            <div class="field" style="grid-column:1/-1"><label>Note (optional)</label><div class="box">&nbsp;</div></div>
+            <div style="grid-column:1/-1;display:flex;align-items:center;gap:12px"><button class="btn main">Post shift</button><span class="muted" style="font-size:13px">Ends at closing time if it would run past it.</span></div>
+          </div></section>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ============ ANDROID (member) ============ -->
+<div class="screen" data-screen="android">
+  <div class="phone-wrap">
+    <div class="phone"><div class="scr">
+      <div class="status"><span>9:41</span><span>●●● 82%</span></div>
+      <div class="bar"><svg width="30" height="30"><use href="#hf"/></svg><h1>My membership</h1><button class="iconbtn" aria-label="Notifications"><svg class="i"><use href="#bell"/></svg></button></div>
+      <div class="body">
+        <div class="fig hl"><div class="l">Quarterly</div><div class="n">23 days left</div><div class="s">Ends 29 Nov 2026, 23:59</div><div class="lane"><b></b></div></div>
+        <button class="btn main y" style="height:46px;width:100%">Choose a package / extend</button>
+        <section><h2 style="font-size:17px">Your paid terms</h2><div class="panel">
+          <div class="rowline"><span><b>Quarterly</b><br><span class="muted" style="font-size:13px">30 Aug – 29 Nov · ₱ 3,600.00</span></span><span class="r"><span class="chip good"><i></i>Active</span></span></div>
+          <div class="rowline"><span><b>Monthly</b><br><span class="muted" style="font-size:13px">30 Nov – 29 Dec · ₱ 1,400.00</span></span><span class="r"><span class="chip"><i style="background:var(--muted)"></i>Scheduled</span></span></div>
+        </div></section>
+        <section style="margin-top:0"><h2 style="font-size:17px">Payments</h2><div class="panel">
+          <div class="rowline"><span>Monthly renewal<br><span class="muted" style="font-size:13px">GYM-7F3K2 · 02 Nov</span></span><span class="r"><b>₱ 1,400</b></span></div>
+          <div class="rowline"><span>Pool pass<br><span class="muted" style="font-size:13px">GYM-P2M9X · Rejected</span></span><span class="r"><b>₱ 500</b></span></div>
+        </div></section>
+      </div>
+      <div class="tabs">
+        <div class="on"><span class="pill"><svg class="i"><use href="#card"/></svg></span>Membership</div>
+        <div><span class="pill"><svg class="i"><use href="#pkg"/></svg></span>Packages</div>
+        <div><span class="pill"><svg class="i"><use href="#cal"/></svg></span>Sessions</div>
+        <div><span class="pill"><svg class="i"><use href="#msg"/></svg></span>Messages</div>
+        <div><span class="pill"><svg class="i"><use href="#more"/></svg></span>More</div>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+<!-- ============ LOGO AND COLOURS ============ -->
+<div class="screen" data-screen="colours">
+  <div class="sheet">
+    <h2>Logo and colours</h2>
+    <h3>HF monogram (side menu, window and app icon, splash, phone header)</h3>
+    <div class="marks">
+      <figure><svg width="128" height="128"><use href="#hf"/></svg><figcaption>128 px (app icon, splash)</figcaption></figure>
+      <figure><svg width="48" height="48"><use href="#hf"/></svg><figcaption>48 px (side menu)</figcaption></figure>
+      <figure><svg width="32" height="32"><use href="#hf"/></svg><figcaption>32 px (phone header)</figcaption></figure>
+      <figure><svg width="16" height="16"><use href="#hf"/></svg><figcaption>16 px (title bar)</figcaption></figure>
+      <figure><div style="width:160px;height:160px;border-radius:50%;background:#fff url('../screenshotsforexample/882263184_1999024240766862_3446343023741622644_n.jpg') center/124% no-repeat;box-shadow:0 0 0 1px #ddd"></div><figcaption>Full badge (sign-in and registration)</figcaption></figure>
+    </div>
+    <h3>Colours</h3>
+    <div class="sw">
+      <div style="background:#FFEC00">Signal yellow<br>#FFEC00</div>
+      <div style="background:#111;color:#fff">Ink / black<br>#111111</div>
+      <div style="background:#EEEEEE">Light page<br>#EEEEEE</div>
+      <div style="background:#fff">Light panel<br>#FFFFFF</div>
+      <div style="background:#0E0E0E;color:#F2F2F2">Dark page<br>#0E0E0E</div>
+      <div style="background:#1A1A1A;color:#F2F2F2">Dark panel<br>#1A1A1A</div>
+      <div style="background:#fff;color:#5B5B5B">Muted (light)<br>#5B5B5B</div>
+      <div style="background:#1A1A1A;color:#A6A6A6">Muted (dark)<br>#A6A6A6</div>
+    </div>
+    <h3>Contrast (WCAG): body text 4.5:1, large text and controls 3:1</h3>
+    <table>
+      <tr><th>Pair</th><th class="num">Ratio</th><th>Result</th></tr>
+      <tr><td>Ink on light page / panel</td><td class="num">16.3 / 18.9</td><td class="pass">Pass</td></tr>
+      <tr><td>Muted on light page / panel / field</td><td class="num">5.9 / 6.8 / 6.2</td><td class="pass">Pass</td></tr>
+      <tr><td>Black on yellow (buttons, side menu, attention bar)</td><td class="num">15.5</td><td class="pass">Pass</td></tr>
+      <tr><td>Ink on dark page / panel</td><td class="num">17.2 / 15.6</td><td class="pass">Pass</td></tr>
+      <tr><td>Muted on dark page / panel / field</td><td class="num">7.9 / 7.2 / 6.4</td><td class="pass">Pass</td></tr>
+      <tr><td>Green / red status words, light on white</td><td class="num">5.4 / 5.7</td><td class="pass">Pass</td></tr>
+      <tr><td>Green / red status words, dark on panel</td><td class="num">8.0 / 6.9</td><td class="pass">Pass</td></tr>
+      <tr><td>Field border, light / dark</td><td class="num">3.5 / 3.2</td><td class="pass">Pass</td></tr>
+      <tr><td>Yellow on white or light page</td><td class="num">1.2 / 1.1</td><td class="fail">Never as text, thin line or focus ring</td></tr>
+    </table>
+    <h3>Rules</h3>
+    <ul class="rules">
+      <li>Yellow is the signal: the side menu (light), the selected item, the one highlighted figure, attention bars, the main action and "needs action" tags. Not page backgrounds or every card.</li>
+      <li>In light, yellow is only ever a filled surface with black on it; the focus ring and thin lines are black. In dark, the focus ring is yellow.</li>
+      <li>Text on yellow is always black. Text on black is white or yellow.</li>
+      <li>Green and red only for status words, always beside the word. Pending and late use a yellow dot (outlined in light).</li>
+      <li>Fonts unchanged: Barlow, Barlow Condensed for figures.</li>
+    </ul>
+  </div>
+</div>
+
+</div>
+</div>
+
+<script>
+  const rails = {
+    admin: [['dash',1],['brief'],'|',['users'],['pkg'],['tag'],['chart'],['undo'],['archive'],'end',['msg'],['gear']],
+    member: [['card',1],['pkg'],['waves'],['cal'],['dumb'],['clock'],'end',['msg'],['gear']],
+    coach: [['dash',1],['cal'],['clock'],['users'],['brief'],['waves'],'end',['msg'],['gear']],
+  };
+  document.querySelectorAll('[data-rail]').forEach(nav => {
+    let html = '<span class="mark"><svg width="44" height="44"><use href="#hf"/></svg></span>';
+    let end = false;
+    for (const it of rails[nav.dataset.rail]) {
+      if (it === '|') { html += '<span class="sep"></span>'; continue; }
+      if (it === 'end') { end = true; continue; }
+      html += `<span class="ico${it[1] ? ' on' : ''}${end ? ' end' : ''}"><svg class="i"><use href="#${it[0]}"/></svg></span>`;
+      end = false;
+    }
+    nav.innerHTML = html;
+  });
+  // coach calendar: November 2026 starts on a Sunday; Monday-first grid
+  const cal = document.getElementById("month");
+  let c = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => `<div class="d h">${d}</div>`).join('');
+  const ev = { 3: ['09:00 Alex T.'], 4: ['17:00 Jessa R.'], 6: ['09:00 Alex T.', '11:00 Jessa R.'], 10: ['Shift 18:00'], 12: ['09:00 Alex T.'], 18: ['17:00 Paolo S.'] };
+  for (let i = 0; i < 35; i++) {
+    const day = i - 5;
+    const out = day < 1 || day > 30;
+    const n = out ? (day < 1 ? 31 + day : day - 30) : day;
+    c += `<div class="d${out ? ' out' : ''}${day === 6 ? ' sel today' : ''}"><span class="n">${n}</span>${(!out && ev[day] ? ev[day] : []).map(e => `<span class="ev">${e}</span>`).join('')}</div>`;
+  }
+  cal.innerHTML = c;
+
+  const themed = document.getElementById('themed'), stage = document.getElementById('stage');
+  document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    const v = b.dataset.v, ctl = seg.dataset.ctl;
+    if (ctl === 'theme') themed.className = v;
+    if (ctl === 'width') stage.classList.toggle('narrow', v === 'narrow');
+    if (ctl === 'screen') document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.dataset.screen === v));
+  }));
+  // ?screen=member&theme=dark&width=narrow presses the same buttons
+  new URLSearchParams(location.search).forEach((v, k) => document.querySelector(`[data-ctl="${k}"] [data-v="${v}"]`)?.click());
+</script>
+</body>
+</html>

@@ -4,49 +4,62 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
 
-    <!-- Surfaces: sage canvas, lime highlight. Chalk = page, Card = panels, Surface = fields and rows inside cards.
-         Light: white cards (with a hairline edge, see Panel) on a deeper sage page, so cards and lime stand out. -->
-    <Color x:Key="ChalkLight">#ECEFE8</Color>
-    <Color x:Key="SurfaceLight">#F2F4F0</Color>
+    <!-- Phase 9 (D23): yellow and black, after the owner's reference dashboard; mockup docs/mockups/yellow-black.html.
+         Page = window background, Card = panels, Surface = fields and rows inside panels. ContrastTests checks every pair. -->
+    <Color x:Key="PageLight">#EEEEEE</Color>
+    <Color x:Key="SurfaceLight">#F5F5F5</Color>
     <Color x:Key="CardLight">#FFFFFF</Color>
-    <Color x:Key="InkLight">#000000</Color>
-    <Color x:Key="MutedLight">#5A6159</Color>
-    <Color x:Key="LineLight">#D4DAD0</Color>
+    <Color x:Key="InkLight">#111111</Color>
+    <Color x:Key="MutedLight">#5B5B5B</Color>
+    <Color x:Key="LineLight">#E4E4E4</Color>
+    <Color x:Key="TakenLight">#D6D6D6</Color>     <!-- a booked half-hour on Book an amenity: a solid block, so taken never looks free (dark: LineDark) -->
+    <Color x:Key="EdgeLight">#808080</Color>      <!-- a field's border: 3:1, so the box shows as a control -->
 
-    <Color x:Key="ChalkDark">#161816</Color>
-    <Color x:Key="SurfaceDark">#2C302B</Color>
-    <Color x:Key="CardDark">#212521</Color>
-    <Color x:Key="InkDark">#EEF1EC</Color>
-    <Color x:Key="MutedDark">#A3AAA1</Color>
-    <Color x:Key="LineDark">#3A3F39</Color>
+    <Color x:Key="PageDark">#0E0E0E</Color>
+    <Color x:Key="SurfaceDark">#242424</Color>
+    <Color x:Key="CardDark">#1A1A1A</Color>
+    <Color x:Key="InkDark">#F2F2F2</Color>
+    <Color x:Key="MutedDark">#A6A6A6</Color>
+    <Color x:Key="LineDark">#2A2A2A</Color>
+    <Color x:Key="EdgeDark">#757575</Color>
 
-    <!-- Behind the side menu and title bar. Light: the page colour, so no darker frame round the page (the rail has its own edge). -->
-    <Color x:Key="BackdropLight">#ECEFE8</Color>
-    <Color x:Key="BackdropDark">#0E100E</Color>
-    <!-- Windows side menu -->
-    <Color x:Key="RailLight">#FFFFFF</Color>
-    <Color x:Key="RailDark">#212521</Color>
+    <!-- Behind the side menu and title bar: the page colour, so the page has no frame round it -->
+    <Color x:Key="BackdropLight">#EEEEEE</Color>
+    <Color x:Key="BackdropDark">#0E0E0E</Color>
+    <!-- Windows side menu: yellow with black icons (light), near-black with light icons (dark) -->
+    <Color x:Key="RailLight">#FFEC00</Color>
+    <Color x:Key="RailDark">#161616</Color>
 
-    <!-- Highlight: the current item, selected choices, the dark-mode primary button. Not a status. -->
-    <Color x:Key="Lime">#E4F58A</Color>
+    <!-- The signal colour: the selected item, the highlight (dark), attention, the main action. Text on it is always black.
+         On white it is 1.2:1, so in light mode it is only ever a filled surface, never text, a thin line or a focus ring. -->
+    <Color x:Key="Signal">#FFEC00</Color>
+    <!-- Phone light mode carries the yellow too (owner 2026-11-12, docs/mockups/phone-light-yellow.html option B): main buttons and the
+         highlight card yellow as in dark mode, the chosen chip black with yellow words. Windows light keeps ink. Tablets count as Windows. -->
+    <OnIdiom x:Key="AccentLight" x:TypeArguments="Color" Phone="#FFEC00" Default="#111111" />
+    <OnIdiom x:Key="OnAccentLight" x:TypeArguments="Color" Phone="#111111" Default="#FFFFFF" />
+    <OnIdiom x:Key="ChosenLight" x:TypeArguments="Color" Phone="#111111" Default="#FFEC00" />
+    <OnIdiom x:Key="OnChosenLight" x:TypeArguments="Color" Phone="#FFEC00" Default="#111111" />
+    <OnIdiom x:Key="HeroActionLight" x:TypeArguments="Color" Phone="#111111" Default="#FFEC00" />
+    <OnIdiom x:Key="OnHeroActionLight" x:TypeArguments="Color" Phone="#FFFFFF" Default="#111111" />
+    <!-- the membership card's days-left lane: black pills on a darker yellow when the card is yellow (as in dark mode) -->
+    <OnIdiom x:Key="LaneDashLight" x:TypeArguments="Color" Phone="#111111" Default="#FFEC00" />
+    <OnIdiom x:Key="LaneTrackLight" x:TypeArguments="Color" Phone="#D6C700" Default="#3A3A3A" />
 
-    <!-- Icons are black in both themes and always sit on a light chip -->
-    <Color x:Key="IconInk">#000000</Color>
-    <Color x:Key="IconChipLight">#ECEFE8</Color>   <!-- sage, so a chip still shows on a white card -->
-    <Color x:Key="IconChipDark">#E7EBE4</Color>
+    <!-- Icons: black on a light chip (light), light on a dark chip (dark) -->
+    <Color x:Key="IconInk">#111111</Color>
+    <Color x:Key="IconChipLight">#EEEEEE</Color>
+    <Color x:Key="IconChipDark">#2A2A2A</Color>
 
-    <!-- Plate colours: colour only ever means status. Never decoration. -->
-    <Color x:Key="PlateBlueLight">#2F62D9</Color>    <!-- scheduled -->
-    <Color x:Key="PlateBlueDark">#7AA2FF</Color>
-    <Color x:Key="PlateYellowLight">#A47600</Color>  <!-- pending; was #B58200 (2.96:1 on ChalkLight), now 3.52:1 -->
-    <Color x:Key="PlateYellowDark">#F2C230</Color>
-    <Color x:Key="PlateGreenLight">#1B7F45</Color>   <!-- verified, active -->
-    <Color x:Key="PlateGreenDark">#4CC585</Color>
-    <Color x:Key="PlateRedLight">#C8372D</Color>     <!-- rejected, expired, errors -->
-    <Color x:Key="PlateRedDark">#FF7B70</Color>
+    <!-- Status colours: only ever beside their word, never decoration (item 15, D23) -->
+    <Color x:Key="ScheduledLight">#5B5B5B</Color>   <!-- scheduled, booked: neutral -->
+    <Color x:Key="ScheduledDark">#A6A6A6</Color>
+    <Color x:Key="PendingLight">#7A5C00</Color>     <!-- pending, late, cooldown as words; the pending dot is yellow with an ink ring -->
+    <Color x:Key="PendingDark">#FFEC00</Color>
+    <Color x:Key="GoodLight">#1B7A3E</Color>        <!-- verified, active, present -->
+    <Color x:Key="GoodDark">#4CC585</Color>
+    <Color x:Key="BadLight">#C42B21</Color>         <!-- rejected, expired, errors -->
+    <Color x:Key="BadDark">#FF7B70</Color>
 
-    <!-- Theme-aware brushes/colours used by styles and pages -->
-    <Color x:Key="Chalk"       >#ECEFE8</Color>
     <Color x:Key="White">#FFFFFF</Color>
-    <Color x:Key="Black">#000000</Color>
+    <Color x:Key="Black">#111111</Color>
 </ResourceDictionary>

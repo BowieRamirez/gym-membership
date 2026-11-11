@@ -1,6 +1,6 @@
 // Phase 4 (D11): receipt-level revenue lines for the PDF. They must add up to revenue_summary for the same range:
 // verified payments on their Manila verification day, minus approved/paid refunds on their Manila approval day, voids excluded.
-import { start } from './harness.mjs';
+import { start, openCashShifts } from './harness.mjs';
 import assert from 'node:assert/strict';
 
 const { server, client: db } = await start();
@@ -24,6 +24,7 @@ async function test(name, fn) {
   catch (e) { failed++; console.error('  FAIL', name, e.message); }
 }
 const admin = await user('admin'), desk = await user('employee');
+await openCashShifts(db);
 const monthly = (await db.query(`insert into membership_packages(name,price,duration_days)
   values('Phase Four Monthly',1000,30) returning membership_package_id`)).rows[0].membership_package_id;
 async function paid(name) {
@@ -39,7 +40,7 @@ const money = rows => rows.reduce((s, r) => s + Number(r.amount ?? r.total), 0);
 const ana = await paid('Ana Reyes'), ben = await paid('Ben Cruz'), voided = await paid('Void Person'), refunded = await paid('Refund Person');
 await as(admin, `select void_payment($1,'Wrong payment')`, [voided.pay.payment_id]);
 const term = (await as(refunded.uid, 'select * from membership_terms'))[0];
-const request = (await as(refunded.uid, 'select * from request_membership_refund($1,$2)', [term.term_id, 'Changed my plans']))[0];
+const request = (await as(refunded.uid, 'select * from request_membership_refund($1,$2,$3)', [term.term_id, 'Changed my plans', 'change_of_mind']))[0];
 await as(admin, 'select decide_membership_refund($1,true,$2)', [request.refund_request_id, 'Approved']);
 await as(desk, `select record_counter_payment('walk_in','cash',null,null,'Juan Walk',null,null)`);
 

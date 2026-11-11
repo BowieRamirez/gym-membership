@@ -9,8 +9,11 @@
 
     <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='16,12,16,0'}" MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
-            <Label Text="What is open right now." Style="{StaticResource Muted}" />
-            <Label Text="Tap Notify me on an amenity to get an alert when it becomes available or unavailable." Style="{StaticResource Muted}" IsVisible="{Binding CanFollow}" />
+            <!-- Windows only: on a phone the Notify me button says it, and the cards come first -->
+            <ContentView IsVisible="{OnIdiom Phone=False, Default=True}">
+                <Label Text="Tap Notify me on an amenity to get an alert when it becomes available or unavailable." Style="{StaticResource Muted}" IsVisible="{Binding CanFollow}" />
+            </ContentView>
+            <Label Text="No coach is in the gym right now. Amenities can only be used while a coach is here." FontFamily="BarlowSemiBold" IsVisible="{Binding NoCoachInGym}" AutomationId="NoCoachNotice" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
         </VerticalStackLayout>
@@ -20,7 +23,7 @@
             <BindableLayout.ItemTemplate>
                 <DataTemplate x:DataType="svc:AmenityCard">
                     <!-- the button text is empty for coaches, which hides the button -->
-                    <c:AmenityCardView ActionText="{Binding FollowText}" ActionClicked="OnFollow" BuyClicked="OnBuy" />
+                    <c:AmenityCardView ActionText="{Binding FollowText}" ActionClicked="OnFollow" RunsToggled="OnRuns" />
                 </DataTemplate>
             </BindableLayout.ItemTemplate>
         </c:CardGrid></ScrollView>

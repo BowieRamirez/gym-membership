@@ -28,6 +28,10 @@ async function user(meta) {
   return (await db.query(`insert into auth.users(email,raw_user_meta_data) values($1,$2) returning id`,
     [`p11-${++serial}@test.io`, JSON.stringify(meta)])).rows[0].id;
 }
+async function staff(role) {
+  return (await db.query('insert into auth.users(email,raw_user_meta_data,raw_app_meta_data) values($1,$2,$3) returning id',
+    ['p11-' + (++serial) + '@test.io', JSON.stringify({ full_name: 'Staff Person' }), JSON.stringify({ role })])).rows[0].id;
+}
 const nameOf = async uid => (await db.query('select first_name, last_name, full_name from profiles where id=$1', [uid])).rows[0];
 const now = () => Math.floor(Date.now() / 1000);
 async function test(name, fn) {
@@ -48,22 +52,67 @@ try {
     const id = await user({ full_name: 'Pedro Penduko' });
     assert.deepEqual(await nameOf(id), { first_name: 'Pedro', last_name: 'Penduko', full_name: 'Pedro Penduko' });
   });
-  await test('a person renames themselves with set_my_name and full_name follows', async () => {
+  await test('nobody can change their own name: no function, and the columns are locked for signed-in users', async () => {
     const id = await user({ full_name: 'Ana Reyes' });
-    await as(id, 'select set_my_name($1,$2)', ['Ana Maria', 'Reyes-Cruz']);
-    assert.deepEqual(await nameOf(id), { first_name: 'Ana Maria', last_name: 'Reyes-Cruz', full_name: 'Ana Maria Reyes-Cruz' });
+    await assert.rejects(as(id, 'select set_my_name($1,$2)', ['Ana Maria', 'Reyes']), /does not exist/);
+    for (const column of ['first_name', 'last_name', 'full_name'])
+      await assert.rejects(as(id, `update profiles set ${column}='Changed' where id=$1`, [id]), /permission denied/);
+    assert.deepEqual(await nameOf(id), { first_name: 'Ana', last_name: 'Reyes', full_name: 'Ana Reyes' });
   });
-  await test('names with digits or symbols, or blank parts, are refused', async () => {
-    const id = await user({ full_name: 'Bad Input' });
-    await assert.rejects(as(id, 'select set_my_name($1,$2)', ['Ana1', 'Reyes']));
-    await assert.rejects(as(id, 'select set_my_name($1,$2)', ['Ana', '']));
-    await assert.rejects(as(id, 'select set_my_name($1,$2)', [' ', 'Reyes']));
+  await test('staff are locked too, including a system admin editing the table directly', async () => {
+    for (const role of ['employee', 'subadmin', 'admin']) {
+      const id = await staff(role);
+      await assert.rejects(as(id, "update profiles set full_name='Changed Name' where id=$1", [id]), /permission denied/);
+    }
+  });
+  await test('a system admin corrects a name with a reason, full_name follows, and the audit log keeps old, new, reason and who', async () => {
+    const admin = await staff('admin'), id = await user({ full_name: 'Maria Sntos' });
+    await as(admin, 'select correct_name($1,$2,$3,$4)', [id, ' Maria ', ' Santos ', ' Typo at sign-up ']);
+    assert.deepEqual(await nameOf(id), { first_name: 'Maria', last_name: 'Santos', full_name: 'Maria Santos' });
+    const log = (await db.query("select actor_id, details from audit_log where action='user.correct_name' and entity='profiles' and entity_id=$1", [id])).rows;
+    assert.equal(log.length, 1);
+    assert.equal(log[0].actor_id, admin);
+    assert.deepEqual(log[0].details, { from: 'Maria Sntos', to: 'Maria Santos', reason: 'Typo at sign-up' });
+  });
+  await test('a system admin can correct their own name', async () => {
+    const admin = await staff('admin');
+    await as(admin, 'select correct_name($1,$2,$3,$4)', [admin, 'Dana', 'Reyes', 'Typo']);
+    assert.equal((await nameOf(admin)).full_name, 'Dana Reyes');
+  });
+  await test('only a system admin may correct: admin, front desk, coach and member are refused, and nothing changes', async () => {
+    const id = await user({ full_name: 'Target Person' });
+    for (const role of ['subadmin', 'employee', 'coach', 'member']) {
+      const actor = await staff(role);
+      await assert.rejects(as(actor, 'select correct_name($1,$2,$3,$4)', [id, 'New', 'Name', 'Reason']), /forbidden|permission/);
+    }
+    await assert.rejects(as(id, 'select correct_name($1,$2,$3,$4)', [id, 'New', 'Name', 'Reason']), /forbidden|permission/);
+    assert.equal((await nameOf(id)).full_name, 'Target Person');
+  });
+  await test('anonymous cannot call it', async () => {
+    await db.query('begin'); await db.query('set local role anon');
+    await assert.rejects(db.query("select correct_name(gen_random_uuid(),'A','B','C')"), /permission denied/);
+    await db.query('rollback');
+  });
+  await test('a correction needs valid names and a reason of 1 to 500 characters', async () => {
+    const admin = await staff('admin'), id = await user({ full_name: 'Bad Input' });
+    for (const [first, last, reason, why] of [['Ana1', 'Reyes', 'Typo', /23514/], ['Ana', '', 'Typo', /bad_name/], [' ', 'Reyes', 'Typo', /bad_name/],
+        [null, 'Reyes', 'Typo', /bad_name/], ['Ana', 'Reyes', '   ', /bad_correction_reason/], ['Ana', 'Reyes', null, /bad_correction_reason/], ['Ana', 'Reyes', 'x'.repeat(501), /bad_correction_reason/]])
+      await assert.rejects(as(admin, 'select correct_name($1,$2,$3,$4)', [id, first, last, reason]), e => why.test(e.message) || why.test(e.code));
     assert.equal((await nameOf(id)).full_name, 'Bad Input');
   });
-  await test('changing only full_name (an older app) splits it again', async () => {
-    const id = await user({ full_name: 'Old Name' });
-    await as(id, `update profiles set full_name='Rosa Maria Lopez' where id=$1`, [id]);
-    assert.deepEqual(await nameOf(id), { first_name: 'Rosa', last_name: 'Maria Lopez', full_name: 'Rosa Maria Lopez' });
+  await test('hostile text in a correction is refused or stored as plain text', async () => {
+    const admin = await staff('admin'), id = await user({ full_name: 'Plain Text' });
+    const attack = "x'; drop table profiles; --";
+    await assert.rejects(as(admin, 'select correct_name($1,$2,$3,$4)', [id, attack, 'Reyes', 'Typo']));
+    await as(admin, 'select correct_name($1,$2,$3,$4)', [id, 'Plain', 'Texts', attack]);
+    const log = (await db.query("select details->>'reason' as reason from audit_log where action='user.correct_name' and entity_id=$1", [id])).rows[0];
+    assert.equal(log.reason, attack);
+  });
+  await test('an unknown or archived account cannot be corrected', async () => {
+    const admin = await staff('admin'), gone = await user({ full_name: 'Gone Person' });
+    await assert.rejects(as(admin, "select correct_name(gen_random_uuid(),'A','B','C')"), /not_found/);
+    await db.query('update profiles set is_active=false where id=$1', [gone]);
+    await assert.rejects(as(admin, 'select correct_name($1,$2,$3,$4)', [gone, 'New', 'Name', 'Reason']), /record_archived/);
   });
   await test('a session opened with an emailed code confirms the sign-in email', async () => {
     const id = await user({ full_name: 'Code Person' });

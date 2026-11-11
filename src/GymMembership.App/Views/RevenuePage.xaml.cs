@@ -8,5 +8,8 @@ public partial class RevenuePage : BasePage
 	{
 		InitializeComponent();
 		BindingContext = vm;
+#if WINDOWS
+		Dashboard.Content = BuildDashboard(vm);
+#endif
 	}
 }

@@ -39,7 +39,7 @@ public class DeskHomeTests
     {
         var (gw, _, svc) = await As("employee@demo.io");
         var before = (await svc.SummaryAsync()).Value!.CheckInsToday;
-        Assert.True((await new AttendanceService(gw).CheckInAsync("u-alex")).Ok);
+        Assert.True((await new AttendanceService(gw).CheckInAsync("u-alex", "manual", pin: "1234")).Ok);   // the demo's Alex has PIN 1234 (F8)
         Assert.Equal(before + 1, (await svc.SummaryAsync()).Value!.CheckInsToday);
     }
 
@@ -84,12 +84,22 @@ public class DeskHomeTests
         Assert.Equal("3", verify.Count); Assert.Equal("3 payments are waiting", verify.Detail); Assert.True(verify.NeedsAttention);
 
         var amenities = tiles.Single(t => t.Route == "amenities");
-        Assert.Equal("2 of 4", amenities.Count); Assert.Equal("1 in use, 1 unavailable", amenities.Detail); Assert.True(amenities.NeedsAttention);
+        Assert.Equal("2 of 4", amenities.Count); Assert.Equal("1 in use, 1 unavailable", amenities.Detail);
+        Assert.False(amenities.NeedsAttention);                              // 9.7: news, said in words, not a desk task
 
         var messages = tiles.Single(t => t.Route == "messages");
-        Assert.Equal("4", messages.Count); Assert.Equal("2 chats nobody has taken", messages.Detail); Assert.True(messages.NeedsAttention);
+        Assert.Equal("4", messages.Count); Assert.Equal("2 chats nobody has taken", messages.Detail);
+        Assert.Single(tiles, t => t.NeedsAttention);                         // 9.7: one highlighted figure, payments first
+        Assert.False(messages.NeedsAttention);
 
         Assert.False(tiles.Single(t => t.Route == "checkin").NeedsAttention);   // a count of people is not a task
+    }
+
+    [Fact]
+    public void With_no_payments_waiting_unanswered_chats_get_the_highlight()
+    {
+        var tiles = HomeViewModel.Build(new DeskSummary(12, 0, 2, 1, 1, 4, 2));
+        Assert.Equal("messages", tiles.Single(t => t.NeedsAttention).Route);
     }
 
     [Fact]

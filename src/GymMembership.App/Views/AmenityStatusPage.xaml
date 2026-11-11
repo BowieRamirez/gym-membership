@@ -5,18 +5,18 @@
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
-            x:Class="GymMembership.App.Views.AmenityStatusPage" x:DataType="vm:AmenityStatusViewModel" Title="Amenity Status">
+            x:Class="GymMembership.App.Views.AmenityStatusPage" x:DataType="vm:AmenityStatusViewModel" Title="Amenity status">
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="12">
-            <Label Text="Mark an amenity available, in use or unavailable. Members who saved an amenity are alerted when it becomes available or unavailable, and you see who." Style="{StaticResource Muted}" />
+            <Label Text="Members who follow an amenity are alerted when it becomes available or unavailable." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
             <!-- the editor for the amenity you chose -->
-            <Border Style="{StaticResource Panel}" IsVisible="{Binding IsEditing}">
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding IsEditing}" MaximumWidthRequest="{OnIdiom Phone=10000, Default=640}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}">
                 <VerticalStackLayout Spacing="10">
-                    <c:CardTitle Icon="waves" Text="{Binding Editing.Amenity.Name, StringFormat='Change {0}'}" />
+                    <c:CardTitle Text="{Binding Editing.Amenity.Name, StringFormat='Change {0}'}" />
                     <Border Style="{StaticResource Field}">
                         <Picker ItemsSource="{Binding Choices}" ItemDisplayBinding="{Binding Label}" SelectedItem="{Binding Choice}" SemanticProperties.Description="Status" />
                     </Border>
@@ -27,17 +27,18 @@
                             <Entry Text="{Binding Reason}" MaxLength="200" Placeholder="For example maintenance, cleaning, closed" SemanticProperties.Description="Reason" />
                         </Border>
                         <FlexLayout Wrap="Wrap">
-                            <Button Text="Maintenance" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnMaintenance" />
-                            <Button Text="Cleaning" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnCleaning" />
-                            <Button Text="Closed" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnClosed" />
+                            <!-- quick reasons: the app's chips (9.7) -->
+                            <Button Text="Maintenance" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnMaintenance" />
+                            <Button Text="Cleaning" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnCleaning" />
+                            <Button Text="Closed" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnClosed" />
                         </FlexLayout>
                         <HorizontalStackLayout Spacing="10">
                             <Switch IsToggled="{Binding HasBackAt}" SemanticProperties.Description="I know when it will be back" />
                             <Label Text="I know when it will be back" VerticalOptions="Center" />
                         </HorizontalStackLayout>
                         <HorizontalStackLayout Spacing="10" IsVisible="{Binding HasBackAt}">
-                            <DatePicker Date="{Binding BackDate}" SemanticProperties.Description="Return date" />
-                            <TimePicker Time="{Binding BackTime}" SemanticProperties.Description="Return time" />
+                            <Border Style="{StaticResource Field}"><DatePicker Date="{Binding BackDate}" SemanticProperties.Description="Return date" /></Border>
+                            <Border Style="{StaticResource Field}"><TimePicker Time="{Binding BackTime}" SemanticProperties.Description="Return time" /></Border>
                         </HorizontalStackLayout>
                     </VerticalStackLayout>
 

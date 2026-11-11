@@ -19,7 +19,8 @@ public class LockedPage : ContentPage
 			Spacing = 14,
 			Children =
 			{
-				new Controls.CardTitle { Icon = "id-card", Text = $"{feature} is for members" },
+				// the page title above already names the feature (and "Coaches is for members" reads wrong)
+				new Controls.CardTitle { Text = "This page is for members" },
 				new Label
 				{
 					Style = (Style)res["Muted"],

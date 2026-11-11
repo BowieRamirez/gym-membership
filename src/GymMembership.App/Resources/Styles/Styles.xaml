@@ -16,18 +16,18 @@
 
     <!-- ===== Page + shell ===== -->
     <Style TargetType="Page" ApplyToDerivedTypes="True">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChalkLight}, Dark={StaticResource ChalkDark}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource PageLight}, Dark={StaticResource PageDark}}" />
     </Style>
 
     <Style TargetType="Shell" ApplyToDerivedTypes="True">
         <Setter Property="Shell.BackgroundColor" Value="{AppThemeBinding Light={StaticResource BackdropLight}, Dark={StaticResource BackdropDark}}" />
         <Setter Property="Shell.ForegroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
         <Setter Property="Shell.TitleColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
-        <!-- phone bottom bars stay light in both themes so their icons can stay black -->
-        <Setter Property="Shell.TabBarBackgroundColor" Value="{AppThemeBinding Light={StaticResource IconChipLight}, Dark={StaticResource IconChipDark}}" />
-        <Setter Property="Shell.TabBarForegroundColor" Value="{StaticResource IconInk}" />
-        <Setter Property="Shell.TabBarTitleColor" Value="{StaticResource IconInk}" />
-        <Setter Property="Shell.TabBarUnselectedColor" Value="{StaticResource MutedLight}" />
+        <!-- the front desk's phone bar (layout unchanged, D22): white or near-black, the current tab in ink (light) or yellow (dark) -->
+        <Setter Property="Shell.TabBarBackgroundColor" Value="{AppThemeBinding Light={StaticResource Signal}, Dark={StaticResource RailDark}}" />
+        <Setter Property="Shell.TabBarForegroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
+        <Setter Property="Shell.TabBarTitleColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+        <Setter Property="Shell.TabBarUnselectedColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
     </Style>
 
     <!-- ===== Text ===== -->
@@ -94,19 +94,19 @@
         <Setter Property="FontSize" Value="{StaticResource TextBody}" />
     </Style>
 
-    <!-- A field is an entry framed by a hairline; the frame turns lime (dark) or Plate Blue (light) while focused (Controls.FieldFocus) -->
+    <!-- A field is an entry framed by a 3:1 edge so it reads as a box; the frame turns ink (light) or yellow (dark) while focused (Controls.FieldFocus) -->
     <Style x:Key="Field" TargetType="Border">
         <Setter Property="StrokeShape" Value="RoundRectangle 14" />
         <Setter Property="StrokeThickness" Value="1.5" />
         <Setter Property="Padding" Value="14,0" />
         <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}" />
-        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource EdgeLight}, Dark={StaticResource EdgeDark}}" />
     </Style>
 
-    <!-- ===== Buttons: pills. Primary is black (light) or lime (dark); outline is secondary ===== -->
+    <!-- ===== Buttons: pills. The main action is black (light) or yellow (dark); outline is secondary ===== -->
     <Style x:Key="BaseButton" TargetType="Button">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Lime}}" />
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource AccentLight}, Dark={StaticResource Signal}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnAccentLight}, Dark={StaticResource Black}}" />
         <Setter Property="FontFamily" Value="BarlowSemiBold" />
         <Setter Property="FontSize" Value="{StaticResource TextBody}" />
         <Setter Property="CornerRadius" Value="24" />
@@ -116,9 +116,11 @@
             <VisualStateGroupList>
                 <VisualStateGroup x:Name="CommonStates">
                     <VisualState x:Name="Normal" />
+                    <!-- disabled: a grey block with muted words, not a faded yellow (it read as a muddy olive in dark, 9.6 polish) -->
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
-                            <Setter Property="Opacity" Value="0.45" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource SurfaceDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
                         </VisualState.Setters>
                     </VisualState>
                     <VisualState x:Name="Pressed">
@@ -138,12 +140,12 @@
         <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
     </Style>
 
-    <!-- ===== Page layout: wide canvas, section titles, white rows inside a card, one lime card per page ===== -->
+    <!-- ===== Page layout: wide canvas, section titles, white rows inside a card, at most one highlight card per page ===== -->
     <!-- pages fill the window (full-page layout, 2026-10-31); this only stops lines running on forever on very wide screens -->
     <x:Double x:Key="PageWidth">2400</x:Double>
     <Style x:Key="SectionTitle" TargetType="Label" BasedOn="{StaticResource BaseLabel}">
         <Setter Property="FontFamily" Value="BarlowMedium" />
-        <Setter Property="FontSize" Value="22" />
+        <Setter Property="FontSize" Value="{OnIdiom Phone=19, Default=22}" />
         <Setter Property="Margin" Value="0,10,0,0" />
     </Style>
     <Style x:Key="Row" TargetType="Border">
@@ -152,12 +154,13 @@
         <Setter Property="Padding" Value="14,11" />
         <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}" />
     </Style>
-    <!-- a lime card: its labels set TextColor Black and its buttons use InkButton/InkSmallButton, in both themes (PageLayoutTests) -->
+    <!-- the highlight card: black in light, yellow in dark (D23). Its labels use TextColor White (light) / Black (dark) and its buttons
+         HeroButton/HeroSmallButton, which flip the other way (PageLayoutTests). -->
     <Style x:Key="HeroPanel" TargetType="Border">
         <Setter Property="StrokeShape" Value="RoundRectangle 16" />
         <Setter Property="StrokeThickness" Value="0" />
         <Setter Property="Padding" Value="14" />
-        <Setter Property="BackgroundColor" Value="{StaticResource Lime}" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource AccentLight}, Dark={StaticResource Signal}}" />
     </Style>
 
 
@@ -171,20 +174,7 @@
     </Style>
 
 
-    <!-- ===== Full-page layout pieces: page frame, number strip, tables, side panel ===== -->
-    <Thickness x:Key="PagePadding">16,12,16,20</Thickness>
-    <!-- a row of filters or actions above the page's content -->
-    <Style x:Key="Toolbar" TargetType="FlexLayout">
-        <Setter Property="Wrap" Value="Wrap" />
-        <Setter Property="AlignItems" Value="Center" />
-    </Style>
-    <!-- a number card in the strip at the top of a page: a small label, then the number -->
-    <Style x:Key="Kpi" TargetType="Border">
-        <Setter Property="StrokeShape" Value="RoundRectangle 14" />
-        <Setter Property="StrokeThickness" Value="0" />
-        <Setter Property="Padding" Value="14,10" />
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource CardLight}, Dark={StaticResource CardDark}}" />
-    </Style>
+    <!-- ===== Full-page layout pieces: number strip, tables, side panel ===== -->
     <Style x:Key="KpiValue" TargetType="Label" BasedOn="{StaticResource Numeral}">
         <Setter Property="FontSize" Value="34" />
     </Style>
@@ -218,32 +208,35 @@
         <Setter Property="HorizontalOptions" Value="Start" />
         <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}" />
     </Style>
+    <!-- pending is the signal yellow; on white it needs an ink ring to show (1.2:1 alone) -->
     <Style x:Key="DotPending" TargetType="Ellipse">
         <Setter Property="WidthRequest" Value="8" /><Setter Property="HeightRequest" Value="8" /><Setter Property="VerticalOptions" Value="Center" />
-        <Setter Property="Fill" Value="{AppThemeBinding Light={StaticResource PlateYellowLight}, Dark={StaticResource PlateYellowDark}}" />
+        <Setter Property="Fill" Value="{StaticResource Signal}" />
+        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
+        <Setter Property="StrokeThickness" Value="1.5" />
     </Style>
     <Style x:Key="DotVerified" TargetType="Ellipse">
         <Setter Property="WidthRequest" Value="8" /><Setter Property="HeightRequest" Value="8" /><Setter Property="VerticalOptions" Value="Center" />
-        <Setter Property="Fill" Value="{AppThemeBinding Light={StaticResource PlateGreenLight}, Dark={StaticResource PlateGreenDark}}" />
+        <Setter Property="Fill" Value="{AppThemeBinding Light={StaticResource GoodLight}, Dark={StaticResource GoodDark}}" />
     </Style>
     <Style x:Key="DotRejected" TargetType="Ellipse">
         <Setter Property="WidthRequest" Value="8" /><Setter Property="HeightRequest" Value="8" /><Setter Property="VerticalOptions" Value="Center" />
-        <Setter Property="Fill" Value="{AppThemeBinding Light={StaticResource PlateRedLight}, Dark={StaticResource PlateRedDark}}" />
+        <Setter Property="Fill" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
     </Style>
     <Style x:Key="DotScheduled" TargetType="Ellipse">
         <Setter Property="WidthRequest" Value="8" /><Setter Property="HeightRequest" Value="8" /><Setter Property="VerticalOptions" Value="Center" />
-        <Setter Property="Fill" Value="{AppThemeBinding Light={StaticResource PlateBlueLight}, Dark={StaticResource PlateBlueDark}}" />
+        <Setter Property="Fill" Value="{AppThemeBinding Light={StaticResource ScheduledLight}, Dark={StaticResource ScheduledDark}}" />
     </Style>
 
-    <!-- Inline error: Plate Red edge, plain words saying what happened and what to do -->
+    <!-- Inline error: a red edge, plain words saying what happened and what to do -->
     <Style x:Key="ErrorPanel" TargetType="Border" BasedOn="{StaticResource Panel}">
-        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource PlateRedLight}, Dark={StaticResource PlateRedDark}}" />
+        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
         <Setter Property="StrokeThickness" Value="1.5" />
     </Style>
 
 
     <Style x:Key="NoticePanel" TargetType="Border" BasedOn="{StaticResource Panel}">
-        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource PlateGreenLight}, Dark={StaticResource PlateGreenDark}}" />
+        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource GoodLight}, Dark={StaticResource GoodDark}}" />
         <Setter Property="StrokeThickness" Value="1.5" />
     </Style>
 
@@ -261,47 +254,61 @@
         <Setter Property="FontSize" Value="14" />
     </Style>
 
-    <!-- Black in both themes: the buttons on a lime card -->
-    <Style x:Key="InkButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
-        <Setter Property="BackgroundColor" Value="{StaticResource Black}" />
-        <Setter Property="TextColor" Value="{StaticResource White}" />
+    <!-- The buttons on a highlight card: yellow on the black card (light), black on the yellow card (dark) -->
+    <Style x:Key="HeroButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource HeroActionLight}, Dark={StaticResource Black}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnHeroActionLight}, Dark={StaticResource White}}" />
     </Style>
-    <Style x:Key="InkSmallButton" TargetType="Button" BasedOn="{StaticResource SmallButton}">
-        <Setter Property="BackgroundColor" Value="{StaticResource Black}" />
-        <Setter Property="TextColor" Value="{StaticResource White}" />
+    <Style x:Key="HeroSmallButton" TargetType="Button" BasedOn="{StaticResource SmallButton}">
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource HeroActionLight}, Dark={StaticResource Black}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnHeroActionLight}, Dark={StaticResource White}}" />
     </Style>
-    <!-- Lime: a selected choice -->
-    <Style x:Key="LimeSmallButton" TargetType="Button" BasedOn="{StaticResource SmallButton}">
-        <Setter Property="BackgroundColor" Value="{StaticResource Lime}" />
+    <!-- Yellow in both themes: the one main action of a sign-in or registration page (black text, so it works in light too) -->
+    <Style x:Key="SignalButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+        <Setter Property="BackgroundColor" Value="{StaticResource Signal}" />
         <Setter Property="TextColor" Value="{StaticResource Black}" />
     </Style>
 
-    <!-- Card action cells: beside the text on wide screens, under it (full width) on phones. Parent Grid needs RowDefinitions="Auto,Auto". -->
-    <Style x:Key="CardActions" TargetType="VerticalStackLayout">
-        <Setter Property="Margin" Value="{OnIdiom Phone='0,10,0,0', Default=0}" />
-        <Setter Property="Grid.Row" Value="{OnIdiom Phone=1, Default=0}" />
-        <Setter Property="Grid.Column" Value="{OnIdiom Phone=0, Default=1}" />
-        <Setter Property="Grid.ColumnSpan" Value="{OnIdiom Phone=2, Default=1}" />
-        <Setter Property="HorizontalOptions" Value="{OnIdiom Phone=Fill, Default=End}" />
+    <!-- Chips (Material 3 filter / assist chips): status filters and small actions inside list rows. Rounded rectangles, not pills, so a
+         filter never reads as a main action; 48 tall on phones (Android's touch minimum; they were 40 until the 9.6 polish) and 34 on
+         Windows. The filter in use is yellow: its DataTrigger sets BackgroundColor and BorderColor to Signal and TextColor to Black. It
+         sets those three, not a whole "on" style: a style swapped in by a trigger did not come back off cleanly (the chip turned into a black
+         box on Android and lost its outline on Windows once another chip was chosen).
+         Never shrunk in a wrapping FlexLayout: it wraps to the next line instead of cutting the word ("Declin"). -->
+    <Style x:Key="FilterChip" TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+        <Setter Property="FlexLayout.Shrink" Value="0" />
+        <Setter Property="MinimumHeightRequest" Value="{OnPlatform Android=48, iOS=48, Default=34}" />
+        <Setter Property="HeightRequest" Value="{OnPlatform Android=48, iOS=48, Default=34}" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="14,0" />
+        <Setter Property="BorderWidth" Value="1" />
+        <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource EdgeLight}, Dark={StaticResource EdgeDark}}" />
+        <Setter Property="FontFamily" Value="BarlowMedium" />
+        <Setter Property="FontSize" Value="14" />
     </Style>
-    <Style x:Key="CardButton" TargetType="Button" BasedOn="{StaticResource SmallButton}">
-        <Setter Property="Margin" Value="{OnIdiom Phone='0,10,0,0', Default=0}" />
-        <Setter Property="Grid.Row" Value="{OnIdiom Phone=1, Default=0}" />
-        <Setter Property="Grid.Column" Value="{OnIdiom Phone=0, Default=1}" />
-        <Setter Property="Grid.ColumnSpan" Value="{OnIdiom Phone=2, Default=1}" />
+
+    <!-- A two-way view switch (the coach Dashboard's Month | Week, as approved): a quiet track, the chosen side a darker or lighter
+         block in bold. Not yellow: choosing a view is not the page's main action. -->
+    <Style x:Key="SegmentTrack" TargetType="Border">
+        <Setter Property="StrokeShape" Value="RoundRectangle 12" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="Padding" Value="3" />
+        <Setter Property="HorizontalOptions" Value="Start" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
     </Style>
-    <Style x:Key="CardOutlineButton" TargetType="Button" BasedOn="{StaticResource SmallOutlineButton}">
-        <Setter Property="Margin" Value="{OnIdiom Phone='0,10,0,0', Default=0}" />
-        <Setter Property="Grid.Row" Value="{OnIdiom Phone=1, Default=0}" />
-        <Setter Property="Grid.Column" Value="{OnIdiom Phone=0, Default=1}" />
-        <Setter Property="Grid.ColumnSpan" Value="{OnIdiom Phone=2, Default=1}" />
+    <!-- the track's own colour, not Transparent: Android drew a Transparent segment as a black block with no label -->
+    <Style x:Key="Segment" TargetType="Button" BasedOn="{StaticResource FilterChip}">
+        <Setter Property="BorderWidth" Value="0" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
     </Style>
+    <!-- the chosen side (bold, InkLight / SurfaceDark) is set by the page's DataTriggers, not by a second style -->
 
     <!-- A text link: secondary actions beside a form (forgot password, create an account, resend code) -->
     <Style x:Key="LinkButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
         <Setter Property="BackgroundColor" Value="Transparent" />
         <!-- ink, not blue: in this palette blue means "scheduled" -->
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Lime}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
         <Setter Property="FontFamily" Value="BarlowSemiBold" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="Padding" Value="4,0" />
@@ -309,51 +316,14 @@
     </Style>
     <!-- What is wrong with one field, under it -->
     <Style x:Key="FieldError" TargetType="Label" BasedOn="{StaticResource Caption}">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource PlateRedLight}, Dark={StaticResource PlateRedDark}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
         <Setter Property="IsVisible" Value="False" />
     </Style>
 
-    <!-- ===== Sign in, reset and create account share one layout: the brand panel on the left and the form on the right (desktop),
-         or a short brand header above the form (phone). On desktop row 0 stays empty. ===== -->
+    <!-- ===== Sign in, reset and create account share one layout: the brand panel with the badge beside the form, or a band above it
+         when the window is narrow and on phones (Controls.AuthLayout) ===== -->
     <ControlTemplate x:Key="AuthShell">
-        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,*">
-            <Border Grid.Row="{OnIdiom Phone=0, Default=1}" Grid.ColumnSpan="{OnIdiom Phone=2, Default=1}"
-                    Margin="{OnIdiom Phone='12,12,12,0', Default=14}" Padding="0"
-                    HeightRequest="{OnIdiom Phone=180, Default=-1}" StrokeThickness="0" StrokeShape="RoundRectangle 26"
-                    BackgroundColor="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource CardDark}}">
-                <!-- the dumbbell sits outside the padded grid, so only the panel's rounded edge clips it (Android clips a layout's children to its padding) -->
-                <Grid>
-                <!-- the one bold move: a big glowing dumbbell running off the panel's edge -->
-                <c:DumbbellLogo Bare="True" Size="{OnIdiom Phone=230, Default=460}" Rotation="-24" Opacity="0.9"
-                                HorizontalOptions="End" VerticalOptions="Start"
-                                TranslationX="{OnIdiom Phone=80, Default=150}" TranslationY="{OnIdiom Phone=-20, Default=20}" />
-                <Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="{OnIdiom Phone=10, Default=22}" Margin="{OnIdiom Phone='22,18', Default='48,40'}">
-                    <HorizontalStackLayout Spacing="12">
-                        <c:DumbbellLogo Size="44" Inverted="True" VerticalOptions="Center" />
-                        <Label Text="Gym Membership" Style="{StaticResource Heading}" TextColor="{StaticResource White}" VerticalOptions="Center" />
-                    </HorizontalStackLayout>
-                    <Label Grid.Row="2" Text="Front desk, coaches and members in one place."
-                           Style="{StaticResource Display}" TextColor="{StaticResource White}" HorizontalOptions="Start"
-                           FontSize="{OnIdiom Phone=24, Default=39}" MaximumWidthRequest="{OnIdiom Phone=250, Default=420}" />
-                    <VerticalStackLayout Grid.Row="3" Spacing="10" IsVisible="{OnIdiom Phone=False, Default=True}">
-                        <HorizontalStackLayout Spacing="12">
-                            <c:IconView Icon="calendar-plus" Size="16" ChipSize="30" VerticalOptions="Center" />
-                            <Label Text="Book sessions and amenities" TextColor="{StaticResource White}" VerticalOptions="Center" />
-                        </HorizontalStackLayout>
-                        <HorizontalStackLayout Spacing="12">
-                            <c:IconView Icon="message-square" Size="16" ChipSize="30" VerticalOptions="Center" />
-                            <Label Text="Message your coach" TextColor="{StaticResource White}" VerticalOptions="Center" />
-                        </HorizontalStackLayout>
-                        <HorizontalStackLayout Spacing="12">
-                            <c:IconView Icon="id-card" Size="16" ChipSize="30" VerticalOptions="Center" />
-                            <Label Text="Manage your membership and payments" TextColor="{StaticResource White}" VerticalOptions="Center" />
-                        </HorizontalStackLayout>
-                    </VerticalStackLayout>
-                </Grid>
-                </Grid>
-            </Border>
-            <ContentPresenter Grid.Row="1" Grid.Column="{OnIdiom Phone=0, Default=1}" Grid.ColumnSpan="{OnIdiom Phone=2, Default=1}" />
-        </Grid>
+        <c:AuthLayout />
     </ControlTemplate>
 
     <Style TargetType="Picker">
@@ -365,6 +335,8 @@
     <Style TargetType="DatePicker">
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
         <Setter Property="FontFamily" Value="Barlow" />
+        <!-- the app's own date words ("Mon 9 Nov 2026"), not the system's 11/9/2026, which reads as 11 September here -->
+        <Setter Property="Format" Value="ddd d MMM yyyy" />
     </Style>
     <Style TargetType="TimePicker">
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />

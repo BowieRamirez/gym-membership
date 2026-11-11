@@ -57,8 +57,9 @@ public class AttendanceViewModelTests
             server.All[i] = server.All[i] with { Mark = status };
             return Task.FromResult(AppResult<bool>.Success(true));
         }
-        public Task<AppResult<bool>> CheckInAsync(string memberId) => throw new NotSupportedException();
-        public Task<AppResult<string?>> MyCodeAsync() => throw new NotSupportedException();
+        public Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null, string? pin = null, string? reason = null) => throw new NotSupportedException();
+        public Task<AppResult<bool>> CanSkipPinAsync() => throw new NotSupportedException();
+        public Task<AppResult<MemberPass>> MyPassAsync() => throw new NotSupportedException();
         public Task<AppResult<MemberScan>> ScanAsync(string code) => throw new NotSupportedException();
         public Task<AppResult<IReadOnlyList<CheckInRow>>> CheckInsOnAsync(DateOnly manilaDay) => throw new NotSupportedException();
         public Task<AppResult<IReadOnlyList<MemberHit>>> FindMembersAsync(string usernameFragment) => throw new NotSupportedException();
@@ -110,7 +111,30 @@ public class AttendanceViewModelTests
         Assert.Equal("4", vm.SessionsText);                                 // 12th x2, 13th, 20th (the cancelled one and September are out)
         Assert.Equal("50%", vm.RateText);                                   // 1 present / (1 present + 1 absent)
         Assert.Equal("1", vm.UpcomingText);
-        Assert.StartsWith("Next: Tue 20 Oct, ", vm.NextText); Assert.Contains("Bea Lim", vm.NextText);
+        // 9.6 yellow card: the time big, then the day and who
+        Assert.Equal("1:00 AM", vm.NextTimeText);
+        Assert.Equal("Tue 20 Oct with Bea Lim", vm.NextWhenText);
+    }
+
+    [Fact]
+    public async Task The_next_session_says_today_or_tomorrow_in_words()
+    {
+        var (_, _, today) = await Open(s => s.Upcoming = [S("2026-10-16T15:00:00Z", null, with: "Bea Lim")]);
+        Assert.Equal(("3:00 PM", "today with Bea Lim"), (today.NextTimeText, today.NextWhenText));
+        var (_, _, tomorrow) = await Open(s => s.Upcoming = [S("2026-10-17T09:00:00Z", null)]);
+        Assert.Equal("tomorrow with Alex Tan", tomorrow.NextWhenText);
+    }
+
+    [Fact]
+    public async Task Calendar_cells_name_their_sessions_in_time_order_without_cancelled_ones()
+    {
+        var (_, _, vm) = await Open(s => s.All.Add(S("2026-10-12T05:00:00Z", null, with: "Bea Lim")));
+        var busy = Day(vm, "2026-10-12");                                     // 1:00 Alex, 3:00 Alex, 5:00 Bea
+        Assert.Equal(("1:00 AM Alex T.", "3:00 AM Alex T.", "+1 more"), (busy.Entry1, busy.Entry2, busy.More));
+        Assert.Null(Day(vm, "2026-10-14").Entry1);                          // only a cancelled session that day
+        Assert.Equal("Shift 6:00 AM", AttendanceCalendar.WithEntries([Day(vm, "2026-10-15")], [],
+            [new DateTime(2026, 10, 15, 6, 0, 0, DateTimeKind.Utc)], TimeZoneInfo.Utc)[0].Entry1);
+        Assert.Equal("Cher", AttendanceCalendar.ShortName("Cher"));
     }
 
     [Fact]
@@ -118,7 +142,13 @@ public class AttendanceViewModelTests
     {
         var (_, _, vm) = await Open(s => { s.All = [S("2026-10-20T01:00:00Z", null)]; s.Upcoming = []; });
         Assert.Equal("—", vm.RateText);
-        Assert.Equal("No upcoming sessions.", vm.NextText);
+        Assert.Equal("None booked", vm.NextTimeText);
+        Assert.False(vm.HasNext);                                           // shown at heading size, not as a numeral
+        vm.ShowWeekCommand.Execute(null);
+        Assert.True(vm.WeekRows.Single(r => r.Day.Date == new DateOnly(2026, 10, 14)).IsEmpty);   // one line, not a card
+        var (_, _, busy) = await Open();
+        busy.ShowWeekCommand.Execute(null);
+        Assert.False(busy.WeekRows.Single(r => r.Day.Date == new DateOnly(2026, 10, 12)).IsEmpty);
     }
 
     [Fact]

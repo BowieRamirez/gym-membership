@@ -16,7 +16,16 @@
                 <!-- D12: a member's QR is identification only; the result comes from live data and a scan never checks in by itself -->
                             <Border Style="{StaticResource Panel}">
                             <VerticalStackLayout Spacing="12">
-                            <c:CardTitle Icon="scan-line" Text="Scan a member" />
+                            <c:CardTitle Text="Scan a member" />
+                            <Label Text="{Binding OfflineText}" FontFamily="BarlowSemiBold" IsVisible="{Binding IsOffline}" AutomationId="OfflineNotice" />
+                            <VerticalStackLayout Spacing="6" IsVisible="{Binding HasQueue}">
+                                <Label Text="{Binding QueueText}" Style="{StaticResource Caption}" AutomationId="QueueText" />
+                                <Button Text="Send now" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" Command="{Binding SendQueueCommand}" AutomationId="SendQueue" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Spacing="6" IsVisible="{Binding HasRefused}">
+                                <Label Text="{Binding RefusedText}" Style="{StaticResource FieldError}" IsVisible="{Binding HasRefused}" AutomationId="RefusedText" />
+                                <Button Text="Dismiss" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" Command="{Binding ClearRefusedCommand}" />
+                            </VerticalStackLayout>
                             <FlexLayout Wrap="Wrap" AlignItems="Center">
                                 <Button Text="Scan member QR" Style="{StaticResource SmallButton}" Command="{Binding ToggleCameraCommand}" Margin="0,0,12,8" AutomationId="ScanCamera">
                                     <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsScanning}" Value="True"><Setter Property="Text" Value="Stop camera" /></DataTrigger></Button.Triggers>
@@ -61,33 +70,108 @@
                                 </BindableLayout.ItemTemplate>
                             </VerticalStackLayout>
                             </Border>
+
+                            <!-- F19 (approved mockup checked-in-today.html): who came in today, newest first; time and name, then how and who
+                                 recorded it. A row that arrived since the last load is tinted until the next one. The count is the day's. -->
+                            <Label Text="{Binding TodayTitle}" Style="{StaticResource SectionTitle}" Margin="0,6,0,0" AutomationId="CheckedInTodayTitle" />
+                            <Border Style="{StaticResource Panel}" Padding="12">
+                            <VerticalStackLayout Spacing="0">
+                                <Border Style="{StaticResource Field}" Margin="0,0,0,6" IsVisible="{Binding IsTodayEmpty, Converter={StaticResource Not}}">
+                                    <Entry Text="{Binding TodayFilter}" Placeholder="Filter by name" AutomationId="CheckedInTodayFilter" SemanticProperties.Description="Filter today's check-ins by name" />
+                                </Border>
+                                <Label Text="Nobody yet. Each check-in appears here as it happens." Style="{StaticResource Muted}" IsVisible="{Binding IsTodayEmpty}" />
+                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Today}" AutomationId="CheckedInTodayList">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="svc:CheckInRow">
+                                            <VerticalStackLayout Spacing="0">
+                                                <BoxView HeightRequest="1" Color="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+                                                <Border StrokeThickness="0" StrokeShape="RoundRectangle 8" Padding="4,9" BackgroundColor="Transparent">
+                                                    <Border.Triggers>
+                                                        <DataTrigger TargetType="Border" Binding="{Binding IsNew}" Value="True"><Setter Property="BackgroundColor" Value="#24FFEC00" /></DataTrigger>
+                                                    </Border.Triggers>
+                                                    <Grid ColumnDefinitions="64,*" RowDefinitions="Auto,Auto" ColumnSpacing="8">
+                                                        <Label Text="{Binding TimeText}" Style="{StaticResource Caption}" />
+                                                        <Label Grid.Column="1" Text="{Binding Name}" FontFamily="BarlowSemiBold" />
+                                                        <Label Grid.Column="1" Grid.Row="1" Text="{Binding HowByText}" Style="{StaticResource Caption}" />
+                                                    </Grid>
+                                                </Border>
+                                            </VerticalStackLayout>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </VerticalStackLayout>
+                                <Label Text="{Binding TodayMatchText}" Style="{StaticResource Caption}" Margin="4,8,0,0" IsVisible="{Binding TodayMatchText, Converter={StaticResource HasText}}" />
+                            </VerticalStackLayout>
+                            </Border>
             </VerticalStackLayout>
         </ScrollView>
+
+        <!-- F4: when the page last loaded, with Refresh; it also reloads by itself when someone checks in anywhere (Windows: staff pages) -->
+        <c:UpdatedBar x:Name="UpdatedLine" Grid.Row="0" IsVisible="{OnIdiom Phone=False, Default=True}" Margin="0,0,0,4" />
 
         <VerticalStackLayout Grid.Row="1" Spacing="10" Padding="0,0,0,10">
             <Label Text="Members" Style="{StaticResource SectionTitle}" Margin="0" />
                         <Border Style="{StaticResource Field}"><SearchBar Placeholder="Search members by name" Text="{Binding Search}" SearchCommand="{Binding SearchCommand}" /></Border>
-                        <c:Banner Message="{Binding ErrorMessage}" />
+                        <!-- while the PIN step is open it shows its own error, next to the PIN -->
+                        <ContentView IsVisible="{Binding HasPinStep, Converter={StaticResource Not}}"><c:Banner Message="{Binding ErrorMessage}" /></ContentView>
                         <c:Banner Kind="notice" Message="{Binding Notice}" />
         </VerticalStackLayout>
 
         <Border Grid.Row="2" Style="{StaticResource Panel}" Padding="12" Margin="0,0,0,16">
-        <CollectionView ItemsSource="{Binding Hits}">
+        <Grid RowDefinitions="Auto,*">
+        <!-- F8 (mockup docs/mockups/desk-pin.html): Check in by name opens this step; nothing is recorded until the PIN is right.
+             It sits at the top of the list rather than inside the row: binding a row to the page's view model breaks while the list reloads (BasePage.Row) -->
+        <Border Style="{StaticResource Row}" Stroke="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" StrokeThickness="2" Padding="14" Margin="0,0,0,8" IsVisible="{Binding HasPinStep}">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                <c:Avatar Letters="{Binding PinLetters}" Url="{Binding PinPhoto}" Diameter="64" VerticalOptions="Start" />
+                <VerticalStackLayout Grid.Column="1" Spacing="6">
+                    <Label Text="{Binding PinFor.Username}" Style="{StaticResource Heading}" AutomationId="PinName" />
+                    <Label Text="Check the photo matches the person, then ask them to type their desk PIN." Style="{StaticResource Caption}" />
+                    <FlexLayout Wrap="Wrap" AlignItems="End">
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                            <Label Text="Desk PIN" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}" WidthRequest="132">
+                                <Entry Text="{Binding Pin}" IsPassword="True" Keyboard="Numeric" MaxLength="4" ReturnCommand="{Binding ConfirmPinCommand}"
+                                       AutomationId="DeskPin" SemanticProperties.Description="The member's 4-digit desk PIN" />
+                            </Border>
+                        </VerticalStackLayout>
+                        <Button Text="Check in" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Command="{Binding ConfirmPinCommand}" AutomationId="ConfirmPin" />
+                        <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding CancelPinCommand}" AutomationId="CancelPin" />
+                    </FlexLayout>
+                    <Label Text="{Binding ErrorMessage}" Style="{StaticResource FieldError}" IsVisible="{Binding ErrorMessage, Converter={StaticResource HasText}}" AutomationId="PinError" />
+                    <VerticalStackLayout Spacing="6" IsVisible="{Binding CanSkipPin}">
+                        <BoxView Style="{StaticResource Hairline}" Margin="0,4,0,4" />
+                        <Label Text="No PIN? Reason for checking them in without it" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}" MaximumWidthRequest="420" HorizontalOptions="Start">
+                            <Entry Text="{Binding Reason}" Placeholder="For example: known member, phone broken" MaxLength="500" AutomationId="PinReason"
+                                   SemanticProperties.Description="Reason for checking in without the PIN" />
+                        </Border>
+                        <Label Text="Saved with the check-in. Admins see it in the day's check-ins." Style="{StaticResource Caption}" />
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Grid>
+        </Border>
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Hits}">
             <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Vertical" ItemSpacing="8" /></CollectionView.ItemsLayout>
             <CollectionView.EmptyView><Label Text="No members match that name." Style="{StaticResource Muted}" /></CollectionView.EmptyView>
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="svc:MemberHit">
                     <Border Style="{StaticResource Row}">
                         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="14">
-                            <Label Text="{Binding Username}" Style="{StaticResource Heading}" VerticalOptions="Center" />
+                            <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                                <Label Text="{Binding Username}" Style="{StaticResource Heading}" />
+                                <Label Text="{Binding PlanText}" Style="{StaticResource Caption}" />
+                            </VerticalStackLayout>
                             <c:StatusChip Grid.Column="1" Status="{Binding PlanStatus}" VerticalOptions="Center" />
-                            <Button Grid.Column="2" Text="Check in" Style="{StaticResource SmallButton}"
+                            <!-- 9.7: outline (Scan member QR is the page's one yellow action); a member who can't check in gets no button,
+                                 their "No active membership" line says why (it was a greyed button a screen reader still landed on) -->
+                            <Button Grid.Column="2" Text="Check in" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanCheckIn}"
                                     Clicked="OnCheckIn" />
                         </Grid>
                     </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
+        </Grid>
         </Border>
     </Grid>
 </v:BasePage>

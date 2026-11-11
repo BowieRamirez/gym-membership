@@ -27,7 +27,7 @@ public class AdminOverviewTests
         Set(a, "AllAmenitiesAsync", (IReadOnlyList<Amenity>)[]);
         Set(a, "DiscountsAsync", (IReadOnlyList<DiscountRow>)[]);
         Set(a, "RevenueAsync", (IReadOnlyList<RevenueRow>)[]);
-        Set(a, "AuditAsync", (IReadOnlyList<AuditRow>)[]);
+        Set(a, "AuditPageAsync", new AuditPage([], false));
         Set(a, "GymSettingsAsync", new GymSettings { GymName = "Test gym" });
         Set(s, "RefundsAsync", (IReadOnlyList<RefundCard>)[]);
         return (new AdminOverviewViewModel(admin, subs) { Clock = () => DateTimeOffset.Parse("2026-10-31T16:30:00Z") }, a, s);
@@ -41,11 +41,13 @@ public class AdminOverviewTests
     {
         var (vm, a, s) = Create();
         await vm.RefreshAsync();
-        Assert.Equal(new[] { "users", "catalog", "discounts", "refunds", "revenue", "void", "gym", "audit" }, vm.Cards.Select(c => c.Key));
+        Assert.Equal(new[] { "users", "catalog", "discounts", "refunds", "revenue", "announcements", "gym", "audit" }, vm.Cards.Select(c => c.Key));   // F10 added Announcements
         Assert.All(vm.Cards, c => Assert.False(c.IsUnavailable));
         Assert.Equal(new[] { "RefundsAsync" }, s.Calls.Select(c => c.Method));
-        Assert.All(a.Calls, c => Assert.Contains(c.Method, new[] { "UsersAsync", "AllPackagesAsync", "AllAmenitiesAsync", "DiscountsAsync", "RevenueAsync", "GymSettingsAsync", "AuditAsync" }));
-        Assert.Equal("Open page", Card(vm, "void").Value);
+        Assert.All(a.Calls, c => Assert.Contains(c.Method, new[] { "UsersAsync", "AllPackagesAsync", "AllAmenitiesAsync", "DiscountsAsync", "RevenueAsync", "GymSettingsAsync", "AuditPageAsync" }));
+        Assert.Equal(new[] { "revenue", "users", "catalog", "discounts" }, vm.Figures.Select(c => c.Key));
+        Assert.Equal(new[] { "refunds", "announcements", "gym", "audit" }, vm.Links.Select(c => c.Key));
+        Assert.False(vm.HasAttention);
     }
 
     [Fact]
@@ -73,7 +75,8 @@ public class AdminOverviewTests
             new(new Discount { IsActive = true, StartsAt = now.AddDays(-2), ExpiresAt = now }, "expired"),
             new(new Discount { IsActive = false, StartsAt = now.AddDays(-1), ExpiresAt = now.AddDays(1) }, "inactive")]);
         await vm.RefreshAsync();
-        Assert.Equal("1 usable code", Card(vm, "discounts").Value);
+        Assert.Equal("1", Card(vm, "discounts").Value);
+        Assert.Equal("usable now, of 4", Card(vm, "discounts").Detail);
     }
 
     [Fact]
@@ -86,8 +89,8 @@ public class AdminOverviewTests
             new(new RefundRequest { Status = "paid" }, "C", "Plan", ""),
             new(new RefundRequest { Status = "rejected" }, "D", "Plan", "")]);
         await vm.RefreshAsync();
-        Assert.Equal("1 awaiting review", Card(vm, "refunds").Value);
-        Assert.Contains("1 awaiting manual repayment", Card(vm, "refunds").Detail);
+        Assert.Equal("1 to review, 1 waiting for repayment", Card(vm, "refunds").Value);
+        Assert.Equal("1 refund request is waiting for review.", vm.AttentionText);
     }
 
     [Fact]
@@ -103,8 +106,8 @@ public class AdminOverviewTests
         Set(a, "UsersAsync", (IReadOnlyList<UserRow>)[new("u1", "Alex", true, ["member", "coach"])]);
         await vm.RefreshAsync();
         Assert.False(Card(vm, "users").IsUnavailable);
-        Assert.Equal("1 account listed", Card(vm, "users").Value);
-        Assert.Contains("1 active", Card(vm, "users").Detail);
+        Assert.Equal("1", Card(vm, "users").Value);
+        Assert.Equal("1 active, 0 inactive", Card(vm, "users").Detail);
     }
 
     [Fact]
@@ -122,13 +125,14 @@ public class AdminOverviewTests
     {
         var (vm, a, _) = Create();
         await vm.RefreshAsync();
-        Assert.Equal("No activity in the loaded audit list.", vm.RecentActivity);
-        Set(a, "AuditAsync", (IReadOnlyList<AuditRow>)Enumerable.Range(1, 7).Select(i => new AuditRow(new AuditEntry { Action = "event-" + i, CreatedAt = new DateTime(2026, 10, i, 18, 0, 0, DateTimeKind.Utc) }, "Owner")).ToArray());
+        Assert.Equal("No activity yet.", vm.RecentActivity);
+        Assert.True(vm.HasActivityMessage);
+        Set(a, "AuditPageAsync", new AuditPage(Enumerable.Range(1, 7).Reverse().Select(i => new AuditRecord { Action = "event-" + i, ActorName = "Owner", CreatedAt = new DateTime(2026, 10, i, 18, 0, 0, DateTimeKind.Utc) }).ToList(), false));
         await vm.RefreshAsync();
-        Assert.Contains("event-7", vm.RecentActivity);
-        Assert.DoesNotContain("event-2", vm.RecentActivity);
-        Assert.True(vm.RecentActivity.IndexOf("event-7") < vm.RecentActivity.IndexOf("event-6"));
-        Assert.Contains("08 Oct", vm.RecentActivity);
+        Assert.Equal(new[] { "event-7", "event-6", "event-5", "event-4", "event-3" }, vm.Activity.Select(a => a.Action));
+        Assert.False(vm.HasActivityMessage);
+        Assert.Equal("8 Oct", vm.Activity[0].WhenText);   // 18:00 UTC on the 7th is the 8th in Manila
+        Assert.Equal("Owner", vm.Activity[0].Actor);
     }
 
     [Fact]
@@ -146,13 +150,14 @@ public class AdminOverviewTests
     public async Task Failed_refresh_clears_old_revenue_and_audit_instead_of_leaving_stale_success()
     {
         var (vm, a, _) = Create();
-        Set(a, "AuditAsync", (IReadOnlyList<AuditRow>)[new(new AuditEntry { Action = "old-event", CreatedAt = DateTime.UtcNow }, "Owner")]);
+        Set(a, "AuditPageAsync", new AuditPage([new AuditRecord { Action = "user.archive", ActorName = "Owner", CreatedAt = DateTime.UtcNow }], false));
         await vm.RefreshAsync();
-        Assert.Contains("old-event", vm.RecentActivity);
-        a.Results["AuditAsync"] = Task.FromResult(AppResult<IReadOnlyList<AuditRow>>.Fail(AppErrorKind.Offline));
+        Assert.Equal("Account deleted", Assert.Single(vm.Activity).Action);   // item 14: the label, not user.archive
+        a.Results["AuditPageAsync"] = Task.FromResult(AppResult<AuditPage>.Fail(AppErrorKind.Offline));
         a.Results["RevenueAsync"] = Task.FromException<AppResult<IReadOnlyList<RevenueRow>>>(new HttpRequestException("offline"));
         await vm.RefreshAsync();
-        Assert.DoesNotContain("old-event", vm.RecentActivity);
+        Assert.Empty(vm.Activity);
+        Assert.StartsWith("Couldn't load recent activity", vm.RecentActivity);
         Assert.Equal("Unavailable", Card(vm, "revenue").Value);
         Assert.True(Card(vm, "audit").IsUnavailable);
         Assert.False(vm.IsBusy);
@@ -176,7 +181,8 @@ public class AdminOverviewTests
         var gateway = new GymMembership.Core.Demo.DemoGateway();
         await gateway.SignInAsync("subadmin@demo.io", GymMembership.Core.Demo.DemoGateway.DemoPassword);
         var vm = new AdminOverviewViewModel(new AdminService(gateway), new SubscriptionService(gateway)) { SuperAdmin = false };
-        Assert.Equal(["users", "catalog", "discounts", "revenue"], vm.Shown.Select(c => c.Key));
+        Assert.Equal(["users", "catalog", "discounts", "revenue", "announcements"], vm.Shown.Select(c => c.Key));
+        Assert.Equal(["announcements"], vm.Links.Select(c => c.Key));   // F10: the sub-admin posts announcements too
         await vm.OnAppearingAsync();
         Assert.All(vm.Shown, c => Assert.False(c.IsUnavailable, c.Title + ": " + c.Detail));
         Assert.DoesNotContain("unavailable", vm.UpdatedText);
@@ -196,4 +202,33 @@ public class AdminOverviewTests
         await first;
         Assert.False(vm.IsBusy);
     }
+
+    [Fact]
+    public async Task The_refund_bar_counts_only_pending_requests_and_says_how_many_are_for_used_terms()
+    {
+        var (vm, _, s) = Create();
+        Set(s, "RefundsAsync", (IReadOnlyList<RefundCard>)[
+            new(new RefundRequest { Status = "pending", WasActivated = true }, "A", "Plan", ""),
+            new(new RefundRequest { Status = "pending", WasActivated = false }, "B", "Plan", ""),
+            new(new RefundRequest { Status = "pending" }, "C", "Plan", ""),   // asked before 0042: not counted as used
+            new(new RefundRequest { Status = "approved", WasActivated = true }, "D", "Plan", "")]);
+        await vm.RefreshAsync();
+        Assert.Equal("3 refund requests are waiting for review, 1 of them for a term the member has used.", vm.AttentionText);
+        Assert.True(vm.HasAttention);
+        Set(s, "RefundsAsync", (IReadOnlyList<RefundCard>)[new(new RefundRequest { Status = "pending", WasActivated = true }, "A", "Plan", "")]);
+        await vm.RefreshAsync();
+        Assert.Equal("1 refund request is waiting for review, for a term the member has used.", vm.AttentionText);
+        Set(s, "RefundsAsync", (IReadOnlyList<RefundCard>)[new(new RefundRequest { Status = "paid" }, "A", "Plan", "")]);
+        await vm.RefreshAsync();
+        Assert.False(vm.HasAttention);
+        Assert.Equal("Nothing to review, 0 waiting for repayment", Card(vm, "refunds").Value);
+    }
+
+    [Theory]
+    [InlineData("qr", "QR")]
+    [InlineData("manual", "By name")]
+    [InlineData("offline", "Sent later")]
+    [InlineData(null, "")]
+    public void A_check_in_says_how_it_came_in(string? method, string text) =>
+        Assert.Equal(text, new CheckInRow("Alex", DateTime.UtcNow, method).HowText);
 }

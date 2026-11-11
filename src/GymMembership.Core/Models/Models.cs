@@ -15,8 +15,18 @@ public static class Status
         Scheduled = "scheduled", NoShow = "no_show", Ended = "ended";
 }
 
-public static class PayKind { public const string Membership = "membership", Renewal = "renewal", Amenity = "amenity", WalkIn = "walk_in"; }
-public static class PayMethod { public const string Qr = "qr", Cash = "cash", Gcash = "gcash", BankTransfer = "bank_transfer"; }
+public static class PayKind
+{
+    public const string Membership = "membership", Renewal = "renewal", Amenity = "amenity", WalkIn = "walk_in";
+    /// <summary>What a kind is called on screen (9.8: Revenue showed the codes). Extension, as the payment lists say for a renewal.</summary>
+    public static string Name(string k) => k switch { Membership => "Membership", Renewal => "Extension", Amenity => "Amenity", WalkIn => "Walk-in", _ => k };
+}
+public static class PayMethod
+{
+    public const string Qr = "qr", Cash = "cash", Gcash = "gcash";   // 0055: no bank transfer
+    /// <summary>What a method is called on screen and in the PDF.</summary>
+    public static string Name(string m) => m switch { Cash => "Cash", Gcash => "GCash", Qr => "QR", _ => m };
+}
 
 [Table("profiles")] public class Profile : BaseModel
 { [PrimaryKey("id")] public string Id { get; set; } = ""; [Column("username")] public string Username { get; set; } = ""; [Column("full_name")] public string FullName { get; set; } = "";
@@ -26,7 +36,7 @@ public static class PayMethod { public const string Qr = "qr", Cash = "cash", Gc
   [Column("deleted_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? DeletedAt { get; set; }
   [Column("deleted_by", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? DeletedBy { get; set; }
   [Column("deletion_reason", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? DeletionReason { get; set; }
-  // full_name is built from these (0035); written only by set_my_name and sign-up
+  // full_name is built from these (0035); locked after sign-up; only correct_name changes them (0040)
   [Column("first_name", ignoreOnInsert: true, ignoreOnUpdate: true)] public string FirstName { get; set; } = "";
   [Column("last_name", ignoreOnInsert: true, ignoreOnUpdate: true)] public string LastName { get; set; } = "";
   // the sign-in email this person proved with a code; written only by confirm_my_email
@@ -48,7 +58,8 @@ public static class PayMethod { public const string Qr = "qr", Cash = "cash", Gc
   [Column("qr_account_name")] public string? QrAccountName { get; set; } [Column("walk_in_price")] public decimal WalkInPrice { get; set; }
   [Column("payment_expiry_hours")] public int PaymentExpiryHours { get; set; } = 48; [Column("receipt_prefix")] public string ReceiptPrefix { get; set; } = "OR";
   // one opening and closing time for every day, Manila wall-clock (0028)
-  [Column("opens_at")] public TimeSpan OpensAt { get; set; } = TimeSpan.FromHours(6); [Column("closes_at")] public TimeSpan ClosesAt { get; set; } = TimeSpan.FromHours(22); }
+  [Column("opens_at")] public TimeSpan OpensAt { get; set; } = TimeSpan.FromHours(6); [Column("closes_at")] public TimeSpan ClosesAt { get; set; } = TimeSpan.FromHours(22);
+  [Column("opening_float")] public decimal OpeningFloat { get; set; } = 5000; }   // F2 (0050): the drawer float a cashier starts a shift with
 
 [Table("membership_packages")] public class MembershipPackage : BaseModel
 { [PrimaryKey("membership_package_id")] public int Id { get; set; } [Column("name")] public string Name { get; set; } = ""; [Column("description")] public string? Description { get; set; }
@@ -76,7 +87,30 @@ public static class PayMethod { public const string Qr = "qr", Cash = "cash", Gc
   [Column("membership_package_snapshot_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? PackageSnapshotId { get; set; }
   [Column("membership_package_name", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? PackageSnapshotName { get; set; }
   [Column("membership_duration_days", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? PackageSnapshotDays { get; set; }
+  [Column("cash_shift_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? CashShiftId { get; set; }   // F2 (0050): the drawer that took this cash
   [Column("created_at")] public DateTime CreatedAt { get; set; } }
+
+/// <summary>F2 (0050): a cash-drawer shift. my_cash_shift() fills the open one; cash_shifts_list() adds the cashier, count and difference.</summary>
+public sealed class CashShift : BaseModel
+{ [Column("shift_id")] public int Id { get; set; } [Column("cashier")] public string? Cashier { get; set; }
+  [Column("opened_at")] public DateTime OpenedAt { get; set; } [Column("closed_at")] public DateTime? ClosedAt { get; set; }
+  [Column("opening_float")] public decimal OpeningFloat { get; set; } [Column("cash_in")] public decimal CashIn { get; set; } [Column("cash_out")] public decimal CashOut { get; set; }
+  [Column("expected")] public decimal Expected { get; set; } [Column("counted")] public decimal? Counted { get; set; } [Column("difference")] public decimal? Difference { get; set; }
+  [Column("open_note")] public string? OpenNote { get; set; } [Column("close_note")] public string? CloseNote { get; set; }
+  // the Revenue table's words
+  [System.Text.Json.Serialization.JsonIgnore] public bool IsOpen => ClosedAt is null;
+  [System.Text.Json.Serialization.JsonIgnore] public bool IsOff => Difference is { } d && d != 0;
+  [System.Text.Json.Serialization.JsonIgnore] public string SpanText => $"{OpenedAt.ToLocalTime():ddd d MMM, h:mm tt}" + (ClosedAt is { } c ? $" to {c.ToLocalTime():h:mm tt}" : "");
+  [System.Text.Json.Serialization.JsonIgnore] public string DifferenceText => Difference is { } d ? d == 0 ? "Matches" : CashCount.Words(d) : "–";
+  [System.Text.Json.Serialization.JsonIgnore] public string NoteText =>
+      string.Join(" · ", new[] { CloseNote, OpenNote is null ? null : "Opened: " + OpenNote }.Where(n => n is not null)) is { Length: > 0 } t ? t : "–"; }
+
+public static class CashCount
+{
+    /// <summary>The count against the expected cash, as the cashier says it: "Matches the expected cash", "₱50.00 short", "₱25.50 over".</summary>
+    public static string Words(decimal difference) =>
+        difference == 0 ? "Matches the expected cash" : $"₱{Math.Abs(difference):N2} {(difference < 0 ? "short" : "over")}";
+}
 
 [Table("amenities")] public class Amenity : BaseModel
 { [PrimaryKey("amenity_id")] public int Id { get; set; } [Column("name")] public string Name { get; set; } = ""; [Column("description")] public string? Description { get; set; }
@@ -101,7 +135,8 @@ public class NotifiedMember : BaseModel
 }
 
 [Table("user_amenities")] public class UserAmenity : BaseModel
-{ [PrimaryKey("user_amenity_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("amenity_id")] public int AmenityId { get; set; }
+{ [Column("is_session", ignoreOnInsert: true, ignoreOnUpdate: true)] public bool IsSession { get; set; }
+  [PrimaryKey("user_amenity_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("amenity_id")] public int AmenityId { get; set; }
   [Column("status")] public string Status { get; set; } = "pending"; [Column("availed_at")] public DateTime AvailedAt { get; set; } [Column("expires_at")] public DateTime? ExpiresAt { get; set; } }
 
 // members insert (user_amenity_id, proof_path, notes); status and times are set by the database and by verify_amenity_usage
@@ -142,7 +177,11 @@ public class NotifiedMember : BaseModel
   [Column("checked_in_at")] public DateTime? CheckedInAt { get; set; } [Column("notes")] public string? Notes { get; set; } }
 
 [Table("gym_check_ins")] public class GymCheckIn : BaseModel
-{ [PrimaryKey("check_in_id")] public int Id { get; set; } [Column("member_id")] public string? MemberId { get; set; } [Column("payment_id")] public int? PaymentId { get; set; }
+{ [Column("method", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? Method { get; set; }
+  [Column("client_ref", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? ClientRef { get; set; }
+  [Column("recorded_by", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? RecordedBy { get; set; }
+  [Column("reason", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? Reason { get; set; }   // F8: why an Admin skipped the PIN
+  [PrimaryKey("check_in_id")] public int Id { get; set; } [Column("member_id")] public string? MemberId { get; set; } [Column("payment_id")] public int? PaymentId { get; set; }
   [Column("checked_in_at")] public DateTime CheckedInAt { get; set; } }
 
 // unread while ReadAt is null; the app may only set read_at. (No computed IsRead property: every public property is sent in a write.)
@@ -154,12 +193,21 @@ public class NotifiedMember : BaseModel
 [Table("audit_log")] public class AuditEntry : BaseModel
 { [PrimaryKey("audit_id")] public int Id { get; set; } [Column("actor_id")] public string? ActorId { get; set; } [Column("action")] public string Action { get; set; } = "";
   [Column("entity")] public string Entity { get; set; } = ""; [Column("entity_id")] public string? EntityId { get; set; } [Column("details")] public Dictionary<string, object>? Details { get; set; }
-  [Column("created_at")] public DateTime CreatedAt { get; set; } }
+  [Column("created_at")] public DateTime CreatedAt { get; set; }
+  // 0045 fills these inside audit(); the app never writes the log (the demo stores them here)
+  [Column("ip_address")] public string? IpAddress { get; set; } [Column("role")] public string? Role { get; set; } }
 
 [Table("discounts")] public class Discount : BaseModel
 { [PrimaryKey("discount_id")] public int Id { get; set; } [Column("code")] public string Code { get; set; } = ""; [Column("percent")] public int Percent { get; set; }
   [Column("starts_at")] public DateTime StartsAt { get; set; } = DateTime.UtcNow; [Column("expires_at")] public DateTime ExpiresAt { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true;
-  [Column("max_uses")] public int? MaxUses { get; set; } }   // null: a code from before limits existed, unlimited
+  [Column("max_uses")] public int? MaxUses { get; set; }   // null: a code from before limits existed, unlimited
+  [Column("show_on_packages")] public bool ShowOnPackages { get; set; } }   // F5: off keeps the code private
+
+/// <summary>F5: a code a member can still use, from packages_codes() (0048).</summary>
+public sealed class PackageCode : BaseModel
+{ [Column("code")] public string Code { get; set; } = ""; [Column("percent")] public int Percent { get; set; } [Column("expires_at")] public DateTime ExpiresAt { get; set; }
+  /// <summary>ExpiresAt is the midnight that ends the last day, as on the Discounts page.</summary>
+  [System.Text.Json.Serialization.JsonIgnore] public string Summary => $"{Percent}% off. Until {ExpiresAt.AddTicks(-1).ToLocalTime():d MMM yyyy}"; }
 
 // one conversation = one coach + one member. A message is sent as one of the two (sender_id) and only read_at changes afterwards
 [Table("messages")] public class ChatMessage : BaseModel
@@ -167,21 +215,33 @@ public class NotifiedMember : BaseModel
   [Column("sender_id")] public string SenderId { get; set; } = ""; [Column("body")] public string Body { get; set; } = "";
   [Column("sent_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime SentAt { get; set; } [Column("read_at", ignoreOnInsert: true)] public DateTime? ReadAt { get; set; }
   [Column("delivered_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? DeliveredAt { get; set; }
-  [Column("attachment_path", ignoreOnUpdate: true)] public string? AttachmentPath { get; set; } }
+  [Column("attachment_path", ignoreOnUpdate: true)] public string? AttachmentPath { get; set; }
+  // F11 (0051): set only by the server for a time request's message; the app may not write them (0006 grants only the columns above)
+  [Column("kind", ignoreOnInsert: true, ignoreOnUpdate: true)] public string Kind { get; set; } = "text";
+  [Column("time_request_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? TimeRequestId { get; set; } }
 
 // the front desk conversation: one thread per member. The app never reads these tables; it uses chat_threads, chat_messages and send_support_message.
 // The demo keeps its data here.
 [Table("support_threads")] public class SupportThread : BaseModel
-{ [PrimaryKey("member_id")] public string MemberId { get; set; } = ""; [Column("claimed_by")] public string? ClaimedBy { get; set; } [Column("status")] public string Status { get; set; } = "open";
+{ [PrimaryKey("member_id")] public string MemberId { get; set; } = ""; [Column("queue")] public string Queue { get; set; } = ChatQueue.FrontDesk; [Column("claimed_by")] public string? ClaimedBy { get; set; } [Column("status")] public string Status { get; set; } = "open";
   [Column("last_message_at")] public DateTime LastMessageAt { get; set; } = DateTime.UtcNow; }
 
 [Table("support_messages")] public class SupportMessage : BaseModel
 { [PrimaryKey("message_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("sender_id")] public string SenderId { get; set; } = "";
+  [Column("queue")] public string Queue { get; set; } = ChatQueue.FrontDesk;
   [Column("body")] public string Body { get; set; } = ""; [Column("sent_at")] public DateTime SentAt { get; set; } [Column("delivered_at")] public DateTime? DeliveredAt { get; set; }
   [Column("read_at")] public DateTime? ReadAt { get; set; }
   [Column("attachment_path")] public string? AttachmentPath { get; set; } }
 
-// one row of chat_threads(): a coach chat ("coach") or a front desk thread ("support"). A function result, never written.
+/// <summary>F9 (0051): the gym's three queues a member or coach can write to. Front desk is the old front desk thread.</summary>
+public static class ChatQueue
+{
+    public const string FrontDesk = "front_desk", Admin = "admin", SystemAdmin = "system_admin";
+    public static readonly string[] All = [FrontDesk, Admin, SystemAdmin];
+    public static string Name(string? queue) => queue switch { Admin => "Admin", SystemAdmin => "System admin", _ => "Front desk" };
+}
+
+// one row of chat_threads(): a coach chat ("coach"), a gym thread ("support", with its queue) or the read-only "announcements". A function result, never written.
 public class ChatThread : BaseModel
 {
   [Column("kind")] public string Kind { get; set; } = "coach";
@@ -199,9 +259,17 @@ public class ChatThread : BaseModel
   [Column("claimed_by")] public string? ClaimedBy { get; set; }
   [Column("claimed_by_name")] public string? ClaimedByName { get; set; }
   [Column("with_last_seen")] public DateTime? WithLastSeen { get; set; }
+  [Column("queue")] public string? Queue { get; set; }
 
-  public string Key => $"{Kind}|{CoachId}|{MemberId}";
+  /// <summary>The queue is added only past the Front desk, so coach and Front desk keys stay as before (the typing channel is named by it).</summary>
+  public string Key => Queue is null or ChatQueue.FrontDesk ? $"{Kind}|{CoachId}|{MemberId}" : $"{Kind}|{CoachId}|{MemberId}|{Queue}";
   public bool IsSupport => Kind == "support";
+  public bool IsAnnouncements => Kind == "announcements";
+  /// <summary>A gym thread of the signed-in member or coach themself (WithId null), not one in a staff inbox.</summary>
+  public bool IsMyGymThread => IsSupport && WithId is null;
+  /// <summary>Before anything is written to Admin or System admin there is no thread yet: this stands in for it until the first message.</summary>
+  public static ChatThread ForQueue(string me, string queue) =>
+      new() { Kind = "support", MemberId = me, Queue = queue, WithName = ChatQueue.Name(queue), CanSend = true, Status = "open" };
   public bool HasUnread => Unread > 0;
   /// <summary>Whether to show online / last active for the other person: not for a member's own "Front desk" thread (staff come and go) and not once a hire has ended.</summary>
   public bool ShowsPresence => WithId is not null && (IsSupport || CanSend);
@@ -220,6 +288,8 @@ public class ChatLine : BaseModel
   [Column("read_at")] public DateTime? ReadAt { get; set; }
   [Column("sender_name")] public string? SenderName { get; set; }
   [Column("attachment_path")] public string? AttachmentPath { get; set; }
+  [Column("kind")] public string Kind { get; set; } = "text";                 // F11: "request" for an automatic message about a time request
+  [Column("time_request_id")] public long? TimeRequestId { get; set; }
 }
 
 // one row of chat_search()
@@ -232,6 +302,19 @@ public class ChatSearchHit : BaseModel
   [Column("with_name")] public string WithName { get; set; } = "";
   [Column("snippet")] public string? Snippet { get; set; }
   [Column("sent_at")] public DateTime? SentAt { get; set; }
+  [Column("queue")] public string? Queue { get; set; }
+}
+
+/// <summary>F10 (0051): one posted announcement, from announcements_list(), for the staff Announcements page.</summary>
+public sealed class AnnouncementRow : BaseModel
+{
+  [Column("announcement_id")] public long Id { get; set; }
+  [Column("author_name")] public string? AuthorName { get; set; }
+  [Column("audience")] public string Audience { get; set; } = "everyone";
+  [Column("body")] public string Body { get; set; } = "";
+  [Column("posted_at")] public DateTime PostedAt { get; set; }
+  [System.Text.Json.Serialization.JsonIgnore] public string AudienceText => Audience switch { "members" => "Members", "coaches" => "Coaches", _ => "Everyone" };
+  [System.Text.Json.Serialization.JsonIgnore] public string WhenText => $"{PostedAt.ToLocalTime():ddd d MMM, h:mm tt}";
 }
 
 [Table("shift_posts")] public class ShiftPost : BaseModel
@@ -244,15 +327,29 @@ public class ChatSearchHit : BaseModel
   [Column("checked_in_by")] public string CheckedInBy { get; set; } = ""; [Column("checked_out_at")] public DateTime? CheckedOutAt { get; set; }
   [Column("checked_out_by")] public string? CheckedOutBy { get; set; } [Column("auto_closed")] public bool AutoClosed { get; set; } }
 
-// a member's permanent QR code (0034). Each member reads only their own row; staff look codes up through scan_member.
+// F14 (0052): a coach who runs an amenity. Written only through set_runs_amenity.
+[Table("coach_amenities")] public class CoachAmenity : BaseModel
+{ [PrimaryKey("amenity_id")] public int AmenityId { get; set; } [Column("coach_id")] public string CoachId { get; set; } = ""; }
+
+// a member's old permanent QR code (0034). F6 (0049): no longer scans; kept for history.
 [Table("member_codes")] public class MemberCode : BaseModel
 { [PrimaryKey("user_id")] public string UserId { get; set; } = ""; [Column("code")] public string Code { get; set; } = ""; }
 
+/// <summary>F6 (0049): the one-use QR pass from issue_member_pass(), good for 5 minutes.</summary>
+public sealed class MemberPass : BaseModel
+{ [Column("code")] public string Code { get; set; } = ""; [Column("expires_at")] public DateTime ExpiresAt { get; set; } }
+
 // one amenity booking (0029). Written only through book_slots / cancel_reservation / end_reservation / extend_reservation.
 [Table("reservations")] public class Reservation : BaseModel
-{ [PrimaryKey("reservation_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("amenity_id")] public int AmenityId { get; set; }
+{ [Column("user_amenity_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? UserAmenityId { get; set; }
+  [Column("payment_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? PaymentId { get; set; }   // F12 (0052): a booking paid for on its own; null for pass and coach bookings
+  [PrimaryKey("reservation_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("amenity_id")] public int AmenityId { get; set; }
   [Column("coach_id")] public string? CoachId { get; set; } [Column("training_session_id")] public int? TrainingSessionId { get; set; }
   [Column("starts_at")] public DateTime StartsAt { get; set; } [Column("ends_at")] public DateTime EndsAt { get; set; } [Column("status")] public string Status { get; set; } = "confirmed";
   [Column("cancelled_at")] public DateTime? CancelledAt { get; set; } [Column("cancelled_by")] public string? CancelledBy { get; set; } [Column("cancel_reason")] public string? CancelReason { get; set; } }
 
-public record RevenueRow(DateTime Day, string Kind, string Method, long Payments, decimal Total);
+public record RevenueRow(DateTime Day, string Kind, string Method, long Payments, decimal Total)
+{
+    /// <summary>"Membership · QR · 1 payment" (9.8: was "membership · qr · 1 payment(s)").</summary>
+    public string Summary => $"{PayKind.Name(Kind)} · {PayMethod.Name(Method)} · {Payments} {(Payments == 1 ? "payment" : "payments")}";
+}

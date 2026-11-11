@@ -30,13 +30,23 @@ public class MessengerViewModelTests
     }
 
     [Fact]
+    public async Task A_coach_with_no_conversations_is_told_so()
+    {
+        var (_, _, vm) = await Open("kai@demo.io");   // 9.6 polish: the list was blank
+        vm.IsCoach = true;                              // F9: coaches have the Gym tab too, so the first tab is theirs, "Trainees"
+        Assert.Empty(vm.Threads);
+        Assert.Equal("Trainees", vm.CoachTabText);
+        Assert.Equal("No trainees yet. Members who hire you appear here.", vm.EmptyListText);
+    }
+
+    [Fact]
     public async Task The_staff_tab_shows_the_front_desk_thread_and_staff_find_it_in_their_inbox()
     {
         var (gw, _, vm) = await Open("carlo@demo.io");
         Assert.Empty(vm.Threads);                                   // Carlo has no coach: the Coach tab is empty
         Assert.Contains("coach", vm.EmptyListText, StringComparison.OrdinalIgnoreCase);
         await vm.ShowTabCommand.ExecuteAsync("support");
-        Assert.Equal("Front desk", vm.Threads.Single().Thread.WithName);
+        Assert.Equal(["Front desk", "Admin", "System admin"], vm.Threads.Select(t => t.Thread.WithName));
 
         vm.Draft = "my payment is stuck";
         await vm.SendCommand.ExecuteAsync(null);
@@ -131,9 +141,9 @@ public class MessengerViewModelTests
 
         await vm.LoadEarlierCommand.ExecuteAsync(null);
 
-        Assert.Equal(73, vm.Bubbles.Count);   // 3 seeded + 70 sent
+        Assert.Equal(74, vm.Bubbles.Count);   // 4 seeded (one a request message, F11) + 70 sent
         Assert.False(vm.HasMore);
-        Assert.Equal(73, vm.Bubbles.Select(b => b.Line.MessageId).Distinct().Count());
+        Assert.Equal(74, vm.Bubbles.Select(b => b.Line.MessageId).Distinct().Count());
         Assert.Equal("m69", vm.Bubbles.Last().Line.Body);
     }
 
@@ -240,7 +250,7 @@ public class MessengerViewModelTests
         Assert.Equal("Coach", bea.CoachTabText);   // nothing unread on the coach side: no count
         desk.Draft = "on it"; await desk.SendCommand.ExecuteAsync(null);
         var (_, _, beaLater) = await Open("bea@demo.io", gw);
-        Assert.Equal("Staff (1)", beaLater.StaffTabText);
+        Assert.Equal("Gym (1)", beaLater.StaffTabText);   // F9: was "Staff"
     }
     // ---- fixes from the whole-branch review
 

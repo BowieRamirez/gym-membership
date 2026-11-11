@@ -44,6 +44,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
 
     readonly TimeProvider _clock;
     readonly object _rpcLock = new();
+    // F6, F8 (0049): no table the app can read, so plain fields. The demo's Alex has desk PIN 1234.
+    sealed class DemoPass { public string Code = "", Member = ""; public DateTime Expires; public DateTime? ScannedAt; public string? ScannedBy; public int? CheckInId; }
+    readonly List<DemoPass> _passes = new();
+    readonly Dictionary<string, (string Pin, int Fails, DateTime? LockedUntil)> _pins = new() { ["u-alex"] = ("1234", 0, null) };
     DateTime SubscriptionNow => _clock.GetUtcNow().UtcDateTime;
     public DemoGateway(bool seed = true, TimeProvider? clock = null)
     { _clock = clock ?? TimeProvider.System; if (seed) { Seed(); SeedMembershipTerms(); } }
@@ -60,6 +64,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         if (pk.PropertyType == typeof(int) && (int)pk.GetValue(row)! == 0)
             pk.SetValue(row, All<T>().Select(r => (int)pk.GetValue(r)!).DefaultIfEmpty(0).Max() + 1);
         if (row is Payment payment) SnapshotMembershipPayment(payment);
+        if (row is AuditEntry { Role: null } entry) entry.Role = MainRole(entry.ActorId);   // as audit() does (0045); the demo has no network address
         Table(typeof(T)).Add(row);
         if (row is Member m) Add(new MemberCode { UserId = m.UserId, Code = "GYM1-" + Guid.NewGuid().ToString("N") });   // 0034: every member gets a code
         return row;
@@ -71,7 +76,16 @@ public sealed partial class DemoGateway : ISupabaseGateway
     string Uid => CurrentUserId ?? throw Err("not authenticated");
     string[] RolesOf(string? user) => All<UserRole>().Where(u => u.UserId == user)
         .Select(u => All<Role>().First(r => r.RoleId == u.RoleId).Name).ToArray();
+    /// <summary>main_role (0045): the one role that best describes a person, in RoleResolver's order.</summary>
+    string? MainRole(string? user) => new[] { "admin", "subadmin", "employee", "coach", "member" }.FirstOrDefault(RolesOf(user).Contains);
     bool Has(string permission) => RolesOf(CurrentUserId).Any(r => RolePermissions[r].Contains(permission));
+    bool CoachInGym => All<CoachVisit>().Any(v => v.CheckedOutAt is null && All<Profile>().Any(p => p.Id == v.CoachId && p.IsActive));
+    // F14 (0052): where coaches run an amenity, one of them must be in; otherwise any coach counts
+    bool CoachInGymFor(int amenityId)
+    {
+        var runners = All<CoachAmenity>().Where(c => c.AmenityId == amenityId).Select(c => c.CoachId).ToHashSet();
+        return All<CoachVisit>().Any(v => v.CheckedOutAt is null && All<Profile>().Any(p => p.Id == v.CoachId && p.IsActive) && (runners.Count == 0 || runners.Contains(v.CoachId)));
+    }
     bool IsStaff => RolesOf(CurrentUserId).Any(r => r is "admin" or "subadmin" or "employee");
     /// <summary>can_manage_person (0036): the super admin manages anyone; others with users:manage, members and coaches only.</summary>
     bool CanManagePerson(string user) => IsActiveUser && Has("users:manage") &&
@@ -116,10 +130,15 @@ public sealed partial class DemoGateway : ISupabaseGateway
         return Task.CompletedTask;
     }
 
+    public Task<bool> EmailInUseAsync(string email) => FailWith is { } failure
+        ? Task.FromException<bool>(failure)
+        : Task.FromResult(_accounts.Keys.Any(k => string.Equals(k, email.Trim(), StringComparison.OrdinalIgnoreCase)));
+
     public Task SignUpAsync(string email, string password, string firstName, string lastName)
     {
         email = email.Trim();
-        if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName) || !email.Contains('@') || password.Length < 6) return Task.FromException(Err("bad_input"));
+        if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName) || !email.Contains('@')) return Task.FromException(Err("bad_input"));
+        if (!AccountRules.IsPassword(password)) return Task.FromException(Err("weak_password"));   // Supabase Auth's letters_digits rule (D5)
         if (_accounts.ContainsKey(email)) return Task.FromException(Err("email_taken"));
         var id = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], NameParts.Join(firstName, lastName), email, "member", firstName.Trim(), lastName.Trim());
         _passwords[id] = password;
@@ -166,6 +185,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
 
     public Task ResetPasswordWithCodeAsync(string email, string code, string newPassword)
     {
+        if (!AccountRules.IsPassword(newPassword)) return Task.FromException(Err("weak_password"));
         if (code != DemoCode || !_codesSent.Remove(email.Trim()) || !_accounts.TryGetValue(email.Trim(), out var uid))
             return Task.FromException(Err("bad_code"));
         CurrentUserId = uid;
@@ -178,7 +198,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     {
         var uid = Uid;
         if (currentPassword != _passwords.GetValueOrDefault(uid, DemoPassword)) return Task.FromException(Err("wrong_password"));
-        if (newPassword.Length < 6) return Task.FromException(Err("bad_input"));
+        if (!AccountRules.IsPassword(newPassword)) return Task.FromException(Err("weak_password"));
         _passwords[uid] = newPassword;
         return Task.CompletedTask;
     }
@@ -200,7 +220,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 case "create-user":
                 {
                     var email = S("email").Trim().ToLowerInvariant(); var role = S("role");
-                    if (role is not ("member" or "coach" or "employee" or "subadmin") || string.IsNullOrWhiteSpace(S("name")) || !email.Contains('@') || S("password").Length < 6) throw Err("bad_input");
+                    if (role is not ("member" or "coach" or "employee" or "subadmin") || string.IsNullOrWhiteSpace(S("name")) || !AccountRules.IsEmail(email)) throw Err("bad_input");
+                    if (!AccountRules.IsPassword(S("password"))) throw Err("bad_password");   // as _shared/rules.ts
                     if (_accounts.ContainsKey(email)) throw Err("email_taken");
                     if (!super && role is not ("member" or "coach")) throw Err("forbidden");
                     var (first, last) = S("first_name") is { Length: > 0 } f && S("last_name") is { Length: > 0 } l ? (f.Trim(), l.Trim()) : NameParts.Split(S("name"));
@@ -214,7 +235,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 {
                     var p = All<Profile>().FirstOrDefault(x => x.Id == S("user_id")) ?? throw Err("not_found");
                     if (!p.IsActive) throw Err("record_archived");
-                    if (S("password").Length < 6) throw Err("bad_input");
+                    if (!AccountRules.IsPassword(S("password"))) throw Err("bad_password");
                     if (!CanManagePerson(p.Id)) throw Err("forbidden");
                     _passwords[p.Id] = S("password"); p.MustChangePassword = true;
                     Notify(p.Id, "system", "Your password was reset. Sign in with the new one.");
@@ -242,7 +263,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             Member m => m.UserId == uid || staff || All<CoachHire>().Any(h => h.CoachId == uid && h.MemberId == m.UserId),
             Payment p => p.MemberId == uid || staff,
             MembershipTerm t => t.MemberId == uid || staff,
-            RefundRequest r => r.MemberId == uid || RolesOf(uid).Contains("admin"),
+            RefundRequest r => r.MemberId == uid || RolesOf(uid).Contains("admin") || (r.Kind == "no_show" && Has("payments:verify")),   // 0052: the desk reads the claims it decides
             UserMembershipPackage m => m.MemberId == uid || staff,
             MembershipRenewal r => staff || All<UserMembershipPackage>().Any(m => m.Id == r.UserMembershipPackageId && m.MemberId == uid),
             UserAmenity a => a.MemberId == uid || staff,
@@ -305,6 +326,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                         throw Err("new row for relation \"messages\" violates check constraint (23514)");
                     break;
                 case AmenityUsage u:
+                    if (!CoachInGymFor(All<UserAmenity>().FirstOrDefault(a => a.Id == u.UserAmenityId)?.AmenityId ?? 0)) throw Err("no_coach_present");   // 0043, 0052
                     if (!ActiveMember(Uid) || !All<UserAmenity>().Any(a => a.Id == u.UserAmenityId && a.MemberId == Uid && a.Status == Status.Active && (a.ExpiresAt is null || a.ExpiresAt > DateTime.UtcNow)))
                         throw Err(Rls);
                     break;
@@ -359,6 +381,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     break;
                 case (Discount d, Discount old):
                     if (!Has("discounts:manage")) throw Err(Rls);
+                    if (!string.Equals(d.Code, old.Code, StringComparison.OrdinalIgnoreCase) || d.Percent != old.Percent) throw Err("discount_fixed");   // 0041
+                    if ((d.StartsAt, d.ExpiresAt, d.MaxUses, d.ShowOnPackages) != (old.StartsAt, old.ExpiresAt, old.MaxUses, old.ShowOnPackages) && Held(old) > 0)
+                        throw Err("discount_locked");   // F7, 0048
                     GuardDiscountLimit(old, d); list[index] = Clone(d); ArchiveUsedUpCodes();
                     break;
                 case (GymSettings, _): if (!Has("gym_settings:manage")) throw Err(Rls); list[index] = Clone(row); break;
@@ -380,14 +405,6 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 case (UserNotification, UserNotification old):   // only read_at
                     if (old.UserId != Uid) throw Err(Rls);
                     old.ReadAt = ((UserNotification)(object)row).ReadAt;
-                    break;
-                case (Profile p, Profile old):
-                    if (old.Id != Uid) throw Err(Rls);
-                    old.FullName = p.FullName; old.Phone = p.Phone;
-                    break;
-                case (Member m, Member old):
-                    if (old.UserId != Uid) throw Err(Rls);
-                    old.Goals = m.Goals;
                     break;
                 default: throw Err(Rls);
             }
@@ -422,38 +439,18 @@ public sealed partial class DemoGateway : ISupabaseGateway
         return Task.CompletedTask;
     }
 
-    public Task DeleteAsync<T>(T row) where T : BaseModel, new()
-    {
-        if (FailWith is not null) return Task.FromException(FailWith);
-        try
-        {
-            RequireActive();
-            switch (row)
-            {
-                case MembershipPackage or Amenity or Discount: throw Err(Rls);
-                case ShiftPost s when s.CoachId == Uid: GuardShift(All<ShiftPost>().FirstOrDefault(x => x.Id == s.Id) ?? s, null); break;
-                case UserNotification n when n.UserId == Uid: break;
-                default: throw Err(Rls);
-            }
-            var pk = Pk(typeof(T));
-            var key = pk.GetValue(row);
-            Table(typeof(T)).RemoveAll(r => Equals(pk.GetValue(r), key));
-            return Task.CompletedTask;
-        }
-        catch (Exception ex) { return Task.FromException(ex); }
-    }
-
     // ---------- chat photos (mirrors 0016: can_use_chat_file) ----------
     readonly Dictionary<string, byte[]> _files = new();
     const string FilePart = @"[A-Za-z0-9_-][A-Za-z0-9._-]{0,119}";
-    static readonly System.Text.RegularExpressions.Regex SupportFile = new(@$"^support/(?<m>[A-Za-z0-9_-]+)/{FilePart}$");
+    // support/{person}/{file} is the Front desk; support/{queue}/{person}/{file} the Admin and System admin queues (0051)
+    static readonly System.Text.RegularExpressions.Regex SupportFile = new(@$"^support/((?<q>admin|system_admin)/)?(?<m>[A-Za-z0-9_-]+)/{FilePart}$");
     static readonly System.Text.RegularExpressions.Regex CoachFile = new(@$"^(?<c>[A-Za-z0-9_-]+)/(?<m>[A-Za-z0-9_-]+)/{FilePart}$");
 
     bool CanUseChatFile(string path, bool write)
     {
         var uid = CurrentUserId;
         if (uid is null || !IsActiveUser) return false;
-        if (SupportFile.Match(path) is { Success: true } s) return s.Groups["m"].Value == uid || Has("support:reply");
+        if (SupportFile.Match(path) is { Success: true } s) return s.Groups["m"].Value == uid || CanAnswer(s.Groups["q"].Success ? s.Groups["q"].Value : ChatQueue.FrontDesk);
         if (CoachFile.Match(path) is { Success: true } c)
         {
             var coach = c.Groups["c"].Value; var member = c.Groups["m"].Value;
@@ -503,14 +500,32 @@ public sealed partial class DemoGateway : ISupabaseGateway
 
     public Task RpcAsync(string function, Dictionary<string, object>? args = null)
     {
-        try { if (FailWith is not null) throw FailWith; Call(function, args ?? new()); return Task.CompletedTask; }
+        try { if (FailWith is not null) throw FailWith; Watched(function, args ?? new()); return Task.CompletedTask; }
         catch (Exception ex) { return Task.FromException(ex); }
     }
 
     public Task<TResult> RpcAsync<TResult>(string function, Dictionary<string, object>? args = null)
     {
-        try { if (FailWith is not null) throw FailWith; return Task.FromResult((TResult)Call(function, args ?? new())!); }
+        try { if (FailWith is not null) throw FailWith; return Task.FromResult((TResult)Watched(function, args ?? new())!); }
         catch (Exception ex) { return Task.FromException<TResult>(ex); }
+    }
+
+    // ---------- F4 (Phase 7): the demo's stand-in for Realtime on payments, check-ins and membership terms (0053) ----------
+    /// <summary>One of those rows was added or changed by a function. Raised only on a real change, so a page reloading never sets off another.</summary>
+    public event Action? RecordsChanged;
+    static readonly Type[] LiveTables = [typeof(Payment), typeof(GymCheckIn), typeof(MembershipTerm)];
+
+    // ponytail: every column of every row of three tables, before and after each function; fine for the demo's few hundred rows.
+    // Every write to them goes through a function (0006 grants no direct writes), so InsertAsync/UpdateAsync need no watch.
+    string LiveStamp() => string.Join('\n', LiveTables.SelectMany(Table).Select(row => string.Join("|", row.GetType().GetProperties()
+        .Where(p => p.IsDefined(typeof(ColumnAttribute), true) || p.IsDefined(typeof(PrimaryKeyAttribute), true)).Select(p => p.GetValue(row)))));
+
+    object? Watched(string function, Dictionary<string, object> args)
+    {
+        var before = LiveStamp();
+        var result = Call(function, args);
+        if (LiveStamp() != before) RecordsChanged?.Invoke();
+        return result;
     }
 
     // ---------- payments: helpers shared by the functions below (0005_functions.sql) ----------
@@ -527,7 +542,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     }
 
     /// <summary>0028: a shift sits on the half-hour grid inside gym hours on one Manila day, and never leaves a scheduled session of its coach outside it.</summary>
-    void GuardShift(ShiftPost? old, ShiftPost? next)
+    void GuardShift(ShiftPost? old, ShiftPost next)
     {
         if (next is { Status: Status.Scheduled } && (old is null || old.Start != next.Start || old.End != next.End || old.Status != Status.Scheduled))
         {
@@ -549,7 +564,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     /// <summary>No code: full price. A bad, expired or already-used code is an error, never a silent full price.</summary>
     (int? Id, decimal Cut, decimal Amount) Discounted(string member, Dictionary<string, object> a, decimal price)
     {
-        if (!a.TryGetValue("p_discount_code", out var raw) || string.IsNullOrWhiteSpace(raw as string)) return (null, 0, price);
+        if (!a.TryGetValue("p_discount_code", out var raw) || string.IsNullOrWhiteSpace(raw as string)) return NotFree((null, 0, price));
         var code = ((string)raw).Trim();
         var now = DateTime.UtcNow;
         ArchiveUsedUpCodes();
@@ -557,8 +572,12 @@ public sealed partial class DemoGateway : ISupabaseGateway
         if (d is null || All<Payment>().Any(p => p.MemberId == member && p.DiscountId == d.Id && p.Status is Status.Pending or Status.Verified or Status.Voided)) throw Err("invalid_code");
         if (d.MaxUses is { } max && Held(d) >= max) throw Err("code_limit_reached");
         var cut = Math.Round(price * d.Percent / 100m, 2);
-        return (d.Id, cut, price - cut);
+        return NotFree((d.Id, cut, price - cut));
     }
+
+    /// <summary>D4, as 0046: 0 only when a discount brought it there. Checked before any row is added, as the server rolls back.</summary>
+    static (int? Id, decimal Cut, decimal Amount) NotFree((int? Id, decimal Cut, decimal Amount) d) =>
+        d.Amount <= 0 && d.Cut <= 0 ? throw Err("zero_amount") : d;
 
     Payment NewQrPayment(string kind, string member, (int? Id, decimal Cut, decimal Amount) d, int? ump = null, int? renewal = null, int? amenity = null)
     {
@@ -584,6 +603,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             var ua = All<UserAmenity>().First(a => a.Id == uaId);
             var days = All<Amenity>().First(a => a.Id == ua.AmenityId).DurationDays;
             ua.Status = Status.Active; ua.ExpiresAt = days is null ? null : now.AddDays(days.Value);
+            SettleHold(ua);
         }
     }
 
@@ -592,21 +612,32 @@ public sealed partial class DemoGateway : ISupabaseGateway
     {
         foreach (var m in All<UserMembershipPackage>().Where(m => m.Id == pay.UserMembershipPackageId && m.Status == Status.Pending)) m.Status = Status.Cancelled;
         foreach (var r in All<MembershipRenewal>().Where(r => r.Id == pay.RenewalId && r.Status == Status.Pending)) r.Status = Status.Cancelled;
-        foreach (var a in All<UserAmenity>().Where(a => a.Id == pay.UserAmenityId && a.Status == Status.Pending)) a.Status = Status.Cancelled;
+        foreach (var a in All<UserAmenity>().Where(a => a.Id == pay.UserAmenityId && a.Status == Status.Pending)) { a.Status = Status.Cancelled; SettleHold(a); }
     }
 
     bool Overlap(string who, bool coach, DateTime start, DateTime end, int ignore = 0) =>
         All<TrainingSession>().Any(s => s.Id != ignore && s.Status == Status.Scheduled && (coach ? s.CoachId : s.MemberId) == who && s.ScheduledStart < end && start < s.ScheduledEnd);
 
     // ---------- functions (mirror 0005_functions.sql) ----------
+    // F11: like the deferred trigger in 0051, each change a call made to a time request is told in the chat once the call has succeeded
     object? Call(string fn, Dictionary<string, object> a)
-    { lock (_rpcLock) return CallLocked(fn, a); }
+    {
+        lock (_rpcLock)
+        {
+            var before = All<TimeRequest>().ToDictionary(r => r.Id, Clone);
+            var result = CallLocked(fn, a);
+            PostRequestMessages(before);
+            return result;
+        }
+    }
 
     object? CallLocked(string fn, Dictionary<string, object> a)
     {
         if (SubscriptionCall(fn, a, out var subscriptionResult)) return subscriptionResult;
         if (ReservationCall(fn, a, out var reservationResult)) return reservationResult;
         if (RequestCall(fn, a, out var requestResult)) return requestResult;
+        if (CashShiftCall(fn, a, out var shiftResult)) return shiftResult;
+        if (MessengerCall(fn, a, out var chatResult)) return chatResult;
         var now = SubscriptionNow;
         int I(string k) => Convert.ToInt32(a[k]);
         bool B(string k) => Convert.ToBoolean(a[k]);
@@ -618,9 +649,15 @@ public sealed partial class DemoGateway : ISupabaseGateway
         switch (fn)
         {
             case "archive_records": return ArchiveRecords(a);
+            case "audit_records": return AuditRecords(a);
             case "discount_usage":
                 Require("discounts:manage"); ArchiveUsedUpCodes();
                 return All<Discount>().Select(d => new DiscountUse(d.Id, Consumed(d), All<Payment>().Count(p => p.DiscountId == d.Id && p.Status == Status.Pending))).ToList();
+            case "packages_codes":   // F5, 0048
+                RequireActive();
+                return All<Discount>().Where(d => d.ShowOnPackages && d.IsActive && d.StartsAt <= now && d.ExpiresAt > now && (d.MaxUses is not { } max || Held(d) < max)
+                        && !All<Payment>().Any(p => p.MemberId == uid && p.DiscountId == d.Id && p.Status is Status.Pending or Status.Verified or Status.Voided))
+                    .OrderBy(d => d.ExpiresAt).ThenBy(d => d.Code).Select(d => new PackageCode { Code = d.Code, Percent = d.Percent, ExpiresAt = d.ExpiresAt }).ToList();
             case "archive_catalog_record": ArchiveCatalog(S("p_type"), I("p_id"), S("p_reason")); return null;
             case "restore_archived_record": RestoreArchived(S("p_type"), S("p_id")); return null;
             case "avail_membership":
@@ -639,7 +676,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 var am = All<Amenity>().FirstOrDefault(x => x.Id == I("p_amenity_id") && x.IsActive) ?? throw Err("not_found");
                 if (All<UserAmenity>().Any(x => x.MemberId == uid && x.AmenityId == am.Id && x.Status is Status.Pending or Status.Active)) throw Err("already_availed");
                 var d = Discounted(uid, a, am.Price);
-                var ua = Add(new UserAmenity { MemberId = uid, AmenityId = am.Id, Status = Status.Pending, AvailedAt = now });
+                var ua = Add(new UserAmenity { MemberId = uid, AmenityId = am.Id, Status = Status.Pending, AvailedAt = now, IsSession = am.DurationDays is null });
                 return Clone(NewQrPayment(PayKind.Amenity, uid, d, amenity: ua.Id));
             }
             case "renew_membership":
@@ -670,7 +707,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (pay.MemberId == uid) throw Err("self_verify");
                 if (B("p_approve"))
                 {
-                    if (pay.Method == PayMethod.Qr && pay.ExpiresAt <= now) throw Err("payment_expired");
+                    if ((pay.Method == PayMethod.Qr || HoldOf(pay) is not null) && pay.ExpiresAt <= now) throw Err("payment_expired");   // 0052: a cash hold runs out too
+                    if (pay.Method == PayMethod.Cash) pay.CashShiftId = OpenShiftOf(uid);   // 0050
                     pay.Status = Status.Verified; pay.VerifiedBy = uid; pay.VerifiedAt = now; pay.ReceiptNo = ReceiptNo();
                     ActivateTarget(pay);
                     Notify(pay.MemberId, "payment", "Payment approved", pay.PaymentCode);
@@ -690,10 +728,11 @@ public sealed partial class DemoGateway : ISupabaseGateway
             {
                 Require("payments:record");
                 var kind = S("p_kind"); var method = S("p_method"); var memberId = Opt("p_member_id");
-                if (method == PayMethod.Qr) throw Err("bad_input");
+                if (method is not (PayMethod.Cash or PayMethod.Gcash)) throw Err("bad_input");   // 0055: cash or GCash at the desk
                 if (memberId == uid) throw Err("self_verify");
                 var reference = Opt("p_reference_no");
-                if (method is PayMethod.Gcash or PayMethod.BankTransfer && reference is null) throw Err("bad_input");
+                if (method == PayMethod.Gcash && reference is null) throw Err("bad_input");
+                int? shift = method == PayMethod.Cash ? OpenShiftOf(uid) : null;   // 0050: cash goes into the cashier's open drawer
                 var itemId = a.ContainsKey("p_item_id") ? I("p_item_id") : 0;
                 var d = (Id: (int?)null, Cut: 0m, Amount: 0m);
                 int? ump = null, ren = null, ua = null;
@@ -703,7 +742,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 {
                     walkIn = Opt("p_walk_in_name") ?? throw Err("bad_input");
                     memberId = null;
-                    d = (null, 0, All<GymSettings>().First().WalkInPrice);
+                    d = NotFree((null, 0, All<GymSettings>().First().WalkInPrice));
                 }
                 else
                 {
@@ -733,7 +772,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                         var am = All<Amenity>().FirstOrDefault(x => x.Id == itemId && x.IsActive) ?? throw Err("not_found");
                         if (All<UserAmenity>().Any(x => x.MemberId == memberId && x.AmenityId == am.Id && x.Status is Status.Pending or Status.Active)) throw Err("already_availed");
                         d = Discounted(memberId, a, am.Price);
-                        ua = Add(new UserAmenity { MemberId = memberId, AmenityId = am.Id, Status = Status.Pending, AvailedAt = now }).Id;
+                        ua = Add(new UserAmenity { MemberId = memberId, AmenityId = am.Id, Status = Status.Pending, AvailedAt = now, IsSession = am.DurationDays is null }).Id;
                     }
                 }
 
@@ -741,7 +780,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 {
                     PaymentCode = PaymentCode(), Kind = kind, Method = method, Status = Status.Verified, Amount = d.Amount, DiscountId = d.Id, DiscountAmount = d.Cut,
                     MemberId = memberId, WalkInName = walkIn, UserMembershipPackageId = ump, RenewalId = ren, UserAmenityId = ua, ReferenceNo = reference,
-                    RecordedBy = uid, VerifiedBy = uid, VerifiedAt = now, ReceiptNo = ReceiptNo(), CreatedAt = now
+                    RecordedBy = uid, VerifiedBy = uid, VerifiedAt = now, ReceiptNo = ReceiptNo(), CreatedAt = now, CashShiftId = shift
                 });
                 if (kind == PayKind.WalkIn) Add(new GymCheckIn { PaymentId = pay.Id, CheckedInAt = now });
                 else { ActivateTarget(pay); Notify(memberId, "payment", "Payment received", pay.PaymentCode); }
@@ -793,12 +832,35 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (manila < g.OpensAt || manila >= g.ClosesAt) throw Err("gym_closed");
                 return Add(new CoachVisit { CoachId = coachId, CheckedInBy = uid, CheckedInAt = now }).Id;
             }
-            // 0034: inactive > active > pending > expired; the demo keeps no scan log (there is no audit screen for it)
+            case "issue_member_pass":   // F6, 0049
+            {
+                RequireActive();
+                if (All<Member>().All(m => m.UserId != uid)) throw Err("forbidden");
+                foreach (var old in _passes.Where(x => x.Member == uid && x.ScannedAt is null && x.Expires > now)) old.Expires = now;
+                var pass = new DemoPass { Code = "GYM2-" + Guid.NewGuid().ToString("N"), Member = uid!, Expires = now.AddMinutes(5) };
+                _passes.Add(pass);
+                return new List<MemberPass> { new() { Code = pass.Code, ExpiresAt = pass.Expires } };
+            }
+            case "set_desk_pin":        // F8, 0049
+            {
+                RequireActive();
+                if (All<Member>().All(m => m.UserId != uid)) throw Err("forbidden");
+                var pin = Opt("p_pin");
+                if (pin is not { Length: 4 } || !pin.All(char.IsAsciiDigit)) throw Err("bad_pin");
+                _pins[uid!] = (pin, 0, null);
+                return null;
+            }
+            // 0034, 0049: inactive > active > pending > expired; a used, expired or replaced pass, or a permanent code, is old_code.
+            // The demo keeps no scan log (there is no audit screen for it)
             case "scan_member":
             {
                 Require("check_ins:record");
                 var code = (Opt("p_code") ?? "").Trim();
-                var member = All<MemberCode>().FirstOrDefault(c => c.Code == code)?.UserId;
+                var pass = _passes.FirstOrDefault(x => x.Code == code);
+                if (pass is not { ScannedAt: null } || pass.Expires <= now)
+                    return new MemberScan { Result = pass is not null || All<MemberCode>().Any(c => c.Code == code) ? "old_code" : "not_found" };
+                (pass.ScannedAt, pass.ScannedBy) = (now, uid);
+                var member = pass.Member;
                 var p = All<Profile>().FirstOrDefault(x => x.Id == member);
                 var terms = All<MembershipTerm>().Where(t => t.MemberId == member && t.CancelledAt is null).OrderBy(t => t.StartsAt).ToList();
                 string result; DateTime? expires = null;
@@ -960,9 +1022,46 @@ public sealed partial class DemoGateway : ISupabaseGateway
             {
                 Require("check_ins:record");
                 var memberId = S("p_member_id");
+                var method = Opt("p_method") ?? "qr";
+                var at = Opt("p_at") is { } when ? DateTime.Parse(when, null, System.Globalization.DateTimeStyles.AdjustToUniversal) : (DateTime?)null;
+                var clientRef = Opt("p_client_ref");
+                var (pin, reason) = (Opt("p_pin"), Opt("p_reason")?.Trim() is { Length: > 0 } r ? r : null);
+                if (method is not ("qr" or "manual" or "offline")) throw Err("bad_input");
+                if (at is { } t0 && (method != "offline" || t0 > now.AddMinutes(5) || t0 < now.AddHours(-48))) throw Err("bad_input");
+                if (reason?.Length > 500) throw Err("bad_reason");
+                if (clientRef is not null && All<GymCheckIn>().FirstOrDefault(c => c.ClientRef == clientRef) is { } again) return again.Id;
                 if (All<Member>().All(m => m.UserId != memberId)) throw Err("not_found");
-                if (!ActiveMember(memberId)) throw Err("no_active_membership");
-                return Add(new GymCheckIn { MemberId = memberId, CheckedInAt = now }).Id;
+                if (at is { } t1
+                    ? !(All<Profile>().Any(p => p.Id == memberId && p.IsActive) && All<MembershipTerm>().Any(x => x.MemberId == memberId && x.CancelledAt is null && x.StartsAt <= t1 && t1 < x.EndsAt))
+                    : !ActiveMember(memberId)) throw Err("no_active_membership");
+                // 0049: qr needs this desk's fresh scan; manual and offline need the PIN, or an Admin or System admin with a reason
+                DemoPass? scanned = null;
+                if (method == "qr")
+                    scanned = _passes.Where(x => x.Member == memberId && x.ScannedBy == uid && x.ScannedAt > now.AddMinutes(-10) && x.CheckInId is null)
+                        .OrderByDescending(x => x.ScannedAt).FirstOrDefault() ?? throw Err("scan_required");
+                else if (pin is null)
+                {
+                    if (reason is null || !RolesOf(uid).Any(x => x is "admin" or "subadmin")) throw Err("pin_required");
+                }
+                else
+                {
+                    if (!_pins.TryGetValue(memberId, out var saved)) throw Err("no_desk_pin");
+                    if (saved.LockedUntil > now) throw Err("pin_locked");
+                    if (saved.Pin != pin) { _pins[memberId] = saved.Fails >= 4 ? (saved.Pin, 0, now.AddMinutes(15)) : (saved.Pin, saved.Fails + 1, saved.LockedUntil); return null; }
+                    _pins[memberId] = (saved.Pin, 0, saved.LockedUntil);
+                }
+                var row = Add(new GymCheckIn { MemberId = memberId, CheckedInAt = at ?? now, Method = method, ClientRef = clientRef, RecordedBy = uid, Reason = reason });
+                if (scanned is not null) scanned.CheckInId = row.Id;
+                return row.Id;
+            }
+            case "desk_member_snapshot":
+            {
+                Require("check_ins:record");
+                return All<Member>().Where(m => All<Profile>().Any(p => p.Id == m.UserId && p.IsActive)).Select(m => new SavedMember
+                {
+                    Member = m.UserId, Name = All<Profile>().First(p => p.Id == m.UserId).FullName,
+                    Terms = All<MembershipTerm>().Where(x => x.MemberId == m.UserId && x.CancelledAt is null && x.EndsAt > now).Select(x => new SavedTerm { Starts = x.StartsAt, Ends = x.EndsAt }).ToList(),
+                }).ToList();
             }
             case "verify_amenity_usage":
             {
@@ -1060,185 +1159,6 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 }
                 return told.OrderBy(t => t.Name).ToList();
             }
-            // ---- messenger (mirrors 0015_messenger.sql)
-            case "chat_threads":
-            {
-                RequireActive();
-                string NameOf(string id) => All<Profile>().FirstOrDefault(p => p.Id == id)?.FullName ?? "Unknown";
-                var rows = new List<ChatThread>();
-
-                // coach chats: every hire (current or ended) and every pair already written to
-                var pairs = All<CoachHire>().Select(h => (h.CoachId, h.MemberId)).Union(All<ChatMessage>().Select(m => (m.CoachId, m.MemberId)))
-                    .Where(p => p.CoachId == uid || p.MemberId == uid).ToList();
-                foreach (var (coachId, memberId) in pairs)
-                {
-                    var withId = coachId == uid ? memberId : coachId;
-                    var msgs = All<ChatMessage>().Where(m => m.CoachId == coachId && m.MemberId == memberId).OrderBy(m => m.Id).ToList();
-                    var last = msgs.LastOrDefault();
-                    rows.Add(new ChatThread
-                    {
-                        Kind = "coach", CoachId = coachId, MemberId = memberId, WithId = withId, WithName = NameOf(withId),
-                        WithAvatar = All<Profile>().FirstOrDefault(p => p.Id == withId)?.AvatarPath,
-                        LastBody = last is null ? null : Preview(last.Body, last.AttachmentPath), LastAt = last?.SentAt, LastFromMe = last?.SenderId == uid,
-                        Unread = msgs.Count(m => m.SenderId != uid && m.ReadAt is null),
-                        CanSend = CoachesMember(coachId, memberId) && ActiveMember(memberId)
-                    });
-                }
-
-                // a member's own front desk thread is always there
-                if (All<Member>().Any(m => m.UserId == uid))
-                {
-                    var msgs = All<SupportMessage>().Where(m => m.MemberId == uid).OrderBy(m => m.Id).ToList();
-                    var last = msgs.LastOrDefault();
-                    rows.Add(new ChatThread
-                    {
-                        Kind = "support", MemberId = uid, WithName = "Front desk", LastBody = last is null ? null : Preview(last.Body, last.AttachmentPath), LastAt = last?.SentAt, LastFromMe = last?.SenderId == uid,
-                        Unread = msgs.Count(m => m.SenderId != uid && m.ReadAt is null), CanSend = true,
-                        Status = All<SupportThread>().FirstOrDefault(t => t.MemberId == uid)?.Status ?? "open"
-                    });
-                }
-
-                // the inbox, for staff who may answer
-                if (Has("support:reply"))
-                    foreach (var t in All<SupportThread>().Where(t => t.MemberId != uid).OrderByDescending(t => t.LastMessageAt).Take(500))
-                    {
-                        var msgs = All<SupportMessage>().Where(m => m.MemberId == t.MemberId).OrderBy(m => m.Id).ToList();
-                        var last = msgs.LastOrDefault();
-                        rows.Add(new ChatThread
-                        {
-                            Kind = "support", MemberId = t.MemberId, WithId = t.MemberId, WithName = NameOf(t.MemberId),
-                            WithAvatar = All<Profile>().FirstOrDefault(p => p.Id == t.MemberId)?.AvatarPath,
-                            LastBody = last is null ? null : Preview(last.Body, last.AttachmentPath), LastAt = last?.SentAt, LastFromMe = last is not null && last.SenderId != t.MemberId,
-                            Unread = msgs.Count(m => m.SenderId == t.MemberId && m.ReadAt is null), CanSend = true,
-                            Status = t.Status, ClaimedBy = t.ClaimedBy, ClaimedByName = t.ClaimedBy is null ? null : NameOf(t.ClaimedBy)
-                        });
-                    }
-                return rows.OrderByDescending(r => r.LastAt ?? DateTime.MinValue).ToList();
-            }
-            case "chat_messages":
-            {
-                RequireActive();
-                var kind = S("p_kind"); var member = Opt("p_member"); var coach = Opt("p_coach");
-                long? before = a.TryGetValue("p_before", out var bv) && bv is not null ? Convert.ToInt64(bv) : null;
-                var limit = Math.Clamp(a.TryGetValue("p_limit", out var lv) && lv is not null ? Convert.ToInt32(lv) : 50, 1, 100);
-                if (kind == "coach")
-                {
-                    if (uid != coach && uid != member) throw Err("forbidden");
-                    return All<ChatMessage>().Where(m => m.CoachId == coach && m.MemberId == member && (before is null || m.Id < before)).OrderByDescending(m => m.Id).Take(limit)
-                        .Select(m => new ChatLine { MessageId = m.Id, SenderId = m.SenderId, Body = m.Body, SentAt = m.SentAt, DeliveredAt = m.DeliveredAt, ReadAt = m.ReadAt, AttachmentPath = m.AttachmentPath }).ToList();
-                }
-                if (kind == "support")
-                {
-                    if (uid != member && !Has("support:reply")) throw Err("forbidden");
-                    return All<SupportMessage>().Where(m => m.MemberId == member && (before is null || m.Id < before)).OrderByDescending(m => m.Id).Take(limit)
-                        .Select(m => new ChatLine
-                        {
-                            MessageId = m.Id, SenderId = m.SenderId, Body = m.Body, SentAt = m.SentAt, DeliveredAt = m.DeliveredAt, ReadAt = m.ReadAt, AttachmentPath = m.AttachmentPath,
-                            // a member never learns which staff member answered; staff do
-                            SenderName = uid == member || m.SenderId == member ? null : All<Profile>().FirstOrDefault(p => p.Id == m.SenderId)?.FullName
-                        }).ToList();
-                }
-                throw Err("bad_input");
-            }
-            case "mark_chat_read":
-            {
-                RequireActive();
-                var kind = S("p_kind"); var member = Opt("p_member"); var coach = Opt("p_coach");
-                if (kind == "coach")
-                {
-                    if (uid != coach && uid != member) throw Err("forbidden");
-                    foreach (var m in All<ChatMessage>().Where(m => m.CoachId == coach && m.MemberId == member && m.SenderId != uid && m.ReadAt is null)) { m.DeliveredAt ??= now; m.ReadAt = now; }
-                    ClearChatAlerts(uid, $"c|{coach}|{member}");
-                }
-                else if (kind == "support")
-                {
-                    if (uid != member && !Has("support:reply")) throw Err("forbidden");
-                    foreach (var m in All<SupportMessage>().Where(m => m.MemberId == member && m.ReadAt is null && (uid == member ? m.SenderId != member : m.SenderId == member))) { m.DeliveredAt ??= now; m.ReadAt = now; }
-                    ClearChatAlerts(uid, $"s|{member}");
-                }
-                else throw Err("bad_input");
-                return null;
-            }
-            case "mark_chats_delivered":
-            {
-                RequireActive();
-                foreach (var m in All<ChatMessage>().Where(m => (m.CoachId == uid || m.MemberId == uid) && m.SenderId != uid && m.DeliveredAt is null)) m.DeliveredAt = now;
-                foreach (var m in All<SupportMessage>().Where(m => m.DeliveredAt is null && m.SenderId != uid && (m.MemberId == uid || (Has("support:reply") && m.SenderId == m.MemberId)))) m.DeliveredAt = now;
-                return null;
-            }
-            case "send_support_message":
-            {
-                RequireActive();
-                var member = S("p_member");
-                var body = (a["p_body"] as string)?.Trim() ?? "";
-                var att = Opt("p_attachment");
-                if (body == "" && att is null) throw Err("empty_message");
-                if (body.Length > 2000) throw Err("message_too_long");
-                if (uid == member) { if (!All<Member>().Any(m => m.UserId == uid)) throw Err("forbidden"); }
-                else if (Has("support:reply")) { if (!All<Member>().Any(m => m.UserId == member)) throw Err("not_found"); }
-                else throw Err("forbidden");
-                // the photo has to be in this member's front desk folder
-                if (att is not null && !System.Text.RegularExpressions.Regex.IsMatch(att, $"^support/{member}/{FilePart}$")) throw Err("forbidden");
-
-                var thread = All<SupportThread>().FirstOrDefault(t => t.MemberId == member) ?? Add(new SupportThread { MemberId = member });
-                var msg = Add(new SupportMessage { MemberId = member, SenderId = uid, Body = body, SentAt = now, AttachmentPath = att });
-                thread.LastMessageAt = now;
-                var shown = Preview(body, att) ?? "";
-                var key = $"s|{member}"; var preview = shown.Length > 80 ? shown[..80] : shown;
-                if (uid == member)
-                {
-                    thread.Status = "open";   // writing again reopens it
-                    var title = $"New message from {All<Profile>().First(p => p.Id == uid).FullName}";
-                    if (thread.ClaimedBy is { } taker && All<Profile>().Any(p => p.Id == taker && p.IsActive)) NotifyChat(taker, title, preview, key);
-                    else foreach (var id in All<UserRole>().Where(u => RolesOf(u.UserId).Any(r => r is "admin" or "subadmin" or "employee")).Select(u => u.UserId).Distinct().ToList())
-                        if (All<Profile>().Any(p => p.Id == id && p.IsActive)) NotifyChat(id, title, preview, key);
-                }
-                else NotifyChat(member, "Message from the front desk", preview, key);
-                return (long)msg.Id;
-            }
-            case "claim_support_thread":
-            {
-                Require("support:reply");
-                var thread = All<SupportThread>().FirstOrDefault(t => t.MemberId == S("p_member")) ?? throw Err("not_found");
-                if (B("p_claim"))
-                {
-                    if (thread.ClaimedBy is not null && thread.ClaimedBy != uid && All<Profile>().Any(p => p.Id == thread.ClaimedBy && p.IsActive)) throw Err("already_processed");
-                    thread.ClaimedBy = uid;
-                }
-                else
-                {
-                    if (thread.ClaimedBy is not null && thread.ClaimedBy != uid && !RolesOf(uid).Contains("admin") && All<Profile>().Any(p => p.Id == thread.ClaimedBy && p.IsActive)) throw Err("forbidden");
-                    thread.ClaimedBy = null;
-                }
-                return null;
-            }
-            case "set_support_status":
-            {
-                Require("support:reply");
-                (All<SupportThread>().FirstOrDefault(t => t.MemberId == S("p_member")) ?? throw Err("not_found")).Status = B("p_open") ? "open" : "closed";
-                return null;
-            }
-            case "chat_search":
-            {
-                RequireActive();
-                var q = ((a.TryGetValue("p_query", out var qv) ? qv as string : null) ?? "").Trim();
-                var hits = new List<ChatSearchHit>();
-                if (q.Length < 2) return hits;
-                bool Has_(string? s) => s?.Contains(q, StringComparison.OrdinalIgnoreCase) == true;   // % and _ are plain characters here, like in the database
-                foreach (var t in (List<ChatThread>)Call("chat_threads", new())!)
-                {
-                    var found = t.IsSupport
-                        ? All<SupportMessage>().Where(m => m.MemberId == t.MemberId && Has_(m.Body)).OrderByDescending(m => m.SentAt).Select(m => (m.Body, m.SentAt)).FirstOrDefault()
-                        : All<ChatMessage>().Where(m => m.CoachId == t.CoachId && m.MemberId == t.MemberId && Has_(m.Body)).OrderByDescending(m => m.SentAt).Select(m => (m.Body, m.SentAt)).FirstOrDefault();
-                    if (found.Body is null && !Has_(t.WithName)) continue;
-                    hits.Add(new ChatSearchHit
-                    {
-                        Kind = t.Kind, CoachId = t.CoachId, MemberId = t.MemberId, WithId = t.WithId, WithName = t.WithName,
-                        Snippet = found.Body ?? t.LastBody, SentAt = found.Body is null ? t.LastAt : found.SentAt
-                    });
-                }
-                return hits.OrderByDescending(h => h.SentAt ?? DateTime.MinValue).Take(30).ToList();
-            }
             case "set_my_avatar":
             {
                 var path = Opt("p_path");
@@ -1247,13 +1167,19 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 return null;
             }
             case "touch_last_seen": RequireActive(); return null;   // the demo has no one to show it to
-            case "set_my_name":
+            case "correct_name":
             {
-                RequireActive();
-                string first = (Opt("p_first") ?? "").Trim(), last = (Opt("p_last") ?? "").Trim();
+                RequireArchiveAdmin();
+                string first = (Opt("p_first") ?? "").Trim(), last = (Opt("p_last") ?? "").Trim(), reason = (Opt("p_reason") ?? "").Trim();
                 if (!AccountRules.IsName(first, last)) throw Err("bad_name");
-                var p = All<Profile>().First(x => x.Id == uid);
+                if (reason.Length is < 1 or > 500) throw Err("bad_correction_reason");
+                var target = Opt("p_user");
+                var p = All<Profile>().FirstOrDefault(x => x.Id == target) ?? throw Err("not_found");
+                if (!p.IsActive) throw Err("record_archived");
+                var old = p.FullName;
                 (p.FirstName, p.LastName, p.FullName) = (first, last, NameParts.Join(first, last));
+                Add(new AuditEntry { ActorId = Uid, Action = "user.correct_name", Entity = "profiles", EntityId = p.Id, CreatedAt = SubscriptionNow,
+                    Details = new() { ["from"] = old, ["to"] = p.FullName, ["reason"] = reason } });
                 return null;
             }
             case "confirm_my_email":
@@ -1289,7 +1215,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
         var now = DateTime.UtcNow;
         DateTime At(int days, double hour) => DateTime.Today.AddDays(days).AddHours(hour).ToUniversalTime(); // seed in the viewer's local time
         foreach (var r in new[] { "admin", "employee", "coach", "member", "subadmin" }) Add(new Role { Name = r });
-        Add(new GymSettings { GymName = "Gym Membership", QrAccountName = "Demo Gym (GCash)", WalkInPrice = 150, PaymentExpiryHours = 48 });
+        // F10: one announcement, so Messages shows the pinned conversation with something in it
+        _announcements.Add(new DemoAnnouncement { Id = 1, Author = "u-admin", Body = "New yoga class on Thursdays at 6:00 PM. Sign up at the front desk.", Posted = now.AddDays(-1) });
+        Add(new GymSettings { GymName = "Health & Fitness Gym Center", QrAccountName = "Demo Gym (GCash)", WalkInPrice = 150, PaymentExpiryHours = 48 });
 
         AddUser("u-admin", "Dana Reyes", "admin@demo.io", "admin");
         AddUser("u-emp", "Marco Santos", "employee@demo.io", "employee");
@@ -1348,7 +1276,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
         Add(new CoachHire { MemberId = "u-bea", CoachId = "u-coach1", HiredAt = now.AddDays(-2) });
 
         Add(new TimeRequest { CoachId = "u-coach1", MemberId = null, RequestedBy = "coach", RequestedStart = At(1, 10), RequestedEnd = At(1, 11), Message = "Open slot, strength session" });
-        Add(new TimeRequest { CoachId = "u-coach1", MemberId = "u-alex", RequestedBy = "member", RequestedStart = At(2, 17), RequestedEnd = At(2, 18), Message = "Evening session after work?" });
+        var alexAsks = Add(new TimeRequest { CoachId = "u-coach1", MemberId = "u-alex", RequestedBy = "member", RequestedStart = At(2, 17), RequestedEnd = At(2, 18), Message = "Evening session after work?" });
+        Add(new ChatMessage { CoachId = "u-coach1", MemberId = "u-alex", SenderId = "u-alex", Body = RequestWords(alexAsks, null)!, SentAt = now.AddDays(-10), ReadAt = now.AddDays(-10), Kind = "request", TimeRequestId = alexAsks.Id });   // F11, as 0051 would have posted it
 
         Add(new TrainingSession { CoachId = "u-coach1", MemberId = "u-alex", Title = "Squat technique", ScheduledStart = At(2, 9), ScheduledEnd = At(2, 10) });
         Add(new TrainingSession { CoachId = "u-coach1", MemberId = "u-alex", Title = "Upper body", ScheduledStart = At(-3, 9), ScheduledEnd = At(-3, 10), Status = Status.Completed });
@@ -1375,7 +1304,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         Add(new UserNotification { UserId = "u-coach1", Type = "time_request", Title = "New time request", CreatedAt = now.AddHours(-1) });
         Add(new UserNotification { UserId = "u-emp", Type = "payment", Title = "Payment waiting for review", Body = "GYM-7F3K2", CreatedAt = now.AddHours(-3) });
 
-        Add(new Discount { Code = "WELCOME10", Percent = 10, StartsAt = now.AddDays(-1), ExpiresAt = now.AddDays(60) });
+        Add(new Discount { Code = "WELCOME10", Percent = 10, StartsAt = now.AddDays(-1), ExpiresAt = now.AddDays(60), ShowOnPackages = true });
         Add(new Discount { Code = "NEWYEAR20", Percent = 20, StartsAt = now.AddDays(-40), ExpiresAt = now.AddDays(-5) });
 
         Add(new ShiftPost { CoachId = "u-coach1", Start = At(1, 6), End = At(1, 14), Note = "Strength floor, squat rack priority" });
@@ -1389,4 +1318,12 @@ public sealed partial class DemoGateway : ISupabaseGateway
         Add(new AuditEntry { ActorId = "u-emp", Action = "payment.verify", Entity = "payments", EntityId = "5", CreatedAt = now.AddDays(-3) });
         Add(new AuditEntry { ActorId = "u-admin", Action = "role.assign", Entity = "user_roles", EntityId = "u-coach2", CreatedAt = now.AddDays(-8) });
     }
+}
+
+/// <summary>Demo mode's live updates: the demo gateway's own change hint (F4).</summary>
+public sealed class DemoLiveRecords : ILiveRecords
+{
+    public DemoLiveRecords(DemoGateway gateway) => gateway.RecordsChanged += () => Changed?.Invoke();
+    public event Action? Changed;
+    public Task StartAsync() => Task.CompletedTask;
 }

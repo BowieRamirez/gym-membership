@@ -29,7 +29,6 @@ public interface IProfileService
     /// <summary>Tells the server you are in the app (it counts at most once every 5 minutes). The result can be ignored.</summary>
     Task<AppResult<bool>> TouchSeenAsync();
     /// <summary>Renames you; the full name everyone sees becomes "first last".</summary>
-    Task<AppResult<bool>> SetNameAsync(string firstName, string lastName);
 }
 
 public sealed class ProfileService(ISupabaseGateway gw) : IProfileService
@@ -52,13 +51,6 @@ public sealed class ProfileService(ISupabaseGateway gw) : IProfileService
         var p = (await gw.ListAsync<Profile>(x => x.Id == uid)).FirstOrDefault() ?? throw new Exception("not_found");
         return new MyProfile(string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName, p.AvatarPath, p.FirstName, p.LastName);
     });
-
-    public async Task<AppResult<bool>> SetNameAsync(string firstName, string lastName)
-    {
-        firstName = firstName.Trim(); lastName = lastName.Trim();
-        if (!AccountRules.IsName(firstName, lastName)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_name");
-        return await Safe.RunAsync(async () => { await gw.RpcAsync("set_my_name", new() { ["p_first"] = firstName, ["p_last"] = lastName }); return true; });
-    }
 
     public async Task<AppResult<string>> SetAvatarAsync(string fileName, byte[] data)
     {

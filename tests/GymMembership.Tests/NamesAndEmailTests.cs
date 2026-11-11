@@ -59,14 +59,72 @@ public class NamesAndEmailTests
     }
 
     [Fact]
-    public async Task Anyone_renames_themselves_and_the_full_name_follows()
+    public async Task Only_a_system_admin_corrects_a_name_and_the_full_name_follows()
     {
-        var gw = await As("coach@demo.io");
-        var profile = new ProfileService(gw);
-        Assert.Equal("bad_name", (await profile.SetNameAsync("Ana", "")).Message);
-        Assert.True((await profile.SetNameAsync("Ana Maria", "Reyes-Cruz")).Ok);
-        var me = (await profile.MeAsync()).Value!;
-        Assert.Equal(("Ana Maria Reyes-Cruz", "Ana Maria", "Reyes-Cruz"), (me.Name, me.FirstName, me.LastName));
+        var gw = await As("admin@demo.io");
+        var admin = new AdminService(gw);
+        Assert.Equal("bad_name", (await admin.CorrectNameAsync("u-coach1", "Ana", "", "Typo")).Message);
+        Assert.Equal("bad_name", (await admin.CorrectNameAsync("u-coach1", "Ana1", "Reyes", "Typo")).Message);
+        Assert.Equal("bad_correction_reason", (await admin.CorrectNameAsync("u-coach1", "Ana", "Reyes", "   ")).Message);
+        Assert.Equal("bad_correction_reason", (await admin.CorrectNameAsync("u-coach1", "Ana", "Reyes", new string('x', 501))).Message);
+
+        Assert.True((await admin.CorrectNameAsync("u-coach1", " Ana Maria ", " Reyes-Cruz ", " Typo at sign-up ")).Ok);
+        var coach = (await gw.ListAsync<Profile>(p => p.Id == "u-coach1")).Single();
+        Assert.Equal(("Ana Maria Reyes-Cruz", "Ana Maria", "Reyes-Cruz"), (coach.FullName, coach.FirstName, coach.LastName));
+        var log = (await gw.ListAsync<AuditEntry>()).Last(a => a.Action == "user.correct_name");
+        Assert.Equal(("u-coach1", "u-admin"), (log.EntityId, log.ActorId));
+        Assert.Equal("Typo at sign-up", log.Details!["reason"]?.ToString());
+
+        Assert.True((await admin.CorrectNameAsync("u-admin", "Dana", "Reyes", "My own typo")).Ok);   // otherwise a lone system admin's typo is permanent
+    }
+
+    [Theory]
+    [InlineData("subadmin@demo.io")]
+    [InlineData("employee@demo.io")]
+    [InlineData("coach@demo.io")]
+    [InlineData("member@demo.io")]
+    public async Task Nobody_else_can_correct_a_name(string email)
+    {
+        var gw = await As(email);
+        var result = await new AdminService(gw).CorrectNameAsync("u-coach1", "New", "Name", "Reason");
+        Assert.False(result.Ok);
+        Assert.Equal(AppErrorKind.Unauthorized, result.Error);
+    }
+
+    [Fact]
+    public async Task An_archived_account_cannot_be_corrected()
+    {
+        var gw = await As("admin@demo.io");
+        await new AdminService(gw).SetActiveAsync("u-coach1", false);
+        Assert.Equal("record_archived", (await new AdminService(gw).CorrectNameAsync("u-coach1", "New", "Name", "Reason")).Message);
+    }
+
+    [Fact]
+    public async Task The_users_page_corrects_a_name_for_a_system_admin_only()
+    {
+        var gw = await As("admin@demo.io");
+        var vm = new UsersViewModel(new AdminService(gw));
+        await vm.OnAppearingAsync();
+        var coach = vm.Users.Single(u => u.UserId == "u-coach1");
+        Assert.True(vm.CanCorrectName(coach));
+        vm.StartCorrectNameCommand.Execute(coach);
+        Assert.Equal((coach.FirstName, coach.LastName, ""), (vm.CorrectFirstName, vm.CorrectLastName, vm.CorrectReason));
+
+        vm.CorrectFirstName = "Rico"; vm.CorrectLastName = "Dalisay";
+        await vm.ConfirmCorrectNameCommand.ExecuteAsync(null);
+        Assert.NotNull(vm.ErrorMessage);   // no reason yet: the panel stays open
+        Assert.NotNull(vm.Correcting);
+
+        vm.CorrectReason = "Typo at sign-up";
+        await vm.ConfirmCorrectNameCommand.ExecuteAsync(null);
+        Assert.Null(vm.Correcting);
+        Assert.Equal("Name corrected to Rico Dalisay.", vm.Notice);
+        Assert.Contains(vm.Users, u => u.UserId == "u-coach1" && u.FirstName == "Rico" && u.LastName == "Dalisay");
+
+        var sub = await As("subadmin@demo.io");
+        var subVm = new UsersViewModel(new AdminService(sub));
+        await subVm.OnAppearingAsync();
+        Assert.False(subVm.CanCorrectName(subVm.Users.First(u => u.UserId == "u-coach1")));
     }
 
     [Fact]
@@ -168,16 +226,14 @@ public class NamesAndEmailTests
     }
 
     [Fact]
-    public async Task Settings_shows_the_name_and_saves_a_new_one()
+    public async Task Settings_shows_the_name_and_offers_no_way_to_change_it()
     {
         var gw = await As("member@demo.io");
         var vm = Settings(gw);
         await vm.OnAppearingAsync();
         Assert.Equal(("Alex", "Tan"), (vm.FirstName, vm.LastName));
-        vm.FirstName = "Alexis"; vm.LastName = "Tan Cruz";
-        await vm.SaveNameCommand.ExecuteAsync(null);
-        Assert.Equal("Name saved.", vm.Notice);
-        Assert.Equal("Alexis Tan Cruz", Me(gw).FullName);
+        Assert.Null(typeof(SettingsViewModel).GetProperty("SaveNameCommand"));
+        Assert.Null(typeof(IProfileService).GetMethod("SetNameAsync"));
     }
 
     [Fact]
@@ -239,9 +295,9 @@ public class NamesAndEmailTests
     [Theory]
     [InlineData("", 0)]
     [InlineData("abc", 1)]          // too short
-    [InlineData("abcdef", 1)]       // length only
-    [InlineData("abcde1", 2)]
-    [InlineData("Abcde1", 3)]
+    [InlineData("abcdefgh", 1)]     // length only
+    [InlineData("abcdefg1", 2)]     // the two required checks
+    [InlineData("Abcdefg1", 3)]
     [InlineData("Abcdefghij12", 4)]
     public void Password_strength_counts_the_checklist(string password, int strength) =>
         Assert.Equal(strength, AccountRules.PasswordStrength(password));
@@ -249,12 +305,13 @@ public class NamesAndEmailTests
     static SettingsViewModel Settings(DemoGateway gw) =>
         new(new SettingsService(gw), new AuthService(gw), new NullNavigator(), new ProfileService(gw), new DemoPhotoPicker(), gw);
 
-    sealed class NullNavigator : IAppNavigator
+    internal sealed class NullNavigator : IAppNavigator
     {
         public void GoTo(AppRole role, bool changePassword = false) { }
         public void GoToLogin() { }
         public void GoToRegister() { }
         public void GoToMessages() { }
+        public void GoToRequests() { }
         public void GoToMembership() { }
         public void ApplyTheme(string theme) { }
     }

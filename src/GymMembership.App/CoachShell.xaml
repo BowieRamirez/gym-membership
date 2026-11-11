@@ -5,24 +5,25 @@
        xmlns:c="clr-namespace:GymMembership.App.Controls"
        xmlns:views="clr-namespace:GymMembership.App.Views"
        FlyoutBehavior="{OnPlatform WinUI=Locked, Default=Flyout}"
-       Title="Gym Membership">
+       Title="Gym Center">
 
     <Shell.TitleView><c:HeaderBar /></Shell.TitleView>
 
     <Shell.FlyoutHeader>
         <VerticalStackLayout Padding="20,28,20,16" Spacing="14">
             <Label Text="Coach" Style="{StaticResource Heading}" />
-            <c:DumbbellLogo Size="36" Inverted="True" HorizontalOptions="Start" />
+            <c:LogoMark Size="36" HorizontalOptions="Start" />
         </VerticalStackLayout>
     </Shell.FlyoutHeader>
 
     <FlyoutItem Title="Dashboard" Route="dashboard"><ShellContent ContentTemplate="{DataTemplate views:AttendancePage}" /></FlyoutItem>
     <FlyoutItem Title="Sessions"><ShellContent ContentTemplate="{DataTemplate views:SessionsPage}" /></FlyoutItem>
-    <FlyoutItem Title="Time requests"><ShellContent ContentTemplate="{DataTemplate views:RequestsPage}" /></FlyoutItem>
-    <FlyoutItem Title="Trainees"><ShellContent ContentTemplate="{DataTemplate views:TraineesPage}" /></FlyoutItem>
-    <FlyoutItem Title="Messages" Route="messages"><ShellContent ContentTemplate="{DataTemplate views:MessagesPage}" /></FlyoutItem>
+    <FlyoutItem Title="Time requests" Route="requests"><ShellContent ContentTemplate="{DataTemplate views:RequestsPage}" /></FlyoutItem>
+    <!-- owner, 2026-11-12: the Trainees page is gone; the trainees are on My shifts -->
     <FlyoutItem Title="My shifts"><ShellContent ContentTemplate="{DataTemplate views:ShiftsPage}" /></FlyoutItem>
-    <FlyoutItem Title="My coach profile"><ShellContent ContentTemplate="{DataTemplate views:CoachProfilePage}" /></FlyoutItem>
+    <FlyoutItem Title="Messages" Route="messages"><ShellContent ContentTemplate="{DataTemplate views:MessagesPage}" /></FlyoutItem>
     <FlyoutItem Title="Amenities"><ShellContent ContentTemplate="{DataTemplate views:AmenitiesPage}" /></FlyoutItem>
-    <FlyoutItem Title="Settings" Route="settings"><ShellContent ContentTemplate="{DataTemplate views:SettingsPage}" /></FlyoutItem>
+    <!-- F17: the coach profile and the account settings are one page, called Settings like everyone else's (owner, 2026-11-11);
+         the account menu's Settings opens it -->
+    <FlyoutItem Title="Settings" Route="settings"><ShellContent ContentTemplate="{DataTemplate views:CoachProfilePage}" /></FlyoutItem>
 </Shell>

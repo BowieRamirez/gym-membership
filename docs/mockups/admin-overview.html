@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overview: simplified (Phase 7 mockup)</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600&display=swap" rel="stylesheet">
+<style>
+  /* Tokens from src/GymMembership.App/Resources/Styles/Colors.xaml */
+  :root, [data-theme="dark"] {
+    --backdrop: #0E100E; --chalk: #161816; --card: #212521; --surface: #2C302B; --line: #3A3F39;
+    --ink: #EEF1EC; --muted: #A3AAA1; --chip: #E7EBE4; --lime: #E4F58A; --red: #FF7B70;
+  }
+  [data-theme="light"] {
+    --backdrop: #ECEFE8; --chalk: #ECEFE8; --card: #FFFFFF; --surface: #F2F4F0; --line: #D4DAD0;
+    --ink: #000000; --muted: #5A6159; --chip: #ECEFE8; --lime: #E4F58A; --red: #C8372D;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #2a2d2a; color: var(--ink); font: 14px/1.45 Barlow, system-ui, sans-serif; }
+  ::selection { background: var(--lime); color: #000; }
+  button, a { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; border-radius: 6px; }
+  svg.i { width: 17px; height: 17px; fill: none; stroke: #000; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  svg.m { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* ---- mockup controls (not part of the app) ---- */
+  .mock { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center; padding: 12px 18px; background: #1a1c1a; color: #dfe3dc; font-size: 13px; }
+  .mock b { font-weight: 600; margin-right: 6px; }
+  .mock .seg { display: inline-flex; border: 1px solid #444a43; border-radius: 8px; overflow: hidden; }
+  .mock .seg button { border: 0; background: none; padding: 5px 11px; cursor: pointer; color: #b9bfb6; border-right: 1px solid #444a43; }
+  .mock .seg button:last-child { border-right: 0; }
+  .mock .seg button[aria-pressed="true"] { background: var(--lime); color: #000; }
+  .stage { padding: 22px; display: flex; justify-content: center; }
+
+  /* ---- app frame ---- */
+  .app { display: grid; grid-template-columns: 64px 1fr; color: var(--ink); background: var(--backdrop); min-height: 760px; width: 100%; max-width: 1600px; border-radius: 10px; overflow: hidden; }
+  .app.narrow { max-width: 900px; }
+  .rail { margin: 10px 0 10px 10px; background: var(--card); border: 1px solid var(--line); border-radius: 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 0; }
+  .rail .logo { width: 36px; height: 36px; border-radius: 10px; background: #000; display: grid; place-items: center; margin-bottom: 4px; }
+  .rail .ico { width: 34px; height: 34px; border-radius: 10px; background: var(--chip); display: grid; place-items: center; }
+  .rail .ico.on { background: var(--lime); }
+  .rail .sep { width: 24px; height: 1px; background: var(--line); margin: 2px 0; }
+  .rail .end { margin-top: auto; }
+
+  .page { padding: 18px 24px 28px; min-width: 0; }
+  .head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+  .head h1 { margin: 0; font: 500 28px/1.1 Barlow, sans-serif; }
+  .head .when { margin-left: auto; color: var(--muted); }
+  .iconbtn { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--line); background: var(--card); display: grid; place-items: center; cursor: pointer; }
+  .iconbtn:hover { background: var(--surface); }
+
+  /* the one thing that needs a decision today */
+  .attention { display: flex; align-items: center; gap: 14px; background: var(--lime); color: #000; border-radius: 12px; padding: 12px 14px 12px 18px; margin-bottom: 14px; }
+  .attention p { margin: 0; font-weight: 500; }
+  .attention p strong { font-weight: 600; }
+  .ink { margin-left: auto; height: 34px; padding: 0 16px; border-radius: 999px; border: 0; background: #000; color: #fff; font-weight: 600; cursor: pointer; white-space: nowrap; }
+
+  /* number strip: one panel, four figures, each opens its page */
+  .strip { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin-bottom: 22px; }
+  .fig { display: block; text-decoration: none; padding: 14px 18px 16px; border-left: 1px solid var(--line); cursor: pointer; }
+  .fig:first-child { border-left: 0; }
+  .fig:hover { background: var(--surface); }
+  .fig .label { display: flex; align-items: center; gap: 6px; color: var(--muted); font-weight: 500; }
+  .fig .label svg { margin-left: auto; opacity: 0; transition: opacity .15s; }
+  .fig:hover .label svg, .fig:focus-visible .label svg { opacity: 1; }
+  .fig .num { font: 600 40px/1.05 "Barlow Condensed", sans-serif; letter-spacing: -0.01em; margin: 6px 0 2px; font-variant-numeric: tabular-nums; }
+  .fig .num small { font-size: 22px; margin-right: 2px; }
+  .fig .sub { color: var(--muted); }
+  .fig.err .num { font: 500 16px/1.4 Barlow, sans-serif; color: var(--ink); margin: 10px 0 6px; }
+  .fig.err .retry { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 3px 12px; cursor: pointer; font-weight: 500; }
+
+  /* lower area */
+  .lower { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+  .narrow .lower { grid-template-columns: 1fr; }
+  .narrow .strip { grid-template-columns: repeat(2, 1fr); }
+  .narrow .fig:nth-child(3) { border-left: 0; }
+  .narrow .fig:nth-child(n+3) { border-top: 1px solid var(--line); }
+  h2 { font: 500 20px/1.2 Barlow, sans-serif; margin: 0 0 10px; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+  section + section { margin-top: 22px; }
+
+  .daybar { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .daybar input { height: 32px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); padding: 0 10px; font: inherit; color-scheme: dark; }
+  [data-theme="light"] .daybar input { color-scheme: light; }
+  .daybar .count { margin-left: auto; font-weight: 600; }
+  .rows { list-style: none; margin: 0; padding: 4px 0; }
+  .rows li { display: grid; grid-template-columns: 52px 1fr auto; gap: 10px; padding: 8px 14px; align-items: baseline; }
+  .rows li + li { border-top: 1px solid var(--line); }
+  .rows time { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .rows .how { color: var(--muted); font-size: 13px; }
+
+  /* the pages the strip doesn't cover */
+  .links a { display: flex; align-items: center; gap: 12px; padding: 10px 14px; text-decoration: none; }
+  .links a + a { border-top: 1px solid var(--line); }
+  .links a:hover { background: var(--surface); }
+  .links .chip { width: 32px; height: 32px; border-radius: 9px; background: var(--chip); display: grid; place-items: center; flex: none; }
+  .links .t { font-weight: 600; }
+  .links .d { color: var(--muted); }
+  .links .go { margin-left: auto; color: var(--muted); }
+  .links a:first-child { border-radius: 14px 14px 0 0; }
+  .links a:last-child { border-radius: 0 0 14px 14px; }
+
+  .activity li { grid-template-columns: 1fr auto; }
+  .activity .who { color: var(--muted); }
+  .empty { padding: 14px; color: var(--muted); margin: 0; }
+
+  [data-role="admin"] .sys { display: none !important; }
+
+  /* notes for the owner, outside the app */
+  .notes { max-width: 900px; margin: 0 auto 40px; padding: 0 22px; color: #dfe3dc; font-size: 14px; }
+  .notes h3 { font: 600 16px/1.3 Barlow, sans-serif; margin: 22px 0 6px; color: #fff; }
+  .notes ul { margin: 0; padding-left: 20px; }
+  .notes li { margin: 4px 0; max-width: 75ch; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="mock" role="toolbar" aria-label="Mockup controls">
+  <span><b>Theme</b><span class="seg" data-ctl="theme"><button aria-pressed="true" data-v="dark">Dark</button><button aria-pressed="false" data-v="light">Light</button></span></span>
+  <span><b>Signed in as</b><span class="seg" data-ctl="role"><button aria-pressed="true" data-v="system">System admin</button><button aria-pressed="false" data-v="admin">Admin</button></span></span>
+  <span><b>Width</b><span class="seg" data-ctl="width"><button aria-pressed="false" data-v="narrow">About 900 px</button><button aria-pressed="true" data-v="wide">Maximised</button></span></span>
+  <span><b>State</b><span class="seg" data-ctl="state"><button aria-pressed="true" data-v="normal">Refunds waiting</button><button aria-pressed="false" data-v="calm">Nothing waiting</button><button aria-pressed="false" data-v="fail">Revenue failed</button></span></span>
+</div>
+
+<div class="stage">
+<div class="app" id="app" data-theme="dark" data-role="system">
+  <nav class="rail" aria-label="Side menu (unchanged)">
+    <div class="logo"><svg class="i" viewBox="0 0 24 24" style="stroke:#E4F58A"><path d="M6.5 6.5v11M17.5 6.5v11M3 9v6M21 9v6M6.5 12h11"/></svg></div>
+    <div class="ico on" title="Overview"><svg class="i" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></div>
+    <div class="ico" title="Front desk"><svg class="i" viewBox="0 0 24 24"><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect width="20" height="14" x="2" y="6" rx="2"/></svg></div>
+    <div class="sep"></div>
+    <div class="ico" title="Users and roles"><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+    <div class="ico" title="Packages and amenities"><svg class="i" viewBox="0 0 24 24"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 8.7 5 8.7-5"/></svg></div>
+    <div class="ico" title="Discounts"><svg class="i" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1"/></svg></div>
+    <div class="ico" title="Revenue"><svg class="i" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg></div>
+    <div class="ico sys" title="Cancellations &amp; refunds"><svg class="i" viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg></div>
+    <div class="ico sys" title="Void a payment"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg></div>
+    <div class="ico sys" title="Gym settings"><svg class="i" viewBox="0 0 24 24"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/></svg></div>
+    <div class="ico sys" title="Logs &amp; Archive"><svg class="i" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></div>
+    <div class="ico end" title="Messages"><svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+    <div class="ico" title="Settings"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg></div>
+  </nav>
+
+  <main class="page">
+    <header class="head">
+      <h1>Overview</h1>
+      <span class="when">Thursday 6 November, checked 14:32</span>
+      <button class="iconbtn" aria-label="Refresh overview" title="Refresh overview"><svg class="m" viewBox="0 0 24 24"><path d="M21 3v5h-5"/><path d="M21 8A9 9 0 1 0 21 16"/></svg></button>
+    </header>
+
+    <div class="attention sys" id="attention">
+      <p><strong>3 refund requests</strong> are waiting for review, 1 of them for a term the member has used.</p>
+      <button class="ink">Review refunds</button>
+    </div>
+
+    <div class="strip" role="list">
+      <a class="fig" role="listitem" href="#" id="fig-revenue" aria-label="Revenue: 4,850 pesos today, 62,300 this month. Open Revenue">
+        <span class="label">Revenue today <svg class="m" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>
+        <div class="num"><small>₱</small>4,850</div>
+        <div class="sub">₱ 62,300 this month</div>
+      </a>
+      <a class="fig" role="listitem" href="#">
+        <span class="label">Accounts <svg class="m" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>
+        <div class="num">214</div>
+        <div class="sub">198 active, 16 inactive</div>
+      </a>
+      <a class="fig" role="listitem" href="#">
+        <span class="label">Packages <svg class="m" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>
+        <div class="num">6</div>
+        <div class="sub">active, plus 4 amenities</div>
+      </a>
+      <a class="fig" role="listitem" href="#">
+        <span class="label">Discount codes <svg class="m" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>
+        <div class="num">3</div>
+        <div class="sub">usable now, of 7</div>
+      </a>
+    </div>
+
+    <div class="lower">
+      <section>
+        <h2>Check-ins</h2>
+        <div class="panel">
+          <div class="daybar">
+            <input type="date" value="2026-11-06" aria-label="Day">
+            <span class="count">12 check-ins</span>
+          </div>
+          <ul class="rows">
+            <li><time>06:04</time><span>Andrea Villanueva</span><span class="how">QR</span></li>
+            <li><time>06:11</time><span>Marco Dela Cruz</span><span class="how">QR</span></li>
+            <li><time>06:40</time><span>Jessa Ramos</span><span class="how">By name</span></li>
+            <li><time>07:15</time><span>Paolo Santos</span><span class="how">QR</span></li>
+            <li><time>08:02</time><span>Kristine Lim</span><span class="how">QR, sent later</span></li>
+            <li><time>09:30</time><span>Rafael Mendoza</span><span class="how">QR</span></li>
+          </ul>
+        </div>
+      </section>
+
+      <div>
+        <section class="sys">
+          <h2>Other pages</h2>
+          <nav class="panel links" aria-label="Other admin pages">
+            <a href="#"><span class="chip"><svg class="i" viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg></span><span><span class="t">Cancellations &amp; refunds</span><br><span class="d" id="refund-line">3 to review, 1 waiting for repayment</span></span><svg class="m go" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></a>
+            <a href="#"><span class="chip"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg></span><span><span class="t">Void a payment</span><br><span class="d">Find a verified payment and void it with a reason</span></span><svg class="m go" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></a>
+            <a href="#"><span class="chip"><svg class="i" viewBox="0 0 24 24"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/></svg></span><span><span class="t">Gym settings</span><br><span class="d">Iron Haven Fitness</span></span><svg class="m go" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></a>
+            <a href="#"><span class="chip"><svg class="i" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></span><span><span class="t">Logs &amp; Archive</span><br><span class="d">Full audit log and archived records</span></span><svg class="m go" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></a>
+          </nav>
+        </section>
+
+        <section class="sys">
+          <h2>Recent activity</h2>
+          <div class="panel">
+            <ul class="rows activity">
+              <li><span>Refund approved <span class="who">by Bowie R.</span></span><time>14:05</time></li>
+              <li><span>Account deleted <span class="who">by Bowie R.</span></span><time>13:48</time></li>
+              <li><span>Discount code edited <span class="who">by Lea M.</span></span><time>11:20</time></li>
+              <li><span>Payment voided <span class="who">by Bowie R.</span></span><time>10:02</time></li>
+              <li><span>Package price changed <span class="who">by Lea M.</span></span><time>Yesterday</time></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+</div>
+
+<div class="notes">
+  <h3>What changes</h3>
+  <ul>
+    <li>The eight cards and their black "Open ..." buttons go. Four numbers sit in one strip, and each number opens its page (Revenue, Users and roles, Packages and amenities, Discounts).</li>
+    <li>The four pages without a number (refunds, void, gym settings, logs) become a short list of links. Every page the cards reached is still one click away, and the side menu is unchanged.</li>
+    <li>Pending refunds, the only thing on this page that needs a decision, get one lime bar with one button. It disappears when nothing is waiting.</li>
+    <li>The paragraphs under each card and the note about "list-based counts" go. The "Refresh overview" button becomes an icon next to the time it was checked.</li>
+    <li>A summary that fails to load says so in its own place, with Retry, instead of a Retry button on every card.</li>
+    <li>Recent activity uses readable labels ("Account deleted", not <code>user.archive</code>). The labels themselves arrive in Phase 8.</li>
+    <li>An Admin (former Sub-admin) sees the same strip and check-ins, without the refund bar, the link list or activity, because those pages are System admin only today.</li>
+  </ul>
+  <h3>Your call</h3>
+  <ul>
+    <li>Title: this mockup uses "Overview", the same word as the side menu, because both admin roles see it. Say if you want "Admin overview" back.</li>
+    <li>The check-in list's last column (QR, By name, sent later) shows how each check-in came in. Phase 6 records this, but the overview doesn't load it yet, so it is a small extra. Drop it if it's noise.</li>
+    <li>On a phone nothing changes: this page is Windows only.</li>
+  </ul>
+</div>
+
+<script>
+  const app = document.getElementById('app');
+  const fig = document.getElementById('fig-revenue');
+  const figHTML = fig.innerHTML;
+  document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    const v = b.dataset.v, ctl = seg.dataset.ctl;
+    if (ctl === 'theme') app.dataset.theme = v;
+    if (ctl === 'role') app.dataset.role = v;
+    if (ctl === 'width') app.classList.toggle('narrow', v === 'narrow');
+    if (ctl === 'state') {
+      document.getElementById('attention').style.display = v === 'calm' ? 'none' : '';
+      document.getElementById('refund-line').textContent = v === 'calm' ? 'Nothing to review, 1 waiting for repayment' : '3 to review, 1 waiting for repayment';
+      fig.classList.toggle('err', v === 'fail');
+      fig.innerHTML = v === 'fail'
+        ? '<span class="label">Revenue today</span><div class="num">Couldn’t load revenue. Check the connection.</div><button class="retry" type="button">Retry</button>'
+        : figHTML;
+    }
+  }));
+  // ?theme=light&role=admin&width=narrow&state=fail presses the same buttons
+  new URLSearchParams(location.search).forEach((v, k) => document.querySelector(`[data-ctl="${k}"] [data-v="${v}"]`)?.click());
+</script>
+</body>
+</html>

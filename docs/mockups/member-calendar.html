@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Member calendar (Phase 6 mockup)</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Tokens from src/GymMembership.App/Resources/Styles/Colors.xaml (as the other mockups in this folder) */
+  :root, [data-theme="dark"] {
+    --page: #0E0E0E; --card: #1A1A1A; --surface: #242424; --line: #2A2A2A; --edge: #757575;
+    --ink: #F2F2F2; --muted: #A6A6A6; --signal: #FFEC00; --good: #4CC585; --rail: #161616; --chip: #2A2A2A;
+    --sel: #FFEC00; --solid: #FFEC00; --solid-ink: #111111; --sched: #7FB2FF;
+  }
+  [data-theme="light"] {
+    --page: #EEEEEE; --card: #FFFFFF; --surface: #F5F5F5; --line: #E4E4E4; --edge: #808080;
+    --ink: #111111; --muted: #5B5B5B; --signal: #FFEC00; --good: #1B7A3E; --rail: #FFEC00; --chip: #E4E4E4;
+    --sel: #111111; --solid: #111111; --solid-ink: #FFFFFF; --sched: #1F5FBF;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #2b2b2b; color: var(--ink); font: 14px/1.45 Barlow, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+  ::selection { background: var(--signal); color: #111; }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--sel); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  .mock { position: sticky; top: 0; z-index: 9; display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: center; padding: 12px 18px; background: #151515; color: #ddd; font-size: 13px; border-bottom: 1px solid #333; }
+  .mock b { font-weight: 600; margin-right: 6px; }
+  .seg { display: inline-flex; border: 1px solid #444; border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; background: none; padding: 5px 11px; cursor: pointer; color: #bbb; border-right: 1px solid #444; }
+  .seg button:last-child { border-right: 0; }
+  .seg button[aria-pressed="true"] { background: var(--signal); color: #111; }
+  .note { max-width: 1180px; margin: 26px auto 8px; padding: 0 22px; color: #cfcfcf; }
+  .note h2 { font: 600 18px/1.3 Barlow, sans-serif; margin: 0 0 6px; color: #fff; }
+  .note p { margin: 0 0 5px; max-width: 80ch; }
+  .stage { padding: 10px 22px 26px; display: flex; gap: 22px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+
+  .app { display: grid; grid-template-columns: 72px 1fr; background: var(--page); border-radius: 10px; overflow: hidden; width: 100%; max-width: 1180px; }
+  .rail { background: var(--rail); display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 0; }
+  .rail i { width: 38px; height: 38px; border-radius: 11px; background: var(--chip); display: block; opacity: .55; }
+  .rail i.on { background: var(--signal); opacity: 1; }
+  [data-theme="light"] .rail i { background: rgba(0,0,0,.12); }
+  [data-theme="light"] .rail i.on { background: #111; }
+  .page { padding: 18px 24px 26px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+  h1 { margin: 0; font: 500 28px/1.1 Barlow, sans-serif; }
+  h2 { margin: 0; font: 600 16px/1.25 Barlow, sans-serif; }
+  .cap { font-size: 12.5px; color: var(--muted); font-weight: 500; }
+  .muted { color: var(--muted); }
+  .panel { background: var(--card); border-radius: 16px; padding: 14px 16px; }
+  .btn { height: 34px; padding: 0 14px; border-radius: 999px; border: 2px solid var(--ink); background: none; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .btn.y { background: var(--solid); border-color: var(--solid); color: var(--solid-ink); }
+  .chip { height: 34px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--edge); background: none; font-weight: 500; cursor: pointer; }
+  .nav { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--edge); background: none; cursor: pointer; display: grid; place-items: center; }
+  .nav svg { width: 18px; height: 18px; }
+
+  /* the coach Dashboard's month: rounded day tiles, today's number on yellow, the chosen day outlined, two entries then "+n more" */
+  .layout { display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start; }
+  .bar { display: flex; align-items: center; gap: 8px; }
+  .bar .m { font: 600 18px Barlow; margin: 0 6px; }
+  .bar .sp { flex: 1; }
+  .wk { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .wk > span { text-align: center; font: 500 12px Barlow; color: var(--muted); }
+  .d { height: 86px; border-radius: 10px; background: var(--surface); border: 2px solid transparent; padding: 6px; display: flex; flex-direction: column; gap: 3px; cursor: pointer; text-align: left; min-width: 0; }
+  .d .n { align-self: flex-start; padding: 0 5px; border-radius: 6px; font: 600 14px/20px Barlow; }
+  .d.today .n { background: var(--signal); color: #111; }
+  .d.on { border-color: var(--sel); }
+  .d.dim { opacity: .45; }
+  .d .e { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 5px; display: flex; align-items: center; gap: 5px; }
+  .k { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .k.session { background: var(--sel); }
+  .k.booking { background: var(--good); }
+  .k.open { background: transparent; border: 1.5px solid var(--sched); }
+  .k.shift { background: var(--edge); }
+  .key { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--muted); align-items: center; }
+  .key span { display: inline-flex; align-items: center; gap: 6px; }
+
+  /* the chosen day: its entries as rows, the one thing you can do on each */
+  .day h2 { font-size: 18px; margin-bottom: 2px; }
+  .row { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; padding: 12px 0; border-top: 1px solid var(--line); align-items: center; }
+  .row:first-of-type { border-top: 0; }
+  .row .k { grid-row: span 2; align-self: start; margin-top: 6px; }
+  .row .t { font-weight: 600; }
+  .row .s { color: var(--muted); font-size: 13px; }
+  .row .a { grid-column: 2; margin-top: 6px; }
+  .empty { color: var(--muted); padding: 10px 0 4px; }
+  .hours { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px; font-size: 13px; color: var(--muted); }
+
+  /* phone */
+  .phone { width: 380px; background: var(--page); border-radius: 26px; padding: 14px; border: 8px solid #000; display: flex; flex-direction: column; gap: 10px; }
+  .phone h1 { font-size: 22px; }
+  .phone .d { height: 48px; padding: 4px; }
+  .phone .d .e { display: none; }
+  .phone .dots { display: flex; gap: 3px; padding-left: 5px; margin-top: auto; }
+  .phone .dots .k { width: 6px; height: 6px; }
+  .tabs { display: grid; grid-template-columns: repeat(5, 1fr); background: var(--card); border-radius: 14px; padding: 6px; gap: 2px; margin-top: auto; }
+  .tabs span { text-align: center; font-size: 11px; color: var(--muted); padding: 22px 0 4px; border-radius: 10px; position: relative; }
+  .tabs span::before { content: ""; position: absolute; top: 6px; left: 50%; width: 18px; height: 14px; margin-left: -9px; border-radius: 4px; border: 1.5px solid currentColor; }
+  .tabs span.on { color: var(--ink); font-weight: 600; }
+  .tabs span.on::before { background: var(--signal); border-color: var(--signal); }
+
+  /* menus */
+  .menus { display: flex; gap: 22px; flex-wrap: wrap; justify-content: center; }
+  .menu { width: 300px; background: var(--card); border-radius: 16px; padding: 12px; }
+  .menu h2 { padding: 2px 8px 8px; }
+  .mi { display: flex; justify-content: space-between; align-items: center; padding: 9px 10px; border-radius: 10px; }
+  .mi.on { background: var(--surface); font-weight: 600; }
+  .mi .lock { font-size: 12px; color: var(--muted); }
+  .mi .tab { font-size: 11.5px; color: var(--muted); }
+
+  /* coach Profile & settings */
+  .sect { font: 600 13px Barlow; color: var(--muted); margin: 6px 0 -4px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .field { border: 2px solid var(--edge); border-radius: 12px; padding: 8px 12px; color: var(--muted); }
+  .sw { display: inline-flex; align-items: center; gap: 10px; }
+  .sw i { width: 46px; height: 26px; border-radius: 999px; background: var(--solid); position: relative; }
+  .sw i::after { content: ""; position: absolute; top: 3px; left: 23px; width: 20px; height: 20px; border-radius: 50%; background: var(--solid-ink); }
+  .av { width: 72px; height: 72px; border-radius: 50%; background: linear-gradient(135deg, #6b6b6b, #3a3a3a); color: #fff; display: grid; place-items: center; font: 600 22px Barlow; }
+</style>
+</head>
+<body data-theme="dark">
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="l" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></symbol>
+  <symbol id="r" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></symbol>
+</svg>
+<div class="mock">
+  <span><b>Theme</b><span class="seg" data-set="theme"><button aria-pressed="true" data-v="dark">Dark</button><button data-v="light">Light</button></span></span>
+  <span><b>Member</b><span class="seg" data-set="who"><button aria-pressed="true" data-v="coach">With a coach</button><button data-v="nocoach">No coach</button></span></span>
+</div>
+
+<div class="note"><h2>1. Member: Calendar (Windows)</h2>
+<p>A new menu item, right under My membership. The month is the coach Dashboard's: today on yellow, the chosen day outlined, each day naming its first two entries in a word (Session, Open slot, Coach shift, or the amenity) and "+2 more"; the times and full names are in the day's list. A dot says what each entry is: <b>your session</b> (yellow, ink in light), <b>amenity booking</b> (green), <b>your coach's open time</b> (blue ring) and <b>your coach on the floor</b> (grey).</p>
+<p>The chosen day is listed on the right. An open time has <b>Ask for this time</b>: it sends a time request with the same rules as Time requests (one request at a time, none while you already have a session booked). A booking has <b>Open</b>, which goes to Book an amenity. Sessions and shifts are just shown. The member doesn't book gym visits here: there's no capacity to book.</p></div>
+<div class="stage">
+  <div class="app"><nav class="rail"><i></i><i class="on"></i><i></i><i></i><i></i><i></i></nav>
+    <main class="page"><h1>Calendar</h1>
+      <div class="layout">
+        <section class="panel">
+          <div class="bar"><button class="nav" aria-label="Previous month"><svg><use href="#l"/></svg></button><span class="m">November 2026</span><button class="nav" aria-label="Next month"><svg><use href="#r"/></svg></button><span class="sp"></span><button class="chip">Today</button></div>
+          <div class="wk" style="margin-top:12px"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+          <div class="wk" id="month" style="margin-top:4px"></div>
+          <div class="key" style="margin-top:10px"><span><i class="k session"></i>Your session</span><span><i class="k booking"></i>Amenity booking</span><span class="coachonly"><i class="k open"></i>Your coach's open time</span><span class="coachonly"><i class="k shift"></i>Your coach on the floor</span></div>
+        </section>
+        <section class="panel day">
+          <h2>Thursday 12 November</h2>
+          <div class="cap" style="margin-bottom:6px">3 things this day</div>
+          <div id="dayrows"></div>
+          <div class="hours" id="hours">The gym is open 6:00 AM to 10:00 PM.</div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="note"><h2>2. Member Calendar on the phone</h2>
+<p>The month shows numbers and dots only (no names fit), then the chosen day's list with the same buttons. Calendar is the second tab.</p></div>
+<div class="stage">
+  <div class="phone"><h1>Calendar</h1>
+    <div class="bar"><button class="nav" aria-label="Previous month"><svg><use href="#l"/></svg></button><span class="m" style="flex:1;text-align:center">November 2026</span><button class="nav" aria-label="Next month"><svg><use href="#r"/></svg></button></div>
+    <div class="wk"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+    <div class="wk" id="pmonth"></div>
+    <section class="panel day" style="padding:12px 14px"><h2>Thursday 12 November</h2><div id="pdayrows"></div></section>
+    <div class="tabs"><span>Membership</span><span class="on">Calendar</span><span>Sessions</span><span>Messages</span><span>More</span></div>
+  </div>
+</div>
+
+<div class="note"><h2>3. The member menu follows the membership (F16)</h2>
+<p>With an active membership the everyday pages lead and Packages moves near the end as <b>Renew or change</b>. Without one, Packages comes first so buying is the obvious next step; members-only pages stay listed and open their "get a membership" notice, as today. The phone keeps the first three as tabs plus Messages; the rest are under More.</p></div>
+<div class="stage menus">
+  <div class="menu"><h2>Active membership</h2>
+    <div class="mi on">My membership <span class="tab">tab</span></div><div class="mi">Calendar <span class="tab">tab</span></div><div class="mi">Sessions <span class="tab">tab</span></div>
+    <div class="mi">Book an amenity</div><div class="mi">Coaches</div><div class="mi">Time requests</div><div class="mi">Messages <span class="tab">tab</span></div>
+    <div class="mi">Renew or change</div><div class="mi">Settings</div></div>
+  <div class="menu"><h2>No membership</h2>
+    <div class="mi on">Packages <span class="tab">tab</span></div><div class="mi">My membership <span class="tab">tab</span></div><div class="mi">Calendar <span class="lock">members only</span></div>
+    <div class="mi">Sessions <span class="lock">members only</span></div><div class="mi">Book an amenity <span class="lock">members only</span></div><div class="mi">Coaches</div>
+    <div class="mi">Time requests <span class="lock">members only</span></div><div class="mi">Messages <span class="tab">tab</span></div><div class="mi">Settings</div></div>
+</div>
+
+<div class="note"><h2>4. Coach: Profile &amp; settings (F17, Windows and phone)</h2>
+<p>One menu item instead of "My coach profile" and "Settings". The coach profile comes first, exactly as it is today (at the gym, photo, specialty, rate, about you, taking new members, Save profile); the account settings follow under their own heading, also unchanged (name, sign-in email, theme, password). The account menu's Settings opens this page too.</p></div>
+<div class="stage">
+  <div class="app" style="max-width:980px"><nav class="rail"><i></i><i></i><i></i><i></i><i class="on"></i></nav>
+    <main class="page"><h1>Profile &amp; settings</h1>
+      <div class="sect">Your coach profile</div>
+      <div class="two">
+        <div class="panel"><h2>At the gym</h2><div class="cap">Checked in since 7:58 AM</div></div>
+        <div class="panel" style="display:flex;gap:14px;align-items:center"><span class="av">LC</span><div><h2>Your photo</h2><div class="cap">Members see it on Coaches.</div></div></div>
+      </div>
+      <div class="panel" style="max-width:720px;display:grid;gap:12px">
+        <div><div class="cap">Specialty</div><div class="field">Strength and conditioning</div></div>
+        <div><div class="cap">Hourly rate (₱ per hour)</div><div class="field">₱ 350.00</div></div>
+        <div><div class="cap">About you</div><div class="field" style="min-height:70px">Ten years coaching lifters of every level.</div></div>
+        <span class="sw"><i></i>Taking new members: <b>On</b></span>
+        <div><button class="btn y">Save profile</button></div>
+      </div>
+      <div class="sect">Account</div>
+      <div class="panel" style="display:flex;gap:16px;align-items:center"><span class="av">LC</span><div><h2 style="font-size:20px">Lena Cruz</h2><div>lena@demo.io</div><div class="cap">Email confirmed</div></div></div>
+      <div class="two"><div class="panel"><h2>Sign-in email</h2><div class="cap">Change it with a code sent to the new address.</div></div><div class="panel"><h2>Theme</h2><div class="cap">Light, dark or the device's.</div></div></div>
+      <div class="panel"><h2>Change password</h2><div class="cap">8 to 64 characters, a letter and a number.</div></div>
+    </main>
+  </div>
+</div>
+
+<script>
+  // November 2026: the grid starts Mon 26 Oct; "today" is Tue 10 Nov; the chosen day is Thu 12 Nov
+  const entries = {
+    11: [['session','Session']],
+    12: [['shift','Coach shift'],['open','Open slot'],['booking','Pool']],
+    14: [['booking','Boxing ring']],
+    16: [['open','Open slot']],
+    18: [['session','Session'],['shift','Coach shift']],
+    20: [['shift','Coach shift'],['open','Open slot']]
+  };
+  const day12 = [
+    ['shift','Lena on the floor','6:00 AM to 10:00 AM',''],
+    ['open','Open with Lena C.','10:00 AM to 11:00 AM','<button class="btn y">Ask for this time</button>'],
+    ['booking','Pool','5:00 PM to 6:00 PM · paid','<button class="btn">Open</button>']
+  ];
+  let coach = true;
+  function month(el, phone) {
+    el.innerHTML = '';
+    for (let i = 0; i < 42; i++) {
+      const date = new Date(2026, 9, 26 + i), d = date.getDate(), inMonth = date.getMonth() === 10;
+      let list = inMonth ? (entries[d] || []) : [];
+      if (!coach) list = list.filter(e => e[0] === 'session' || e[0] === 'booking');
+      const b = document.createElement('button');
+      b.className = 'd' + (inMonth && d === 10 ? ' today' : '') + (inMonth && d === 12 ? ' on' : '') + (inMonth ? '' : ' dim');
+      let html = `<span class="n">${d}</span>`;
+      if (phone) html += `<span class="dots">${[...new Set(list.map(e => e[0]))].map(k => `<i class="k ${k}"></i>`).join('')}</span>`;
+      else { list.slice(0, 2).forEach(e => html += `<span class="e"><i class="k ${e[0]}"></i>${e[1]}</span>`); if (list.length > 2) html += `<span class="e">+${list.length - 2} more</span>`; }
+      b.innerHTML = html;
+      b.setAttribute('aria-label', date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }));
+      b.onclick = () => { el.querySelectorAll('.d').forEach(x => x.classList.toggle('on', x === b)); };
+      el.appendChild(b);
+    }
+  }
+  function rows(el) {
+    const list = coach ? day12 : day12.filter(r => r[0] === 'booking');
+    el.innerHTML = list.length ? list.map(r => `<div class="row"><i class="k ${r[0]}"></i><span class="t">${r[1]}</span><span class="s">${r[2]}</span>${r[3] ? `<span class="a">${r[3]}</span>` : ''}</div>`).join('')
+      : '<div class="empty">Nothing this day.</div>';
+  }
+  function draw() {
+    month(document.getElementById('month')); month(document.getElementById('pmonth'), true);
+    rows(document.getElementById('dayrows')); rows(document.getElementById('pdayrows'));
+    document.querySelectorAll('.coachonly').forEach(x => x.hidden = !coach);
+    document.getElementById('hours').textContent = coach ? 'The gym is open 6:00 AM to 10:00 PM.' : 'The gym is open 6:00 AM to 10:00 PM. Hire a coach to see their shifts and open times here.';
+    document.querySelector('.day .cap').textContent = coach ? '3 things this day' : '1 thing this day';
+  }
+  document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', ev => {
+    const b = ev.target.closest('button'); if (!b) return;
+    seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    if (seg.dataset.set === 'theme') document.body.dataset.theme = b.dataset.v; else { coach = b.dataset.v === 'coach'; draw(); }
+  }));
+  const q = new URLSearchParams(location.search);
+  if (q.get('theme')) document.body.dataset.theme = q.get('theme');
+  if (q.get('who') === 'nocoach') coach = false;
+  draw();
+</script>
+</body>
+</html>

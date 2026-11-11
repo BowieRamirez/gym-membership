@@ -8,7 +8,7 @@
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='20,16,20,24', Default='16,12,16,20'}" Spacing="16">
-            <Label Text="What members see when they pay, and the price of a day pass at the desk." Style="{StaticResource Muted}" />
+            <Label Text="What members see when they pay, the price of a day pass, and the float each cash drawer starts with." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
@@ -22,12 +22,29 @@
             </VerticalStackLayout>
 
             <VerticalStackLayout Spacing="6">
-                <Label Text="Walk-in price (₱)" Style="{StaticResource Caption}" />
-                <Border Style="{StaticResource Field}" WidthRequest="160" HorizontalOptions="Start"><Entry Text="{Binding WalkInPrice}" Keyboard="Numeric" SemanticProperties.Description="Walk-in price" /></Border>
-                <Label Text="Opening hours, every day (Manila time). Coach shifts and bookings must fit inside them, on the hour or half hour." Style="{StaticResource Caption}" />
-                <FlexLayout Wrap="Wrap">
-                    <Border Style="{StaticResource Field}" Margin="0,0,8,8"><TimePicker Time="{Binding OpensAt}" SemanticProperties.Description="Opening time" /></Border>
-                    <Border Style="{StaticResource Field}" Margin="0,0,8,8"><TimePicker Time="{Binding ClosesAt}" SemanticProperties.Description="Closing time" /></Border>
+                <!-- F2 (0050): the float sits beside the day-pass price; Start shift on the Cashier page fills it in -->
+                <FlexLayout Wrap="Wrap" AlignItems="End">
+                    <VerticalStackLayout Spacing="6" Margin="0,0,16,0">
+                        <Label Text="Walk-in price (₱)" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}" WidthRequest="160"><Entry Text="{Binding WalkInPrice}" Keyboard="Numeric" SemanticProperties.Description="Walk-in price" /></Border>
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="Opening float (₱)" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}" WidthRequest="160"><Entry Text="{Binding OpeningFloat}" Keyboard="Numeric" AutomationId="OpeningFloat" SemanticProperties.Description="Opening float, in pesos" /></Border>
+                    </VerticalStackLayout>
+                </FlexLayout>
+                <Label Text="The opening float is the cash each cashier counts into their drawer when they start a shift." Style="{StaticResource Caption}" />
+                <Label Text="Opening hours, every day (Manila time). Coach shifts and bookings must fit inside them, on the hour or half hour." Style="{StaticResource Caption}" Margin="0,10,0,0" />
+                <!-- 9.8: each picker says which end of the day it is -->
+                <FlexLayout Wrap="Wrap" AlignItems="End">
+                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                        <Label Text="Opens" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><TimePicker Time="{Binding OpensAt}" SemanticProperties.Description="Opening time" /></Border>
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                        <Label Text="Closes" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><TimePicker Time="{Binding ClosesAt}" SemanticProperties.Description="Closing time" /></Border>
+                    </VerticalStackLayout>
                 </FlexLayout>
             </VerticalStackLayout>
             </VerticalStackLayout>
@@ -35,7 +52,7 @@
 
             <Border Style="{StaticResource Panel}">
                 <VerticalStackLayout Spacing="10">
-                    <c:CardTitle Icon="scan-line" Text="Payment QR" />
+                    <c:CardTitle Text="Payment QR" />
                     <Label Text="The GCash, Maya or QR Ph code members scan. Upload a clear image of it." Style="{StaticResource Caption}" />
                     <VerticalStackLayout Spacing="6">
                         <Label Text="Name shown on the QR" Style="{StaticResource Caption}" />

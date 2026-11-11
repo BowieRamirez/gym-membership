@@ -19,7 +19,7 @@ public class ChatServiceTests
         var (_, svc) = await As("member@demo.io");
         var threads = (await svc.ThreadsAsync()).Value!;
 
-        var coach = threads.Single(t => !t.IsSupport);
+        var coach = threads.Single(t => t.Kind == "coach");
         Assert.Equal("Lena Cruz", coach.WithName);
         Assert.Equal("Perfect, see you on the session.", coach.LastBody);
         Assert.True(coach.LastFromMe);
@@ -33,7 +33,7 @@ public class ChatServiceTests
     public async Task Messages_come_back_oldest_first_with_a_status_on_the_ones_you_sent()
     {
         var (_, svc) = await As("member@demo.io");
-        var coach = (await svc.ThreadsAsync()).Value!.Single(t => !t.IsSupport);
+        var coach = (await svc.ThreadsAsync()).Value!.Single(t => t.Kind == "coach");
 
         var page = (await svc.MessagesAsync(coach)).Value!;
 
@@ -48,7 +48,7 @@ public class ChatServiceTests
     public async Task A_long_conversation_loads_a_page_at_a_time_without_duplicates()
     {
         var (gw, svc) = await As("member@demo.io");
-        var coach = (await svc.ThreadsAsync()).Value!.Single(t => !t.IsSupport);
+        var coach = (await svc.ThreadsAsync()).Value!.Single(t => t.Kind == "coach");
         for (var i = 0; i < 120; i++) await svc.SendAsync(coach, $"message {i}");
 
         var first = (await svc.MessagesAsync(coach)).Value!;
@@ -60,16 +60,16 @@ public class ChatServiceTests
         Assert.Equal(50, second.Bubbles.Count);
         Assert.True(second.HasMore);
         var third = (await svc.MessagesAsync(coach, second.Bubbles[0].Line.MessageId)).Value!;
-        Assert.False(third.HasMore);   // 3 seeded + 120 sent = 123; the last page is the 23 oldest
-        Assert.Equal(123, first.Bubbles.Count + second.Bubbles.Count + third.Bubbles.Count);
-        Assert.Equal(123, first.Bubbles.Concat(second.Bubbles).Concat(third.Bubbles).Select(b => b.Line.MessageId).Distinct().Count());
+        Assert.False(third.HasMore);   // 4 seeded (one a request message, F11) + 120 sent = 124; the last page is the 24 oldest
+        Assert.Equal(124, first.Bubbles.Count + second.Bubbles.Count + third.Bubbles.Count);
+        Assert.Equal(124, first.Bubbles.Concat(second.Bubbles).Concat(third.Bubbles).Select(b => b.Line.MessageId).Distinct().Count());
     }
 
     [Fact]
     public async Task Sending_to_a_coach_needs_text_and_an_active_hire_and_never_adds_a_phantom_message_when_it_fails()
     {
         var (gw, svc) = await As("member@demo.io");
-        var coach = (await svc.ThreadsAsync()).Value!.Single(t => !t.IsSupport);
+        var coach = (await svc.ThreadsAsync()).Value!.Single(t => t.Kind == "coach");
         Assert.Equal("empty_message", (await svc.SendAsync(coach, "   ")).Message);
         Assert.Equal("message_too_long", (await svc.SendAsync(coach, new string('x', 2001))).Message);
 
@@ -83,7 +83,7 @@ public class ChatServiceTests
     public async Task Reading_a_conversation_shows_Read_to_the_sender_and_clears_the_unread_badge()
     {
         var (gw, alex) = await As("member@demo.io");
-        var toCoach = (await alex.ThreadsAsync()).Value!.Single(t => !t.IsSupport);
+        var toCoach = (await alex.ThreadsAsync()).Value!.Single(t => t.Kind == "coach");
         await alex.SendAsync(toCoach, "see you at 9");
 
         var (_, coach) = await As("coach@demo.io", gw);
@@ -93,7 +93,7 @@ public class ChatServiceTests
         Assert.Equal(0, (await coach.ThreadsAsync()).Value!.Single(t => t.WithName == "Alex Tan").Unread);
 
         var (_, alexAgain) = await As("member@demo.io", gw);
-        var sent = (await alexAgain.MessagesAsync((await alexAgain.ThreadsAsync()).Value!.Single(t => !t.IsSupport))).Value!.Bubbles.Last(b => b.Mine);
+        var sent = (await alexAgain.MessagesAsync((await alexAgain.ThreadsAsync()).Value!.Single(t => t.Kind == "coach"))).Value!.Bubbles.Last(b => b.Mine);
         Assert.Equal("Read", sent.Status);
     }
 

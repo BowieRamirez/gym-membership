@@ -22,6 +22,20 @@ public sealed record ChatBubble(ChatLine Line, bool Mine, string? PhotoUrl = nul
     public bool ShowPhoto => !string.IsNullOrEmpty(PhotoUrl);
     /// <summary>A photo was sent but no link could be made for it: the bubble says so instead of leaving a blank.</summary>
     public bool PhotoMissing => Line.AttachmentPath is not null && !ShowPhoto;
+    /// <summary>F11: an automatic message about a time request, shown framed with a link to Time requests.</summary>
+    public bool IsRequest => Line.Kind == "request";
+    /// <summary>The frame's heading, from how the server words each step (0051 post_request_message).</summary>
+    public string RequestTitle => !IsRequest ? "" : Line.Body switch
+    {
+        var b when b.StartsWith("I would like to invite") => "Training session invitation",
+        var b when b.StartsWith("I would like to request") => "Training session request",
+        var b when b.StartsWith("Could we do another time") => "Another time proposed",
+        var b when b.StartsWith("Could we do this time instead") => "Another time asked for",
+        var b when b.StartsWith("I accepted") => "Training session accepted",
+        var b when b.StartsWith("I declined") => "Training session declined",
+        var b when b.StartsWith("I cancelled") => "Request cancelled",
+        _ => "Training session"
+    };
 }
 
 /// <summary>One page of a conversation, oldest first. HasMore says an earlier page exists.</summary>
@@ -58,6 +72,7 @@ public sealed class ChatService(ISupabaseGateway gw, INotificationService notifi
         var take = Math.Clamp(limit, 1, 99);
         var args = new Dictionary<string, object> { ["p_kind"] = thread.Kind, ["p_member"] = thread.MemberId, ["p_limit"] = take + 1 };   // one extra row tells whether an earlier page exists
         if (thread.CoachId is not null) args["p_coach"] = thread.CoachId;
+        if (thread.IsSupport && thread.Queue is not null) args["p_queue"] = thread.Queue;
         if (beforeId is { } before) args["p_before"] = before;
         var rows = await gw.RpcAsync<List<ChatLine>>("chat_messages", args) ?? [];
         var shown = rows.Take(take).Reverse().ToList();
@@ -79,7 +94,7 @@ public sealed class ChatService(ISupabaseGateway gw, INotificationService notifi
         return await Safe.RunAsync(async () =>
         {
             var uid = gw.CurrentUserId ?? throw new Exception("not authenticated");
-            if (thread.IsSupport) await gw.RpcAsync("send_support_message", new() { ["p_member"] = thread.MemberId, ["p_body"] = text });
+            if (thread.IsSupport) await gw.RpcAsync("send_support_message", Queued(thread, new() { ["p_member"] = thread.MemberId, ["p_body"] = text }));
             else await gw.InsertAsync(new ChatMessage { CoachId = thread.CoachId!, MemberId = thread.MemberId, SenderId = uid, Body = text });
             return true;
         });
@@ -93,11 +108,12 @@ public sealed class ChatService(ISupabaseGateway gw, INotificationService notifi
         return await Safe.RunAsync(async () =>
         {
             var uid = gw.CurrentUserId ?? throw new Exception("not authenticated");
-            var folder = thread.IsSupport ? $"support/{thread.MemberId}" : $"{thread.CoachId}/{thread.MemberId}";
+            var folder = !thread.IsSupport ? $"{thread.CoachId}/{thread.MemberId}"
+                : thread.Queue is null or ChatQueue.FrontDesk ? $"support/{thread.MemberId}" : $"support/{thread.Queue}/{thread.MemberId}";   // 0051 support_folder
             var name = Path.GetFileName(fileName); if (name.Length > 80) name = name[^80..];
             // ponytail: if the message fails after the upload, the file stays in the bucket unseen. Add cleanup when storage use matters.
             var path = await gw.UploadAsync("chat-attachments", $"{folder}/{DateTime.UtcNow:yyyyMMddHHmmssfff}-{name}", data);
-            if (thread.IsSupport) await gw.RpcAsync("send_support_message", new() { ["p_member"] = thread.MemberId, ["p_body"] = text, ["p_attachment"] = path });
+            if (thread.IsSupport) await gw.RpcAsync("send_support_message", Queued(thread, new() { ["p_member"] = thread.MemberId, ["p_body"] = text, ["p_attachment"] = path }));
             else await gw.InsertAsync(new ChatMessage { CoachId = thread.CoachId!, MemberId = thread.MemberId, SenderId = uid, Body = text, AttachmentPath = path });
             return true;
         });
@@ -107,7 +123,7 @@ public sealed class ChatService(ISupabaseGateway gw, INotificationService notifi
     {
         var args = new Dictionary<string, object> { ["p_kind"] = thread.Kind, ["p_member"] = thread.MemberId };
         if (thread.CoachId is not null) args["p_coach"] = thread.CoachId;
-        await gw.RpcAsync("mark_chat_read", args);
+        await gw.RpcAsync("mark_chat_read", thread.IsSupport ? Queued(thread, args) : args);
         notifications.Refresh();   // the alert for this chat is cleared, so the bell can update
         return true;
     });
@@ -115,11 +131,36 @@ public sealed class ChatService(ISupabaseGateway gw, INotificationService notifi
     public Task<AppResult<bool>> MarkDeliveredAsync() => Safe.RunAsync(async () => { await gw.RpcAsync("mark_chats_delivered"); return true; });
 
     public Task<AppResult<bool>> ClaimAsync(ChatThread thread, bool claim) => Safe.RunAsync(async () =>
-    { await gw.RpcAsync("claim_support_thread", new() { ["p_member"] = thread.MemberId, ["p_claim"] = claim }); return true; });
+    { await gw.RpcAsync("claim_support_thread", Queued(thread, new() { ["p_member"] = thread.MemberId, ["p_claim"] = claim })); return true; });
 
     public Task<AppResult<bool>> SetOpenAsync(ChatThread thread, bool open) => Safe.RunAsync(async () =>
-    { await gw.RpcAsync("set_support_status", new() { ["p_member"] = thread.MemberId, ["p_open"] = open }); return true; });
+    { await gw.RpcAsync("set_support_status", Queued(thread, new() { ["p_member"] = thread.MemberId, ["p_open"] = open })); return true; });
+
+    // F9: which gym queue a call is about. Front desk is sent too: it is the server's default, so saying it changes nothing.
+    static Dictionary<string, object> Queued(ChatThread thread, Dictionary<string, object> args) { args["p_queue"] = thread.Queue ?? ChatQueue.FrontDesk; return args; }
 
     public Task<AppResult<IReadOnlyList<ChatSearchHit>>> SearchAsync(string query) => Safe.RunAsync<IReadOnlyList<ChatSearchHit>>(async () =>
         string.IsNullOrWhiteSpace(query) ? [] : await gw.RpcAsync<List<ChatSearchHit>>("chat_search", new() { ["p_query"] = query.Trim() }) ?? []);
+}
+
+// ===================== Announcements (F10, 0051) =====================
+public interface IAnnouncementService
+{
+    /// <summary>Posted announcements, newest first (Admin and System admin).</summary>
+    Task<AppResult<IReadOnlyList<AnnouncementRow>>> ListAsync();
+    /// <summary>audience: everyone, members or coaches.</summary>
+    Task<AppResult<bool>> PostAsync(string body, string audience);
+}
+
+public sealed class AnnouncementService(ISupabaseGateway gw) : IAnnouncementService
+{
+    public Task<AppResult<IReadOnlyList<AnnouncementRow>>> ListAsync() => Safe.RunAsync<IReadOnlyList<AnnouncementRow>>(async () =>
+        await gw.RpcAsync<List<AnnouncementRow>>("announcements_list", new()) ?? []);
+
+    public async Task<AppResult<bool>> PostAsync(string body, string audience)
+    {
+        var text = body?.Trim() ?? "";
+        if (text.Length is 0 or > 2000 || audience is not ("everyone" or "members" or "coaches")) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
+        return await Safe.RunAsync(async () => { await gw.RpcAsync("post_announcement", new() { ["p_body"] = text, ["p_audience"] = audience }); return true; });
+    }
 }

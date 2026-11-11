@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.AnnouncementsPage" x:DataType="vm:AnnouncementsViewModel" Title="Announcements">
+
+    <v:BasePage.Resources>
+        <DataTemplate x:Key="PostedRow" x:DataType="m:AnnouncementRow">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="170,110,*,160">
+                    <Label Text="{Binding WhenText}" VerticalOptions="Center" />
+                    <Label Grid.Column="1" Text="{Binding AudienceText}" VerticalOptions="Center" />
+                    <Label Grid.Column="2" Text="{Binding Body}" LineBreakMode="WordWrap" VerticalOptions="Center" />
+                    <Label Grid.Column="3" Text="{Binding AuthorName}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+        <!-- narrow window: the message first, then when, for whom and by whom on one line -->
+        <DataTemplate x:Key="PostedCard" x:DataType="m:AnnouncementRow">
+            <VerticalStackLayout>
+                <VerticalStackLayout Spacing="4" Padding="14,12">
+                    <Label Text="{Binding Body}" LineBreakMode="WordWrap" />
+                    <Label Style="{StaticResource Caption}">
+                        <Label.Text>
+                            <MultiBinding StringFormat="{}{0} · for {1} · {2}"><Binding Path="WhenText" /><Binding Path="AudienceText" /><Binding Path="AuthorName" /></MultiBinding>
+                        </Label.Text>
+                    </Label>
+                </VerticalStackLayout>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+    </v:BasePage.Resources>
+
+    <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
+        <VerticalStackLayout Padding="{OnIdiom Phone='20,16,20,24', Default='16,12,16,20'}" Spacing="14">
+            <Label Text="What you post here goes to members, coaches or both, in their Messages, with a notification." Style="{StaticResource Muted}" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+            <Border Style="{StaticResource Panel}">
+                <VerticalStackLayout Spacing="10">
+                    <c:CardTitle Text="New announcement" />
+                    <Border Style="{StaticResource Field}" HeightRequest="120">
+                        <Editor Text="{Binding Body}" Placeholder="For example: Closed on Monday for repairs." MaxLength="2000" AutoSize="Disabled"
+                                AutomationId="AnnouncementBody" SemanticProperties.Description="Announcement" />
+                    </Border>
+                    <FlexLayout Wrap="Wrap" AlignItems="Center">
+                        <Label Text="For" Style="{StaticResource Caption}" Margin="0,0,10,8" VerticalOptions="Center" />
+                        <Button Text="Everyone" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickAudienceCommand}" CommandParameter="everyone">
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Audience}" Value="everyone"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="SemanticProperties.Description" Value="Everyone, selected" /></DataTrigger></Button.Triggers>
+                        </Button>
+                        <Button Text="Members" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickAudienceCommand}" CommandParameter="members">
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Audience}" Value="members"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="SemanticProperties.Description" Value="Members, selected" /></DataTrigger></Button.Triggers>
+                        </Button>
+                        <Button Text="Coaches" Style="{StaticResource FilterChip}" Margin="0,0,24,8" Command="{Binding PickAudienceCommand}" CommandParameter="coaches">
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Audience}" Value="coaches"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="SemanticProperties.Description" Value="Coaches, selected" /></DataTrigger></Button.Triggers>
+                        </Button>
+                        <Label Text="{Binding CountText}" Style="{StaticResource Caption}" Margin="0,0,12,8" VerticalOptions="Center" />
+                        <Button Text="Post" Margin="0,0,0,8" Command="{Binding PostCommand}" AutomationId="PostAnnouncement" />
+                    </FlexLayout>
+                    <Label Text="Posted announcements can't be edited or removed: people may already have read them." Style="{StaticResource Caption}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Label Text="Posted" Style="{StaticResource SectionTitle}" Margin="0,4,0,0" />
+            <Border Style="{StaticResource TablePanel}">
+                <VerticalStackLayout>
+                    <VerticalStackLayout x:Name="PostedHead">
+                        <Grid Style="{StaticResource TableHead}" ColumnDefinitions="170,110,*,160">
+                            <Label Text="When" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="1" Text="For" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="2" Text="Message" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="3" Text="By" Style="{StaticResource Caption}" />
+                        </Grid>
+                        <BoxView Style="{StaticResource Hairline}" />
+                    </VerticalStackLayout>
+                    <c:TableBody BindableLayout.ItemsSource="{Binding Posted}" Header="{x:Reference PostedHead}" WideFrom="760"
+                                 RowTemplate="{StaticResource PostedRow}" CardTemplate="{StaticResource PostedCard}"
+                                 BindableLayout.ItemTemplate="{StaticResource PostedRow}">
+                        <BindableLayout.EmptyView><Label Text="Nothing posted yet." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                    </c:TableBody>
+                </VerticalStackLayout>
+            </Border>
+        </VerticalStackLayout>
+    </ScrollView>
+</v:BasePage>

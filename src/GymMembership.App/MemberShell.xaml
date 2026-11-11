@@ -5,24 +5,23 @@
        xmlns:c="clr-namespace:GymMembership.App.Controls"
        xmlns:views="clr-namespace:GymMembership.App.Views"
        FlyoutBehavior="{OnPlatform WinUI=Locked, Default=Flyout}"
-       Title="Gym Membership">
+       Title="Gym Center">
 
     <Shell.TitleView><c:HeaderBar /></Shell.TitleView>
 
     <Shell.FlyoutHeader>
         <VerticalStackLayout Padding="20,28,20,16" Spacing="14">
-            <Label Text="Gym Membership" Style="{StaticResource Heading}" />
-            <c:DumbbellLogo Size="36" Inverted="True" HorizontalOptions="Start" />
+            <Label Text="Gym Center" Style="{StaticResource Heading}" />
+            <c:LogoMark Size="36" HorizontalOptions="Start" />
         </VerticalStackLayout>
     </Shell.FlyoutHeader>
 
     <FlyoutItem Title="My membership" Route="memberships"><ShellContent ContentTemplate="{DataTemplate views:MyMembershipPage}" /></FlyoutItem>
     <FlyoutItem Title="Packages" Route="packages"><ShellContent ContentTemplate="{DataTemplate views:PackagesPage}" /></FlyoutItem>
-    <FlyoutItem Title="Amenities" ClassId="members-only"><ShellContent ContentTemplate="{DataTemplate views:AmenitiesPage}" /></FlyoutItem>
-    <FlyoutItem Title="Book an amenity" ClassId="members-only"><ShellContent ContentTemplate="{DataTemplate views:BookAmenityPage}" /></FlyoutItem>
+    <FlyoutItem Title="Book an amenity" ClassId="members-only" Route="bookings"><ShellContent ContentTemplate="{DataTemplate views:BookAmenityPage}" /></FlyoutItem>
     <FlyoutItem Title="Coaches"><ShellContent ContentTemplate="{DataTemplate views:CoachesPage}" /></FlyoutItem>
     <FlyoutItem Title="Messages" Route="messages"><ShellContent ContentTemplate="{DataTemplate views:MessagesPage}" /></FlyoutItem>
     <FlyoutItem Title="Sessions" ClassId="members-only"><ShellContent ContentTemplate="{DataTemplate views:SessionsPage}" /></FlyoutItem>
-    <FlyoutItem Title="Time requests" ClassId="members-only"><ShellContent ContentTemplate="{DataTemplate views:RequestsPage}" /></FlyoutItem>
+    <FlyoutItem Title="Time requests" ClassId="members-only" Route="requests"><ShellContent ContentTemplate="{DataTemplate views:RequestsPage}" /></FlyoutItem>
     <FlyoutItem Title="Settings" Route="settings"><ShellContent ContentTemplate="{DataTemplate views:SettingsPage}" /></FlyoutItem>
 </Shell>

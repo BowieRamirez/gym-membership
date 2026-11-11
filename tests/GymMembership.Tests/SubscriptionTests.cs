@@ -5,23 +5,33 @@ using Xunit;
 
 public class SubscriptionTests
 {
-    sealed class Clock : TimeProvider
+    internal sealed class Clock : TimeProvider
     {
         public DateTimeOffset Now = new(2026, 10, 17, 4, 0, 0, TimeSpan.Zero);
         public override DateTimeOffset GetUtcNow() => Now;
     }
 
-    static async Task<(DemoGateway Gw, Clock Clock, SubscriptionService Svc, MembershipPackage Monthly, MembershipPackage Annual)> Setup()
+    internal static async Task<(DemoGateway Gw, Clock Clock, SubscriptionService Svc, MembershipPackage Monthly, MembershipPackage Annual)> Setup()
     {
         var clock = new Clock(); var gw = new DemoGateway(clock: clock);
         await gw.SignUpAsync("phase7@demo.io", "secret12", "Ana", "Reyes");
         var packages = await gw.ListAsync<MembershipPackage>();
-        return (gw, clock, new SubscriptionService(gw), packages.First(p => p.Name == "Monthly"), packages.First(p => p.Name == "Annual"));
+        return (gw, clock, new SubscriptionService(gw, clock), packages.First(p => p.Name == "Monthly"), packages.First(p => p.Name == "Annual"));
     }
-    static async Task Verify(DemoGateway gw, Payment pay)
+    internal static async Task Verify(DemoGateway gw, Payment pay)
     {
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         Assert.True((await new PaymentStaffService(gw).VerifyAsync(pay.Id, true)).Ok);
+        await gw.SignInAsync("phase7@demo.io", "secret12");
+    }
+
+    static async Task CheckIn(DemoGateway gw)
+    {
+        var me = gw.CurrentUserId!;
+        var pass = (await new AttendanceService(gw).MyPassAsync()).Value!.Code;   // F6: the desk scans a fresh pass, then checks in
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        await new AttendanceService(gw).ScanAsync(pass);
+        Assert.True((await new AttendanceService(gw).CheckInAsync(me)).Ok);
         await gw.SignInAsync("phase7@demo.io", "secret12");
     }
 
@@ -85,7 +95,7 @@ public class SubscriptionTests
         var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
         var extension=(await svc.ExtendAsync(annual.Id)).Value!; await Verify(gw,extension);
         var future=(await svc.TermsAsync()).Value!.Single(t=>t.Term.PaymentId==extension.Id).Term;
-        Assert.True((await svc.RequestRefundAsync(term.Id,"Changed plans")).Ok);
+        Assert.True((await svc.RequestRefundAsync(term.Id,"Changed plans","change_of_mind")).Ok);
         Assert.True((await new MembershipService(gw).AccessAsync()).Value!.Active);
         Assert.False((await svc.RequestRefundAsync(term.Id,"Twice")).Ok);
         var request=Assert.Single((await svc.RefundsAsync()).Value!).Request;
@@ -113,7 +123,7 @@ public class SubscriptionTests
         var (gw, _, svc, monthly, _) = await Setup();
         var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
         var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
-        Assert.True((await svc.RequestRefundAsync(term.Id,"Changed plans")).Ok);
+        Assert.True((await svc.RequestRefundAsync(term.Id,"Changed plans","change_of_mind")).Ok);
         await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
         var vm=new GymMembership.Core.ViewModels.RefundsViewModel(svc) { DialogOpen=true };
         await vm.AutoRefreshAsync(); Assert.Empty(vm.Requests);
@@ -123,20 +133,112 @@ public class SubscriptionTests
         Assert.False(row.CanDecide); Assert.True(row.CanRepay);
         Assert.Contains("manual repayment",vm.Notice); Assert.Contains("no transfer",vm.Notice);
         Assert.Null(row.Request.PaidAt);
+        await gw.OpenDrawerAsync();
         await vm.MarkPaidAsync(row,PayMethod.Cash,null);
         Assert.Equal("paid",Assert.Single(vm.Requests).Request.Status);
         Assert.False(Assert.Single(vm.Requests).CanRepay);
     }
 
     [Theory]
-    [InlineData(86399,true)] [InlineData(86400,false)] [InlineData(86401,false)]
-    public async Task Refund_window_ends_at_exactly_24_hours_after_verification(int seconds,bool accepted)
+    [InlineData("service_not_provided")] [InlineData("misled")] [InlineData("contract_allows")] [InlineData("illness_or_relocation")] [InlineData("change_of_mind")]
+    public async Task A_term_with_a_check_in_goes_to_review_with_a_reason_even_after_24_hours(string category)
+    {
+        var (gw, clock, svc, monthly, _) = await Setup();
+        var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
+        await CheckIn(gw);
+        clock.Now=clock.Now.AddHours(25);
+        var card=Assert.Single((await svc.TermsAsync()).Value!);
+        Assert.True(card.Activated); Assert.True(card.CanRequestRefund);
+        Assert.Contains("review",card.RefundText);
+
+        Assert.Equal("refund_reason_required",(await svc.RequestRefundAsync(card.Term.Id,"No category")).Message);
+        Assert.Equal("bad_input",(await svc.RequestRefundAsync(card.Term.Id,"Bad","because")).Message);
+        Assert.True((await svc.RequestRefundAsync(card.Term.Id,"Details",category)).Ok);
+        var request=Assert.Single((await svc.RefundsAsync()).Value!).Request;
+        Assert.Equal((true,category,p.Amount),(request.WasActivated,request.ReviewReason,request.Amount));
+    }
+
+    [Fact]
+    public async Task A_term_that_has_ended_cannot_be_requested()
     {
         var (gw, clock, svc, monthly, _) = await Setup();
         var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
         var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
-        clock.Now=clock.Now.AddSeconds(seconds);
-        Assert.Equal(accepted,(await svc.RequestRefundAsync(term.Id,"Changed plans")).Ok);
+        clock.Now=new DateTimeOffset(term.EndsAt,TimeSpan.Zero);
+        var card=Assert.Single((await svc.TermsAsync()).Value!);
+        Assert.False(card.CanRequestRefund);
+        Assert.Equal("This term has ended.",card.RefundText);
+        Assert.Equal("refund_window_closed",(await svc.RequestRefundAsync(term.Id,"Too late","misled")).Message);
+    }
+
+    [Fact]
+    public async Task A_paid_term_with_no_check_in_is_a_full_refund_even_days_after_it_started()
+    {
+        var (gw, clock, svc, monthly, _) = await Setup();
+        var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
+        clock.Now=clock.Now.AddDays(10);
+        var card=Assert.Single((await svc.TermsAsync()).Value!);
+        Assert.False(card.Activated);
+        Assert.Contains("full refund",card.RefundText);
+        Assert.True((await svc.RequestRefundAsync(card.Term.Id,"Never came")).Ok);
+        var request=Assert.Single((await svc.RefundsAsync()).Value!).Request;
+        Assert.Equal((false,(string?)null,p.Amount),(request.WasActivated,request.ReviewReason,request.Amount));
+    }
+
+    [Fact]
+    public async Task A_queued_term_that_has_not_started_is_a_full_refund_with_no_category_and_no_time_limit()
+    {
+        var (gw, clock, svc, monthly, annual) = await Setup();
+        var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
+        var next=(await svc.ExtendAsync(annual.Id)).Value!; await Verify(gw,next);
+        clock.Now=clock.Now.AddDays(10);
+        var queued=(await svc.TermsAsync()).Value!.Single(t=>t.Term.PaymentId==next.Id);
+        Assert.False(queued.Activated); Assert.True(queued.CanRequestRefund);
+        Assert.Contains("full refund",queued.RefundText);
+
+        Assert.True((await svc.RequestRefundAsync(queued.Term.Id,"Plans changed")).Ok);
+        await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
+        var row=Assert.Single((await svc.RefundsAsync()).Value!);
+        Assert.Equal((false,(string?)null,next.Amount),(row.Request.WasActivated,row.Request.ReviewReason,row.Request.Amount));
+        Assert.Equal("No check-in during this term: full refund owed.",row.ReviewText);
+        Assert.Equal("Full refund",row.AmountLabel);
+        Assert.Equal(0,row.LaterTerms);
+    }
+
+    [Fact]
+    public async Task Staff_see_why_a_used_term_needs_review_and_are_warned_about_later_paid_terms_which_stay()
+    {
+        var (gw, _, svc, monthly, annual) = await Setup();
+        var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
+        await CheckIn(gw);
+        var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
+        var next=(await svc.ExtendAsync(annual.Id)).Value!; await Verify(gw,next);
+        Assert.True((await svc.RequestRefundAsync(term.Id,"The pool was closed","service_not_provided")).Ok);
+        var me=gw.CurrentUserId!;
+
+        await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
+        var vm=new GymMembership.Core.ViewModels.RefundsViewModel(svc);
+        await vm.OnAppearingAsync();
+        var row=Assert.Single(vm.Requests);
+        Assert.Equal("Checked in during this term, needs review: gym didn't provide the agreed service.",row.ReviewText);
+        Assert.Equal("Refund requested",row.AmountLabel);
+        Assert.Equal(1,row.LaterTerms);
+        Assert.Equal("This member also has 1 later paid term. It stays and is not refunded.",row.LaterTermsWarning);
+
+        await vm.DecideAsync(row,true,"Confirmed");   // item 11: approving cancels that member's term
+        var terms=(await gw.ListAsync<MembershipTerm>(t=>t.MemberId==me));
+        Assert.NotNull(terms.Single(t=>t.Id==term.Id).CancelledAt);
+        Assert.Null(terms.Single(t=>t.PaymentId==next.Id).CancelledAt);
+        Assert.Empty((await gw.ListAsync<MembershipTerm>()).Where(t=>t.MemberId!=me&&t.CancelledAt is not null));
+    }
+
+    [Fact]
+    public void The_refund_reasons_have_words_for_members_and_for_staff()
+    {
+        Assert.Equal(5,RefundReasons.All.Count);
+        Assert.All(RefundReasons.All,r=>{ Assert.NotEmpty(r.Member); Assert.NotEmpty(r.Staff); });
+        Assert.Equal("change_of_mind",RefundReasons.KeyFor(RefundReasons.All.Last().Member));
+        Assert.Null(RefundReasons.KeyFor("Something else"));
     }
 
     [Fact]
@@ -149,7 +251,7 @@ public class SubscriptionTests
         await gw.SignInAsync("phase7@demo.io","secret12");
         var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
         var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
-        Assert.True((await svc.RequestRefundAsync(term.Id,"Changed plans")).Ok);
+        Assert.True((await svc.RequestRefundAsync(term.Id,"Changed plans","change_of_mind")).Ok);
         var request=(await gw.ListAsync<RefundRequest>()).Single();
         Assert.False((await svc.DecideAsync(request.Id,true,"Mine")).Ok);
         Assert.Equal("pending",(await gw.ListAsync<RefundRequest>()).Single().Status);
@@ -166,11 +268,13 @@ public class SubscriptionTests
     {
         var (gw, _, svc, _, _) = await Setup();
         await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
-        var free=await gw.InsertAsync(new MembershipPackage {Name="Free trial",Price=0,DurationDays=7,IsActive=true});
+        // D4: a payment is ₱0 only when a discount brought it there
+        var trial=await gw.InsertAsync(new MembershipPackage {Name="Trial",Price=100,DurationDays=7,IsActive=true});
+        await gw.InsertAsync(new Discount {Code="TRIALFREE",Percent=100,MaxUses=5,StartsAt=DateTime.UtcNow.AddMinutes(-1),ExpiresAt=DateTime.UtcNow.AddDays(1),IsActive=true});
         await gw.SignInAsync("phase7@demo.io","secret12");
-        var p=(await svc.ExtendAsync(free.Id)).Value!; await Verify(gw,p);
+        var p=(await svc.ExtendAsync(trial.Id,"TRIALFREE")).Value!; Assert.Equal(0m,p.Amount); await Verify(gw,p);
         var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
-        Assert.False((await svc.RequestRefundAsync(term.Id,"Changed plans")).Ok);
+        Assert.False((await svc.RequestRefundAsync(term.Id,"Changed plans","change_of_mind")).Ok);
     }
 
     sealed class NoPicker : IProofPicker { public Task<(string FileName, byte[] Data)?> PickAsync() => Task.FromResult<(string FileName, byte[] Data)?>(null); }
@@ -221,12 +325,12 @@ public class SubscriptionTests
         clock.Now = DateTimeOffset.UtcNow.AddYears(1);
         var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
         var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
-        Assert.True((await svc.RequestRefundAsync(term.Id,"Changed plans")).Ok);
+        Assert.True((await svc.RequestRefundAsync(term.Id,"Changed plans","change_of_mind")).Ok);
         var request=Assert.Single((await svc.RefundsAsync()).Value!).Request;
         var day=DateOnly.FromDateTime(clock.Now.UtcDateTime.AddHours(8));
-        await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
+        await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword); await gw.OpenDrawerAsync();
         async Task<decimal> Net()=>(await new AdminService(gw).RevenueAsync(day,day)).Value!.Sum(r=>r.Total);
-        async Task<decimal> Cash()=>(await new PaymentStaffService(gw).CashSummaryAsync(day)).Value!.Sum(r=>r.Total);
+        async Task<decimal> Cash()=>(await new PaymentStaffService(gw).ShiftAsync()).Value.Open!.Expected;   // the admin's drawer
         var received=await Net(); Assert.Equal(monthly.Price,received); var cash=await Cash();
         Assert.True((await svc.DecideAsync(request.Id,true,"Approved")).Ok);
         Assert.Equal(0m,await Net()); Assert.Equal(cash,await Cash());
@@ -240,7 +344,7 @@ public class SubscriptionTests
         var (gw, _, svc, monthly, _) = await Setup();
         var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
         var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
-        Assert.True((await svc.RequestRefundAsync(term.Id,"Changed plans")).Ok);
+        Assert.True((await svc.RequestRefundAsync(term.Id,"Changed plans","change_of_mind")).Ok);
         await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
         Assert.False((await new PaymentStaffService(gw).VoidAsync(p.Id,"Wrong payment")).Ok);
         await Assert.ThrowsAnyAsync<Exception>(()=>gw.UpdateAsync(term));

@@ -47,6 +47,21 @@ public class StatusFilterTests
     }
 
     [Fact]
+    public async Task Sessions_list_what_needs_doing_first()
+    {
+        // 9.6: scheduled sessions soonest first, then history newest first (the list used to start with October's history)
+        var vm = new SessionsViewModel(new SessionService(await As("coach")));
+        await vm.OnAppearingAsync();
+        var rows = vm.Sessions.ToList();
+        var scheduled = rows.TakeWhile(r => r.Session.Status == Status.Scheduled).ToList();
+        Assert.NotEmpty(scheduled);
+        Assert.DoesNotContain(rows.Skip(scheduled.Count), r => r.Session.Status == Status.Scheduled);
+        Assert.Equal(scheduled.OrderBy(r => r.Session.ScheduledStart), scheduled);
+        var past = rows.Skip(scheduled.Count).ToList();
+        Assert.Equal(past.OrderByDescending(r => r.Session.ScheduledStart), past);
+    }
+
+    [Fact]
     public async Task Membership_payments_filter_by_status()
     {
         var gw = await As("member");

@@ -62,14 +62,18 @@ public class SideLayout : Layout
     public double WideFrom { get; set; } = 1100;
     /// <summary>Stacked order: the side above the main area (a form above its list), or below it (a calendar above the chosen day).</summary>
     public bool SideFirst { get; set; } = true;
+    /// <summary>Stacked only: the side's widest, left-aligned, so a form doesn't stretch its fields across a whole window (Phase 9 critique).</summary>
+    public double StackedSideWidth { get; set; } = double.PositiveInfinity;
 
     bool IsWide(double width) => double.IsFinite(width) && width >= WideFrom;
+    double StackedWidth(IView view, double width) => view == Part(1) ? Math.Min(width, StackedSideWidth) : width;
+    IView? Part(int i) => Count > i && this[i].Visibility != Visibility.Collapsed ? this[i] : null;
 
     protected override Microsoft.Maui.Layouts.ILayoutManager CreateLayoutManager() => new Manager(this);
 
     sealed class Manager(SideLayout layout) : Microsoft.Maui.Layouts.ILayoutManager
     {
-        IView? Part(int i) => layout.Count > i && layout[i].Visibility != Visibility.Collapsed ? layout[i] : null;
+        IView? Part(int i) => layout.Part(i);
 
         public Size Measure(double widthConstraint, double heightConstraint)
         {
@@ -79,7 +83,7 @@ public class SideLayout : Layout
                 var mainHeight = main.Measure(widthConstraint - layout.SideWidth - layout.Spacing, double.PositiveInfinity).Height;
                 return new Size(widthConstraint, Math.Max(mainHeight, side.Measure(layout.SideWidth, double.PositiveInfinity).Height));
             }
-            var heights = (layout.SideFirst ? new[] { side, main } : new[] { main, side }).Where(v => v is not null).Select(v => v!.Measure(widthConstraint, double.PositiveInfinity).Height).ToList();
+            var heights = (layout.SideFirst ? new[] { side, main } : new[] { main, side }).Where(v => v is not null).Select(v => v!.Measure(layout.StackedWidth(v, widthConstraint), double.PositiveInfinity).Height).ToList();
             return new Size(widthConstraint, heights.Sum() + layout.Spacing * Math.Max(0, heights.Count - 1));
         }
 
@@ -95,11 +99,91 @@ public class SideLayout : Layout
             var y = bounds.Top;
             foreach (var view in (layout.SideFirst ? new[] { side, main } : new[] { main, side }).Where(v => v is not null))
             {
-                view!.Arrange(new Rect(bounds.Left, y, bounds.Width, view.DesiredSize.Height));
+                view!.Arrange(new Rect(bounds.Left, y, layout.StackedWidth(view, bounds.Width), view.DesiredSize.Height));
                 y += view.DesiredSize.Height + layout.Spacing;
             }
             return bounds.Size;
         }
+    }
+}
+
+/// <summary>
+/// AuthShell (sign in, reset, create account): the brand panel with the full badge beside the form when there is room (WideFrom),
+/// otherwise a short band above it with a smaller badge, so a narrow window or a phone never squeezes two columns (Phase 2 note).
+/// The form is the page's own content.
+/// </summary>
+public class AuthLayout : Grid
+{
+    const double WideFrom = 960;
+
+    readonly Border _brand, _badge;
+    readonly Grid _inner;
+    readonly VerticalStackLayout _words;
+    readonly Label _name, _tagline;
+    readonly BoxView _bar;
+    bool? _wide;
+
+    public AuthLayout()
+    {
+        // the badge is black on white, so it keeps its white round in both themes, ringed in the signal yellow
+        _badge = new Border
+        {
+            StrokeShape = new Ellipse(), StrokeThickness = 6, Stroke = FieldFocus.Pick("Signal"), BackgroundColor = Colors.White, Padding = 0,
+            HorizontalOptions = LayoutOptions.Start, VerticalOptions = LayoutOptions.Center,
+            Content = new Image { Source = "gym_badge.png", Aspect = Aspect.AspectFit },
+        };
+        AutomationProperties.SetIsInAccessibleTree(_badge, false);   // the name beside it says the same
+        _name = new Label { Text = "Health & Fitness Gym Center", FontFamily = "BarlowCondensedSemiBold", LineHeight = 1.15, TextColor = Colors.White };
+        _tagline = new Label { Text = "Members, coaches and the front desk, in one place.", LineHeight = 1.2, TextColor = FieldFocus.Pick("MutedDark") };
+        _words = new VerticalStackLayout { Spacing = 6, HorizontalOptions = LayoutOptions.Start, Children = { _name, _tagline } };
+        _bar = new BoxView { Color = FieldFocus.Pick("Signal"), WidthRequest = 56, HeightRequest = 4, CornerRadius = 2, HorizontalOptions = LayoutOptions.Start };
+        _inner = new Grid { Children = { _badge, _words, _bar } };
+        _brand = new Border { StrokeThickness = 0, StrokeShape = new RoundRectangle { CornerRadius = 26 }, Content = _inner };
+        _brand.SetAppThemeColor(BackgroundColorProperty, FieldFocus.Pick("InkLight"), FieldFocus.Pick("CardDark"));
+        Add(_brand);
+        Add(new ContentPresenter());
+        Fit(false);
+        SizeChanged += (_, _) => { if (Width > 0) Fit(Width >= WideFrom); };
+    }
+
+    void Fit(bool wide)
+    {
+        if (wide == _wide) return;
+        _wide = wide;
+        var form = Children[1];
+        ColumnDefinitions.Clear(); RowDefinitions.Clear();
+        _inner.ColumnDefinitions.Clear(); _inner.RowDefinitions.Clear();
+        _bar.IsVisible = wide;
+        // centred in the wide panel (owner, 2026-11-07: the badge read small and off to one side); left-aligned beside the badge in the band
+        var align = wide ? LayoutOptions.Center : LayoutOptions.Start;
+        _badge.HorizontalOptions = _words.HorizontalOptions = _bar.HorizontalOptions = align;
+        _name.HorizontalTextAlignment = _tagline.HorizontalTextAlignment = wide ? TextAlignment.Center : TextAlignment.Start;
+        if (wide)
+        {
+            // left: badge, name and line centred in the panel, the yellow bar at the foot; right: the form
+            ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+            ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+            SetColumn(form, 1); SetRow(form, 0);
+            _brand.Margin = 14; _brand.Padding = new Thickness(48, 44);
+            _badge.WidthRequest = _badge.HeightRequest = 300;
+            _name.FontSize = 34; _tagline.FontSize = 16;   // 34 keeps the name on one line down to WideFrom
+            foreach (var h in new[] { GridLength.Star, GridLength.Auto, GridLength.Auto, GridLength.Star, GridLength.Auto }) _inner.RowDefinitions.Add(new RowDefinition(h));
+            _inner.SetRow(_badge, 1); _inner.SetRow(_words, 2); _inner.SetColumn(_words, 0); _inner.SetRow(_bar, 4);
+            _words.Margin = new Thickness(0, 32, 0, 0); _words.MaximumWidthRequest = 400;
+            return;
+        }
+        // narrow window or phone: a band above the form, badge beside the name
+        RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        RowDefinitions.Add(new RowDefinition(GridLength.Star));
+        SetColumn(form, 0); SetRow(form, 1);
+        _brand.Margin = new Thickness(12, 12, 12, 0); _brand.Padding = new Thickness(20, 18);
+        _badge.WidthRequest = _badge.HeightRequest = DeviceInfo.Idiom == DeviceIdiom.Phone ? 76 : 96;
+        _name.FontSize = DeviceInfo.Idiom == DeviceIdiom.Phone ? 23 : 26; _tagline.FontSize = 14;
+        _inner.ColumnSpacing = 18;
+        _inner.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        _inner.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        _inner.SetRow(_badge, 0); _inner.SetRow(_words, 0); _inner.SetColumn(_words, 1);
+        _words.Margin = 0; _words.MaximumWidthRequest = double.PositiveInfinity; _words.VerticalOptions = LayoutOptions.Center;
     }
 }
 
@@ -140,12 +224,15 @@ public class CardGrid : Layout
     public double Spacing { get; set; } = 12;
     /// <summary>Columns is a most: a narrow window gets fewer, so no card is squeezed below this width.</summary>
     public double MinColumnWidth { get; set; } = 320;
+    /// <summary>No more columns than visible cards, so a short set fills its row instead of leaving an empty column (Settings, 2026-11-11).</summary>
+    public bool FillRow { get; set; }
 
     int Fit(double width)
     {
         var room = width - Padding.HorizontalThickness;
         var fit = double.IsFinite(room) ? (int)((room + Spacing) / (MinColumnWidth + Spacing)) : Columns;
-        return Math.Clamp(fit, 1, Math.Max(1, Columns));
+        var most = FillRow ? Math.Min(Columns, this.Count(v => ((IView)v).Visibility != Visibility.Collapsed)) : Columns;
+        return Math.Clamp(fit, 1, Math.Max(1, most));
     }
 
     protected override Microsoft.Maui.Layouts.ILayoutManager CreateLayoutManager() => new Manager(this);
@@ -181,21 +268,18 @@ public class CardGrid : Layout
     }
 }
 
-/// <summary>A card's header: one of the Icons on its chip, then the title. TextColor is for lime cards, which keep black words.</summary>
+/// <summary>A card's header: the title alone, as a level-2 heading. No icon chip (Phase 9, approved mockup: an icon beside every heading
+/// is the dashboard-kit look). TextColor is for highlight cards, whose words flip with the card.</summary>
 public class CardTitle : ContentView
 {
-    public static readonly BindableProperty IconProperty = BindableProperty.Create(nameof(Icon), typeof(string), typeof(CardTitle), "",
-        propertyChanged: (b, _, n) => ((CardTitle)b)._icon.Icon = (string)n);
     public static readonly BindableProperty TextProperty = BindableProperty.Create(nameof(Text), typeof(string), typeof(CardTitle), "",
         propertyChanged: (b, _, n) => ((CardTitle)b)._label.Text = (string)n);
     public static readonly BindableProperty TextColorProperty = BindableProperty.Create(nameof(TextColor), typeof(Color), typeof(CardTitle), null,
         propertyChanged: (b, _, n) => { if (n is Color c) ((CardTitle)b)._label.TextColor = c; });
 
-    public string Icon { get => (string)GetValue(IconProperty); set => SetValue(IconProperty, value); }
     public string Text { get => (string)GetValue(TextProperty); set => SetValue(TextProperty, value); }
     public Color? TextColor { get => (Color?)GetValue(TextColorProperty); set => SetValue(TextColorProperty, value); }
 
-    readonly IconView _icon = new() { Size = 17, ChipSize = 34, VerticalOptions = LayoutOptions.Center };
     readonly Label _label = new() { FontFamily = "BarlowSemiBold", FontSize = 18, VerticalOptions = LayoutOptions.Center, LineBreakMode = LineBreakMode.WordWrap };
 
     public CardTitle()
@@ -204,8 +288,7 @@ public class CardTitle : ContentView
         _label.FontSize = 18;
         SemanticProperties.SetHeadingLevel(_label, SemanticHeadingLevel.Level2);
         PropertyChanged += (_, e) => { if (e.PropertyName == nameof(AutomationId) && _label.AutomationId is null) _label.AutomationId = AutomationId; };
-        Content = new Grid { ColumnDefinitions = [new(GridLength.Auto), new(GridLength.Star)], ColumnSpacing = 10, Children = { _icon, _label } };
-        Grid.SetColumn(_label, 1);
+        Content = _label;
     }
 }
 
@@ -220,9 +303,9 @@ public class StatusChip : ContentView
     readonly Ellipse _dot = new();
     readonly Label _label = new() { VerticalOptions = LayoutOptions.Center, FontSize = 13 };
 
-    static readonly HashSet<string> Good = ["verified", "active", "completed", "approved", "present", "available"];
-    static readonly HashSet<string> Bad = ["rejected", "expired", "cancelled", "absent", "no_show", "inactive", "unavailable"];
-    static readonly HashSet<string> Wait = ["pending", "late", "in_use"];
+    static readonly HashSet<string> Good = new(["verified", "active", "completed", "approved", "present", "available"], StringComparer.OrdinalIgnoreCase);
+    static readonly HashSet<string> Bad = new(["rejected", "expired", "cancelled", "absent", "no_show", "inactive", "unavailable", "deleted"], StringComparer.OrdinalIgnoreCase);
+    static readonly HashSet<string> Wait = new(["pending", "late", "in_use"], StringComparer.OrdinalIgnoreCase);
 
     public StatusChip()
     {
@@ -274,6 +357,13 @@ public class Banner : ContentView
     }
 }
 
+/// <summary>IsActive to the D13 word, for catalog rows bound straight to their model.</summary>
+public class RecordStatusConverter : IValueConverter
+{
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => GymMembership.Core.Services.RecordStatus.Of(value is true);
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
 public class LocalDateConverter : IValueConverter
 {
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
@@ -287,7 +377,7 @@ public class LocalDateConverter : IValueConverter
 }
 
 /// <summary>
-/// A field's frame turns lime (dark theme) or Plate Blue (light) while the box inside it has focus: the keyboard-focus indicator for every
+/// A field's frame turns yellow (dark theme) or ink (light) while the box inside it has focus: the keyboard-focus indicator for every
 /// Entry, Editor and SearchBar in a "Field" border. MauiProgram attaches it to each input as its handler connects.
 /// </summary>
 public static class FieldFocus
@@ -307,7 +397,7 @@ public static class FieldFocus
 
     // a plain value (not a theme binding) so ClearValue hands the frame straight back to the Field style
     public static void Mark(Border b) =>
-        b.Stroke = Pick(Application.Current!.RequestedTheme == AppTheme.Dark ? "Lime" : "InkLight");
+        b.Stroke = Pick(Application.Current!.RequestedTheme == AppTheme.Dark ? "Signal" : "InkLight");
 
     public static void Unmark(Border b) => b.ClearValue(Border.StrokeProperty);
 
@@ -364,7 +454,7 @@ public class CodeBoxes : Grid
 }
 
 /// <summary>
-/// Under a new password: four bars and a word for how strong it is, and the checklist from AccountRules. Only the length is required.
+/// Under a new password: four bars and a word for how strong it is, and the checklist from AccountRules. The first two lines are required.
 /// Colour is never the only signal: the word and the ticks say the same.
 /// </summary>
 public class PasswordStrength : VerticalStackLayout
@@ -374,11 +464,11 @@ public class PasswordStrength : VerticalStackLayout
     public string? Password { get => (string?)GetValue(PasswordProperty); set => SetValue(PasswordProperty, value); }
 
     static readonly string[] Words = ["", "Weak", "Fair", "Good", "Strong"];
-    static readonly string[] Tones = ["", "PlateRed", "PlateYellow", "PlateGreen", "PlateGreen"];
+    static readonly string[] Tones = ["", "Bad", "Pending", "Good", "Good"];
     readonly BoxView[] _bars = new BoxView[4];
     readonly Label _word = new() { Style = (Style)Application.Current!.Resources["Caption"], HorizontalOptions = LayoutOptions.End };
     readonly Label[] _checks = new Label[3];
-    static readonly string[] CheckText = ["6 to 64 characters", "At least one number", "Upper and lower case letters"];
+    static readonly string[] CheckText = ["8 to 64 characters", "A letter and a number", "Upper and lower case (optional)"];
 
     public PasswordStrength()
     {
@@ -395,12 +485,51 @@ public class PasswordStrength : VerticalStackLayout
     {
         var password = Password ?? "";
         var score = AccountRules.PasswordStrength(password);
-        var (length, number, mixed) = AccountRules.PasswordChecks(password);
+        var (length, letterAndNumber, mixed) = AccountRules.PasswordChecks(password);
         for (var i = 0; i < 4; i++)
             if (i < score) _bars[i].SetAppThemeColor(BoxView.ColorProperty, FieldFocus.Pick(Tones[score] + "Light"), FieldFocus.Pick(Tones[score] + "Dark"));
             else _bars[i].SetAppThemeColor(BoxView.ColorProperty, FieldFocus.Pick("LineLight"), FieldFocus.Pick("LineDark"));
         _word.Text = Words[score];
-        bool[] ok = [length, number, mixed];
+        bool[] ok = [length, letterAndNumber, mixed];
         for (var i = 0; i < 3; i++) _checks[i].Text = (ok[i] ? "✓  " : "–  ") + CheckText[i];
+    }
+}
+
+/// <summary>
+/// The quiet two-way switch at the top of a combined page (Refunds &amp; voids), drawn like
+/// Logs &amp; Archive's: the open side bold and filled. Pages show their halves from ShowSecond.
+/// </summary>
+public class PartSwitch : ContentView
+{
+    public static readonly BindableProperty ShowSecondProperty = BindableProperty.Create(nameof(ShowSecond), typeof(bool), typeof(PartSwitch), false,
+        propertyChanged: (b, _, _) => ((PartSwitch)b).Paint());
+    public bool ShowSecond { get => (bool)GetValue(ShowSecondProperty); set => SetValue(ShowSecondProperty, value); }
+    public string First { get => _first.Text; set { _first.Text = value; Paint(); } }
+    public string Second { get => _second.Text; set { _second.Text = value; Paint(); } }
+
+    readonly Button _first = new() { AutomationId = "PartFirst" }, _second = new() { AutomationId = "PartSecond" };
+
+    public PartSwitch()
+    {
+        var res = Application.Current!.Resources;
+        _first.Style = _second.Style = (Style)res["Segment"];
+        _first.Clicked += (_, _) => ShowSecond = false;
+        _second.Clicked += (_, _) => ShowSecond = true;
+        Content = new Border { Style = (Style)res["SegmentTrack"], Content = new HorizontalStackLayout { Spacing = 2, Children = { _first, _second } } };
+        Paint();
+    }
+
+    // both sides set outright: a style swap lost the other label on Android, and clearing the open side's values left Windows' fill
+    // in place. Closed = the Segment style's own values.
+    void Paint()
+    {
+        var res = Application.Current!.Resources;
+        foreach (var (button, open) in new[] { (_first, !ShowSecond), (_second, ShowSecond) })
+        {
+            SemanticProperties.SetDescription(button, open ? $"{button.Text}, selected" : button.Text);
+            button.FontFamily = open ? "BarlowSemiBold" : "BarlowMedium";
+            button.SetAppThemeColor(Button.BackgroundColorProperty, (Color)res[open ? "InkLight" : "LineLight"], (Color)res[open ? "SurfaceDark" : "PageDark"]);
+            button.SetAppThemeColor(Button.TextColorProperty, (Color)res[open ? "White" : "MutedLight"], (Color)res[open ? "InkDark" : "MutedDark"]);
+        }
     }
 }

@@ -16,56 +16,80 @@
         <!-- ===== conversations ===== -->
         <!-- the conversation list sits in a card beside the chat -->
         <Border Grid.Row="1" Style="{StaticResource Panel}" Padding="0" Margin="12,12,0,12" IsVisible="{Binding ShowList}">
-        <Grid x:Name="ListPane" RowDefinitions="Auto,Auto,Auto,Auto,*" RowSpacing="10" Padding="14,12">
+        <Grid x:Name="ListPane" RowDefinitions="Auto,Auto,Auto,Auto,Auto,*" RowSpacing="10" Padding="14,12">
             <Border Style="{StaticResource Field}">
                 <Entry Text="{Binding SearchText}" Placeholder="Search people and messages" ClearButtonVisibility="WhileEditing" SemanticProperties.Description="Search" />
             </Border>
 
-            <!-- a member's two conversations -->
-            <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="8" IsVisible="{Binding HasTabs}">
-                <Button Text="{Binding CoachTabText}" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowTabCommand}" CommandParameter="coach">
+            <!-- F10: Announcements, pinned above the tabs for members and coaches; read-only, so it is never in a tab -->
+            <Border Grid.Row="1" Style="{StaticResource Row}" Padding="12,10" IsVisible="{Binding HasPinned}" AutomationId="PinnedAnnouncements"
+                    SemanticProperties.Description="{Binding Pinned.Thread.UnreadText, StringFormat='Announcements, {0} unread'}">
+                <Border.Triggers>
+                    <DataTrigger TargetType="Border" Binding="{Binding Pinned.IsOpen}" Value="True">
+                        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource PageLight}, Dark={StaticResource PageDark}}" />
+                        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+                    </DataTrigger>
+                </Border.Triggers>
+                <Border.GestureRecognizers><TapGestureRecognizer Tapped="OnOpenPinned" /></Border.GestureRecognizers>
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                    <c:IconView Icon="megaphone" Selected="True" Size="20" ChipSize="44" VerticalOptions="Center" />
+                    <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                        <Label Text="Announcements" FontFamily="BarlowSemiBold" />
+                        <Label Text="{Binding Pinned.Thread.Preview}" Style="{StaticResource Muted}" LineBreakMode="TailTruncation" MaxLines="1" />
+                    </VerticalStackLayout>
+                    <Border Grid.Column="2" IsVisible="{Binding Pinned.Thread.HasUnread}" VerticalOptions="Center" MinimumWidthRequest="20" HeightRequest="20" Padding="6,0" StrokeThickness="0"
+                            StrokeShape="RoundRectangle 10" BackgroundColor="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}">
+                        <Label Text="{Binding Pinned.Thread.UnreadText}" FontSize="12" FontFamily="BarlowSemiBold" HorizontalOptions="Center" VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PageDark}}" />
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- a member's or coach's two kinds of conversation, as chips (the yellow one is open) -->
+            <HorizontalStackLayout Grid.Row="2" Spacing="8" IsVisible="{Binding HasTabs}">
+                <Button Text="{Binding CoachTabText}" Style="{StaticResource FilterChip}" Command="{Binding ShowTabCommand}" CommandParameter="coach">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Tab}" Value="coach">
-                            <Setter Property="Style" Value="{StaticResource LimeSmallButton}" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
-                <Button Grid.Column="1" Text="{Binding StaffTabText}" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowTabCommand}" CommandParameter="support">
+                <Button Text="{Binding StaffTabText}" Style="{StaticResource FilterChip}" Command="{Binding ShowTabCommand}" CommandParameter="support">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Tab}" Value="support">
-                            <Setter Property="Style" Value="{StaticResource LimeSmallButton}" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
-            </Grid>
+            </HorizontalStackLayout>
 
-            <!-- front desk: which members' conversations -->
-            <Grid Grid.Row="2" ColumnDefinitions="*,*,*" ColumnSpacing="8" IsVisible="{Binding HasFilters}">
-                <Button Text="Open" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowFilterCommand}" CommandParameter="open">
+            <!-- staff: which conversations -->
+            <HorizontalStackLayout Grid.Row="3" Spacing="8" IsVisible="{Binding HasFilters}">
+                <Button Text="Open" Style="{StaticResource FilterChip}" Command="{Binding ShowFilterCommand}" CommandParameter="open">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="open">
-                            <Setter Property="Style" Value="{StaticResource LimeSmallButton}" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
-                <Button Grid.Column="1" Text="Mine" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowFilterCommand}" CommandParameter="mine">
+                <Button Text="Mine" Style="{StaticResource FilterChip}" Command="{Binding ShowFilterCommand}" CommandParameter="mine">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="mine">
-                            <Setter Property="Style" Value="{StaticResource LimeSmallButton}" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
-                <Button Grid.Column="2" Text="Closed" Style="{StaticResource SmallOutlineButton}" Command="{Binding ShowFilterCommand}" CommandParameter="closed">
+                <Button Text="Closed" Style="{StaticResource FilterChip}" Command="{Binding ShowFilterCommand}" CommandParameter="closed">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="closed">
-                            <Setter Property="Style" Value="{StaticResource LimeSmallButton}" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>
-            </Grid>
+            </HorizontalStackLayout>
 
             <!-- what the search found inside messages (names are matched in the list below) -->
-            <ScrollView Grid.Row="3" MaximumHeightRequest="240" IsVisible="{Binding HasHits}">
+            <ScrollView Grid.Row="4" MaximumHeightRequest="240" IsVisible="{Binding HasHits}">
                 <VerticalStackLayout Spacing="8">
                     <Label Text="In messages" Style="{StaticResource Caption}" />
                     <VerticalStackLayout Spacing="8" BindableLayout.ItemsSource="{Binding Hits}">
@@ -86,7 +110,7 @@
                 </VerticalStackLayout>
             </ScrollView>
 
-            <CollectionView Grid.Row="4" ItemsSource="{Binding Threads}">
+            <CollectionView Grid.Row="5" ItemsSource="{Binding Threads}">
                 <CollectionView.EmptyView>
                     <Label Text="{Binding EmptyListText}" Style="{StaticResource Muted}" Margin="0,8" />
                 </CollectionView.EmptyView>
@@ -111,8 +135,14 @@
             <Grid RowDefinitions="Auto,Auto,*,Auto" IsVisible="{Binding HasChat}">
                 <!-- who you are talking to, and for staff: take, release, close -->
                 <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="12" Padding="16,12">
-                    <Button Text="Back" Style="{StaticResource SmallOutlineButton}" Command="{Binding BackCommand}" IsVisible="{Binding IsCompact}" VerticalOptions="Center" />
-                    <c:Avatar Grid.Column="1" Letters="{Binding Selected.Letters}" Url="{Binding Selected.AvatarUrl}" Diameter="40" VerticalOptions="Center" />
+                    <!-- phones: a back arrow, as in any Android app bar, not a "Back" pill -->
+                    <Grid WidthRequest="44" HeightRequest="44" IsVisible="{Binding IsCompact}" VerticalOptions="Center">
+                        <Button BackgroundColor="Transparent" BorderWidth="0" Padding="0" Command="{Binding BackCommand}" SemanticProperties.Description="Back to conversations" />
+                        <c:IconView Icon="chevron-left" Ghost="True" Size="24" HorizontalOptions="Center" VerticalOptions="Center" InputTransparent="True" />
+                    </Grid>
+                    <c:Avatar Grid.Column="1" Letters="{Binding Selected.Letters}" Url="{Binding Selected.AvatarUrl}" Diameter="40" VerticalOptions="Center"
+                              IsVisible="{Binding Selected.Thread.IsAnnouncements, Converter={StaticResource Not}}" />
+                    <c:IconView Grid.Column="1" Icon="megaphone" Selected="True" Size="20" ChipSize="40" VerticalOptions="Center" IsVisible="{Binding Selected.Thread.IsAnnouncements}" />
                     <VerticalStackLayout Grid.Column="2" VerticalOptions="Center">
                         <Label Text="{Binding Selected.Thread.WithName}" Style="{StaticResource Heading}" LineBreakMode="TailTruncation" />
                         <Label Text="{Binding Selected.Subtitle}" Style="{StaticResource Caption}" IsVisible="{Binding Selected.Subtitle, Converter={StaticResource HasText}}" />
@@ -130,22 +160,44 @@
                 <Button Grid.Row="1" Text="Load earlier messages" Style="{StaticResource SmallOutlineButton}" Command="{Binding LoadEarlierCommand}"
                         IsVisible="{Binding HasMore}" HorizontalOptions="Center" Margin="0,0,0,10" />
 
-                <!-- Your messages sit right in Rubber (the primary ink); theirs sit left on a hairline panel -->
+                <!-- Your messages sit right on the highlight colour; theirs sit left on a panel -->
                 <CollectionView Grid.Row="2" ItemsSource="{Binding Bubbles}" ItemsUpdatingScrollMode="KeepLastItemInView" Margin="16,0">
                     <CollectionView.EmptyView>
-                        <Label Text="No messages yet. Say hello below." Style="{StaticResource Muted}" />
+                        <Label Text="{Binding ChatEmptyText}" Style="{StaticResource Muted}" />
                     </CollectionView.EmptyView>
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="svc:ChatBubble">
                             <!-- the grid fills the row; the bubble inside it sits left or right (a list row ignores its own alignment on Windows) -->
                             <Grid>
+                                <!-- F11: a step of a time request, said by whoever took it: framed, on the sender's side, with a link to act on it -->
+                                <Border Padding="14,10" Margin="0,0,0,8" MaximumWidthRequest="460" HorizontalOptions="Start" StrokeShape="RoundRectangle 14"
+                                        StrokeThickness="2" Stroke="{AppThemeBinding Light={StaticResource EdgeLight}, Dark={StaticResource EdgeDark}}"
+                                        BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}" IsVisible="{Binding IsRequest}">
+                                    <Border.Triggers>
+                                        <DataTrigger TargetType="Border" Binding="{Binding Mine}" Value="True"><Setter Property="HorizontalOptions" Value="End" /></DataTrigger>
+                                    </Border.Triggers>
+                                    <VerticalStackLayout Spacing="4">
+                                        <HorizontalStackLayout Spacing="6">
+                                            <c:IconView Icon="calendar-days" Ghost="True" Size="15" VerticalOptions="Center" />
+                                            <Label Text="{Binding RequestTitle}" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                                        </HorizontalStackLayout>
+                                        <Label Text="{Binding Line.Body}" />
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                            <Button Text="Open Time requests" Style="{StaticResource LinkButton}" Padding="0" HorizontalOptions="Start" Clicked="OnOpenRequests"
+                                                    SemanticProperties.Hint="Opens Time requests, where you answer it" />
+                                            <Label Grid.Column="1" Text="{Binding Line.SentAt, Converter={StaticResource LocalDate}, ConverterParameter='ddd d MMM, h:mm tt'}"
+                                                   Style="{StaticResource Caption}" FontSize="12" VerticalOptions="Center" />
+                                        </Grid>
+                                    </VerticalStackLayout>
+                                </Border>
                                 <Border Style="{StaticResource Panel}" Padding="14,10" Margin="0,0,0,8" MaximumWidthRequest="460"
-                                        HorizontalOptions="Start" StrokeShape="RoundRectangle 14,14,14,4">
+                                        HorizontalOptions="Start" StrokeShape="RoundRectangle 14,14,14,4" IsVisible="{Binding IsRequest, Converter={StaticResource Not}}">
                                     <Border.Triggers>
                                         <DataTrigger TargetType="Border" Binding="{Binding Mine}" Value="True">
                                             <Setter Property="HorizontalOptions" Value="End" />
                                             <Setter Property="StrokeShape" Value="RoundRectangle 14,14,4,14" />
-                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+                                            <!-- the highlight flip (D23): black in light, yellow in dark (was a near-white block in dark until the 9.6 polish) -->
+                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
                                         </DataTrigger>
                                     </Border.Triggers>
                                     <VerticalStackLayout Spacing="3">
@@ -159,14 +211,14 @@
                                         <Label Text="Photo unavailable" Style="{StaticResource Caption}" IsVisible="{Binding PhotoMissing}">
                                             <Label.Triggers>
                                                 <DataTrigger TargetType="Label" Binding="{Binding Mine}" Value="True">
-                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" />
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PageDark}}" />
                                                 </DataTrigger>
                                             </Label.Triggers>
                                         </Label>
                                         <Label Text="{Binding Line.Body}" IsVisible="{Binding HasText}">
                                             <Label.Triggers>
                                                 <DataTrigger TargetType="Label" Binding="{Binding Mine}" Value="True">
-                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" />
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PageDark}}" />
                                                 </DataTrigger>
                                             </Label.Triggers>
                                         </Label>
@@ -175,13 +227,13 @@
                                                Style="{StaticResource Caption}" FontSize="12" HorizontalOptions="End">
                                             <Label.Triggers>
                                                 <DataTrigger TargetType="Label" Binding="{Binding Mine}" Value="True">
-                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" />
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PageDark}}" />
                                                     <Setter Property="Opacity" Value="0.75" />
                                                 </DataTrigger>
                                             </Label.Triggers>
                                         </Label>
                                         <Label Text="{Binding Status}" Style="{StaticResource Caption}" FontSize="12" HorizontalOptions="End"
-                                               IsVisible="{Binding Mine}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource ChalkDark}}" Opacity="0.75" />
+                                               IsVisible="{Binding Mine}" TextColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PageDark}}" Opacity="0.75" />
                                     </VerticalStackLayout>
                                 </Border>
                             </Grid>
@@ -206,7 +258,7 @@
                         <Button Grid.Column="2" Text="Send" Command="{Binding SendCommand}" />
                     </Grid>
                 </Grid>
-                <Label Grid.Row="3" Text="You can read this conversation, but you can't send new messages in it right now." Style="{StaticResource Muted}"
+                <Label Grid.Row="3" Text="{Binding ReadOnlyText}" Style="{StaticResource Muted}"
                        Padding="16,10,16,14" IsVisible="{Binding ReadOnly}" />
             </Grid>
         </Grid>

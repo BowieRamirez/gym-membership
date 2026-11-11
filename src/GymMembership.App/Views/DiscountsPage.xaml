@@ -7,15 +7,69 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.DiscountsPage" x:DataType="vm:DiscountsViewModel" Title="Discounts">
 
+    <!-- 9.8: a table (was a grid of cards); the actions as chips, destructive ones last (D28); narrow windows stack the same facts -->
+    <v:BasePage.Resources>
+        <DataTemplate x:Key="CodeRow" x:DataType="svc:DiscountRow">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,90,130,*,110,1.4*">
+                    <VerticalStackLayout VerticalOptions="Center" Spacing="2">
+                        <Label Text="{Binding Discount.Code}" FontFamily="BarlowSemiBold" />
+                        <Label Text="Shown on Packages" Style="{StaticResource Caption}" IsVisible="{Binding Discount.ShowOnPackages}" />
+                    </VerticalStackLayout>
+                    <Label Grid.Column="1" Text="{Binding Discount.Percent, StringFormat='{0}%'}" VerticalOptions="Center" />
+                    <Label Grid.Column="2" Text="{Binding LastDay, Converter={StaticResource LocalDate}, ConverterParameter='d MMM yyyy'}" VerticalOptions="Center" />
+                    <Label Grid.Column="3" Text="{Binding Usage}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                    <c:StatusChip Grid.Column="4" Status="{Binding StatusText}" VerticalOptions="Center" />
+                    <FlexLayout Grid.Column="5" Wrap="Wrap" JustifyContent="End" Margin="0,8,0,0">
+                        <Button Text="Edit" Style="{StaticResource FilterChip}" Margin="8,0,0,8" Clicked="OnEditCode" AutomationId="DiscountEdit" IsVisible="{Binding CanEdit}" />
+                        <Button Text="Deactivate" Style="{StaticResource FilterChip}" Margin="8,0,0,8" Clicked="OnToggle">
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Discount.IsActive}" Value="False"><Setter Property="Text" Value="Activate" /></DataTrigger></Button.Triggers>
+                        </Button>
+                        <Button Text="Archive" Style="{StaticResource FilterChip}" Margin="8,0,0,8" Clicked="OnDelete" />
+                    </FlexLayout>
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+        <DataTemplate x:Key="CodeCard" x:DataType="svc:DiscountRow">
+            <VerticalStackLayout>
+                <VerticalStackLayout Spacing="4" Padding="14,12">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <Label Text="{Binding Discount.Code}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                        <c:StatusChip Grid.Column="1" Status="{Binding StatusText}" VerticalOptions="Center" />
+                    </Grid>
+                    <Label Style="{StaticResource Caption}">
+                        <Label.Text>
+                            <MultiBinding StringFormat="{}{0}% off, valid until {1}">
+                                <Binding Path="Discount.Percent" />
+                                <Binding Path="LastDay" Converter="{StaticResource LocalDate}" ConverterParameter="d MMM yyyy" />
+                            </MultiBinding>
+                        </Label.Text>
+                    </Label>
+                    <Label Text="{Binding Usage}" Style="{StaticResource Caption}" />
+                    <Label Text="Shown on Packages" Style="{StaticResource Caption}" IsVisible="{Binding Discount.ShowOnPackages}" />
+                    <FlexLayout Wrap="Wrap" Margin="0,4,0,0">
+                        <Button Text="Edit" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnEditCode" AutomationId="DiscountEdit" IsVisible="{Binding CanEdit}" />
+                        <Button Text="Deactivate" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnToggle">
+                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Discount.IsActive}" Value="False"><Setter Property="Text" Value="Activate" /></DataTrigger></Button.Triggers>
+                        </Button>
+                        <Button Text="Archive" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnDelete" />
+                    </FlexLayout>
+                </VerticalStackLayout>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+    </v:BasePage.Resources>
+
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='20,16,20,24', Default='16,12,16,20'}" Spacing="14">
-            <Label Text="Percent-off codes. Members type a code when they buy or renew a package." Style="{StaticResource Muted}" />
+            <Label Text="Percent-off codes. Members type a code when they buy or renew a package. Once a code has been used, it can't be edited, only turned off." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
             <Border Style="{StaticResource Panel}" IsVisible="{Binding Deleting, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="10">
-                    <c:CardTitle Icon="archive" Text="{Binding Deleting.Discount.Code, StringFormat='Archive code {0}? History will be retained.'}" />
+                    <c:CardTitle Text="{Binding Deleting.Discount.Code, StringFormat='Archive code {0}? History will be retained.'}" />
                     <HorizontalStackLayout Spacing="8">
                         <Button Text="Yes, archive" Style="{StaticResource SmallButton}" Command="{Binding ConfirmDeleteCommand}" />
                         <Button Text="Keep it" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepCommand}" />
@@ -25,13 +79,25 @@
 
             <Border Style="{StaticResource Panel}" IsVisible="{Binding Editing, Converter={StaticResource IsNotNull}}">
                 <VerticalStackLayout Spacing="10">
-                    <c:CardTitle Icon="tag" Text="{Binding Editing.Discount.Code, StringFormat='Change the limit for {0}'}" />
+                    <c:CardTitle Text="{Binding Editing.Discount.Code, StringFormat='Edit code {0}'}" />
                     <Label Text="{Binding Editing.Usage}" Style="{StaticResource Caption}" />
-                    <Border Style="{StaticResource Field}" WidthRequest="110" HorizontalOptions="Start">
-                        <Entry Text="{Binding EditLimit}" Keyboard="Numeric" SemanticProperties.Description="New limit" />
-                    </Border>
+                    <FlexLayout Wrap="Wrap" AlignItems="End">
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="110">
+                            <Label Text="Max uses" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding EditLimit}" Keyboard="Numeric" SemanticProperties.Description="New limit" AutomationId="EditCodeLimit" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                            <Label Text="Valid until" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><DatePicker Date="{Binding EditUntil}" MinimumDate="{x:Static x:DateTime.Today}" SemanticProperties.Description="Last day the code works" AutomationId="EditCodeUntil" /></Border>
+                        </VerticalStackLayout>
+                        <HorizontalStackLayout Margin="0,0,12,14" Spacing="8">
+                            <Switch IsToggled="{Binding EditShowOnPackages}" AutomationId="EditCodeShowOnPackages" SemanticProperties.Description="Show on Packages" />
+                            <Label Text="Show on Packages" VerticalOptions="Center" />
+                        </HorizontalStackLayout>
+                    </FlexLayout>
+                    <Label Text="The code and percent can't change. After the code's first use, nothing else can change either." Style="{StaticResource Caption}" />
                     <HorizontalStackLayout Spacing="8">
-                        <Button Text="Save limit" Style="{StaticResource SmallButton}" Command="{Binding SaveLimitCommand}" />
+                        <Button Text="Save changes" Style="{StaticResource SmallButton}" Command="{Binding SaveEditCommand}" AutomationId="SaveEditCode" />
                         <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelEditCommand}" />
                     </HorizontalStackLayout>
                 </VerticalStackLayout>
@@ -55,45 +121,33 @@
                         <Label Text="Valid until" Style="{StaticResource Caption}" />
                         <Border Style="{StaticResource Field}"><DatePicker Date="{Binding ValidUntil}" MinimumDate="{x:Static x:DateTime.Today}" /></Border>
                     </VerticalStackLayout>
+                    <HorizontalStackLayout Margin="0,0,12,14" Spacing="8">
+                        <Switch IsToggled="{Binding NewShowOnPackages}" AutomationId="NewCodeShowOnPackages" SemanticProperties.Description="Show on Packages, so members can see and use it" />
+                        <Label Text="Show on Packages" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
                     <Button Text="Add code" Style="{StaticResource SmallButton}" Margin="0,0,0,8" Command="{Binding AddCommand}" />
                 </FlexLayout>
             </Border>
 
-            <c:CardGrid Columns="{OnIdiom Phone=1, Default=4}" BindableLayout.ItemsSource="{Binding Discounts}">
-                <BindableLayout.EmptyView><Label Text="No discount codes yet." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
-                <BindableLayout.ItemTemplate>
-                    <DataTemplate x:DataType="svc:DiscountRow">
-                        <Border Style="{StaticResource Panel}">
-                            <VerticalStackLayout Spacing="10">
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                    <VerticalStackLayout Spacing="2">
-                                        <c:CardTitle Icon="tag" Text="{Binding Discount.Code}" />
-                                        <Label Style="{StaticResource Caption}">
-                                            <Label.Text>
-                                                <MultiBinding StringFormat="{}{0}% off, valid until {1}">
-                                                    <Binding Path="Discount.Percent" />
-                                                    <Binding Path="Discount.ExpiresAt" Converter="{StaticResource LocalDate}" ConverterParameter="d MMM yyyy" />
-                                                </MultiBinding>
-                                            </Label.Text>
-                                        </Label>
-                                        <Label Text="{Binding Usage}" Style="{StaticResource Caption}" />
-                                    </VerticalStackLayout>
-                                    <c:StatusChip Grid.Column="1" Status="{Binding State}" VerticalOptions="Start" />
-                                </Grid>
-                                <!-- wraps on narrow screens so no label is cut off -->
-                                <FlexLayout Wrap="Wrap">
-                                    <Button Text="Change limit" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                            Clicked="OnChangeLimit" />
-                                    <Button Text="Deactivate" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                            Clicked="OnToggle" />
-                                    <Button Text="Archive" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                            Clicked="OnDelete" />
-                                </FlexLayout>
-                            </VerticalStackLayout>
-                        </Border>
-                    </DataTemplate>
-                </BindableLayout.ItemTemplate>
-            </c:CardGrid>
+            <Border Style="{StaticResource TablePanel}">
+                <VerticalStackLayout>
+                    <VerticalStackLayout x:Name="CodeHead">
+                        <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,90,130,*,110,1.4*">
+                            <Label Text="Code" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="1" Text="Off" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="2" Text="Valid until" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="3" Text="Uses" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="4" Text="Status" Style="{StaticResource Caption}" />
+                        </Grid>
+                        <BoxView Style="{StaticResource Hairline}" />
+                    </VerticalStackLayout>
+                    <c:TableBody BindableLayout.ItemsSource="{Binding Discounts}" Header="{x:Reference CodeHead}" WideFrom="1000"
+                                 RowTemplate="{StaticResource CodeRow}" CardTemplate="{StaticResource CodeCard}"
+                                 BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource CodeCard}, Default={StaticResource CodeRow}}">
+                        <BindableLayout.EmptyView><Label Text="No discount codes yet. Add one above." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                    </c:TableBody>
+                </VerticalStackLayout>
+            </Border>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

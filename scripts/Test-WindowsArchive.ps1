@@ -49,10 +49,13 @@ try {
         }
         throw "No actionable control: $name"
     }
-    Invoke-Name 'Admin'
-    $null = Wait-Id 'AdminOverviewTitle'
+    Invoke-Name 'System admin'
+    $null = Wait-Id 'AdminOverviewUpdated'
     Invoke-Name 'Users and roles'
-    Invoke-Element (Wait-Id 'UserAccountActions')
+    $null = Wait-Id 'UserAccountActions'
+    # the demo's first row is the System admin, who can't be deleted (0037); the second is a member
+    Invoke-Element @($root.FindAll([Windows.Automation.TreeScope]::Descendants,
+        (New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::AutomationIdProperty, 'UserAccountActions'))))[1]
     Invoke-Name 'Delete Account'
     $confirm = Wait-Id 'ConfirmAccountDeletion'
     if ($confirm.Current.IsEnabled) { throw 'Blank deletion reason enabled confirmation.' }
@@ -66,7 +69,7 @@ try {
     Invoke-Name 'Packages and amenities'
     Invoke-Name 'Archive'
     Invoke-Name 'Yes, archive'
-    Invoke-Name 'Discounts & Archive'
+    Invoke-Name 'Logs & Archive'
     Invoke-Element (Wait-Id 'OpenArchive')
     $reasonFilter = Wait-Id 'ArchiveReason'
     $reasonFilter.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue('unmatched-smoke-test')
@@ -86,9 +89,11 @@ try {
     $null = Wait-Id 'ArchiveEmpty'
     Write-Output 'PASS read-only details restore the archived plan; it disappears from the archive'
     Invoke-Name 'Sign out'
+    # sign-out asks first ("Sign out?"); WinUI names the dialog's confirm button PrimaryButton
+    Invoke-Element (Wait-Id 'PrimaryButton')
     Invoke-Name 'Front desk'
     $archiveLink = $root.FindFirst([Windows.Automation.TreeScope]::Descendants,
-        (New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::NameProperty, 'Discounts & Archive')))
+        (New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::NameProperty, 'Logs & Archive')))
     if ($null -ne $archiveLink -and -not $archiveLink.Current.IsOffscreen) { throw 'Front desk exposes admin archive navigation.' }
     Write-Output 'PASS front desk does not expose admin archive navigation'
 }

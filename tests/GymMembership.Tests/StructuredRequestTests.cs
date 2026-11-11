@@ -137,7 +137,7 @@ public class StructuredRequestTests
         Assert.Null(vm.ErrorMessage);
         Assert.Equal(Manila(11, 30), vm.Sessions.Single(r => r.Session.Id == row.Session.Id).Session.ScheduledEnd);
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
-        Assert.EndsWith("10:00–11:30", (await new ReservationService(gw).MyBookingsAsync()).Value!.Single().When);
+        Assert.EndsWith("10:00 AM to 11:30 AM", (await new ReservationService(gw).MyBookingsAsync()).Value!.Single().When);
     }
 
     [Fact]

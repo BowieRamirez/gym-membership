@@ -1,7 +1,8 @@
 // POST { first_name, last_name, email, role: 'member' | 'coach' | 'employee' | 'subadmin', password } (or { name, ... } from an older app)
 // The owner creates an account with a temporary password (plan 4.3). The handle_new_user trigger
 // builds the profile, settings, role and member/coach row from the metadata set here.
-import { adminClient, cors, reply, requireAdmin } from '../_shared/admin.ts';
+import { adminClient, auditBy, cors, reply, requireAdmin } from '../_shared/admin.ts';
+import { isEmail, isPassword } from '../_shared/rules.ts';
 
 const ROLES = ['member', 'coach', 'employee', 'subadmin'];
 
@@ -20,7 +21,8 @@ Deno.serve(async (req) => {
   const email = String(body.email ?? '').trim().toLowerCase();
   const role = String(body.role ?? '');
   const password = String(body.password ?? '');
-  if (!name || !email.includes('@') || !ROLES.includes(role) || password.length < 6) return reply({ error: 'bad_input' }, 400);
+  if (!name || !isEmail(email) || !ROLES.includes(role)) return reply({ error: 'bad_input' }, 400);
+  if (!isPassword(password)) return reply({ error: 'bad_password' }, 400);   // D5, as the app checks
   if (!caller.superAdmin && !['member', 'coach'].includes(role)) return reply({ error: 'forbidden' }, 403);   // sub-admins add members and coaches only
 
   const { data, error } = await admin.auth.admin.createUser({
@@ -36,7 +38,7 @@ Deno.serve(async (req) => {
   }
 
   await admin.from('audit_log').insert({
-    actor_id: caller.id, action: 'user.create', entity: 'profiles', entity_id: data.user.id, details: { role },
+    ...auditBy(req, caller), action: 'user.create', entity: 'profiles', entity_id: data.user.id, details: { role },
   });
   return reply({ id: data.user.id });
 });

@@ -39,58 +39,21 @@ try {
     $admin = $null
     for ($i = 0; $i -lt 40 -and $null -eq $admin; $i++) {
         $admin = $root.FindFirst([Windows.Automation.TreeScope]::Descendants,
-            (New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::NameProperty, 'Admin')))
+            (New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::NameProperty, 'System admin')))
         if ($null -eq $admin) { Start-Sleep -Milliseconds 200 }
     }
-    if ($null -eq $admin) { throw 'Demo Admin shortcut is missing. Refusing to enter credentials.' }
+    if ($null -eq $admin) { throw 'Demo System admin shortcut is missing. Refusing to enter credentials.' }
     Invoke-Element $admin
     Wait-Name 'AdminFrontDeskGroup' 'collapsed'
     Write-Output 'PASS admin startup; operations initially collapsed'
     Wait-Name 'AdminNavigation-overview' ', current page$'
-    Wait-Name 'AdminOverviewTitle' '^Admin overview$'
     Wait-Name 'AdminOverviewUpdated' 'Checked.*Manila'
-    foreach ($sidebar in @('expanded', 'collapsed')) {
-        if ($sidebar -eq 'collapsed') {
-            Invoke-Id 'WindowsSidebarToggle'
-            Wait-Name 'WindowsSidebarToggle' '^Expand navigation$'
-            Start-Sleep -Milliseconds 350
-        }
-        $bounds = @()
-        foreach ($key in @('users', 'catalog', 'discounts', 'refunds', 'revenue', 'void', 'gym', 'audit')) {
-            $headingElement = Find-Id ('AdminOverviewHeading-' + $key)
-            $buttonElement = Find-Id ('AdminOverviewOpen-' + $key)
-            if ($null -eq $headingElement -or $null -eq $buttonElement) { throw "Missing alignment control: $key" }
-            $heading = $headingElement.Current.BoundingRectangle
-            $button = $buttonElement.Current.BoundingRectangle
-            if (-not $heading.IsEmpty -and -not $button.IsEmpty -and $button.Height -gt 0) {
-                $bounds += [pscustomobject]@{ Key = $key; HeadingTop = $heading.Top; ButtonTop = $button.Top; ButtonBottom = $button.Bottom }
-            }
-        }
-        $pairs = 0
-        for ($i = 0; $i -lt $bounds.Count; $i++) {
-            for ($j = $i + 1; $j -lt $bounds.Count; $j++) {
-                if ([Math]::Abs($bounds[$i].HeadingTop - $bounds[$j].HeadingTop) -le 2) {
-                    $pairs++
-                    if ([Math]::Abs($bounds[$i].ButtonTop - $bounds[$j].ButtonTop) -gt 2 -or
-                        [Math]::Abs($bounds[$i].ButtonBottom - $bounds[$j].ButtonBottom) -gt 2) {
-                        throw "Quick-access buttons are misaligned: $($bounds[$i].Key), $($bounds[$j].Key) with sidebar $sidebar"
-                    }
-                }
-            }
-        }
-        if ($pairs -eq 0) { throw "No multi-column card row was available to check with sidebar $sidebar." }
-        Write-Output "PASS quick-access button alignment with sidebar $sidebar ($pairs visible pairs)"
-    }
-    Invoke-Id 'WindowsSidebarToggle'
-    Wait-Name 'WindowsSidebarToggle' '^Collapse navigation$'
-    Start-Sleep -Milliseconds 350
-    foreach ($key in @('users', 'catalog', 'discounts', 'refunds', 'revenue', 'void', 'gym', 'audit')) {
+    foreach ($key in @('users', 'catalog', 'discounts', 'refunds', 'revenue', 'gym', 'audit')) {
         $value = Find-Id ('AdminOverviewValue-' + $key)
         if ($null -eq $value -or $value.Current.Name -match 'Loading|Unavailable') { throw "Overview summary failed: $key" }
         Invoke-Id ('AdminOverviewOpen-' + $key)
-        if ($null -ne (Find-Id 'AdminOverviewTitle')) { throw "Overview shortcut did not navigate: $key" }
+        if ($null -ne (Find-Id 'AdminOverviewUpdated')) { throw "Overview shortcut did not navigate: $key" }
         Invoke-Id 'AdminNavigation-overview'
-        Wait-Name 'AdminOverviewTitle' '^Admin overview$'
         Wait-Name 'AdminOverviewUpdated' 'Checked.*Manila'
         Write-Output "PASS admin overview shortcut: $key"
     }

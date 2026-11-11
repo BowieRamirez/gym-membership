@@ -11,6 +11,16 @@ public class RevenuePdfTests
 {
     static readonly byte[] Font = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoSans-Regular.ttf"));
 
+    [Fact]
+    public void Revenue_rows_and_methods_read_as_words_not_codes()
+    {
+        // 9.8: the screen showed "walk_in · cash · 1 payment(s)"
+        Assert.Equal("Walk-in · Cash · 1 payment", new RevenueRow(DateTime.Today, PayKind.WalkIn, PayMethod.Cash, 1, 150).Summary);
+        Assert.Equal("Extension · QR · 3 payments", new RevenueRow(DateTime.Today, PayKind.Renewal, PayMethod.Qr, 3, 900).Summary);
+        Assert.Equal(("GCash", "voucher"), (PayMethod.Name(PayMethod.Gcash), PayMethod.Name("voucher")));
+        Assert.Equal("Sat 7 Nov 2026, 8:30 AM", new AuditRecord { CreatedAt = new DateTime(2026, 11, 7, 0, 30, 0, DateTimeKind.Utc) }.ShownWhen);
+    }
+
     sealed class Files : IReportFiles
     {
         public string? Name; public byte[]? Pdf; public Exception? Fail;
@@ -83,6 +93,38 @@ public class RevenuePdfTests
     }
 
     [Fact]
+    public async Task Revenue_lists_the_drawer_shifts_of_the_range_and_exports_them()
+    {
+        var gw = new DemoGateway(); await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        var desk = new PaymentStaffService(gw);
+        await desk.OpenShiftAsync(4000, "Short float"); await desk.RecordCounterAsync(PayKind.WalkIn, PayMethod.Cash, null, null, "Pedro Ramos", null, null);
+        await desk.CloseShiftAsync(4100, "Gave change twice");
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var files = new Files();
+        var vm = new RevenueViewModel(new AdminService(gw), files) { From = DateTime.Today.AddDays(-1), To = DateTime.Today.AddDays(1) };
+        Assert.False(vm.ExportShiftsPdfCommand.CanExecute(null));
+        await vm.LoadCommand.ExecuteAsync(null);
+        var shift = Assert.Single(vm.Shifts);
+        Assert.Equal((4150m, -50m), (shift.Expected, shift.Difference!.Value));
+
+        await vm.ExportShiftsPdfCommand.ExecuteAsync(null);
+        Assert.Null(vm.ErrorMessage);
+        Assert.StartsWith("cash-shifts-", files.Name);
+        Assert.StartsWith("%PDF-", Encoding.ASCII.GetString(files.Pdf!, 0, 5));
+    }
+
+    [Fact]
+    public void The_shifts_PDF_renders_open_closed_and_empty()
+    {
+        CashShift S(int n, bool open) => new() { Id = n, Cashier = $"Cashier {n}", OpenedAt = new DateTime(2026, 11, 9, 0, 0, 0, DateTimeKind.Utc).AddMinutes(n),
+            ClosedAt = open ? null : new DateTime(2026, 11, 9, 8, 0, 0, DateTimeKind.Utc), OpeningFloat = 5000, CashIn = 150, Expected = 5150,
+            Counted = open ? null : 5100, Difference = open ? null : -50, CloseNote = open ? null : "Gave change twice" };
+        var pdf = CashShiftPdf.Build(new(2026, 11, 9), new(2026, 11, 9), Enumerable.Range(1, 80).Select(n => S(n, n == 1)).ToList(), DateTime.UtcNow, Font);
+        Assert.True(Pages(pdf) > 1);
+        Assert.Equal(1, Pages(CashShiftPdf.Build(new(2026, 11, 9), new(2026, 11, 9), [], DateTime.UtcNow, Font)));
+    }
+
+    [Fact]
     public async Task A_failed_share_shows_an_error_and_no_success_message()
     {
         var gw = await Admin(); var files = new Files { Fail = new InvalidOperationException("share failed") };
@@ -101,7 +143,7 @@ public class RevenuePdfTests
         await vm.LoadCommand.ExecuteAsync(null);
         var before = vm.TotalText;
 
-        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);   // a walk-in is paid after the screen loaded
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();   // a walk-in is paid after the screen loaded
         Assert.True((await new PaymentStaffService(gw).RecordCounterAsync(PayKind.WalkIn, PayMethod.Cash, null, null, "Late Walk-in", null, null)).Ok);
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
 

@@ -7,7 +7,7 @@
             x:Class="GymMembership.App.Views.LoginPage" x:DataType="vm:LoginViewModel"
             Title="Sign in" ControlTemplate="{StaticResource AuthShell}">
 
-    <!-- The brand panel on the left comes from AuthShell (Styles.xaml); this is the form on the right. -->
+    <!-- The brand panel with the badge comes from AuthShell (Controls.AuthLayout); this is the form. -->
     <ScrollView>
         <VerticalStackLayout Padding="{OnIdiom Phone='24,20,24,24', Default='64,40'}"
                              Spacing="18" MaximumWidthRequest="440"
@@ -17,7 +17,7 @@
             <!-- Headings: the logo carries the product name, so the page says what to do -->
             <VerticalStackLayout Spacing="6" IsVisible="{Binding IsResetting, Converter={StaticResource Not}}">
                 <Label Text="Welcome back" Style="{StaticResource Display}" SemanticProperties.HeadingLevel="Level1" />
-                <Label Text="Sign in to pick up where you left off." Style="{StaticResource Muted}" />
+
             </VerticalStackLayout>
 
             <VerticalStackLayout Spacing="8" IsVisible="{Binding IsResetting}">
@@ -26,9 +26,9 @@
                 <Button Text="Use a different email" Style="{StaticResource LinkButton}" HorizontalOptions="Start" Margin="-4,0,0,10"
                         Command="{Binding ChangeResetEmailCommand}" IsVisible="{Binding IsResetStep2}" />
                 <Grid ColumnDefinitions="28,28" ColumnSpacing="6" HorizontalOptions="Start">
-                    <BoxView HeightRequest="4" CornerRadius="2" Color="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Lime}}" />
+                    <BoxView HeightRequest="4" CornerRadius="2" Color="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
                     <BoxView Grid.Column="1" HeightRequest="4" CornerRadius="2" Color="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
-                    <BoxView Grid.Column="1" HeightRequest="4" CornerRadius="2" Color="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Lime}}" IsVisible="{Binding ResetCodeSent}" />
+                    <BoxView Grid.Column="1" HeightRequest="4" CornerRadius="2" Color="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" IsVisible="{Binding ResetCodeSent}" />
                 </Grid>
                 <Label Text="Step 1 of 2" Style="{StaticResource Caption}" IsVisible="{Binding IsResetStep1}" />
                 <Label Text="Step 2 of 2" Style="{StaticResource Caption}" IsVisible="{Binding IsResetStep2}" />
@@ -61,9 +61,9 @@
                 </VerticalStackLayout>
 
                 <Grid>
-                    <Button Text="Sign in" Command="{Binding SignInCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}" />
+                    <Button Text="Sign in" Style="{StaticResource SignalButton}" Command="{Binding SignInCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}" />
                     <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" WidthRequest="20" HeightRequest="20" HorizontalOptions="Start" Margin="20,0"
-                                       Color="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" InputTransparent="True" />
+                                       Color="{StaticResource Black}" InputTransparent="True" />
                 </Grid>
 
                 <HorizontalStackLayout HorizontalOptions="Center" Spacing="2">
@@ -81,9 +81,9 @@
                     </Border>
                 </VerticalStackLayout>
                 <Grid>
-                    <Button Text="Send code" Command="{Binding SendResetCodeCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}" />
+                    <Button Text="Send code" Style="{StaticResource SignalButton}" Command="{Binding SendResetCodeCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}" />
                     <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" WidthRequest="20" HeightRequest="20" HorizontalOptions="Start" Margin="20,0"
-                                       Color="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" InputTransparent="True" />
+                                       Color="{StaticResource Black}" InputTransparent="True" />
                 </Grid>
             </VerticalStackLayout>
 
@@ -110,14 +110,13 @@
                         <Grid ColumnDefinitions="*,Auto"><Entry x:Name="ConfirmNewPasswordBox" Text="{Binding ConfirmNewPassword}" IsPassword="True" MaxLength="64" ReturnType="Done" ReturnCommand="{Binding ResetPasswordCommand}" SemanticProperties.Description="Repeat new password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference ConfirmNewPasswordBox}" /></Grid>
                     </Border>
                 </VerticalStackLayout>
-                <Button Text="Save new password" Command="{Binding ResetPasswordCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}" />
+                <Button Text="Save new password" Style="{StaticResource SignalButton}" Command="{Binding ResetPasswordCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}" />
             </VerticalStackLayout>
 
             <!-- Demo mode: shown only when no Supabase project is configured -->
             <Border Style="{StaticResource Panel}" Margin="0,16,0,0" IsVisible="{Binding IsDemo}">
                 <VerticalStackLayout Spacing="10">
                     <Label Text="Demo mode" Style="{StaticResource Heading}" />
-                    <Label Text="No database is connected yet, so everything here is sample data held in memory. Jump in as:" Style="{StaticResource Muted}" />
                     <FlexLayout Wrap="Wrap" JustifyContent="Start" AlignItems="Start">
                         <Button Text="Member" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
                                 Command="{Binding DemoSignInCommand}" CommandParameter="member@demo.io" />
@@ -125,9 +124,9 @@
                                 Command="{Binding DemoSignInCommand}" CommandParameter="coach@demo.io" />
                         <Button Text="Front desk" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
                                 Command="{Binding DemoSignInCommand}" CommandParameter="employee@demo.io" />
-                        <Button Text="Admin" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                        <Button Text="System admin" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
                                 Command="{Binding DemoSignInCommand}" CommandParameter="admin@demo.io" />
-                        <Button Text="Sub-admin" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
+                        <Button Text="Admin" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
                                 Command="{Binding DemoSignInCommand}" CommandParameter="subadmin@demo.io" />
                     </FlexLayout>
                 </VerticalStackLayout>

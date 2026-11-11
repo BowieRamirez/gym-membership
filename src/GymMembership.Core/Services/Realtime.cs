@@ -39,6 +39,68 @@ public sealed class NoRealtime : IRealtimeChat
     public Task SendTypingAsync(string conversationKey) => Task.CompletedTask;
 }
 
+/// <summary>
+/// F4 (Phase 7): a payment, check-in or membership term changed somewhere this user may read. A hint only, as with chat: the page that
+/// hears it asks the server again, and keeps its own timer in case a hint never comes.
+/// </summary>
+public interface ILiveRecords
+{
+    event Action? Changed;
+    /// <summary>Connects for the signed-in user. Safe to call again; a failure only means the page relies on its timer. Signing out stops it.</summary>
+    Task StartAsync();
+}
+
+/// <summary>
+/// A page's side of live updates: a hint starts a reload; hints that arrive while one runs cost one more reload, not one each.
+/// A failed reload is the page's own business (it shows its error); the next hint still reloads.
+/// </summary>
+public sealed class LiveRefresh : IDisposable
+{
+    readonly ILiveRecords _live;
+    readonly Func<Task> _reload;
+    readonly object _sync = new();
+    bool _running, _again, _gone;
+
+    /// <summary>The reload in progress, or a finished task; for tests.</summary>
+    public Task Idle { get; private set; } = Task.CompletedTask;
+
+    public LiveRefresh(ILiveRecords live, Func<Task> reload)
+    {
+        (_live, _reload) = (live, reload);
+        live.Changed += OnChanged;
+    }
+
+    void OnChanged()
+    {
+        lock (_sync)
+        {
+            if (_gone) return;
+            if (_running) { _again = true; return; }
+            _running = true;
+            Idle = RunAsync();
+        }
+    }
+
+    async Task RunAsync()
+    {
+        while (true)
+        {
+            try { await _reload(); } catch { /* the page shows its own error; the next hint tries again */ }
+            lock (_sync)
+            {
+                if (!_again || _gone) { _running = false; return; }
+                _again = false;
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_sync) _gone = true;
+        _live.Changed -= OnChanged;
+    }
+}
+
 /// <summary>"Active 2 h ago", in words. Empty when the person has never been seen.</summary>
 public static class ActiveAgo
 {

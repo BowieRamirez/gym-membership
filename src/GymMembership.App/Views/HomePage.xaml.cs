@@ -12,6 +12,8 @@ public partial class HomePage : BasePage
 
 	// the numbers settle on their own while the desk is open
 	protected override TimeSpan? AutoRefresh => TimeSpan.FromSeconds(20);
+	protected override bool LiveRecords => true;
+	protected override Controls.UpdatedBar? Updated => UpdatedLine;
 
 	void OnTile(object? sender, TappedEventArgs e)
 	{

@@ -32,7 +32,7 @@ public class IconRailTests
         var source = Rail();
         Assert.StartsWith("#if WINDOWS", source);
         Assert.EndsWith("#endif", source.TrimEnd());
-        foreach (var required in new[] { "new ScrollView", "ToolTipProperties.SetText", "SemanticProperties.SetDescription", "FlyoutWidth = 88", "CurrentItem = item", "Navigated" })
+        foreach (var required in new[] { "new ScrollView", "ToolTipProperties.SetText", "SemanticProperties.SetDescription", "FlyoutWidth = 72", "CurrentItem = item", "Navigated" })
             Assert.Contains(required, source);
         // custom content navigates through the original Shell items; it never replaces them or forces the native selection
         foreach (var banned in new[] { "Items.Remove", "new ShellContent", "MenuItemsSource", "SelectedItem" })

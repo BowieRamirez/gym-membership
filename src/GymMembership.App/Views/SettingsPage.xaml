@@ -12,93 +12,124 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <!-- who is signed in: the one lime card on the page. Saved values, not what is being typed below. -->
-            <Border Style="{StaticResource HeroPanel}" Padding="{OnIdiom Phone='16,16', Default='20,18'}">
+            <!-- who is signed in: a plain panel (Phase 9: yellow is kept for actions and the one key figure, not a profile).
+                 Saved values, not what is being typed below. -->
+            <Border Style="{StaticResource Panel}" Padding="{OnIdiom Phone='16,16', Default='20,18'}">
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="18">
                     <c:Avatar Letters="{Binding Letters}" Url="{Binding AvatarUrl}" Diameter="{OnIdiom Phone=64, Default=88}" VerticalOptions="Center" />
                     <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
-                        <Label Text="{Binding SavedName}" Style="{StaticResource PageTitle}" TextColor="{StaticResource Black}" />
-                        <Label Text="{Binding SavedEmail}" TextColor="{StaticResource Black}" />
-                        <Label Text="Email confirmed" Style="{StaticResource Caption}" TextColor="{StaticResource Black}" IsVisible="{Binding EmailConfirmed}" />
-                        <Label Text="Email not confirmed yet" Style="{StaticResource Caption}" TextColor="{StaticResource Black}" IsVisible="{Binding EmailConfirmed, Converter={StaticResource Not}}" />
-                        <Button Text="Change picture" Style="{StaticResource InkSmallButton}"
+                        <Label Text="{Binding SavedName}" Style="{StaticResource PageTitle}" />
+                        <Label Text="{Binding SavedEmail}" />
+                        <Label Text="Email confirmed" Style="{StaticResource Caption}" IsVisible="{Binding EmailConfirmed}" />
+                        <Label Text="Email not confirmed yet" Style="{StaticResource Caption}" IsVisible="{Binding EmailConfirmed, Converter={StaticResource Not}}" />
+                        <Button Text="Change picture" Style="{StaticResource SmallOutlineButton}"
                                 Command="{Binding ChangePhotoCommand}" HorizontalOptions="Start" Margin="0,6,0,0" />
                     </VerticalStackLayout>
                 </Grid>
             </Border>
 
             <c:SideLayout SideFirst="False">
-                <!-- main: name and email in one panel, side by side when there is room -->
+                <!-- main: name and email in one panel, side by side when there is room; below it, a coach's profile (CoachProfilePage) -->
+                <VerticalStackLayout Spacing="12">
                 <Border Style="{StaticResource Panel}" Padding="0">
                     <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" MinColumnWidth="340" Spacing="0">
                         <VerticalStackLayout Spacing="14" Padding="18">
-                            <c:CardTitle Icon="id-card" Text="Your name" />
+                            <c:CardTitle Text="Your name" />
                             <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
                                 <VerticalStackLayout Spacing="4">
                                     <Label Text="First name" Style="{StaticResource Caption}" />
-                                    <Border Style="{StaticResource Field}"><Entry Text="{Binding FirstName}" TextChanged="OnNameChanged" MaxLength="{x:Static svc:AccountRules.MaxName}" SemanticProperties.Description="First name" /></Border>
+                                    <Label Text="{Binding FirstName}" FontFamily="BarlowSemiBold" AutomationId="SettingsFirstName" />
                                 </VerticalStackLayout>
-                                <VerticalStackLayout Grid.Column="1" Spacing="4">
+                                <VerticalStackLayout Grid.Column="1" Spacing="4" IsVisible="{Binding LastName, Converter={StaticResource HasText}}">
                                     <Label Text="Last name" Style="{StaticResource Caption}" />
-                                    <Border Style="{StaticResource Field}"><Entry Text="{Binding LastName}" TextChanged="OnNameChanged" MaxLength="{x:Static svc:AccountRules.MaxName}" ReturnCommand="{Binding SaveNameCommand}" SemanticProperties.Description="Last name" /></Border>
+                                    <Label Text="{Binding LastName}" FontFamily="BarlowSemiBold" AutomationId="SettingsLastName" />
                                 </VerticalStackLayout>
                             </Grid>
-                            <Button Text="Save name" Command="{Binding SaveNameCommand}" HorizontalOptions="Start" />
+                            <Label Text="Names can't be changed after sign-up. If yours is wrong, ask the gym to correct it." Style="{StaticResource Caption}" />
                         </VerticalStackLayout>
 
                         <!-- Email: send a code to the address, then type it. A new address becomes the sign-in email. -->
                         <VerticalStackLayout Spacing="14" Padding="18">
-                            <c:CardTitle Icon="message-square" Text="Sign-in email" />
+                            <c:CardTitle Text="Sign-in email" />
                             <Label Text="Not confirmed yet. Send a code to this address to confirm it." Style="{StaticResource Caption}" IsVisible="{Binding EmailConfirmed, Converter={StaticResource Not}}" />
                             <VerticalStackLayout Spacing="4">
                                 <Label Text="Email address" Style="{StaticResource Caption}" />
                                 <Border Style="{StaticResource Field}"><Entry Text="{Binding EmailAddress}" Keyboard="Email" MaxLength="{x:Static svc:AccountRules.MaxEmail}" SemanticProperties.Description="Sign-in email" /></Border>
-                                <Label Text="Changing it also changes the email you sign in with." Style="{StaticResource Caption}" />
                             </VerticalStackLayout>
-                            <Button Text="Send code" Command="{Binding SendEmailCodeCommand}" HorizontalOptions="Start" />
+                            <Button Text="Send code" Style="{StaticResource SmallOutlineButton}" Command="{Binding SendEmailCodeCommand}" HorizontalOptions="Start" />
                             <VerticalStackLayout Spacing="12" IsVisible="{Binding CodeSent}">
                                 <VerticalStackLayout Spacing="4">
                                     <Label Text="Code from the email" Style="{StaticResource Caption}" />
                                     <Border Style="{StaticResource Field}"><Entry Text="{Binding EmailCode}" Keyboard="Numeric" MaxLength="6" ReturnCommand="{Binding ConfirmEmailCommand}" SemanticProperties.Description="6-digit code" /></Border>
                                 </VerticalStackLayout>
-                                <Button Text="Confirm email" Command="{Binding ConfirmEmailCommand}" HorizontalOptions="Start" />
+                                <Button Text="Confirm email" Style="{StaticResource SmallOutlineButton}" Command="{Binding ConfirmEmailCommand}" HorizontalOptions="Start" />
                             </VerticalStackLayout>
                         </VerticalStackLayout>
                     </c:CardGrid>
                 </Border>
+                <ContentView x:Name="CoachSlot" x:FieldModifier="internal" />
+                </VerticalStackLayout>
 
-                <!-- side: the two short settings -->
-                <VerticalStackLayout Spacing="12">
-                    <Border Style="{StaticResource SidePanel}">
+                <!-- side: the short settings, one column beside the main part; stacked on a narrower window they share one row across the
+                     width, each at its own height, so nothing leaves an empty half (owner, 2026-11-11).
+                     Their buttons are outline: Settings has no single main action, and three yellow buttons shouted in dark (Phase 9 critique) -->
+                <c:CardGrid x:Name="ShortSettings" Columns="3" FillRow="True" MinColumnWidth="320">
+                    <Border Style="{StaticResource SidePanel}" VerticalOptions="Start">
                         <VerticalStackLayout Spacing="10">
-                            <c:CardTitle Icon="settings" Text="Theme" />
-                            <Border Style="{StaticResource Field}">
-                                <Picker ItemsSource="{Binding Themes}" SelectedItem="{Binding Theme}" SemanticProperties.Description="Theme" />
+                            <c:CardTitle Text="Theme" />
+                            <!-- three short choices: the field is as wide as the longest, not the panel (9.6 polish) -->
+                            <Border Style="{StaticResource Field}" WidthRequest="240" HorizontalOptions="Start">
+                                <Picker ItemsSource="{Binding ThemeNames}" SelectedIndex="{Binding ThemeIndex}" SemanticProperties.Description="Theme" />
                             </Border>
-                            <Label Text="System follows your device. Light and dark stay fixed." Style="{StaticResource Caption}" />
-                            <Button Text="Save theme" Style="{StaticResource SmallButton}" Command="{Binding SaveCommand}" HorizontalOptions="Start" />
+                            <Button Text="Save theme" Style="{StaticResource SmallOutlineButton}" Command="{Binding SaveCommand}" HorizontalOptions="Start" />
                         </VerticalStackLayout>
                     </Border>
 
-                    <Border Style="{StaticResource SidePanel}">
+                    <!-- F8 (mockup docs/mockups/desk-pin.html): members only; typed twice because a typo only shows up at the desk -->
+                    <Border Style="{StaticResource SidePanel}" VerticalOptions="Start" IsVisible="{Binding IsMember}">
                         <VerticalStackLayout Spacing="12">
-                            <c:CardTitle Icon="eye" Text="Change password" />
+                            <VerticalStackLayout Spacing="2">
+                                <c:CardTitle Text="Desk PIN" />
+                                <Label Text="4 digits you type at the front desk if you check in without your phone." Style="{StaticResource Caption}" />
+                            </VerticalStackLayout>
+                            <FlexLayout Wrap="Wrap">
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                                    <Label Text="New PIN" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}" WidthRequest="132">
+                                        <Grid ColumnDefinitions="*,Auto"><Entry x:Name="DeskPinBox" Text="{Binding DeskPin}" IsPassword="True" Keyboard="Numeric" MaxLength="4" AutomationId="NewDeskPin" SemanticProperties.Description="New desk PIN, 4 digits" /><c:EyeButton Grid.Column="1" Entry="{x:Reference DeskPinBox}" /></Grid>
+                                    </Border>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                                    <Label Text="Type it again" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}" WidthRequest="132">
+                                        <Grid ColumnDefinitions="*,Auto"><Entry x:Name="DeskPinAgainBox" Text="{Binding DeskPinAgain}" IsPassword="True" Keyboard="Numeric" MaxLength="4" ReturnCommand="{Binding SaveDeskPinCommand}"
+                                               AutomationId="RepeatDeskPin" SemanticProperties.Description="Repeat the desk PIN" /><c:EyeButton Grid.Column="1" Entry="{x:Reference DeskPinAgainBox}" /></Grid>
+                                    </Border>
+                                </VerticalStackLayout>
+                            </FlexLayout>
+                            <Button Text="Save PIN" Style="{StaticResource SmallOutlineButton}" Command="{Binding SaveDeskPinCommand}" HorizontalOptions="Start" AutomationId="SaveDeskPin" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border Style="{StaticResource SidePanel}" VerticalOptions="Start">
+                        <VerticalStackLayout Spacing="12">
+                            <c:CardTitle Text="Change password" />
                             <VerticalStackLayout Spacing="4">
                                 <Label Text="Current password" Style="{StaticResource Caption}" />
                                 <Border Style="{StaticResource Field}"><Grid ColumnDefinitions="*,Auto"><Entry x:Name="CurrentPasswordBox" Text="{Binding CurrentPassword}" IsPassword="True" SemanticProperties.Description="Current password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference CurrentPasswordBox}" /></Grid></Border>
                             </VerticalStackLayout>
                             <VerticalStackLayout Spacing="4">
-                                <Label Text="New password (at least 6 characters)" Style="{StaticResource Caption}" />
+                                <Label Text="New password (8 to 64 characters, a letter and a number)" Style="{StaticResource Caption}" />
                                 <Border Style="{StaticResource Field}"><Grid ColumnDefinitions="*,Auto"><Entry x:Name="NewPasswordBox" Text="{Binding NewPassword}" IsPassword="True" SemanticProperties.Description="New password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference NewPasswordBox}" /></Grid></Border>
                             </VerticalStackLayout>
                             <VerticalStackLayout Spacing="4">
                                 <Label Text="Repeat new password" Style="{StaticResource Caption}" />
                                 <Border Style="{StaticResource Field}"><Grid ColumnDefinitions="*,Auto"><Entry x:Name="ConfirmPasswordBox" Text="{Binding ConfirmPassword}" IsPassword="True" ReturnCommand="{Binding ChangePasswordCommand}" SemanticProperties.Description="Repeat new password" /><c:EyeButton Grid.Column="1" Entry="{x:Reference ConfirmPasswordBox}" /></Grid></Border>
                             </VerticalStackLayout>
-                            <Button Text="Change password" Command="{Binding ChangePasswordCommand}" HorizontalOptions="Start" />
+                            <Button Text="Change password" Style="{StaticResource SmallOutlineButton}" Command="{Binding ChangePasswordCommand}" HorizontalOptions="Start" />
                         </VerticalStackLayout>
                     </Border>
-                </VerticalStackLayout>
+                </c:CardGrid>
             </c:SideLayout>
 
         </VerticalStackLayout>
