@@ -780,9 +780,9 @@ await test('a photo whose text is only blanks still reads "Photo" in the list', 
 });
 
 console.log('\nlive chat (0017)');
-await test('messages and support_messages are in the Realtime publication', async () => {
+await test('exactly chat (0017) and the live records (0053) are in the Realtime publication', async () => {
   const r = await db.query(`select tablename from pg_publication_tables where pubname = 'supabase_realtime' order by 1`);
-  assert.deepEqual(r.rows.map(x => x.tablename), ['messages', 'support_messages']);
+  assert.deepEqual(r.rows.map(x => x.tablename), ['gym_check_ins', 'membership_terms', 'messages', 'payments', 'support_messages']);
 });
 const gus = await user('gus@t.io', 'member', 'Gus');
 await db.query(`insert into coach_hires (coach_id, member_id) values ($1, $2)`, [coach, gus]);

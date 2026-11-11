@@ -230,6 +230,8 @@ public sealed class AdminOverviewPage : BasePage
         return new Grid { WidthRequest = 40, HeightRequest = 40, VerticalOptions = LayoutOptions.Center, Children = { button, icon } };
     }
 
+    protected override bool LiveRecords => true;   // F4: payments and check-ins move its figures; its own "Checked" line says when
+
     static void Open(string title) => (Shell.Current as StaffShell)?.ShowAdminPage(title);
     static Label Bound(string style, string path) { var l = Text("", style); l.VerticalOptions = LayoutOptions.Center; l.SetBinding(Label.TextProperty, path); return l; }
     static Color Theme(string key) => (Color)Application.Current!.Resources[key];

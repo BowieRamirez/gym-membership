@@ -331,7 +331,7 @@ public partial class VoidPaymentsViewModel(IPaymentStaffService svc) : LoadableV
     }
 }
 
-public partial class CheckInViewModel(IAttendanceService svc, ICoachService coaches, OfflineDesk? offline = null, IProfileService? profile = null) : LoadableViewModel
+public partial class CheckInViewModel(IAttendanceService svc, ICoachService coaches, OfflineDesk? offline = null, IProfileService? profile = null, TimeProvider? clock = null) : LoadableViewModel
 {
     public ObservableCollection<MemberHit> Hits { get; } = new();
     public ObservableCollection<CoachPresenceRow> Coaches { get; } = new();
@@ -370,7 +370,39 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
     public override async Task OnAppearingAsync()
     {
         if ((await svc.CanSkipPinAsync()) is { Ok: true } skip) CanSkipPin = skip.Value;   // quiet: offline it stays as it was
-        await SearchAsync(); await LoadCoachesAsync(); await SendQueueAsync();
+        await SearchAsync(); await LoadCoachesAsync(); await SendQueueAsync(); await LoadTodayAsync();
+    }
+
+    // ---- F19 (Phase 7): who came in today, newest first, with the count and a name filter; reloads after each check-in ----
+    public ObservableCollection<CheckInRow> Today { get; } = new();
+    IReadOnlyList<CheckInRow> _today = [];
+    [ObservableProperty] private string todayFilter = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(TodayTitle))] private int todayCount;
+    public string TodayTitle => $"Checked in today: {TodayCount}";
+    /// <summary>"2 of 42 match" while a filter is typed; blank otherwise.</summary>
+    public string TodayMatchText => TodayFilter.Trim().Length == 0 ? "" : $"{Today.Count} of {TodayCount} match";
+    public bool IsTodayEmpty => TodayCount == 0;
+
+    partial void OnTodayFilterChanged(string value) => ShowToday();
+
+    void ShowToday()
+    {
+        var f = TodayFilter.Trim();
+        Sync(Today, f.Length == 0 ? _today : _today.Where(r => r.Name.Contains(f, StringComparison.OrdinalIgnoreCase)).ToList(), r => (r.Name, r.At), (a, b) => a == b);
+        OnPropertyChanged(nameof(TodayMatchText));
+        OnPropertyChanged(nameof(IsTodayEmpty));
+    }
+
+    /// <summary>Quiet: a failure (or offline) leaves the list as it was; the page's own error line covers the rest.</summary>
+    async Task LoadTodayAsync()
+    {
+        var now = (clock ?? TimeProvider.System).GetUtcNow().UtcDateTime;
+        var manila = DateOnly.FromDateTime(now.AddHours(8));   // Manila has no daylight saving
+        if (await svc.CheckInsOnAsync(manila) is not { Ok: true, Value: { } rows }) return;
+        // tinted for a minute: the live hint and the desk's own reload can come one after the other, so "new" means recent
+        _today = rows.OrderByDescending(r => r.At).Select(r => r with { IsNew = now - r.At < TimeSpan.FromMinutes(1) }).ToList();
+        TodayCount = _today.Count;
+        ShowToday();
     }
 
     /// <summary>Sends anything queued and keeps the saved list up to date. Quiet when offline: the next tick tries again.</summary>
@@ -412,7 +444,7 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
             ErrorMessage = $"The connection dropped. Find {s.Name} by name and check them in with their desk PIN.";
             return;
         }
-        if (await RunAsync(() => Task.FromResult(result))) { Notice = $"{s.Name} is checked in."; Scan = null; }
+        if (await RunAsync(() => Task.FromResult(result))) { Notice = $"{s.Name} is checked in."; Scan = null; await LoadTodayAsync(); }
     }
 
     [RelayCommand] private void ClearScan() => Scan = null;
@@ -491,6 +523,7 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
         if (!result.Ok) { ErrorMessage = ErrorText.For(result.Error, result.Message); return; }
         ClosePin(); ErrorMessage = null;
         Notice = $"{hit.Username} is checked in.";
+        await LoadTodayAsync();
     }
 
     [RelayCommand]

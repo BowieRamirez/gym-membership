@@ -71,6 +71,7 @@
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='20,16,20,24', Default='16,12,16,20'}" Spacing="14">
             <!-- 9.7: no second heading under the "Home" header; the one line says the figures open their pages -->
+            <c:UpdatedBar x:Name="UpdatedLine" />   <!-- F4: when it last loaded, with Refresh; it also reloads by itself on a change -->
             <Label Text="Tap a figure to open its page." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />

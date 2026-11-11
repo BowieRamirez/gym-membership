@@ -104,6 +104,7 @@
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="12">
+            <c:UpdatedBar x:Name="UpdatedLine" />   <!-- F4: when it last loaded, with Refresh; it also reloads by itself on a change -->
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 

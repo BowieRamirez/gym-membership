@@ -70,8 +70,43 @@
                                 </BindableLayout.ItemTemplate>
                             </VerticalStackLayout>
                             </Border>
+
+                            <!-- F19 (approved mockup checked-in-today.html): who came in today, newest first; time and name, then how and who
+                                 recorded it. A row that arrived since the last load is tinted until the next one. The count is the day's. -->
+                            <Label Text="{Binding TodayTitle}" Style="{StaticResource SectionTitle}" Margin="0,6,0,0" AutomationId="CheckedInTodayTitle" />
+                            <Border Style="{StaticResource Panel}" Padding="12">
+                            <VerticalStackLayout Spacing="0">
+                                <Border Style="{StaticResource Field}" Margin="0,0,0,6" IsVisible="{Binding IsTodayEmpty, Converter={StaticResource Not}}">
+                                    <Entry Text="{Binding TodayFilter}" Placeholder="Filter by name" AutomationId="CheckedInTodayFilter" SemanticProperties.Description="Filter today's check-ins by name" />
+                                </Border>
+                                <Label Text="Nobody yet. Each check-in appears here as it happens." Style="{StaticResource Muted}" IsVisible="{Binding IsTodayEmpty}" />
+                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Today}" AutomationId="CheckedInTodayList">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="svc:CheckInRow">
+                                            <VerticalStackLayout Spacing="0">
+                                                <BoxView HeightRequest="1" Color="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+                                                <Border StrokeThickness="0" StrokeShape="RoundRectangle 8" Padding="4,9" BackgroundColor="Transparent">
+                                                    <Border.Triggers>
+                                                        <DataTrigger TargetType="Border" Binding="{Binding IsNew}" Value="True"><Setter Property="BackgroundColor" Value="#24FFEC00" /></DataTrigger>
+                                                    </Border.Triggers>
+                                                    <Grid ColumnDefinitions="64,*" RowDefinitions="Auto,Auto" ColumnSpacing="8">
+                                                        <Label Text="{Binding TimeText}" Style="{StaticResource Caption}" />
+                                                        <Label Grid.Column="1" Text="{Binding Name}" FontFamily="BarlowSemiBold" />
+                                                        <Label Grid.Column="1" Grid.Row="1" Text="{Binding HowByText}" Style="{StaticResource Caption}" />
+                                                    </Grid>
+                                                </Border>
+                                            </VerticalStackLayout>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </VerticalStackLayout>
+                                <Label Text="{Binding TodayMatchText}" Style="{StaticResource Caption}" Margin="4,8,0,0" IsVisible="{Binding TodayMatchText, Converter={StaticResource HasText}}" />
+                            </VerticalStackLayout>
+                            </Border>
             </VerticalStackLayout>
         </ScrollView>
+
+        <!-- F4: when the page last loaded, with Refresh; it also reloads by itself when someone checks in anywhere (Windows: staff pages) -->
+        <c:UpdatedBar x:Name="UpdatedLine" Grid.Row="0" IsVisible="{OnIdiom Phone=False, Default=True}" Margin="0,0,0,4" />
 
         <VerticalStackLayout Grid.Row="1" Spacing="10" Padding="0,0,0,10">
             <Label Text="Members" Style="{StaticResource SectionTitle}" Margin="0" />

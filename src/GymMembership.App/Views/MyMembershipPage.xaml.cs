@@ -11,6 +11,8 @@ public partial class MyMembershipPage : BasePage
         BindingContext=vm;
     }
     protected override TimeSpan? AutoRefresh => TimeSpan.FromSeconds(20);
+    protected override bool LiveRecords => true;
+    protected override Controls.UpdatedBar? Updated => UpdatedLine;
     void OnPayAgain(object? sender, EventArgs e) => Row<MyMembershipViewModel>(sender,v=>v.PayAgainCommand);
     async void OnCancelPayment(object? sender, EventArgs e)
     {

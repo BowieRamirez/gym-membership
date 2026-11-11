@@ -64,6 +64,37 @@ public sealed class SupabaseGateway : ISupabaseGateway
     internal async Task<Client> ClientAsync() => await ReadyAsync();
     internal string? AccessToken => _client.Auth.CurrentSession?.AccessToken;
 
+    // One Realtime socket shared by chat and the live records (F4): the first user connects it, the last one to let go disconnects it,
+    // so leaving Messages never cuts the desk's live check-ins. Each holder calls RealtimeReleaseAsync once per acquire.
+    readonly SemaphoreSlim _realtime = new(1, 1);
+    int _realtimeHolders;
+
+    internal async Task<Supabase.Realtime.Interfaces.IRealtimeClient<Supabase.Realtime.RealtimeSocket, Supabase.Realtime.RealtimeChannel>> RealtimeAcquireAsync()
+    {
+        var rt = (await ReadyAsync()).Realtime;
+        await _realtime.WaitAsync();
+        try
+        {
+            if (AccessToken is { } token) rt.SetAuth(token);   // so the server filters changes by this user's row access
+            if (_realtimeHolders == 0) await rt.ConnectAsync();
+            _realtimeHolders++;
+            return rt;
+        }
+        finally { _realtime.Release(); }
+    }
+
+    internal async Task RealtimeReleaseAsync()
+    {
+        var rt = (await ReadyAsync()).Realtime;
+        await _realtime.WaitAsync();
+        try
+        {
+            if (_realtimeHolders == 0) return;
+            if (--_realtimeHolders == 0) try { rt.Disconnect(); } catch { /* already gone */ }
+        }
+        finally { _realtime.Release(); }
+    }
+
     async Task<Client> ReadyAsync()
     {
         if (_started) return _client;

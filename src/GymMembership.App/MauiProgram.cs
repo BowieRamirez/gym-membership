@@ -100,6 +100,13 @@ public static class MauiProgram
 		s.AddSingleton<IAnnouncementService, AnnouncementService>();
 		// live updates need the real project; the demo and the tests use the do-nothing version
 		s.AddSingleton<IRealtimeChat>(sp => sp.GetRequiredService<ISupabaseGateway>() is SupabaseGateway g ? new SupabaseRealtimeChat(g) : NoRealtime.Instance);
+		// F4: live payments, check-ins and membership terms; the demo raises the same hint when its own rows change
+		s.AddSingleton<ILiveRecords>(sp => sp.GetRequiredService<ISupabaseGateway>() switch
+		{
+			SupabaseGateway g => new SupabaseLiveRecords(g),
+			DemoGateway d => new DemoLiveRecords(d),
+			_ => throw new InvalidOperationException("unknown gateway")
+		});
 		s.AddSingleton<IDeskHomeService, DeskHomeService>();
 		s.AddSingleton<IAdminService, AdminService>();
 		s.AddSingleton<IAccountArchiveService, AccountArchiveService>();

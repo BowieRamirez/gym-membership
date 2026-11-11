@@ -1201,6 +1201,10 @@ public sealed record CheckInRow(string Name, DateTime At, string? Method = null,
     public string HowText => Method switch { "qr" => "QR", "manual" when Reason is not null => "By name, no PIN", "manual" => "By name", "offline" => "Sent later", _ => "" };
     /// <summary>F8: who recorded it, and why an Admin skipped the PIN; blank for check-ins from before this was kept.</summary>
     public string ByText => By is null ? "" : Reason is null ? $"By {By}" : $"By {By}. Reason: {Reason}";
+    /// <summary>F19: the second line of a row on the Check-in page, "QR · By Marco Santos".</summary>
+    public string HowByText => string.Join(" · ", new[] { HowText, ByText }.Where(t => t.Length > 0));
+    /// <summary>F19: came in during the last minute; the Check-in page tints it.</summary>
+    public bool IsNew { get; init; }
 }
 
 public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = null) : IAttendanceService

@@ -500,14 +500,32 @@ public sealed partial class DemoGateway : ISupabaseGateway
 
     public Task RpcAsync(string function, Dictionary<string, object>? args = null)
     {
-        try { if (FailWith is not null) throw FailWith; Call(function, args ?? new()); return Task.CompletedTask; }
+        try { if (FailWith is not null) throw FailWith; Watched(function, args ?? new()); return Task.CompletedTask; }
         catch (Exception ex) { return Task.FromException(ex); }
     }
 
     public Task<TResult> RpcAsync<TResult>(string function, Dictionary<string, object>? args = null)
     {
-        try { if (FailWith is not null) throw FailWith; return Task.FromResult((TResult)Call(function, args ?? new())!); }
+        try { if (FailWith is not null) throw FailWith; return Task.FromResult((TResult)Watched(function, args ?? new())!); }
         catch (Exception ex) { return Task.FromException<TResult>(ex); }
+    }
+
+    // ---------- F4 (Phase 7): the demo's stand-in for Realtime on payments, check-ins and membership terms (0053) ----------
+    /// <summary>One of those rows was added or changed by a function. Raised only on a real change, so a page reloading never sets off another.</summary>
+    public event Action? RecordsChanged;
+    static readonly Type[] LiveTables = [typeof(Payment), typeof(GymCheckIn), typeof(MembershipTerm)];
+
+    // ponytail: every column of every row of three tables, before and after each function; fine for the demo's few hundred rows.
+    // Every write to them goes through a function (0006 grants no direct writes), so InsertAsync/UpdateAsync need no watch.
+    string LiveStamp() => string.Join('\n', LiveTables.SelectMany(Table).Select(row => string.Join("|", row.GetType().GetProperties()
+        .Where(p => p.IsDefined(typeof(ColumnAttribute), true) || p.IsDefined(typeof(PrimaryKeyAttribute), true)).Select(p => p.GetValue(row)))));
+
+    object? Watched(string function, Dictionary<string, object> args)
+    {
+        var before = LiveStamp();
+        var result = Call(function, args);
+        if (LiveStamp() != before) RecordsChanged?.Invoke();
+        return result;
     }
 
     // ---------- payments: helpers shared by the functions below (0005_functions.sql) ----------
@@ -1300,4 +1318,12 @@ public sealed partial class DemoGateway : ISupabaseGateway
         Add(new AuditEntry { ActorId = "u-emp", Action = "payment.verify", Entity = "payments", EntityId = "5", CreatedAt = now.AddDays(-3) });
         Add(new AuditEntry { ActorId = "u-admin", Action = "role.assign", Entity = "user_roles", EntityId = "u-coach2", CreatedAt = now.AddDays(-8) });
     }
+}
+
+/// <summary>Demo mode's live updates: the demo gateway's own change hint (F4).</summary>
+public sealed class DemoLiveRecords : ILiveRecords
+{
+    public DemoLiveRecords(DemoGateway gateway) => gateway.RecordsChanged += () => Changed?.Invoke();
+    public event Action? Changed;
+    public Task StartAsync() => Task.CompletedTask;
 }

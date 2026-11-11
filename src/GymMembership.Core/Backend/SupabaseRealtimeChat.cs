@@ -30,7 +30,7 @@ public sealed class SupabaseRealtimeChat(SupabaseGateway gateway) : IRealtimeCha
     RealtimePresence<Here>? presence;
     string? userId, watching;
     IRealtimeClient<RealtimeSocket, RealtimeChannel>.SocketStateEventHandler? stateHandler;   // added on each start and removed on each stop, so nothing depends on what Disconnect() clears
-    bool signOutHooked;
+    bool signOutHooked, holding;   // holding: this chat holds one share of the gateway's socket
 
     public bool Connected { get; private set; }
     public event Action? ConnectionChanged;
@@ -50,9 +50,8 @@ public sealed class SupabaseRealtimeChat(SupabaseGateway gateway) : IRealtimeCha
             var client = await gateway.ClientAsync();
             // signing out ends the connection and the "online" presence at once, whether or not the page is told it went away
             if (!signOutHooked) { client.Auth.AddStateChangedListener((sender, state) => { if (state == Supabase.Gotrue.Constants.AuthState.SignedOut) _ = StopAsync(); }); signOutHooked = true; }
-            var rt = client.Realtime;
-            if (gateway.AccessToken is { } token) rt.SetAuth(token);   // so the server filters changes by this user's row access
-            await rt.ConnectAsync();
+            var rt = await gateway.RealtimeAcquireAsync();
+            holding = true;
             stateHandler = (_, state) => SetConnected(state == Constants.SocketState.Open && userId is not null);
             rt.AddStateChangedHandler(stateHandler);
 
@@ -92,7 +91,7 @@ public sealed class SupabaseRealtimeChat(SupabaseGateway gateway) : IRealtimeCha
         {
             var rt = (await gateway.ClientAsync()).Realtime;
             if (stateHandler is not null) rt.RemoveStateChangedHandler(stateHandler);
-            rt.Disconnect();
+            if (holding) { holding = false; await gateway.RealtimeReleaseAsync(); }   // the socket closes only when live records let go too
         }
         catch { /* same */ }
         stateHandler = null;

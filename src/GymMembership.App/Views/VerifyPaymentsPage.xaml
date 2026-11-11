@@ -109,6 +109,7 @@
 
     <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='20,16,20,0', Default='16,12,16,0'}" MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
+            <c:UpdatedBar x:Name="UpdatedLine" />   <!-- F4: when it last loaded, with Refresh; it also reloads by itself on a change -->
             <Label Text="Oldest first. Match the code and amount in the gym's e-wallet; Verify turns the membership or booking on and issues a receipt number. Take cash puts a desk payment in your drawer." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
