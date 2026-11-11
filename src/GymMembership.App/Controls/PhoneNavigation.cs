@@ -62,7 +62,7 @@ public sealed class PhoneNavigation
         _shell = shell;
         var original = shell.Items.ToList();
         var primary = coach
-            ? new[] { ("Dashboard", "Dashboard", "overview"), ("Sessions", "Sessions", "sessions"), ("Trainees & shifts", "Trainees", "trainees"), ("Messages", "Messages", "messages") }
+            ? new[] { ("Dashboard", "Dashboard", "overview"), ("Sessions", "Sessions", "sessions"), ("My shifts", "Shifts", "trainees"), ("Messages", "Messages", "messages") }
             : MemberMenu.Tabs(access?.Active ?? true).Select(t => MemberTabs[t.Page]).ToArray();   // F16: the order follows the membership
         var pageTypes = new Dictionary<string, Type>
         {

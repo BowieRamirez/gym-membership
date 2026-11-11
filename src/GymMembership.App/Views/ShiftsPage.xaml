@@ -49,6 +49,8 @@
                                         </DataTemplate>
                                     </BindableLayout.ItemTemplate>
                                 </c:CardGrid>
+                    <!-- the coach's trainees (TraineesPage's content), so My shifts is one page for both -->
+                    <ContentView x:Name="TraineesHost" Margin="0,18,0,0" />
                 </VerticalStackLayout>
                 <!-- side: post a shift (taking new members on or off is on My coach profile) -->
                 <VerticalStackLayout Spacing="12">

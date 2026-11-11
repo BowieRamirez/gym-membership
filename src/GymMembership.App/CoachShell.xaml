@@ -19,7 +19,8 @@
     <FlyoutItem Title="Dashboard" Route="dashboard"><ShellContent ContentTemplate="{DataTemplate views:AttendancePage}" /></FlyoutItem>
     <FlyoutItem Title="Sessions"><ShellContent ContentTemplate="{DataTemplate views:SessionsPage}" /></FlyoutItem>
     <FlyoutItem Title="Time requests" Route="requests"><ShellContent ContentTemplate="{DataTemplate views:RequestsPage}" /></FlyoutItem>
-    <FlyoutItem Title="Trainees &amp; shifts"><ShellContent ContentTemplate="{DataTemplate views:TraineesPage}" /></FlyoutItem>
+    <!-- owner, 2026-11-12: the Trainees page is gone; the trainees are on My shifts -->
+    <FlyoutItem Title="My shifts"><ShellContent ContentTemplate="{DataTemplate views:ShiftsPage}" /></FlyoutItem>
     <FlyoutItem Title="Messages" Route="messages"><ShellContent ContentTemplate="{DataTemplate views:MessagesPage}" /></FlyoutItem>
     <FlyoutItem Title="Amenities"><ShellContent ContentTemplate="{DataTemplate views:AmenitiesPage}" /></FlyoutItem>
     <!-- F17: the coach profile and the account settings are one page, called Settings like everyone else's (owner, 2026-11-11);

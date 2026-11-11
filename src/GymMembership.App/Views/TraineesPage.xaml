@@ -5,22 +5,16 @@
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
-            x:Class="GymMembership.App.Views.TraineesPage" x:DataType="vm:TraineesViewModel" Title="Trainees &amp; shifts">
+            x:Class="GymMembership.App.Views.TraineesPage" x:DataType="vm:TraineesViewModel" Title="Your trainees">
 
-    <!-- D30: Trainees and My shifts are one page with the switch; the shifts half is ShiftsPage's content (BasePage.HostPart) -->
-    <Grid RowDefinitions="Auto,*" MaximumWidthRequest="{StaticResource PageWidth}">
-    <c:PartSwitch x:Name="Switch" First="Trainees" Second="My shifts" Margin="16,12,16,0" />
-    <ContentView x:Name="Part" Grid.Row="1" IsVisible="{Binding ShowSecond, Source={x:Reference Switch}, x:DataType=c:PartSwitch}" />
-    <Grid Grid.Row="1" RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='16,12,16,0'}"
-          IsVisible="{Binding ShowSecond, Source={x:Reference Switch}, x:DataType=c:PartSwitch, Converter={StaticResource Not}}">
-        <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
-            <Label Text="Members who have hired you. Message them, or remove them when you stop training together." Style="{StaticResource Muted}" />
-            <c:Banner Message="{Binding ErrorMessage}" />
-            <c:Banner Kind="notice" Message="{Binding Notice}" />
-        </VerticalStackLayout>
-
-        <ScrollView Grid.Row="1"><c:CardGrid Columns="{OnIdiom Phone=1, Default=4}" Padding="0,0,0,16" BindableLayout.ItemsSource="{Binding Trainees}">
-            <BindableLayout.EmptyView><Label Text="No trainees yet. Members can hire you while Taking new members is on in My coach profile." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+    <!-- Owner, 2026-11-12: no Trainees page of its own; this content sits on My shifts, under Upcoming shifts (ShiftsPage, BasePage.HostBelow) -->
+    <VerticalStackLayout Spacing="10">
+        <Label Text="Your trainees" Style="{StaticResource SectionTitle}" Margin="0" />
+        <Label Text="Members who have hired you. Message them, or remove them when you stop training together." Style="{StaticResource Muted}" />
+        <c:Banner Message="{Binding ErrorMessage}" />
+        <c:Banner Kind="notice" Message="{Binding Notice}" />
+        <c:CardGrid Columns="{OnIdiom Phone=1, Default=3}" BindableLayout.ItemsSource="{Binding Trainees}">
+            <BindableLayout.EmptyView><Label Text="No trainees yet. Members can hire you while Taking new members is on in Settings." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
             <BindableLayout.ItemTemplate>
                 <DataTemplate x:DataType="svc:TraineeRow">
                     <!-- 9.6: the text gets the card's full width, the two actions follow as chips (no yellow per card, Remove no bigger than Message) -->
@@ -37,7 +31,6 @@
                     </Border>
                 </DataTemplate>
             </BindableLayout.ItemTemplate>
-        </c:CardGrid></ScrollView>
-    </Grid>
-    </Grid>
+        </c:CardGrid>
+    </VerticalStackLayout>
 </v:BasePage>

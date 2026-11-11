@@ -41,7 +41,7 @@ public class PhoneNavigationTests
     public void Phone_coach_opens_on_the_dashboard_and_keeps_requests_in_more_with_five_tabs()
     {
         var source = Read("Controls/PhoneNavigation.cs");
-        Assert.Contains("(\"Dashboard\", \"Dashboard\", \"overview\"), (\"Sessions\", \"Sessions\", \"sessions\"), (\"Trainees & shifts\", \"Trainees\", \"trainees\"), (\"Messages\", \"Messages\", \"messages\")", source);
+        Assert.Contains("(\"Dashboard\", \"Dashboard\", \"overview\"), (\"Sessions\", \"Sessions\", \"sessions\"), (\"My shifts\", \"Shifts\", \"trainees\"), (\"Messages\", \"Messages\", \"messages\")", source);
         Assert.Contains("<FlyoutItem Title=\"Dashboard\" Route=\"dashboard\"><ShellContent ContentTemplate=\"{DataTemplate views:AttendancePage}\" />", Read("CoachShell.xaml"));
         Assert.Contains("MemberMenu.Tabs(access?.Active ?? true)", source);
         Assert.Contains("[\"Book an amenity\"] = (\"Book an amenity\", \"Book\", \"bookings\")", source);   // its tab keeps the //bookings route the calendar opens
