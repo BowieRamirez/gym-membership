@@ -204,7 +204,8 @@ public class RealtimeMessengerTests
         var (_, chat, rt, _) = await Open();
         var before = chat.ThreadCalls;
         for (var i = 0; i < 5; i++) rt.RaiseChanged();
-        await Task.Delay(300);
+        await Eventually.Until(() => chat.ThreadCalls > before);
+        await Task.Delay(200);   // and no second reload follows
         Assert.Equal(before + 1, chat.ThreadCalls);
     }
 
@@ -220,7 +221,7 @@ public class RealtimeMessengerTests
 
         await gw.SignOutAsync(); await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         rt.RaiseChanged();
-        await Task.Delay(300);
+        await Eventually.Until(() => member.Bubbles.Count == count + 1);
         Assert.Equal(count + 1, member.Bubbles.Count);
         Assert.Equal("see you at 6", member.Bubbles.Last().Line.Body);
         Assert.Equal("half typed", member.Draft);
@@ -281,7 +282,7 @@ public class RealtimeMessengerTests
         rt.RaiseTyping(vm.Selected!.Thread.Key);
         Assert.True(vm.OtherTyping);
         Assert.Equal("typing…", vm.StatusLine);
-        await Task.Delay(250);   // TypingHold is 80 ms in these tests
+        await Eventually.Until(() => !vm.OtherTyping);   // TypingHold is 80 ms in these tests
         Assert.False(vm.OtherTyping);
     }
 

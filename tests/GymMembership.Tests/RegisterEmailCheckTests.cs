@@ -30,11 +30,7 @@ public class RegisterEmailCheckTests
     static Task<AppResult<bool>> Answer(bool inUse) => Task.FromResult(AppResult<bool>.Success(inUse));
     static RegisterViewModel Page(IAuthService auth) => new(auth, new NullNavigator()) { EmailCheckDelay = Delay };
 
-    static async Task Until(Func<bool> done)
-    {
-        for (var i = 0; i < 200 && !done(); i++) await Task.Delay(10);
-        Assert.True(done());
-    }
+    static Task Until(Func<bool> done) => Eventually.Until(done);
 
     [Fact]
     public async Task Fast_typing_sends_one_lookup_for_the_final_address()
@@ -42,7 +38,8 @@ public class RegisterEmailCheckTests
         var auth = new StubAuth(_ => Answer(false));
         var vm = Page(auth);
         vm.Email = "ana@demo.i"; vm.Email = "ana@demo.io"; vm.Email = "ana@demo.io.ph";
-        await Task.Delay(Delay * 3);
+        await Until(() => auth.Lookups.Count > 0);
+        await Task.Delay(Delay * 2);   // and no other lookup follows
         Assert.Equal(["ana@demo.io.ph"], auth.Lookups);
     }
 
