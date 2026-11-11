@@ -12,22 +12,10 @@
             <c:Banner Kind="notice" Message="{Binding Notice}" />
             <!-- F17: the coach profile first, then the account settings (SettingsPage's content, hosted below) -->
             <Label Text="Your coach profile" Style="{StaticResource SectionTitle}" />
-            <!-- check-in and photo side by side, then the profile form in one card -->
-            <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}">
+            <!-- the profile form, and beside it (above it on phones and narrow windows) check-in and the photo reminder, shown only while
+                 there is no photo: Account's "Change picture" changes it after that (owner, 2026-11-11). Capped so fields don't span the window. -->
+            <c:SideLayout x:Name="CoachColumn" SideWidth="420" Spacing="16" StackedSideWidth="720" MaximumWidthRequest="{OnIdiom Phone=10000, Default=1200}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}">
             <Border Style="{StaticResource Panel}">
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
-                    <VerticalStackLayout Spacing="8" VerticalOptions="Center">
-                        <c:CardTitle Text="At the gym" />
-                        <Label Text="{Binding VisitText}" Style="{StaticResource Caption}" />
-                    </VerticalStackLayout>
-                    <Button Grid.Column="1" Text="{Binding VisitButton}" Command="{Binding ToggleVisitCommand}" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" />
-                </Grid>
-            </Border>
-            <c:CoachPhotoPrompt x:DataType="vm:CoachPhotoViewModel" BindingContext="{Binding Source={RelativeSource AncestorType={x:Type vm:CoachProfileViewModel}}, Path=Photo}" IsVisible="{Binding IsCoach}" />
-            </c:CardGrid>
-
-            <!-- the form stops at a readable width on wide windows, left-aligned (it stretched to about 1450 px) -->
-            <Border Style="{StaticResource Panel}" MaximumWidthRequest="{OnIdiom Phone=10000, Default=720}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}">
             <VerticalStackLayout Spacing="16">
 
             <VerticalStackLayout Spacing="6">
@@ -64,6 +52,19 @@
             <Button Text="Save profile" Command="{Binding SaveCommand}" HorizontalOptions="Start" />
             </VerticalStackLayout>
             </Border>
+            <VerticalStackLayout Spacing="16">
+            <Border Style="{StaticResource Panel}">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                    <VerticalStackLayout Spacing="8" VerticalOptions="Center">
+                        <c:CardTitle Text="At the gym" />
+                        <Label Text="{Binding VisitText}" Style="{StaticResource Caption}" />
+                    </VerticalStackLayout>
+                    <Button Grid.Column="1" Text="{Binding VisitButton}" Command="{Binding ToggleVisitCommand}" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" />
+                </Grid>
+            </Border>
+            <c:CoachPhotoPrompt x:DataType="vm:CoachPhotoViewModel" BindingContext="{Binding Source={RelativeSource AncestorType={x:Type vm:CoachProfileViewModel}}, Path=Photo}" IsVisible="{Binding NeedsPhoto}" />
+            </VerticalStackLayout>
+            </c:SideLayout>
 
             <Label Text="Account" Style="{StaticResource SectionTitle}" Margin="0,8,0,0" />
             <ContentView x:Name="Account" />
