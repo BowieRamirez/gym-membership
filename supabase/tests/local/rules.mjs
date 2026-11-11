@@ -210,12 +210,14 @@ await test('only an admin can void; voiding cancels the membership and is audite
   assert.equal((await run(eve, `select is_active_member() m`)).rows[0].m, false);
   assert.equal((await run(admin, `select * from audit_log where action='payment.void'`)).rowCount, 1);
 });
+const today = `(now() at time zone 'Asia/Manila')::date`;
 await test('revenue excludes voided payments and only admin can read it', async () => {
-  const r = await run(admin, `select kind, total from revenue_summary(current_date - 1, current_date + 1) order by kind`);
+  // the gym's days are Manila days: on a UTC server current_date is a day behind for 8 hours of every day (it failed in CI at 01:21 Manila)
+  const r = await run(admin, `select kind, total from revenue_summary(${today} - 1, ${today} + 1) order by kind`);
   const total = r.rows.reduce((s, x) => s + Number(x.total), 0);
   assert.equal(total, 1000 + 150 + 300);   // alex's QR + walk-in + eve's amenity (eve's membership voided)
-  assert.match(await code(run(desk, `select * from revenue_summary(current_date, current_date)`)), /forbidden/);
-  assert.equal((await run(desk, `select * from daily_cash_summary(current_date)`)).rowCount > 0, true);
+  assert.match(await code(run(desk, `select * from revenue_summary(${today}, ${today})`)), /forbidden/);
+  assert.equal((await run(desk, `select * from daily_cash_summary(${today})`)).rowCount > 0, true);
 });
 await test('renewing an active plan extends from its end date', async () => {
   const ump = (await run(alex, `select user_membership_package_id id, ends_at from user_membership_packages`)).rows[0];

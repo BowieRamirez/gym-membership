@@ -38,7 +38,9 @@ public class MemberCalendarTests
         await vm.LoadCommand.ExecuteAsync(null);
         return (gw, vm, nav);
     }
-    static DateOnly Tomorrow => DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8)).AddDays(1);
+    // the demo seeds "tomorrow" in the computer's own time (DemoGateway.At); the calendar shows Manila days. Midday of that local tomorrow
+    // is the same Manila day on a Manila computer and on CI's UTC machines (it failed there at 01:21 Manila, when the two dates differ).
+    static DateOnly Tomorrow => DateOnly.FromDateTime(DateTime.Today.AddDays(1).AddHours(12).ToUniversalTime().AddHours(8));
 
     [Fact]
     public void Each_day_names_its_entries_in_time_order_two_at_most_and_dots_by_kind()
