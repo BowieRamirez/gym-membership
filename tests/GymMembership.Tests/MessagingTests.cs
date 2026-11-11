@@ -59,8 +59,11 @@ public class MessagingTests
     public async Task Writing_to_Admin_starts_that_conversation_and_only_Admin_and_System_admin_see_it()
     {
         var (gw, bea, _) = await Open("bea@demo.io");
-        await bea.WriteToCommand.ExecuteAsync(ChatQueue.Admin);
-        Assert.Equal(("Admin", ChatQueue.Admin, "support"), (bea.Selected!.Thread.WithName, bea.WritingTo, bea.Tab));
+        await bea.ShowTabCommand.ExecuteAsync("support");
+        // no "Write to" chips: Front desk, Admin and System admin are always conversations in the Gym tab, like Front desk was
+        Assert.Equal(["Front desk", "Admin", "System admin"], bea.Threads.Select(t => t.Thread.WithName));
+        await bea.OpenCommand.ExecuteAsync(bea.Threads.Single(t => t.Thread.Queue == ChatQueue.Admin));
+        Assert.Equal(("Admin", "No messages yet"), (bea.Selected!.Thread.WithName, bea.Selected.Thread.Preview));
         Assert.Empty(bea.Bubbles);
         bea.Draft = "My card was charged twice"; await bea.SendCommand.ExecuteAsync(null);
         Assert.Contains(bea.Threads, t => t.Thread.Queue == ChatQueue.Admin && t.Thread.LastBody == "My card was charged twice");
@@ -81,7 +84,8 @@ public class MessagingTests
         var (gw, kai, _) = await Open("kai@demo.io", coach: true);
         Assert.True(kai.HasTabs);
         Assert.Equal("Gym", kai.StaffTabText);
-        await kai.WriteToCommand.ExecuteAsync(ChatQueue.SystemAdmin);
+        await kai.ShowTabCommand.ExecuteAsync("support");
+        await kai.OpenCommand.ExecuteAsync(kai.Threads.Single(t => t.Thread.Queue == ChatQueue.SystemAdmin));
         kai.Draft = "Shift swap next week"; await kai.SendCommand.ExecuteAsync(null);
         Assert.Contains((await Open("admin@demo.io", gw)).Vm.Threads, t => t.Thread.Queue == ChatQueue.SystemAdmin && t.QueueTag == "To System admin");
         Assert.DoesNotContain((await Open("subadmin@demo.io", gw)).Vm.Threads, t => t.Thread.Queue == ChatQueue.SystemAdmin);

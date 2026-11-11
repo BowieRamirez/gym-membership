@@ -46,7 +46,7 @@ public class MessengerViewModelTests
         Assert.Empty(vm.Threads);                                   // Carlo has no coach: the Coach tab is empty
         Assert.Contains("coach", vm.EmptyListText, StringComparison.OrdinalIgnoreCase);
         await vm.ShowTabCommand.ExecuteAsync("support");
-        Assert.Equal("Front desk", vm.Threads.Single().Thread.WithName);
+        Assert.Equal(["Front desk", "Admin", "System admin"], vm.Threads.Select(t => t.Thread.WithName));
 
         vm.Draft = "my payment is stuck";
         await vm.SendCommand.ExecuteAsync(null);

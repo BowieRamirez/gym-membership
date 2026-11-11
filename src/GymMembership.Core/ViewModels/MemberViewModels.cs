@@ -469,17 +469,17 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowChat), nameof(ShowList))] private bool isCompact;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowChat), nameof(ShowList))] private bool showingChat;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasChat), nameof(CanSend), nameof(ReadOnly), nameof(ReadOnlyText), nameof(CanTake), nameof(CanRelease), nameof(CanClose), nameof(CanReopen), nameof(StatusLine), nameof(WritingTo), nameof(ChatEmptyText))] private ThreadItem? selected;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasChat), nameof(CanSend), nameof(ReadOnly), nameof(ReadOnlyText), nameof(CanTake), nameof(CanRelease), nameof(CanClose), nameof(CanReopen), nameof(StatusLine), nameof(ChatEmptyText))] private ThreadItem? selected;
     /// <summary>F10: Announcements, pinned above the tabs for members and coaches; null for staff.</summary>
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPinned))] private ThreadItem? pinned;
     [ObservableProperty] private string draft = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPhoto), nameof(PhotoName))] private (string Name, byte[] Data)? pendingPhoto;   // chosen, not sent yet
     [ObservableProperty] private bool hasMore;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowWriteTo))] private string tab = "coach";
+    [ObservableProperty] private string tab = "coach";
     [ObservableProperty] private string filter = "open";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsSearching))] private string searchText = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CanTake), nameof(CanRelease), nameof(CanClose), nameof(CanReopen))] private bool hasFilters;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowWriteTo))] private bool hasTabs;
+    [ObservableProperty] private bool hasTabs;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CoachTabText))] private int coachTabBadge;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(StaffTabText))] private int staffTabBadge;
 
@@ -495,8 +495,6 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         ? "Announcements are from the gym. You can't reply here; write to the Front desk in the Gym tab."
         : "You can read this conversation, but you can't send new messages in it right now.";
     public bool HasPinned => Pinned is not null;
-    /// <summary>F9: the Gym tab starts with "Write to" Front desk, Admin or System admin.</summary>
-    public bool ShowWriteTo => HasTabs && Tab == "support";
     /// <summary>What an empty conversation says: who reads a new gym thread, or that Announcements has nothing yet.</summary>
     public string ChatEmptyText => Selected?.Thread switch
     {
@@ -505,8 +503,6 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         { IsMyGymThread: true, Queue: ChatQueue.SystemAdmin } => "Write to the System admin about anything the Admin team can't sort out.",
         _ => "No messages yet. Say hello below."
     };
-    /// <summary>The queue of your own gym conversation on screen, so its Write to chip shows as chosen.</summary>
-    public string? WritingTo => Selected?.Thread is { IsMyGymThread: true } t ? t.Queue ?? ChatQueue.FrontDesk : null;
     public bool HasHits => Hits.Count > 0;
     public bool HasPhoto => PendingPhoto is not null;
     public string PhotoName => PendingPhoto?.Name ?? "";
@@ -658,6 +654,9 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         all = result.Value!.ToList();
         // members and coaches have their own gym threads and get the Coach (or Trainees) and Gym tabs; staff see others' threads and get the Open, Mine and Closed filters
         var writer = all.Any(t => t.IsMyGymThread);
+        // Front desk, Admin and System admin are always there to open; one not written to yet is started by its first message
+        if (writer && myId is { } me)
+            all.AddRange(ChatQueue.All.Where(q => !all.Any(t => t.IsMyGymThread && (t.Queue ?? ChatQueue.FrontDesk) == q)).Select(q => ChatThread.ForQueue(me, q)));
         HasTabs = writer;
         HasFilters |= !writer && all.Any(t => t.IsSupport);   // once on, stays on, so an emptied inbox keeps its filters
         CoachTabBadge = all.Where(t => t.Kind == "coach").Sum(t => t.Unread);
@@ -743,17 +742,6 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         ShowingChat = true;
         Bubbles.Clear(); HasMore = false;
         await ShowAsync(item, markRead: true);
-    }
-
-    /// <summary>F9: open your conversation with a gym queue, or a fresh one that is created by its first message.</summary>
-    [RelayCommand]
-    private async Task WriteToAsync(string queue)
-    {
-        if (myId is null) return;
-        if (HasTabs) Tab = "support";
-        Rebuild();
-        var thread = all.FirstOrDefault(t => t.IsMyGymThread && (t.Queue ?? ChatQueue.FrontDesk) == queue) ?? ChatThread.ForQueue(myId, queue);
-        await OpenAsync(Threads.FirstOrDefault(x => x.Thread.Key == thread.Key) ?? new ThreadItem(thread));
     }
 
     /// <summary>F11: a request message's link. The buttons to answer stay on Time requests.</summary>

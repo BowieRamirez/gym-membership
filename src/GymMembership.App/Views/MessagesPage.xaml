@@ -16,7 +16,7 @@
         <!-- ===== conversations ===== -->
         <!-- the conversation list sits in a card beside the chat -->
         <Border Grid.Row="1" Style="{StaticResource Panel}" Padding="0" Margin="12,12,0,12" IsVisible="{Binding ShowList}">
-        <Grid x:Name="ListPane" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,*" RowSpacing="10" Padding="14,12">
+        <Grid x:Name="ListPane" RowDefinitions="Auto,Auto,Auto,Auto,Auto,*" RowSpacing="10" Padding="14,12">
             <Border Style="{StaticResource Field}">
                 <Entry Text="{Binding SearchText}" Placeholder="Search people and messages" ClearButtonVisibility="WhileEditing" SemanticProperties.Description="Search" />
             </Border>
@@ -63,24 +63,8 @@
                 </Button>
             </HorizontalStackLayout>
 
-            <!-- F9: in the Gym tab, the three queues to write to; the one on screen is yellow -->
-            <VerticalStackLayout Grid.Row="3" Spacing="6" IsVisible="{Binding ShowWriteTo}">
-                <Label Text="Write to" Style="{StaticResource Caption}" />
-                <FlexLayout Wrap="Wrap">
-                    <Button Text="Front desk" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding WriteToCommand}" CommandParameter="front_desk" AutomationId="WriteTo-front_desk">
-                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding WritingTo}" Value="front_desk"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" /><Setter Property="SemanticProperties.Description" Value="Front desk, open" /></DataTrigger></Button.Triggers>
-                    </Button>
-                    <Button Text="Admin" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding WriteToCommand}" CommandParameter="admin" AutomationId="WriteTo-admin">
-                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding WritingTo}" Value="admin"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" /><Setter Property="SemanticProperties.Description" Value="Admin, open" /></DataTrigger></Button.Triggers>
-                    </Button>
-                    <Button Text="System admin" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding WriteToCommand}" CommandParameter="system_admin" AutomationId="WriteTo-system_admin">
-                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding WritingTo}" Value="system_admin"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /><Setter Property="TextColor" Value="{StaticResource Black}" /><Setter Property="BorderColor" Value="{StaticResource Signal}" /><Setter Property="SemanticProperties.Description" Value="System admin, open" /></DataTrigger></Button.Triggers>
-                    </Button>
-                </FlexLayout>
-            </VerticalStackLayout>
-
             <!-- staff: which conversations -->
-            <HorizontalStackLayout Grid.Row="4" Spacing="8" IsVisible="{Binding HasFilters}">
+            <HorizontalStackLayout Grid.Row="3" Spacing="8" IsVisible="{Binding HasFilters}">
                 <Button Text="Open" Style="{StaticResource FilterChip}" Command="{Binding ShowFilterCommand}" CommandParameter="open">
                     <Button.Triggers>
                         <DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="open">
@@ -105,7 +89,7 @@
             </HorizontalStackLayout>
 
             <!-- what the search found inside messages (names are matched in the list below) -->
-            <ScrollView Grid.Row="5" MaximumHeightRequest="240" IsVisible="{Binding HasHits}">
+            <ScrollView Grid.Row="4" MaximumHeightRequest="240" IsVisible="{Binding HasHits}">
                 <VerticalStackLayout Spacing="8">
                     <Label Text="In messages" Style="{StaticResource Caption}" />
                     <VerticalStackLayout Spacing="8" BindableLayout.ItemsSource="{Binding Hits}">
@@ -126,7 +110,7 @@
                 </VerticalStackLayout>
             </ScrollView>
 
-            <CollectionView Grid.Row="6" ItemsSource="{Binding Threads}">
+            <CollectionView Grid.Row="5" ItemsSource="{Binding Threads}">
                 <CollectionView.EmptyView>
                     <Label Text="{Binding EmptyListText}" Style="{StaticResource Muted}" Margin="0,8" />
                 </CollectionView.EmptyView>
