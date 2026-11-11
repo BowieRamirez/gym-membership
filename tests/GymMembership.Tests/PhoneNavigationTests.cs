@@ -43,7 +43,9 @@ public class PhoneNavigationTests
         var source = Read("Controls/PhoneNavigation.cs");
         Assert.Contains("(\"Dashboard\", \"Dashboard\", \"overview\"), (\"Sessions\", \"Sessions\", \"sessions\"), (\"Trainees & shifts\", \"Trainees\", \"trainees\"), (\"Messages\", \"Messages\", \"messages\")", source);
         Assert.Contains("<FlyoutItem Title=\"Dashboard\" Route=\"dashboard\"><ShellContent ContentTemplate=\"{DataTemplate views:AttendancePage}\" />", Read("CoachShell.xaml"));
-        Assert.Contains("MemberMenu.Tabs(access?.Active ?? true)", source);   // F16: member tabs follow the membership (MemberCalendarTests pins the order)
+        Assert.Contains("MemberMenu.Tabs(access?.Active ?? true)", source);
+        Assert.Contains("[\"Book an amenity\"] = (\"Book an amenity\", \"Book\", \"bookings\")", source);   // its tab keeps the //bookings route the calendar opens
+        Assert.DoesNotContain("MemberCalendarPage", source);   // the calendar lives inside Sessions, not as its own phone page   // F16: member tabs follow the membership (MemberCalendarTests pins the order)
         Assert.Contains("_bar.Items.Add(_more)", source);
         Assert.Contains("new PhoneMorePage", source);
         Assert.Contains("FlyoutBehavior.Disabled", source);
@@ -56,7 +58,6 @@ public class PhoneNavigationTests
     [InlineData("Coaches", "CoachesPage")]
     [InlineData("Time requests", "RequestsPage")]
     [InlineData("Profile & settings", "CoachProfilePage")]
-    [InlineData("Calendar", "MemberCalendarPage")]
     [InlineData("Renew or change", "PackagesPage")]
     [InlineData("Settings", "SettingsPage")]
     public void Every_more_destination_has_an_explicit_dependency_injected_page_factory(string title, string page)
@@ -130,7 +131,7 @@ public class PhoneNavigationTests
 
     [Theory]
     [InlineData("membership")]
-    [InlineData("calendar")]
+    [InlineData("bookings")]
     [InlineData("packages")]
     [InlineData("sessions")]
     [InlineData("requests")]
@@ -171,5 +172,14 @@ public class PhoneNavigationTests
             Assert.DoesNotContain(old, source);
             Assert.DoesNotContain(old, Read("Views/PhoneMorePage.cs"));
         }
+    }
+
+    [Fact]
+    public void Phone_sessions_opens_the_member_calendar_inline_from_a_button()
+    {
+        var xaml = Read("Views/SessionsPage.xaml");
+        Assert.Contains("x:Name=\"CalendarToggle\"", xaml);
+        Assert.Contains("CalendarSection.IsVisible = !CalendarSection.IsVisible", Read("Views/SessionsPage.xaml.cs"));
+        Assert.DoesNotContain("MemberCalendarPage", Read("MemberShell.xaml"));
     }
 }

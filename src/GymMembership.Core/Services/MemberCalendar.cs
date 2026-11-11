@@ -10,13 +10,13 @@ public sealed record MenuItem(string Title, string Page, bool MembersOnly = fals
 /// <summary>
 /// The member menu in one place, so Windows and the phone read the same list (F16, 2026-11-10). With an active membership the
 /// everyday pages lead and Packages sits near the end as "Renew or change"; without one Packages comes first. Members-only pages stay
-/// listed and open their locked notice. The phone keeps the first three as tabs, plus Messages; the rest go under More.
+/// listed and open their locked notice. The calendar is part of Sessions, not a menu entry (owner, 2026-11-11). The phone keeps the first three as tabs, plus Messages; the rest go under More.
 /// </summary>
 public static class MemberMenu
 {
     static readonly MenuItem[] Everyday =
     [
-        new("Calendar", "Calendar", true), new("Sessions", "Sessions", true), new("Book an amenity", "Book an amenity", true),
+        new("Sessions", "Sessions", true), new("Book an amenity", "Book an amenity", true),
         new("Coaches", "Coaches"), new("Time requests", "Time requests", true), new("Messages", "Messages")
     ];
     static readonly MenuItem Membership = new("My membership", "My membership"), Settings = new("Settings", "Settings");

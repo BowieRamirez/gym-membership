@@ -18,7 +18,6 @@
 
     <FlyoutItem Title="My membership" Route="memberships"><ShellContent ContentTemplate="{DataTemplate views:MyMembershipPage}" /></FlyoutItem>
     <FlyoutItem Title="Packages" Route="packages"><ShellContent ContentTemplate="{DataTemplate views:PackagesPage}" /></FlyoutItem>
-    <FlyoutItem Title="Calendar" ClassId="members-only" Route="calendar"><ShellContent ContentTemplate="{DataTemplate views:MemberCalendarPage}" /></FlyoutItem>
     <FlyoutItem Title="Book an amenity" ClassId="members-only" Route="bookings"><ShellContent ContentTemplate="{DataTemplate views:BookAmenityPage}" /></FlyoutItem>
     <FlyoutItem Title="Coaches"><ShellContent ContentTemplate="{DataTemplate views:CoachesPage}" /></FlyoutItem>
     <FlyoutItem Title="Messages" Route="messages"><ShellContent ContentTemplate="{DataTemplate views:MessagesPage}" /></FlyoutItem>

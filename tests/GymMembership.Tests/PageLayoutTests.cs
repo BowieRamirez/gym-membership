@@ -8,17 +8,17 @@ public class PageLayoutTests
     static string AppFile(params string[] parts) => Path.Combine(new[] { TestPaths.AppFolder() }.Concat(parts).ToArray());
 
     [Fact]
-    public void Windows_member_sessions_hosts_calendar_and_removes_its_separate_menu_item()
+    public void Member_sessions_hosts_calendar_and_it_has_no_separate_menu_item()
     {
         var xaml = File.ReadAllText(AppFile("Views", "SessionsPage.xaml"));
         var code = File.ReadAllText(AppFile("Views", "SessionsPage.xaml.cs"));
-        var shell = File.ReadAllText(AppFile("MemberShell.xaml.cs"));
+        var shell = File.ReadAllText(AppFile("MemberShell.xaml"));
         Assert.True(xaml.IndexOf("</c:SideLayout>", StringComparison.Ordinal) < xaml.IndexOf("x:Name=\"CalendarSection\"", StringComparison.Ordinal));
         Assert.Contains("x:Name=\"CalendarHost\"", xaml);
         Assert.Contains("Shell.Current is MemberShell", code);
         Assert.Contains("HostBelow(CalendarHost", code);
         Assert.Contains("RefreshOwnViewModel => false", code);
-        Assert.Contains("Items.Remove(byPage[\"Calendar\"])", shell);
+        Assert.DoesNotContain("Title=\"Calendar\"", shell);
         var calendar = File.ReadAllText(AppFile("Views", "MemberCalendarPage.xaml"));
         Assert.Contains("<VerticalStackLayout.Resources>", calendar);
         Assert.Contains("x:Key=\"TileWidth\"", calendar);

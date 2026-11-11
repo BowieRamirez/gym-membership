@@ -31,7 +31,7 @@ public static class IconRail
         ["Messages"] = "message-square",
         ["Settings"] = "settings",
         ["My membership"] = "id-card",
-        ["Packages"] = "package", ["Renew or change"] = "package", ["Calendar"] = "calendar",
+        ["Packages"] = "package", ["Renew or change"] = "package",
         ["Amenities"] = "waves",
         ["Book an amenity"] = "calendar-plus",
         ["Coaches"] = "dumbbell",

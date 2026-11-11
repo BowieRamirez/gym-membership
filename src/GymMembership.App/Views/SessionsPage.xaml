@@ -72,6 +72,9 @@
         <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="12">
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
+            <!-- phones (owner, 2026-11-11): the member calendar opens here, inside Sessions, from this button; Windows shows it below the list -->
+            <Button x:Name="CalendarToggle" Text="Show calendar" IsVisible="False" Style="{StaticResource OutlineButton}" Clicked="OnToggleCalendar"
+                    SemanticProperties.Hint="Shows your sessions, bookings and your coach's open times by month" />
 
             <c:SideLayout StackedSideWidth="600">
                 <VerticalStackLayout Spacing="4">
@@ -140,7 +143,7 @@
             </c:SideLayout>
 
             <VerticalStackLayout x:Name="CalendarSection" IsVisible="False" Spacing="12" Margin="0,12,0,0">
-                <Label Text="Calendar" Style="{StaticResource SectionTitle}" />
+                <Label Text="Calendar" Style="{StaticResource SectionTitle}" IsVisible="{OnIdiom Phone=False, Default=True}" />
                 <ContentView x:Name="CalendarHost" />
             </VerticalStackLayout>
         </VerticalStackLayout>

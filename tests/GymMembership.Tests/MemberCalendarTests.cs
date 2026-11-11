@@ -12,19 +12,19 @@ public class MemberCalendarTests
     [Fact]
     public void An_active_member_sees_their_membership_first_and_packages_near_the_end_as_renew_or_change()
     {
-        Assert.Equal(["My membership", "Calendar", "Sessions", "Book an amenity", "Coaches", "Time requests", "Messages", "Renew or change", "Settings"],
+        Assert.Equal(["My membership", "Sessions", "Book an amenity", "Coaches", "Time requests", "Messages", "Renew or change", "Settings"],
             MemberMenu.Order(active: true).Select(i => i.Title));
-        Assert.Equal(["My membership", "Calendar", "Sessions", "Messages"], MemberMenu.Tabs(active: true).Select(i => i.Title));
+        Assert.Equal(["My membership", "Sessions", "Book an amenity", "Messages"], MemberMenu.Tabs(active: true).Select(i => i.Title));
         Assert.Equal("Packages", MemberMenu.Order(true).Single(i => i.Title == "Renew or change").Page);
     }
 
     [Fact]
     public void Without_a_membership_packages_come_first_and_members_only_pages_stay_listed()
     {
-        Assert.Equal(["Packages", "My membership", "Calendar", "Sessions", "Book an amenity", "Coaches", "Time requests", "Messages", "Settings"],
+        Assert.Equal(["Packages", "My membership", "Sessions", "Book an amenity", "Coaches", "Time requests", "Messages", "Settings"],
             MemberMenu.Order(active: false).Select(i => i.Title));
-        Assert.Equal(["Packages", "My membership", "Calendar", "Messages"], MemberMenu.Tabs(active: false).Select(i => i.Title));
-        Assert.True(MemberMenu.Order(false).Single(i => i.Title == "Calendar").MembersOnly);
+        Assert.Equal(["Packages", "My membership", "Sessions", "Messages"], MemberMenu.Tabs(active: false).Select(i => i.Title));
+        Assert.True(MemberMenu.Order(false).Single(i => i.Title == "Sessions").MembersOnly);
         Assert.False(MemberMenu.Order(false).Single(i => i.Title == "Coaches").MembersOnly);
     }
 

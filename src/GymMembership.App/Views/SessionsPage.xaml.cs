@@ -15,14 +15,26 @@ public partial class SessionsPage : BasePage
 
 	protected override void OnAppearing()
 	{
-#if WINDOWS
-		if (!CalendarSection.IsVisible && Shell.Current is MemberShell)
+		if (CalendarHost.Content is null && Shell.Current is MemberShell)
 		{
 			HostBelow(CalendarHost, _services.GetRequiredService<MemberCalendarPage>());
-			CalendarSection.IsVisible = true;
+			if (DeviceInfo.Idiom == DeviceIdiom.Phone)
+			{
+				// the calendar sits right under its button, closed until asked for
+				var stack = (VerticalStackLayout)CalendarSection.Parent;
+				stack.Remove(CalendarSection);
+				stack.Insert(stack.IndexOf(CalendarToggle) + 1, CalendarSection);
+				CalendarToggle.IsVisible = true;
+			}
+			else CalendarSection.IsVisible = true;
 		}
-#endif
 		base.OnAppearing();
+	}
+
+	void OnToggleCalendar(object? sender, EventArgs e)
+	{
+		CalendarSection.IsVisible = !CalendarSection.IsVisible;
+		CalendarToggle.Text = CalendarSection.IsVisible ? "Hide calendar" : "Show calendar";
 	}
 
 	protected override TimeSpan? AutoRefresh => CalendarSection.IsVisible ? TimeSpan.FromSeconds(60) : null;

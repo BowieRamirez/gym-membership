@@ -47,7 +47,7 @@ public sealed class PhoneNavigation
     static readonly Dictionary<string, (string, string, string)> MemberTabs = new()
     {
         ["My membership"] = ("My membership", "Membership", "membership"), ["Packages"] = ("Packages", "Packages", "packages"),
-        ["Calendar"] = ("Calendar", "Calendar", "calendar"), ["Sessions"] = ("Sessions", "Sessions", "sessions"), ["Messages"] = ("Messages", "Messages", "messages"),
+        ["Book an amenity"] = ("Book an amenity", "Book", "bookings"), ["Sessions"] = ("Sessions", "Sessions", "sessions"), ["Messages"] = ("Messages", "Messages", "messages"),
     };
 
     public static void Attach(Shell shell, bool coach, IServiceProvider services, Access? access = null)
@@ -68,7 +68,7 @@ public sealed class PhoneNavigation
         {
             ["Amenities"] = typeof(AmenitiesPage), ["Book an amenity"] = typeof(BookAmenityPage), ["Coaches"] = typeof(CoachesPage),
             ["Time requests"] = typeof(RequestsPage),
-            ["Profile & settings"] = typeof(CoachProfilePage), ["Calendar"] = typeof(MemberCalendarPage), ["Renew or change"] = typeof(PackagesPage),
+            ["Profile & settings"] = typeof(CoachProfilePage), ["Renew or change"] = typeof(PackagesPage),
             ["Settings"] = typeof(SettingsPage)
         };
         var secondary = original.Where(item => !primary.Any(p => p.Item1 == item.Title)).ToList();
