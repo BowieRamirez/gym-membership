@@ -37,7 +37,7 @@ Status vocabulary: `PLANNED`, `WAITING` (decisions open), `IN PROGRESS`, `BLOCKE
 ### Current work / restart here
 
 - **Where it stands (2026-11-12):** plan written from the owner's list and a read of the code. No code or database changes yet. Branch `owner-fixes-2026-11-12` holds only this file.
-- **Next concrete action:** ask the owner G1 to G4 (Phase 1 and 2), (item 4 has no sketch: its add page starts as a mockup, G8). Phase 1's shift-in bug needs no decision and can start right away.
+- **Next concrete action:** ask the owner G1 to G5 (Phases 1 and 2). Item 4 has no sketch: its add page starts as a mockup (G8). Phase 1's shift-in bug needs no decision and can start right away.
 - **Unrelated, left alone:** `.codex/`, `.gemini/`, `.impeccable/config.json`, `2026-10-30-visual-redesign.md` (modified), two PDFs in `docs/`.
 
 ## 1. Repository findings
