@@ -1334,6 +1334,8 @@ public sealed record UserRow(string UserId, string Username, bool IsActive, IRea
     public bool IsSuperAdmin => Roles.Contains("admin");
     public string SubAdminActionText => IsSubAdmin ? "Remove admin" : "Make admin";
     /// <summary>Front desk, sub-admin or super admin: only the super admin manages these accounts (D15).</summary>
+    /// <summary>Item 3 (0059): a first name and no last name, from before both were required. Corrected, never guessed.</summary>
+    public bool NameIncomplete => string.IsNullOrWhiteSpace(LastName);
     public bool IsStaff => Roles.Any(r => r is "admin" or "subadmin" or "employee");
     public string ActiveActionText => IsActive ? "Deactivate" : "Reactivate";
     public string ActiveStatus => RecordStatus.Of(IsActive);

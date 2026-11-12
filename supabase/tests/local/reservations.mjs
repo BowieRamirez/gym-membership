@@ -19,8 +19,12 @@ async function as(uid, sql, args = [], client = db) {
   } catch (e) { await client.query('rollback'); throw e; }
 }
 async function user(role = 'member', name = 'Test Person') {
-  return (await db.query(`insert into auth.users(email,raw_user_meta_data,raw_app_meta_data)
-    values($1,$2,$3) returning id`, [`p6-${++serial}@test.io`, JSON.stringify({full_name: name}), JSON.stringify({role})])).rows[0].id;
+  // since 0059 a sign-up must carry a last name; a one-word person here is an old account, given its name the way 0035 left it
+  const oneWord = !/\s/.test(name.trim());
+  const id = (await db.query(`insert into auth.users(email,raw_user_meta_data,raw_app_meta_data)
+    values($1,$2,$3) returning id`, [`p6-${++serial}@test.io`, JSON.stringify({full_name: oneWord ? null : name}), JSON.stringify({role})])).rows[0].id;
+  if (oneWord) await db.query(`update profiles set first_name = $2, last_name = '' where id = $1`, [id, name.trim()]);
+  return id;
 }
 async function test(name, fn) {
   try { await fn(); passed++; console.log('  ok  ', name); }

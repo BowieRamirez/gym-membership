@@ -12,7 +12,10 @@
         <DataTemplate x:Key="AccountRow" x:DataType="svc:UserRow">
             <VerticalStackLayout>
                 <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,*,110,100">
-                    <Label Text="{Binding Username}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                    <VerticalStackLayout VerticalOptions="Center">
+                        <Label Text="{Binding Username}" FontFamily="BarlowSemiBold" />
+                        <Label Text="Last name missing" Style="{StaticResource Caption}" IsVisible="{Binding NameIncomplete}" />
+                    </VerticalStackLayout>
                     <Label Grid.Column="1" Text="{Binding RoleText}" Style="{StaticResource Muted}" VerticalOptions="Center" />
                     <c:StatusChip Grid.Column="2" Status="{Binding ActiveStatus}" VerticalOptions="Center" />
                     <Button Grid.Column="3" Text="Actions" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="End" VerticalOptions="Center"
@@ -27,6 +30,7 @@
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="14,10">
                     <VerticalStackLayout Spacing="2" VerticalOptions="Center">
                         <Label Text="{Binding Username}" FontFamily="BarlowSemiBold" />
+                        <Label Text="Last name missing" Style="{StaticResource Caption}" IsVisible="{Binding NameIncomplete}" />
                         <Label Text="{Binding RoleText}" Style="{StaticResource Caption}" />
                         <c:StatusChip Status="{Binding ActiveStatus}" />
                     </VerticalStackLayout>
@@ -116,7 +120,15 @@
 
             <!-- 9.8: the accounts as a table (hairline rows in one panel, a header), each row's menu a labelled "Actions" button (was a "⋮"
                  glyph); the menu itself is unchanged (owner, D28). AutomationId stays: scripts/Test-WindowsArchive.ps1 uses it. -->
-            <Label Text="Active accounts" Style="{StaticResource SectionTitle}" />
+            <!-- item 3 (0059): accounts with no last name, for a System admin to correct with Actions > Correct name; shown only when there are some -->
+            <Grid ColumnDefinitions="*,Auto">
+                <Label Text="Active accounts" Style="{StaticResource SectionTitle}" VerticalOptions="Center" />
+                <Button Grid.Column="1" Text="{Binding IncompleteText}" Style="{StaticResource FilterChip}" Command="{Binding ToggleIncompleteCommand}"
+                        IsVisible="{Binding HasIncomplete}" AutomationId="NameIncompleteFilter" VerticalOptions="Center"
+                        SemanticProperties.Hint="Shows only the accounts with no last name, or every account again">
+                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding OnlyIncomplete}" Value="True"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
+                </Button>
+            </Grid>
             <Border Style="{StaticResource TablePanel}">
                 <VerticalStackLayout>
                     <VerticalStackLayout x:Name="AccountHead">

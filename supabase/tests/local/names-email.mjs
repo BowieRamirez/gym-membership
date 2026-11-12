@@ -44,6 +44,44 @@ try {
     assert.deepEqual(await nameOf(oldJuan), { first_name: 'Juan', last_name: 'dela Cruz', full_name: 'Juan dela Cruz' });
     assert.deepEqual(await nameOf(oldMadonna), { first_name: 'Madonna', last_name: '', full_name: 'Madonna' });
   });
+  // item 3 / G5 (2026-11-12, 0059): no new blank last names; the owner of an old one-word name adds the last name once, nobody guesses it
+  await test('a new account needs a last name: a one-word name or a blank last name is refused', async () => {
+    await assert.rejects(user({ full_name: 'Cher' }), /bad_name/);
+    await assert.rejects(user({ first_name: 'Cher', last_name: ' ', full_name: 'Cher' }), /bad_name/);
+  });
+  await test('an account made with no name at all (the dashboard) is still created, with a blank last name to fill in', async () => {
+    const id = (await db.query(`insert into auth.users(email) values('solo@test.io') returning id`)).rows[0].id;
+    assert.deepEqual(await nameOf(id), { first_name: 'solo', last_name: '', full_name: 'solo' });
+  });
+  await test('an old one-word account keeps working: other columns still change', async () => {
+    await db.query('update profiles set must_change_password = false where id = $1', [oldMadonna]);
+    assert.deepEqual(await nameOf(oldMadonna), { first_name: 'Madonna', last_name: '', full_name: 'Madonna' });
+  });
+  await test('the account owner adds their missing last name once, full_name follows, and the audit log keeps it', async () => {
+    await as(oldMadonna, 'select add_my_last_name($1)', [' Ciccone ']);
+    assert.deepEqual(await nameOf(oldMadonna), { first_name: 'Madonna', last_name: 'Ciccone', full_name: 'Madonna Ciccone' });
+    const log = (await db.query("select actor_id, details from audit_log where action='user.add_last_name' and entity_id=$1", [oldMadonna])).rows;
+    assert.deepEqual(log.map(l => [l.actor_id, l.details]), [[oldMadonna, { from: 'Madonna', to: 'Madonna Ciccone' }]]);
+    await assert.rejects(as(oldMadonna, 'select add_my_last_name($1)', ['Other']), /name_complete/);
+    assert.equal((await nameOf(oldMadonna)).last_name, 'Ciccone');
+  });
+  await test('adding a last name: a complete name is refused, blank or non-letters are refused, anonymous cannot call it', async () => {
+    const id = await user({ full_name: 'Ana Reyes' });
+    await assert.rejects(as(id, 'select add_my_last_name($1)', ['Santos']), /name_complete/);
+    const one = (await db.query(`insert into auth.users(email,raw_user_meta_data) values('p11-one@test.io','{"full_name":"Two Words"}') returning id`)).rows[0].id;
+    await db.query("alter table profiles disable trigger profiles_name_parts"); // an old row, as 0035 left it
+    await db.query("update profiles set last_name = '', full_name = 'Two' where id = $1", [one]);
+    await db.query("alter table profiles enable trigger profiles_name_parts");
+    for (const [last, why] of [['  ', /bad_name/], [null, /bad_name/], ['Reyes1', /23514|profiles_last_name_letters/]])
+      await assert.rejects(as(one, 'select add_my_last_name($1)', [last]), e => why.test(e.message) || why.test(e.code));
+    assert.equal((await nameOf(one)).last_name, '');
+    await db.query('begin'); await db.query('set local role anon');
+    await assert.rejects(db.query("select add_my_last_name('X')"), /permission denied/);
+    await db.query('rollback');
+  });
+  await test('every full_name matches its first and last name', async () => {
+    assert.equal((await db.query("select count(*)::int n from profiles where full_name <> btrim(first_name || ' ' || last_name)")).rows[0].n, 0);
+  });
   await test('sign-up with first and last name builds full_name from them', async () => {
     const id = await user({ first_name: 'Mary Ann', last_name: 'Santos', full_name: 'Mary Ann Santos' });
     assert.deepEqual(await nameOf(id), { first_name: 'Mary Ann', last_name: 'Santos', full_name: 'Mary Ann Santos' });

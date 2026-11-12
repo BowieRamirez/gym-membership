@@ -1112,6 +1112,20 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
 public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? archive = null) : LoadableViewModel
 {
     public ObservableCollection<UserRow> Users { get; } = new();
+    IReadOnlyList<UserRow> active = [];
+    // item 3 (0059): active accounts with a first name and no last name, for a system admin to correct
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasIncomplete), nameof(IncompleteText))] private int incompleteCount;
+    [ObservableProperty] private bool onlyIncomplete;
+    public bool HasIncomplete => IncompleteCount > 0;
+    public string IncompleteText => $"Name incomplete ({IncompleteCount})";
+    partial void OnOnlyIncompleteChanged(bool value) => ShowUsers();
+    [RelayCommand] private void ToggleIncomplete() => OnlyIncomplete = !OnlyIncomplete;
+    void ShowUsers()
+    {
+        IncompleteCount = active.Count(u => u.NameIncomplete);
+        if (IncompleteCount == 0) OnlyIncomplete = false;
+        Fill(Users, OnlyIncomplete ? active.Where(u => u.NameIncomplete) : active);
+    }
     /// <summary>Switched off but not deleted: they can be switched back on here.</summary>
     public ObservableCollection<UserRow> Deactivated { get; } = new();
     /// <summary>What can be added: a sub-admin adds members and coaches only (D15).</summary>
@@ -1145,7 +1159,7 @@ public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? a
         await RunAsync(svc.IsSuperAdminAsync, yes => IsSuperAdmin = yes);
         Roles = IsSuperAdmin ? ["Member", "Coach", "Front desk", "Admin"] : ["Member", "Coach"];
         if (!Roles.Contains(NewRole)) NewRole = "Member";
-        await RunAsync(svc.UsersAsync, rows => { Fill(Users, rows.Where(r => r.IsActive)); Fill(Deactivated, rows.Where(r => !r.IsActive)); });
+        await RunAsync(svc.UsersAsync, rows => { active = rows.Where(r => r.IsActive).ToList(); ShowUsers(); Fill(Deactivated, rows.Where(r => !r.IsActive)); });
     }
 
     [RelayCommand]

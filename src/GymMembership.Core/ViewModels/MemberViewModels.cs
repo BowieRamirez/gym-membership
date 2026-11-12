@@ -1020,8 +1020,22 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
     }
 
     // ---------- name: shown only, locked after sign-up (0040) ----------
-    [ObservableProperty] private string firstName = "";
-    [ObservableProperty] private string lastName = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(NeedsLastName))] private string firstName = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(NeedsLastName))] private string lastName = "";
+
+    // item 3 (0059): an old one-word name. The person types their own last name once; nothing is guessed.
+    public bool NeedsLastName => FirstName.Length > 0 && string.IsNullOrWhiteSpace(LastName);
+    [ObservableProperty] private string missingLastName = "";
+
+    [RelayCommand]
+    private async Task AddLastNameAsync()
+    {
+        Notice = null;
+        if (!await RunAsync(() => profile.AddMyLastNameAsync(MissingLastName))) return;
+        MissingLastName = "";
+        await LoadPhotoAsync(names: true);
+        Notice = $"Your name is now {SavedName}.";
+    }
 
     // ---------- email: send a code to it, then type the code ----------
     [ObservableProperty] private string emailAddress = "";

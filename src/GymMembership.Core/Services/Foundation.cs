@@ -111,6 +111,7 @@ public static class ErrorText
         "bad_walk_in_price" => "Enter a walk-in price above ₱0.",
         "zero_amount" => "A payment of ₱0 can't be recorded. Ask an administrator to set a price above ₱0.",
         "bad_input" => "Fill in every field, then try again.",
+        "name_complete" => "Your name is already complete. A System admin can correct it if it is wrong.",
         "bad_name" => "Enter a first and a last name in letters. Spaces, hyphens and apostrophes are fine. At least 2 letters each, 60 characters together.",
         "bad_email" => "Enter a valid email address, for example name@example.com. Up to 100 characters.",
         "bad_password" => "Use 8 to 64 characters for your password, with at least one letter and one number.",

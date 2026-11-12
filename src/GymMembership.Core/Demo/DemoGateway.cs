@@ -1182,6 +1182,19 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     Details = new() { ["from"] = old, ["to"] = p.FullName, ["reason"] = reason } });
                 return null;
             }
+            case "add_my_last_name":   // item 3 (0059): the owner of a one-word name fills in the last name, once
+            {
+                var last = (Opt("p_last") ?? "").Trim();
+                if (last.Length == 0) throw Err("bad_name");
+                var p = All<Profile>().First(x => x.Id == uid);
+                if (!string.IsNullOrWhiteSpace(p.LastName)) throw Err("name_complete");
+                if (!AccountRules.IsName(p.FirstName, last)) throw Err("bad_name");
+                var old = p.FullName;
+                (p.LastName, p.FullName) = (last, NameParts.Join(p.FirstName, last));
+                Add(new AuditEntry { ActorId = Uid, Action = "user.add_last_name", Entity = "profiles", EntityId = p.Id, CreatedAt = SubscriptionNow,
+                    Details = new() { ["from"] = old, ["to"] = p.FullName } });
+                return null;
+            }
             case "confirm_my_email":
                 if (!_codeSession) throw Err("code_not_verified");
                 All<Profile>().First(x => x.Id == uid).ConfirmedEmail = CurrentEmail;
@@ -1227,6 +1240,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         AddUser("u-alex", "Alex Tan", "member@demo.io", "member");
         AddUser("u-bea", "Bea Lim", "bea@demo.io", "member");
         AddUser("u-carlo", "Carlo Diaz", "carlo@demo.io", "member");
+        AddUser("u-joy", "Joy", "joy@demo.io", "member", "Joy", "");   // item 3: an old one-word account, no last name to guess
 
         var lena = All<Coach>().First(c => c.UserId == "u-coach1"); lena.Specialty = "Strength and conditioning"; lena.HourlyRate = 800;
         lena.Bio = "Ten years coaching powerlifting and general strength. Works with beginners and returning lifters.";

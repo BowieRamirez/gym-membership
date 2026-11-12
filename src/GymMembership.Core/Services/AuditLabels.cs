@@ -14,7 +14,7 @@ public static class AuditLabels
     {
         ["user.create"] = "Account created", ["user.archive"] = "Account deleted", ["user.restore"] = "Account restored",
         ["user.activate"] = "Account reactivated", ["user.deactivate"] = "Account deactivated",
-        ["user.correct_name"] = "Name corrected", ["user.reset_password"] = "Password reset",
+        ["user.correct_name"] = "Name corrected", ["user.add_last_name"] = "Last name added", ["user.reset_password"] = "Password reset",
         ["role.assign"] = "Role given", ["role.revoke"] = "Role removed",
         ["payment.record"] = "Payment recorded", ["payment.verify"] = "Payment verified", ["payment.reject"] = "Payment rejected",
         ["payment.void"] = "Payment voided", ["payment.cancel"] = "Payment cancelled",

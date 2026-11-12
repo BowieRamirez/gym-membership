@@ -23,9 +23,12 @@ async function test(name, fn) {
 
 // --- people: created the way Supabase does, through auth.users + the trigger
 async function user(email, role, name) {
+  // since 0059 a sign-up must carry a last name; a one-word person here is an old account, given its name the way 0035 left it
+  const oneWord = typeof name === 'string' && name.trim() !== '' && !/\s/.test(name.trim());
   const r = await db.query(
     `insert into auth.users (email, raw_user_meta_data, raw_app_meta_data) values ($1, $2, $3) returning id`,
-    [email, JSON.stringify({ full_name: name }), JSON.stringify({ role })]);
+    [email, JSON.stringify({ full_name: oneWord ? null : name }), JSON.stringify({ role })]);
+  if (oneWord) await db.query(`update profiles set first_name = $2, last_name = '' where id = $1`, [r.rows[0].id, name.trim()]);
   return r.rows[0].id;
 }
 const admin = await user('admin@t.io', 'admin', 'Owner');
@@ -375,7 +378,7 @@ async function userTwoStep(email, role, name) {
   return id;
 }
 await test('an account made through the Admin API gets the role written after it was inserted', async () => {
-  const boss = await userTwoStep('boss@t.io', 'admin', 'Boss');
+  const boss = await userTwoStep('boss@t.io', 'admin', 'Boss Person');
   const rows = async (id) => (await db.query(`select (select string_agg(r.name, ',') from user_roles ur join roles r using(role_id) where ur.user_id=$1) roles, (select count(*) from members where user_id=$1)::int m, (select count(*) from coaches where user_id=$1)::int c`, [id])).rows[0];
   assert.deepEqual(await rows(boss), { roles: 'admin', m: 0, c: 0 });
   const c2 = await userTwoStep('c2@t.io', 'coach', 'Coach Two');
@@ -402,7 +405,7 @@ await test('digits, symbols, doubled or edge separators and bad lengths are refu
 });
 await test('sign-up with a bad name fails, with no name it falls back to the letters in the email', async () => {
   const signUp = (email, name) => db.query(`insert into auth.users (email, raw_user_meta_data) values ($1, $2) returning id`, [email, JSON.stringify(name === undefined ? {} : { full_name: name })]);
-  assert.match(await code(signUp('bad@t.io', 'R2D2')), /23514/);
+  assert.match(await code(signUp('bad@t.io', 'R2D2 Unit')), /23514/);
   const nameOf = async (email, name) => (await db.query(`select full_name from profiles where id = $1`, [(await signUp(email, name)).rows[0].id])).rows[0].full_name;
   assert.equal(await nameOf('jane.doe99@t.io'), 'jane doe');
   assert.equal(await nameOf('99@t.io'), 'Member');
@@ -688,7 +691,7 @@ await test('a conversation taken by someone who has since been deactivated can b
 });
 await test('the inbox is bounded: staff get the 500 most recently active member threads, not every thread there is', async () => {
   await db.query(`insert into auth.users (email, raw_user_meta_data, raw_app_meta_data)
-                  select 'bulk' || g || '@t.io', jsonb_build_object('full_name', 'Bulk'), jsonb_build_object('role', 'member') from generate_series(1, 505) g`);
+                  select 'bulk' || g || '@t.io', jsonb_build_object('full_name', 'Bulk Member'), jsonb_build_object('role', 'member') from generate_series(1, 505) g`);
   await db.query(`insert into support_threads (member_id) select user_id from members where user_id not in (select member_id from support_threads)`);
   const inbox = (await threads(desk)).filter(r => r.kind === 'support');
   assert.equal(inbox.length, 500);
