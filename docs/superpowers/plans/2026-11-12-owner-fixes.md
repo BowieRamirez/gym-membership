@@ -2,10 +2,10 @@
 
 Created: 2026-11-12
 Last updated: 2026-11-12 (plan created; nothing built yet)
-Status: WAITING. Decisions G1 to G15 are open; no phase has started.
+Status: WAITING. Decisions G1 to G18 are open; no phase has started.
 Branch: `owner-fixes-2026-11-12`, a new branch from `main` at `b91cafe` (v0.5.0 plus the test-wait fix). Every phase of this plan stays on this branch; the owner merges to `main` when the plan is done.
 
-**Goal:** Work through the owner's 9-item list of fixes (received 2026-11-12): the cashier shift-in bug, discount codes that can't be changed once made and are shown to the members they fit, clean account names, an Actions menu and a proper add form for packages and amenities, drafts, publishing, archiving and versions for packages, a Membership checking page at the desk, and amenity bookings held by a down payment with a solo or coached session.
+**Goal:** Work through the owner's 9-item list of fixes (received 2026-11-12), plus item 10 added the same day: the cashier shift-in bug, discount codes that can't be changed once made and are shown to the members they fit, clean account names, an Actions menu and a proper add form for packages and amenities, drafts, publishing, archiving and versions for packages, a Membership checking page at the desk, amenity bookings held by a down payment with a solo or coached session, and gym closing days set by Admin that block bookings and are announced in chat.
 
 **Separate from** `docs/superpowers/plans/2026-11-09-features-and-improvements.md` (done, v0.5.0), whose decisions are F1 to F19, and the 2026-11-05 plan (D1 to D31). This plan's decisions are numbered **G1 onward**. Where an item here reverses a D or F decision, the G decision says so.
 
@@ -57,6 +57,7 @@ From reading the code on 2026-11-12. Verify before relying on these; line number
 | 4 Add form | Adding is an inline form on `CatalogAdminPage`; the photo is a separate row action; `image_path` exists on both tables (`0013`). The sketch "in the document" is not in `docs/gym-system-documentation.pdf` or `docs/gym-system-diagrams.pdf`. | A separate add page built to the owner's sketch, which we need (G8). |
 | 5 Check-in | Page "Check-in" (`StaffShell.xaml:22`, rail icon `scan-line`): scan a rotating pass (`0049`) or search by name with the member's desk PIN; status is shown; check-ins are recorded with method and who recorded them (`0044`, `0049`); today's list (F19). | Most of item 5 exists. New: the name "Membership checking", a clear Confirm step and reason text for every inactive case (G10, G11). Login mode isn't defined (G12). |
 | 6 Reservations | Booking holds the slot as `awaiting_payment` before anything is paid (`0052`), cancelled "Not paid" if the hold lapses. Payment is the full session price. `reservations.coach_id` exists; coaches say which amenities they run (`coach_amenities`, F14); coach shifts are in `shift_posts`. | Item 6 reverses the unpaid hold: no slot without a down payment (G13). Picking a coach needs "who is free then" from shifts, amenity links and other bookings (G14). |
+| 10 Closing days | Gym settings has opening and closing times only (`0028`: `opens_at`, `closes_at`). Those hours are checked on the server wherever a time is set up: coach shifts (`0028` trigger, `outside_gym_hours`), amenity bookings (`book_slots`, `0029`/`0043`/`0052`) and session requests (`request_session`, `0031`). No closed dates exist. Admin and System admin announcements exist (`0051`, F10): an "Announcements" conversation in chat plus a notification. | A `gym_closures` table and a single "is that day closed" check added to every place the hours check already runs. The closure is posted as an announcement, so it reaches chat and notifications with no new channel (G16 to G18). |
 | 7, 8, 9 Package lifecycle | `membership_packages`: name (unique), description, price, duration_days, is_active, image_path, archive columns. No draft, no published state, no version link, no real delete. A member's own terms are copied at purchase into `membership_terms` (`0018`), so a later package change doesn't touch them. | Add a draft/published state, delete only for never-published, never-bought packages, versions linked to the one they replace (G6, G7, G9). The unique name has to allow two versions of one package. |
 
 ## 2. Decisions to settle
@@ -77,6 +78,9 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 - [ ] **G12 — login mode (item 5):** Not defined yet. Recommend: leave out of this plan until the owner says what it is (guess: a kiosk where members check themselves in, or a coach/staff clock-in). Becomes its own phase once defined.
 - [ ] **G13 — down payment (item 6):** Reverses `0052`'s unpaid hold. Recommend: down payment is a Gym settings percent of the session price, **50%** by default, paid by GCash (member uploads the reference) or cash at the desk. The slot is reserved only when the desk verifies the down payment; before that others can book it, and if two pay for one slot the first verified wins and the other's down payment is refunded through Refunds. The rest is paid at the desk before the session. Cancelling: down payment refunded if cancelled 24 hours or more before; kept otherwise. Say the percent, the cancel rule and whether cash at the desk counts.
 - [ ] **G14 — solo or with a coach (item 6):** Recommend: the member chooses Solo or With a coach. With a coach lists coaches who run that amenity (`coach_amenities`), have a posted shift covering the whole time, and aren't booked then; picking one fills `reservations.coach_id`; no coach approval step. A coached session costs a coach fee per session set on the amenity (₱0 allowed). Solo still needs a coach in the gym at the time of use (D21, `coach_in_gym`). Say if the coach fee should be the coach's own rate (`0033`) instead.
+- [ ] **G16 — closing a day (item 10):** Recommend: Gym settings gets a "Closed days" list where Admin and System admin pick a date (today or later) and type a reason ("Holiday", "Repairs"); whole days only, Manila time. A closed day can be removed (reopened) up to the day itself. Past closed days stay in the list as history. Say if half days (closing early) are wanted too.
+- [ ] **G17 — what a closed day blocks (item 10):** Recommend: nobody can set up anything on that day: amenity bookings, session requests and proposals, coach shifts. Membership check-in is refused too, with the reason shown on Membership checking. Memberships still count down through a closed day (no days added). Say if members should get the day back.
+- [ ] **G18 — what happens to things already set up that day, and the notice (item 10):** Recommend: closing a day cancels that day's amenity bookings, scheduled sessions and coach shifts, with the reason "Gym closed: <reason>". Paid amenity bookings and down payments go to Refunds for the desk to pay back, as for any cancelled paid booking. Admin sees how many will be cancelled before confirming. Everyone is told through an announcement to all members and coaches (Announcements in chat, plus a notification): "The gym is closed on Friday, 25 Dec: Holiday." Members and coaches whose booking, session or shift was cancelled also get a personal note. Reopening the day posts "The gym is open again on ..." but does not bring back cancelled bookings.
 - [ ] **G15 — old apps (all items):** Recommend: as before, the server refuses old flows (unpaid holds, editing codes, buying drafts); desks and phones need the new build. Release as v0.6.0 when the plan is done.
 
 ## 3. Phases and item coverage
@@ -89,7 +93,8 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 | 4 | Packages and amenities screens: Actions menu, add page, drafts, versions, members' Packages | 4, 7, 8, 9 | Phase 3, G8 | WAITING |
 | 5 | Membership checking | 5 | G10, G11 (G12 later) | WAITING |
 | 6 | Amenity reservations: down payment, solo or with a coach | 6 | G13, G14 | WAITING |
-| 7 | Try to break the new parts; final check and report | All | Phases 1-6 | PLANNED |
+| 7 | Gym closing days | 10 | G16, G17, G18 | WAITING |
+| 8 | Try to break the new parts; final check and report | All | Phases 1-7 | PLANNED |
 
 ### Phase 1: cashier shift-in bug and account names (items 1, 3)
 - [ ] Baseline before any change: xUnit count, every database test file, Windows demo build, the three UI scripts. Record the numbers here.
@@ -128,7 +133,13 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 - [ ] Screens: Book an amenity (Solo / With a coach, the coach list, down payment step), desk Payments to verify and Amenity status show down payment and balance. Mockup first; Windows and Pixel 7 (light, dark, font 1.3).
 - [ ] Push live; UI scripts; `ponytail-review`; plan updated.
 
-### Phase 7: try to break the new parts; final check and report
+### Phase 7: gym closing days (item 10)
+- [ ] Database (next free number): `gym_closures` (date primary key, reason, set by, set at; read by every active user, written only by the functions); `gym_closed_on(date)`; the check added next to every `outside_gym_hours` check (coach shift trigger, `book_slots`, `request_session` and `propose_time`) and to `record_check_in`, refusing with `gym_closed`; `close_gym_day(date, reason)` (Admin and System admin only) cancels that day's bookings, sessions and shifts, sends paid bookings to Refunds, posts the announcement and the personal notes in one transaction; `closure_preview(date)` returns the counts; `reopen_gym_day(date)`. Tests (`gym-closures.mjs`): watched fail first; a member, coach or front desk account can't close a day; every booking path refuses a closed day; the announcement and personal notes arrive; a past date is refused.
+- [ ] Core: `GymClosure` model, `ErrorText` for `gym_closed` ("The gym is closed on Friday, 25 Dec: Holiday."), Gym settings closed-days list, close and reopen with the preview count; the member calendar, Book an amenity and the coach's Post a shift mark closed days and don't offer them. xUnit; demo mirror.
+- [ ] Screens: Gym settings "Closed days" section (Windows only); closed days greyed with the reason on the booking calendars, the member calendar and the coach's shift form (Windows and Pixel 7, light, dark, font 1.3). Mockup first.
+- [ ] Push live; UI scripts; `ponytail-review`; plan updated.
+
+### Phase 8: try to break the new parts; final check and report
 - [ ] Break attempts on every new function from a member, coach and front desk account (`rules.mjs`), live grants checked read-only.
 - [ ] Full xUnit, every database file, both builds, three UI scripts; report to the owner; PR to `main` on the owner's go-ahead.
 
@@ -190,6 +201,11 @@ Received 2026-11-12, as sent.
 - When the new version is published, archive the previous version from sale. Existing customers retain their original terms.
 - Allow the new draft to be deleted without affecting the published version.
 
+Added by the owner later on 2026-11-12, as sent:
+
+10. "also add in plan add day closing in admin gym settings add a feature admin can pick a date to close gym no one can set up date for that day in amenities and sessions it will notif and show in updates in chats"
+
 ## Session log
 
 - **2026-11-12:** Plan created from the owner's 9-item list and a read of the code, on the new branch `owner-fixes-2026-11-12`. Decisions G1 to G15 open; the sketch for item 4 requested. No code or database changes.
+- **2026-11-12:** Owner added item 10 (gym closing days). Decisions G16 to G18 and Phase 7 added; the final check is now Phase 8.
