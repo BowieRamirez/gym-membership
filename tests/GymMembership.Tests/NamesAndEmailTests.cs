@@ -99,6 +99,17 @@ public class NamesAndEmailTests
         Assert.Equal("record_archived", (await new AdminService(gw).CorrectNameAsync("u-coach1", "New", "Name", "Reason")).Message);
     }
 
+    // owner, 2026-11-13: a coach couldn't sign in and nobody could see which email the account signs in with
+    [Fact]
+    public async Task Users_and_roles_shows_each_account_s_sign_in_email()
+    {
+        var gw = await As("admin@demo.io");
+        var vm = new UsersViewModel(new AdminService(gw));
+        await vm.OnAppearingAsync();
+        var coach = vm.Users.Single(u => u.UserId == "u-coach1");
+        Assert.Equal(("Lena Cruz", "coach@demo.io"), (coach.Username, coach.Email));
+    }
+
     [Fact]
     public async Task The_users_page_corrects_a_name_for_a_system_admin_only()
     {

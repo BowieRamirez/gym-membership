@@ -14,6 +14,7 @@
                 <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,*,110,100">
                     <VerticalStackLayout VerticalOptions="Center">
                         <Label Text="{Binding Username}" FontFamily="BarlowSemiBold" />
+                        <Label Text="{Binding Email}" Style="{StaticResource Caption}" AutomationId="UserEmail" SemanticProperties.Description="{Binding Email, StringFormat='Signs in with {0}'}" />
                         <Label Text="Last name missing" Style="{StaticResource Caption}" IsVisible="{Binding NameIncomplete}" />
                     </VerticalStackLayout>
                     <Label Grid.Column="1" Text="{Binding RoleText}" Style="{StaticResource Muted}" VerticalOptions="Center" />
@@ -30,6 +31,7 @@
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="14,10">
                     <VerticalStackLayout Spacing="2" VerticalOptions="Center">
                         <Label Text="{Binding Username}" FontFamily="BarlowSemiBold" />
+                        <Label Text="{Binding Email}" Style="{StaticResource Caption}" SemanticProperties.Description="{Binding Email, StringFormat='Signs in with {0}'}" />
                         <Label Text="Last name missing" Style="{StaticResource Caption}" IsVisible="{Binding NameIncomplete}" />
                         <Label Text="{Binding RoleText}" Style="{StaticResource Caption}" />
                         <c:StatusChip Status="{Binding ActiveStatus}" />
@@ -133,7 +135,7 @@
                 <VerticalStackLayout>
                     <VerticalStackLayout x:Name="AccountHead">
                         <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,*,110,100">
-                            <Label Text="Name" Style="{StaticResource Caption}" />
+                            <Label Text="Name and sign-in email" Style="{StaticResource Caption}" />
                             <Label Grid.Column="1" Text="Role" Style="{StaticResource Caption}" />
                             <Label Grid.Column="2" Text="Status" Style="{StaticResource Caption}" />
                         </Grid>

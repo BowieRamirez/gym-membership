@@ -1319,7 +1319,8 @@ public sealed class NotificationService(ISupabaseGateway gw) : INotificationServ
 }
 
 // ===================== Admin =====================
-public sealed record UserRow(string UserId, string Username, bool IsActive, IReadOnlyList<string> Roles, string FirstName = "", string LastName = "")
+/// <summary>Username is the name shown; Email is the address the account signs in with (profiles.username follows it, 0035).</summary>
+public sealed record UserRow(string UserId, string Username, bool IsActive, IReadOnlyList<string> Roles, string FirstName = "", string LastName = "", string Email = "")
 {
     public string RoleText => string.Join(", ", Roles.Select(RoleTitle));   // 9.8: titles in lists, as the audit log shows them
     /// <summary>What a role is called on screen, the one place for it (D17): the code admin is the System admin, subadmin is the Admin,
@@ -1430,7 +1431,7 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         var roles = await gw.ListAsync<Role>();
         var links = await gw.ListAsync<UserRole>();
         return profiles.Where(p => p.DeletedAt is null).Select(p => new UserRow(p.Id, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName, p.IsActive,
-            links.Where(l => l.UserId == p.Id).Select(l => roles.First(r => r.RoleId == l.RoleId).Name).OrderBy(n => n).ToList(), p.FirstName, p.LastName)).ToList();
+            links.Where(l => l.UserId == p.Id).Select(l => roles.First(r => r.RoleId == l.RoleId).Name).OrderBy(n => n).ToList(), p.FirstName, p.LastName, p.Username)).ToList();
     });
 
     public Task<AppResult<bool>> IsSuperAdminAsync() => Safe.RunAsync(async () =>
