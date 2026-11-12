@@ -1,7 +1,7 @@
 # Owner's fixes — implementation and progress plan
 
 Created: 2026-11-12
-Last updated: 2026-11-13 (Phases 1 and 2 deployed)
+Last updated: 2026-11-13 (Phases 1 and 2 deployed; sign-in email on Users and roles; branch pushed, owner away)
 Status: IN PROGRESS. Phases 1 and 2 deployed (`0059`, `0060` live). G1 to G5 answered; G6 to G18 open.
 Branch: `owner-fixes-2026-11-12`, a new branch from `main` at `b91cafe` (v0.5.0 plus the test-wait fix). Every phase of this plan stays on this branch; the owner merges to `main` when the plan is done.
 
@@ -36,10 +36,10 @@ Status vocabulary: `PLANNED`, `WAITING` (decisions open), `IN PROGRESS`, `BLOCKE
 
 ### Current work / restart here
 
-- **Where it stands (2026-11-13):** Phases 1 and 2 DEPLOYED. Phase 1: shift-in fix (`e81586c`), names (`a481fac`, `0059`). Phase 2: discount codes (`be486f6`, `0060`). **Next migration is `0061`.** Branch not pushed to GitHub yet.
+- **Where it stands (2026-11-13, stopping here):** Phases 1 and 2 DEPLOYED. Phase 1: shift-in fix (`e81586c`), names (`a481fac`, `0059`). Phase 2: discount codes (`be486f6`, `0060`). Extra: sign-in email shown on Users and roles (`c0d9f5f`). **Next migration is `0061`.** Branch `owner-fixes-2026-11-12` pushed to GitHub; not merged. Working tree clean apart from the unrelated files below.
 - **Owner to check by hand on the real backend:** Cashier → Start shift shows the drawer at once; a one-word account's Settings offers "Add your last name"; existing live codes still work for packages and amenities; a new code for one package is refused for another. **Every desk and admin app needs the new build:** since `0060` older apps can't add or edit codes (no direct writes).
 - **Left open on purpose:** `handle_new_user` still makes a name from the email address ("jane doe") or "Member" when an account is created with no name at all (Supabase dashboard). That is a guessed name; it now shows as "Name incomplete" when it is one word, but a two-word guess doesn't. Owner to say whether dashboard-made accounts should be refused or left blank instead.
-- **Next concrete action:** ask the owner G6, G7 and G9 (Phase 3: package drafts, publishing, archiving, versions). Item 4 has no sketch: its add page starts as a mockup (G8, Phase 4).
+- **Next concrete action:** (1) hear back from the owner on the coach sign-in (see the last session log entry): if it still fails with the email shown on Users and roles and a fresh reset password, debug it as a real bug. (2) Ask the owner G6, G7 and G9 and start Phase 3 (package drafts, publishing, archiving, versions). Item 4 has no sketch: its add page starts as a mockup (G8, Phase 4). (3) Open from Phase 5: whether the Admin/System admin "reason instead of PIN" override goes once password check-in exists (owner asked 2026-11-13).
 - **Unrelated, left alone:** `.codex/`, `.gemini/`, `.impeccable/config.json`, `2026-10-30-visual-redesign.md` (modified), two PDFs in `docs/`.
 
 ## 1. Repository findings
