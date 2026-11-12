@@ -142,7 +142,7 @@ public class PaymentTests
         var gw = await As("admin@demo.io");
         var settings = (await gw.ListAsync<GymSettings>()).First(); settings.WalkInPrice = 0; await gw.UpdateAsync(settings);
         var free = (await gw.ListAsync<MembershipPackage>()).First(p => p.Name == "Monthly"); free.Price = 0; await gw.UpdateAsync(free);
-        Assert.True((await new AdminService(gw).SaveDiscountAsync(new Discount { Code = "ALLFREE", Percent = 100, MaxUses = 5, ExpiresAt = DateTime.UtcNow.AddDays(1) })).Ok);
+        Assert.True((await new AdminService(gw).CreateDiscountAsync(new Discount { Code = "ALLFREE", Percent = 100, MaxUses = 5, ExpiresAt = DateTime.UtcNow.AddDays(1) }, DiscountItem.Everything)).Ok);
 
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();
         var staff = new PaymentStaffService(gw);

@@ -15,11 +15,11 @@ public partial class UsersPage : BasePage
 	}
 
 	bool _actionRunning;
-	Action? _dismissMenu;
+	readonly ActionsMenu _menu = new();
 
 	protected override void OnDisappearing()
 	{
-		_dismissMenu?.Invoke();
+		_menu.Dismiss();
 		base.OnDisappearing();
 	}
 
@@ -42,8 +42,7 @@ public partial class UsersPage : BasePage
 				: new List<string> { "Reset password", user.ActiveActionText };
 			if (vm.CanCorrectName(user)) actions.Add("Correct name");
 			if (vm.CanDeleteAccounts && user.IsActive && !user.IsSuperAdmin) actions.Add("Delete Account");
-			var action = await ShowAccountMenuAsync(button, user.Username, actions);
-			_dismissMenu = null;
+			var action = await _menu.ShowAsync(this, button, user.Username, actions);
 			if (action == user.CoachActionText) await vm.ToggleRoleCommand.ExecuteAsync($"{user.UserId}|coach");
 			else if (action == user.EmployeeActionText) await vm.ToggleRoleCommand.ExecuteAsync($"{user.UserId}|employee");
 			else if (action == user.SubAdminActionText) await vm.ToggleRoleCommand.ExecuteAsync($"{user.UserId}|subadmin");
@@ -65,44 +64,6 @@ public partial class UsersPage : BasePage
 			System.Diagnostics.Debug.WriteLine(ex);
 			await DisplayAlertAsync("Account actions", "This action could not be completed. Please try again.", "OK");
 		}
-		finally { _actionRunning = false; _dismissMenu = null; }
-	}
-
-	Task<string?> ShowAccountMenuAsync(Button button, string name, IReadOnlyList<string> actions)
-	{
-#if WINDOWS
-		if (button.Handler?.PlatformView is Microsoft.UI.Xaml.FrameworkElement anchor)
-		{
-			var result = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
-			var menu = new Microsoft.UI.Xaml.Controls.MenuFlyout();
-			foreach (var action in actions)
-			{
-				var item = new Microsoft.UI.Xaml.Controls.MenuFlyoutItem { Text = action };
-				item.Click += (_, _) => result.TrySetResult(action);
-				menu.Items.Add(item);
-			}
-			menu.Closed += (_, _) => result.TrySetResult(null);
-			_dismissMenu = menu.Hide;
-			menu.ShowAt(anchor);
-			return result.Task;
-		}
-#elif ANDROID
-		if (button.Handler?.PlatformView is Android.Views.View anchor)
-		{
-			var result = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
-			var menu = new Android.Widget.PopupMenu(anchor.Context!, anchor, Android.Views.GravityFlags.End);
-			for (var i = 0; i < actions.Count; i++) menu.Menu?.Add(0, i, i, new Java.Lang.String(actions[i]));
-			menu.MenuItemClick += (_, e) =>
-			{
-				e.Handled = true;
-				if (e.Item is { } item) result.TrySetResult(actions[item.ItemId]);
-			};
-			menu.DismissEvent += (_, _) => { result.TrySetResult(null); menu.Dispose(); };
-			_dismissMenu = menu.Dismiss;
-			menu.Show();
-			return result.Task;
-		}
-#endif
-		return DisplayActionSheetAsync(name, "No, Cancel", null, actions.ToArray());
+		finally { _actionRunning = false; }
 	}
 }

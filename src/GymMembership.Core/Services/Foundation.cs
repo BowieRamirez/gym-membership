@@ -33,9 +33,9 @@ public static class ErrorMapper
     {
         var m = message.ToLowerInvariant();
         if (Has(m, "forbidden", "42501", "jwt", "row-level security", "invalid login", "invalid_credentials", "not authenticated")) return AppErrorKind.Unauthorized;
-        if (Has(m, "account_has_commitments", "account_archived", "record_archived", "record_not_restorable", "code_limit_reached", "shift_has_sessions", "slot_taken", "member_busy", "stale_proposal", "coach_unavailable", "coach_busy", "already_started", "not_in_use", "amenity_unavailable", "not_archived", "already_processed", "already_availed", "renewal_pending", "already_requested", "refund_in_progress", "not_refundable", "pending_session_request", "active_coaching_session", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
+        if (Has(m, "account_has_commitments", "account_archived", "record_archived", "record_not_restorable", "code_limit_reached", "code_taken", "discount_used", "name_complete", "shift_has_sessions", "slot_taken", "member_busy", "stale_proposal", "coach_unavailable", "coach_busy", "already_started", "not_in_use", "amenity_unavailable", "not_archived", "already_processed", "already_availed", "renewal_pending", "already_requested", "refund_in_progress", "not_refundable", "pending_session_request", "active_coaching_session", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
         if (Has(m, "account_inactive", "no_open_shift", "shift_open", "note_required", "bad_archive_reason", "bad_correction_reason", "discount_fixed", "discount_locked", "wrong_pin", "pin_locked", "no_desk_pin", "pin_required", "scan_required", "bad_pin", "refund_reason_required", "no_coach_present", "self_archive", "last_active_admin", "no_active_membership", "self_verify", "self_decision", "not_renewable", "wrong_member", "not_found", "23514",
-                   "refund_window_closed", "too_soon", "too_late_to_cancel", "not_ended", "claim_window_closed", "payment_expired", "gym_closed", "coach_not_in_gym", "bad_rate", "invite_member_inactive", "invalid_code", "limit_required", "bad_hours", "off_grid", "outside_gym_hours", "too_long", "past_slot", "too_far_ahead", "no_pass", "limit_below_used", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "super_admin_protected", "bad_code", "code_not_verified", "resend_wait", "same_password", "end must be after start")) return AppErrorKind.Validation;
+                   "refund_window_closed", "too_soon", "too_late_to_cancel", "not_ended", "claim_window_closed", "payment_expired", "gym_closed", "coach_not_in_gym", "bad_rate", "invite_member_inactive", "invalid_code", "code_already_used", "code_not_for_item", "no_items", "item_not_found", "limit_required", "bad_hours", "off_grid", "outside_gym_hours", "too_long", "past_slot", "too_far_ahead", "no_pass", "limit_below_used", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "super_admin_protected", "bad_code", "code_not_verified", "resend_wait", "same_password", "end must be after start")) return AppErrorKind.Validation;
         return AppErrorKind.Unknown;
     }
 
@@ -60,7 +60,13 @@ public static class ErrorText
         "bad_archive_reason" => "Enter a reason for deletion, from 1 to 500 characters.",
         "bad_correction_reason" => "Enter a reason for the correction, from 1 to 500 characters.",
         "discount_fixed" => "A code and its percent can't change. To change them, archive this code and add a new one.",
-        "discount_locked" => "This code has been used, so it can't be changed. Turn it off and add a new code if you need different terms.",
+        "discount_locked" => "A code can't be changed once it's made. Turn it off and add a new code with the terms you need.",
+        "code_already_used" => "You've already used this code. Each code works once per person.",
+        "code_not_for_item" => "That code doesn't work for this. Check what the code is for.",
+        "no_items" => "Choose at least one package or amenity the code can be used for.",
+        "item_not_found" => "One of the packages or amenities you chose is no longer on sale. Reload the page and choose again.",
+        "code_taken" => "That code already exists, maybe in the Archive. Choose a different code.",
+        "discount_used" => "This code has been used on a payment, so it can't be deleted. Turn it off or archive it instead.",
         "wrong_pin" => "That PIN is wrong. Ask the member to try again. After 5 wrong tries it locks for 15 minutes.",
         "pin_locked" => "Too many wrong PINs: this member's desk PIN is locked for 15 minutes. Scan their QR code instead, or ask an Admin.",
         "no_desk_pin" => "This member hasn't set a desk PIN yet (Settings in their app). An Admin or System admin can check them in with a reason.",
@@ -122,7 +128,7 @@ public static class ErrorText
         "bad_back_at" => "Pick a return time that is still ahead.",
         "bad_reason" => "Keep the reason under 200 characters.",
         "bad_status" => "Choose Available, In use or Unavailable.",
-        "bad_discount" => "Enter a code and a percent between 1 and 100.",
+        "bad_discount" => "Enter a code of 3 to 30 letters, numbers or dashes, a percent between 1 and 100, and a last day from today on.",
         "email_confirmation_required" => "Check your email and confirm your address, then sign in.",
         _ when raw?.Contains("invalid login credentials", StringComparison.OrdinalIgnoreCase) == true || raw?.Contains("invalid_credentials", StringComparison.OrdinalIgnoreCase) == true => "Email or password is incorrect. Try again, or use Forgot password? to reset your password.",
         "wrong_password" => "Your current password isn't right.",

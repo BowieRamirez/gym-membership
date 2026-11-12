@@ -154,8 +154,8 @@ public class ConfirmationTests
         { "StaffViewModels.cs", "CatalogAdminViewModel", "ToggleAmenity" },
         { "StaffViewModels.cs", "CatalogAdminViewModel", "SavePackage" },
         { "StaffViewModels.cs", "CatalogAdminViewModel", "AddAmenity" },
-        { "StaffViewModels.cs", "DiscountsViewModel", "Toggle" },
-        { "StaffViewModels.cs", "DiscountsViewModel", "SaveEdit" },
+        { "StaffViewModels.cs", "DiscountsViewModel", "RunAction" },
+        { "StaffViewModels.cs", "DiscountsViewModel", "Add" },
         { "StaffViewModels.cs", "GymSettingsViewModel", "Save" },
     };
 

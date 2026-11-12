@@ -41,6 +41,8 @@ await db.query(`insert into membership_packages (name, price, duration_days) val
 await db.query(`insert into amenities (name, price, duration_days) values ('Boxing', 300, 30)`);
 await db.query(`insert into discounts (code, percent, starts_at, expires_at, max_uses) values ('WELCOME10', 10, now() - interval '1 day', now() + interval '30 days', 100),
                 ('OLD20', 20, now() - interval '10 days', now() - interval '1 day', 100)`);
+// since 0060 a code fits only what its items say; these fit everything, as every code did before
+await db.query(`insert into discount_items (discount_id, kind) select discount_id, k from discounts, unnest(array['package','amenity']) k`);
 const monthly = 1;
 
 console.log('\nsign-up trigger');
@@ -177,7 +179,7 @@ await test('a code works once per member', async () => {
   const dp = (await run(d, `select * from avail_membership($1, 'WELCOME10')`, [monthly])).rows[0];
   await run(desk, `select verify_payment($1, false, 'no')`, [dp.payment_id]);              // rejected: code is free again
   await run(d, `select * from avail_membership($1, 'WELCOME10')`, [monthly]);               // can reuse after a rejection
-  assert.match(await code(run(d, `select * from avail_membership($1, 'WELCOME10')`, [monthly])), /already_availed|invalid_code/);
+  assert.match(await code(run(d, `select * from avail_membership($1, 'WELCOME10')`, [monthly])), /already_availed|code_already_used/);
 });
 
 console.log('\ncounter payments, voids, renewals');

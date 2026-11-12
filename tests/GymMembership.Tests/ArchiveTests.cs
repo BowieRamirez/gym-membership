@@ -63,7 +63,7 @@ public class ArchiveTests
         Assert.False(row.CanRestore); Assert.Equal("record_not_restorable", (await service.RestoreAsync(row)).Message);
         var code = (await gw.ListAsync<Discount>()).Single(d => d.Id.ToString() == row.RecordId);
         code.ExpiresAt = DateTime.UtcNow.AddYears(1);
-        Assert.Equal("record_archived", (await admin.SaveDiscountAsync(code)).Message);
+        await Assert.ThrowsAnyAsync<Exception>(() => gw.UpdateAsync(code));   // G2 (0060): no code is edited, archived or not
     }
 
     [Fact]

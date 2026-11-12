@@ -54,20 +54,31 @@
         </VerticalStackLayout>
 
         <ScrollView Grid.Row="1"><VerticalStackLayout Spacing="10">
-            <!-- F5: codes the gym chose to show; "Use code" fills the box above. Hidden when there are none -->
+            <!-- G4 (approved mockup docs/mockups/discount-codes.html): shown codes this member can still use that fit a package, each with what
+                 it's for, its last day and a "New" mark for a week; "Use code" fills the box above. Hidden when there are none -->
             <VerticalStackLayout Spacing="6" IsVisible="{Binding HasCodes}">
                 <Label Text="Codes you can use" Style="{StaticResource Caption}" />
                 <!-- CardGrid, not FlexLayout: a column FlexLayout clipped the card's height on Android -->
                 <c:CardGrid Columns="{OnIdiom Phone=1, Default=4}" MinColumnWidth="260" BindableLayout.ItemsSource="{Binding Codes}">
                     <BindableLayout.ItemTemplate>
-                        <DataTemplate x:DataType="m:PackageCode">
-                            <Border Style="{StaticResource Panel}" Padding="14,10">
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                    <VerticalStackLayout Spacing="2" VerticalOptions="Center">
-                                        <Label Text="{Binding Code}" FontFamily="BarlowSemiBold" />
-                                        <Label Text="{Binding Summary}" Style="{StaticResource Caption}" />
+                        <DataTemplate x:DataType="m:AvailableCode">
+                            <Border Style="{StaticResource Panel}" Padding="14,12">
+                                <Grid ColumnDefinitions="{OnIdiom Phone='*', Default='*,Auto'}" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="8">
+                                    <VerticalStackLayout Spacing="2">
+                                        <HorizontalStackLayout Spacing="8">
+                                            <Label Text="{Binding Code}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                                            <Border IsVisible="{Binding IsNew}" StrokeThickness="0" StrokeShape="RoundRectangle 10" Padding="8,1" VerticalOptions="Center"
+                                                    BackgroundColor="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}">
+                                                <Label Text="New" FontFamily="BarlowSemiBold" FontSize="12"
+                                                       TextColor="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" />
+                                            </Border>
+                                        </HorizontalStackLayout>
+                                        <Label Text="{Binding Percent, StringFormat='{0}% off'}" FontFamily="BarlowMedium" FontSize="20" />
+                                        <Label Text="{Binding ForText}" Style="{StaticResource Caption}" />
+                                        <Label Text="{Binding LastDayText}" Style="{StaticResource Caption}" />
                                     </VerticalStackLayout>
-                                    <Button Grid.Column="1" Text="Use code" Style="{StaticResource FilterChip}" VerticalOptions="Center" Clicked="OnUseCode"
+                                    <Button Grid.Row="{OnIdiom Phone=1, Default=0}" Grid.Column="{OnIdiom Phone=0, Default=1}" Text="Use code" Style="{StaticResource FilterChip}"
+                                            VerticalOptions="Center" HorizontalOptions="Start" Clicked="OnUseCode"
                                             SemanticProperties.Description="{Binding Code, StringFormat='Use code {0}'}" />
                                 </Grid>
                             </Border>

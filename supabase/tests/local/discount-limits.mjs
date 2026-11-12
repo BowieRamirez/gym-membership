@@ -44,7 +44,8 @@ const admin = await user('admin'), desk = await user('employee');
 await openCashShifts(db);
 const monthly = (await db.query(`insert into membership_packages(name,price,duration_days)
   values('Phase Three Monthly',1000,30) returning membership_package_id`)).rows[0].membership_package_id;
-const addCode = (code, limit) => as(admin, `insert into discounts(code,percent,expires_at,max_uses) values($1,10,now()+interval '30 days',$2) returning *`, [code, limit]);
+// since 0060 codes are made only by create_discount, with what they fit (here: every package)
+const addCode = (code, limit) => as(admin, `select create_discount($1,10,now()+interval '30 days',$2,false,'[{"kind":"package","id":null}]')`, [code, limit]);
 const code = async c => (await db.query('select * from discounts where code=$1', [c])).rows[0];
 const buy = async (uid, c, client = db) => (await as(uid, 'select * from extend_membership($1,$2)', [monthly, c], client))[0];
 const verify = pay => as(desk, 'select verify_payment($1,true)', [pay.payment_id]);
@@ -79,7 +80,7 @@ try {
     const d = await code('ONCE');
     assert.equal(d.is_active, false); assert.equal(d.archive_reason, 'Limit reached'); assert.ok(d.archived_at);
     await assert.rejects(as(admin, `select restore_archived_record('code',$1)`, [String(d.discount_id)]), /record_not_restorable/);
-    await assert.rejects(as(admin, 'update discounts set max_uses=5 where discount_id=$1', [d.discount_id]), /record_archived/);
+    await assert.rejects(as(admin, 'update discounts set max_uses=5 where discount_id=$1', [d.discount_id]), /permission denied/);   // G2 (0060): no direct writes
     const row = (await as(admin, `select * from archive_records('code','',null,null,'Limit',0,31)`)).find(r => r.record_id === String(d.discount_id));
     assert.equal(row.can_restore, false);
   });
@@ -94,40 +95,19 @@ try {
     const uid = await user(), pay = await buy(uid, 'VOIDME'); await verify(pay);
     await as(admin, `select void_payment($1,'Wrong payment')`, [pay.payment_id]);
     assert.equal(Number((await usage((await code('VOIDME')).discount_id)).used), 1);
-    await assert.rejects(buy(uid, 'VOIDME'), /invalid_code/);
+    await assert.rejects(buy(uid, 'VOIDME'), /code_already_used/);
   });
-  await test('limit edits on an unused code: never back to unlimited, can go up or down', async () => {
-    await addCode('EDIT', 5);
-    const id = (await code('EDIT')).discount_id;
-    await assert.rejects(as(admin, 'update discounts set max_uses=null where discount_id=$1', [id]), /limit_required/);
-    await as(admin, 'update discounts set max_uses=3 where discount_id=$1', [id]);
-    assert.equal((await code('EDIT')).max_uses, 3);
-  });
-  await test('F7: once used, even by one pending payment, a code cannot be edited, only turned off', async () => {
-    await addCode('LOCKED', 5);
-    const id = (await code('LOCKED')).discount_id;
-    await buy(await user(), 'LOCKED');
-    const later = new Date(Date.now() + 90 * 86400000).toISOString();
-    await assert.rejects(as(admin, 'update discounts set expires_at=$2 where discount_id=$1', [id, later]), /discount_locked/);
-    await assert.rejects(as(admin, 'update discounts set max_uses=9 where discount_id=$1', [id]), /discount_locked/);
-    await assert.rejects(as(admin, `update discounts set starts_at=now()-interval '1 day' where discount_id=$1`, [id]), /discount_locked/);
-    await assert.rejects(as(admin, 'update discounts set show_on_packages=true where discount_id=$1', [id]), /discount_locked/);
-    await assert.rejects(as(admin, 'update discounts set max_uses=10 where discount_id=$1', [legacy]), /discount_locked/);
-    // the app sends the whole row back on save: same values plus is_active off must pass
-    // timestamps as text: a JS Date drops the microseconds, which would be a real change
-    const d = (await db.query('select code,percent,starts_at::text,expires_at::text,max_uses,show_on_packages from discounts where discount_id=$1', [id])).rows[0];
-    await as(admin, `update discounts set code=lower($2),percent=$3,starts_at=$4,expires_at=$5,max_uses=$6,show_on_packages=$7,is_active=false where discount_id=$1`,
-      [id, d.code, d.percent, d.starts_at, d.expires_at, d.max_uses, d.show_on_packages]);
-    assert.equal((await db.query('select is_active from discounts where discount_id=$1', [id])).rows[0].is_active, false);
-  });
+  // G2 (0060) replaced D19/F7's edit rules: no code can be edited at all. Tested in discount-items.mjs.
   await test('F5: Packages lists only shown, live codes with a place left that this member has not used', async () => {
-    const add = c => db.query(`insert into discounts(code,percent,starts_at,expires_at,max_uses,show_on_packages)
-      values($1,15,now()-interval '1 day',now()+interval '20 days',5,true)`, [c]);
-    for (const c of ['SHOWN', 'HIDDEN', 'OFFCODE', 'FULL', 'LATER', 'MINE']) await add(c);
-    await db.query(`update discounts set show_on_packages=false where code='HIDDEN'`);
+    // since 0060 a code can't change after it's made (G2), so each is made with its settings, fitting every package
+    const add = async (c, { show = true, limit = 5, starts = "now()-interval '1 day'" } = {}) => {
+      const id = (await db.query(`insert into discounts(code,percent,starts_at,expires_at,max_uses,show_on_packages)
+        values($1,15,${starts},now()+interval '20 days',$2,$3) returning discount_id`, [c, limit, show])).rows[0].discount_id;
+      await db.query(`insert into discount_items(discount_id,kind,item_id) values($1,'package',null)`, [id]);
+    };
+    await add('SHOWN'); await add('HIDDEN', { show: false }); await add('OFFCODE'); await add('FULL', { limit: 1 });
+    await add('LATER', { starts: "now()+interval '1 day'" }); await add('MINE');
     await db.query(`update discounts set is_active=false where code='OFFCODE'`);
-    await db.query(`update discounts set starts_at=now()+interval '1 day' where code='LATER'`);
-    await db.query(`update discounts set max_uses=1 where code='FULL'`);
     const me = await user();
     await buy(await user(), 'FULL'); await buy(me, 'MINE');
     const rows = await as(me, 'select * from packages_codes()');

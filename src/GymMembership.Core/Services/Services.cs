@@ -274,8 +274,8 @@ public sealed record PaymentItem(int Id, string What, string PaymentCode, string
 public interface IMembershipService
 {
     Task<AppResult<IReadOnlyList<MembershipPackage>>> ListPackagesAsync();
-    /// <summary>F5: codes staff chose to show on Packages that this member can still use.</summary>
-    Task<AppResult<IReadOnlyList<PackageCode>>> PackageCodesAsync();
+    /// <summary>G4 (0060): codes staff chose to show that this member can still use, each with FitsText filled from the catalog.</summary>
+    Task<AppResult<IReadOnlyList<AvailableCode>>> AvailableCodesAsync();
     Task<AppResult<IReadOnlyList<MembershipRow>>> MyMembershipsAsync();
     Task<AppResult<IReadOnlyList<PaymentItem>>> MyPaymentsAsync();
     Task<AppResult<Access>> AccessAsync();
@@ -307,8 +307,15 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
     public Task<AppResult<IReadOnlyList<MembershipPackage>>> ListPackagesAsync() =>
         Safe.RunAsync(() => gw.ListAsync<MembershipPackage>(p => p.IsActive == true));
 
-    public Task<AppResult<IReadOnlyList<PackageCode>>> PackageCodesAsync() =>
-        Safe.RunAsync<IReadOnlyList<PackageCode>>(async () => await gw.RpcAsync<List<PackageCode>>("packages_codes", new()) ?? []);
+    public Task<AppResult<IReadOnlyList<AvailableCode>>> AvailableCodesAsync() => Safe.RunAsync<IReadOnlyList<AvailableCode>>(async () =>
+    {
+        var codes = await gw.RpcAsync<List<AvailableCode>>("my_discount_codes", new()) ?? [];
+        if (codes.Count == 0) return codes;
+        var packages = (await gw.ListAsync<MembershipPackage>(p => p.IsActive == true)).ToDictionary(p => p.Id, p => p.Name);
+        var amenities = (await gw.ListAsync<Amenity>(a => a.IsActive == true)).ToDictionary(a => a.Id, a => a.Name);
+        foreach (var c in codes) c.FitsText = DiscountFits.Text(c.AllPackages, c.PackageIds, c.AllAmenities, c.AmenityIds, packages, amenities);
+        return codes;
+    });
 
     public static MembershipRow ToRow(UserMembershipPackage m, MembershipPackage? p, DateTime now)
     {
@@ -1340,16 +1347,33 @@ public sealed record UserRow(string UserId, string Username, bool IsActive, IRea
     public string ActiveActionText => IsActive ? "Deactivate" : "Reactivate";
     public string ActiveStatus => RecordStatus.Of(IsActive);
 }
-public sealed record DiscountRow(Discount Discount, string State, long Used = 0, long Pending = 0)
+/// <summary>G3 (0060): what a code fits, in words. One place for staff and members, so both read the same.</summary>
+public static class DiscountFits
 {
-    /// <summary>The chip word (D13): an expired code is Inactive; the card still shows its last day.</summary>
-    public string StatusText => RecordStatus.Of(State == "active");
+    public static string Text(bool allPackages, IEnumerable<int> packageIds, bool allAmenities, IEnumerable<int> amenityIds,
+        IReadOnlyDictionary<int, string> packageNames, IReadOnlyDictionary<int, string> amenityNames)
+    {
+        static string? Part(bool all, string allText, IEnumerable<int> ids, IReadOnlyDictionary<int, string> names) =>
+            all ? allText : ids.Select(names.GetValueOrDefault).OfType<string>().ToList() is { Count: > 0 } n ? string.Join(", ", n) : null;
+        var parts = new[] { Part(allPackages, "All packages", packageIds, packageNames), Part(allAmenities, "All amenities", amenityIds, amenityNames) }.OfType<string>().ToList();
+        return parts.Count > 0 ? string.Join(" · ", parts) : "Nothing on sale now";
+    }
+
+    /// <summary>"For all packages", "For Monthly, Annual": the same words running on from "For".</summary>
+    public static string For(string fitsText) => "For " + fitsText.Replace("All packages", "all packages").Replace("All amenities", "all amenities");
+}
+
+public sealed record DiscountRow(Discount Discount, string State, long Used = 0, long Pending = 0, string FitsText = "")
+{
+    /// <summary>The chip word (D13): an expired code is Inactive; a code turned off for now says so (G1).</summary>
+    public string StatusText => State == "active" && Discount.Paused ? "Turned off" : RecordStatus.Of(State == "active");
     // used = verified + voided; pending payments hold a place too
     /// <summary>The last day it works: ExpiresAt is the midnight that ends that day, so showing it directly reads one day late.</summary>
     public DateTime LastDay => Discount.ExpiresAt.AddTicks(-1);
     public string Usage => (Discount.MaxUses is { } max ? $"{Used} of {max} used" : $"{Used} used, no limit") + (Pending > 0 ? $", {Pending} pending" : "");
-    /// <summary>F7: once any payment holds a place, nothing about the code can change; it can only be turned off.</summary>
-    public bool CanEdit => Used + Pending == 0;
+    /// <summary>G1: offered only while no payment holds or used a place; the server also counts rejected and expired ones (discount_used).</summary>
+    public bool CanDelete => Used + Pending == 0;
+    public string ForText => DiscountFits.For(FitsText);
 }
 public sealed record DiscountUse(long Id, long Used, long Pending);
 
@@ -1369,7 +1393,13 @@ public interface IAdminService
     Task<AppResult<bool>> DeletePackageAsync(MembershipPackage package);
     Task<AppResult<bool>> DeleteAmenityAsync(Amenity amenity);
     Task<AppResult<IReadOnlyList<DiscountRow>>> DiscountsAsync();
-    Task<AppResult<bool>> SaveDiscountAsync(Discount discount);
+    /// <summary>G2/G3 (0060): makes the code and what it fits in one step. A code can't be edited afterwards.</summary>
+    Task<AppResult<int>> CreateDiscountAsync(Discount discount, IReadOnlyList<DiscountItem> items);
+    /// <summary>G1: turns a live code off for now, or back on.</summary>
+    Task<AppResult<bool>> SetDiscountPausedAsync(Discount discount, bool paused);
+    /// <summary>Moves the code to the Archive (a System admin, D15); payments keep pointing at it.</summary>
+    Task<AppResult<bool>> ArchiveDiscountAsync(Discount discount);
+    /// <summary>G1: removes a code no payment ever named (a System admin).</summary>
     Task<AppResult<bool>> DeleteDiscountAsync(Discount discount);
     Task<AppResult<bool>> SavePackageAsync(MembershipPackage package);
     Task<AppResult<bool>> SaveAmenityAsync(Amenity amenity);
@@ -1455,20 +1485,38 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
     {
         var now = DateTime.UtcNow;
         var uses = (await gw.RpcAsync<List<DiscountUse>>("discount_usage", new()) ?? []).ToDictionary(u => u.Id);
+        var items = (await gw.ListAsync<DiscountItem>()).ToLookup(i => i.DiscountId);
+        var packages = (await gw.ListAsync<MembershipPackage>()).ToDictionary(p => p.Id, p => p.Name);
+        var amenities = (await gw.ListAsync<Amenity>()).ToDictionary(a => a.Id, a => a.Name);
+        string Fits(int id)
+        {
+            var mine = items[id].ToList();
+            bool All(string kind) => mine.Any(i => i.Kind == kind && i.ItemId is null);
+            IEnumerable<int> Ids(string kind) => mine.Where(i => i.Kind == kind && i.ItemId is not null).Select(i => i.ItemId!.Value);
+            return DiscountFits.Text(All("package"), Ids("package"), All("amenity"), Ids("amenity"), packages, amenities);
+        }
         return (await gw.ListAsync<Discount>()).OrderByDescending(d => d.ExpiresAt)
             .Select(d => new DiscountRow(d, !d.IsActive ? "inactive" : d.ExpiresAt <= now ? "expired" : "active",
-                uses.GetValueOrDefault(d.Id)?.Used ?? 0, uses.GetValueOrDefault(d.Id)?.Pending ?? 0)).ToList();
+                uses.GetValueOrDefault(d.Id)?.Used ?? 0, uses.GetValueOrDefault(d.Id)?.Pending ?? 0, Fits(d.Id))).ToList();
     });
 
-    public async Task<AppResult<bool>> SaveDiscountAsync(Discount d)
+    public async Task<AppResult<int>> CreateDiscountAsync(Discount d, IReadOnlyList<DiscountItem> items)
     {
-        if (string.IsNullOrWhiteSpace(d.Code) || d.Percent is < 1 or > 100) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_discount");
-        if (d.MaxUses < 1 || d.Id == 0 && d.MaxUses is null) return AppResult<bool>.Fail(AppErrorKind.Validation, "limit_required");
-        d.Code = d.Code.Trim().ToUpperInvariant();
-        return await Safe.RunAsync(async () => { if (d.Id == 0) await gw.InsertAsync(d); else await gw.UpdateAsync(d); return true; });
+        var code = d.Code.Trim().ToUpperInvariant();
+        if (code.Length == 0 || d.Percent is < 1 or > 100) return AppResult<int>.Fail(AppErrorKind.Validation, "bad_discount");
+        if (d.MaxUses is not > 0) return AppResult<int>.Fail(AppErrorKind.Validation, "limit_required");
+        if (items.Count == 0) return AppResult<int>.Fail(AppErrorKind.Validation, "no_items");
+        var list = items.Select(i => new Dictionary<string, object?> { ["kind"] = i.Kind, ["id"] = i.ItemId }).ToList();
+        return await Safe.RunAsync(async () => await gw.RpcAsync<int>("create_discount", new()
+        {
+            ["p_code"] = code, ["p_percent"] = d.Percent, ["p_expires_at"] = d.ExpiresAt.ToUniversalTime().ToString("O"), ["p_max_uses"] = d.MaxUses,
+            ["p_show"] = d.ShowOnPackages, ["p_items"] = list
+        }));
     }
 
-    public Task<AppResult<bool>> DeleteDiscountAsync(Discount d) => Rpc("archive_catalog_record", new() { ["p_type"] = "code", ["p_id"] = d.Id, ["p_reason"] = "Deactivated code" });
+    public Task<AppResult<bool>> SetDiscountPausedAsync(Discount d, bool paused) => Rpc("set_discount_paused", new() { ["p_id"] = d.Id, ["p_paused"] = paused });
+    public Task<AppResult<bool>> ArchiveDiscountAsync(Discount d) => Rpc("archive_catalog_record", new() { ["p_type"] = "code", ["p_id"] = d.Id, ["p_reason"] = "Archived code" });
+    public Task<AppResult<bool>> DeleteDiscountAsync(Discount d) => Rpc("delete_discount", new() { ["p_id"] = d.Id });
 
     public Task<AppResult<bool>> SavePackageAsync(MembershipPackage p) =>
         Safe.RunAsync(async () => { if (p.Id == 0) await gw.InsertAsync(p); else await gw.UpdateAsync(p); return true; });

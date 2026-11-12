@@ -22,6 +22,7 @@ public static class AuditLabels
         ["reservation.book"] = "Booking made", ["reservation.hold"] = "Booking held for payment", ["reservation.cancel"] = "Booking cancelled", ["reservation.end"] = "Booking ended",
         ["reservation.extend"] = "Booking extended",
         ["amenity.status"] = "Amenity status changed", ["amenity.runs"] = "Coach runs amenity changed",
+        ["discount.create"] = "Code added", ["discount.turn_off"] = "Code turned off", ["discount.turn_on"] = "Code turned on", ["discount.delete"] = "Code deleted",
         ["catalog.archive"] = "Archived", ["catalog.restore"] = "Restored from archive",
         ["cash_shift.open"] = "Cash shift started", ["cash_shift.close"] = "Cash shift ended",
         ["announcement.post"] = "Announcement posted",
@@ -31,7 +32,7 @@ public static class AuditLabels
     public static readonly IReadOnlyDictionary<string, string> Areas = new Dictionary<string, string>
     {
         ["user"] = "Account", ["role"] = "Role", ["payment"] = "Payment", ["refund"] = "Refund",
-        ["reservation"] = "Booking", ["amenity"] = "Amenity", ["catalog"] = "Catalog", ["cash_shift"] = "Cash shift", ["announcement"] = "Announcement",
+        ["reservation"] = "Booking", ["amenity"] = "Amenity", ["catalog"] = "Catalog", ["cash_shift"] = "Cash shift", ["announcement"] = "Announcement", ["discount"] = "Discount code",
     };
 
     /// <summary>Object type: the table the entry is about. The filter sends the key.</summary>

@@ -84,19 +84,19 @@ public class NewFeatureTests
     {
         var gw = await As("member@demo.io");
         Assert.Empty(await gw.ListAsync<Discount>());
-        Assert.Equal(AppErrorKind.Unauthorized, (await new AdminService(gw).SaveDiscountAsync(new Discount { Code = "HACK", Percent = 100, MaxUses = 1, ExpiresAt = DateTime.UtcNow.AddDays(1) })).Error);
+        Assert.Equal(AppErrorKind.Unauthorized, (await new AdminService(gw).CreateDiscountAsync(new Discount { Code = "HACK", Percent = 100, MaxUses = 1, ExpiresAt = DateTime.UtcNow.AddDays(1) }, DiscountItem.Everything)).Error);
 
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
         var admin = new AdminService(gw);
-        Assert.Equal(AppErrorKind.Validation, (await admin.SaveDiscountAsync(new Discount { Code = "", Percent = 10 })).Error);
-        Assert.Equal(AppErrorKind.Validation, (await admin.SaveDiscountAsync(new Discount { Code = "BIG", Percent = 150 })).Error);
+        Assert.Equal(AppErrorKind.Validation, (await admin.CreateDiscountAsync(new Discount { Code = "", Percent = 10 }, DiscountItem.Everything)).Error);
+        Assert.Equal(AppErrorKind.Validation, (await admin.CreateDiscountAsync(new Discount { Code = "BIG", Percent = 150 }, DiscountItem.Everything)).Error);
 
         var rows = (await admin.DiscountsAsync()).Value!;
         Assert.Equal("expired", rows.First(r => r.Discount.Code == "NEWYEAR20").State);
         var expired = rows.First(r => r.Discount.Code == "NEWYEAR20").Discount;
-        Assert.Equal("record_archived", (await admin.DeleteDiscountAsync(expired)).Message);
+        Assert.Equal("record_archived", (await admin.ArchiveDiscountAsync(expired)).Message);
         var live = rows.First(r => r.State == "active").Discount;
-        Assert.True((await admin.DeleteDiscountAsync(live)).Ok);
+        Assert.True((await admin.ArchiveDiscountAsync(live)).Ok);
         Assert.False((await admin.DiscountsAsync()).Value!.Single(r => r.Discount.Id == live.Id).Discount.IsActive);
         Assert.Contains((await new ArchiveService(gw).ListAsync(new("code"), 0)).Value!.Rows, r => r.RecordId == live.Id.ToString());
     }

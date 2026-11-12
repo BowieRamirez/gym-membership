@@ -1408,17 +1408,30 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
         a.IsActive = !a.IsActive; if (await RunAsync(() => svc.SaveAmenityAsync(a))) await LoadAsync(); else a.IsActive = !a.IsActive; }
 }
 
+/// <summary>A package or amenity to tick on the new-code form (G3).</summary>
+public partial class ItemChoice(string kind, int id, string name) : ObservableObject
+{
+    public string Kind { get; } = kind; public int Id { get; } = id; public string Name { get; } = name;
+    [ObservableProperty] private bool isChosen;
+}
+
 public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
 {
-    /// <summary>Only the super admin archives codes (D15).</summary>
+    /// <summary>Only the super admin archives and deletes codes (D15).</summary>
     [ObservableProperty] private bool canArchive;
+    /// <summary>Live codes: not archived, not expired. A code turned off for now stays here (G1).</summary>
     public ObservableCollection<DiscountRow> Discounts { get; } = new();
     [ObservableProperty] private string newCode = "";
     [ObservableProperty] private int newPercent = 10;
     [ObservableProperty] private DateTime validUntil = DateTime.Today.AddDays(30);
     [ObservableProperty] private int newLimit = 100;
-    /// <summary>F5: off by default, so a code made for one person stays private.</summary>
-    [ObservableProperty] private bool newShowOnPackages;
+    /// <summary>G4: on by default; off keeps a code private, for one person.</summary>
+    [ObservableProperty] private bool newShowToMembers = true;
+    // G3: what the new code fits
+    [ObservableProperty] private bool allPackages;
+    [ObservableProperty] private bool allAmenities;
+    public ObservableCollection<ItemChoice> PackageChoices { get; } = new();
+    public ObservableCollection<ItemChoice> AmenityChoices { get; } = new();
 
     public override Task OnAppearingAsync() => LoadAsync();
 
@@ -1427,82 +1440,65 @@ public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
     {
         await RunAsync(svc.IsSuperAdminAsync, yes => CanArchive = yes);
         await RunAsync(svc.DiscountsAsync, rows => Fill(Discounts, rows.Where(r => r.Discount.IsActive && r.Discount.ExpiresAt > DateTime.UtcNow)));
+        await RunAsync(svc.AllPackagesAsync, rows => Fill(PackageChoices, rows.Where(p => p.IsActive).Select(p => new ItemChoice("package", p.Id, p.Name))));
+        await RunAsync(svc.AllAmenitiesAsync, rows => Fill(AmenityChoices, rows.Where(a => a.IsActive).Select(a => new ItemChoice("amenity", a.Id, a.Name))));
     }
+
+    /// <summary>What the form says the code fits; "all" wins over single ticks.</summary>
+    public IReadOnlyList<DiscountItem> ChosenItems() =>
+        (AllPackages ? [DiscountItem.Package(null)] : PackageChoices.Where(c => c.IsChosen).Select(c => DiscountItem.Package(c.Id)))
+        .Concat(AllAmenities ? [DiscountItem.Amenity(null)] : AmenityChoices.Where(c => c.IsChosen).Select(c => DiscountItem.Amenity(c.Id))).ToList();
 
     [RelayCommand]
     private async Task AddAsync()
     {
-        Notice = null;
-        // valid through the end of the chosen day, local time
-        var d = new Discount { Code = NewCode, Percent = NewPercent, MaxUses = NewLimit, ExpiresAt = ValidUntil.Date.AddDays(1).ToUniversalTime(), ShowOnPackages = NewShowOnPackages };
-        if (!await RunAsync(() => svc.SaveDiscountAsync(d))) return;
-        Notice = $"Code {d.Code} is live." + (d.ShowOnPackages ? " Members see it on Packages." : "");
-        NewCode = ""; NewShowOnPackages = false;
-        await LoadAsync();
-    }
-
-    [RelayCommand]
-    private async Task ToggleAsync(DiscountRow row)
-    {
-        var d = row.Discount;
-        if (!await (d.IsActive ? Confirm.AskAsync($"Turn off code {d.Code}?", "Members can't use it until you turn it back on.", "Turn off")
-                               : Confirm.AskAsync($"Turn on code {d.Code}?", "Members can use it again.", "Turn on"))) return;
-        d.IsActive = !d.IsActive;
-        if (await RunAsync(() => svc.SaveDiscountAsync(d))) await LoadAsync(); else d.IsActive = !d.IsActive;
-    }
-
-    [ObservableProperty] private DiscountRow? editing;
-    [ObservableProperty] private int editLimit;
-    [ObservableProperty] private DateTime editUntil;
-    [ObservableProperty] private bool editShowOnPackages;
-    int _limitShown;
-
-    [RelayCommand]
-    private void EditCode(DiscountRow row)
-    {
-        if (!row.CanEdit) return;   // F7: the page offers no Edit on a used code; the database refuses it too
-        (Editing, EditLimit, EditUntil, EditShowOnPackages) = (row, row.Discount.MaxUses ?? Math.Max(1, (int)(row.Used + row.Pending)), row.LastDay.ToLocalTime().Date, row.Discount.ShowOnPackages);
-        _limitShown = EditLimit;
         Notice = null; ErrorMessage = null;
-    }
-    [RelayCommand] private void CancelEdit() => Editing = null;
-
-    [RelayCommand]
-    private async Task SaveEditAsync()
-    {
-        if (Editing is not { } row) return;
-        if (EditUntil.Date < DateTime.Today) { ErrorMessage = "Choose today or a later date."; return; }
-        var d = row.Discount;
-        // a field left alone keeps its value: changing only the date must not put a limit on an old unlimited code
-        int? limit = EditLimit == _limitShown ? d.MaxUses : EditLimit;
-        var expires = EditUntil.Date == row.LastDay.ToLocalTime().Date ? d.ExpiresAt : EditUntil.Date.AddDays(1).ToUniversalTime();
-        var summary = $"{(limit is { } uses ? $"Up to {uses} uses" : "No limit on uses")}, until {EditUntil:d MMM yyyy}. "
-            + (EditShowOnPackages ? "Shown on Packages." : "Not shown on Packages.");
-        if (!await Confirm.AskAsync($"Save changes to {d.Code}?", summary, "Save changes")) return;
-        var (oldLimit, oldExpires, oldShown) = (d.MaxUses, d.ExpiresAt, d.ShowOnPackages);
-        (d.MaxUses, d.ExpiresAt, d.ShowOnPackages) = (limit, expires, EditShowOnPackages);
-        if (!await RunAsync(() => svc.SaveDiscountAsync(d))) { (d.MaxUses, d.ExpiresAt, d.ShowOnPackages) = (oldLimit, oldExpires, oldShown); return; }
-        Editing = null;
-        Notice = $"Code {d.Code} saved. {summary}";
+        var items = ChosenItems();
+        if (items.Count == 0) { ErrorMessage = ErrorText.For(AppErrorKind.Validation, "no_items"); return; }
+        // valid through the end of the chosen day, local time
+        var d = new Discount { Code = NewCode.Trim().ToUpperInvariant(), Percent = NewPercent, MaxUses = NewLimit, ExpiresAt = ValidUntil.Date.AddDays(1).ToUniversalTime(), ShowOnPackages = NewShowToMembers };
+        var fits = DiscountFits.Text(AllPackages, PackageChoices.Where(c => c.IsChosen).Select(c => c.Id), AllAmenities, AmenityChoices.Where(c => c.IsChosen).Select(c => c.Id),
+            PackageChoices.ToDictionary(c => c.Id, c => c.Name), AmenityChoices.ToDictionary(c => c.Id, c => c.Name));
+        // G2: nothing can change afterwards, so the terms are read back before the code goes live
+        if (!await Confirm.AskAsync($"Add code {d.Code}?",
+                $"{d.Percent}% off, up to {d.MaxUses} uses, until {ValidUntil:d MMM yyyy}.\nFor: {fits}.\n"
+                + (d.ShowOnPackages ? "Members see it." : "Hidden from members.") + "\nA code can't be changed after it's added.", "Add code")) return;
+        if (!await RunAsync(() => svc.CreateDiscountAsync(d, items), _ => { })) return;
+        Notice = $"Code {d.Code} is live." + (d.ShowOnPackages ? " Members can see it." : "");
+        NewCode = ""; NewShowToMembers = true; AllPackages = AllAmenities = false;
         await LoadAsync();
     }
 
-    [ObservableProperty] private DiscountRow? deleting;
+    /// <summary>The Actions menu for one code, as on Users and roles: only what's allowed for it (G1).</summary>
+    public IReadOnlyList<string> ActionsFor(DiscountRow row) =>
+        new[] { row.Discount.Paused ? "Turn on" : "Turn off", CanArchive ? "Archive" : null, CanArchive && row.CanDelete ? "Delete" : null }.OfType<string>().ToList();
 
     [RelayCommand]
-    private void Delete(DiscountRow row)
+    private async Task RunActionAsync((DiscountRow Row, string Action) pick)
     {
-        if (!CanArchive) { ErrorMessage = "Only a System admin can archive a code. Turn it off instead."; return; }
-        Deleting = row;
-    }
-    [RelayCommand] private void Keep() => Deleting = null;
-
-    [RelayCommand]
-    private async Task ConfirmDeleteAsync()
-    {
-        if (Deleting is not { } row) return;
-        Deleting = null;
-        if (await RunAsync(() => svc.DeleteDiscountAsync(row.Discount))) await LoadAsync();
+        var (row, action) = pick; var d = row.Discount;
+        Notice = null; ErrorMessage = null;
+        switch (action)
+        {
+            case "Turn off":
+                if (!await Confirm.AskAsync($"Turn off code {d.Code}?", "Nobody can use it, and members don't see it, until you turn it back on.", "Turn off")) return;
+                if (!await RunAsync(() => svc.SetDiscountPausedAsync(d, true))) return;
+                Notice = $"Code {d.Code} is off."; break;
+            case "Turn on":
+                if (!await Confirm.AskAsync($"Turn on code {d.Code}?", "It can be used again, and members see it if it's shown to them.", "Turn on")) return;
+                if (!await RunAsync(() => svc.SetDiscountPausedAsync(d, false))) return;
+                Notice = $"Code {d.Code} is on."; break;
+            case "Archive":
+                if (!await Confirm.AskAsync($"Archive code {d.Code}?", "It stops working and moves to the Archive. Payments made with it keep it.", "Archive")) return;
+                if (!await RunAsync(() => svc.ArchiveDiscountAsync(d))) return;
+                Notice = $"Code {d.Code} is archived."; break;
+            case "Delete":
+                if (!await Confirm.AskAsync($"Delete code {d.Code}?", "No payment has used it. It's removed for good.", "Delete")) return;
+                if (!await RunAsync(() => svc.DeleteDiscountAsync(d))) return;
+                Notice = $"Code {d.Code} is deleted."; break;
+            default: return;
+        }
+        await LoadAsync();
     }
 }
 

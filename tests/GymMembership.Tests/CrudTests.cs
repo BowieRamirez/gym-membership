@@ -88,96 +88,56 @@ public class CrudTests
         Assert.False((await new AdminService(gw).DeleteAmenityAsync(amenity)).Ok);
     }
 
+    // G1 (0060): turning a code off is not archiving it; it stays on the Discounts page and comes back on
     [Fact]
-    public async Task An_inactive_code_is_already_in_the_archive_and_can_be_restored()
+    public async Task A_code_turned_off_stays_on_the_page_and_turns_back_on()
     {
         var gw = await As("admin@demo.io");
-        var vm = new DiscountsViewModel(new AdminService(gw)); var archive = new ArchiveService(gw);
+        var vm = new DiscountsViewModel(new AdminService(gw));
         await vm.OnAppearingAsync();
-        var row = vm.Discounts.First();
+        var row = vm.Discounts.Single(r => r.Discount.Code == "WELCOME10");
+        Assert.Equal(["Turn off", "Archive", "Delete"], vm.ActionsFor(row));   // never used, so it can still be deleted
 
-        await vm.ToggleCommand.ExecuteAsync(row);
-        Assert.DoesNotContain(vm.Discounts, r => r.Discount.Id == row.Discount.Id);
-        var archived = (await archive.ListAsync(new(Type: "code"), 0)).Value!.Rows.Single(r => r.RecordId == row.Discount.Id.ToString());
-        Assert.NotNull(archived.ArchivedAt);
-        Assert.Single(await gw.ListAsync<Discount>(d => d.Id == row.Discount.Id));   // the row is still there
-        Assert.True((await archive.RestoreAsync(archived)).Ok);
+        await vm.RunActionCommand.ExecuteAsync((row, "Turn off"));
+        row = vm.Discounts.Single(r => r.Discount.Code == "WELCOME10");
+        Assert.Equal(("Turned off", "Turn on"), (row.StatusText, vm.ActionsFor(row)[0]));
+        Assert.Empty((await new ArchiveService(gw).ListAsync(new(Type: "code"), 0)).Value!.Rows.Where(r => r.RecordId == row.Discount.Id.ToString()));
+
+        await vm.RunActionCommand.ExecuteAsync((row, "Turn on"));
+        Assert.False(vm.Discounts.Single(r => r.Discount.Code == "WELCOME10").Discount.Paused);
     }
 
     [Fact]
-    public async Task A_discount_code_is_created_read_edited_archived_and_restored()
+    public async Task A_discount_code_is_created_read_archived_and_restored()
     {
         var gw = await As("admin@demo.io");
         var admin = new AdminService(gw); var archive = new ArchiveService(gw);
         var vm = new DiscountsViewModel(admin) { NewCode = "crud20", NewPercent = 20, NewLimit = 5, ValidUntil = DateTime.Today.AddDays(10) };
+        await vm.OnAppearingAsync();
+        vm.AllPackages = true;
         await vm.AddCommand.ExecuteAsync(null);
         var row = vm.Discounts.Single(r => r.Discount.Code == "CRUD20");
         Assert.Equal(DateTime.Today.AddDays(10), row.LastDay.ToLocalTime().Date);   // the day chosen, not the midnight after it
+        Assert.Equal("All packages", row.FitsText);
 
-        vm.EditCodeCommand.Execute(row);
-        Assert.Equal((5, DateTime.Today.AddDays(10)), (vm.EditLimit, vm.EditUntil));
-        vm.EditUntil = DateTime.Today.AddDays(40);
-        await vm.SaveEditCommand.ExecuteAsync(null);
-        Assert.Null(vm.Editing);
-        row = vm.Discounts.Single(r => r.Discount.Code == "CRUD20");
-        Assert.Equal((5, DateTime.Today.AddDays(40)), (row.Discount.MaxUses, row.LastDay.ToLocalTime().Date));
-
-        vm.DeleteCommand.Execute(row);
-        await vm.ConfirmDeleteCommand.ExecuteAsync(null);
+        await vm.RunActionCommand.ExecuteAsync((row, "Archive"));
         Assert.DoesNotContain(vm.Discounts, r => r.Discount.Code == "CRUD20");
         var archived = (await archive.ListAsync(new(Type: "code"), 0)).Value!.Rows.Single(r => r.RecordId == row.Discount.Id.ToString());
         Assert.True((await archive.RestoreAsync(archived)).Ok);
         Assert.True((await gw.ListAsync<Discount>(d => d.Id == row.Discount.Id)).Single().IsActive);
     }
 
+    // G2 (0060): nothing about a code can change after it's made, through any path
     [Fact]
-    public async Task Changing_only_the_date_leaves_an_unlimited_code_unlimited()
-    {
-        var gw = await As("admin@demo.io");
-        var admin = new AdminService(gw);
-        var vm = new DiscountsViewModel(admin);
-        await vm.OnAppearingAsync();
-        var row = vm.Discounts.First();
-        row.Discount.MaxUses = null;
-        Assert.True((await admin.SaveDiscountAsync(row.Discount)).Ok);
-        await vm.LoadCommand.ExecuteAsync(null);
-        row = vm.Discounts.Single(r => r.Discount.Id == row.Discount.Id);
-
-        vm.EditCodeCommand.Execute(row);
-        vm.EditUntil = DateTime.Today.AddDays(90);
-        await vm.SaveEditCommand.ExecuteAsync(null);
-        row = vm.Discounts.Single(r => r.Discount.Id == row.Discount.Id);
-        Assert.Null(row.Discount.MaxUses);
-        Assert.Equal(DateTime.Today.AddDays(90), row.LastDay.ToLocalTime().Date);
-    }
-
-    [Fact]
-    public async Task A_past_end_date_is_refused_and_the_code_is_unchanged()
-    {
-        var gw = await As("admin@demo.io");
-        var vm = new DiscountsViewModel(new AdminService(gw));
-        await vm.OnAppearingAsync();
-        var row = vm.Discounts.First(); var before = row.Discount.ExpiresAt;
-        vm.EditCodeCommand.Execute(row);
-        vm.EditUntil = DateTime.Today.AddDays(-1);
-        await vm.SaveEditCommand.ExecuteAsync(null);
-        Assert.NotNull(vm.ErrorMessage);
-        Assert.NotNull(vm.Editing);
-        Assert.Equal(before, row.Discount.ExpiresAt);
-    }
-
-    [Theory]
-    [InlineData("OTHER", 10)]
-    [InlineData("WELCOME10", 50)]
-    public async Task A_code_and_its_percent_cannot_change(string code, int percent)
+    public async Task A_code_cannot_be_edited_after_it_is_made()
     {
         var gw = await As("admin@demo.io");
         var welcome = (await gw.ListAsync<Discount>()).Single(d => d.Code == "WELCOME10");
-        var edited = new Discount { Id = welcome.Id, Code = code, Percent = percent, StartsAt = welcome.StartsAt, ExpiresAt = welcome.ExpiresAt, MaxUses = welcome.MaxUses, IsActive = true };
-        var result = await new AdminService(gw).SaveDiscountAsync(edited);
-        Assert.Equal("discount_fixed", result.Message);
-        Assert.Equal(AppErrorKind.Validation, result.Error);
-        Assert.Equal("A code and its percent can't change. To change them, archive this code and add a new one.", ErrorText.For(result.Error, result.Message));
+        welcome.Percent = 50; welcome.ExpiresAt = welcome.ExpiresAt.AddDays(30);
+        await Assert.ThrowsAnyAsync<Exception>(() => gw.UpdateAsync(welcome));
+        Assert.Equal(10, (await gw.ListAsync<Discount>(d => d.Code == "WELCOME10")).Single().Percent);
+        Assert.Equal("A code can't be changed once it's made. Turn it off and add a new code with the terms you need.",
+            ErrorText.For(AppErrorKind.Validation, "discount_locked"));
     }
 
     [Fact]

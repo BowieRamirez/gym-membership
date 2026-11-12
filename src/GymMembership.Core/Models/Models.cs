@@ -201,13 +201,34 @@ public class NotifiedMember : BaseModel
 { [PrimaryKey("discount_id")] public int Id { get; set; } [Column("code")] public string Code { get; set; } = ""; [Column("percent")] public int Percent { get; set; }
   [Column("starts_at")] public DateTime StartsAt { get; set; } = DateTime.UtcNow; [Column("expires_at")] public DateTime ExpiresAt { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true;
   [Column("max_uses")] public int? MaxUses { get; set; }   // null: a code from before limits existed, unlimited
-  [Column("show_on_packages")] public bool ShowOnPackages { get; set; } }   // F5: off keeps the code private
+  [Column("show_on_packages")] public bool ShowOnPackages { get; set; }   // F5/G4: off keeps the code private
+  [Column("paused")] public bool Paused { get; set; }   // G1 (0060): turned off for now; still on the Discounts page
+  [Column("created_at")] public DateTime CreatedAt { get; set; } }
 
-/// <summary>F5: a code a member can still use, from packages_codes() (0048).</summary>
-public sealed class PackageCode : BaseModel
-{ [Column("code")] public string Code { get; set; } = ""; [Column("percent")] public int Percent { get; set; } [Column("expires_at")] public DateTime ExpiresAt { get; set; }
+/// <summary>G3 (0060): a package or amenity a code fits; ItemId null means every package (or every amenity).</summary>
+[Table("discount_items")] public class DiscountItem : BaseModel
+{ [Column("discount_id")] public int DiscountId { get; set; } [Column("kind")] public string Kind { get; set; } = ""; [Column("item_id")] public int? ItemId { get; set; }
+  public static DiscountItem Package(int? id) => new() { Kind = "package", ItemId = id };
+  public static DiscountItem Amenity(int? id) => new() { Kind = "amenity", ItemId = id };
+  /// <summary>Every package and every amenity: what every code fitted before 0060.</summary>
+  public static IReadOnlyList<DiscountItem> Everything => [Package(null), Amenity(null)]; }
+
+/// <summary>G4 (0060): a code this person can still use, from my_discount_codes(), with what it fits.</summary>
+public sealed class AvailableCode : BaseModel
+{ [Column("code")] public string Code { get; set; } = ""; [Column("percent")] public int Percent { get; set; }
+  [Column("expires_at")] public DateTime ExpiresAt { get; set; } [Column("created_at")] public DateTime CreatedAt { get; set; }
+  [Column("all_packages")] public bool AllPackages { get; set; } [Column("package_ids")] public List<int> PackageIds { get; set; } = [];
+  [Column("all_amenities")] public bool AllAmenities { get; set; } [Column("amenity_ids")] public List<int> AmenityIds { get; set; } = [];
+  /// <summary>Filled by the service from the catalog names: "All packages", "Monthly and Annual", "Pool".</summary>
+  [System.Text.Json.Serialization.JsonIgnore] public string FitsText { get; set; } = "";
+  [System.Text.Json.Serialization.JsonIgnore] public bool FitsAnyPackage => AllPackages || PackageIds.Count > 0;
+  /// <summary>G4: made in the last 7 days.</summary>
+  public bool IsNewAt(DateTime nowUtc) => nowUtc - CreatedAt.ToUniversalTime() < TimeSpan.FromDays(7);
+  [System.Text.Json.Serialization.JsonIgnore] public bool IsNew => IsNewAt(DateTime.UtcNow);
+  /// <summary>"For all packages", "For Monthly, Annual": the staff wording, lower-cased where it runs on from "For".</summary>
+  [System.Text.Json.Serialization.JsonIgnore] public string ForText => GymMembership.Core.Services.DiscountFits.For(FitsText);
   /// <summary>ExpiresAt is the midnight that ends the last day, as on the Discounts page.</summary>
-  [System.Text.Json.Serialization.JsonIgnore] public string Summary => $"{Percent}% off. Until {ExpiresAt.AddTicks(-1).ToLocalTime():d MMM yyyy}"; }
+  [System.Text.Json.Serialization.JsonIgnore] public string LastDayText => $"Last day {ExpiresAt.AddTicks(-1).ToLocalTime():d MMM yyyy}"; }
 
 // one conversation = one coach + one member. A message is sent as one of the two (sender_id) and only read_at changes afterwards
 [Table("messages")] public class ChatMessage : BaseModel
