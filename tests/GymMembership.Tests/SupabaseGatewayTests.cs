@@ -553,6 +553,26 @@ public sealed class SupabaseGatewayTests : IDisposable
     }
 
     [Fact]
+    public async Task Starting_a_shift_reads_the_new_row_whose_totals_are_still_empty()
+    {
+        // item 1, 2026-11-12: open_cash_shift returns the raw cash_shifts row, and an open row has no cash_in, cash_out or expected yet
+        // (0050's check). Reading it failed, so Start shift stopped before showing the shift the server had just opened.
+        var gw = await SignedInAsync();
+        var paths = new List<string>();
+        _reply = r =>
+        {
+            paths.Add(r.Path);
+            return r.Path.EndsWith("/my_cash_shift")
+                ? (200, """[{"shift_id":8,"opened_at":"2026-11-12T01:00:00+00:00","opening_float":5000.00,"cash_in":0,"cash_out":0,"expected":5000.00}]""")
+                : (200, """{"shift_id":8,"cashier_id":"u-emp","opened_at":"2026-11-12T01:00:00+00:00","opening_float":5000.00,"open_note":null,"closed_at":null,"cash_in":null,"cash_out":null,"expected":null,"counted":null,"close_note":null}""");
+        };
+        var opened = await new PaymentStaffService(gw).OpenShiftAsync(5000, null);
+        Assert.True(opened.Ok, opened.Message);
+        Assert.Equal((8, 5000m, 5000m, true), (opened.Value!.Id, opened.Value.OpeningFloat, opened.Value.Expected, opened.Value.IsOpen));
+        Assert.Equal(new[] { "/rest/v1/rpc/open_cash_shift", "/rest/v1/rpc/my_cash_shift" }, paths);
+    }
+
+    [Fact]
     public async Task Reports_come_back_as_typed_rows_and_a_number_function_returns_a_number()
     {
         var gw = await SignedInAsync();

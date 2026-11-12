@@ -515,7 +515,13 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
 
     public Task<AppResult<CashShift>> OpenShiftAsync(decimal openingFloat, string? note) => openingFloat < 0
         ? Task.FromResult(AppResult<CashShift>.Fail(AppErrorKind.Validation, "bad_input"))
-        : Safe.RunAsync(() => gw.RpcAsync<CashShift>("open_cash_shift", new() { ["p_float"] = openingFloat, ["p_note"] = note?.Trim() ?? "" }));
+        : Safe.RunAsync(async () =>
+        {
+            // item 1 (2026-11-12): the row open_cash_shift returns has no totals yet (null until closed, 0050), which a CashShift can't
+            // hold; reading it failed after the shift was already open. my_cash_shift returns the same shift with its live totals.
+            await gw.RpcAsync("open_cash_shift", new() { ["p_float"] = openingFloat, ["p_note"] = note?.Trim() ?? "" });
+            return (await gw.RpcAsync<List<CashShift>>("my_cash_shift", new())).Single();
+        });
 
     public Task<AppResult<CashShift>> CloseShiftAsync(decimal counted, string? note) => counted < 0
         ? Task.FromResult(AppResult<CashShift>.Fail(AppErrorKind.Validation, "bad_input"))
