@@ -58,7 +58,7 @@ public sealed partial class DemoGateway
                 result = new AmenityGrid
                 {
                     Now = now, Opens = from + g.OpensAt, Closes = from + g.ClosesAt,
-                    Amenities = All<Amenity>().Where(x => x.IsActive).OrderBy(x => x.Name)
+                    Amenities = All<Amenity>().Where(x => x.State == CatalogState.Published).OrderBy(x => x.Name)
                         .Select(x => new GridAmenity { Id = x.Id, Name = x.Name, Status = x.Availability, Back = x.BackAt }).ToList(),
                     Blocks = Confirmed.Where(r => r.StartsAt < to && from < r.EndsAt + Cooldown).OrderBy(r => r.StartsAt)
                         .Select(r => new GridBlock { Amenity = r.AmenityId, Starts = r.StartsAt, Ends = r.EndsAt, Cooldown = r.EndsAt + Cooldown, Mine = r.MemberId == Uid, Id = r.MemberId == Uid ? r.Id : null }).ToList()
@@ -93,7 +93,7 @@ public sealed partial class DemoGateway
                     var day = (b.Start + Manila).Date;
                     if (day > (now + Manila).Date.AddDays(14)) throw Err("too_far_ahead");
                     if (b.Start < day - Manila + g.OpensAt || b.End > day - Manila + g.ClosesAt) throw Err("outside_gym_hours");
-                    var am = All<Amenity>().FirstOrDefault(x => x.Id == b.Amenity && x.IsActive) ?? throw Err("not_found");
+                    var am = AmenityForSale(b.Amenity);
                     if (am.Availability == "unavailable" && (am.BackAt is null || am.BackAt > b.Start)) throw Err("amenity_unavailable");
                     if (b.Start <= now.AddMinutes(30) && !CoachInGymFor(b.Amenity)) throw Err("no_coach_present");   // 0043, 0052
                     var pass = All<UserAmenity>().Where(p => p.MemberId == Uid && p.AmenityId == b.Amenity && p.Status == Status.Active && (p.ExpiresAt is null || p.ExpiresAt >= b.End) && !sessions.Contains(p.Id))
@@ -167,7 +167,7 @@ public sealed partial class DemoGateway
                 if (day > (now + Manila).Date.AddDays(14)) throw Err("too_far_ahead");
                 var g = All<GymSettings>().First();
                 if (start < day - Manila + g.OpensAt || end > day - Manila + g.ClosesAt) throw Err("outside_gym_hours");
-                var am = All<Amenity>().FirstOrDefault(x => x.Id == amenityId && x.IsActive) ?? throw Err("not_found");
+                var am = AmenityForSale(amenityId);
                 if (am.Availability == "unavailable" && (am.BackAt is null || am.BackAt > start)) throw Err("amenity_unavailable");
                 if (Confirmed.Any(o => o.MemberId == Uid && o.StartsAt < end && start < o.EndsAt)
                     || All<TrainingSession>().Any(t => t.MemberId == Uid && t.Status == Status.Scheduled && t.ScheduledStart < end && start < t.ScheduledEnd)) throw Err("member_busy");
@@ -218,7 +218,7 @@ public sealed partial class DemoGateway
                 RequireActive();
                 if (!IsCoach(Uid!)) throw Err("forbidden");
                 var amenityId = I("p_amenity");
-                if (a.GetValueOrDefault("p_on") is null || !All<Amenity>().Any(x => x.Id == amenityId && x.IsActive)) throw Err("not_found");
+                if (a.GetValueOrDefault("p_on") is null || !All<Amenity>().Any(x => x.Id == amenityId && x.State == CatalogState.Published)) throw Err("not_found");
                 var mine = All<CoachAmenity>().FirstOrDefault(c => c.AmenityId == amenityId && c.CoachId == Uid);
                 if (Convert.ToBoolean(a["p_on"])) { if (mine is null) Add(new CoachAmenity { AmenityId = amenityId, CoachId = Uid! }); }
                 else if (mine is not null) Table(typeof(CoachAmenity)).Remove(mine);

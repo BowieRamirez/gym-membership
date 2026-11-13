@@ -57,8 +57,12 @@ public class SubscriptionTests
         var p = (await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
         var extension = (await svc.ExtendAsync(annual.Id)).Value!;
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
-        annual.Name="Changed Annual"; annual.Price=18000; annual.DurationDays=366;
-        await gw.UpdateAsync(annual);
+        // G9 (0061): the catalog changes through a new version, which archives the package this payment named
+        var admin=new AdminService(gw);
+        var versionId=(await admin.NewPackageVersionAsync(annual.Id)).Value;
+        var version=(await admin.AllPackagesAsync()).Value!.Single(x=>x.Id==versionId);
+        version.Name="Changed Annual"; version.Price=18000; version.DurationDays=366;
+        Assert.True((await admin.SavePackageAsync(version)).Ok); Assert.True((await admin.PublishAsync("plan",version.Id)).Ok);
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         Assert.True((await new PaymentStaffService(gw).VerifyAsync(extension.Id,true)).Ok);
         await gw.SignInAsync("phase7@demo.io","secret12");
@@ -76,7 +80,7 @@ public class SubscriptionTests
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         Assert.True((await new PaymentStaffService(gw).VerifyAsync(extension.Id,false,"Proof does not match")).Ok);
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
-        annual.Price=18000; await gw.UpdateAsync(annual);
+        annual.Price=18000; await Assert.ThrowsAnyAsync<Exception>(()=>gw.UpdateAsync(annual));   // G9 (0061): a package on sale keeps its price
         await gw.SignInAsync("phase7@demo.io","secret12");
         var memberships = new MembershipService(gw);
         var item = (await memberships.MyPaymentsAsync()).Value!.Single(p=>p.Id==extension.Id);
@@ -84,7 +88,7 @@ public class SubscriptionTests
         var retry = await memberships.PayAgainAsync(item);
         Assert.True(retry.Ok,retry.Message);
         Assert.Equal(annual.Id,retry.Value!.PackageSnapshotId);
-        Assert.Equal(("Annual",18000m,365),(retry.Value.PackageSnapshotName,retry.Value.Amount,retry.Value.PackageSnapshotDays));
+        Assert.Equal(("Annual",14000m,365),(retry.Value.PackageSnapshotName,retry.Value.Amount,retry.Value.PackageSnapshotDays));
     }
 
     [Fact]
@@ -269,7 +273,8 @@ public class SubscriptionTests
         var (gw, _, svc, _, _) = await Setup();
         await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
         // D4: a payment is ₱0 only when a discount brought it there
-        var trial=await gw.InsertAsync(new MembershipPackage {Name="Trial",Price=100,DurationDays=7,IsActive=true});
+        var trial=await gw.InsertAsync(new MembershipPackage {Name="Trial",Description="A week to try",Price=100,DurationDays=7,IsActive=true});
+        Assert.True((await new AdminService(gw).PublishAsync("plan",trial.Id)).Ok);   // G6 (0061): added as a draft
         Assert.True((await new AdminService(gw).CreateDiscountAsync(new Discount {Code="TRIALFREE",Percent=100,MaxUses=5,ExpiresAt=DateTime.UtcNow.AddDays(1)},DiscountItem.Everything)).Ok);
         await gw.SignInAsync("phase7@demo.io","secret12");
         var p=(await svc.ExtendAsync(trial.Id,"TRIALFREE")).Value!; Assert.Equal(0m,p.Amount); await Verify(gw,p);

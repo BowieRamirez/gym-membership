@@ -17,7 +17,7 @@ public sealed partial class DemoGateway
         if (end <= start) throw Err("bad_input");
         if (start <= now) throw Err("past_slot");
         if (amenityId is null) return;
-        if (!All<Amenity>().Any(a => a.Id == amenityId && a.IsActive)) throw Err("not_found");
+        if (!All<Amenity>().Any(a => a.Id == amenityId && a.State == CatalogState.Published)) throw Err("not_found");
         static bool OffGrid(DateTime t) => (t.ToUniversalTime() - DateTime.UnixEpoch).Ticks % Cooldown.Ticks != 0;
         if (OffGrid(start) || OffGrid(end)) throw Err("off_grid");
         if (end - start > TimeSpan.FromHours(2)) throw Err("too_long");
@@ -30,7 +30,7 @@ public sealed partial class DemoGateway
     void CheckSessionAmenity(string coach, string member, int? sessionId, int amenityId, DateTime start, DateTime end)
     {
         if (!All<ShiftPost>().Any(s => s.CoachId == coach && s.Status == Status.Scheduled && s.Start <= start && s.End >= end)) throw Err("coach_unavailable");
-        var am = All<Amenity>().FirstOrDefault(a => a.Id == amenityId && a.IsActive) ?? throw Err("not_found");
+        var am = All<Amenity>().FirstOrDefault(a => a.Id == amenityId && a.State == CatalogState.Published) ?? throw Err("not_found");
         if (am.Availability == "unavailable" && (am.BackAt is null || am.BackAt > start)) throw Err("amenity_unavailable");
         var others = Confirmed.Where(r => sessionId is null || r.TrainingSessionId != sessionId).ToList();
         if (others.Any(o => (o.MemberId == member || o.CoachId == coach) && o.StartsAt < end && start < o.EndsAt)) throw Err("member_busy");

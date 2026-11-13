@@ -24,6 +24,7 @@ public static class AuditLabels
         ["amenity.status"] = "Amenity status changed", ["amenity.runs"] = "Coach runs amenity changed",
         ["discount.create"] = "Code added", ["discount.turn_off"] = "Code turned off", ["discount.turn_on"] = "Code turned on", ["discount.delete"] = "Code deleted",
         ["catalog.archive"] = "Archived", ["catalog.restore"] = "Restored from archive",
+        ["catalog.publish"] = "Published", ["catalog.new_version"] = "New version drafted", ["catalog.delete"] = "Deleted draft",
         ["cash_shift.open"] = "Cash shift started", ["cash_shift.close"] = "Cash shift ended",
         ["announcement.post"] = "Announcement posted",
     };

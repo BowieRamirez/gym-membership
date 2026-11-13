@@ -19,8 +19,9 @@ public class AmenitySessionTests
     {
         var gw = new DemoGateway(clock: new Clock());
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
-        Assert.True((await new AdminService(gw).SaveAmenityAsync(new Amenity { Name = "Crud room", Price = 150, DurationDays = days })).Ok);
+        Assert.True((await new AdminService(gw).SaveAmenityAsync(new Amenity { Name = "Crud room", Description = "Small studio", Price = 150, DurationDays = days })).Ok);
         var id = (await gw.ListAsync<Amenity>()).Single(a => a.Name == "Crud room").Id;
+        Assert.True((await new AdminService(gw).PublishAsync("amenity", id)).Ok);   // G6 (0061): added as a draft
         foreach (var visit in await gw.ListAsync<CoachVisit>(v => v.CheckedOutAt == null)) Assert.True((await new CoachService(gw).CheckOutAsync(visit.CoachId)).Ok);   // the demo starts with a coach in
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         return (gw, id);

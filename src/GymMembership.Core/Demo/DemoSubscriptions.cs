@@ -61,7 +61,7 @@ public sealed partial class DemoGateway
         RequireActive();
         if(!All<Member>().Any(m=>m.UserId==member) || !All<Profile>().Any(p=>p.Id==member && p.IsActive)) throw Err("not_found");
         if(All<Payment>().Any(p=>p.MemberId==member && p.Status==Status.Pending && p.Kind is PayKind.Membership or PayKind.Renewal)) throw Err("renewal_pending");
-        var pkg=All<MembershipPackage>().FirstOrDefault(p=>p.Id==packageId && p.IsActive)??throw Err("not_found");
+        var pkg=PackageForSale(packageId);
         var discount=Discounted(member,args,pkg.Price,"package",pkg.Id);
         var ump=All<UserMembershipPackage>().Where(u=>u.MemberId==member && u.StartsAt is not null).OrderByDescending(u=>u.Id).FirstOrDefault();
         Payment pay;

@@ -284,8 +284,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
             Discount => Has("discounts:manage"),   // members only learn a code is valid by using it
             DiscountItem => Has("discounts:manage"),
             Reservation r => r.MemberId == uid || r.CoachId == uid || staff,
-            MembershipPackage k => k.IsActive || Has("catalog:manage"),
-            Amenity a => a.IsActive || Has("catalog:manage"),
+            MembershipPackage k => k.State == CatalogState.Published || Has("catalog:manage"),   // G6 (0061): drafts only for catalog managers
+            Amenity a => a.State == CatalogState.Published || Has("catalog:manage"),
             AmenityFollow f => f.MemberId == uid,
             SupportThread t => t.MemberId == uid || Has("support:reply"),
             SupportMessage m => m.MemberId == uid || Has("support:reply"),
@@ -337,6 +337,11 @@ public sealed partial class DemoGateway : ISupabaseGateway
         catch (Exception ex) { return Task.FromException<T>(ex); }
 
         var added = Add(row);
+        switch (added)   // G6 (0061): anything added from the app starts as a draft
+        {
+            case MembershipPackage p: p.PublishedAt = null; p.ReplacesId = null; break;
+            case Amenity a: a.PublishedAt = null; break;
+        }
         switch (added)
         {
             case MembershipPackage { IsActive: false } p: StampArchive("plan", p.Id.ToString(), "Created inactive"); break;
@@ -374,10 +379,17 @@ public sealed partial class DemoGateway : ISupabaseGateway
             if (row is MembershipPackage or Amenity or Discount) GuardCatalogEdit(list[index], row);
             switch (row, list[index])
             {
-                case (MembershipPackage, _): if (!Has("catalog:manage")) throw Err(Rls); list[index] = Clone(row); break;
+                case (MembershipPackage p, MembershipPackage old):
+                    if (!Has("catalog:manage")) throw Err(Rls);
+                    // G9 (0061): a published package changes only by being archived
+                    if (old.PublishedAt is not null && ((p.Name, p.Description, p.Price, p.DurationDays) != (old.Name, old.Description, old.Price, old.DurationDays) || !p.Benefits.SequenceEqual(old.Benefits)))
+                        throw Err("package_published");
+                    var kept = Clone(p); kept.PublishedAt = old.PublishedAt; kept.ReplacesId = old.ReplacesId;
+                    list[index] = kept;
+                    break;
                 case (Amenity a, Amenity old):       // a catalog edit never changes the live status, like the column rights in the database
                     if (!Has("catalog:manage")) throw Err(Rls);
-                    var edited = Clone(a); edited.Availability = old.Availability; edited.StatusReason = old.StatusReason; edited.BackAt = old.BackAt; edited.ImagePath = old.ImagePath;
+                    var edited = Clone(a); edited.Availability = old.Availability; edited.StatusReason = old.StatusReason; edited.BackAt = old.BackAt; edited.ImagePath = old.ImagePath; edited.PublishedAt = old.PublishedAt;
                     list[index] = edited;
                     break;
                 case (Discount, Discount): throw Err(Rls);   // G2 (0060): a code can't be edited; turn it off instead
@@ -683,7 +695,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     var kind = i.TryGetValue("kind", out var k) ? k as string : null;
                     int? id = i.TryGetValue("id", out var v) && v is not null ? Convert.ToInt32(v) : null;
                     if (kind is not ("package" or "amenity")) throw Err("bad_input");
-                    if (id is { } x && !(kind == "package" ? All<MembershipPackage>().Any(p => p.Id == x && p.IsActive) : All<Amenity>().Any(m => m.Id == x && m.IsActive))) throw Err("item_not_found");
+                    if (id is { } x && !(kind == "package" ? All<MembershipPackage>().Any(p => p.Id == x && p.State == CatalogState.Published) : All<Amenity>().Any(m => m.Id == x && m.State == CatalogState.Published))) throw Err("item_not_found");
                     return (kind, id);   // kind is checked above
                 }).Distinct().ToList();
                 if (wanted.Count == 0) throw Err("no_items");
@@ -711,13 +723,16 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 Audit("discount.delete", "discounts", d.Id.ToString());
                 return null;
             }
+            case "publish_catalog_item": PublishCatalog(S("p_kind"), I("p_id")); return null;   // G6, G9 (0061)
+            case "new_package_version": return NewPackageVersion(I("p_id"));
+            case "delete_catalog_item": DeleteDraft(S("p_kind"), I("p_id")); return null;
             case "archive_catalog_record": ArchiveCatalog(S("p_type"), I("p_id"), S("p_reason")); return null;
             case "restore_archived_record": RestoreArchived(S("p_type"), S("p_id")); return null;
             case "avail_membership":
             {
                 RequireActive();
                 if (All<Member>().All(m => m.UserId != uid)) throw Err("forbidden");
-                var pkg = All<MembershipPackage>().FirstOrDefault(p => p.Id == I("p_package_id") && p.IsActive) ?? throw Err("not_found");
+                var pkg = PackageForSale(I("p_package_id"));
                 if (All<UserMembershipPackage>().Any(m => m.MemberId == uid && m.Status == Status.Pending)
                     || All<MembershipTerm>().Any(t => t.MemberId == uid && t.CancelledAt is null && t.EndsAt > now)) throw Err("already_availed");
                 return Clone(CreateExtension(uid, pkg.Id, a));
@@ -726,7 +741,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             {
                 RequireActive();
                 if (!ActiveMember(uid)) throw Err("no_active_membership");
-                var am = All<Amenity>().FirstOrDefault(x => x.Id == I("p_amenity_id") && x.IsActive) ?? throw Err("not_found");
+                var am = AmenityForSale(I("p_amenity_id"));
                 if (All<UserAmenity>().Any(x => x.MemberId == uid && x.AmenityId == am.Id && x.Status is Status.Pending or Status.Active)) throw Err("already_availed");
                 var d = Discounted(uid, a, am.Price, "amenity", am.Id);
                 var ua = Add(new UserAmenity { MemberId = uid, AmenityId = am.Id, Status = Status.Pending, AvailedAt = now, IsSession = am.DurationDays is null });
@@ -737,7 +752,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 RequireActive();
                 var ump = All<UserMembershipPackage>().FirstOrDefault(m => m.Id == I("p_ump_id") && m.MemberId == uid) ?? throw Err("not_found");
                 if (ump.Status is not (Status.Active or Status.Expired)) throw Err("not_renewable");
-                return Clone(CreateExtension(uid, ump.MembershipPackageId, a));
+                return Clone(CreateExtension(uid, NewestVersion(ump.MembershipPackageId), a));   // G9
             }
             case "submit_payment_proof":
             {
@@ -804,7 +819,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     if (kind == PayKind.Membership && All<MembershipTerm>().Any(t => t.MemberId == memberId && t.CancelledAt is null && t.EndsAt > now)) throw Err("already_availed");
                     if (kind == PayKind.Membership)
                     {
-                        var pkg = All<MembershipPackage>().FirstOrDefault(p => p.Id == itemId && p.IsActive) ?? throw Err("not_found");
+                        var pkg = PackageForSale(itemId);
                         if (All<UserMembershipPackage>().Any(m => m.MemberId == memberId && m.Status is Status.Pending or Status.Active)) throw Err("already_availed");
                         d = Discounted(memberId, a, pkg.Price, "package", pkg.Id);
                         ump = Add(new UserMembershipPackage { MemberId = memberId, MembershipPackageId = pkg.Id, Status = Status.Pending }).Id;
@@ -814,7 +829,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                         var cur = All<UserMembershipPackage>().FirstOrDefault(m => m.Id == itemId && m.MemberId == memberId) ?? throw Err("not_found");
                         if (cur.Status is not (Status.Active or Status.Expired)) throw Err("not_renewable");
                         if (All<MembershipRenewal>().Any(r => r.UserMembershipPackageId == cur.Id && r.Status == Status.Pending)) throw Err("renewal_pending");
-                        var pkg = All<MembershipPackage>().First(p => p.Id == cur.MembershipPackageId);
+                        var pkg = PackageForSale(NewestVersion(cur.MembershipPackageId));   // G9
                         d = Discounted(memberId, a, pkg.Price, "package", pkg.Id);
                         var start = cur.EndsAt is { } e && e > now ? e : now;
                         ren = Add(new MembershipRenewal { UserMembershipPackageId = cur.Id, PreviousEndsAt = cur.EndsAt ?? now, NewStartsAt = start, NewEndsAt = start.AddDays(pkg.DurationDays) }).Id;
@@ -822,7 +837,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     else
                     {
                         if (!ActiveMember(memberId)) throw Err("no_active_membership");
-                        var am = All<Amenity>().FirstOrDefault(x => x.Id == itemId && x.IsActive) ?? throw Err("not_found");
+                        var am = AmenityForSale(itemId);
                         if (All<UserAmenity>().Any(x => x.MemberId == memberId && x.AmenityId == am.Id && x.Status is Status.Pending or Status.Active)) throw Err("already_availed");
                         d = Discounted(memberId, a, am.Price, "amenity", am.Id);
                         ua = Add(new UserAmenity { MemberId = memberId, AmenityId = am.Id, Status = Status.Pending, AvailedAt = now, IsSession = am.DurationDays is null }).Id;
@@ -1311,6 +1326,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
                                       Availability = "unavailable", StatusReason = "Cleaning", BackAt = DateTime.UtcNow.AddMinutes(90) });
         Add(new Amenity { Name = "Group classes", Description = "Spin, yoga and circuit classes on the studio floor.", Price = 500, DurationDays = 30 });
         Add(new Amenity { Name = "Boxing ring", Description = "Closed for maintenance.", Price = 400, DurationDays = 30, IsActive = false });
+        foreach (var p in All<MembershipPackage>()) p.PublishedAt = now.AddDays(-120);   // on sale from the start (0061)
+        foreach (var x in All<Amenity>()) x.PublishedAt = now.AddDays(-120);
         Add(new AmenityFollow { MemberId = "u-alex", AmenityId = pool.Id });     // Alex saved the pool and the sauna
         Add(new AmenityFollow { MemberId = "u-alex", AmenityId = sauna.Id });
 

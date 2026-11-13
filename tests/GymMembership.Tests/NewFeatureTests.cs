@@ -115,10 +115,16 @@ public class NewFeatureTests
         Assert.False((await admin.AllPackagesAsync()).Value!.Single(p => p.Name == "Monthly").IsActive);
         Assert.True((await admin.DeletePackageAsync(plans.First(p => p.Name == "Annual"))).Ok);
 
+        // G9 (0061): a package on sale is changed through a new version
         var quarterly = plans.First(p => p.Name == "Quarterly");
         quarterly.Price = 3750;
-        Assert.True((await admin.SavePackageAsync(quarterly)).Ok);
-        Assert.Equal(3750m, (await admin.AllPackagesAsync()).Value!.First(p => p.Name == "Quarterly").Price);
+        Assert.Equal("package_published", (await admin.SavePackageAsync(quarterly)).Message);
+        var versionId = (await admin.NewPackageVersionAsync(quarterly.Id)).Value;
+        var version = (await admin.AllPackagesAsync()).Value!.Single(p => p.Id == versionId);
+        version.Price = 3750;
+        Assert.True((await admin.SavePackageAsync(version)).Ok);
+        Assert.True((await admin.PublishAsync("plan", version.Id)).Ok);
+        Assert.Equal(3750m, (await admin.AllPackagesAsync()).Value!.Single(p => p.Name == "Quarterly" && p.IsActive).Price);
     }
 
     // ---------- messaging ----------

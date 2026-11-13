@@ -25,6 +25,73 @@ public sealed partial class DemoGateway
         if (!next) StampArchive(type, id.ToString(), "Deactivated " + (type == "plan" ? "gym plan" : type));
     }
 
+    // G6/G9 (0061): what can be sold, and the newest published version in a package's line
+    MembershipPackage PackageForSale(int id)
+    {
+        var p = All<MembershipPackage>().FirstOrDefault(p => p.Id == id && p.IsActive) ?? throw Err("not_found");
+        return p.PublishedAt is null ? throw Err("item_not_for_sale") : p;
+    }
+
+    Amenity AmenityForSale(int id)
+    {
+        var a = All<Amenity>().FirstOrDefault(a => a.Id == id && a.IsActive) ?? throw Err("not_found");
+        return a.PublishedAt is null ? throw Err("item_not_for_sale") : a;
+    }
+
+    int NewestVersion(int id)
+    {
+        while (All<MembershipPackage>().FirstOrDefault(p => p.ReplacesId == id && p.PublishedAt is not null) is { } next) id = next.Id;
+        return id;
+    }
+
+    void PublishCatalog(string kind, int id)
+    {
+        RequireActive(); if (!Has("catalog:manage")) throw Err("forbidden");
+        (string Name, string? Description, decimal Price, DateTime? Published, bool Active) row = kind switch
+        {
+            "plan" => All<MembershipPackage>().FirstOrDefault(p => p.Id == id) is { } p ? (p.Name, p.Description, p.Price, p.PublishedAt, p.IsActive) : throw Err("not_found"),
+            "amenity" => All<Amenity>().FirstOrDefault(a => a.Id == id) is { } a ? (a.Name, a.Description, a.Price, a.PublishedAt, a.IsActive) : throw Err("not_found"),
+            _ => throw Err("bad_input")
+        };
+        if (row.Published is not null) throw Err("already_published");
+        if (!row.Active) throw Err("record_archived");
+        if (string.IsNullOrWhiteSpace(row.Name) || string.IsNullOrWhiteSpace(row.Description) || row.Price <= 0) throw Err("missing_fields");
+        if (kind == "plan")
+        {
+            var draft = All<MembershipPackage>().First(p => p.Id == id);
+            if (All<MembershipPackage>().FirstOrDefault(p => p.Id == draft.ReplacesId && p.IsActive) is { } old) { old.IsActive = false; StampArchive("plan", old.Id.ToString(), "Replaced by a new version"); }
+            if (All<MembershipPackage>().Any(p => p.Id != id && p.Name == draft.Name && p.State == CatalogState.Published)) throw Err("name_taken");
+            draft.PublishedAt = SubscriptionNow;
+        }
+        else All<Amenity>().First(a => a.Id == id).PublishedAt = SubscriptionNow;
+        Audit("catalog.publish", CatalogTable(kind), id.ToString());
+    }
+
+    int NewPackageVersion(int id)
+    {
+        RequireActive(); if (!Has("catalog:manage")) throw Err("forbidden");
+        var p = All<MembershipPackage>().FirstOrDefault(p => p.Id == id) ?? throw Err("not_found");
+        if (p.State != CatalogState.Published) throw Err("not_published");
+        if (All<MembershipPackage>().Any(x => x.ReplacesId == id && x.PublishedAt is null)) throw Err("draft_exists");
+        var v = Add(new MembershipPackage { Name = p.Name, Description = p.Description, Price = p.Price, DurationDays = p.DurationDays, Benefits = [.. p.Benefits], ReplacesId = id });
+        Audit("catalog.new_version", "membership_packages", v.Id.ToString());
+        return v.Id;
+    }
+
+    void DeleteDraft(string kind, int id)
+    {
+        RequireActive(); if (!Has("catalog:manage")) throw Err("forbidden");
+        object row = kind switch
+        {
+            "plan" => All<MembershipPackage>().FirstOrDefault(p => p.Id == id) ?? throw Err("not_found"),
+            "amenity" => All<Amenity>().FirstOrDefault(a => a.Id == id) ?? throw Err("not_found"),
+            _ => throw Err("bad_input")
+        };
+        if (row is MembershipPackage { PublishedAt: not null } or Amenity { PublishedAt: not null }) throw Err("published_archive_instead");
+        Table(row.GetType()).Remove(row);
+        Audit("catalog.delete", CatalogTable(kind), id.ToString());
+    }
+
     void ArchiveCatalog(string type, int id, string reason)
     {
         RequireArchiveAdmin(); reason = reason.Trim();
@@ -63,7 +130,9 @@ public sealed partial class DemoGateway
             {
                 case "plan":
                     var p = All<MembershipPackage>().FirstOrDefault(p => p.Id == number) ?? throw Err("not_found");
-                    if (p.IsActive) throw Err("not_archived"); p.IsActive = true; break;
+                    if (p.IsActive) throw Err("not_archived");
+                    if (p.PublishedAt is not null) throw Err("package_archived");   // G6 (0061): make a new version instead
+                    p.IsActive = true; break;
                 case "amenity":
                     var a = All<Amenity>().FirstOrDefault(a => a.Id == number) ?? throw Err("not_found");
                     if (a.IsActive) throw Err("not_archived"); a.IsActive = true; break;

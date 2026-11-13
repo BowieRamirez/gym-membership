@@ -63,7 +63,36 @@ public static class PayMethod
 
 [Table("membership_packages")] public class MembershipPackage : BaseModel
 { [PrimaryKey("membership_package_id")] public int Id { get; set; } [Column("name")] public string Name { get; set; } = ""; [Column("description")] public string? Description { get; set; }
-  [Column("price")] public decimal Price { get; set; } [Column("duration_days")] public int DurationDays { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true; }
+  [Column("price")] public decimal Price { get; set; } [Column("duration_days")] public int DurationDays { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true;
+  // G6/G9 (0061): null = a draft; set only by publish_catalog_item. A version points at the package it replaces.
+  [Column("published_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? PublishedAt { get; set; }
+  [Column("replaces_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? ReplacesId { get; set; }
+  [Column("benefits")] public List<string> Benefits { get; set; } = [];
+  [System.Text.Json.Serialization.JsonIgnore] public CatalogState State => Catalog.StateOf(IsActive, PublishedAt); }
+
+public enum CatalogState { Draft, Published, Archived }
+
+public static class Catalog
+{
+    public static CatalogState StateOf(bool isActive, DateTime? publishedAt) =>
+        !isActive ? CatalogState.Archived : publishedAt is null ? CatalogState.Draft : CatalogState.Published;
+}
+
+/// <summary>G9: what a new version changes, for the side-by-side check before publishing.</summary>
+public static class PackageChanges
+{
+    public sealed record Change(string Field, string Old, string New);
+
+    public static IReadOnlyList<Change> Between(MembershipPackage old, MembershipPackage next) =>
+        new[]
+        {
+            new Change("Name", old.Name, next.Name),
+            new Change("Description", old.Description ?? "", next.Description ?? ""),
+            new Change("Price", $"₱{old.Price:N2}", $"₱{next.Price:N2}"),
+            new Change("Duration", $"{old.DurationDays} days", $"{next.DurationDays} days"),
+            new Change("Benefits", string.Join("; ", old.Benefits), string.Join("; ", next.Benefits)),
+        }.Where(c => c.Old != c.New).ToList();
+}
 
 [Table("user_membership_packages")] public class UserMembershipPackage : BaseModel
 { [PrimaryKey("user_membership_package_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("membership_package_id")] public int MembershipPackageId { get; set; }
@@ -116,6 +145,8 @@ public static class CashCount
 { [PrimaryKey("amenity_id")] public int Id { get; set; } [Column("name")] public string Name { get; set; } = ""; [Column("description")] public string? Description { get; set; }
   [Column("price")] public decimal Price { get; set; } [Column("duration_days")] public int? DurationDays { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true;
   [Column("image_path", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? ImagePath { get; set; }
+  [Column("published_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? PublishedAt { get; set; }   // G6/G7 (0061): null = a draft
+  [System.Text.Json.Serialization.JsonIgnore] public CatalogState State => Catalog.StateOf(IsActive, PublishedAt);
   // live status: written only by set_amenity_status, so a catalog edit never sends these
   [Column("status", ignoreOnInsert: true, ignoreOnUpdate: true)] public string Availability { get; set; } = "available";
   [Column("status_reason", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? StatusReason { get; set; }

@@ -28,6 +28,7 @@ await openCashShifts(db);
 const [monthly, annual] = (await db.query(`insert into membership_packages(name,price,duration_days)
   values('Phase Seven Monthly',1000,30),('Phase Seven Annual',10000,365) returning membership_package_id`)).rows.map(x => x.membership_package_id);
 await db.query(`insert into discounts(code,percent,starts_at,expires_at,max_uses) values('PHASE7',10,now()-interval '1 day',now()+interval '1 day',100)`);
+await db.query(`insert into discount_items (discount_id, kind) select discount_id, k from discounts, unnest(array['package','amenity']) k`);   // G3 (0060): a code fits what it lists
 const extend = async (uid, pkg = monthly, discount = null, client = db) =>
   (await as(uid, `select * from extend_membership($1,$2)`, [pkg, discount], client))[0];
 async function verify(pay) { await as(desk, 'select verify_payment($1,true)', [pay.payment_id]); }

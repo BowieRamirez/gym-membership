@@ -18,6 +18,7 @@ public class AmenityPassTests
     {
         var gw = await As("admin@demo.io");
         Assert.True((await new AdminService(gw).SaveAmenityAsync(new Amenity { Name = "Steam Room", Price = 300, DurationDays = 30, Description = "Dry sauna, 6 seats" })).Ok);   // a timed pass, as amenities sold before per-session pricing are
+        Assert.True((await new AdminService(gw).PublishAsync("amenity", (await gw.ListAsync<Amenity>()).Single(a => a.Name == "Steam Room").Id)).Ok);   // G6 (0061): added as a draft
         return gw;
     }
 

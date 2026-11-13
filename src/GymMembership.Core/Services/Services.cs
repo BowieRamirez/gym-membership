@@ -1403,6 +1403,12 @@ public interface IAdminService
     /// <summary>G1: removes a code no payment ever named (a System admin).</summary>
     Task<AppResult<bool>> DeleteDiscountAsync(Discount discount);
     Task<AppResult<bool>> SavePackageAsync(MembershipPackage package);
+    /// <summary>G6 (0061): puts a draft on sale once its required fields are filled; a package version archives the one it replaces. kind: "plan" or "amenity".</summary>
+    Task<AppResult<bool>> PublishAsync(string kind, int id);
+    /// <summary>G9: copies a published package into a draft that replaces it when published. Returns the draft's id.</summary>
+    Task<AppResult<int>> NewPackageVersionAsync(int packageId);
+    /// <summary>G6: removes a draft for real; anything published is archived instead.</summary>
+    Task<AppResult<bool>> DeleteDraftAsync(string kind, int id);
     Task<AppResult<bool>> SaveAmenityAsync(Amenity amenity);
     Task<AppResult<string>> SetAmenityPhotoAsync(int amenityId, string fileName, byte[] data);
     Task<AppResult<IReadOnlyList<MembershipPackage>>> AllPackagesAsync();
@@ -1521,6 +1527,9 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
 
     public Task<AppResult<bool>> SavePackageAsync(MembershipPackage p) =>
         Safe.RunAsync(async () => { if (p.Id == 0) await gw.InsertAsync(p); else await gw.UpdateAsync(p); return true; });
+    public Task<AppResult<bool>> PublishAsync(string kind, int id) => Rpc("publish_catalog_item", new() { ["p_kind"] = kind, ["p_id"] = id });
+    public Task<AppResult<int>> NewPackageVersionAsync(int packageId) => Safe.RunAsync(() => gw.RpcAsync<int>("new_package_version", new() { ["p_id"] = packageId }));
+    public Task<AppResult<bool>> DeleteDraftAsync(string kind, int id) => Rpc("delete_catalog_item", new() { ["p_kind"] = kind, ["p_id"] = id });
     public Task<AppResult<bool>> SaveAmenityAsync(Amenity a) =>
         Safe.RunAsync(async () => { if (a.Id == 0) await gw.InsertAsync(a); else await gw.UpdateAsync(a); return true; });
 

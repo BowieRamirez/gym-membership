@@ -8,6 +8,11 @@ import os from 'node:os';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 
+// embedded-postgres's exit hook (async-exit-hook) calls process.exit(0) on beforeExit, which threw away every file's
+// `process.exitCode = 1`, so a failing file still exited 0 and `npm test` never stopped. Keep the failure.
+const realExit = process.exit;
+process.exit = code => realExit(code || process.exitCode);
+
 const MIGRATIONS = process.env.MIGRATIONS ?? path.join(path.dirname(fileURLToPath(import.meta.url)), '../../migrations');
 async function unusedPort() {
   const socket = net.createServer();

@@ -21,8 +21,8 @@ public class ArchiveTests
         Assert.Equal(history, (await gw.ListAsync<UserMembershipPackage>()).Count);
         var row = Assert.Single((await archive.ListAsync(new(Type: "plan"), 0)).Value!.Rows, r => r.RecordId == plan.Id.ToString());
         Assert.NotNull(row.ArchivedAt); Assert.Contains("plan", row.Reason);
-        Assert.True((await archive.RestoreAsync(row)).Ok);
-        Assert.True((await gw.ListAsync<MembershipPackage>()).Single(p => p.Id == plan.Id).IsActive);
+        Assert.Equal("package_archived", (await archive.RestoreAsync(row)).Message);   // G6 (0061): a new version instead
+        Assert.False((await gw.ListAsync<MembershipPackage>()).Single(p => p.Id == plan.Id).IsActive);
     }
 
     [Fact]

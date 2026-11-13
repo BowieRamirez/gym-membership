@@ -29,6 +29,7 @@ const freePack = await id(`insert into membership_packages(name,price,duration_d
 const oldPack = await id(`insert into membership_packages(name,price,duration_days,is_active) values('B Old',500,30,false) returning membership_package_id`);
 const freeAmenity = await id(`insert into amenities(name,price,duration_days) values('B Free amenity',0,30) returning amenity_id`);
 await db.query(`insert into discounts(code,percent,expires_at,max_uses) values('ALLFREE',100,now()+interval '30 days',100)`);
+await db.query(`insert into discount_items (discount_id, kind) select discount_id, k from discounts, unnest(array['package','amenity']) k`);   // G3 (0060): a code fits what it lists
 const buy = async (uid, p = pack, c = null) => (await as(uid, 'select * from extend_membership($1,$2)', [p, c]))[0];
 async function paid() {
   const uid = await user();

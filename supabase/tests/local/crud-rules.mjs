@@ -24,7 +24,8 @@ const person = async (role = 'member') => (await db.query(
 // S select, I insert, U update, D delete; each still limited to the right rows and columns by the row rules and the column grants
 const expected = {
   // master data: never D, because delete means archive
-  amenities: 'SIU-', discounts: 'SIU-', membership_packages: 'SIU-',
+  amenities: 'SIU-', membership_packages: 'SIU-',
+  discounts: 'S---', discount_items: 'S---',               // G2 (0060): codes are made only by create_discount and never edited
   coaches: 'S-U-', gym_settings: 'S-U-', user_settings: 'S-U-',
   profiles: 'S---', members: 'S---',                      // only server functions change these (D18)
   // day-to-day records the app writes directly
@@ -79,20 +80,11 @@ try {
     await assert.rejects(as(coach, 'delete from user_notifications where user_id=$1', [coach]), /permission denied/);
     await as(coach, 'update user_notifications set read_at=now() where user_id=$1', [coach]);
   });
-  await test('a discount code and percent are fixed; while unused, its end date, limit and on/off can change (D19, F7)', async () => {
+  await test('a discount code is never written directly; create_discount makes it and nothing edits it (G2, 0060)', async () => {
     const owner = await person('admin');
-    const code = (await as(owner, `insert into discounts(code,percent,expires_at,max_uses) values('FIXED10',10,now()+interval '30 days',5) returning discount_id`)).rows[0].discount_id;
-    const later = new Date(Date.now() + 60 * 86400000).toISOString();
-    await as(owner, 'update discounts set expires_at=$2 where discount_id=$1', [code, later]);
-    await as(owner, 'update discounts set max_uses=9 where discount_id=$1', [code]);
-    const row = (await db.query('select expires_at,max_uses from discounts where discount_id=$1', [code])).rows[0];
-    assert.equal(row.expires_at.toISOString(), later); assert.equal(row.max_uses, 9);
-
-    await assert.rejects(as(owner, `update discounts set code='OTHER' where discount_id=$1`, [code]), /discount_fixed/);
-    await assert.rejects(as(owner, 'update discounts set percent=50 where discount_id=$1', [code]), /discount_fixed/);
-    // installed apps send every column back on save, so the same values, or the same code in another case, must still pass
-    await as(owner, `update discounts set code='fixed10',percent=10,max_uses=8 where discount_id=$1`, [code]);
-    assert.equal((await db.query('select max_uses from discounts where discount_id=$1', [code])).rows[0].max_uses, 8);
+    await assert.rejects(as(owner, `insert into discounts(code,percent,expires_at,max_uses) values('FIXED10',10,now()+interval '30 days',5)`), /permission denied/);
+    const code = (await as(owner, `select create_discount('FIXED10',10,now()+interval '30 days',5,true,'[{"kind":"package","id":null}]'::jsonb) id`)).rows[0].id;
+    await assert.rejects(as(owner, 'update discounts set max_uses=9 where discount_id=$1', [code]), /permission denied/);
   });
   await test('master data cannot be physically deleted, even by a system admin', async () => {
     const owner = await person('admin');

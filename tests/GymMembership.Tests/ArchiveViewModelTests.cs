@@ -69,17 +69,18 @@ public class ArchiveViewModelTests
     public async Task Restore_requires_explicit_confirmation_and_refreshes_results()
     {
         var (gw, vm) = await Setup(); var admin = new AdminService(gw);
-        var plan = (await gw.ListAsync<MembershipPackage>()).First(); await admin.DeletePackageAsync(plan);
-        await vm.OnAppearingAsync(); var row = vm.Rows.Single(r => r.Type == "plan" && r.RecordId == plan.Id.ToString());
+        // an amenity: an archived package can't be restored since G6 (0061)
+        var amenity = (await gw.ListAsync<Amenity>()).First(a => a.IsActive); await admin.DeleteAmenityAsync(amenity);
+        await vm.OnAppearingAsync(); var row = vm.Rows.Single(r => r.Type == "amenity" && r.RecordId == amenity.Id.ToString());
         vm.ViewCommand.Execute(row);
         await vm.ConfirmRestoreCommand.ExecuteAsync(null);
-        Assert.False((await gw.ListAsync<MembershipPackage>()).Single(p => p.Id == plan.Id).IsActive);
+        Assert.False((await gw.ListAsync<Amenity>()).Single(p => p.Id == amenity.Id).IsActive);
         vm.RequestRestoreCommand.Execute(null); vm.CancelRestoreCommand.Execute(null);
         Assert.False(vm.ConfirmingRestore); Assert.Same(row, vm.Selected);
         vm.RequestRestoreCommand.Execute(null); await vm.ConfirmRestoreCommand.ExecuteAsync(null);
-        Assert.True((await gw.ListAsync<MembershipPackage>()).Single(p => p.Id == plan.Id).IsActive);
+        Assert.True((await gw.ListAsync<Amenity>()).Single(p => p.Id == amenity.Id).IsActive);
         Assert.Null(vm.Selected); Assert.Contains("restored", vm.Notice);
-        Assert.DoesNotContain(vm.Rows, r => r.Type == "plan" && r.RecordId == row.RecordId);
+        Assert.DoesNotContain(vm.Rows, r => r.Type == "amenity" && r.RecordId == row.RecordId);
     }
 
     [Fact]

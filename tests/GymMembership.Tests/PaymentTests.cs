@@ -141,7 +141,11 @@ public class PaymentTests
         // 0046 refuses it on the server for every path; the demo stands in for that
         var gw = await As("admin@demo.io");
         var settings = (await gw.ListAsync<GymSettings>()).First(); settings.WalkInPrice = 0; await gw.UpdateAsync(settings);
-        var free = (await gw.ListAsync<MembershipPackage>()).First(p => p.Name == "Monthly"); free.Price = 0; await gw.UpdateAsync(free);
+        // G6 (0061): a package at zero can't go on sale at all (publishing needs a price above zero)
+        var admin = new AdminService(gw);
+        Assert.True((await admin.SavePackageAsync(new MembershipPackage { Name = "Free", Description = "Nothing to pay", Price = 0, DurationDays = 30 })).Ok);
+        var free = (await gw.ListAsync<MembershipPackage>()).Single(p => p.Name == "Free");
+        Assert.Equal("missing_fields", (await admin.PublishAsync("plan", free.Id)).Message);
         Assert.True((await new AdminService(gw).CreateDiscountAsync(new Discount { Code = "ALLFREE", Percent = 100, MaxUses = 5, ExpiresAt = DateTime.UtcNow.AddDays(1) }, DiscountItem.Everything)).Ok);
 
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();
@@ -151,9 +155,9 @@ public class PaymentTests
         var auth = new AuthService(gw);
         Assert.True((await auth.RegisterAsync("Free", "Rider", "free@demo.io", "secret12")).Ok);
         var member = new MembershipService(gw);
-        Assert.Equal("zero_amount", (await member.AvailAsync(free.Id)).Message);
+        Assert.Equal("item_not_for_sale", (await member.AvailAsync(free.Id)).Message);
         Assert.Empty(await gw.ListAsync<UserMembershipPackage>(m => m.MemberId == gw.CurrentUserId));   // nothing left behind
-        Assert.Equal("zero_amount", (await member.AvailAsync(free.Id, "ALLFREE")).Message);   // 100% of ₱0 is no discount
+        Assert.Equal("item_not_for_sale", (await member.AvailAsync(free.Id, "ALLFREE")).Message);   // 100% of ₱0 is no discount
         var quarterly = await Package(gw, "Quarterly");
         var pay = (await member.AvailAsync(quarterly.Id, "ALLFREE")).Value!;
         Assert.Equal((0m, quarterly.Price), (pay.Amount, pay.DiscountAmount));
