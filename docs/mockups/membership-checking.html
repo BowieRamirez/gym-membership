@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Membership checking (Phase 5 mockup)</title>
+<title>Membership checking (Phase 5 and 8 mockup)</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600&display=swap" rel="stylesheet">
 <style>
   /* Tokens from src/GymMembership.App/Resources/Styles/Colors.xaml */
@@ -71,6 +71,7 @@
   .box.pin { width: 132px; letter-spacing: .5em; font-size: 20px; }
   .box.reason { width: 320px; color: var(--muted); font-size: 14px; }
   .err { color: var(--bad); font-weight: 500; }
+  .pinstep .err { grid-column: 2; margin: 8px 0 0; }
   .or { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }
 
   /* the member's pass */
@@ -89,6 +90,17 @@
   td .cap { display: block; }
   .tag { display: inline-block; font-size: 12.5px; padding: 2px 9px; border-radius: 999px; background: var(--chip); font-weight: 500; }
   .tag.warn { background: var(--signal); color: #111; }
+  /* Phase 8 (G20): the ID step. The type is a row of choices (one tap at the desk), the match is the desk's own statement */
+  .types { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .types button { height: 34px; padding: 0 14px; border-radius: 999px; border: 2px solid var(--edge); background: var(--card); cursor: pointer; font-weight: 500; }
+  .types button[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--page); font-weight: 600; }
+  .check { display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 500; }
+  .check input { width: 20px; height: 20px; accent-color: var(--signal); margin: 0; }
+  .ways { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 0 0; }
+  .today .t { display: grid; grid-template-columns: 64px 1fr; gap: 0 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .today .t:last-child { border-bottom: 0; }
+  .today .time { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 500; }
+  .today .new { background: color-mix(in srgb, var(--signal) 14%, transparent); border-radius: 8px; padding: 8px 6px; margin: 0 -6px; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -99,14 +111,17 @@
     <button aria-pressed="true" data-v="active">Active</button><button data-v="expired">Expired</button><button data-v="pending">Payment not verified</button><button data-v="none">No membership</button><button data-v="off">Account deactivated</button>
   </span></span>
   <span><b>By name</b><span class="seg" data-set="step">
-    <button aria-pressed="true" data-v="pin">PIN</button><button data-v="pw">Sign in instead</button><button data-v="pwwrong">Wrong password</button><button data-v="pwlocked">Too many tries</button><button data-v="offline">Offline</button>
+    <button aria-pressed="true" data-v="pin">PIN</button><button data-v="pw">Sign in instead</button><button data-v="pwwrong">Wrong password</button><button data-v="pwlocked">Too many tries</button><button data-v="offline">Offline</button><button data-v="id">Check their ID</button><button data-v="idnotype">ID: no type</button><button data-v="idnomatch">ID: not ticked</button><button data-v="idoffline">ID offline</button>
   </span></span>
 </div>
 
 <div class="note"><h2>Membership checking (Windows, front desk, Admin, System admin)</h2>
 <p>The page and its menu label are renamed from <b>Check-in</b> to <b>Membership checking</b> (same icon). A scan or a name search shows one card:
 photo, full name, status. Active: <b>Confirm check-in</b> records the date and time; the scan alone records nothing (as now).
-Not active: no check-in button, the reason in plain words, and a button for the next step at the desk (G11).</p></div>
+Not active: no check-in button, the reason in plain words, and a button for the next step at the desk (G11).</p>
+<p style="margin-top:8px"><b>Phase 8 (G20, G21):</b> a third way in for a member with no phone, no PIN and no password: <b>Check their ID instead</b>.
+The desk picks the ID type and ticks that the name and photo match. Only the type is kept (no number, no photo of the ID), with who checked it.
+It works offline. Front desk, Admin and System admin, for any active member. Use the <b>By name</b> buttons above to see it.</p></div>
 <div class="stage">
   <div class="app"><nav class="rail"><i></i><i></i><i></i><i class="on"></i><i></i><i></i></nav>
     <main class="page"><h1>Membership checking</h1>
@@ -124,7 +139,7 @@ Not active: no check-in button, the reason in plain words, and a button for the 
                   <button class="btn y">Confirm check-in</button>
                   <button class="btn">Cancel</button>
                 </div>
-                <p style="margin:10px 0 0"><button class="btn link" id="swap">No phone and no PIN? Sign in instead</button></p>
+                <p class="ways"><button class="btn link" id="swap">No phone and no PIN? Sign in instead</button><button class="btn link">Check their ID instead</button></p>
               </div>
               <div id="pwmode" hidden>
                 <div class="pinline">
@@ -133,7 +148,21 @@ Not active: no check-in button, the reason in plain words, and a button for the 
                   <button class="btn">Cancel</button>
                 </div>
                 <p class="cap" style="margin:8px 0 0">The member types it. It's checked once, never shown or saved, and the field clears after each try.</p>
-                <p style="margin:8px 0 0"><button class="btn link">Use the desk PIN instead</button></p>
+                <p class="ways"><button class="btn link">Use the desk PIN instead</button><button class="btn link">Check their ID instead</button></p>
+              </div>
+              <div id="idmode" hidden>
+                <div class="field"><label>ID they showed</label>
+                  <div class="types" role="group" aria-label="ID they showed" id="types">
+                    <button aria-pressed="false">Driver's license</button><button aria-pressed="false">National ID</button><button aria-pressed="true">Passport</button><button aria-pressed="false">School ID</button><button aria-pressed="false">Other</button>
+                  </div>
+                </div>
+                <label class="check" style="margin-top:12px"><input type="checkbox" id="match" checked> The name and photo on the ID match this member</label>
+                <div class="pinline" style="margin-top:12px">
+                  <button class="btn y">Confirm check-in</button>
+                  <button class="btn">Cancel</button>
+                </div>
+                <p class="cap" style="margin:8px 0 0">Only the type of ID is kept, with your name. Don't write down the ID number.</p>
+                <p class="ways"><button class="btn link">Use the desk PIN instead</button><button class="btn link" id="swap2">Sign in instead</button></p>
               </div>
               <p class="err" id="steperr" hidden></p>
             </div>
@@ -159,6 +188,11 @@ Not active: no check-in button, the reason in plain words, and a button for the 
               <button class="btn">Done</button>
             </div>
           </div>
+          <div class="card today" style="margin-top:12px"><h2>Checked in today: 3</h2>
+            <div class="t new" id="idrow" hidden><span class="time">10:42 AM</span><div><div style="font:500 16px Barlow">Alex Tan</div><div class="cap" id="idhow">ID checked (Passport) · By Marco Santos</div></div></div>
+            <div class="t"><span class="time">10:15 AM</span><div><div style="font:500 16px Barlow">Dana Cruz</div><div class="cap">QR · By Marco Santos</div></div></div>
+            <div class="t"><span class="time">9:58 AM</span><div><div style="font:500 16px Barlow">Joy Reyes</div><div class="cap">By name · By Marco Santos</div></div></div>
+          </div>
         </aside>
       </div>
     </main>
@@ -179,6 +213,10 @@ Not active: no check-in button, the reason in plain words, and a button for the 
     pwwrong:  { pw: true, err: 'Wrong password. Ask the member to try again. After 5 wrong tries (PIN or password) it locks for 15 minutes.' },
     pwlocked: { pw: true, err: 'Too many tries: this member is locked for 15 minutes. Scan their QR code instead, or ask an Admin.' },
     offline:  { pw: false, err: '', offline: true },
+    id:        { id: true, err: '', done: true },
+    idnotype:  { id: true, err: 'Pick the type of ID the member showed.', notype: true },
+    idnomatch: { id: true, err: 'Tick that the name and photo match this member.', nomatch: true },
+    idoffline: { id: true, err: '', offline: true, done: true },
   };
   function scan(k) {
     const s = scans[k], d = document.getElementById('sdot');
@@ -191,14 +229,25 @@ Not active: no check-in button, the reason in plain words, and a button for the 
   }
   function step(k) {
     const s = steps[k];
-    document.getElementById('pinmode').hidden = s.pw;
+    document.getElementById('pinmode').hidden = s.pw || s.id;
     document.getElementById('pwmode').hidden = !s.pw;
+    document.getElementById('idmode').hidden = !s.id;
+    document.querySelectorAll('#types button').forEach((b, i) => b.setAttribute('aria-pressed', !s.notype && i === 2));
+    document.getElementById('match').checked = !s.nomatch && !s.notype;
+    const s2 = document.getElementById('swap2'); s2.disabled = !!s.offline; s2.style.opacity = s.offline ? .55 : 1;
+    s2.textContent = s.offline ? 'Sign in instead needs the internet' : 'Sign in instead';
+    document.getElementById('idrow').hidden = !s.done;
+    document.getElementById('idhow').textContent = s.offline ? 'ID checked (Passport), sent later · By Marco Santos' : 'ID checked (Passport) · By Marco Santos';
     const sw = document.getElementById('swap');
     sw.textContent = s.offline ? 'Sign in instead needs the internet' : 'No phone and no PIN? Sign in instead';
     sw.disabled = !!s.offline; sw.style.opacity = s.offline ? .55 : 1;
-    document.getElementById('ask').textContent = s.pw ? 'Check the photo matches the person, then ask them to type their own account password.' : 'Check the photo matches the person, then ask them to type their desk PIN.';
+    document.getElementById('ask').textContent = s.id ? 'Ask for an ID. Check its name and photo against this member and the photo here.' : s.pw ? 'Check the photo matches the person, then ask them to type their own account password.' : 'Check the photo matches the person, then ask them to type their desk PIN.';
     const e = document.getElementById('steperr'); e.textContent = s.err; e.hidden = !s.err;
   }
+  document.getElementById('types').addEventListener('click', ev => {
+    const b = ev.target.closest('button'); if (!b) return;
+    document.querySelectorAll('#types button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  });
   document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', ev => {
     const b = ev.target.closest('button'); if (!b) return;
     seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
