@@ -25,12 +25,20 @@ public partial class PickChip(string text, bool canPick, DateTime start = defaul
     [ObservableProperty] private bool isPicked;
 }
 
+/// <summary>G14: one coach in the sheet's list; the picked one is outlined.</summary>
+public partial class CoachChoice(FreeCoach coach) : ObservableObject
+{
+    public FreeCoach Coach { get; } = coach;
+    public string Name => Coach.Name;
+    [ObservableProperty] private bool isPicked;
+}
+
 /// <summary>
 /// Members: Book an amenity (F12). The amenity cards; Book opens a sheet with the month, the start times still free that day, how long and how to pay.
 /// A member with a pass or a session books straight away; anyone else holds the time until the payment is approved. Below, their bookings with
 /// Cancel, End now, Send proof and "I didn't use it" (F13).
 /// </summary>
-public partial class BookAmenityViewModel(IReservationService svc, IAmenityService amenities, IAppNavigator nav) : LoadableViewModel
+public partial class BookAmenityViewModel(IReservationService svc, IAmenityService amenities, IAppNavigator nav, IMembershipService? membership = null) : LoadableViewModel
 {
     static readonly CultureInfo En = CultureInfo.InvariantCulture;
     static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8));   // Manila
@@ -42,12 +50,34 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     public ObservableCollection<PickChip> Times { get; } = new();
     public ObservableCollection<PickChip> Lengths { get; } = new();
 
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPicking), nameof(SheetTitle), nameof(SheetCaption), nameof(PayFirst), nameof(BookText), nameof(HoldText))]
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPicking), nameof(SheetTitle), nameof(SheetCaption), nameof(PayFirst), nameof(BookText), nameof(HoldText), nameof(Split), nameof(CoachFeeText))]
     private AmenityCard? picked;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(MonthText))] private DateOnly month = new(Today.Year, Today.Month, 1);
     [ObservableProperty, NotifyPropertyChangedFor(nameof(DayText))] private DateOnly day = Today;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(Summary), nameof(SummaryDetail), nameof(CanBook))] private PickChip? time;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(Summary), nameof(SummaryDetail), nameof(CanBook))] private PickChip? length;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(Summary), nameof(SummaryDetail), nameof(CanBook), nameof(CoachesTitle))] private PickChip? time;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(Summary), nameof(SummaryDetail), nameof(CanBook), nameof(CoachesTitle))] private PickChip? length;
+
+    // ---- G14, G13, G4 (0064, approved mockup docs/mockups/amenity-down-payment.html): who, the coach, a code, and the split ----
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsSolo), nameof(CanBook), nameof(Split), nameof(BookText), nameof(HoldText), nameof(SummaryDetail))] private bool isWithCoach;
+    public bool IsSolo => !IsWithCoach;
+    public ObservableCollection<CoachChoice> Coaches { get; } = new();
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanBook), nameof(Split), nameof(BookText), nameof(HoldText), nameof(SummaryDetail))] private FreeCoach? pickedCoach;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(Split), nameof(BookText), nameof(SummaryDetail))] private string code = "";
+    /// <summary>The member's codes that fit this amenity (G4), as on Packages.</summary>
+    public ObservableCollection<AvailableCode> Codes { get; } = new();
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(Split), nameof(BookText), nameof(SummaryDetail))] private int percent = 50;
+    IReadOnlyList<AvailableCode> _myCodes = [];
+
+    public bool HasCoaches => Coaches.Count > 0;
+    public bool HasCodes => Codes.Count > 0;
+    public string CoachFeeText => Picked is { } p && p.Amenity.CoachFee > 0 ? $"+ ₱{p.Amenity.CoachFee:N2} coach fee" : "No coach fee";
+    public string CoachesTitle => Time is null || Length is null ? "Pick a time to see who's free"
+        : $"Coaches free {Manila(Time.StartUtc).ToString("h:mm", En)} to {Manila(Time.StartUtc.AddMinutes(Length.Minutes)).ToString("h:mm tt", En)}";
+    int CodePercent => Codes.FirstOrDefault(c => string.Equals(c.Code, Code.Trim(), StringComparison.OrdinalIgnoreCase))?.Percent ?? 0;
+    /// <summary>What booking now costs: with a pass only the coach fee, paid at the desk; otherwise the down payment now and the balance at the desk.</summary>
+    public PriceSplit Split => Picked is not { } p ? new(0, 0, 0, 0, 0)
+        : PayFirst ? BookingPrice.Split(p.Amenity.Price, p.Amenity.CoachFee, IsWithCoach && PickedCoach is not null, Percent, CodePercent)
+        : BookingPrice.Split(0, p.Amenity.CoachFee, IsWithCoach && PickedCoach is not null, 0);
     [ObservableProperty, NotifyPropertyChangedFor(nameof(PayQr), nameof(PayCash))] private string method = PayMethod.Qr;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsClaiming))] private BookingRow? claiming;
     [ObservableProperty] private string claimReason = "";
@@ -64,9 +94,10 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     public bool PayCash => Method == PayMethod.Cash;
     public string MonthText => Month.ToString("MMMM yyyy", En);
     public string DayText => Day.ToString("dddd d MMMM", En);
-    public string BookText => PayFirst ? "Book and pay" : "Book";
-    public bool CanBook => Time is not null && Length is not null;
-    public string HoldText => PayFirst ? "Held for you until paid, up to 1 hour before it starts." : "Uses your pass, nothing to pay.";
+    public string BookText => PayFirst ? $"Book and pay ₱{Split.Down:N2}" : "Book";
+    public bool CanBook => Time is not null && Length is not null && (!IsWithCoach || PickedCoach is not null);
+    public string HoldText => PayFirst ? "Not yours until the desk verifies the down payment. If someone else's is verified first, yours is refunded."
+        : Split.Balance > 0 ? $"Uses your pass. The ₱{Split.Balance:N2} coach fee is paid at the desk." : "Uses your pass, nothing to pay.";
     /// <summary>Why times are faded: none left that day, or (paying first, today) the hold needs the start more than 1 hour away.</summary>
     public string TimesNote => !Times.Any(t => t.CanPick) ? (PayFirst ? "No free times this day. Online bookings start more than 1 hour from now." : "No free times this day.")
         : PayFirst && Day == Today ? "Times less than 1 hour from now can't be held online." : "";
@@ -74,7 +105,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     public string Summary => Time is null || Length is null ? "Pick a start time"
         : $"{Manila(Time.StartUtc).ToString("ddd d MMM, h:mm", En)} to {Manila(Time.StartUtc.AddMinutes(Length.Minutes)).ToString("h:mm tt", En)}";
     public string SummaryDetail => Picked is null || Time is null ? "" : PayFirst
-        ? $"₱{Picked.Amenity.Price:N2} · {Picked.Amenity.Name} cools down for 30 minutes after."
+        ? $"Total ₱{Split.Due:N2}{(Split.Cut > 0 ? $" after ₱{Split.Cut:N2} off" : "")}. Down payment now ({Percent}%) ₱{Split.Down:N2}, balance at the desk ₱{Split.Balance:N2}."
         : $"With your pass · {Picked.Amenity.Name} cools down for 30 minutes after.";
 
     static DateTime Manila(DateTime utc) => utc.ToUniversalTime().AddHours(8);
@@ -105,11 +136,38 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     {
         Notice = null; ErrorMessage = null;
         Picked = card; Method = PayMethod.Qr; Month = new(Today.Year, Today.Month, 1);
+        (IsWithCoach, PickedCoach, Code) = (false, null, "");
+        Coaches.Clear(); OnPropertyChanged(nameof(HasCoaches));
+        if (await svc.DownPaymentPercentAsync() is { Ok: true } pct) Percent = pct.Value;
+        if (membership is not null && await membership.AvailableCodesAsync() is { Ok: true, Value: { } codes }) _myCodes = codes;
+        Fill(Codes, _myCodes.Where(c => c.AllAmenities || c.AmenityIds.Contains(card.Amenity.Id)));
+        OnPropertyChanged(nameof(HasCodes));
         await PickDayAsync(Today);
         if (!Times.Any(t => t.CanPick)) await PickDayAsync(Today.AddDays(1));   // late in the day: start on tomorrow
     }
 
-    [RelayCommand] private void Close() { Picked = null; Time = null; Length = null; Times.Clear(); Lengths.Clear(); }
+    [RelayCommand] private void Close() { Picked = null; Time = null; Length = null; Times.Clear(); Lengths.Clear(); Coaches.Clear(); PickedCoach = null; }
+
+    [RelayCommand] private void Solo() { IsWithCoach = false; PickedCoach = null; }
+    [RelayCommand] private Task WithCoach() { IsWithCoach = true; return LoadCoachesAsync(); }
+    [RelayCommand]
+    private void PickCoach(CoachChoice choice)
+    {
+        foreach (var c in Coaches) c.IsPicked = c == choice;
+        PickedCoach = choice.Coach;
+    }
+    [RelayCommand] private void UseCode(AvailableCode c) => Code = c.Code;
+
+    /// <summary>G14: who is free for the picked time; a coach picked earlier stays only if still free.</summary>
+    [RelayCommand]
+    private async Task LoadCoachesAsync()
+    {
+        if (!IsWithCoach || Picked is not { } card || Time is null || Length is null) { Coaches.Clear(); OnPropertyChanged(nameof(HasCoaches)); return; }
+        if (!await RunAsync(() => svc.FreeCoachesAsync(card.Amenity.Id, Time.StartUtc, Length.Minutes),
+                list => Fill(Coaches, list.Select(f => new CoachChoice(f) { IsPicked = f.CoachId == PickedCoach?.CoachId })))) return;
+        if (PickedCoach is { } c && Coaches.All(x => x.Coach.CoachId != c.CoachId)) PickedCoach = null;
+        OnPropertyChanged(nameof(HasCoaches));
+    }
 
     [RelayCommand] private void PreviousMonth() { if (Month > new DateOnly(Today.Year, Today.Month, 1)) { Month = Month.AddMonths(-1); BuildDays(); } }
     [RelayCommand] private void NextMonth() { var last = Today.AddDays(DaysAhead); if (Month < new DateOnly(last.Year, last.Month, 1)) { Month = Month.AddMonths(1); BuildDays(); } }
@@ -159,6 +217,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
         if (!chip.CanPick) return;
         foreach (var c in Lengths) c.IsPicked = c == chip;
         Length = chip;
+        if (IsWithCoach) _ = LoadCoachesAsync();
     }
 
     [RelayCommand] private void PickMethod(string value) => Method = value;
@@ -168,10 +227,11 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     {
         if (Picked is not { } card || Time is null || Length is null) return;
         Notice = null;
-        var how = !PayFirst ? "Uses your pass." : PayCash ? $"Pay ₱{card.Amenity.Price:N2} at the front desk before the hold ends." : $"Pay ₱{card.Amenity.Price:N2} by GCash or QR and send your proof.";
+        var how = !PayFirst ? HoldText : (PayCash ? $"Pay the ₱{Split.Down:N2} down payment at the front desk." : $"Pay the ₱{Split.Down:N2} down payment by GCash and send your proof.")
+            + $" The ₱{Split.Balance:N2} balance is paid at the desk. It's yours once the desk verifies the down payment.";
         if (!await Confirm.AskAsync($"Book {card.Amenity.Name}?", $"{Summary}\n{how}", BookText)) return;
         Reservation? made = null;
-        if (!await RunAsync(() => svc.BookAsync(card.Amenity.Id, Time.StartUtc, Length.Minutes, Method), r => made = r))
+        if (!await RunAsync(() => svc.BookAsync(card.Amenity.Id, Time.StartUtc, Length.Minutes, Method, IsWithCoach ? PickedCoach?.CoachId : null, Code), r => made = r))
         {
             var error = ErrorMessage;   // nothing was booked: show the day as it is now, with the reason
             await PickDayAsync(Day);
@@ -182,8 +242,8 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
         await LoadAsync();
         var row = Bookings.FirstOrDefault(b => b.Booking.Id == made!.Id);
         Notice = made!.Status != "awaiting_payment" ? "Booked." : PayCash
-            ? $"Held for you. {row?.Detail ?? "Pay at the front desk before the hold ends."}"
-            : "Held for you. Send your GCash or QR proof from My membership before the hold ends.";
+            ? $"Requested. {row?.Detail ?? "Pay the down payment at the front desk."}"
+            : "Requested. Send your GCash proof for the down payment from My membership. It's yours once the desk verifies it.";
     }
 
     // ---------- my bookings ----------
@@ -191,10 +251,13 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     private async Task CancelAsync(BookingRow row)
     {
         Notice = null;
-        var body = row.IsWaiting ? "The time is released and the payment withdrawn." : row.Paid ? $"₱{row.Payment!.Amount:N2} will be repaid at the front desk." : row.When;
+        var refund = row.Booking.StartsAt.ToUniversalTime().AddHours(-24) >= DateTime.UtcNow;
+        var body = row.IsWaiting ? "The request and its payment are withdrawn." : row.Paid
+            ? refund ? $"The ₱{row.Payment!.Amount:N2} down payment will be repaid at the front desk." : $"It starts within 24 hours, so the gym keeps the ₱{row.Payment!.Amount:N2} down payment."
+            : row.When;
         if (!await Confirm.AskAsync($"Cancel your {row.Amenity} booking?", body, "Cancel booking")) return;
         if (!await RunAsync(() => svc.CancelAsync(row.Booking.Id))) return;
-        Notice = row.Paid ? "Booking cancelled. Your refund is approved; collect it at the front desk." : "Booking cancelled.";
+        Notice = row.Paid && refund ? "Booking cancelled. Your down payment refund is approved; collect it at the front desk." : "Booking cancelled.";
         await LoadBookingsAsync();
     }
 

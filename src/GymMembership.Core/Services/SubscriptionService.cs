@@ -36,7 +36,7 @@ public sealed record RefundCard(RefundRequest Request, string Member, string Pac
     public string AmountLabel => Request.WasActivated == true ? "Refund requested" : "Full refund";
     public string ReviewText => Request.Kind switch
     {
-        "cancel" => "Booking cancelled 1 hour or more before the start: full refund owed.",
+        "cancel" => $"{Request.DecisionReason?.TrimEnd('.') ?? "Booking cancelled: down payment refunded"}.",   // G13 (0064): 24 hours or more before, the gym, or slot taken
         "no_show" => Request.Status == "pending" ? "The member says they didn't use the booking." : $"Didn't use it: {(Request.Status == "rejected" ? "declined" : "approved")} by the front desk.",
         _ => MembershipReview
     };

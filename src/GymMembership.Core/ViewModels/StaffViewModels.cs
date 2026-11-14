@@ -342,7 +342,7 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
     public bool HasScan => Scan is not null;
 
     // D12: when the connection drops, the desk works from its saved list (OfflineDesk)
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(OfflineText))] private bool isOffline;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OfflineText), nameof(CanUsePassword))] private bool isOffline;
     public string OfflineText => offline?.OfflineText ?? "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasQueue))] private string queueText = "";
     public bool HasQueue => QueueText.Length > 0;
@@ -430,7 +430,12 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
         var result = await svc.ScanAsync(code);
         if (WentOffline(result)) { IsOffline = true; ErrorMessage = null; Scan = new MemberScan { Result = "saved_no_qr" }; ShowQueue(); return; }
         await RunAsync(() => Task.FromResult(result), s => { Scan = s; IsOffline = false; });
+        // G10: the card shows the face, or the initials while the photo loads or when there is none
+        (ScanPhoto, ScanLetters) = (null, Scan?.Name is { } n ? Initials.From(n) : "");
+        if (profile is not null && Scan is { AvatarPath: { } path } shown && (await profile.AvatarUrlAsync(path)) is { Ok: true, Value: { } url } && Scan == shown) ScanPhoto = url;
     }
+    [ObservableProperty] private string? scanPhoto;
+    [ObservableProperty] private string scanLetters = "";
 
     [RelayCommand]
     private async Task CheckInScannedAsync()
@@ -499,7 +504,31 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
     void ClosePin()
     {
         if (PinFor is { } hit && Hits.All(h => h.MemberId != hit.MemberId)) Hits.Insert(Math.Min(_pinRow, Hits.Count), hit);
-        (PinFor, Pin, Reason, PinPhoto) = (null, "", "", null);
+        (PinFor, Pin, Reason, PinPhoto, Password, IsPasswordMode) = (null, "", "", null, "", false);
+    }
+
+    // ---- G12, login mode: no phone and no PIN, so the member types their own account password; online only, never kept ----
+    [ObservableProperty] private bool isPasswordMode;
+    [ObservableProperty] private string password = "";
+    public bool CanUsePassword => !IsOffline;
+
+    [RelayCommand] private void UsePassword() { (IsPasswordMode, Pin, ErrorMessage) = (true, "", null); }
+    [RelayCommand] private void UsePin() { (IsPasswordMode, Password, ErrorMessage) = (false, "", null); }
+
+    [RelayCommand]
+    private async Task ConfirmPasswordAsync()
+    {
+        if (PinFor is not { } hit) return;
+        Notice = null;
+        var typed = Password;
+        Password = "";   // cleared after every try, right or wrong
+        if (typed.Length == 0) { ErrorMessage = "Ask the member to type their account password."; return; }
+        var proof = await svc.VerifyPasswordAsync(hit.MemberId, typed);
+        if (!proof.Ok) { ErrorMessage = ErrorText.For(proof.Error, proof.Message); return; }
+        if (!await RunAsync(() => svc.CheckInAsync(hit.MemberId, "password", proof: proof.Value))) return;
+        ClosePin(); ErrorMessage = null;
+        Notice = $"{hit.Username} is checked in.";
+        await LoadTodayAsync();
     }
 
     [RelayCommand] private void CancelPin() { ClosePin(); ErrorMessage = null; }
@@ -1356,6 +1385,7 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     [ObservableProperty] private string formDescription = "";
     [ObservableProperty] private decimal formPrice;
     [ObservableProperty] private int formDays = 30;
+    [ObservableProperty] private decimal formCoachFee;   // G14 (0064): amenities only, added when a member books With a coach
     [ObservableProperty, NotifyPropertyChangedFor(nameof(PriceLabel), nameof(ShowsDays))] private bool soldAsPass = true;
     public string PriceLabel => IsPackagePanel ? "Price" : SoldAsPass ? "Price for the pass" : "Price per session";
     public bool ShowsDays => IsPackagePanel || SoldAsPass;
@@ -1410,7 +1440,7 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
             ? ($"Edit {a.Name}", "Changes apply to new purchases. Passes and sessions already paid keep what was paid.", "Save changes", false, false)
             : (a.Id == 0 ? "Add an amenity" : "Edit draft", "Save as draft to finish it later. Add puts it on sale.", "Add", true, true);
         VersionNote = null;
-        (SoldAsPass, FormDays) = (a.DurationDays is not null, a.DurationDays ?? 30);
+        (SoldAsPass, FormDays, FormCoachFee) = (a.DurationDays is not null, a.DurationDays ?? 30, a.CoachFee);
         Benefits.Clear();
         Open(false, a.Name, a.Description, a.Price, Amenities.FirstOrDefault(r => r.Amenity.Id == a.Id && a.Id != 0)?.PhotoUrl);
     }
@@ -1473,7 +1503,7 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
         else
         {
             var a = _amenity!;
-            (a.Name, a.Description, a.Price) = (FormName.Trim(), description, FormPrice);
+            (a.Name, a.Description, a.Price, a.CoachFee) = (FormName.Trim(), description, FormPrice, Math.Max(0, FormCoachFee));
             if (CanChooseSoldAs) a.DurationDays = SoldAsPass ? FormDays : null;
             ok = await RunAsync(() => svc.SaveAmenityAsync(a));
             id = a.Id;
@@ -1838,6 +1868,7 @@ public partial class GymSettingsViewModel(IAdminService svc, IProofPicker picker
     [ObservableProperty] private TimeSpan opensAt = TimeSpan.FromHours(6);
     [ObservableProperty] private TimeSpan closesAt = TimeSpan.FromHours(22);
     [ObservableProperty] private decimal openingFloat = 5000;   // F2: what each cashier's drawer starts with
+    [ObservableProperty] private int downPaymentPercent = 50;   // G13 (0064): of an amenity booking, paid to reserve it
     [ObservableProperty] private string qrStatus = "No QR uploaded yet. Members can't pay until you add one.";
     GymSettings? _loaded;
     (string FileName, byte[] Data)? _newQr;
@@ -1847,7 +1878,7 @@ public partial class GymSettingsViewModel(IAdminService svc, IProofPicker picker
     [RelayCommand]
     private Task LoadAsync() => RunAsync(svc.GymSettingsAsync, g =>
     {
-        _loaded = g; GymName = g.GymName; QrAccountName = g.QrAccountName; WalkInPrice = g.WalkInPrice; OpensAt = g.OpensAt; ClosesAt = g.ClosesAt; OpeningFloat = g.OpeningFloat;
+        _loaded = g; GymName = g.GymName; QrAccountName = g.QrAccountName; WalkInPrice = g.WalkInPrice; OpensAt = g.OpensAt; ClosesAt = g.ClosesAt; OpeningFloat = g.OpeningFloat; DownPaymentPercent = g.DownPaymentPercent;
         QrStatus = string.IsNullOrWhiteSpace(g.QrImagePath) ? "No QR uploaded yet. Members can't pay until you add one." : "A payment QR is set. Choose a new image to replace it.";
     });
 
@@ -1867,7 +1898,7 @@ public partial class GymSettingsViewModel(IAdminService svc, IProofPicker picker
         var qr = _newQr is null ? "" : "\nThe payment QR members scan will change.";
         if (!await Confirm.AskAsync("Save gym settings?", $"Open {DateTime.Today.Add(OpensAt):h:mm tt} to {DateTime.Today.Add(ClosesAt):h:mm tt} every day.{qr}", "Save settings")) return;
         _loaded.GymName = GymName.Trim(); _loaded.QrAccountName = string.IsNullOrWhiteSpace(QrAccountName) ? null : QrAccountName.Trim(); _loaded.WalkInPrice = WalkInPrice;
-        _loaded.OpensAt = OpensAt; _loaded.ClosesAt = ClosesAt; _loaded.OpeningFloat = OpeningFloat;
+        _loaded.OpensAt = OpensAt; _loaded.ClosesAt = ClosesAt; _loaded.OpeningFloat = OpeningFloat; _loaded.DownPaymentPercent = DownPaymentPercent;
         if (!await RunAsync(() => svc.SaveGymSettingsAsync(_loaded, _newQr))) return;
         _newQr = null;
         Notice = "Saved.";
@@ -1962,8 +1993,36 @@ public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive
 public sealed record StatusChoice(string Value, string Label);
 
 /// <summary>Front desk and admin: mark an amenity available, in use or unavailable, and see who was alerted.</summary>
-public partial class AmenityStatusViewModel(IAmenityService svc) : LoadableViewModel
+public partial class AmenityStatusViewModel(IAmenityService svc, IReservationService? reservations = null) : LoadableViewModel
 {
+    // ---- G13 (0064): today's confirmed bookings with a balance; the desk takes it once, cash into the drawer or GCash with a reference ----
+    public ObservableCollection<BalanceRow> Balances { get; } = new();
+    public bool HasBalances => Balances.Count > 0;
+    [ObservableProperty] private string balanceReference = "";
+
+    public async Task LoadBalancesAsync(DateOnly manilaDay)
+    {
+        if (reservations is null) return;
+        if (await reservations.BalancesAsync(manilaDay) is { Ok: true, Value: { } rows }) Fill(Balances, rows);
+        OnPropertyChanged(nameof(HasBalances));
+    }
+    static DateOnly ManilaToday => DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8));
+
+    [RelayCommand] private Task TakeBalance(BalanceRow row) => TakeAsync(row, PayMethod.Cash);
+    [RelayCommand] private Task TakeBalanceGcash(BalanceRow row) => TakeAsync(row, PayMethod.Gcash);
+
+    async Task TakeAsync(BalanceRow row, string method)
+    {
+        if (reservations is null) return;
+        Notice = null;
+        if (method == PayMethod.Gcash && string.IsNullOrWhiteSpace(BalanceReference)) { ErrorMessage = "Type the GCash reference first."; return; }
+        if (!await Confirm.AskAsync($"Take {row.Member}'s balance?", $"{row.BalanceText} for {row.Amenity}, {row.When}, {(method == PayMethod.Cash ? "in cash into your drawer" : "by GCash")}.", "Take balance")) return;
+        if (!await RunAsync(() => reservations.TakeBalanceAsync(row.Booking.Id, method, method == PayMethod.Gcash ? BalanceReference : null), _ => { })) return;
+        BalanceReference = "";
+        Notice = $"{row.Member}'s balance is paid.";
+        Balances.Remove(row); OnPropertyChanged(nameof(HasBalances));
+    }
+
     public ObservableCollection<AmenityCard> Cards { get; } = new();
     public StatusChoice[] Choices { get; } = [new("available", "Available"), new("in_use", "In use"), new("unavailable", "Unavailable")];
 
@@ -1979,7 +2038,12 @@ public partial class AmenityStatusViewModel(IAmenityService svc) : LoadableViewM
 
     public override Task OnAppearingAsync() => LoadAsync();
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.BoardAsync, board => Fill(Cards, board.Cards));
+    [RelayCommand]
+    private async Task LoadAsync()
+    {
+        await RunAsync(svc.BoardAsync, board => Fill(Cards, board.Cards));
+        await LoadBalancesAsync(ManilaToday);
+    }
 
     // Quiet and in place: the error line, the notice and the open form stay as they are, and only cards that changed are swapped.
     public override async Task AutoRefreshAsync()

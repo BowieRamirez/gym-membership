@@ -77,7 +77,7 @@ try {
   await test('execute grants are as before 0055 (0056): signed-in users only, never anon; the old counter function closed to both', async () => {
     const can = async (role, fn) => (await db.query(`select has_function_privilege($1, $2, 'execute') ok`, [role, fn])).rows[0].ok;
     const app = ['public.record_counter_payment(public.payment_kind,public.payment_method,uuid,bigint,text,text,text)',
-      'public.book_amenity(bigint,timestamptz,integer,public.payment_method)', 'public.record_membership_refund_paid(bigint,public.payment_method,text)',
+      'public.book_amenity(bigint,timestamptz,integer,public.payment_method,uuid,text)', 'public.record_membership_refund_paid(bigint,public.payment_method,text)',
       'public.revenue_lines(date,date,integer,integer)', 'public.revenue_summary(date,date)', 'public.membership_refund_outflows(date,date)'];
     for (const fn of app) {
       assert.equal(await can('authenticated', fn), true, `${fn} closed to signed-in users`);

@@ -285,6 +285,13 @@
                                 </VerticalStackLayout>
                             </Grid>
 
+                            <!-- G14 (0064): amenities: what With a coach adds; ₱0 means a coach costs nothing extra -->
+                            <VerticalStackLayout Spacing="4" IsVisible="{Binding IsPackagePanel, Converter={StaticResource Not}}">
+                                <Label Text="Coach fee per session" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}" WidthRequest="200" HorizontalOptions="Start"><Entry Text="{Binding FormCoachFee}" Keyboard="Numeric" AutomationId="FormCoachFee" SemanticProperties.Description="Coach fee per session" /></Border>
+                                <Label Text="Added when a member books With a coach." Style="{StaticResource Caption}" />
+                            </VerticalStackLayout>
+
                             <!-- packages: benefits, one per line, shown to members -->
                             <VerticalStackLayout Spacing="8" IsVisible="{Binding IsPackagePanel}">
                                 <Label Text="Benefits, one per line (shown to members)" Style="{StaticResource Caption}" />

@@ -206,14 +206,15 @@ public sealed partial class DemoGateway : ISupabaseGateway
     public Task SignOutAsync() { CurrentUserId = null; _codeSession = false; return Task.CompletedTask; }
     public Task<bool> RestoreSessionAsync() => Task.FromResult(false);
 
-    // ---------- Edge Functions: create-user and reset-password (plan 4.3, 4.4) ----------
-    public Task InvokeFunctionAsync(string name, Dictionary<string, object> body)
+    // ---------- Edge Functions: create-user and reset-password (plan 4.3, 4.4), verify-member-password (G12, 0062) ----------
+    public Task<string> InvokeFunctionAsync(string name, Dictionary<string, object> body)
     {
         try
         {
             if (FailWith is not null) throw FailWith;
-            if (!RolesOf(Uid).Any(r => r is "admin" or "subadmin") || !IsActiveUser) throw Err("forbidden");
             string S(string k) => Convert.ToString(body.GetValueOrDefault(k)) ?? "";
+            if (name == "verify-member-password") return Task.FromResult(VerifyMemberPassword(S("member_id"), S("password")));
+            if (!RolesOf(Uid).Any(r => r is "admin" or "subadmin") || !IsActiveUser) throw Err("forbidden");
             var super = RolesOf(Uid).Contains("admin");   // a sub-admin acts on members and coaches only
             switch (name)
             {
@@ -244,9 +245,29 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 }
                 default: throw Err("not_found");
             }
-            return Task.CompletedTask;
+            return Task.FromResult("{\"ok\":true}");
         }
-        catch (Exception ex) { return Task.FromException(ex); }
+        catch (Exception ex) { return Task.FromException<string>(ex); }
+    }
+
+    // G12 (0062): desk_password_target, the Auth check, then desk_password_result. Wrong tries count with the desk PIN's.
+    readonly Dictionary<string, (string Member, string Desk, DateTime Expires)> _proofs = new();
+    string VerifyMemberPassword(string memberId, string password)
+    {
+        var now = SubscriptionNow;
+        if (!IsActiveUser || !Has("check_ins:record")) throw Err("forbidden");
+        if (All<Member>().All(m => m.UserId != memberId)) throw Err("not_found");
+        var tries = _pins.GetValueOrDefault(memberId, (null!, 0, null));
+        if (tries.LockedUntil > now) throw Err("pin_locked");
+        if (password == _passwords.GetValueOrDefault(memberId, DemoPassword))
+        {
+            if (_pins.ContainsKey(memberId)) _pins[memberId] = (tries.Pin, 0, tries.LockedUntil);
+            var proof = Guid.NewGuid().ToString();
+            _proofs[proof] = (memberId, Uid!, now.AddMinutes(2));
+            return $"{{\"proof\":\"{proof}\"}}";
+        }
+        _pins[memberId] = tries.Fails >= 4 ? (tries.Pin, 0, now.AddMinutes(15)) : (tries.Pin, tries.Fails + 1, tries.LockedUntil);
+        throw Err(tries.Fails >= 4 ? "pin_locked" : "wrong_password");
     }
 
     // ---------- table access (RLS-shaped, plan 6) ----------
@@ -1110,7 +1131,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 var at = Opt("p_at") is { } when ? DateTime.Parse(when, null, System.Globalization.DateTimeStyles.AdjustToUniversal) : (DateTime?)null;
                 var clientRef = Opt("p_client_ref");
                 var (pin, reason) = (Opt("p_pin"), Opt("p_reason")?.Trim() is { Length: > 0 } r ? r : null);
-                if (method is not ("qr" or "manual" or "offline")) throw Err("bad_input");
+                if (method is not ("qr" or "manual" or "offline" or "password")) throw Err("bad_input");
                 if (at is { } t0 && (method != "offline" || t0 > now.AddMinutes(5) || t0 < now.AddHours(-48))) throw Err("bad_input");
                 if (reason?.Length > 500) throw Err("bad_reason");
                 if (clientRef is not null && All<GymCheckIn>().FirstOrDefault(c => c.ClientRef == clientRef) is { } again) return again.Id;
@@ -1123,14 +1144,21 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (method == "qr")
                     scanned = _passes.Where(x => x.Member == memberId && x.ScannedBy == uid && x.ScannedAt > now.AddMinutes(-10) && x.CheckInId is null)
                         .OrderByDescending(x => x.ScannedAt).FirstOrDefault() ?? throw Err("scan_required");
+                else if (method == "password")
+                {
+                    if (Opt("p_proof") is not { } proof || !_proofs.TryGetValue(proof, out var p) || p.Member != memberId || p.Desk != uid || p.Expires <= now) throw Err("proof_invalid");
+                    _proofs.Remove(proof);
+                }
                 else if (pin is null)
                 {
                     if (reason is null || !RolesOf(uid).Any(x => x is "admin" or "subadmin")) throw Err("pin_required");
+                    if (_pins.TryGetValue(memberId, out var has) && has.Pin is not null) throw Err("has_desk_pin");   // F8, fixed by 0063
                 }
                 else
                 {
                     if (!_pins.TryGetValue(memberId, out var saved)) throw Err("no_desk_pin");
                     if (saved.LockedUntil > now) throw Err("pin_locked");
+                    if (saved.Pin is null) throw Err("no_desk_pin");   // only wrong passwords counted here (0062)
                     if (saved.Pin != pin) { _pins[memberId] = saved.Fails >= 4 ? (saved.Pin, 0, now.AddMinutes(15)) : (saved.Pin, saved.Fails + 1, saved.LockedUntil); return null; }
                     _pins[memberId] = (saved.Pin, 0, saved.LockedUntil);
                 }
@@ -1409,6 +1437,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
         foreach (var d in All<Discount>()) foreach (var i in DiscountItem.Everything) Add(new DiscountItem { DiscountId = d.Id, Kind = i.Kind, ItemId = i.ItemId });   // as 0060
 
         Add(new ShiftPost { CoachId = "u-coach1", Start = At(1, 6), End = At(1, 14), Note = "Strength floor, squat rack priority" });
+        // G14 (0064): Lena runs Group classes, which has a coach fee, so With a coach has someone to offer tomorrow morning
+        Add(new CoachAmenity { CoachId = "u-coach1", AmenityId = All<Amenity>().First(x => x.Name == "Group classes").Id });
+        All<Amenity>().First(x => x.Name == "Group classes").CoachFee = 100;
         Add(new ShiftPost { CoachId = "u-coach1", Start = At(3, 14), End = At(3, 20) });
         Add(new ShiftPost { CoachId = "u-coach2", Start = At(1, 14), End = At(1, 22), Note = "Heavy bags and pad work" });
 

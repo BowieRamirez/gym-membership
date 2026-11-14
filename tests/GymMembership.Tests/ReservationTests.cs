@@ -97,26 +97,26 @@ public class ReservationTests
     {
         var (gw, vm) = await Member();
         await Pick(vm, "Group classes", "10:00");
-        Assert.Equal(("Book and pay", true), (vm.BookText, vm.PayFirst));
-        Assert.StartsWith("Held for you until paid", vm.HoldText);
+        Assert.Equal(("Book and pay ₱250.00", true), (vm.BookText, vm.PayFirst));   // G13: half of ₱500
+        Assert.StartsWith("Not yours until the desk verifies the down payment", vm.HoldText);
         var row = await Booked(vm, "Group classes", "10:00");
         Assert.Equal("₱500.00 for 30 days", vm.Cards.Single(c => c.Amenity.Name == "Group classes").PassText);   // the hold is not a pass bought
-        Assert.Equal(("Waiting for payment", "wait", true, true), (row.StatusText, row.Tone, row.CanSendProof, row.CanCancel));
-        Assert.StartsWith("₱500.00 by GCash or QR. Pay by ", row.Detail);
-        Assert.StartsWith("Held for you.", vm.Notice);
+        Assert.Equal(("Waiting for down payment", "wait", true, true), (row.StatusText, row.Tone, row.CanSendProof, row.CanCancel));
+        Assert.StartsWith("Down payment ₱250.00 by GCash. Pay by ", row.Detail);
+        Assert.StartsWith("Requested.", vm.Notice);
 
         await AsDesk(gw, async desk =>
         {
             var pay = desk.Pending.Single(p => p.HasBooking);
-            Assert.Equal(("Group classes booking", "Verify", "QR"), (pay.Item, pay.ApproveText, pay.MethodText));
-            Assert.EndsWith("10:00 AM to 11:00 AM", pay.Booking);
+            Assert.Equal(("Group classes booking · down payment", "Verify", "QR"), (pay.Item, pay.ApproveText, pay.MethodText));
+            Assert.EndsWith("10:00 AM to 11:00 AM · solo · balance ₱250.00 at the desk", pay.Booking);
             await desk.ApproveCommand.ExecuteAsync(pay);
             Assert.Null(desk.ErrorMessage);
         });
         await vm.LoadCommand.ExecuteAsync(null);
         row = vm.Bookings.Single(b => b.Amenity == "Group classes");
         Assert.Equal(("Confirmed", true), (row.StatusText, row.Paid));
-        Assert.StartsWith("Paid ₱500.00. Cancel by ", row.Detail);
+        Assert.StartsWith("Down payment ₱250.00 paid. Balance ₱250.00 at the desk.", row.Detail);
         Assert.Contains((await gw.ListAsync<UserNotification>()).Select(n => n.Title), t => t == "Booking confirmed");
     }
 
@@ -125,7 +125,7 @@ public class ReservationTests
     {
         var (gw, vm) = await Member();
         var row = await Booked(vm, "Group classes", "14:00", 30, PayMethod.Cash);
-        Assert.StartsWith("₱500.00 at the front desk by ", row.Detail);
+        Assert.StartsWith("Down payment ₱250.00 at the front desk by ", row.Detail);
         Assert.False(row.CanSendProof);
         await AsDesk(gw, async desk =>
         {
@@ -194,32 +194,40 @@ public class ReservationTests
     public async Task Cancelling_a_paid_booking_approves_a_full_refund_that_admin_repays()
     {
         var (gw, vm) = await Member();
-        var row = await Booked(vm, "Group classes", "10:00");
+        // G13: two days out, so cancelling is 24 hours or more before the start and the down payment comes back
+        var later = Tomorrow.AddDays(1);
+        await vm.OpenCommand.ExecuteAsync(vm.Cards.Single(c => c.Amenity.Name == "Group classes"));
+        await vm.PickDayCommand.ExecuteAsync(vm.Days.Single(d => d.Date == later));
+        vm.PickTimeCommand.Execute(vm.Times.Single(t => t.StartUtc == At("10:00").AddDays(1)));
+        await vm.BookCommand.ExecuteAsync(null);
+        Assert.Null(vm.ErrorMessage);
         await AsDesk(gw, desk => desk.ApproveCommand.ExecuteAsync(desk.Pending.Single(p => p.HasBooking)));
         await vm.LoadCommand.ExecuteAsync(null);
         await vm.CancelCommand.ExecuteAsync(vm.Bookings.Single(b => b.Amenity == "Group classes"));
-        Assert.StartsWith("Booking cancelled. Your refund is approved", vm.Notice);
-        row = vm.Bookings.Single(b => b.Amenity == "Group classes");
-        Assert.Equal(("Cancelled · refund approved", "₱500.00 to be repaid at the front desk."), (row.StatusText, row.Detail));
+        Assert.StartsWith("Booking cancelled. Your down payment refund is approved", vm.Notice);
+        var row = vm.Bookings.Single(b => b.Amenity == "Group classes");
+        Assert.Equal(("Cancelled · refund approved", "₱250.00 to be repaid at the front desk."), (row.StatusText, row.Detail));
         Assert.False(row.CanCancel);
 
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
         await gw.OpenDrawerAsync();
         var card = (await new SubscriptionService(gw).RefundsAsync()).Value!.Single(c => c.Request.IsBooking);
         Assert.Equal(("Group classes booking", false, true), (card.PackageName, card.CanDecide, card.CanRepay));
-        Assert.StartsWith("Booking cancelled 1 hour or more", card.ReviewText);
+        Assert.StartsWith("Cancelled 24 hours or more before the start: down payment refunded", card.ReviewText);
         Assert.True((await new SubscriptionService(gw).MarkPaidAsync(card.Request.Id, PayMethod.Cash, null)).Ok);
     }
 
     [Fact]
-    public void A_paid_booking_can_be_cancelled_until_an_hour_before_and_claimed_for_a_day_after()
+    public void A_paid_booking_can_be_cancelled_until_it_starts_and_claimed_for_a_day_after()
     {
         var start = At("10:00");
-        var paid = new Payment { Id = 1, Status = Status.Verified, Amount = 500, Method = PayMethod.Qr };
-        BookingRow Row(DateTime now, RefundRequest? f = null) => new(new Reservation { Id = 1, StartsAt = start, EndsAt = start.AddHours(1), Status = "confirmed", PaymentId = 1 }, "Pool", now, paid, f);
-        Assert.True(Row(start.AddHours(-1)).CanCancel);
-        Assert.False(Row(start.AddMinutes(-59)).CanCancel);
-        Assert.Equal("Paid ₱500.00. It starts within the hour, so it can't be cancelled now.", Row(start.AddMinutes(-59)).Detail);
+        var paid = new Payment { Id = 1, Status = Status.Verified, Amount = 250, Method = PayMethod.Qr };
+        BookingRow Row(DateTime now, RefundRequest? f = null, int? balance = null) => new(new Reservation { Id = 1, StartsAt = start, EndsAt = start.AddHours(1), Status = "confirmed",
+            PaymentId = 1, TotalPrice = 500, DownPayment = 250, BalancePaymentId = balance }, "Pool", now, paid, f);
+        Assert.True(Row(start.AddMinutes(-59)).CanCancel);   // G13: any time before the start...
+        Assert.False(Row(start.AddMinutes(-59), balance: 9).CanCancel);   // ...until the balance is paid
+        Assert.Equal("Down payment ₱250.00 paid. Balance ₱250.00 at the desk. Cancelling now keeps the ₱250.00 down payment.", Row(start.AddMinutes(-59)).Detail);
+        Assert.EndsWith("to get the ₱250.00 down payment back.", Row(start.AddHours(-25)).Detail);
         Assert.False(Row(start.AddMinutes(59)).CanClaim);   // still going
         Assert.True(Row(start.AddHours(1)).CanClaim);
         Assert.True(Row(start.AddHours(25)).CanClaim);
@@ -251,7 +259,7 @@ public class ReservationTests
         await AsDesk(gw, async desk =>
         {
             var claim = Assert.Single(desk.Claims);
-            Assert.Equal(("Alex Tan", "Group classes", "₱500.00"), (claim.Member, claim.Amenity, claim.Price));
+            Assert.Equal(("Alex Tan", "Group classes", "₱250.00"), (claim.Member, claim.Amenity, claim.Price));   // the down payment
             Assert.Equal("Available", claim.AmenityNow);
             desk.DeclineClaimCommand.Execute(claim);
             Assert.Equal("Decline", desk.DecideText);
@@ -296,7 +304,7 @@ public class ReservationTests
 
         var (_, vm) = await Member(gw: gw);
         Assert.StartsWith("Run by ", vm.Cards.Single(c => c.Amenity.Name == "Pool").RunText);
-        Assert.Equal("Any coach in the gym", vm.Cards.Single(c => c.Amenity.Name == "Group classes").RunText);
+        Assert.Equal("Any coach in the gym", vm.Cards.Single(c => c.Amenity.Name == "Sauna").RunText);   // Group classes is Lena's (G14 demo)
         Assert.Equal("forbidden", (await new AmenityService(gw).SetRunsAsync(pool.Amenity.Id, true)).Message);
     }
 }

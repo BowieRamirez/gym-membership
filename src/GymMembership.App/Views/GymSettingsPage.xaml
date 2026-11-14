@@ -32,8 +32,13 @@
                         <Label Text="Opening float (₱)" Style="{StaticResource Caption}" />
                         <Border Style="{StaticResource Field}" WidthRequest="160"><Entry Text="{Binding OpeningFloat}" Keyboard="Numeric" AutomationId="OpeningFloat" SemanticProperties.Description="Opening float, in pesos" /></Border>
                     </VerticalStackLayout>
+                    <!-- G13 (0064): the part of an amenity booking paid to reserve it; the rest is paid at the desk -->
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="Booking down payment (%)" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}" WidthRequest="160"><Entry Text="{Binding DownPaymentPercent}" Keyboard="Numeric" AutomationId="DownPaymentPercent" SemanticProperties.Description="Down payment for amenity bookings, in percent" /></Border>
+                    </VerticalStackLayout>
                 </FlexLayout>
-                <Label Text="The opening float is the cash each cashier counts into their drawer when they start a shift." Style="{StaticResource Caption}" />
+                <Label Text="The opening float is the cash each cashier counts into their drawer when they start a shift. The booking down payment is the part of an amenity booking paid to reserve it (1 to 100); the rest is paid at the desk." Style="{StaticResource Caption}" />
                 <Label Text="Opening hours, every day (Manila time). Coach shifts and bookings must fit inside them, on the hour or half hour." Style="{StaticResource Caption}" Margin="0,10,0,0" />
                 <!-- 9.8: each picker says which end of the day it is -->
                 <FlexLayout Wrap="Wrap" AlignItems="End">

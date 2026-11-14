@@ -19,7 +19,7 @@ public static class AuditLabels
         ["payment.record"] = "Payment recorded", ["payment.verify"] = "Payment verified", ["payment.reject"] = "Payment rejected",
         ["payment.void"] = "Payment voided", ["payment.cancel"] = "Payment cancelled",
         ["refund.request"] = "Refund requested", ["refund.decide"] = "Refund decided", ["refund.paid"] = "Refund repaid",
-        ["reservation.book"] = "Booking made", ["reservation.hold"] = "Booking held for payment", ["reservation.cancel"] = "Booking cancelled", ["reservation.end"] = "Booking ended",
+        ["reservation.book"] = "Booking made", ["reservation.hold"] = "Booking held for payment", ["reservation.request"] = "Booking requested", ["reservation.balance"] = "Booking balance taken", ["reservation.request"] = "Booking requested", ["reservation.balance"] = "Booking balance taken", ["reservation.cancel"] = "Booking cancelled", ["reservation.end"] = "Booking ended",
         ["reservation.extend"] = "Booking extended",
         ["amenity.status"] = "Amenity status changed", ["amenity.runs"] = "Coach runs amenity changed",
         ["discount.create"] = "Code added", ["discount.turn_off"] = "Code turned off", ["discount.turn_on"] = "Code turned on", ["discount.delete"] = "Code deleted",

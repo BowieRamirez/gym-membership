@@ -59,7 +59,8 @@ public static class PayMethod
   [Column("payment_expiry_hours")] public int PaymentExpiryHours { get; set; } = 48; [Column("receipt_prefix")] public string ReceiptPrefix { get; set; } = "OR";
   // one opening and closing time for every day, Manila wall-clock (0028)
   [Column("opens_at")] public TimeSpan OpensAt { get; set; } = TimeSpan.FromHours(6); [Column("closes_at")] public TimeSpan ClosesAt { get; set; } = TimeSpan.FromHours(22);
-  [Column("opening_float")] public decimal OpeningFloat { get; set; } = 5000; }   // F2 (0050): the drawer float a cashier starts a shift with
+  [Column("opening_float")] public decimal OpeningFloat { get; set; } = 5000;
+  [Column("down_payment_percent")] public int DownPaymentPercent { get; set; } = 50; }   // G13 (0064): of an amenity booking's price   // F2 (0050): the drawer float a cashier starts a shift with
 
 [Table("membership_packages")] public class MembershipPackage : BaseModel
 { [PrimaryKey("membership_package_id")] public int Id { get; set; } [Column("name")] public string Name { get; set; } = ""; [Column("description")] public string? Description { get; set; }
@@ -147,6 +148,7 @@ public static class CashCount
 { [PrimaryKey("amenity_id")] public int Id { get; set; } [Column("name")] public string Name { get; set; } = ""; [Column("description")] public string? Description { get; set; }
   [Column("price")] public decimal Price { get; set; } [Column("duration_days")] public int? DurationDays { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true;
   [Column("image_path", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? ImagePath { get; set; }
+  [Column("coach_fee")] public decimal CoachFee { get; set; }   // G14 (0064): added when a member books With a coach
   [Column("published_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? PublishedAt { get; set; }   // G6/G7 (0061): null = a draft
   [System.Text.Json.Serialization.JsonIgnore] public CatalogState State => Catalog.StateOf(IsActive, PublishedAt);
   // live status: written only by set_amenity_status, so a catalog edit never sends these
@@ -400,7 +402,12 @@ public sealed class MemberPass : BaseModel
   [PrimaryKey("reservation_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("amenity_id")] public int AmenityId { get; set; }
   [Column("coach_id")] public string? CoachId { get; set; } [Column("training_session_id")] public int? TrainingSessionId { get; set; }
   [Column("starts_at")] public DateTime StartsAt { get; set; } [Column("ends_at")] public DateTime EndsAt { get; set; } [Column("status")] public string Status { get; set; } = "confirmed";
-  [Column("cancelled_at")] public DateTime? CancelledAt { get; set; } [Column("cancelled_by")] public string? CancelledBy { get; set; } [Column("cancel_reason")] public string? CancelReason { get; set; } }
+  [Column("cancelled_at")] public DateTime? CancelledAt { get; set; } [Column("cancelled_by")] public string? CancelledBy { get; set; } [Column("cancel_reason")] public string? CancelReason { get; set; }
+  // G13 (0064): what the booking costs, the part paid to reserve it, and the balance's payment once the desk takes it
+  [Column("total_price", ignoreOnInsert: true, ignoreOnUpdate: true)] public decimal TotalPrice { get; set; }
+  [Column("down_payment", ignoreOnInsert: true, ignoreOnUpdate: true)] public decimal DownPayment { get; set; }
+  [Column("balance_payment_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? BalancePaymentId { get; set; }
+  [System.Text.Json.Serialization.JsonIgnore] public decimal Balance => TotalPrice - DownPayment; }
 
 public record RevenueRow(DateTime Day, string Kind, string Method, long Payments, decimal Total)
 {

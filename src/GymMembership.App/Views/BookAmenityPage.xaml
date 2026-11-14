@@ -5,6 +5,7 @@
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.BookAmenityPage" x:DataType="vm:BookAmenityViewModel" Title="Book an amenity">
 
     <v:BasePage.Resources>
@@ -208,25 +209,82 @@
                                         </BindableLayout.ItemTemplate>
                                     </FlexLayout>
                                 </VerticalStackLayout>
+                                <!-- G14 (approved mockup docs/mockups/amenity-down-payment.html): Solo, or With a coach who is free the whole time -->
+                                <VerticalStackLayout Spacing="6" IsVisible="{Binding Time, Converter={StaticResource IsNotNull}}">
+                                    <Label Text="Who" Style="{StaticResource Caption}" />
+                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                        <Border Style="{StaticResource PayOption}">
+                                            <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding IsSolo}" Value="True"><Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /><Setter Property="StrokeThickness" Value="2" /></DataTrigger></Border.Triggers>
+                                            <Grid>
+                                                <VerticalStackLayout Spacing="2"><Label Text="Solo" FontFamily="BarlowSemiBold" /><Label Text="A coach is in the gym, as always" Style="{StaticResource Caption}" /></VerticalStackLayout>
+                                                <Button Margin="-12,-10" BackgroundColor="Transparent" BorderWidth="0" Text="" Command="{Binding SoloCommand}" SemanticProperties.Description="Book solo" AutomationId="BookSolo" />
+                                            </Grid>
+                                        </Border>
+                                        <Border Grid.Column="1" Style="{StaticResource PayOption}">
+                                            <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding IsWithCoach}" Value="True"><Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /><Setter Property="StrokeThickness" Value="2" /></DataTrigger></Border.Triggers>
+                                            <Grid>
+                                                <VerticalStackLayout Spacing="2"><Label Text="With a coach" FontFamily="BarlowSemiBold" /><Label Text="{Binding CoachFeeText}" Style="{StaticResource Caption}" /></VerticalStackLayout>
+                                                <Button Margin="-12,-10" BackgroundColor="Transparent" BorderWidth="0" Text="" Command="{Binding WithCoachCommand}" SemanticProperties.Description="Book with a coach" AutomationId="BookWithCoach" />
+                                            </Grid>
+                                        </Border>
+                                    </Grid>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="6" IsVisible="{Binding IsWithCoach}">
+                                    <Label Text="{Binding CoachesTitle}" Style="{StaticResource Caption}" />
+                                    <VerticalStackLayout Spacing="6" BindableLayout.ItemsSource="{Binding Coaches}">
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:CoachChoice">
+                                                <Border Style="{StaticResource PayOption}">
+                                                    <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding IsPicked}" Value="True"><Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /><Setter Property="StrokeThickness" Value="2" /></DataTrigger></Border.Triggers>
+                                                    <Grid>
+                                                        <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                                                        <Button Margin="-12,-10" BackgroundColor="Transparent" BorderWidth="0" Text="" Clicked="OnCoach"
+                                                                SemanticProperties.Description="{Binding Name, StringFormat='Book with {0}'}" />
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
+                                    </VerticalStackLayout>
+                                    <Label Text="No coach who runs this is free for the whole time. Pick another time, or book solo." Style="{StaticResource Caption}"
+                                           IsVisible="{Binding HasCoaches, Converter={StaticResource Not}}" />
+                                </VerticalStackLayout>
+                                <!-- G4: a code, with the member's codes that fit this amenity one tap away -->
                                 <VerticalStackLayout Spacing="6" IsVisible="{Binding PayFirst}">
-                                    <Label Text="Pay with" Style="{StaticResource Caption}" />
+                                    <Label Text="Code" Style="{StaticResource Caption}" />
+                                    <!-- one wrapping layout only: a FlexLayout inside another took WinUI down when the sheet opened -->
+                                    <VerticalStackLayout Spacing="6">
+                                        <Border Style="{StaticResource Field}" WidthRequest="170" HorizontalOptions="Start">
+                                            <Entry Text="{Binding Code}" Placeholder="Optional" AutomationId="BookingCode" SemanticProperties.Description="Discount code" />
+                                        </Border>
+                                        <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Codes}" IsVisible="{Binding HasCodes}">
+                                            <BindableLayout.ItemTemplate>
+                                                <DataTemplate x:DataType="m:AvailableCode">
+                                                    <Button Style="{StaticResource FilterChip}" Margin="0,0,6,6" Clicked="OnCode" Text="{Binding Code, StringFormat='{0}'}"
+                                                            SemanticProperties.Description="{Binding Code, StringFormat='Use code {0}'}" />
+                                                </DataTemplate>
+                                            </BindableLayout.ItemTemplate>
+                                        </FlexLayout>
+                                    </VerticalStackLayout>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="6" IsVisible="{Binding PayFirst}">
+                                    <Label Text="Pay the down payment with" Style="{StaticResource Caption}" />
                                     <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                                         <Border Style="{StaticResource PayOption}">
                                             <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding PayQr}" Value="True"><Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /><Setter Property="StrokeThickness" Value="2" /></DataTrigger></Border.Triggers>
                                             <Grid>
-                                                <VerticalStackLayout Spacing="2"><Label Text="GCash or QR" FontFamily="BarlowSemiBold" /><Label Text="Send proof now" Style="{StaticResource Caption}" /></VerticalStackLayout>
+                                                <VerticalStackLayout Spacing="2"><Label Text="GCash" FontFamily="BarlowSemiBold" /><Label Text="Send proof now" Style="{StaticResource Caption}" /></VerticalStackLayout>
                                                 <!-- a clear button over the option, so it works by keyboard and screen reader too -->
                                                 <Button Margin="-12,-10" BackgroundColor="Transparent" BorderWidth="0" Text="" Command="{Binding PickMethodCommand}" CommandParameter="qr"
-                                                        SemanticProperties.Description="Pay by GCash or QR" />
+                                                        SemanticProperties.Description="Pay the down payment by GCash" />
                                             </Grid>
                                         </Border>
                                         <Border Grid.Column="1" Style="{StaticResource PayOption}">
                                             <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding PayCash}" Value="True"><Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /><Setter Property="StrokeThickness" Value="2" /></DataTrigger></Border.Triggers>
                                             <Grid>
-                                                <VerticalStackLayout Spacing="2"><Label Text="At the desk" FontFamily="BarlowSemiBold" /><Label Text="Cash, before the hold ends" Style="{StaticResource Caption}" /></VerticalStackLayout>
+                                                <VerticalStackLayout Spacing="2"><Label Text="At the desk" FontFamily="BarlowSemiBold" /><Label Text="Cash" Style="{StaticResource Caption}" /></VerticalStackLayout>
                                                 <!-- a clear button over the option, so it works by keyboard and screen reader too -->
                                                 <Button Margin="-12,-10" BackgroundColor="Transparent" BorderWidth="0" Text="" Command="{Binding PickMethodCommand}" CommandParameter="cash"
-                                                        SemanticProperties.Description="Pay at the desk in cash" />
+                                                        SemanticProperties.Description="Pay the down payment at the desk in cash" />
                                             </Grid>
                                         </Border>
                                     </Grid>

@@ -8,8 +8,8 @@ namespace GymMembership.Core.Demo;
 public sealed partial class DemoGateway
 {
     static readonly TimeSpan Cooldown = TimeSpan.FromMinutes(30), Manila = TimeSpan.FromHours(8);
-    // 0052: an unpaid hold takes its slot and cooldown like a confirmed booking
-    IEnumerable<Reservation> Confirmed => All<Reservation>().Where(r => r.Status is "confirmed" or AwaitingPayment);
+    // G13 (0064): only confirmed bookings take a slot, the member's time and the coach; a request waiting for its down payment holds nothing
+    IEnumerable<Reservation> Confirmed => All<Reservation>().Where(r => r.Status == "confirmed");
     const string AwaitingPayment = "awaiting_payment";
 
     Reservation? HoldOf(Payment pay) => All<Reservation>().FirstOrDefault(r => r.PaymentId == pay.Id && r.Status == AwaitingPayment);
@@ -21,12 +21,34 @@ public sealed partial class DemoGateway
         if (r is null) return;
         if (ua.Status == Status.Active)
         {
+            // G13, G14 (0064): someone else's down payment verified first took the slot, the coach or the member's own time
+            var others = Confirmed.Where(o => o.Id != r.Id).ToList();
+            var why = others.Any(o => o.CoachId is not null && o.CoachId == r.CoachId && o.StartsAt < r.EndsAt && r.StartsAt < o.EndsAt) ? "Coach not free"
+                : others.Any(o => o.MemberId == r.MemberId && o.StartsAt < r.EndsAt && r.StartsAt < o.EndsAt) ? "You have another booking then"
+                : others.Any(o => o.AmenityId == r.AmenityId && o.StartsAt < r.EndsAt + Cooldown && r.StartsAt < o.EndsAt + Cooldown) ? "Slot taken" : null;
+            if (why is not null)
+            {
+                var pay = All<Payment>().First(p => p.Id == r.PaymentId);
+                r.Status = "cancelled"; r.CancelledAt = SubscriptionNow; r.CancelReason = why; ua.Status = Status.Cancelled;
+                Add(new RefundRequest { Kind = "cancel", ReservationId = r.Id, PaymentId = pay.Id, MemberId = r.MemberId, Amount = pay.Amount, Reason = why, RequestedAt = SubscriptionNow,
+                    Status = "approved", DecidedBy = Uid, DecidedAt = SubscriptionNow, DecisionReason = why + ": another booking's down payment was verified first. Down payment refunded." });
+                Notify(r.MemberId, "amenity", "Your slot was taken: down payment refunded", why);
+                NotifyStaff("payment", "Booking refund to repay");
+                return;
+            }
             r.Status = "confirmed";
             if (ua.IsSession) ua.Status = Status.Expired;   // the session is this booking
             Notify(r.MemberId, "amenity", "Booking confirmed", (r.StartsAt + Manila).ToString("ddd dd MMM, hh:mm tt"));
         }
         else if (ua.Status == Status.Cancelled) { r.Status = "cancelled"; r.CancelledAt = SubscriptionNow; r.CancelReason = "Not paid"; }
     }
+
+    // G14 (0064): runs the amenity, a scheduled shift over the whole time, no confirmed booking or scheduled session then
+    bool CoachIsFree(string coach, int amenityId, DateTime start, DateTime end) =>
+        All<CoachAmenity>().Any(c => c.CoachId == coach && c.AmenityId == amenityId) && All<Profile>().Any(p => p.Id == coach && p.IsActive)
+        && All<ShiftPost>().Any(s => s.CoachId == coach && s.Status == Status.Scheduled && s.Start <= start && s.End >= end)
+        && !Confirmed.Any(r => r.CoachId == coach && r.StartsAt < end && start < r.EndsAt)
+        && !All<TrainingSession>().Any(t => t.CoachId == coach && t.Status == Status.Scheduled && t.ScheduledStart < end && start < t.ScheduledEnd);
 
     // expire_payments for holds: one that ran out frees its slot before anyone books
     void ExpireHolds()
@@ -60,8 +82,10 @@ public sealed partial class DemoGateway
                     Now = now, Opens = from + g.OpensAt, Closes = from + g.ClosesAt,
                     Amenities = All<Amenity>().Where(x => x.State == CatalogState.Published).OrderBy(x => x.Name)
                         .Select(x => new GridAmenity { Id = x.Id, Name = x.Name, Status = x.Availability, Back = x.BackAt }).ToList(),
-                    Blocks = Confirmed.Where(r => r.StartsAt < to && from < r.EndsAt + Cooldown).OrderBy(r => r.StartsAt)
-                        .Select(r => new GridBlock { Amenity = r.AmenityId, Starts = r.StartsAt, Ends = r.EndsAt, Cooldown = r.EndsAt + Cooldown, Mine = r.MemberId == Uid, Id = r.MemberId == Uid ? r.Id : null }).ToList()
+                    Blocks = All<Reservation>().Where(r => r.Status == "confirmed" || (r.Status == AwaitingPayment && r.MemberId == Uid))
+                        .Where(r => r.StartsAt < to && from < r.EndsAt + Cooldown).OrderBy(r => r.StartsAt)
+                        .Select(r => new GridBlock { Amenity = r.AmenityId, Starts = r.StartsAt, Ends = r.EndsAt, Cooldown = r.EndsAt + Cooldown, Mine = r.MemberId == Uid,
+                            Id = r.MemberId == Uid ? r.Id : null, Pending = r.Status == AwaitingPayment }).ToList()
                 };
                 return true;
             }
@@ -123,21 +147,22 @@ public sealed partial class DemoGateway
                 if (r.MemberId != Uid && (reason is null || reason.Length is < 1 or > 500)) throw Err("bad_reason");
                 if (r.Status is not ("confirmed" or AwaitingPayment)) throw Err("already_processed");
                 if (r.StartsAt <= now) throw Err("already_started");
+                if (r.BalancePaymentId is not null) throw Err("balance_paid");   // G13 (0064): the desk voids the balance first
                 var pay = All<Payment>().FirstOrDefault(p => p.Id == r.PaymentId);
                 var paid = r.Status == "confirmed" && pay?.Status == Status.Verified;
-                if (paid && r.MemberId == Uid && r.StartsAt.AddHours(-1) < now) throw Err("too_late_to_cancel");   // 0052
+                var mine = r.MemberId == Uid;
                 var was = r.Status;
                 r.Status = "cancelled"; r.CancelledAt = now; r.CancelledBy = Uid; r.CancelReason = string.IsNullOrEmpty(reason) ? null : reason;
                 if (was == AwaitingPayment && pay is { Status: Status.Pending }) { pay.Status = Status.Rejected; pay.RejectedReason = "Booking cancelled"; CancelTarget(pay); }
-                else if (paid)
+                else if (paid && (!mine || r.StartsAt.AddHours(-24) >= now))   // G13: 24 hours or more before, or the gym cancelling
                 {
                     var f = Add(new RefundRequest { Kind = "cancel", ReservationId = r.Id, PaymentId = pay!.Id, MemberId = r.MemberId, Amount = pay.Amount,
                         Reason = string.IsNullOrEmpty(reason) ? "Booking cancelled" : reason, RequestedAt = now, Status = "approved", DecidedBy = Uid, DecidedAt = now,
-                        DecisionReason = "Cancelled 1 hour or more before the start: full refund" });
+                        DecisionReason = mine ? "Cancelled 24 hours or more before the start: down payment refunded" : "Cancelled by the gym: down payment refunded" });
                     NotifyStaff("payment", "Booking refund to repay");
                     Audit("refund.request", "refund_requests", f.Id.ToString());
                 }
-                else if (r.UserAmenityId is { } session) All<UserAmenity>().First(p => p.Id == session).Status = Status.Active;
+                else if (!paid && r.UserAmenityId is { } session) foreach (var p in All<UserAmenity>().Where(p => p.Id == session && p.IsSession)) p.Status = Status.Active;
                 if (r.MemberId != Uid) Notify(r.MemberId, "amenity", "Booking cancelled", reason);
                 Audit("reservation.cancel", "reservations", r.Id.ToString());
                 return true;
@@ -151,13 +176,19 @@ public sealed partial class DemoGateway
                 if (minutes is not (30 or 60 or 90 or 120) || method is not (PayMethod.Qr or PayMethod.Cash)) throw Err("bad_input");
                 var start = DateTime.Parse((string)a["p_start"], null, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal);
                 var end = start.AddMinutes(minutes);
+                var coach = a.GetValueOrDefault("p_coach") as string;
                 ExpireHolds();
-                if (All<UserAmenity>().Any(p => p.MemberId == Uid && p.AmenityId == amenityId && p.Status == Status.Active && (p.ExpiresAt is null || p.ExpiresAt >= end)))
+                var amenity = AmenityForSale(amenityId);
+                if (coach is not null && !CoachIsFree(coach, amenityId, start, end)) throw Err("coach_not_free");   // G14 (0064)
+                if (All<UserAmenity>().Where(p => p.MemberId == Uid && p.AmenityId == amenityId && p.Status == Status.Active && (p.ExpiresAt is null || p.ExpiresAt >= end))
+                        .OrderBy(p => p.IsSession).ThenBy(p => p.Id).FirstOrDefault() is { } heldPass)
                 {
                     var slots = Enumerable.Range(0, minutes / 30)
                         .Select(i => new Dictionary<string, object> { ["amenity"] = amenityId, ["start"] = start.AddMinutes(30 * i).ToString("yyyy-MM-ddTHH:mm:ssZ") }).ToList();
                     ReservationCall("book_slots", new() { ["p_slots"] = slots }, out var made);
-                    result = ((IEnumerable<Reservation>)made!).First();
+                    var booked = All<Reservation>().First(x => x.Id == ((IEnumerable<Reservation>)made!).First().Id);
+                    if (coach is not null) { booked.CoachId = coach; booked.TotalPrice = amenity.CoachFee; booked.DownPayment = 0; booked.UserAmenityId ??= heldPass.Id; }   // the fee at the desk
+                    result = Clone(booked);
                     return true;
                 }
                 if ((start - DateTime.UnixEpoch).Ticks % Cooldown.Ticks != 0) throw Err("off_grid");
@@ -169,14 +200,17 @@ public sealed partial class DemoGateway
                 if (start < day - Manila + g.OpensAt || end > day - Manila + g.ClosesAt) throw Err("outside_gym_hours");
                 var am = AmenityForSale(amenityId);
                 if (am.Availability == "unavailable" && (am.BackAt is null || am.BackAt > start)) throw Err("amenity_unavailable");
-                if (Confirmed.Any(o => o.MemberId == Uid && o.StartsAt < end && start < o.EndsAt)
-                    || All<TrainingSession>().Any(t => t.MemberId == Uid && t.Status == Status.Scheduled && t.ScheduledStart < end && start < t.ScheduledEnd)) throw Err("member_busy");
-                if (Confirmed.Any(o => o.AmenityId == amenityId && o.StartsAt < end + Cooldown && start < o.EndsAt + Cooldown)) throw Err("slot_taken");
+                if (All<TrainingSession>().Any(t => t.MemberId == Uid && t.Status == Status.Scheduled && t.ScheduledStart < end && start < t.ScheduledEnd)) throw Err("member_busy");
+                // G13 (0064): no slot is held; the down payment is the percent of price + coach fee - code (G4)
+                var total = am.Price + (coach is null ? 0 : am.CoachFee);
+                var d = Discounted(Uid!, new() { ["p_discount_code"] = a.GetValueOrDefault("p_code")! }, total, "amenity", amenityId);
+                var down = Math.Round(d.Amount * g.DownPaymentPercent / 100m, 2);
                 var ua = Add(new UserAmenity { MemberId = Uid!, AmenityId = amenityId, Status = Status.Pending, AvailedAt = now, IsSession = am.DurationDays is null });
-                var pay = Add(new Payment { PaymentCode = PaymentCode(), Kind = PayKind.Amenity, Method = method, Status = Status.Pending, Amount = am.Price,
+                var pay = Add(new Payment { PaymentCode = PaymentCode(), Kind = PayKind.Amenity, Method = method, Status = Status.Pending, Amount = down, DiscountId = d.Id, DiscountAmount = d.Cut,
                     MemberId = Uid, UserAmenityId = ua.Id, CreatedAt = now, ExpiresAt = new[] { now.AddHours(g.PaymentExpiryHours), start.AddHours(-1) }.Min() });
-                var r = Add(new Reservation { MemberId = Uid!, AmenityId = amenityId, StartsAt = start, EndsAt = end, UserAmenityId = ua.Id, PaymentId = pay.Id, Status = AwaitingPayment });
-                Audit("reservation.hold", "reservations", r.Id.ToString());
+                var r = Add(new Reservation { MemberId = Uid!, AmenityId = amenityId, CoachId = coach, StartsAt = start, EndsAt = end, UserAmenityId = ua.Id, PaymentId = pay.Id,
+                    Status = AwaitingPayment, TotalPrice = d.Amount, DownPayment = down });
+                Audit("reservation.request", "reservations", r.Id.ToString());
                 result = Clone(r);
                 return true;
             }
@@ -211,6 +245,37 @@ public sealed partial class DemoGateway
                 f.Status = approve ? "approved" : "rejected"; f.DecidedBy = Uid; f.DecidedAt = now; f.DecisionReason = reason;
                 Notify(f.MemberId, "payment", approve ? "Refund approved" : "Refund claim declined", reason);
                 Audit("refund.decide", "refund_requests", f.Id.ToString());
+                return true;
+            }
+            case "free_coaches":   // G14 (0064)
+            {
+                RequireActive();
+                var amenityId = I("p_amenity");
+                DateTime T(string k) => DateTime.Parse((string)a[k], null, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal);
+                var (start, end) = (T("p_start"), T("p_end"));
+                if (end <= start) throw Err("bad_input");
+                result = All<CoachAmenity>().Where(c => c.AmenityId == amenityId && CoachIsFree(c.CoachId, amenityId, start, end))
+                    .Select(c => All<Profile>().First(p => p.Id == c.CoachId))
+                    .Select(p => new FreeCoach { CoachId = p.Id, Name = string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName, AvatarPath = p.AvatarPath })
+                    .OrderBy(c => c.Name).ToList();
+                return true;
+            }
+            case "record_booking_balance":   // G13 (0064): the rest, at the desk
+            {
+                Require("payments:record");
+                var method = a.GetValueOrDefault("p_method") as string;
+                var reference = (a.GetValueOrDefault("p_reference") as string)?.Trim();
+                if (method is not (PayMethod.Cash or PayMethod.Gcash) || (method == PayMethod.Gcash && string.IsNullOrEmpty(reference))) throw Err("bad_input");
+                var r = All<Reservation>().FirstOrDefault(x => x.Id == I("p_reservation_id")) ?? throw Err("not_found");
+                if (r.Status != "confirmed") throw Err("not_confirmed");
+                if (r.BalancePaymentId is not null || r.Balance <= 0 || r.UserAmenityId is null) throw Err("already_processed");
+                int? shift = method == PayMethod.Cash ? OpenShiftOf(Uid!) : null;
+                var pay = Add(new Payment { PaymentCode = PaymentCode(), Kind = PayKind.Amenity, Method = method, Status = Status.Verified, Amount = r.Balance, MemberId = r.MemberId,
+                    UserAmenityId = r.UserAmenityId, ReferenceNo = string.IsNullOrEmpty(reference) ? null : reference, RecordedBy = Uid, VerifiedBy = Uid, VerifiedAt = now,
+                    ReceiptNo = ReceiptNo(), CreatedAt = now, CashShiftId = shift });
+                r.BalancePaymentId = pay.Id;
+                Audit("reservation.balance", "reservations", r.Id.ToString());
+                result = Clone(pay);
                 return true;
             }
             case "set_runs_amenity":   // F14 (0052)

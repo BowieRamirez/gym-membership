@@ -28,7 +28,7 @@ public class RefundRequest : BaseModel
 {
     [PrimaryKey("refund_request_id")] public int Id { get; set; }
     [Column("term_id")] public int? TermId { get; set; }   // null for an amenity booking (0052)
-    /// <summary>membership, cancel (a paid booking cancelled 1 hour or more before) or no_show ("I didn't use it"), 0052.</summary>
+    /// <summary>membership, cancel (a booking cancelled 24 hours or more before, by the gym, or whose slot was taken: the down payment, 0064) or no_show ("I didn't use it"), 0052.</summary>
     [Column("kind", ignoreOnInsert: true, ignoreOnUpdate: true)] public string Kind { get; set; } = "membership";
     [Column("reservation_id")] public int? ReservationId { get; set; }
     public bool IsBooking => Kind != "membership";

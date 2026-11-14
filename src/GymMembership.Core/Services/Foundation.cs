@@ -34,7 +34,7 @@ public static class ErrorMapper
         var m = message.ToLowerInvariant();
         if (Has(m, "forbidden", "42501", "jwt", "row-level security", "invalid login", "invalid_credentials", "not authenticated")) return AppErrorKind.Unauthorized;
         if (Has(m, "item_not_for_sale", "already_published", "package_published", "package_archived", "name_taken", "draft_exists", "not_published", "published_archive_instead", "account_has_commitments", "account_archived", "record_archived", "record_not_restorable", "code_limit_reached", "code_taken", "discount_used", "name_complete", "shift_has_sessions", "slot_taken", "member_busy", "stale_proposal", "coach_unavailable", "coach_busy", "already_started", "not_in_use", "amenity_unavailable", "not_archived", "already_processed", "already_availed", "renewal_pending", "already_requested", "refund_in_progress", "not_refundable", "pending_session_request", "active_coaching_session", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
-        if (Has(m, "account_inactive", "no_open_shift", "shift_open", "note_required", "bad_archive_reason", "bad_correction_reason", "discount_fixed", "discount_locked", "wrong_pin", "pin_locked", "no_desk_pin", "pin_required", "scan_required", "bad_pin", "refund_reason_required", "no_coach_present", "self_archive", "last_active_admin", "no_active_membership", "self_verify", "self_decision", "not_renewable", "wrong_member", "not_found", "23514",
+        if (Has(m, "account_inactive", "no_open_shift", "shift_open", "note_required", "bad_archive_reason", "bad_correction_reason", "discount_fixed", "discount_locked", "wrong_pin", "has_desk_pin", "bad_down_payment", "coach_not_free", "not_confirmed", "balance_paid", "wrong_member_password", "proof_invalid", "auth_unavailable", "pin_locked", "no_desk_pin", "pin_required", "scan_required", "bad_pin", "refund_reason_required", "no_coach_present", "self_archive", "last_active_admin", "no_active_membership", "self_verify", "self_decision", "not_renewable", "wrong_member", "not_found", "23514",
                    "missing_fields", "refund_window_closed", "too_soon", "too_late_to_cancel", "not_ended", "claim_window_closed", "payment_expired", "gym_closed", "coach_not_in_gym", "bad_rate", "invite_member_inactive", "invalid_code", "code_already_used", "code_not_for_item", "no_items", "item_not_found", "limit_required", "bad_hours", "off_grid", "outside_gym_hours", "too_long", "past_slot", "too_far_ahead", "no_pass", "limit_below_used", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "super_admin_protected", "bad_code", "code_not_verified", "resend_wait", "same_password", "end must be after start")) return AppErrorKind.Validation;
         return AppErrorKind.Unknown;
     }
@@ -78,9 +78,13 @@ public static class ErrorText
         "published_archive_instead" => "This has been on sale, so it can't be deleted. Archive it instead; its history stays.",
         "discount_used" => "This code has been used on a payment, so it can't be deleted. Turn it off or archive it instead.",
         "wrong_pin" => "That PIN is wrong. Ask the member to try again. After 5 wrong tries it locks for 15 minutes.",
-        "pin_locked" => "Too many wrong PINs: this member's desk PIN is locked for 15 minutes. Scan their QR code instead, or ask an Admin.",
+        "pin_locked" => "Too many wrong tries (PIN or password): this member is locked for 15 minutes. Scan their QR code instead, or ask an Admin.",
+        "wrong_member_password" => "Wrong password. Ask the member to try again. After 5 wrong tries (PIN or password) it locks for 15 minutes.",
+        "proof_invalid" => "The password check ran out. Ask the member to type their password again.",
+        "auth_unavailable" => "The password can't be checked right now. Try the desk PIN, or scan their QR code.",
         "no_desk_pin" => "This member hasn't set a desk PIN yet (Settings in their app). An Admin or System admin can check them in with a reason.",
         "pin_required" => "Enter the member's desk PIN.",
+        "has_desk_pin" => "This member has a desk PIN, so a reason isn't enough. Ask them to type their PIN, or use Sign in instead.",
         "no_open_shift" => "Start your cash shift on the Cashier page first: cash you take or pay back goes through your drawer.",
         "shift_open" => "Your shift is already open. End it before starting a new one.",
         "note_required" => "Add a note: the amount differs from what's expected.",
@@ -125,6 +129,10 @@ public static class ErrorText
         "account_inactive" => "This account is inactive and cannot receive a new booking, coaching hire or pending payment.",
         "invalid_code" => "That discount code isn't valid, or it has expired.",
         "bad_walk_in_price" => "Enter a walk-in price above ₱0.",
+        "bad_down_payment" => "The down payment is a percent from 1 to 100.",
+        "coach_not_free" => "That coach isn't free for the whole time any more. Pick another coach or another time.",
+        "not_confirmed" => "This booking isn't confirmed yet: its down payment hasn't been verified.",
+        "balance_paid" => "The balance is already paid at the desk, so the booking can't be cancelled here. The desk can void that payment first.",
         "zero_amount" => "A payment of ₱0 can't be recorded. Ask an administrator to set a price above ₱0.",
         "bad_input" => "Fill in every field, then try again.",
         "name_complete" => "Your name is already complete. A System admin can correct it if it is wrong.",
@@ -280,5 +288,6 @@ public interface ISupabaseGateway
     /// <summary>A short-lived link to a private file (a payment screenshot, the gym's QR), or null if it does not exist.</summary>
     Task<string?> SignedUrlAsync(string bucket, string path);
     /// <summary>Calls an Edge Function (create-user, reset-password), which holds the service-role key the app never has.</summary>
-    Task InvokeFunctionAsync(string name, Dictionary<string, object> body);
+    /// <returns>The function's JSON answer.</returns>
+    Task<string> InvokeFunctionAsync(string name, Dictionary<string, object> body);
 }

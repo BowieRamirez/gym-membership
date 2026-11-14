@@ -436,7 +436,9 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
         var look = await PaymentLookup.LoadAsync(gw);
         var held = (await gw.ListAsync<Reservation>(r => r.Status == "awaiting_payment")).Where(r => r.PaymentId is not null).ToDictionary(r => r.PaymentId!.Value);
         return payments.Select(p => held.GetValueOrDefault(p.Id) is { } r
-            ? new PaymentRow(p, names.GetValueOrDefault(p.MemberId ?? "", "Unknown"), $"{look.Item(p)} booking", p.ProofPath is not null, BookingTime(r.StartsAt, r.EndsAt))
+            // G13, G14 (0064): the down payment, the coach and what's left to pay at the desk
+            ? new PaymentRow(p, names.GetValueOrDefault(p.MemberId ?? "", "Unknown"), $"{look.Item(p)} booking · down payment", p.ProofPath is not null,
+                $"{BookingTime(r.StartsAt, r.EndsAt)} · {(r.CoachId is { } c ? $"with {names.GetValueOrDefault(c, "a coach")}" : "solo")} · balance ₱{r.Balance:N2} at the desk")
             : new PaymentRow(p, p.WalkInName ?? names.GetValueOrDefault(p.MemberId ?? "", "Unknown"), look.Item(p), p.ProofPath is not null)).ToList();
     }
 
@@ -1145,12 +1147,43 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
 }
 
 // ===================== Attendance and check-ins =====================
-public sealed record MemberHit(string MemberId, string Username, bool HasActiveMembership, DateTime? PaidUntil = null, string? AvatarPath = null)
+/// <summary>
+/// G10, G11 (Membership checking): why someone can't check in, in plain words, and the desk's next step for it. Status is what
+/// scan_member says (active, pending, expired, inactive); an expired member with no end date never had a membership.
+/// </summary>
+public static class MemberCheck
 {
-    public string PlanStatus => HasActiveMembership ? "active" : "inactive";
-    /// <summary>Forgot phone: what staff check before letting someone in without a QR.</summary>
-    public string PlanText => !HasActiveMembership ? "No active membership" : PaidUntil is { } until ? $"Paid until {until.AddHours(8):d MMM yyyy}" : "Paid";
+    public static string Reason(string status, DateTime? ended) => status switch
+    {
+        "pending" => "Payment not verified yet",
+        "inactive" => "Account deactivated",
+        "expired" when ended is { } e => $"Expired on {e.AddHours(8):d MMM}",   // Manila has no daylight saving
+        "expired" => "No membership",
+        _ => "",
+    };
+
+    /// <summary>The page staff open next, as (button text, Shell route); null when there is nothing the desk can do.</summary>
+    public static (string Text, string Route)? NextStep(string status) => status switch
+    {
+        "pending" => ("Open Payments to verify", "verify"),
+        "expired" => ("Open Cashier", "cashier"),
+        _ => null,
+    };
+}
+
+/// <param name="Status">Online only: active, pending, expired or inactive (G10). Null on the saved list, which knows paid or not.</param>
+public sealed record MemberHit(string MemberId, string Username, bool HasActiveMembership, DateTime? PaidUntil = null, string? AvatarPath = null,
+    string? Status = null, DateTime? EndedAt = null)
+{
+    public string PlanStatus => HasActiveMembership ? "active" : Status == "expired" && EndedAt is null ? "no_membership" : Status ?? "inactive";
+    /// <summary>Forgot phone: what staff check before letting someone in without a QR; the reason when they can't (G10).</summary>
+    public string PlanText => HasActiveMembership ? PaidUntil is { } until ? $"Paid until {until.AddHours(8):d MMM yyyy}" : "Paid"
+        : Status is { } s ? MemberCheck.Reason(s, EndedAt) : "No active membership";
     public bool CanCheckIn => HasActiveMembership;
+    /// <summary>G11: the next step at the desk for someone who can't check in, e.g. Open Cashier.</summary>
+    public string? NextStepText => CanCheckIn || Status is null ? null : MemberCheck.NextStep(Status)?.Text;
+    public string? NextStepRoute => CanCheckIn || Status is null ? null : MemberCheck.NextStep(Status)?.Route;
+    public bool HasNextStep => NextStepText is not null;
 }
 
 public interface IAttendanceService
@@ -1160,7 +1193,11 @@ public interface IAttendanceService
     /// <param name="method">qr (the default: needs a pass this desk just scanned), manual or offline (0044, 0049).</param>
     /// <param name="pin">The member's desk PIN, for manual (F8). A wrong one fails as wrong_pin.</param>
     /// <param name="reason">Admin and System admin only: why they check in by name without the PIN.</param>
-    Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null, string? pin = null, string? reason = null);
+    /// <param name="proof">Method password (G12): the one-use proof from <see cref="VerifyPasswordAsync"/>.</param>
+    Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null, string? pin = null, string? reason = null, string? proof = null);
+    /// <summary>G12, login mode: the member's own account password, checked by the server; a proof for one check-in, or
+    /// wrong_member_password / pin_locked. Needs the internet. The password is never kept.</summary>
+    Task<AppResult<string>> VerifyPasswordAsync(string memberId, string password);
     /// <summary>F8: true for Admin and System admin, who may check in by name without the PIN, with a reason.</summary>
     Task<AppResult<bool>> CanSkipPinAsync();
     Task<AppResult<IReadOnlyList<MemberHit>>> FindMembersAsync(string usernameFragment);
@@ -1181,9 +1218,20 @@ public sealed class MemberScan
     public DateTime? Expires { get; set; }
     /// <summary>Set when this came from the saved list (OfflineDesk) rather than the server. It says how old that list is.</summary>
     public string? SavedNote { get; set; }
+    /// <summary>G10: the member's photo path, looked up after the scan so the card can show their face.</summary>
+    public string? AvatarPath { get; set; }
 
     public bool CanCheckIn => Result is "active" or "saved" && Member is not null;
     public bool IsSaved => Result.StartsWith("saved");
+    /// <summary>G10: why this member can't check in, in plain words; blank when they can or the code named nobody.</summary>
+    public string ReasonText => Member is null ? "" : MemberCheck.Reason(Result, Expires);
+    /// <summary>G11: the desk's next step, e.g. Open Cashier.</summary>
+    public string? NextStepText => MemberCheck.NextStep(Result)?.Text;
+    public string? NextStepRoute => MemberCheck.NextStep(Result)?.Route;
+    public bool HasNextStep => Member is not null && NextStepText is not null;
+    /// <summary>G10: the card's main line: the reason for someone who can't check in, otherwise the status.</summary>
+    public string HeadlineText => !CanCheckIn && ReasonText.Length > 0 ? ReasonText : StatusText;
+    public bool NeedsAdmin => Member is not null && Result == "inactive";
     public string StatusText => Result switch
     {
         "saved" => $"Paid on the saved list. {SavedNote}",
@@ -1221,15 +1269,25 @@ public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = 
         return true;
     });
 
-    public async Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null, string? pin = null, string? reason = null)
+    public async Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null, string? pin = null, string? reason = null, string? proof = null)
     {
         Dictionary<string, object> args = new() { ["p_member_id"] = memberId };
         if (method is not null) args["p_method"] = method;
+        if (proof is not null) args["p_proof"] = proof;
         if (!string.IsNullOrEmpty(pin)) args["p_pin"] = pin;
         if (!string.IsNullOrWhiteSpace(reason)) args["p_reason"] = reason.Trim();
         var id = await Safe.RunAsync(() => gw.RpcAsync<int?>("record_check_in", args));
         // 0049: a wrong PIN comes back as no id, not an error, so the server can keep its count of wrong tries
         return !id.Ok ? AppResult<bool>.Fail(id.Error, id.Message) : id.Value is null ? AppResult<bool>.Fail(AppErrorKind.Validation, "wrong_pin") : AppResult<bool>.Success(true);
+    }
+
+    public async Task<AppResult<string>> VerifyPasswordAsync(string memberId, string password)
+    {
+        var result = await Safe.RunAsync(async () =>
+            System.Text.Json.JsonDocument.Parse(await gw.InvokeFunctionAsync("verify-member-password", new() { ["member_id"] = memberId, ["password"] = password }))
+                .RootElement.GetProperty("proof").GetString()!);
+        // "wrong_password" is also the code for a staff member's own wrong password in Settings; this one is the member's
+        return result.Message == "wrong_password" ? AppResult<string>.Fail(AppErrorKind.Validation, "wrong_member_password") : result;
     }
 
     public Task<AppResult<bool>> CanSkipPinAsync() => Safe.RunAsync(async () =>
@@ -1244,16 +1302,26 @@ public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = 
         var members = await gw.ListAsync<Member>();
         var profiles = await gw.ListAsync<Profile>();
         var now = clock.GetUtcNow().UtcDateTime;
-        var active = (await gw.ListAsync<UserMembershipPackage>(m => m.Status == "active")).Where(m => m.EndsAt > now).GroupBy(m => m.MemberId).ToDictionary(g => g.Key, g => g.Max(m => m.EndsAt));
-        return members.Join(profiles, m => m.UserId, p => p.Id, (m, p) => new MemberHit(m.UserId, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName, active.ContainsKey(m.UserId), active.GetValueOrDefault(m.UserId), p.AvatarPath))
+        var memberships = await gw.ListAsync<UserMembershipPackage>();
+        var active = memberships.Where(m => m.Status == "active" && m.EndsAt > now).GroupBy(m => m.MemberId).ToDictionary(g => g.Key, g => g.Max(m => m.EndsAt));
+        var ended = memberships.Where(m => m.EndsAt <= now).GroupBy(m => m.MemberId).ToDictionary(g => g.Key, g => g.Max(m => m.EndsAt));
+        var waiting = (await gw.ListAsync<Payment>(p => p.Status == Status.Pending)).Where(p => p.Kind is PayKind.Membership or PayKind.Renewal).Select(p => p.MemberId).ToHashSet();
+        // G10: the same order scan_member uses: deactivated, active, waiting for a payment, otherwise expired (or never had one)
+        string StatusOf(Profile p) => !p.IsActive ? "inactive" : active.ContainsKey(p.Id) ? "active" : waiting.Contains(p.Id) ? "pending" : "expired";
+        return members.Join(profiles, m => m.UserId, p => p.Id, (m, p) => new MemberHit(m.UserId, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName,
+                p.IsActive && active.ContainsKey(m.UserId), active.GetValueOrDefault(m.UserId), p.AvatarPath, StatusOf(p), ended.GetValueOrDefault(m.UserId)))
             .Where(h => h.Username.Contains(fragment, StringComparison.OrdinalIgnoreCase)).Take(20).ToList();
     });
 
     public Task<AppResult<MemberPass>> MyPassAsync() =>
         Safe.RunAsync(async () => (await gw.RpcAsync<List<MemberPass>>("issue_member_pass", new())).Single());
 
-    public Task<AppResult<MemberScan>> ScanAsync(string code) =>
-        Safe.RunAsync(() => gw.RpcAsync<MemberScan>("scan_member", new() { ["p_code"] = code.Trim() }));
+    public Task<AppResult<MemberScan>> ScanAsync(string code) => Safe.RunAsync(async () =>
+    {
+        var scan = await gw.RpcAsync<MemberScan>("scan_member", new() { ["p_code"] = code.Trim() });
+        if (scan.Member is { } id) scan.AvatarPath = (await gw.ListAsync<Profile>(p => p.Id == id)).FirstOrDefault()?.AvatarPath;
+        return scan;
+    });
 
     public Task<AppResult<IReadOnlyList<CheckInRow>>> CheckInsOnAsync(DateOnly manilaDay) => Safe.RunAsync<IReadOnlyList<CheckInRow>>(async () =>
     {
@@ -1637,6 +1705,7 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
     {
         if (string.IsNullOrWhiteSpace(s.GymName)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
         if (s.WalkInPrice <= 0) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_walk_in_price");   // D4: ₱0 could never be paid
+        if (s.DownPaymentPercent is < 1 or > 100) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_down_payment");   // G13, as 0064's check
         static bool OnGrid(TimeSpan t) => t.Seconds == 0 && t.Minutes is 0 or 30 && t >= TimeSpan.Zero && t < TimeSpan.FromDays(1);
         if (!OnGrid(s.OpensAt) || !OnGrid(s.ClosesAt) || s.ClosesAt <= s.OpensAt) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_hours");
         return await Safe.RunAsync(async () =>
