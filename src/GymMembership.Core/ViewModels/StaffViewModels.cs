@@ -477,7 +477,7 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
     public bool HasPinStep => PinFor is not null;
     [ObservableProperty] private string pin = "";
     [ObservableProperty] private string reason = "";
-    [ObservableProperty] private bool canSkipPin;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowsReason))] private bool canSkipPin;
     /// <summary>F8: the member's photo, so staff can compare the face; the initials when there is none.</summary>
     [ObservableProperty] private string? pinPhoto;
     [ObservableProperty] private string pinLetters = "";
@@ -509,7 +509,7 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
     }
 
     // ---- G12, login mode: no phone and no PIN, so the member types their own account password; online only, never kept ----
-    [ObservableProperty] private bool isPasswordMode;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPinMode), nameof(ShowsReason))] private bool isPasswordMode;
     [ObservableProperty] private string password = "";
     public bool CanUsePassword => !IsOffline;
 
@@ -517,10 +517,16 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
     [RelayCommand] private void UsePin() { (IsPasswordMode, Password, ErrorMessage) = (false, "", null); (IsIdMode, IdType, IdMatches) = (false, null, false); }
 
     // ---- G20/G21 (0066): the desk looks at the member's ID and compares it with the photo on the card; only the ID's type is kept ----
-    [ObservableProperty] private bool isIdMode;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPinMode), nameof(ShowsReason))] private bool isIdMode;
     [ObservableProperty] private string? idType;
     [ObservableProperty] private bool idMatches;
-    public IReadOnlyList<string> IdTypes => Services.IdTypes.Labels;
+    /// <summary>One chip per ID type; the picked one is IdType.</summary>
+    public IReadOnlyList<PickChip> IdChips { get; } = Services.IdTypes.Labels.Select(l => new PickChip(l, true)).ToList();
+    partial void OnIdTypeChanged(string? value) { foreach (var c in IdChips) c.IsPicked = c.Text == value; }
+    [RelayCommand] private void PickIdType(PickChip chip) { (IdType, ErrorMessage) = (chip.Text, null); }
+    /// <summary>The desk PIN step shows unless the password or the ID step is open; an Admin's reason goes only with it.</summary>
+    public bool IsPinMode => !IsPasswordMode && !IsIdMode;
+    public bool ShowsReason => CanSkipPin && IsPinMode;
 
     [RelayCommand] private void UseId() { (IsIdMode, IsPasswordMode, Pin, Password, ErrorMessage) = (true, false, "", "", null); }
 
@@ -1401,7 +1407,7 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
 
     // ---------- the side panel ----------
     [ObservableProperty] private bool isPanelOpen;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(PriceLabel), nameof(ShowsDays))] private bool isPackagePanel;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(PriceLabel))] private bool isPackagePanel;
     [ObservableProperty] private bool isComparing;
     [ObservableProperty] private string panelTitle = "";
     [ObservableProperty] private string panelSubtitle = "";
@@ -1417,7 +1423,6 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     /// <summary>G19 (0066): a new amenity is sold per session; one still set up as a pass keeps its days until Sell per session.</summary>
     [ObservableProperty, NotifyPropertyChangedFor(nameof(PriceLabel))] private bool isOldPass;
     public string PriceLabel => IsPackagePanel ? "Price" : IsOldPass ? "Price for the pass" : "Price per session";
-    public bool ShowsDays => IsPackagePanel;
     public ObservableCollection<BenefitLine> Benefits { get; } = new();
     [ObservableProperty] private string newBenefit = "";
 
@@ -1505,7 +1510,7 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     bool Complete()
     {
         ClearMissing();
-        (NameMissing, DescriptionMissing, PriceMissing, DaysMissing) = (string.IsNullOrWhiteSpace(FormName), string.IsNullOrWhiteSpace(FormDescription), FormPrice <= 0, ShowsDays && FormDays <= 0);
+        (NameMissing, DescriptionMissing, PriceMissing, DaysMissing) = (string.IsNullOrWhiteSpace(FormName), string.IsNullOrWhiteSpace(FormDescription), FormPrice <= 0, IsPackagePanel && FormDays <= 0);
         var missing = new[] { (NameMissing, "a name"), (DescriptionMissing, "a description"), (PriceMissing, "a price"), (DaysMissing, "the days") }.Where(m => m.Item1).Select(m => m.Item2).ToList();
         if (missing.Count == 0) return true;
         var list = missing.Count == 1 ? missing[0] : string.Join(", ", missing.SkipLast(1)) + " and " + missing[^1];
@@ -1545,7 +1550,7 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     {
         ClearMissing();
         if (string.IsNullOrWhiteSpace(FormName)) { (NameMissing, MissingText) = (true, "A draft needs a name."); return; }
-        if (ShowsDays && FormDays <= 0) { (DaysMissing, MissingText) = (true, "Days must be more than zero."); return; }
+        if (IsPackagePanel && FormDays <= 0) { (DaysMissing, MissingText) = (true, "Days must be more than zero."); return; }
         var ok = await SaveAsync();
         await LoadAsync();
         if (!ok) return;

@@ -256,7 +256,7 @@
                                     <Border Style="{StaticResource Field}"><Entry Text="{Binding FormPrice}" Keyboard="Numeric" AutomationId="FormPrice" SemanticProperties.Description="{Binding PriceLabel}" /></Border>
                                     <Label Text="Set a price above ₱0." Style="{StaticResource FieldError}" IsVisible="{Binding PriceMissing}" />
                                 </VerticalStackLayout>
-                                <VerticalStackLayout Grid.Column="1" Spacing="4" IsVisible="{Binding ShowsDays}">
+                                <VerticalStackLayout Grid.Column="1" Spacing="4" IsVisible="{Binding IsPackagePanel}">
                                     <Label Text="Days of access" Style="{StaticResource Caption}" />
                                     <Border Style="{StaticResource Field}"><Entry Text="{Binding FormDays}" Keyboard="Numeric" AutomationId="FormDays" SemanticProperties.Description="Days of access" /></Border>
                                     <Label Text="Days must be more than zero." Style="{StaticResource FieldError}" IsVisible="{Binding DaysMissing}" />

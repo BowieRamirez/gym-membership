@@ -9,20 +9,6 @@
             x:Class="GymMembership.App.Views.BookAmenityPage" x:DataType="vm:BookAmenityViewModel" Title="Book an amenity">
 
     <v:BasePage.Resources>
-        <!-- a start time or a length: a chip; the picked one yellow, as the Cashier's chips; ones that don't fit faded and not tappable -->
-        <Style x:Key="PickChip" TargetType="Button" BasedOn="{StaticResource FilterChip}" x:DataType="vm:PickChip">
-            <Setter Property="Margin" Value="0,0,6,6" />
-            <Style.Triggers>
-                <DataTrigger TargetType="Button" Binding="{Binding IsPicked}" Value="True">
-                    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
-                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" />
-                    <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
-                </DataTrigger>
-                <DataTrigger TargetType="Button" Binding="{Binding CanPick}" Value="False">
-                    <Setter Property="Opacity" Value="0.38" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
         <!-- how to pay: an outlined option, the chosen one with the selection outline (ink in light, yellow in dark) -->
         <Style x:Key="PayOption" TargetType="Border" BasedOn="{StaticResource Row}">
             <Setter Property="Padding" Value="12,10" />

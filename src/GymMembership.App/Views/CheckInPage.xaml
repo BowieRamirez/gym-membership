@@ -135,7 +135,7 @@
                 <VerticalStackLayout Grid.Column="1" Spacing="6">
                     <Label Text="{Binding PinFor.Username}" Style="{StaticResource Heading}" AutomationId="PinName" />
                     <!-- the desk PIN, or (G12) the member's own account password when they have no phone and no PIN -->
-                    <VerticalStackLayout Spacing="6" IsVisible="{Binding IsPasswordMode, Converter={StaticResource Not}}">
+                    <VerticalStackLayout Spacing="6" IsVisible="{Binding IsPinMode}">
                         <Label Text="Check the photo matches the person, then ask them to type their desk PIN." Style="{StaticResource Caption}" />
                         <FlexLayout Wrap="Wrap" AlignItems="End">
                             <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
@@ -148,9 +148,12 @@
                             <Button Text="Confirm check-in" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Command="{Binding ConfirmPinCommand}" AutomationId="ConfirmPin" />
                             <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding CancelPinCommand}" AutomationId="CancelPin" />
                         </FlexLayout>
-                        <Button Text="No phone and no PIN? Sign in instead" Style="{StaticResource LinkButton}" HorizontalOptions="Start" Command="{Binding UsePasswordCommand}"
-                                IsVisible="{Binding CanUsePassword}" AutomationId="UsePassword" />
-                        <Label Text="Sign in instead needs the internet." Style="{StaticResource Caption}" IsVisible="{Binding CanUsePassword, Converter={StaticResource Not}}" />
+                        <FlexLayout Wrap="Wrap" AlignItems="Center">
+                            <Button Text="No phone and no PIN? Sign in instead" Style="{StaticResource LinkButton}" Margin="0,0,18,0" Command="{Binding UsePasswordCommand}"
+                                    IsVisible="{Binding CanUsePassword}" AutomationId="UsePassword" />
+                            <Label Text="Sign in instead needs the internet." Style="{StaticResource Caption}" Margin="0,0,18,0" VerticalOptions="Center" IsVisible="{Binding CanUsePassword, Converter={StaticResource Not}}" />
+                            <Button Text="Check their ID instead" Style="{StaticResource LinkButton}" Command="{Binding UseIdCommand}" AutomationId="UseId" />
+                        </FlexLayout>
                     </VerticalStackLayout>
                     <VerticalStackLayout Spacing="6" IsVisible="{Binding IsPasswordMode}">
                         <Label Text="Check the photo matches the person, then ask them to type their own account password." Style="{StaticResource Caption}" />
@@ -167,10 +170,41 @@
                             <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding CancelPinCommand}" />
                         </FlexLayout>
                         <Label Text="The member types it. It's checked once, never shown or saved, and the field clears after each try." Style="{StaticResource Caption}" />
-                        <Button Text="Use the desk PIN instead" Style="{StaticResource LinkButton}" HorizontalOptions="Start" Command="{Binding UsePinCommand}" AutomationId="UsePin" />
+                        <FlexLayout Wrap="Wrap" AlignItems="Center">
+                            <Button Text="Use the desk PIN instead" Style="{StaticResource LinkButton}" Margin="0,0,18,0" Command="{Binding UsePinCommand}" AutomationId="UsePin" />
+                            <Button Text="Check their ID instead" Style="{StaticResource LinkButton}" Command="{Binding UseIdCommand}" />
+                        </FlexLayout>
+                    </VerticalStackLayout>
+                    <!-- G20/G21 (Phase 8 mockup): the desk looks at an ID; only its type is kept, with who checked. Works offline. -->
+                    <VerticalStackLayout Spacing="6" IsVisible="{Binding IsIdMode}">
+                        <Label Text="Ask for an ID. Check its name and photo against this member and the photo here." Style="{StaticResource Caption}" />
+                        <Label Text="ID they showed" Style="{StaticResource Caption}" Margin="0,4,0,0" />
+                        <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding IdChips}" SemanticProperties.Description="ID they showed">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="vm:PickChip">
+                                    <Button Text="{Binding Text}" Style="{StaticResource PickChip}" Clicked="OnIdType" />
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </FlexLayout>
+                        <HorizontalStackLayout Spacing="4">
+                            <CheckBox WidthRequest="{OnPlatform WinUI=32, Default=-1}" MinimumWidthRequest="0" IsChecked="{Binding IdMatches}" Color="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" VerticalOptions="Center" AutomationId="IdMatches" SemanticProperties.Description="The name and photo on the ID match this member" />
+                            <Label Text="The name and photo on the ID match this member" FontFamily="BarlowMedium" VerticalOptions="Center">
+                                <Label.GestureRecognizers><TapGestureRecognizer Tapped="OnIdMatchText" /></Label.GestureRecognizers>
+                            </Label>
+                        </HorizontalStackLayout>
+                        <FlexLayout Wrap="Wrap" AlignItems="End" Margin="0,4,0,0">
+                            <Button Text="Confirm check-in" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Command="{Binding ConfirmIdCommand}" AutomationId="ConfirmId" />
+                            <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding CancelPinCommand}" />
+                        </FlexLayout>
+                        <Label Text="Only the type of ID is kept, with your name. Don't write down the ID number." Style="{StaticResource Caption}" />
+                        <FlexLayout Wrap="Wrap" AlignItems="Center">
+                            <Button Text="Use the desk PIN instead" Style="{StaticResource LinkButton}" Margin="0,0,18,0" Command="{Binding UsePinCommand}" />
+                            <Button Text="Sign in instead" Style="{StaticResource LinkButton}" Command="{Binding UsePasswordCommand}" IsVisible="{Binding CanUsePassword}" />
+                            <Label Text="Sign in instead needs the internet." Style="{StaticResource Caption}" VerticalOptions="Center" IsVisible="{Binding CanUsePassword, Converter={StaticResource Not}}" />
+                        </FlexLayout>
                     </VerticalStackLayout>
                     <Label Text="{Binding ErrorMessage}" Style="{StaticResource FieldError}" IsVisible="{Binding ErrorMessage, Converter={StaticResource HasText}}" AutomationId="PinError" />
-                    <VerticalStackLayout Spacing="6" IsVisible="{Binding CanSkipPin}">
+                    <VerticalStackLayout Spacing="6" IsVisible="{Binding ShowsReason}">
                         <BoxView Style="{StaticResource Hairline}" Margin="0,4,0,4" />
                         <Label Text="No PIN? Reason for checking them in without it" Style="{StaticResource Caption}" />
                         <Border Style="{StaticResource Field}" MaximumWidthRequest="420" HorizontalOptions="Start">

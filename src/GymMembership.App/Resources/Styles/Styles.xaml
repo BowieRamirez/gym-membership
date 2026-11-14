@@ -3,7 +3,8 @@
 <ResourceDictionary
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    xmlns:c="clr-namespace:GymMembership.App.Controls">
+    xmlns:c="clr-namespace:GymMembership.App.Controls"
+    xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core">
 
     <!-- ===== Type scale (ratio 1.25 from 16) ===== -->
     <x:Double x:Key="TextCaption">13</x:Double>
@@ -303,6 +304,21 @@
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
     </Style>
     <!-- the chosen side (bold, InkLight / SurfaceDark) is set by the page's DataTriggers, not by a second style -->
+
+    <!-- a pick-one chip (a start time, a length, an ID type): a chip; the picked one yellow, as the Cashier's chips; ones that don't fit faded and not tappable -->
+    <Style x:Key="PickChip" TargetType="Button" BasedOn="{StaticResource FilterChip}" x:DataType="vm:PickChip">
+        <Setter Property="Margin" Value="0,0,6,6" />
+        <Style.Triggers>
+            <DataTrigger TargetType="Button" Binding="{Binding IsPicked}" Value="True">
+                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" />
+                <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
+            </DataTrigger>
+            <DataTrigger TargetType="Button" Binding="{Binding CanPick}" Value="False">
+                <Setter Property="Opacity" Value="0.38" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
 
     <!-- A text link: secondary actions beside a form (forgot password, create an account, resend code) -->
     <Style x:Key="LinkButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">

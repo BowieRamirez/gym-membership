@@ -46,7 +46,7 @@ public class PerSessionAndIdCheckInTests
         var vm = new CatalogAdminViewModel(admin);
         await vm.OnAppearingAsync();
         vm.AddAmenityCommand.Execute(null);
-        Assert.Equal(("Price per session", false), (vm.PriceLabel, vm.ShowsDays));
+        Assert.Equal(("Price per session", false), (vm.PriceLabel, vm.IsPackagePanel));
         (vm.FormName, vm.FormDescription, vm.FormPrice) = ("Ice bath", "Cold plunge.", 120);
         await vm.MainCommand.ExecuteAsync(null);
         Assert.Null(vm.ErrorMessage);
@@ -107,11 +107,13 @@ public class PerSessionAndIdCheckInTests
         var (gw, vm, _) = await DeskWithAlex();
         vm.UseIdCommand.Execute(null);
         Assert.Equal((true, false), (vm.IsIdMode, vm.IsPasswordMode));
-        Assert.Equal(["Driver's license", "National ID", "Passport", "School ID", "Other"], vm.IdTypes);
+        Assert.Equal(["Driver's license", "National ID", "Passport", "School ID", "Other"], vm.IdChips.Select(c => c.Text));
+        Assert.Equal((false, false), (vm.IsPinMode, vm.ShowsReason));
 
         await vm.ConfirmIdCommand.ExecuteAsync(null);
         Assert.Equal("Pick the type of ID the member showed.", vm.ErrorMessage);
-        vm.IdType = "Passport";
+        vm.PickIdTypeCommand.Execute(vm.IdChips[2]);
+        Assert.Equal(("Passport", true, false), (vm.IdType, vm.IdChips[2].IsPicked, vm.IdChips[0].IsPicked));
         await vm.ConfirmIdCommand.ExecuteAsync(null);
         Assert.Equal("Tick that the name and photo match this member.", vm.ErrorMessage);
 
@@ -119,7 +121,8 @@ public class PerSessionAndIdCheckInTests
         await vm.ConfirmIdCommand.ExecuteAsync(null);
         Assert.Null(vm.ErrorMessage);
         Assert.Equal("Alex Tan is checked in.", vm.Notice);
-        Assert.Equal((false, null, false), (vm.IsIdMode, vm.IdType, vm.IdMatches));
+        Assert.Equal((false, null, false, true), (vm.IsIdMode, vm.IdType, vm.IdMatches, vm.IsPinMode));
+        Assert.DoesNotContain(vm.IdChips, c => c.IsPicked);
         var row = (await gw.ListAsync<GymCheckIn>(c => c.MemberId == "u-alex")).OrderBy(c => c.Id).Last();
         Assert.Equal(("id", "passport", "u-emp"), (row.Method, row.IdType, row.RecordedBy));
         Assert.Equal("ID checked (Passport)", vm.Today.First().HowText);
