@@ -5,7 +5,7 @@
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
-            x:Class="GymMembership.App.Views.CheckInPage" x:DataType="vm:CheckInViewModel" Title="Check-in">
+            x:Class="GymMembership.App.Views.CheckInPage" x:DataType="vm:CheckInViewModel" Title="Membership checking">
 
     <!-- desktop: members on the left (the list scrolls by itself), scanning and coaches on the right; phones: scan, coaches, members, as before -->
     <Grid RowDefinitions="Auto,Auto,*" ColumnDefinitions="{OnIdiom Phone='*,0', Default='*,340'}" ColumnSpacing="{OnIdiom Phone=0, Default=12}"
@@ -36,13 +36,22 @@
                                 </Border>
                             </FlexLayout>
                             <ContentView x:Name="CameraHost" HeightRequest="300" MaximumWidthRequest="420" HorizontalOptions="Start" IsVisible="{Binding IsScanning}" />
+                            <!-- G10, G11 (mockup docs/mockups/membership-checking.html): face, name and status; Confirm check-in when
+                                 active, otherwise the reason and the desk's next step. The scan alone records nothing. -->
                             <Border Style="{StaticResource Row}" Padding="16,12" IsVisible="{Binding HasScan}">
                                 <VerticalStackLayout Spacing="6">
-                                    <Label Text="{Binding Scan.Name, TargetNullValue='Unknown code'}" Style="{StaticResource Heading}" AutomationId="ScanName" />
-                                    <Label Text="{Binding Scan.StatusText}" FontFamily="BarlowMedium" AutomationId="ScanStatus" />
-                                    <Label Text="{Binding Scan.ExpiryText}" Style="{StaticResource Caption}" />
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14" IsVisible="{Binding Scan.Member, Converter={StaticResource IsNotNull}}">
+                                        <c:Avatar Letters="{Binding ScanLetters}" Url="{Binding ScanPhoto}" Diameter="64" VerticalOptions="Center" />
+                                        <Label Grid.Column="1" Text="{Binding Scan.Name}" Style="{StaticResource Heading}" VerticalOptions="Center" AutomationId="ScanName" />
+                                    </Grid>
+                                    <Label Text="Unknown code" Style="{StaticResource Heading}" IsVisible="{Binding Scan.Member, Converter={StaticResource IsNull}}" />
+                                    <Label Text="{Binding Scan.HeadlineText}" FontFamily="BarlowSemiBold" AutomationId="ScanStatus" />
+                                    <Label Text="{Binding Scan.ExpiryText}" Style="{StaticResource Caption}" IsVisible="{Binding Scan.CanCheckIn}" />
+                                    <Label Text="Next step at the desk:" Style="{StaticResource Caption}" IsVisible="{Binding Scan.HasNextStep}" />
+                                    <Label Text="Please see an Admin." Style="{StaticResource Caption}" IsVisible="{Binding Scan.NeedsAdmin}" />
                                     <FlexLayout Wrap="Wrap" Margin="0,6,0,0">
-                                        <Button Text="Check in" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Command="{Binding CheckInScannedCommand}" IsVisible="{Binding Scan.CanCheckIn}" />
+                                        <Button Text="Confirm check-in" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Command="{Binding CheckInScannedCommand}" IsVisible="{Binding Scan.CanCheckIn}" AutomationId="ConfirmScanCheckIn" />
+                                        <Button Text="{Binding Scan.NextStepText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnScanNextStep" IsVisible="{Binding Scan.HasNextStep}" AutomationId="ScanNextStep" />
                                         <Button Text="Done" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding ClearScanCommand}" />
                                     </FlexLayout>
                                 </VerticalStackLayout>
@@ -125,18 +134,41 @@
                 <c:Avatar Letters="{Binding PinLetters}" Url="{Binding PinPhoto}" Diameter="64" VerticalOptions="Start" />
                 <VerticalStackLayout Grid.Column="1" Spacing="6">
                     <Label Text="{Binding PinFor.Username}" Style="{StaticResource Heading}" AutomationId="PinName" />
-                    <Label Text="Check the photo matches the person, then ask them to type their desk PIN." Style="{StaticResource Caption}" />
-                    <FlexLayout Wrap="Wrap" AlignItems="End">
-                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
-                            <Label Text="Desk PIN" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}" WidthRequest="132">
-                                <Entry Text="{Binding Pin}" IsPassword="True" Keyboard="Numeric" MaxLength="4" ReturnCommand="{Binding ConfirmPinCommand}"
-                                       AutomationId="DeskPin" SemanticProperties.Description="The member's 4-digit desk PIN" />
-                            </Border>
-                        </VerticalStackLayout>
-                        <Button Text="Check in" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Command="{Binding ConfirmPinCommand}" AutomationId="ConfirmPin" />
-                        <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding CancelPinCommand}" AutomationId="CancelPin" />
-                    </FlexLayout>
+                    <!-- the desk PIN, or (G12) the member's own account password when they have no phone and no PIN -->
+                    <VerticalStackLayout Spacing="6" IsVisible="{Binding IsPasswordMode, Converter={StaticResource Not}}">
+                        <Label Text="Check the photo matches the person, then ask them to type their desk PIN." Style="{StaticResource Caption}" />
+                        <FlexLayout Wrap="Wrap" AlignItems="End">
+                            <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                                <Label Text="Desk PIN" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}" WidthRequest="132">
+                                    <Entry Text="{Binding Pin}" IsPassword="True" Keyboard="Numeric" MaxLength="4" ReturnCommand="{Binding ConfirmPinCommand}"
+                                           AutomationId="DeskPin" SemanticProperties.Description="The member's 4-digit desk PIN" />
+                                </Border>
+                            </VerticalStackLayout>
+                            <Button Text="Confirm check-in" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Command="{Binding ConfirmPinCommand}" AutomationId="ConfirmPin" />
+                            <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding CancelPinCommand}" AutomationId="CancelPin" />
+                        </FlexLayout>
+                        <Button Text="No phone and no PIN? Sign in instead" Style="{StaticResource LinkButton}" HorizontalOptions="Start" Command="{Binding UsePasswordCommand}"
+                                IsVisible="{Binding CanUsePassword}" AutomationId="UsePassword" />
+                        <Label Text="Sign in instead needs the internet." Style="{StaticResource Caption}" IsVisible="{Binding CanUsePassword, Converter={StaticResource Not}}" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="6" IsVisible="{Binding IsPasswordMode}">
+                        <Label Text="Check the photo matches the person, then ask them to type their own account password." Style="{StaticResource Caption}" />
+                        <FlexLayout Wrap="Wrap" AlignItems="End">
+                            <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                                <Label Text="Member's account password" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}" WidthRequest="240">
+                                    <!-- hidden, never filled in or remembered by the device; the view model clears it after every try -->
+                                    <Entry Text="{Binding Password}" IsPassword="True" IsSpellCheckEnabled="False" IsTextPredictionEnabled="False" MaxLength="128"
+                                           ReturnCommand="{Binding ConfirmPasswordCommand}" AutomationId="MemberPassword" SemanticProperties.Description="The member's account password" />
+                                </Border>
+                            </VerticalStackLayout>
+                            <Button Text="Confirm check-in" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Command="{Binding ConfirmPasswordCommand}" AutomationId="ConfirmPassword" />
+                            <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding CancelPinCommand}" />
+                        </FlexLayout>
+                        <Label Text="The member types it. It's checked once, never shown or saved, and the field clears after each try." Style="{StaticResource Caption}" />
+                        <Button Text="Use the desk PIN instead" Style="{StaticResource LinkButton}" HorizontalOptions="Start" Command="{Binding UsePinCommand}" AutomationId="UsePin" />
+                    </VerticalStackLayout>
                     <Label Text="{Binding ErrorMessage}" Style="{StaticResource FieldError}" IsVisible="{Binding ErrorMessage, Converter={StaticResource HasText}}" AutomationId="PinError" />
                     <VerticalStackLayout Spacing="6" IsVisible="{Binding CanSkipPin}">
                         <BoxView Style="{StaticResource Hairline}" Margin="0,4,0,4" />
@@ -162,10 +194,12 @@
                                 <Label Text="{Binding PlanText}" Style="{StaticResource Caption}" />
                             </VerticalStackLayout>
                             <c:StatusChip Grid.Column="1" Status="{Binding PlanStatus}" VerticalOptions="Center" />
-                            <!-- 9.7: outline (Scan member QR is the page's one yellow action); a member who can't check in gets no button,
-                                 their "No active membership" line says why (it was a greyed button a screen reader still landed on) -->
+                            <!-- 9.7: outline (Scan member QR is the page's one yellow action). Someone who can't check in gets no Check in;
+                                 their line says why (G10) and the button is the desk's next step (G11): Cashier, or Payments to verify -->
                             <Button Grid.Column="2" Text="Check in" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanCheckIn}"
                                     Clicked="OnCheckIn" />
+                            <Button Grid.Column="2" Text="{Binding NextStepText}" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding HasNextStep}"
+                                    Clicked="OnHitNextStep" AutomationId="MemberNextStep" />
                         </Grid>
                     </Border>
                 </DataTemplate>

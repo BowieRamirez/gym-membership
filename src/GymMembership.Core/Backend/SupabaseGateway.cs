@@ -259,11 +259,11 @@ public sealed class SupabaseGateway : ISupabaseGateway
         await c.Rpc(function, args);
     }
 
-    public async Task InvokeFunctionAsync(string name, Dictionary<string, object> body)
+    public async Task<string> InvokeFunctionAsync(string name, Dictionary<string, object> body)
     {
         var c = await ReadyAsync();
-        // the signed-in admin's own token goes along, and the function checks it is an admin (supabase/functions/_shared/admin.ts)
-        try { await c.Functions.Invoke(name, c.Auth.CurrentSession?.AccessToken, new Supabase.Functions.Client.InvokeFunctionOptions { Body = body }); }
+        // the signed-in staff member's own token goes along, and the function checks who it is (supabase/functions/_shared/admin.ts)
+        try { return await c.Functions.Invoke(name, c.Auth.CurrentSession?.AccessToken, new Supabase.Functions.Client.InvokeFunctionOptions { Body = body }); }
         catch (Exception ex) when (ErrorCode(ex.Message) is { } code) { throw new Exception(code, ex); }   // {"error":"email_taken"} -> email_taken
     }
 

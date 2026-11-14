@@ -124,6 +124,15 @@ try {
     const rows = (await db.query('select recorded_by, reason from gym_check_ins where member_id=$1 order by check_in_id', [uid])).rows;
     assert.deepEqual(rows.map(r => [r.recorded_by, r.reason]), [[sub, 'Known member, phone broken'], [owner, 'Second visit']]);
   });
+  await test('F8 (fixed by 0063): a member who has a desk PIN cannot be checked in with a reason instead, by anyone, online or queued', async () => {
+    const uid = await paid(); await setPin(uid, '2580');
+    for (const who of [owner, sub]) {
+      await assert.rejects(checkIn(uid, { method: 'manual', reason: 'Known member' }, who), /has_desk_pin/);
+      await assert.rejects(checkIn(uid, { method: 'offline', reason: 'Known member', at: new Date().toISOString(), ref: randomUUID() }, who), /has_desk_pin/);
+    }
+    assert.equal(await count(uid), 0);
+    await checkIn(uid, { method: 'manual', pin: '2580' }, owner);   // the PIN itself still works
+  });
   await test('F8: a wrong PIN checks no one in and counts; the fifth locks it for 15 minutes, even for the right PIN', async () => {
     const uid = await paid(); await setPin(uid, '1357');
     for (let n = 1; n <= 4; n++) assert.equal((await checkIn(uid, { method: 'manual', pin: '0000' }))[0].id, null);

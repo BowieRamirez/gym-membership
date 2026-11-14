@@ -322,8 +322,9 @@ public sealed class SupabaseGatewayTests : IDisposable
         var gw = await SignedInAsync();
         _reply = _ => (200, """{"result":"active","member":"u-9","name":"Alex Tan","expires":"2026-11-30T16:00:00+00:00"}""");
         var scan = (await new AttendanceService(gw).ScanAsync(" GYM1-abc ")).Value!;
-        Assert.Equal("/rest/v1/rpc/scan_member", Last.Path);
-        Assert.Contains("\"p_code\":\"GYM1-abc\"", Last.Body);
+        Seen call; lock (_seen) call = _seen.Single(s => s.Path == "/rest/v1/rpc/scan_member");
+        Assert.Contains("\"p_code\":\"GYM1-abc\"", call.Body);
+        Assert.StartsWith("/rest/v1/profiles", Last.Path);   // G10: then the member's photo, for the card
         Assert.Equal(("active", "u-9", "Alex Tan", true), (scan.Result, scan.Member, scan.Name, scan.CanCheckIn));
         Assert.Equal(new DateTime(2026, 11, 30, 16, 0, 0, DateTimeKind.Utc), scan.Expires!.Value.ToUniversalTime());
     }

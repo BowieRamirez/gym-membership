@@ -57,7 +57,8 @@ public class AttendanceViewModelTests
             server.All[i] = server.All[i] with { Mark = status };
             return Task.FromResult(AppResult<bool>.Success(true));
         }
-        public Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null, string? pin = null, string? reason = null) => throw new NotSupportedException();
+        public Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null, string? pin = null, string? reason = null, string? proof = null) => throw new NotSupportedException();
+        public Task<AppResult<string>> VerifyPasswordAsync(string memberId, string password) => throw new NotSupportedException();
         public Task<AppResult<bool>> CanSkipPinAsync() => throw new NotSupportedException();
         public Task<AppResult<MemberPass>> MyPassAsync() => throw new NotSupportedException();
         public Task<AppResult<MemberScan>> ScanAsync(string code) => throw new NotSupportedException();

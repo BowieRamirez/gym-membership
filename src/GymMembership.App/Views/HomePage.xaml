@@ -142,7 +142,7 @@
                         <c:TableBody BindableLayout.ItemsSource="{Binding InGym}" Header="{x:Reference CoachHead}" WideFrom="420"
                                      RowTemplate="{StaticResource CoachRow}" CardTemplate="{StaticResource CoachCard}"
                                      BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource CoachCard}, Default={StaticResource CoachRow}}">
-                            <BindableLayout.EmptyView><Label Text="No coaches checked in. Check them in on the Check-in page." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                            <BindableLayout.EmptyView><Label Text="No coaches checked in. Check them in on the Membership checking page." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
                         </c:TableBody>
                     </VerticalStackLayout>
                 </Border>

@@ -37,6 +37,7 @@ const expected = {
   training_sessions: 'S---', time_requests: 'S---', time_request_events: 'S---', reservations: 'S---', coach_hires: 'S---', coach_visits: 'S---',
   support_threads: 'S---', support_messages: 'S---', amenity_follows: 'S---',
   member_passes: '----', desk_pins: '----',                // F6, F8 (0049): only server functions touch them
+  desk_password_proofs: '----',                            // G12 (0062): only the password check-in functions
   cash_shifts: '----',                                     // F2 (0050): open, close and list through server functions only
   announcements: '----', announcement_reads: '----',      // F10 (0051): posted, listed and read through server functions only
   coach_amenities: 'S---',                                 // F14 (0052): read by all; written only by set_runs_amenity
