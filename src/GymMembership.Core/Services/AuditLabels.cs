@@ -27,13 +27,14 @@ public static class AuditLabels
         ["catalog.publish"] = "Published", ["catalog.new_version"] = "New version drafted", ["catalog.delete"] = "Deleted draft",
         ["cash_shift.open"] = "Cash shift started", ["cash_shift.close"] = "Cash shift ended",
         ["announcement.post"] = "Announcement posted",
+        ["gym.close"] = "Gym closed for a day", ["gym.reopen"] = "Gym opened again",   // G16 (0065)
     };
 
     /// <summary>Action type: the part of the code before the dot. The filter sends the key.</summary>
     public static readonly IReadOnlyDictionary<string, string> Areas = new Dictionary<string, string>
     {
         ["user"] = "Account", ["role"] = "Role", ["payment"] = "Payment", ["refund"] = "Refund",
-        ["reservation"] = "Booking", ["amenity"] = "Amenity", ["catalog"] = "Catalog", ["cash_shift"] = "Cash shift", ["announcement"] = "Announcement", ["discount"] = "Discount code",
+        ["reservation"] = "Booking", ["amenity"] = "Amenity", ["catalog"] = "Catalog", ["cash_shift"] = "Cash shift", ["announcement"] = "Announcement", ["discount"] = "Discount code", ["gym"] = "Gym",
     };
 
     /// <summary>Object type: the table the entry is about. The filter sends the key.</summary>
@@ -41,7 +42,7 @@ public static class AuditLabels
     {
         ["profiles"] = "Account", ["user_roles"] = "Role", ["payments"] = "Payment", ["refund_requests"] = "Refund request",
         ["reservations"] = "Booking", ["amenities"] = "Amenity", ["membership_packages"] = "Package", ["discounts"] = "Discount code",
-        ["cash_shifts"] = "Cash shift", ["announcements"] = "Announcement",
+        ["cash_shifts"] = "Cash shift", ["announcements"] = "Announcement", ["gym_closures"] = "Closed day",
     };
 
     public static string Action(string code) => Actions.GetValueOrDefault(code, code);

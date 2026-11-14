@@ -178,6 +178,8 @@ public interface IReservationService
     Task<AppResult<IReadOnlyList<FreeCoach>>> FreeCoachesAsync(int amenityId, DateTime startUtc, int minutes);
     /// <summary>G13: the Gym settings percent paid to reserve.</summary>
     Task<AppResult<int>> DownPaymentPercentAsync();
+    /// <summary>G16: closed days from today on, with their reasons.</summary>
+    Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync();
     /// <summary>G13, the desk: one Manila day's confirmed bookings with a balance still to pay.</summary>
     Task<AppResult<IReadOnlyList<BalanceRow>>> BalancesAsync(DateOnly manilaDay);
     Task<AppResult<Payment>> TakeBalanceAsync(int reservationId, string method, string? reference);
@@ -213,6 +215,8 @@ public sealed class ReservationService(ISupabaseGateway gw) : IReservationServic
 
     public Task<AppResult<IReadOnlyList<FreeCoach>>> FreeCoachesAsync(int amenityId, DateTime startUtc, int minutes) => Safe.RunAsync<IReadOnlyList<FreeCoach>>(async () =>
         await gw.RpcAsync<List<FreeCoach>>("free_coaches", new() { ["p_amenity"] = amenityId, ["p_start"] = Utc(startUtc), ["p_end"] = Utc(startUtc.AddMinutes(minutes)) }));
+
+    public Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync() => Safe.RunAsync(() => GymClosures.ByDayAsync(gw));
 
     public Task<AppResult<int>> DownPaymentPercentAsync() => Safe.RunAsync(async () => (await gw.ListAsync<GymSettings>()).First().DownPaymentPercent);
 

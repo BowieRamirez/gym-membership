@@ -28,6 +28,7 @@
                     <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource ScheduledLight}, Dark={StaticResource ScheduledDark}}" />
                     <Setter Property="StrokeThickness" Value="1.5" />
                 </Trigger>
+                <Trigger TargetType="Ellipse" Property="ClassId" Value="closed"><Setter Property="Fill" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" /></Trigger>
             </Style.Triggers>
         </Style>
     </VerticalStackLayout.Resources>
@@ -64,6 +65,12 @@
                                             <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
                                                 <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
                                             </DataTrigger>
+                                            <!-- G16 (0065): a closed day, outlined in red as on the booking sheet -->
+                                            <DataTrigger TargetType="Border" Binding="{Binding IsClosed}" Value="True">
+                                                <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
+                                                <Setter Property="StrokeThickness" Value="1.5" />
+                                                <Setter Property="StrokeDashArray" Value="3,2" />
+                                            </DataTrigger>
                                         </Border.Triggers>
                                         <Grid RowDefinitions="Auto,*">
                                             <Border StrokeThickness="0" StrokeShape="RoundRectangle 6" Padding="5,0" HorizontalOptions="Start" BackgroundColor="Transparent">
@@ -86,6 +93,7 @@
                                             </VerticalStackLayout>
                                             <!-- phones: a dot per kind, no names -->
                                             <HorizontalStackLayout Grid.Row="1" Spacing="3" Margin="5,0,0,2" VerticalOptions="End" IsVisible="{OnIdiom Phone=True, Default=False}">
+                                                <Ellipse Style="{StaticResource KindDot}" ClassId="closed" WidthRequest="6" HeightRequest="6" IsVisible="{Binding IsClosed}" />
                                                 <Ellipse Style="{StaticResource KindDot}" ClassId="session" WidthRequest="6" HeightRequest="6" IsVisible="{Binding HasSession}" />
                                                 <Ellipse Style="{StaticResource KindDot}" ClassId="booking" WidthRequest="6" HeightRequest="6" IsVisible="{Binding HasBooking}" />
                                                 <Ellipse Style="{StaticResource KindDot}" ClassId="open" WidthRequest="6" HeightRequest="6" IsVisible="{Binding HasOpen}" />
@@ -120,7 +128,10 @@
                                         <BoxView Style="{StaticResource Hairline}" />
                                         <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="2" Padding="0,12">
                                             <Ellipse Style="{StaticResource KindDot}" ClassId="{Binding Kind}" VerticalOptions="Start" Margin="0,6,0,0" />
-                                            <Label Grid.Column="1" Text="{Binding Title}" FontFamily="BarlowSemiBold" LineBreakMode="WordWrap" />
+                                            <Label Grid.Column="1" Text="{Binding Title}" FontFamily="BarlowSemiBold" LineBreakMode="WordWrap">
+                                                <Label.Triggers><DataTrigger TargetType="Label" Binding="{Binding IsClosed}" Value="True">
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" /></DataTrigger></Label.Triggers>
+                                            </Label>
                                             <Label Grid.Column="1" Grid.Row="1" Text="{Binding Time}" Style="{StaticResource Caption}" />
                                             <HorizontalStackLayout Grid.Column="1" Grid.Row="2" Margin="0,6,0,0" IsVisible="{Binding CanRequest}">
                                                 <Button Text="Ask for this time" Style="{StaticResource SmallButton}" Clicked="OnRequest"

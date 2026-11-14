@@ -971,9 +971,11 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     [ObservableProperty] private int postHours = 4;
     [ObservableProperty] private string? postNote;
     [ObservableProperty] private bool canPost;                       // the selected day still has gym time ahead
+    [ObservableProperty] private string closedNote = "";              // G17 (0065): why no shift can be posted that day
     public bool HasShifts => coach is not null;
     List<ShiftPost> shifts = [];
     GymSettings? hours;
+    IReadOnlyDictionary<DateOnly, string> closed = new Dictionary<DateOnly, string>();
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsMonth), nameof(IsWeek), nameof(PeriodTitle))] private string viewMode = "Month";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(PeriodTitle))] private DateOnly focus;
@@ -1011,6 +1013,7 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     {
         if (Focus == default) { Focus = Today; SelectedDay = Today; }
         if (coach is not null && hours is null && gym is not null) { var g = await gym.GymAsync(); if (g.Ok) hours = g.Value; }
+        if (coach is not null && gym is not null && await gym.ClosedDaysAsync() is { Ok: true, Value: { } c }) closed = c;
         if (coach is not null) await RunAsync(coach.TraineesAsync, t => TraineesText = t.Count.ToString());
         await ReloadAsync();
         Prefill();
@@ -1020,7 +1023,8 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     void Prefill()
     {
         var start = hours is not null && SelectedDay is { } day ? ShiftSlot.DefaultStart(day, hours.OpensAt, hours.ClosesAt, Clock()) : null;
-        CanPost = start is not null;
+        ClosedNote = SelectedDay is { } sd && closed.TryGetValue(sd, out var why) ? $"The gym is closed this day: {why}." : "";
+        CanPost = start is not null && ClosedNote == "";
         if (start is { } s) PostTime = AttendanceCalendar.LocalTime(s, Zone).TimeOfDay;
         PostHours = 4;
     }
@@ -1873,7 +1877,7 @@ public partial class GymSettingsViewModel(IAdminService svc, IProofPicker picker
     GymSettings? _loaded;
     (string FileName, byte[] Data)? _newQr;
 
-    public override Task OnAppearingAsync() => LoadAsync();
+    public override async Task OnAppearingAsync() { await LoadAsync(); await LoadClosuresAsync(); }
 
     [RelayCommand]
     private Task LoadAsync() => RunAsync(svc.GymSettingsAsync, g =>
@@ -1904,6 +1908,51 @@ public partial class GymSettingsViewModel(IAdminService svc, IProofPicker picker
         Notice = "Saved.";
         await LoadAsync();
     }
+
+    // ---- G16-G18 (0065): closed days. Whole Manila days, today or later, with a reason; reopening is allowed up to the day itself. ----
+    static DateOnly ManilaToday => DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8));
+    public ObservableCollection<GymClosureRow> Closures { get; } = new();
+    public bool HasClosures => Closures.Count > 0;
+    public DateTime MinClosedDay => ManilaToday.ToDateTime(TimeOnly.MinValue);
+    [ObservableProperty] private DateTime closedDay = DateTime.Today.AddDays(1);
+    [ObservableProperty] private string closedReason = "";
+
+    async Task LoadClosuresAsync()
+    {
+        await RunAsync(svc.ClosuresAsync, rows => Fill(Closures, rows.Select(c => new GymClosureRow(c.Day, c.Reason, c.Day >= ManilaToday))));
+        OnPropertyChanged(nameof(HasClosures));
+    }
+
+    [RelayCommand]
+    private async Task CloseDayAsync()
+    {
+        Notice = null; ErrorMessage = null;
+        var day = DateOnly.FromDateTime(ClosedDay);
+        if (string.IsNullOrWhiteSpace(ClosedReason)) { ErrorMessage = "Type why the gym is closed, for example Holiday."; return; }
+        ClosurePreview? preview = null;
+        if (!await RunAsync(() => svc.ClosurePreviewAsync(day), p => preview = p)) return;
+        var when = day.ToString("dddd, d MMM", CultureInfo.InvariantCulture);
+        if (!await Confirm.AskAsync($"Close the gym on {when}?", $"{preview!.Text}\nEveryone is told: \"The gym is closed on {when}: {ClosedReason.Trim().TrimEnd('.')}.\"", "Close the gym")) return;
+        if (!await RunAsync(() => svc.CloseDayAsync(day, ClosedReason))) return;
+        Notice = $"Closed on {when}. Everyone has been told."; ClosedReason = "";
+        await LoadClosuresAsync();
+    }
+
+    [RelayCommand]
+    private async Task ReopenAsync(GymClosureRow row)
+    {
+        Notice = null;
+        if (!await Confirm.AskAsync($"Open the gym again on {row.DayText}?", "Everyone is told. Bookings, sessions and shifts that were cancelled stay cancelled.", "Open again")) return;
+        if (!await RunAsync(() => svc.ReopenDayAsync(row.Day))) return;
+        Notice = $"Open again on {row.DayText}.";
+        await LoadClosuresAsync();
+    }
+}
+
+/// <summary>A closed day on Gym settings; past ones stay as history and can't be reopened.</summary>
+public sealed record GymClosureRow(DateOnly Day, string Reason, bool CanReopen)
+{
+    public string DayText => Day.ToString("ddd d MMM yyyy", CultureInfo.InvariantCulture);
 }
 
 public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive = null) : LoadableViewModel

@@ -63,6 +63,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         var pk = typeof(T).GetProperties().FirstOrDefault(p => p.GetCustomAttribute<PrimaryKeyAttribute>() != null);   // discount_items has none
         if (pk?.PropertyType == typeof(int) && (int)pk.GetValue(row)! == 0)
             pk.SetValue(row, All<T>().Select(r => (int)pk.GetValue(r)!).DefaultIfEmpty(0).Max() + 1);
+        RefuseClosedRow(row);   // G17 (0065)
         if (row is Payment payment) SnapshotMembershipPayment(payment);
         if (row is AuditEntry { Role: null } entry) entry.Role = MainRole(entry.ActorId);   // as audit() does (0045); the demo has no network address
         Table(typeof(T)).Add(row);
@@ -596,6 +597,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             var day = next.Start.ToUniversalTime().AddHours(8).Date;   // Manila has no daylight saving
             if (next.Start.ToUniversalTime() < day + g.OpensAt - TimeSpan.FromHours(8) || next.End.ToUniversalTime() > day + g.ClosesAt - TimeSpan.FromHours(8)) throw Err("outside_gym_hours");
             if ((old is null || old.Start != next.Start || old.Status != Status.Scheduled) && next.Start.ToUniversalTime() < SubscriptionNow) throw Err("past_slot");   // 0033
+            if (old is null || old.Start != next.Start) RefuseClosed(next.Start);   // G17 (0065)
             if (All<ShiftPost>().Any(s => !ReferenceEquals(s, old) && s.CoachId == next.CoachId && s.Status == Status.Scheduled && s.Start < next.End && next.Start < s.End))
                 throw Err("conflicting key value violates exclusion constraint \"shift_posts_no_overlap\"");
         }
@@ -684,6 +686,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     {
         if (SubscriptionCall(fn, a, out var subscriptionResult)) return subscriptionResult;
         if (ReservationCall(fn, a, out var reservationResult)) return reservationResult;
+        if (ClosureCall(fn, a, out var closureResult)) return closureResult;
         if (RequestCall(fn, a, out var requestResult)) return requestResult;
         if (CashShiftCall(fn, a, out var shiftResult)) return shiftResult;
         if (MessengerCall(fn, a, out var chatResult)) return chatResult;
@@ -1075,6 +1078,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     {   // a reschedule moves the booked session instead of creating a second one
                         session = All<TrainingSession>().First(s => s.Id == sid);
                         if (session.Status != Status.Scheduled) throw Err("already_processed");
+                        RefuseClosed(r.RequestedStart);   // G17 (0065)
                         session.ScheduledStart = r.RequestedStart; session.ScheduledEnd = r.RequestedEnd;
                     }
                     else session = Add(new TrainingSession { CoachId = r.CoachId, MemberId = member, Title = "Training session", ScheduledStart = r.RequestedStart, ScheduledEnd = r.RequestedEnd });

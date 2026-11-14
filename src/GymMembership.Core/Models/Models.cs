@@ -62,6 +62,12 @@ public static class PayMethod
   [Column("opening_float")] public decimal OpeningFloat { get; set; } = 5000;
   [Column("down_payment_percent")] public int DownPaymentPercent { get; set; } = 50; }   // G13 (0064): of an amenity booking's price   // F2 (0050): the drawer float a cashier starts a shift with
 
+/// <summary>G16 (0065): a whole Manila day the gym is closed; written only by close_gym_day and reopen_gym_day.</summary>
+[Table("gym_closures")] public class GymClosure : BaseModel
+{ [PrimaryKey("closed_on", true)] public DateTime ClosedOn { get; set; } [Column("reason")] public string Reason { get; set; } = "";
+  [Column("closed_by")] public string ClosedBy { get; set; } = ""; [Column("closed_at")] public DateTime ClosedAt { get; set; }
+  public DateOnly Day => DateOnly.FromDateTime(ClosedOn); }
+
 [Table("membership_packages")] public class MembershipPackage : BaseModel
 { [PrimaryKey("membership_package_id")] public int Id { get; set; } [Column("name")] public string Name { get; set; } = ""; [Column("description")] public string? Description { get; set; }
   [Column("price")] public decimal Price { get; set; } [Column("duration_days")] public int DurationDays { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true;

@@ -271,6 +271,13 @@
                             <VerticalStackLayout Spacing="10" IsVisible="{Binding HasShifts}">
                                 <BoxView Style="{StaticResource Hairline}" />
                                 <Label Text="Post a shift" FontFamily="BarlowSemiBold" FontSize="17" />
+                                <!-- G17 (0065, approved mockup docs/mockups/gym-closed-days.html): a closed day says why in place of a usable form -->
+                                <Border Style="{StaticResource Row}" Padding="14,12" StrokeShape="RoundRectangle 12" IsVisible="{Binding ClosedNote, Converter={StaticResource HasText}}" AutomationId="DashboardClosedNote">
+                                    <VerticalStackLayout Spacing="4">
+                                        <Label Text="{Binding ClosedNote}" FontFamily="BarlowSemiBold" TextColor="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
+                                        <Label Text="You can't post a shift this day. Anything already set up for it was cancelled, and the people involved were told." Style="{StaticResource Caption}" />
+                                    </VerticalStackLayout>
+                                </Border>
                                 <Grid ColumnDefinitions="*,110" ColumnSpacing="12">
                                     <VerticalStackLayout Spacing="4">
                                         <Label Text="Starts" Style="{StaticResource Caption}" />
@@ -291,7 +298,9 @@
                                     <Button Text="Post shift" Style="{StaticResource SmallButton}" Margin="0,0,12,6" FlexLayout.Shrink="0"
                                             Command="{Binding PostShiftCommand}" IsEnabled="{Binding CanPost}" AutomationId="DashboardPostShift" />
                                     <Label Text="Ends at closing time if it would run past it." Style="{StaticResource Caption}" Margin="0,0,0,6" IsVisible="{Binding CanPost}" />
-                                    <Label Text="The gym has no opening hours left on this day." Style="{StaticResource Caption}" Margin="0,0,0,6" IsVisible="{Binding CanPost, Converter={StaticResource Not}}" />
+                                    <Label Text="The gym has no opening hours left on this day." Style="{StaticResource Caption}" Margin="0,0,0,6" IsVisible="{Binding CanPost, Converter={StaticResource Not}}">
+                                        <Label.Triggers><DataTrigger TargetType="Label" Binding="{Binding ClosedNote, Converter={StaticResource HasText}}" Value="True"><Setter Property="IsVisible" Value="False" /></DataTrigger></Label.Triggers>
+                                    </Label>
                                 </FlexLayout>
                             </VerticalStackLayout>
                         </VerticalStackLayout>

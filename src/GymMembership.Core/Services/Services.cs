@@ -4,6 +4,24 @@ using GymMembership.Core.Models;
 
 namespace GymMembership.Core.Services;
 
+/// <summary>G16 (0065): closed days from today (Manila) on, with their reasons; every calendar that offers a day reads this.</summary>
+public static class GymClosures
+{
+    public static async Task<IReadOnlyDictionary<DateOnly, string>> ByDayAsync(ISupabaseGateway gw)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8)).ToDateTime(TimeOnly.MinValue);
+        return (await gw.ListAsync<GymClosure>(c => c.ClosedOn >= today)).ToDictionary(c => c.Day, c => c.Reason);
+    }
+}
+
+/// <summary>G18: what closing a day would cancel, as closure_preview counts it.</summary>
+public sealed record ClosurePreview(int Bookings, int Paid, int Sessions, int Shifts, int Requests)
+{
+    static string N(int n, string one) => $"{n} {one}{(n == 1 ? "" : "s")}";
+    public string Text => $"{N(Bookings, "booking")}{(Paid > 0 ? $" ({Paid} paid, refunded)" : "")}, {N(Sessions, "session")} and {N(Shifts, "shift")} will be cancelled."
+        + (Requests > 0 ? $" {N(Requests, "session request")} will be declined." : "");
+}
+
 static class Directory_
 {
     /// <summary>Every profile the caller may read, by id. The full name, or the username if none was given.</summary>
@@ -287,6 +305,8 @@ public interface IMembershipService
     /// <summary>Starts a fresh payment for the same item after a rejection or expiry.</summary>
     Task<AppResult<Payment>> PayAgainAsync(PaymentItem item);
     Task<AppResult<GymSettings>> GymAsync();
+    /// <summary>G16: closed days from today on, with their reasons.</summary>
+    Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync();
     /// <summary>A link to the gym's payment QR image, or null if the owner has not uploaded one.</summary>
     Task<AppResult<string?>> QrUrlAsync();
 }
@@ -377,6 +397,7 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
             _ => AppResult<Payment>.Fail(AppErrorKind.Validation, "not_found")
         };
 
+    public Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync() => Safe.RunAsync(() => GymClosures.ByDayAsync(gw));
     public Task<AppResult<GymSettings>> GymAsync() => Safe.RunAsync(async () => (await gw.ListAsync<GymSettings>()).First());
 
     public Task<AppResult<string?>> QrUrlAsync() => Safe.RunAsync(async () =>
@@ -1499,6 +1520,12 @@ public interface IAdminService
     Task<AppResult<GymSettings>> GymSettingsAsync();
     /// <summary>Saves the gym name, QR account name and walk-in price, and uploads a new payment QR image when one is given.</summary>
     Task<AppResult<bool>> SaveGymSettingsAsync(GymSettings settings, (string FileName, byte[] Data)? qrImage);
+    /// <summary>G16: every closed day, the latest first (past ones stay as history).</summary>
+    Task<AppResult<IReadOnlyList<GymClosure>>> ClosuresAsync();
+    /// <summary>G18: what closing the day would cancel.</summary>
+    Task<AppResult<ClosurePreview>> ClosurePreviewAsync(DateOnly day);
+    Task<AppResult<bool>> CloseDayAsync(DateOnly day, string reason);
+    Task<AppResult<bool>> ReopenDayAsync(DateOnly day);
 }
 
 public sealed class AdminService(ISupabaseGateway gw) : IAdminService
@@ -1716,6 +1743,13 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
             return true;
         });
     }
+
+    static string Day(DateOnly d) => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+    public Task<AppResult<IReadOnlyList<GymClosure>>> ClosuresAsync() => Safe.RunAsync<IReadOnlyList<GymClosure>>(async () =>
+        (await gw.ListAsync<GymClosure>()).OrderByDescending(c => c.ClosedOn).ToList());
+    public Task<AppResult<ClosurePreview>> ClosurePreviewAsync(DateOnly day) => Safe.RunAsync(() => gw.RpcAsync<ClosurePreview>("closure_preview", new() { ["p_date"] = Day(day) }));
+    public Task<AppResult<bool>> CloseDayAsync(DateOnly day, string reason) => Rpc("close_gym_day", new() { ["p_date"] = Day(day), ["p_reason"] = reason.Trim() });
+    public Task<AppResult<bool>> ReopenDayAsync(DateOnly day) => Rpc("reopen_gym_day", new() { ["p_date"] = Day(day) });
 
     Task<AppResult<bool>> Rpc(string fn, Dictionary<string, object> args) =>
         Safe.RunAsync(async () => { await gw.RpcAsync(fn, args); return true; });

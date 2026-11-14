@@ -9,4 +9,6 @@ public partial class GymSettingsPage : BasePage
 		InitializeComponent();
 		BindingContext = vm;
 	}
+
+	void OnReopen(object? sender, EventArgs e) => Row<GymSettingsViewModel>(sender, v => v.ReopenCommand);   // G16
 }

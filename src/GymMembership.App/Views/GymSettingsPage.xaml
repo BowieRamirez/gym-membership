@@ -70,6 +70,42 @@
             </c:CardGrid>
 
             <Button Text="Save settings" HorizontalOptions="Start" Command="{Binding SaveCommand}" />
+
+            <!-- G16-G18 (0065, approved mockup docs/mockups/gym-closed-days.html): closing a day happens at once, after a confirm; not part of Save settings -->
+            <Border Style="{StaticResource Panel}">
+                <VerticalStackLayout Spacing="12">
+                    <c:CardTitle Text="Closed days" />
+                    <Label Text="Close the gym for a whole day. Bookings, sessions and coach shifts that day are cancelled, paid bookings are refunded at the desk, and everyone gets an announcement." Style="{StaticResource Caption}" />
+                    <FlexLayout Wrap="Wrap" AlignItems="End">
+                        <VerticalStackLayout Spacing="6" Margin="0,0,12,8">
+                            <Label Text="Day" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><DatePicker Date="{Binding ClosedDay}" MinimumDate="{Binding MinClosedDay}" AutomationId="ClosedDay" SemanticProperties.Description="Day to close" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="6" Margin="0,0,12,8" FlexLayout.Grow="1" MinimumWidthRequest="260">
+                            <Label Text="Why (members see this)" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding ClosedReason}" MaxLength="200" Placeholder="For example, Holiday" AutomationId="ClosedReason" SemanticProperties.Description="Why the gym is closed" /></Border>
+                        </VerticalStackLayout>
+                        <Button Text="Close the gym that day" Style="{StaticResource OutlineButton}" Margin="0,0,0,8" Command="{Binding CloseDayCommand}" AutomationId="CloseGymDay" />
+                    </FlexLayout>
+                    <Label Text="No closed days. The gym is open every day in its opening hours." Style="{StaticResource Muted}" IsVisible="{Binding HasClosures, Converter={StaticResource Not}}" />
+                    <VerticalStackLayout Spacing="0" BindableLayout.ItemsSource="{Binding Closures}" IsVisible="{Binding HasClosures}">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="vm:GymClosureRow">
+                                <VerticalStackLayout Spacing="0">
+                                    <BoxView Style="{StaticResource Hairline}" />
+                                    <Grid ColumnDefinitions="160,*,Auto" ColumnSpacing="14" Padding="0,10">
+                                        <Label Text="{Binding DayText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                                        <Label Grid.Column="1" Text="{Binding Reason}" VerticalOptions="Center" LineBreakMode="WordWrap" />
+                                        <Button Grid.Column="2" Text="Open again" Style="{StaticResource SmallOutlineButton}" Clicked="OnReopen" IsVisible="{Binding CanReopen}"
+                                                SemanticProperties.Description="{Binding DayText, StringFormat='Open the gym again on {0}'}" />
+                                        <c:StatusChip Grid.Column="2" Status="Past" VerticalOptions="Center" IsVisible="{Binding CanReopen, Converter={StaticResource Not}}" />
+                                    </Grid>
+                                </VerticalStackLayout>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gym closed days (Phase 7 mockup)</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Tokens from src/GymMembership.App/Resources/Styles/Colors.xaml (as the other mockups in this folder) */
+  :root, [data-theme="dark"] {
+    --page: #0E0E0E; --card: #1A1A1A; --surface: #242424; --line: #2A2A2A; --edge: #757575;
+    --ink: #F2F2F2; --muted: #A6A6A6; --signal: #FFEC00; --good: #4CC585; --bad: #FF7B70; --rail: #161616; --chip: #2A2A2A;
+    --sel: #FFEC00; --solid: #FFEC00; --solid-ink: #111111; --scrim: rgba(0,0,0,.62); --closed: #FF7B70;
+  }
+  [data-theme="light"] {
+    --page: #EEEEEE; --card: #FFFFFF; --surface: #F5F5F5; --line: #E4E4E4; --edge: #808080;
+    --ink: #111111; --muted: #5B5B5B; --signal: #FFEC00; --good: #1B7A3E; --bad: #C42B21; --rail: #FFEC00; --chip: #E4E4E4;
+    --sel: #111111; --solid: #111111; --solid-ink: #FFFFFF; --scrim: rgba(0,0,0,.38); --closed: #C42B21;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #2b2b2b; color: var(--ink); font: 14px/1.45 Barlow, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+  ::selection { background: var(--signal); color: #111; }
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--sel); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  .mock { position: sticky; top: 0; z-index: 9; display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: center; padding: 12px 18px; background: #151515; color: #ddd; font-size: 13px; border-bottom: 1px solid #333; }
+  .mock b { font-weight: 600; margin-right: 6px; }
+  .seg { display: inline-flex; border: 1px solid #444; border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; background: none; padding: 5px 11px; cursor: pointer; color: #bbb; border-right: 1px solid #444; }
+  .seg button:last-child { border-right: 0; }
+  .seg button[aria-pressed="true"] { background: var(--signal); color: #111; }
+  .note { max-width: 1180px; margin: 26px auto 8px; padding: 0 22px; color: #cfcfcf; }
+  .note h2 { font: 600 18px/1.3 Barlow, sans-serif; margin: 0 0 6px; color: #fff; }
+  .note p { margin: 0 0 5px; max-width: 80ch; }
+  .note ul { margin: 4px 0 0; padding-left: 18px; max-width: 80ch; }
+  .stage { padding: 10px 22px 26px; display: flex; gap: 22px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+
+  .app { position: relative; display: grid; grid-template-columns: 72px 1fr; background: var(--page); border-radius: 10px; overflow: hidden; width: 100%; max-width: 1180px; }
+  .rail { background: var(--rail); display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 0; }
+  .rail i { width: 38px; height: 38px; border-radius: 11px; background: var(--chip); display: block; opacity: .55; }
+  .rail i.on { background: var(--signal); opacity: 1; }
+  [data-theme="light"] .rail i { background: rgba(0,0,0,.12); }
+  [data-theme="light"] .rail i.on { background: #111; }
+  .page { padding: 18px 24px 26px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+  h1 { margin: 0; font: 500 28px/1.1 Barlow, sans-serif; }
+  h2 { margin: 0; font: 500 20px/1.2 Barlow, sans-serif; }
+  .cap { font-size: 12.5px; color: var(--muted); font-weight: 500; }
+  .muted { color: var(--muted); }
+  .lead { color: var(--muted); max-width: 70ch; margin: 0; }
+
+  .btn { height: 40px; padding: 0 18px; border-radius: 999px; border: 2px solid var(--ink); background: none; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .btn.y { background: var(--solid); border-color: var(--solid); color: var(--solid-ink); }
+  .btn.sm { height: 34px; padding: 0 14px; }
+  .btn:disabled { opacity: .38; cursor: not-allowed; }
+  .field { height: 40px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); padding: 0 12px; display: flex; align-items: center; }
+  .field input { border: 0; background: none; outline: none; width: 100%; }
+  .field input::placeholder { color: var(--muted); }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .panel { background: var(--card); border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+  .ghostpanel { background: var(--card); border-radius: 16px; padding: 16px 18px; opacity: .45; min-height: 150px; }
+  .ghostpanel .bar { height: 10px; border-radius: 6px; background: var(--chip); margin: 12px 0; }
+
+  /* Closed days: the form on one line, the list below it */
+  .closeform { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+  .closeform .f { display: flex; flex-direction: column; gap: 6px; }
+  .closeform .why { flex: 1 1 260px; }
+  .crow { display: grid; grid-template-columns: 150px 1fr auto; gap: 14px; align-items: center; padding: 11px 0; border-top: 1px solid var(--line); }
+  .crow .d { font-weight: 600; }
+  .crow.past { color: var(--muted); }
+  .crow.past .d { font-weight: 500; }
+  .tag { display: inline-flex; align-items: center; gap: 6px; font: 600 12px/1 Barlow; padding: 6px 10px; border-radius: 999px; background: var(--chip); white-space: nowrap; color: var(--muted); }
+
+  /* the confirm dialog, as Confirm.AskAsync shows it on Windows */
+  .scrim { position: absolute; inset: 0; background: var(--scrim); display: grid; place-items: center; }
+  .dialog { width: min(470px, 92%); background: var(--card); border-radius: 14px; padding: 22px 24px; box-shadow: 0 18px 40px rgba(0,0,0,.35); display: flex; flex-direction: column; gap: 12px; }
+  .dialog h3 { margin: 0; font: 600 19px/1.25 Barlow; }
+  .dialog p { margin: 0; }
+  .dialog .acts { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
+
+  /* phones */
+  .phone { width: 360px; background: var(--page); border-radius: 30px; border: 8px solid #000; overflow: hidden; display: flex; flex-direction: column; }
+  .ph-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px; }
+  .ph-head .av { width: 34px; height: 34px; border-radius: 50%; background: var(--ink); color: var(--page); display: grid; place-items: center; font-weight: 600; font-size: 13px; }
+  .ph-head h2 { font-size: 20px; }
+  .ph-body { padding: 4px 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .sheet { background: var(--card); border-radius: 18px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  .sheet .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .sheet h3 { margin: 0; font: 600 18px/1.2 Barlow; }
+  .month { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; text-align: center; }
+  .month .h { font-size: 11.5px; color: var(--muted); font-weight: 600; padding-bottom: 2px; }
+  .day { position: relative; height: 40px; border-radius: 10px; background: var(--surface); display: grid; place-items: center; font-weight: 600; border: 2px solid transparent; }
+  .day.dim { opacity: .35; }
+  .day.today { background: var(--signal); color: #111; }
+  .day.sel { border-color: var(--sel); }
+  .day.closed { background: none; border: 1px dashed var(--closed); color: var(--closed); opacity: 1; }
+  .day.closed::after { content: ""; position: absolute; left: 8px; right: 8px; top: 50%; height: 1.5px; background: var(--closed); transform: rotate(-24deg); opacity: .7; }
+  .closednote { border-radius: 12px; background: var(--surface); padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+  .closednote b { color: var(--closed); font-weight: 600; }
+  .times { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { height: 34px; padding: 0 14px; border-radius: 999px; border: 0; background: var(--chip); font-weight: 500; }
+  .tabbar { margin-top: auto; display: grid; grid-template-columns: repeat(5, 1fr); background: var(--rail); padding: 10px 6px 14px; font-size: 11.5px; text-align: center; color: var(--muted); }
+  [data-theme="light"] .tabbar { color: #3D3A00; }
+  .tabbar span.on { color: var(--ink); font-weight: 600; }
+
+  /* member calendar: month cell markers and the day list */
+  .cal .day { height: 46px; align-content: start; padding-top: 6px; }
+  .cal .day small { display: block; font: 600 9.5px/1 Barlow; margin-top: 3px; }
+  .cal .day.closed::after { display: none; }
+  .entry { display: grid; grid-template-columns: 74px 1fr; gap: 10px; padding: 11px 0; border-top: 1px solid var(--line); }
+  .entry .k { font-size: 12px; color: var(--muted); }
+  .entry.closed .t { color: var(--closed); font-weight: 600; }
+
+  /* coach dashboard: the shift form for the selected day */
+  .coachwrap { width: 100%; max-width: 1180px; }
+  .shiftform { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+  .shiftform .f { display: flex; flex-direction: column; gap: 6px; }
+  .label { font: 600 13px/1.2 Barlow; color: #bbb; margin: 0 0 8px 4px; }
+
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } .crow { grid-template-columns: 1fr auto; } .crow .r { grid-column: 1 / -1; } }
+</style>
+</head>
+<body data-theme="dark">
+<div class="mock">
+  <span><b>Theme</b><span class="seg" id="theme"><button aria-pressed="true" data-v="dark">Dark</button><button aria-pressed="false" data-v="light">Light</button></span></span>
+  <span><b>Gym settings</b><span class="seg" id="dlg"><button aria-pressed="false" data-v="list">The section</button><button aria-pressed="true" data-v="confirm">Confirm before closing</button><button aria-pressed="false" data-v="empty">No closed days yet</button></span></span>
+</div>
+
+<div class="note">
+  <h2>Phase 7: gym closed days (G16, G17, G18 as you decided)</h2>
+  <p>Admin and System admin close a whole day on <b>Gym settings</b>, with a reason. Closing happens at once (it isn't part of "Save settings"), after a confirm that says what will be cancelled and the exact announcement everyone gets.</p>
+  <ul>
+    <li>Upcoming closed days have <b>Open again</b>. Past ones stay in the list as history, marked Past.</li>
+    <li>Members see a closed day crossed out in red on the booking sheet and as "Closed" on their calendar, with the reason. Coaches see no shift form that day, just the reason.</li>
+    <li>Front desk: check-in that day is refused with "The gym is closed that day. See Announcements for why…". No new screen for that.</li>
+  </ul>
+</div>
+
+<!-- 1. Gym settings (Windows, Admin) -->
+<div class="stage"><div class="label" style="width:100%;max-width:1180px">Gym settings · Windows (Admin, System admin)</div>
+<div class="app" id="settings">
+  <nav class="rail"><i></i><i></i><i></i><i></i><i class="on"></i><i></i></nav>
+  <main class="page">
+    <h1>Gym settings</h1>
+    <p class="lead">What members see when they pay, the price of a day pass, and the float each cash drawer starts with.</p>
+    <div class="grid2"><div class="ghostpanel"><div class="cap">Gym name, prices, opening hours (unchanged)</div><div class="bar"></div><div class="bar" style="width:60%"></div><div class="bar" style="width:75%"></div></div>
+      <div class="ghostpanel"><div class="cap">Payment QR (unchanged)</div><div class="bar"></div><div class="bar" style="width:50%"></div></div></div>
+    <div><button class="btn y" type="button">Save settings</button></div>
+
+    <section class="panel" aria-labelledby="cdh">
+      <h2 id="cdh">Closed days</h2>
+      <p class="cap" style="margin:0">Close the gym for a whole day. Bookings, sessions and coach shifts that day are cancelled, paid bookings are refunded at the desk, and everyone gets an announcement.</p>
+      <div class="closeform">
+        <div class="f"><span class="cap">Day</span><div class="field" style="width:190px"><input value="Fri 25 Dec 2026" aria-label="Day to close"></div></div>
+        <div class="f why"><span class="cap">Why (members see this)</span><div class="field"><input value="Christmas Day" aria-label="Why the gym is closed"></div></div>
+        <button class="btn" type="button">Close the gym that day</button>
+      </div>
+      <div id="rows">
+        <div class="crow"><span class="d">Sat 21 Nov 2026</span><span class="r">Floor repairs</span><button class="btn sm" type="button">Open again</button></div>
+        <div class="crow"><span class="d">Fri 25 Dec 2026</span><span class="r">Christmas Day</span><button class="btn sm" type="button">Open again</button></div>
+        <div class="crow past"><span class="d">Sun 1 Nov 2026</span><span class="r">All Saints' Day</span><span class="tag">Past</span></div>
+      </div>
+      <p class="muted" id="empty" hidden style="margin:0;padding-top:4px">No closed days. The gym is open every day, 6:00 AM to 10:00 PM.</p>
+    </section>
+  </main>
+  <div class="scrim" id="confirm">
+    <div class="dialog" role="dialog" aria-labelledby="ch">
+      <h3 id="ch">Close the gym on Friday, 25 Dec?</h3>
+      <p>4 bookings (2 paid, refunded), 1 session and 2 shifts will be cancelled. 1 session request will be declined.</p>
+      <p class="muted">Everyone is told: "The gym is closed on Friday, 25 Dec: Christmas Day."</p>
+      <div class="acts"><button class="btn sm" type="button">Cancel</button><button class="btn y sm" type="button">Close the gym</button></div>
+    </div>
+  </div>
+</div></div>
+
+<!-- 2. Member phone: booking sheet and calendar -->
+<div class="stage">
+  <div>
+    <div class="label">Book an amenity · phone (member)</div>
+    <div class="phone">
+      <div class="ph-head"><span class="av">AT</span><h2>Book an amenity</h2></div>
+      <div class="ph-body">
+        <div class="sheet">
+          <div class="top"><div><h3>Book Pool</h3><span class="cap">Pass active until 10 Dec · Any coach in the gym</span></div><button class="btn sm" type="button">Close</button></div>
+          <div class="month" aria-label="November 2026">
+            <span class="h">M</span><span class="h">T</span><span class="h">W</span><span class="h">T</span><span class="h">F</span><span class="h">S</span><span class="h">S</span>
+            <span class="day dim">9</span><span class="day dim">10</span><span class="day dim">11</span><span class="day dim">12</span><span class="day dim">13</span><span class="day today">14</span><span class="day">15</span>
+            <span class="day">16</span><span class="day">17</span><span class="day">18</span><span class="day">19</span><span class="day">20</span><span class="day closed sel" aria-label="Saturday 21 November, gym closed: Floor repairs">21</span><span class="day">22</span>
+          </div>
+          <div class="closednote"><b>Closed Saturday 21 November</b><span>The gym is closed this day: Floor repairs.</span></div>
+          <span class="cap">Pick another day to see free times.</span>
+        </div>
+      </div>
+      <div class="tabbar"><span>Membership</span><span>Sessions</span><span class="on">Book</span><span>Messages</span><span>More</span></div>
+    </div>
+  </div>
+  <div>
+    <div class="label">My calendar · phone (member)</div>
+    <div class="phone">
+      <div class="ph-head"><span class="av">AT</span><h2>My calendar</h2></div>
+      <div class="ph-body">
+        <div class="sheet cal">
+          <div class="month">
+            <span class="h">M</span><span class="h">T</span><span class="h">W</span><span class="h">T</span><span class="h">F</span><span class="h">S</span><span class="h">S</span>
+            <span class="day">16</span><span class="day">17<small>Session</small></span><span class="day">18</span><span class="day">19</span><span class="day">20</span><span class="day closed sel">21<small>Closed</small></span><span class="day">22</span>
+          </div>
+        </div>
+        <div class="sheet" style="gap:0">
+          <h3 style="padding-bottom:8px">Saturday 21 November</h3>
+          <div class="entry closed"><span class="k">All day</span><span><span class="t">Gym closed: Floor repairs</span><br><span class="cap">Nothing can be booked this day.</span></span></div>
+        </div>
+      </div>
+      <div class="tabbar"><span>Membership</span><span class="on">Sessions</span><span>Book</span><span>Messages</span><span>More</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- 3. Coach dashboard (Windows; the phone shows the same note in place of the form) -->
+<div class="stage"><div class="coachwrap"><div class="label">Coach dashboard · selected day · Windows and phone</div>
+  <div class="app"><nav class="rail"><i class="on"></i><i></i><i></i><i></i></nav>
+  <main class="page">
+    <h2>Saturday 21 November</h2>
+    <div class="closednote"><b>The gym is closed this day: Floor repairs.</b><span class="muted">You can't post a shift this day. Anything already set up for it was cancelled, and the people involved were told.</span></div>
+    <div class="shiftform" aria-disabled="true" style="opacity:.38">
+      <div class="f"><span class="cap">Start</span><div class="field" style="width:130px">8:00 AM</div></div>
+      <div class="f"><span class="cap">Hours</span><div class="field" style="width:90px">4</div></div>
+      <button class="btn y" type="button" disabled>Post shift</button>
+    </div>
+  </main></div>
+</div></div>
+
+<script>
+  const seg = (id, f) => document.querySelectorAll(`#${id} button`).forEach(b => b.onclick = () => {
+    document.querySelectorAll(`#${id} button`).forEach(x => x.setAttribute('aria-pressed', x === b));
+    f(b.dataset.v);
+  });
+  seg('theme', v => document.body.dataset.theme = v);
+  seg('dlg', v => {
+    document.getElementById('confirm').hidden = v !== 'confirm';
+    document.getElementById('rows').hidden = v === 'empty';
+    document.getElementById('empty').hidden = v !== 'empty';
+  });
+</script>
+</body>
+</html>

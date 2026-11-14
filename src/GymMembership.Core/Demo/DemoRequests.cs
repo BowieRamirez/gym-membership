@@ -77,6 +77,7 @@ public sealed partial class DemoGateway
                 if (reason is null || reason.Length > 500) throw Err("bad_reason");
                 var (start, end, amenity) = (T("p_start"), T("p_end"), OptI("p_amenity_id"));
                 CheckSessionTime(start, end, amenity, now);
+                RefuseClosed(start);   // G17 (0065)
                 r.Status = Proposed; r.ProposedStart = start; r.ProposedEnd = end; r.ProposedAmenityId = amenity; r.ProposalReason = reason;
                 r.ProposalExpiresAt = now.AddHours(24) < start ? now.AddHours(24) : start; r.Version++;
                 Notify(r.MemberId, "time_request", "Your coach proposed another time", reason);
@@ -110,6 +111,7 @@ public sealed partial class DemoGateway
                 if (r.Status != Proposed) throw Err("already_processed");
                 var (start, end, amenity) = (T("p_start"), T("p_end"), OptI("p_amenity_id"));
                 CheckSessionTime(start, end, amenity, now);
+                RefuseClosed(start);   // G17 (0065)
                 r.Status = Status.Pending; r.RequestedStart = start; r.RequestedEnd = end; r.AmenityId = amenity; r.Message = Text("p_message") ?? r.Message;
                 r.ProposedStart = r.ProposedEnd = null; r.ProposedAmenityId = null; r.ProposalReason = null; r.ProposalExpiresAt = null; r.Version++;
                 Notify(r.CoachId, "time_request", "Another time requested");

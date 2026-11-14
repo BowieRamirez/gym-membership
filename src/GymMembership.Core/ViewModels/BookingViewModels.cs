@@ -8,11 +8,13 @@ using GymMembership.Core.Services;
 namespace GymMembership.Core.ViewModels;
 
 /// <summary>A day on the booking sheet's month, in the coach Dashboard's style: today on yellow, the chosen day outlined, days that can't be booked dimmed.</summary>
-public sealed record BookDay(DateOnly Date, bool InMonth, bool IsToday, bool IsSelected, bool CanPick, bool HasBooking)
+public sealed record BookDay(DateOnly Date, bool InMonth, bool IsToday, bool IsSelected, bool CanPick, bool HasBooking, string? ClosedReason = null)
 {
     public string Number => Date.Day.ToString(CultureInfo.InvariantCulture);
-    public bool Dimmed => !CanPick || !InMonth;
-    public string Description => Date.ToString("dddd d MMMM", CultureInfo.InvariantCulture) + (IsToday ? ", today" : "") + (HasBooking ? ", you have a booking" : "") + (CanPick ? "" : ", can't be booked");
+    public bool Dimmed => (!CanPick && !IsClosed) || !InMonth;
+    /// <summary>G16 (0065): closed days stay readable, crossed out in red, and can be opened to read why.</summary>
+    public bool IsClosed => ClosedReason is not null;
+    public string Description => Date.ToString("dddd d MMMM", CultureInfo.InvariantCulture) + (IsToday ? ", today" : "") + (HasBooking ? ", you have a booking" : "") + (ClosedReason is { } why ? $", gym closed: {why}" : CanPick ? "" : ", can't be booked");   // G16 (0065)
 }
 
 /// <summary>A start time or a length on the sheet; only ones that fit can be picked.</summary>
@@ -53,7 +55,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPicking), nameof(SheetTitle), nameof(SheetCaption), nameof(PayFirst), nameof(BookText), nameof(HoldText), nameof(Split), nameof(CoachFeeText))]
     private AmenityCard? picked;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(MonthText))] private DateOnly month = new(Today.Year, Today.Month, 1);
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(DayText))] private DateOnly day = Today;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(DayText), nameof(IsDayClosed))] private DateOnly day = Today;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Summary), nameof(SummaryDetail), nameof(CanBook), nameof(CoachesTitle))] private PickChip? time;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Summary), nameof(SummaryDetail), nameof(CanBook), nameof(CoachesTitle))] private PickChip? length;
 
@@ -67,6 +69,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     public ObservableCollection<AvailableCode> Codes { get; } = new();
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Split), nameof(BookText), nameof(SummaryDetail))] private int percent = 50;
     IReadOnlyList<AvailableCode> _myCodes = [];
+    IReadOnlyDictionary<DateOnly, string> _closed = new Dictionary<DateOnly, string>();   // G16 (0065)
 
     public bool HasCoaches => Coaches.Count > 0;
     public bool HasCodes => Codes.Count > 0;
@@ -99,7 +102,9 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     public string HoldText => PayFirst ? "Not yours until the desk verifies the down payment. If someone else's is verified first, yours is refunded."
         : Split.Balance > 0 ? $"Uses your pass. The ₱{Split.Balance:N2} coach fee is paid at the desk." : "Uses your pass, nothing to pay.";
     /// <summary>Why times are faded: none left that day, or (paying first, today) the hold needs the start more than 1 hour away.</summary>
-    public string TimesNote => !Times.Any(t => t.CanPick) ? (PayFirst ? "No free times this day. Online bookings start more than 1 hour from now." : "No free times this day.")
+    public bool IsDayClosed => _closed.ContainsKey(Day);
+    public string TimesNote => _closed.TryGetValue(Day, out var why) ? $"The gym is closed this day: {why}."
+        : !Times.Any(t => t.CanPick) ? (PayFirst ? "No free times this day. Online bookings start more than 1 hour from now." : "No free times this day.")
         : PayFirst && Day == Today ? "Times less than 1 hour from now can't be held online." : "";
 
     public string Summary => Time is null || Length is null ? "Pick a start time"
@@ -139,6 +144,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
         (IsWithCoach, PickedCoach, Code) = (false, null, "");
         Coaches.Clear(); OnPropertyChanged(nameof(HasCoaches));
         if (await svc.DownPaymentPercentAsync() is { Ok: true } pct) Percent = pct.Value;
+        if (await svc.ClosedDaysAsync() is { Ok: true, Value: { } closed }) _closed = closed;
         if (membership is not null && await membership.AvailableCodesAsync() is { Ok: true, Value: { } codes }) _myCodes = codes;
         Fill(Codes, _myCodes.Where(c => c.AllAmenities || c.AmenityIds.Contains(card.Amenity.Id)));
         OnPropertyChanged(nameof(HasCodes));
@@ -172,12 +178,13 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     [RelayCommand] private void PreviousMonth() { if (Month > new DateOnly(Today.Year, Today.Month, 1)) { Month = Month.AddMonths(-1); BuildDays(); } }
     [RelayCommand] private void NextMonth() { var last = Today.AddDays(DaysAhead); if (Month < new DateOnly(last.Year, last.Month, 1)) { Month = Month.AddMonths(1); BuildDays(); } }
 
-    [RelayCommand] private Task PickDay(BookDay d) => d.CanPick ? PickDayAsync(d.Date) : Task.CompletedTask;
+    [RelayCommand] private Task PickDay(BookDay d) => d.CanPick || d.IsClosed ? PickDayAsync(d.Date) : Task.CompletedTask;
 
     async Task PickDayAsync(DateOnly d)
     {
         Day = d; Time = null; Length = null;
         BuildDays();
+        if (_closed.ContainsKey(d)) { Times.Clear(); Lengths.Clear(); OnPropertyChanged(nameof(TimesNote)); return; }
         if (!await RunAsync(() => svc.GridAsync(d), g => _grid = g)) return;
         BuildTimes();
     }
@@ -186,7 +193,8 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     {
         var mine = Bookings.Where(b => b.Booking.Status is "confirmed" or "awaiting_payment").Select(b => DateOnly.FromDateTime(Manila(b.Booking.StartsAt))).ToHashSet();
         Fill(Days, AttendanceCalendar.MonthGrid(Month.Year, Month.Month).Select(x =>
-            new BookDay(x, x.Month == Month.Month, x == Today, x == Day, x >= Today && x <= Today.AddDays(DaysAhead), mine.Contains(x))));
+            new BookDay(x, x.Month == Month.Month, x == Today, x == Day, x >= Today && x <= Today.AddDays(DaysAhead) && !_closed.ContainsKey(x), mine.Contains(x),
+                _closed.GetValueOrDefault(x))));
     }
 
     void BuildTimes()

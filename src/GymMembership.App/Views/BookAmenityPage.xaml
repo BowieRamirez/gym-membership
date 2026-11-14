@@ -160,13 +160,24 @@
                                                     <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
                                                         <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
                                                     </DataTrigger>
+                                                    <!-- G16 (0065): a closed day, crossed out in red; it still opens to say why -->
+                                                    <DataTrigger TargetType="Border" Binding="{Binding IsClosed}" Value="True">
+                                                        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
+                                                        <Setter Property="StrokeThickness" Value="1.5" />
+                                                        <Setter Property="StrokeDashArray" Value="3,2" />
+                                                        <Setter Property="BackgroundColor" Value="Transparent" />
+                                                    </DataTrigger>
                                                 </Border.Triggers>
                                                 <Grid RowDefinitions="Auto,*">
                                                     <!-- today: the number on a small yellow block, as the Dashboard -->
                                                     <Border StrokeThickness="0" StrokeShape="RoundRectangle 6" Padding="5,0" HorizontalOptions="Start" BackgroundColor="Transparent">
                                                         <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding IsToday}" Value="True"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /></DataTrigger></Border.Triggers>
                                                         <Label Text="{Binding Number}" FontFamily="BarlowSemiBold" FontSize="14">
-                                                            <Label.Triggers><DataTrigger TargetType="Label" Binding="{Binding IsToday}" Value="True"><Setter Property="TextColor" Value="{StaticResource Black}" /></DataTrigger></Label.Triggers>
+                                                            <Label.Triggers><DataTrigger TargetType="Label" Binding="{Binding IsToday}" Value="True"><Setter Property="TextColor" Value="{StaticResource Black}" /></DataTrigger>
+                                                                <DataTrigger TargetType="Label" Binding="{Binding IsClosed}" Value="True">
+                                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
+                                                                    <Setter Property="TextDecorations" Value="Strikethrough" />
+                                                                </DataTrigger></Label.Triggers>
                                                         </Label>
                                                     </Border>
                                                     <!-- a dot: you already have a booking that day -->
@@ -188,8 +199,16 @@
                             <VerticalStackLayout Grid.Column="{OnIdiom Phone=0, Default=1}" Grid.Row="{OnIdiom Phone=1, Default=0}"
                                                  Padding="{OnIdiom Phone='12,0,12,12', Default='18,8,18,16'}" Spacing="12">
                                 <VerticalStackLayout Spacing="6">
-                                    <Label Text="{Binding DayText}" FontFamily="BarlowSemiBold" FontSize="16" />
-                                    <Label Text="Start time" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding DayText}" FontFamily="BarlowSemiBold" FontSize="16" IsVisible="{Binding IsDayClosed, Converter={StaticResource Not}}" />
+                                    <!-- G16 (0065): a closed day says why, in place of its times -->
+                                    <Border Style="{StaticResource Row}" Padding="14,12" StrokeShape="RoundRectangle 12" IsVisible="{Binding IsDayClosed}" AutomationId="ClosedDayNote">
+                                        <VerticalStackLayout Spacing="4">
+                                            <Label Text="{Binding DayText, StringFormat='Closed {0}'}" FontFamily="BarlowSemiBold" TextColor="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
+                                            <Label Text="{Binding TimesNote}" />
+                                            <Label Text="Pick another day to see free times." Style="{StaticResource Caption}" />
+                                        </VerticalStackLayout>
+                                    </Border>
+                                    <Label Text="Start time" Style="{StaticResource Caption}" IsVisible="{Binding IsDayClosed, Converter={StaticResource Not}}" />
                                     <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Times}">
                                         <BindableLayout.ItemTemplate>
                                             <DataTemplate x:DataType="vm:PickChip">
@@ -197,7 +216,9 @@
                                             </DataTemplate>
                                         </BindableLayout.ItemTemplate>
                                     </FlexLayout>
-                                    <Label Text="{Binding TimesNote}" Style="{StaticResource Caption}" IsVisible="{Binding TimesNote, Converter={StaticResource HasText}}" />
+                                    <Label Text="{Binding TimesNote}" Style="{StaticResource Caption}" IsVisible="{Binding TimesNote, Converter={StaticResource HasText}}">
+                                        <Label.Triggers><DataTrigger TargetType="Label" Binding="{Binding IsDayClosed}" Value="True"><Setter Property="IsVisible" Value="False" /></DataTrigger></Label.Triggers>
+                                    </Label>
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Spacing="6" IsVisible="{Binding Time, Converter={StaticResource IsNotNull}}">
                                     <Label Text="How long" Style="{StaticResource Caption}" />
