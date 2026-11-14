@@ -56,6 +56,19 @@ public class ReservationTests
         Blocks = taken.Select(b => new GridBlock { Amenity = 1, Starts = At(b.From), Ends = At(b.To), Cooldown = At(b.To).AddMinutes(30) }).ToList()
     };
 
+    // A changed Access rebuilds the member menu on the next page change (MemberShell.RecheckAsync); on Android that rebuild during a
+    // tab tap crashed the app right after booking, because the down payment counted as a membership payment waiting.
+    [Fact]
+    public async Task Booking_an_amenity_leaves_the_members_access_as_it_was()
+    {
+        var (gw, vm) = await Member();
+        var before = (await new MembershipService(gw).AccessAsync()).Value;
+        await Booked(vm, "Group classes", "10:00");
+        Assert.Equal(before, (await new MembershipService(gw).AccessAsync()).Value);
+        await gw.SignInAsync("bea@demo.io", DemoGateway.DemoPassword);   // no active plan, a membership payment waiting: the locked pages say so
+        Assert.Equal(new Access(false, true), (await new MembershipService(gw).AccessAsync()).Value);
+    }
+
     [Fact]
     public void A_start_offers_only_lengths_that_end_before_the_next_bookings_cooldown_would_clash()
     {

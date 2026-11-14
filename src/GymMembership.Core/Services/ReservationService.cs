@@ -119,7 +119,9 @@ public sealed record BookingRow(Reservation Booking, string Amenity, DateTime No
     public bool IsWaiting => Booking.Status == "awaiting_payment";
     string Down => $"₱{Booking.DownPayment:N2}";
     /// <summary>G13: the member gets the down payment back if they cancel 24 hours or more before the start.</summary>
-    bool Refundable => Start.AddHours(-24) >= NowUtc;
+    public bool Refundable => Start.AddHours(-24) >= NowUtc;
+    /// <summary>G13: cancelled because another down payment was verified first (0064's reasons).</summary>
+    bool LostToOther => Booking.CancelReason is "Slot taken" or "Coach not free" or "You have another booking then";
     bool Confirmed => Booking.Status == "confirmed";
     public bool Paid => Payment?.Status == Status.Verified;
     public bool InUse => Confirmed && Start <= NowUtc && NowUtc < End;
@@ -138,8 +140,7 @@ public sealed record BookingRow(Reservation Booking, string Amenity, DateTime No
         { Status: "pending" } => "Refund claim sent",
         { Status: "rejected" } => "Claim declined",
         { Status: "paid" } => "Refund repaid",
-        { Status: "approved", Kind: "cancel" } when Booking.CancelReason is "Slot taken" or "Coach not free" or "You have another booking then" => $"{Booking.CancelReason} · refund approved",
-        { Status: "approved", Kind: "cancel" } when Booking.CancelReason is "Slot taken" or "Coach not free" or "You have another booking then" => $"{Booking.CancelReason} · refund approved",
+        { Status: "approved", Kind: "cancel" } when LostToOther => $"{Booking.CancelReason} · refund approved",
         { Status: "approved", Kind: "cancel" } => "Cancelled · refund approved",
         { Status: "approved" } => "Refund approved",
         _ => IsWaiting ? "Waiting for down payment" : InUse ? "In use" : Ended ? "Ended" : "Confirmed"
@@ -150,8 +151,7 @@ public sealed record BookingRow(Reservation Booking, string Amenity, DateTime No
         { Status: "rejected" } r => $"\"{r.DecisionReason}\" (Front desk)",
         { Status: "paid" } => $"{Price} repaid.",
         { Status: "approved", Kind: "no_show" } r => $"{Price} to be repaid at the front desk. \"{r.DecisionReason}\" (Front desk)",
-        { Status: "approved", Kind: "cancel" } when Booking.CancelReason is "Slot taken" or "Coach not free" or "You have another booking then"
-            => $"Another booking's down payment was verified first. {Price} to be repaid at the front desk.",
+        { Status: "approved", Kind: "cancel" } when LostToOther => $"Another booking's down payment was verified first. {Price} to be repaid at the front desk.",
         { Status: "approved" } => $"{Price} to be repaid at the front desk.",
         _ when IsWaiting && Payment is { } p => (p.Method == PayMethod.Cash
             ? $"Down payment {Price} at the front desk by {At(p.ExpiresAt ?? Start)}."

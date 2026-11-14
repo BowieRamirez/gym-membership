@@ -181,6 +181,8 @@ try {
       const g = (await db.query(`select has_function_privilege('anon','public.${fn}','execute') a`)).rows[0];
       assert.equal(g.a, false, fn);
     }
+    const a = await amenity('D Window');
+    await assert.rejects(as(await member(), 'select * from free_coaches($1,$2,$2)', [a, at('10:00')]), /bad_input/);   // no time window
   });
 } finally {
   await db.end(); await server.stop();

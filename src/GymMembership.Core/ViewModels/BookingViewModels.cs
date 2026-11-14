@@ -251,7 +251,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     private async Task CancelAsync(BookingRow row)
     {
         Notice = null;
-        var refund = row.Booking.StartsAt.ToUniversalTime().AddHours(-24) >= DateTime.UtcNow;
+        var refund = row.Refundable;
         var body = row.IsWaiting ? "The request and its payment are withdrawn." : row.Paid
             ? refund ? $"The ₱{row.Payment!.Amount:N2} down payment will be repaid at the front desk." : $"It starts within 24 hours, so the gym keeps the ₱{row.Payment!.Amount:N2} down payment."
             : row.When;

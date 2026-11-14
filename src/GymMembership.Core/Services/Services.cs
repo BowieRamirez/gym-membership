@@ -301,7 +301,8 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
         var uid = gw.CurrentUserId;
         var active = await gw.RpcAsync<bool>("is_active_member");
         var pays = await gw.ListAsync<Payment>(p => p.MemberId == uid);
-        return new Access(active, pays.Any(p => p.Status == Status.Pending));
+        // only what the member menu shows: a plan payment waiting matters to the locked pages; an amenity down payment must not rebuild the menu
+        return new Access(active, !active && pays.Any(p => p.Status == Status.Pending && p.Kind is PayKind.Membership or PayKind.Renewal));
     });
 
     public Task<AppResult<IReadOnlyList<MembershipPackage>>> ListPackagesAsync() =>
