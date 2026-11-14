@@ -113,7 +113,7 @@ public class ReservationTests
         Assert.Equal(("Book and pay ₱250.00", true), (vm.BookText, vm.PayFirst));   // G13: half of ₱500
         Assert.StartsWith("Not yours until the desk verifies the down payment", vm.HoldText);
         var row = await Booked(vm, "Group classes", "10:00");
-        Assert.Equal("₱500.00 for 30 days", vm.Cards.Single(c => c.Amenity.Name == "Group classes").PassText);   // the hold is not a pass bought
+        Assert.Equal("₱500.00 per session, up to 2 hours", vm.Cards.Single(c => c.Amenity.Name == "Group classes").PassText);   // the hold is not a pass bought
         Assert.Equal(("Waiting for down payment", "wait", true, true), (row.StatusText, row.Tone, row.CanSendProof, row.CanCancel));
         Assert.StartsWith("Down payment ₱250.00 by GCash. Pay by ", row.Detail);
         Assert.StartsWith("Requested.", vm.Notice);

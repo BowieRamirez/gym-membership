@@ -38,7 +38,7 @@ public class CrudTests
     {
         var gw = await As("admin@demo.io");
         var admin = new AdminService(gw);
-        Assert.True((await admin.SaveAmenityAsync(new Amenity { Name = "Crud room", Price = 200, DurationDays = 30 })).Ok);
+        Assert.True((await admin.SaveAmenityAsync(new Amenity { Name = "Crud room", Price = 200 })).Ok);
         var sauna = (await admin.AllAmenitiesAsync()).Value!.Single(a => a.Name == "Crud room");
 
         sauna.Price = 250;

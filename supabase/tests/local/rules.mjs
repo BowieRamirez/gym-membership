@@ -38,7 +38,7 @@ const alex = await user('alex@t.io', 'member', 'Alex');
 const bea = await user('bea@t.io', 'member', 'Bea');
 await openCashShifts(db);
 await db.query(`insert into membership_packages (name, price, duration_days) values ('Monthly', 1000, 30), ('Annual', 10000, 365)`);
-await db.query(`insert into amenities (name, price, duration_days) values ('Boxing', 300, 30)`);
+await db.query(`insert into amenities (name, price, duration_days) values ('Boxing', 300, null)`);   // 0066: sold per session
 await db.query(`insert into discounts (code, percent, starts_at, expires_at, max_uses) values ('WELCOME10', 10, now() - interval '1 day', now() + interval '30 days', 100),
                 ('OLD20', 20, now() - interval '10 days', now() - interval '1 day', 100)`);
 // since 0060 a code fits only what its items say; these fit everything, as every code did before
@@ -203,10 +203,10 @@ await test('a walk-in is recorded with a name, the default price, and a check-in
   assert.equal(Number(w.amount), 150); assert.equal(w.walk_in_name, 'Juan Dela Cruz'); assert.equal(w.member_id, null);
   assert.equal((await run(desk, `select * from gym_check_ins where payment_id=$1`, [w.payment_id])).rowCount, 1);
 });
-await test('an amenity bought at the counter activates with an expiry', async () => {
+await test('an amenity bought at the counter is one session, active at once', async () => {
   const a = (await run(desk, `select * from record_counter_payment('amenity','gcash',$1,1,null,'GC-777')`, [eve])).rows[0];
-  const r = await run(eve, `select status, expires_at is not null e from user_amenities where user_amenity_id=$1`, [a.user_amenity_id]);
-  assert.deepEqual(r.rows[0], { status: 'active', e: true });
+  const r = await run(eve, `select status, is_session from user_amenities where user_amenity_id=$1`, [a.user_amenity_id]);
+  assert.deepEqual(r.rows[0], { status: 'active', is_session: true });
 });
 await test('only an admin can void; voiding cancels the membership and is audited', async () => {
   assert.match(await code(run(desk, `select void_payment($1,'oops')`, [counter.payment_id])), /forbidden/);

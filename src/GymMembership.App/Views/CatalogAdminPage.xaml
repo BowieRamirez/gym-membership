@@ -172,7 +172,7 @@
                             <Grid Style="{StaticResource TableHead}" ColumnDefinitions="52,*,190,120,100" ColumnSpacing="14">
                                 <Label Text="Photo" Style="{StaticResource Caption}" />
                                 <Label Grid.Column="1" Text="Amenity" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="2" Text="Sold as" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="2" Text="Price" Style="{StaticResource Caption}" />
                                 <Label Grid.Column="3" Text="State" Style="{StaticResource Caption}" />
                             </Grid>
                             <BoxView Style="{StaticResource Hairline}" />
@@ -247,30 +247,8 @@
                                 <Label Text="Write what members get." Style="{StaticResource FieldError}" IsVisible="{Binding DescriptionMissing}" />
                             </VerticalStackLayout>
 
-                            <!-- amenities: a pass for some days, or per session (changing a published one is Sell per session) -->
-                            <VerticalStackLayout Spacing="4" IsVisible="{Binding IsPackagePanel, Converter={StaticResource Not}}">
-                                <Label Text="Sold as" Style="{StaticResource Caption}" />
-                                <Border Style="{StaticResource SegmentTrack}" IsVisible="{Binding CanChooseSoldAs}">
-                                    <HorizontalStackLayout Spacing="2">
-                                        <Button Text="Pass for some days" Style="{StaticResource Segment}" Command="{Binding SellAsPassCommand}" AutomationId="SoldAsPass">
-                                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding SoldAsPass}" Value="True">
-                                                <Setter Property="FontFamily" Value="BarlowSemiBold" />
-                                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
-                                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
-                                            </DataTrigger></Button.Triggers>
-                                        </Button>
-                                        <Button Text="Per session" Style="{StaticResource Segment}" Command="{Binding SellPerSessionCommand}" AutomationId="SoldPerSession">
-                                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding SoldAsPass}" Value="False">
-                                                <Setter Property="FontFamily" Value="BarlowSemiBold" />
-                                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
-                                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
-                                            </DataTrigger></Button.Triggers>
-                                        </Button>
-                                    </HorizontalStackLayout>
-                                </Border>
-                                <Label Text="A pass gives unlimited use for the days set. Per session: members book a time slot and pay each time." Style="{StaticResource Caption}" IsVisible="{Binding CanChooseSoldAs}" />
-                                <Label Text="To sell a pass amenity per session instead, close this and use Sell per session in its Actions menu." Style="{StaticResource Caption}" IsVisible="{Binding CanChooseSoldAs, Converter={StaticResource Not}}" />
-                            </VerticalStackLayout>
+                            <!-- G19 (0066): amenities are sold per session; one still set up as a pass is turned over from its Actions menu -->
+                            <Label Text="This amenity is still a pass for some days, which members can no longer buy. Use Sell per session in its Actions menu to put it back on sale." Style="{StaticResource Caption}" IsVisible="{Binding IsOldPass}" />
 
                             <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
                                 <VerticalStackLayout Spacing="4">

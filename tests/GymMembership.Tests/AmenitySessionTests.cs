@@ -19,9 +19,10 @@ public class AmenitySessionTests
     {
         var gw = new DemoGateway(clock: new Clock());
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
-        Assert.True((await new AdminService(gw).SaveAmenityAsync(new Amenity { Name = "Crud room", Description = "Small studio", Price = 150, DurationDays = days })).Ok);
+        Assert.True((await new AdminService(gw).SaveAmenityAsync(new Amenity { Name = "Crud room", Description = "Small studio", Price = 150 })).Ok);
         var id = (await gw.ListAsync<Amenity>()).Single(a => a.Name == "Crud room").Id;
         Assert.True((await new AdminService(gw).PublishAsync("amenity", id)).Ok);   // G6 (0061): added as a draft
+        gw.OwnerSetPassDays(id, days);   // G19 (0066): only an amenity left from before can still be a pass
         foreach (var visit in await gw.ListAsync<CoachVisit>(v => v.CheckedOutAt == null)) Assert.True((await new CoachService(gw).CheckOutAsync(visit.CoachId)).Ok);   // the demo starts with a coach in
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         return (gw, id);
@@ -90,8 +91,8 @@ public class AmenitySessionTests
     public async Task A_timed_pass_still_books_many_times()
     {
         var (gw, id) = await WithAmenity(days: 30);
-        Assert.Equal("₱150.00 for 30 days", (await Card(gw)).PassText);
-        await Buy(gw, id);
+        Assert.Equal("Not on sale right now", (await Card(gw)).PassText);   // G19 (0066)
+        gw.OwnerAddPass("u-alex", id, 30);   // bought before
         Assert.True((await Book(gw, id, Tomorrow10)).Ok);
         Assert.True((await Book(gw, id, Tomorrow10.AddHours(4))).Ok);
     }
@@ -100,7 +101,7 @@ public class AmenitySessionTests
     public async Task Staff_set_a_session_price_on_a_pass_amenity_and_passes_already_sold_keep_working()
     {
         var (gw, id) = await WithAmenity(days: 30);
-        await Buy(gw, id);
+        gw.OwnerAddPass("u-alex", id, 30);   // bought before 0066
 
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
         var vm = new CatalogAdminViewModel(new AdminService(gw));
@@ -135,13 +136,12 @@ public class AmenitySessionTests
         await vm.OnAppearingAsync();
 
         await vm.RunActionCommand.ExecuteAsync((vm.Amenities.Single(r => r.Amenity.Id == id), "Edit"));
-        Assert.Equal(("Price for the pass", false), (vm.PriceLabel, vm.CanChooseSoldAs));   // switching is Sell per session, which asks first
+        Assert.Equal(("Price for the pass", true), (vm.PriceLabel, vm.IsOldPass));   // switching is Sell per session, which asks first
         vm.FormDescription = "New words";
         await vm.MainCommand.ExecuteAsync(null);
         Assert.Equal(30, (await gw.ListAsync<Amenity>(a => a.Id == id)).Single().DurationDays);
 
         vm.AddAmenityCommand.Execute(null);
-        vm.SellPerSessionCommand.Execute(null);
         Assert.Equal("Price per session", vm.PriceLabel);
         (vm.FormName, vm.FormDescription, vm.FormPrice) = ("Ice bath", "Cold plunge.", 0);   // D4: ₱0 could never be paid
         await vm.MainCommand.ExecuteAsync(null);
@@ -160,7 +160,7 @@ public class AmenitySessionTests
     public async Task A_booking_in_the_next_slot_needs_a_coach_in_the_gym_and_a_later_one_does_not()
     {
         var (gw, id) = await WithAmenity(days: 30);
-        await Buy(gw, id);
+        gw.OwnerAddPass("u-alex", id, 30);   // bought before 0066
         var nextSlot = new DateTime(2026, 10, 20, 2, 30, 0, DateTimeKind.Utc);
         Assert.Equal("no_coach_present", (await Book(gw, id, nextSlot)).Message);
         Assert.True((await Book(gw, id, Tomorrow10)).Ok);
@@ -173,7 +173,7 @@ public class AmenitySessionTests
     public async Task Using_an_amenity_needs_a_coach_in_the_gym_and_the_board_says_so()
     {
         var (gw, id) = await WithAmenity(days: 30);
-        await Buy(gw, id);
+        gw.OwnerAddPass("u-alex", id, 30);   // bought before 0066
         var pass = (await gw.ListAsync<UserAmenity>(u => u.AmenityId == id)).Single();
         var amenities = new AmenityService(gw);
         Assert.False((await amenities.BoardAsync()).Value!.CoachInGym);

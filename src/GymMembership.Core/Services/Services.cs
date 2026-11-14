@@ -570,7 +570,8 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
             case PayKind.Membership:
                 return (await gw.ListAsync<MembershipPackage>(p => p.IsActive == true)).Select(p => new CounterItem(p.Id, p.Name, p.Price)).ToList();
             case PayKind.Amenity:
-                return (await gw.ListAsync<Amenity>(a => a.IsActive == true)).Select(a => new CounterItem(a.Id, a.Name, a.Price)).ToList();
+                // G19 (0066): sessions only; an amenity still set up as a pass isn't sold until it has a session price
+                return (await gw.ListAsync<Amenity>(a => a.IsActive == true)).Where(a => a.DurationDays is null).Select(a => new CounterItem(a.Id, a.Name, a.Price)).ToList();
             case PayKind.Renewal:
                 var packages = await gw.ListAsync<MembershipPackage>();
                 return (await gw.ListAsync<UserMembershipPackage>(m => m.MemberId == memberId && (m.Status == "active" || m.Status == "expired")))
@@ -603,11 +604,11 @@ public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow,
         Models.Status.Pending => "Waiting for your payment to be verified",
         Models.Status.Active when PassIsSession => "1 session ready to book",
         Models.Status.Active => PassUntil is { } until ? $"Pass active until {until.ToLocalTime():d MMM yyyy}" : "Pass active",
-        _ => Amenity.DurationDays is { } days ? $"₱{Amenity.Price:N2} for {days} days" : $"₱{Amenity.Price:N2} per session, up to 2 hours"
+        _ => Amenity.DurationDays is not null ? "Not on sale right now" : $"₱{Amenity.Price:N2} per session, up to 2 hours"   // G19 (0066): passes aren't sold
     };
     /// <summary>F12: a pass or a session already paid books without paying again.</summary>
     public bool HasPass => PassStatus == Models.Status.Active;
-    public bool CanBook => CanFollow && !IsUnavailable;
+    public bool CanBook => CanFollow && !IsUnavailable && (HasPass || Amenity.DurationDays is null);
 
     /// <summary>F14: who runs it (other coaches, when a coach is looking). An amenity nobody runs works with any coach in the gym.</summary>
     public string RunText
@@ -1216,7 +1217,7 @@ public interface IAttendanceService
     /// <param name="pin">The member's desk PIN, for manual (F8). A wrong one fails as wrong_pin.</param>
     /// <param name="reason">Admin and System admin only: why they check in by name without the PIN.</param>
     /// <param name="proof">Method password (G12): the one-use proof from <see cref="VerifyPasswordAsync"/>.</param>
-    Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null, string? pin = null, string? reason = null, string? proof = null);
+    Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null, string? pin = null, string? reason = null, string? proof = null, string? idType = null);
     /// <summary>G12, login mode: the member's own account password, checked by the server; a proof for one check-in, or
     /// wrong_member_password / pin_locked. Needs the internet. The password is never kept.</summary>
     Task<AppResult<string>> VerifyPasswordAsync(string memberId, string password);
@@ -1268,11 +1269,26 @@ public sealed class MemberScan
     public string ExpiryText => Expires is { } e ? (Result is "active" or "saved" ? "Membership ends " : "Membership ended ") + RevenuePdf.Manila(e) + " (Manila)" : IsSaved ? "" : "No end date";
 }
 
-public sealed record CheckInRow(string Name, DateTime At, string? Method = null, string? By = null, string? Reason = null)
+/// <summary>G20 (0066): the IDs the desk may check a member in with; only the type is kept, never the number.</summary>
+public static class IdTypes
+{
+    static readonly (string Code, string Label)[] All =
+        [("drivers_license", "Driver's license"), ("national_id", "National ID"), ("passport", "Passport"), ("school_id", "School ID"), ("other", "Other")];
+    public static IReadOnlyList<string> Labels { get; } = All.Select(t => t.Label).ToArray();
+    public static string Label(string code) => All.FirstOrDefault(t => t.Code == code).Label ?? code;
+    public static string? Code(string? label) => All.FirstOrDefault(t => t.Label == label).Code;
+}
+
+public sealed record CheckInRow(string Name, DateTime At, string? Method = null, string? By = null, string? Reason = null, string? IdType = null)
 {
     public string TimeText => At.AddHours(8).ToString("h:mm tt", CultureInfo.InvariantCulture);   // Manila has no daylight saving
     /// <summary>How it came in (0044); blank for check-ins recorded before that. A reason means an Admin skipped the PIN (F8).</summary>
-    public string HowText => Method switch { "qr" => "QR", "manual" when Reason is not null => "By name, no PIN", "manual" => "By name", "offline" => "Sent later", _ => "" };
+    public string HowText => (Method, IdType) switch
+    {
+        ("offline", { } t) => $"ID checked ({IdTypes.Label(t)}), sent later",
+        (_, { } t) => $"ID checked ({IdTypes.Label(t)})",
+        ("qr", _) => "QR", ("manual", _) when Reason is not null => "By name, no PIN", ("manual", _) => "By name", ("offline", _) => "Sent later", _ => ""
+    };
     /// <summary>F8: who recorded it, and why an Admin skipped the PIN; blank for check-ins from before this was kept.</summary>
     public string ByText => By is null ? "" : Reason is null ? $"By {By}" : $"By {By}. Reason: {Reason}";
     /// <summary>F19: the second line of a row on the Check-in page, "QR · By Marco Santos".</summary>
@@ -1291,11 +1307,12 @@ public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = 
         return true;
     });
 
-    public async Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null, string? pin = null, string? reason = null, string? proof = null)
+    public async Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null, string? pin = null, string? reason = null, string? proof = null, string? idType = null)
     {
         Dictionary<string, object> args = new() { ["p_member_id"] = memberId };
         if (method is not null) args["p_method"] = method;
         if (proof is not null) args["p_proof"] = proof;
+        if (idType is not null) args["p_id_type"] = idType;
         if (!string.IsNullOrEmpty(pin)) args["p_pin"] = pin;
         if (!string.IsNullOrWhiteSpace(reason)) args["p_reason"] = reason.Trim();
         var id = await Safe.RunAsync(() => gw.RpcAsync<int?>("record_check_in", args));
@@ -1353,7 +1370,7 @@ public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = 
         var names = await Directory_.UserNamesAsync(gw);
         return rows.OrderBy(c => c.CheckedInAt)
             .Select(c => new CheckInRow(c.MemberId is { } m ? names.GetValueOrDefault(m, "Member") : "Walk-in", c.CheckedInAt, c.Method,
-                c.RecordedBy is { } by ? names.GetValueOrDefault(by) : null, c.Reason)).ToList();
+                c.RecordedBy is { } by ? names.GetValueOrDefault(by) : null, c.Reason, c.IdType)).ToList();
     });
 }
 

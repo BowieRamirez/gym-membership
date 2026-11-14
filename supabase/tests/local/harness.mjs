@@ -73,3 +73,7 @@ if (process.argv[1].endsWith('harness.mjs')) {
 export const openCashShifts = db => db.query(`insert into cash_shifts(cashier_id, opening_float)
   select ur.user_id, 5000 from user_roles ur join roles r using (role_id) where r.name in ('admin', 'subadmin', 'employee')
     and not exists (select 1 from cash_shifts s where s.cashier_id = ur.user_id and s.closed_at is null)`);
+
+// 0066 (G19): passes are no longer sold. Files that test what an existing pass still does seed one as it was sold before.
+export const oldPass = async (db, member, amenity, days = 30) => (await db.query(`insert into user_amenities(member_id,amenity_id,status,expires_at)
+  values($1,$2,'active',now()+make_interval(days=>$3)) returning *`, [member, amenity, days])).rows[0];

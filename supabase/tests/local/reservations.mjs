@@ -1,7 +1,7 @@
 // Phase 6 (D6-D8): amenity reservations. One unit per amenity, 30-minute cooldown after each use (exact boundary allowed),
 // touching slots = one booking (max 2 h), all-or-nothing multi-select, pass required for solo bookings, no double booking
 // under races, cancellation frees occupancy, early end keeps the cooldown, coach extensions are atomic.
-import { start } from './harness.mjs';
+import { start, oldPass } from './harness.mjs';
 import assert from 'node:assert/strict';
 import pg from 'pg';
 
@@ -41,7 +41,7 @@ async function member({ passes = [court, ring], name = 'Member' } = {}) {
   const uid = await user('member', name);
   const pay = (await as(uid, 'select * from extend_membership($1,null)', [pack]))[0];
   await as(desk, 'select verify_payment($1,true)', [pay.payment_id]);
-  for (const a of passes) { const p = (await as(uid, 'select * from avail_amenity($1)', [a]))[0]; await as(desk, 'select verify_payment($1,true)', [p.payment_id]); }
+  for (const a of passes) await oldPass(db, uid, a);   // 0066: bought before passes stopped selling
   return uid;
 }
 const day = (await db.query(`select ((now() at time zone 'Asia/Manila')::date + 2)::text d`)).rows[0].d;
@@ -89,12 +89,13 @@ try {
     await assert.rejects(book(ben, []), /bad_input/);
     void today;
   });
-  await test('a solo booking needs an active pass for that amenity', async () => {
-    await assert.rejects(book(nopass, [[court, '20:00']]), /no_pass/);
-    const p = (await as(nopass, 'select * from avail_amenity($1)', [court]))[0];   // pending pass: still no right
-    await assert.rejects(book(nopass, [[court, '20:00']]), /no_pass/);
+  await test('a solo booking needs a paid session for that amenity', async () => {
+    const sess = (await db.query(`insert into amenities(name,price) values('P6 Session',300) returning amenity_id`)).rows[0].amenity_id;   // 0066: sold per session
+    await assert.rejects(book(nopass, [[sess, '20:00']]), /no_pass/);
+    const p = (await as(nopass, 'select * from avail_amenity($1)', [sess]))[0];   // pending: still no right
+    await assert.rejects(book(nopass, [[sess, '20:00']]), /no_pass/);
     await as(desk, 'select verify_payment($1,true)', [p.payment_id]);
-    await book(nopass, [[court, '20:00']]);
+    await book(nopass, [[sess, '20:00']]);
   });
   await test('cancelling before the start frees the slot and its cooldown', async () => {
     const [first] = await ids(ana);
@@ -115,7 +116,7 @@ try {
   });
   await test('the grid shows occupancy and cooldown but only your own bookings are identified', async () => {
     const g = (await as(ben, 'select amenity_grid($1::date) g', [day]))[0].g;
-    const block = g.blocks.find(b => String(b.amenity) === String(court) && b.mine === false);
+    const block = g.blocks.find(b => b.mine === false);   // someone else's booking, on any amenity
     assert.ok(block && block.id === null && !('member' in block));
     assert.equal(new Date(block.cooldown) - new Date(block.ends), 30 * 60e3);
     assert.ok(g.blocks.some(b => b.mine === true && b.id));

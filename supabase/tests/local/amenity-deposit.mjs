@@ -2,7 +2,7 @@
 // default, Gym settings); before that nobody's slot is held, and of two paid requests for one slot the first verified wins and the
 // other's down payment goes to Refunds. The rest is paid at the desk. Cancelling 24 hours or more before refunds the down payment.
 // Solo or with a coach: a coach who runs the amenity, has a shift over the whole time and isn't booked; a coach fee set on the amenity.
-import { start, openCashShifts } from './harness.mjs';
+import { start, openCashShifts, oldPass } from './harness.mjs';
 import assert from 'node:assert/strict';
 
 const { server, client: db } = await start();
@@ -164,8 +164,7 @@ try {
   });
   await test('a pass holder still books solo straight away; with a coach, the coach fee is the balance at the desk', async () => {
     const uid = await member(), a = (await db.query(`insert into amenities(name,price,duration_days,coach_fee) values('D Pass',300,30,120) returning amenity_id id`)).rows[0].id;
-    const buy = (await as(uid, 'select * from avail_amenity($1)', [a]))[0];
-    await as(desk, 'select verify_payment($1,true)', [buy.payment_id]);
+    await oldPass(db, uid, a);   // 0066: bought before passes stopped selling
     const solo = await book(uid, a, '09:00');
     assert.deepEqual([solo.status, Number(solo.total_price ?? 0)], ['confirmed', 0]);
     const own = await user('coach');

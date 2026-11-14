@@ -69,16 +69,16 @@ try {
     await db.query(`update training_sessions set status='cancelled' where training_session_id=$1`, [id]);
     await as(coach, `update shift_posts set status='cancelled' where shift_post_id=$1`, [s.shift_post_id]);
   });
-  await test('a bought amenity pass grants nothing until staff verify the payment', async () => {
+  await test('a bought amenity session grants nothing until staff verify the payment', async () => {
     const pack = (await db.query(`insert into membership_packages(name,price,duration_days) values('P5 Monthly',1000,30) returning membership_package_id`)).rows[0].membership_package_id;
     const pay = (await as(member, 'select * from extend_membership($1,null)', [pack]))[0];
     await as(desk, 'select verify_payment($1,true)', [pay.payment_id]);
-    const court = (await db.query(`insert into amenities(name,price,duration_days) values('P5 Court',300,30) returning amenity_id`)).rows[0].amenity_id;
+    const court = (await db.query(`insert into amenities(name,price,duration_days) values('P5 Court',300,null) returning amenity_id`)).rows[0].amenity_id;
     const bought = (await as(member, 'select * from avail_amenity($1)', [court]))[0];
-    const pass = async () => (await as(member, 'select status, expires_at from user_amenities where amenity_id=$1', [court]))[0];
+    const pass = async () => (await as(member, 'select status, is_session from user_amenities where amenity_id=$1', [court]))[0];
     assert.equal((await pass()).status, 'pending');
     await as(desk, 'select verify_payment($1,true)', [bought.payment_id]);
-    const p = await pass(); assert.equal(p.status, 'active'); assert.ok(p.expires_at > new Date());
+    assert.deepEqual(await pass(), { status: 'active', is_session: true });
   });
   // Phase 9 (0033)
   await test('a shift cannot start in the past or overlap another of the same coach', async () => {

@@ -32,6 +32,9 @@ public sealed partial class DemoGateway
         return p.PublishedAt is null ? throw Err("item_not_for_sale") : p;
     }
 
+    /// <summary>G19 (0066): a new sale is always one session; an amenity still set up as a pass isn't sold.</summary>
+    static bool SessionOnly(Amenity a) => a.DurationDays is null ? true : throw Err("pass_not_sold");
+
     Amenity AmenityForSale(int id)
     {
         var a = All<Amenity>().FirstOrDefault(a => a.Id == id && a.IsActive) ?? throw Err("not_found");

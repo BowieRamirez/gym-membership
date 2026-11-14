@@ -359,9 +359,9 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
         OnPropertyChanged(nameof(OfflineText));
     }
 
-    void QueueFor(string memberId, string name, string? pin, string? reason)
+    void QueueFor(string memberId, string name, string? pin, string? reason, string? idType = null)
     {
-        offline!.Queue(memberId, name, pin, reason);
+        offline!.Queue(memberId, name, pin, reason, idType);
         IsOffline = true; ErrorMessage = null;
         Notice = $"{name} is saved and will be sent when the connection is back.";
         ShowQueue();
@@ -505,6 +505,7 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
     {
         if (PinFor is { } hit && Hits.All(h => h.MemberId != hit.MemberId)) Hits.Insert(Math.Min(_pinRow, Hits.Count), hit);
         (PinFor, Pin, Reason, PinPhoto, Password, IsPasswordMode) = (null, "", "", null, "", false);
+        (IsIdMode, IdType, IdMatches) = (false, null, false);
     }
 
     // ---- G12, login mode: no phone and no PIN, so the member types their own account password; online only, never kept ----
@@ -512,8 +513,32 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
     [ObservableProperty] private string password = "";
     public bool CanUsePassword => !IsOffline;
 
-    [RelayCommand] private void UsePassword() { (IsPasswordMode, Pin, ErrorMessage) = (true, "", null); }
-    [RelayCommand] private void UsePin() { (IsPasswordMode, Password, ErrorMessage) = (false, "", null); }
+    [RelayCommand] private void UsePassword() { (IsPasswordMode, Pin, ErrorMessage) = (true, "", null); (IsIdMode, IdType, IdMatches) = (false, null, false); }
+    [RelayCommand] private void UsePin() { (IsPasswordMode, Password, ErrorMessage) = (false, "", null); (IsIdMode, IdType, IdMatches) = (false, null, false); }
+
+    // ---- G20/G21 (0066): the desk looks at the member's ID and compares it with the photo on the card; only the ID's type is kept ----
+    [ObservableProperty] private bool isIdMode;
+    [ObservableProperty] private string? idType;
+    [ObservableProperty] private bool idMatches;
+    public IReadOnlyList<string> IdTypes => Services.IdTypes.Labels;
+
+    [RelayCommand] private void UseId() { (IsIdMode, IsPasswordMode, Pin, Password, ErrorMessage) = (true, false, "", "", null); }
+
+    [RelayCommand]
+    private async Task ConfirmIdAsync()
+    {
+        if (PinFor is not { } hit) return;
+        Notice = null;
+        if (Services.IdTypes.Code(IdType) is not { } type) { ErrorMessage = "Pick the type of ID the member showed."; return; }
+        if (!IdMatches) { ErrorMessage = "Tick that the name and photo match this member."; return; }
+        if (IsOffline) { QueueFor(hit.MemberId, hit.Username, null, null, type); ClosePin(); return; }
+        var result = await svc.CheckInAsync(hit.MemberId, "id", idType: type);
+        if (WentOffline(result)) { QueueFor(hit.MemberId, hit.Username, null, null, type); ClosePin(); return; }
+        if (!result.Ok) { ErrorMessage = ErrorText.For(result.Error, result.Message); return; }
+        ClosePin(); ErrorMessage = null;
+        Notice = $"{hit.Username} is checked in.";
+        await LoadTodayAsync();
+    }
 
     [RelayCommand]
     private async Task ConfirmPasswordAsync()
@@ -1382,7 +1407,6 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     [ObservableProperty] private string panelSubtitle = "";
     [ObservableProperty] private string mainLabel = "Add";
     [ObservableProperty] private bool canSaveDraft = true;
-    [ObservableProperty] private bool canChooseSoldAs = true;
     [ObservableProperty] private string? versionNote;
 
     [ObservableProperty] private string formName = "";
@@ -1390,9 +1414,10 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     [ObservableProperty] private decimal formPrice;
     [ObservableProperty] private int formDays = 30;
     [ObservableProperty] private decimal formCoachFee;   // G14 (0064): amenities only, added when a member books With a coach
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(PriceLabel), nameof(ShowsDays))] private bool soldAsPass = true;
-    public string PriceLabel => IsPackagePanel ? "Price" : SoldAsPass ? "Price for the pass" : "Price per session";
-    public bool ShowsDays => IsPackagePanel || SoldAsPass;
+    /// <summary>G19 (0066): a new amenity is sold per session; one still set up as a pass keeps its days until Sell per session.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(PriceLabel))] private bool isOldPass;
+    public string PriceLabel => IsPackagePanel ? "Price" : IsOldPass ? "Price for the pass" : "Price per session";
+    public bool ShowsDays => IsPackagePanel;
     public ObservableCollection<BenefitLine> Benefits { get; } = new();
     [ObservableProperty] private string newBenefit = "";
 
@@ -1410,7 +1435,7 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     Amenity? _amenity;
 
     [RelayCommand] private void AddPackage() => OpenPackage(new MembershipPackage { DurationDays = 30 });
-    [RelayCommand] private void AddAmenity() => OpenAmenity(new Amenity { DurationDays = 30 });
+    [RelayCommand] private void AddAmenity() => OpenAmenity(new Amenity());
 
     void Open(bool package, string name, string? description, decimal price, string? photo)
     {
@@ -1428,7 +1453,7 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
         (PanelTitle, PanelSubtitle, MainLabel) = replaces is not null
             ? ($"New version of {replaces.Name}", $"A draft. {replaces.Name} stays on sale until you publish this.", "Review and publish")
             : (p.Id == 0 ? "Add a package" : "Edit draft", "Save as draft to finish it later. Add puts it on sale.", "Add");
-        (CanSaveDraft, CanChooseSoldAs) = (true, true);
+        CanSaveDraft = true;
         VersionNote = replaces is null ? null : $"This is a draft of a new version. {replaces.Name} stays on sale as it is until you publish this one. Discount codes for the old version don't carry over.";
         FormDays = p.DurationDays;
         Benefits.Clear();
@@ -1440,19 +1465,17 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     {
         (_package, _amenity) = (null, a);
         var published = a.State == CatalogState.Published;
-        (PanelTitle, PanelSubtitle, MainLabel, CanSaveDraft, CanChooseSoldAs) = published
-            ? ($"Edit {a.Name}", "Changes apply to new purchases. Passes and sessions already paid keep what was paid.", "Save changes", false, false)
-            : (a.Id == 0 ? "Add an amenity" : "Edit draft", "Save as draft to finish it later. Add puts it on sale.", "Add", true, true);
+        (PanelTitle, PanelSubtitle, MainLabel, CanSaveDraft) = published
+            ? ($"Edit {a.Name}", "Changes apply to new purchases. Passes and sessions already paid keep what was paid.", "Save changes", false)
+            : (a.Id == 0 ? "Add an amenity" : "Edit draft", "Save as draft to finish it later. Add puts it on sale.", "Add", true);
         VersionNote = null;
-        (SoldAsPass, FormDays, FormCoachFee) = (a.DurationDays is not null, a.DurationDays ?? 30, a.CoachFee);
+        (IsOldPass, FormCoachFee) = (a.DurationDays is not null, a.CoachFee);
         Benefits.Clear();
         Open(false, a.Name, a.Description, a.Price, Amenities.FirstOrDefault(r => r.Amenity.Id == a.Id && a.Id != 0)?.PhotoUrl);
     }
 
     [RelayCommand] private void ClosePanel() => (IsPanelOpen, IsComparing) = (false, false);
     [RelayCommand] private void BackToEdit() => IsComparing = false;
-    [RelayCommand] private void SellAsPass() => SoldAsPass = true;
-    [RelayCommand] private void SellPerSession() => SoldAsPass = false;
 
     [RelayCommand]
     private void AddBenefit()
@@ -1508,7 +1531,6 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
         {
             var a = _amenity!;
             (a.Name, a.Description, a.Price, a.CoachFee) = (FormName.Trim(), description, FormPrice, Math.Max(0, FormCoachFee));
-            if (CanChooseSoldAs) a.DurationDays = SoldAsPass ? FormDays : null;
             ok = await RunAsync(() => svc.SaveAmenityAsync(a));
             id = a.Id;
         }
@@ -1536,7 +1558,7 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     private async Task MainAsync()
     {
         if (!Complete()) return;
-        var terms = IsPackagePanel ? $"₱{FormPrice:N2} for {FormDays} days." : SoldAsPass ? $"Pass: ₱{FormPrice:N2} for {FormDays} days." : $"₱{FormPrice:N2} per session.";
+        var terms = IsPackagePanel ? $"₱{FormPrice:N2} for {FormDays} days." : IsOldPass ? $"Pass: ₱{FormPrice:N2} for {_amenity!.DurationDays} days." : $"₱{FormPrice:N2} per session.";
         var ask = (_package, _amenity) switch
         {
             ({ ReplacesId: not null }, _) => ((string, string, string)?)null,   // the comparison is the check

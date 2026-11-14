@@ -116,7 +116,7 @@ try {
       const g = (await db.query(`select has_function_privilege('anon','public.${fn}','execute') a, has_function_privilege('authenticated','public.${fn}','execute') b`)).rows[0];
       assert.deepEqual(g, { a: false, b: false }, fn);
     }
-    const rc = (await db.query(`select has_function_privilege('anon','public.record_check_in(uuid,text,timestamptz,uuid,text,text,uuid)','execute') a`)).rows[0];
+    const rc = (await db.query(`select has_function_privilege('anon','public.record_check_in(uuid,text,timestamptz,uuid,text,text,uuid,text)','execute') a`)).rows[0];
     assert.equal(rc.a, false);
   });
   await test('PIN and QR check-ins work as before (0049) with the new argument left out', async () => {

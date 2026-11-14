@@ -1,5 +1,5 @@
 // Item 7 (0043): an amenity sold per session uses up one session per booking, and amenities are used only while a coach is in the gym.
-import { start, openCashShifts } from './harness.mjs';
+import { start, openCashShifts, oldPass } from './harness.mjs';
 import assert from 'node:assert/strict';
 
 const { server, client: db } = await start();
@@ -39,12 +39,13 @@ const coachIn = () => db.query('insert into coach_visits(coach_id,checked_in_by)
 const coachOut = () => db.query('update coach_visits set checked_out_at=now(),checked_out_by=coach_id where checked_out_at is null');
 
 try {
-  await test('an amenity with no duration sells one session; one with a duration still sells a timed pass', async () => {
+  await test('an amenity with no duration sells one session; one with a duration no longer sells (0066, G19)', async () => {
     const uid = await member(), session = await amenity('S Session 1', null), timed = await amenity('S Timed 1', 30);
-    await buy(uid, session); await buy(uid, timed);
-    const s = await passOf(uid, session), t = await passOf(uid, timed);
+    await buy(uid, session);
+    await assert.rejects(buy(uid, timed), /pass_not_sold/);
+    const s = await passOf(uid, session);
     assert.deepEqual([s.is_session, s.status, s.expires_at], [true, 'active', null]);
-    assert.equal(t.is_session, false); assert.ok(t.expires_at);
+    assert.equal((await oldPass(db, uid, timed)).is_session, false);   // a pass sold before is still a pass
   });
   await test('a counter payment for a per-session amenity is a session too', async () => {
     const uid = await member(), session = await amenity('S Session 2', null);
@@ -79,8 +80,7 @@ try {
   });
   await test('a timed pass already sold keeps working after the amenity switches to per session, and is used first', async () => {
     const uid = await member(), a = await amenity('S Switch', 30);
-    await buy(uid, a);
-    const before = await passOf(uid, a);
+    const before = await oldPass(db, uid, a);
     await db.query('update amenities set duration_days=null,price=99 where amenity_id=$1', [a]);
     await book(uid, [[a, '10:00']]); await book(uid, [[a, '14:00']]);
     const after = await passOf(uid, a);
@@ -90,7 +90,7 @@ try {
   await test('a booking far ahead needs no coach yet', async () => {
     await coachOut();
     const uid = await member(), a = await amenity('S Ahead', 30);
-    await buy(uid, a);
+    await oldPass(db, uid, a);
     assert.equal((await book(uid, [[a, '10:00']])).length, 1);
   });
   await test('a booking starting in the next slot needs a coach in the gym now', async () => {
@@ -98,7 +98,7 @@ try {
     if (hour >= 22) return;   // the next slot would run past the day's closing time
     await db.query(`update gym_settings set opens_at='00:00',closes_at='23:30' where id=1`);
     const uid = await member(), a = await amenity('S Next', 30);
-    await buy(uid, a);
+    await oldPass(db, uid, a);
     const next = new Date(Math.ceil((Date.now() + 1000) / 1800000) * 1800000).toISOString();
     const go = () => as(uid, 'select * from book_slots($1::jsonb)', [JSON.stringify([{ amenity: a, start: next }])]);
     await coachOut();
@@ -110,7 +110,7 @@ try {
   await test('using an amenity needs a coach in the gym; an archived coach does not count', async () => {
     await coachOut();
     const uid = await member(), a = await amenity('S Use', 30);
-    await buy(uid, a);
+    await oldPass(db, uid, a);
     const p = await passOf(uid, a);
     const use = () => as(uid, 'insert into amenity_usages(user_amenity_id) values($1) returning status', [p.user_amenity_id]);
     await assert.rejects(use(), /no_coach_present/);

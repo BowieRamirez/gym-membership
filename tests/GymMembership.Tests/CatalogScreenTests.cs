@@ -118,7 +118,7 @@ public class CatalogScreenTests
         var (vm, _) = await Open("subadmin@demo.io");
         Assert.False(vm.CanArchive);
         Assert.Equal(["Create new version"], vm.ActionsFor(Pkg(vm, "Monthly")));
-        Assert.Equal(["Edit", "Sell per session"], vm.ActionsFor(Am(vm, "Pool")));
+        Assert.Equal(["Edit"], vm.ActionsFor(Am(vm, "Pool")));   // G19 (0066): the demo sells every amenity per session
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public class CatalogScreenTests
         var (vm, _) = await Open();
         vm.AddAmenityCommand.Execute(null);
         Assert.False(vm.IsPackagePanel);
-        (vm.FormName, vm.FormDescription, vm.FormPrice, vm.SoldAsPass) = ("Ice bath", "Cold plunge, 5 minutes.", 250, false);
+        (vm.FormName, vm.FormDescription, vm.FormPrice) = ("Ice bath", "Cold plunge, 5 minutes.", 250);
         await vm.PickPhotoCommand.ExecuteAsync(null);
         Assert.Equal("ring.png, saved with the amenity", vm.PhotoText);
         await vm.MainCommand.ExecuteAsync(null);

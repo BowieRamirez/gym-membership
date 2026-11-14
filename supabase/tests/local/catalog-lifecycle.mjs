@@ -38,7 +38,7 @@ const draftPackage = async (name, extra = {}) => Number((await as(admin,
   `insert into membership_packages(name,description,price,duration_days,benefits) values($1,$2,$3,$4,$5) returning membership_package_id id`,
   [name, extra.description ?? 'A plan', extra.price ?? 1000, extra.days ?? 30, extra.benefits ?? ['Gym floor']]))[0].id);
 const draftAmenity = async (name, description = 'Lanes') => Number((await as(admin,
-  `insert into amenities(name,description,price,duration_days) values($1,$2,300,30) returning amenity_id id`, [name, description]))[0].id);
+  `insert into amenities(name,description,price) values($1,$2,300) returning amenity_id id`, [name, description]))[0].id);
 const publish = (kind, id, who = admin) => as(who, 'select publish_catalog_item($1,$2)', [kind, id]);
 const newVersion = (id, who = admin) => as(who, 'select new_package_version($1) id', [id]).then(r => Number(r[0].id));
 const remove = (kind, id, who = admin) => as(who, 'select delete_catalog_item($1,$2)', [kind, id]);

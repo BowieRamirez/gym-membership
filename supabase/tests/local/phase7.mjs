@@ -357,7 +357,7 @@ try {
     assert.equal((await payRow(pay)).status, 'verified'); assert.equal(await active(uid), true);
   });
   await test('an amenity payment cannot be cancelled this way', async () => {
-    const {uid} = await fixture(), amenity = (await db.query(`insert into amenities(name,price,duration_days) values('Cancel Test Sauna',200,30) returning amenity_id`)).rows[0].amenity_id;
+    const {uid} = await fixture(), amenity = (await db.query(`insert into amenities(name,price,duration_days) values('Cancel Test Sauna',200,null) returning amenity_id`)).rows[0].amenity_id;
     const pay = (await as(uid, 'select * from avail_amenity($1)', [amenity]))[0];
     await assert.rejects(cancelPending(uid, pay), /not_found/); assert.equal((await payRow(pay)).status, 'pending');
   });

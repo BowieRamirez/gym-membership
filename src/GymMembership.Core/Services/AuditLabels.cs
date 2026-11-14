@@ -18,6 +18,7 @@ public static class AuditLabels
         ["role.assign"] = "Role given", ["role.revoke"] = "Role removed",
         ["payment.record"] = "Payment recorded", ["payment.verify"] = "Payment verified", ["payment.reject"] = "Payment rejected",
         ["payment.void"] = "Payment voided", ["payment.cancel"] = "Payment cancelled",
+        ["check_in.id"] = "Checked in by ID",
         ["refund.request"] = "Refund requested", ["refund.decide"] = "Refund decided", ["refund.paid"] = "Refund repaid",
         ["reservation.book"] = "Booking made", ["reservation.hold"] = "Booking held for payment", ["reservation.request"] = "Booking requested", ["reservation.balance"] = "Booking balance taken", ["reservation.request"] = "Booking requested", ["reservation.balance"] = "Booking balance taken", ["reservation.cancel"] = "Booking cancelled", ["reservation.end"] = "Booking ended",
         ["reservation.extend"] = "Booking extended",
@@ -33,7 +34,7 @@ public static class AuditLabels
     /// <summary>Action type: the part of the code before the dot. The filter sends the key.</summary>
     public static readonly IReadOnlyDictionary<string, string> Areas = new Dictionary<string, string>
     {
-        ["user"] = "Account", ["role"] = "Role", ["payment"] = "Payment", ["refund"] = "Refund",
+        ["user"] = "Account", ["role"] = "Role", ["payment"] = "Payment", ["check_in"] = "Check-in", ["refund"] = "Refund",
         ["reservation"] = "Booking", ["amenity"] = "Amenity", ["catalog"] = "Catalog", ["cash_shift"] = "Cash shift", ["announcement"] = "Announcement", ["discount"] = "Discount code", ["gym"] = "Gym",
     };
 
@@ -42,7 +43,7 @@ public static class AuditLabels
     {
         ["profiles"] = "Account", ["user_roles"] = "Role", ["payments"] = "Payment", ["refund_requests"] = "Refund request",
         ["reservations"] = "Booking", ["amenities"] = "Amenity", ["membership_packages"] = "Package", ["discounts"] = "Discount code",
-        ["cash_shifts"] = "Cash shift", ["announcements"] = "Announcement", ["gym_closures"] = "Closed day",
+        ["cash_shifts"] = "Cash shift", ["announcements"] = "Announcement", ["gym_closures"] = "Closed day", ["gym_check_ins"] = "Check-in",
     };
 
     public static string Action(string code) => Actions.GetValueOrDefault(code, code);

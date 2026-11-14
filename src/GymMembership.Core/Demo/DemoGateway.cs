@@ -105,6 +105,11 @@ public sealed partial class DemoGateway : ISupabaseGateway
     /// <summary>The demo's stand-in for the database owner (Supabase dashboard) switching an account on or off, which 0037 still allows
     /// for a super admin when nobody in the app can.</summary>
     public void OwnerSetActive(string userId, bool active) => All<Profile>().First(p => p.Id == userId).IsActive = active;
+    /// <summary>0066 (G19): the database owner, not the app, can still leave an amenity set up as a pass, as amenities sold before were.</summary>
+    public void OwnerSetPassDays(int amenityId, int? days) => All<Amenity>().First(a => a.Id == amenityId).DurationDays = days;
+    /// <summary>A pass bought before 0066; it keeps working until it ends.</summary>
+    public void OwnerAddPass(string memberId, int amenityId, int days) =>
+        Add(new UserAmenity { MemberId = memberId, AmenityId = amenityId, Status = Status.Active, AvailedAt = SubscriptionNow, ExpiresAt = SubscriptionNow.AddDays(days) });
 
     /// <summary>The demo's stand-in for the server sending someone an alert (a client cannot insert one itself, here or on the real table).</summary>
     public void Notify(string? userId, string type, string title, string? body = null)
@@ -334,7 +339,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             RequireActive();
             switch (row)
             {
-                case MembershipPackage or Amenity: if (!Has("catalog:manage")) throw Err(Rls); break;
+                case MembershipPackage or Amenity: if (!Has("catalog:manage")) throw Err(Rls); if (row is Amenity { DurationDays: not null }) throw Err("pass_not_sold"); break;   // G19 (0066)
                 case Discount or DiscountItem: throw Err(Rls);   // G2 (0060): codes are made only by create_discount
                 case ShiftPost s:
                     if (s.CoachId != Uid || !IsCoach(Uid)) throw Err(Rls);
@@ -411,6 +416,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     break;
                 case (Amenity a, Amenity old):       // a catalog edit never changes the live status, like the column rights in the database
                     if (!Has("catalog:manage")) throw Err(Rls);
+                    if (a.DurationDays is not null && a.DurationDays != old.DurationDays) throw Err("pass_not_sold");   // G19 (0066): sessions only
                     var edited = Clone(a); edited.Availability = old.Availability; edited.StatusReason = old.StatusReason; edited.BackAt = old.BackAt; edited.ImagePath = old.ImagePath; edited.PublishedAt = old.PublishedAt;
                     list[index] = edited;
                     break;
@@ -784,7 +790,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 var am = AmenityForSale(I("p_amenity_id"));
                 if (All<UserAmenity>().Any(x => x.MemberId == uid && x.AmenityId == am.Id && x.Status is Status.Pending or Status.Active)) throw Err("already_availed");
                 var d = Discounted(uid, a, am.Price, "amenity", am.Id);
-                var ua = Add(new UserAmenity { MemberId = uid, AmenityId = am.Id, Status = Status.Pending, AvailedAt = now, IsSession = am.DurationDays is null });
+                var ua = Add(new UserAmenity { MemberId = uid, AmenityId = am.Id, Status = Status.Pending, AvailedAt = now, IsSession = SessionOnly(am) });
                 return Clone(NewQrPayment(PayKind.Amenity, uid, d, amenity: ua.Id));
             }
             case "renew_membership":
@@ -880,7 +886,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                         var am = AmenityForSale(itemId);
                         if (All<UserAmenity>().Any(x => x.MemberId == memberId && x.AmenityId == am.Id && x.Status is Status.Pending or Status.Active)) throw Err("already_availed");
                         d = Discounted(memberId, a, am.Price, "amenity", am.Id);
-                        ua = Add(new UserAmenity { MemberId = memberId, AmenityId = am.Id, Status = Status.Pending, AvailedAt = now, IsSession = am.DurationDays is null }).Id;
+                        ua = Add(new UserAmenity { MemberId = memberId, AmenityId = am.Id, Status = Status.Pending, AvailedAt = now, IsSession = SessionOnly(am) }).Id;
                     }
                 }
 
@@ -1135,7 +1141,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 var at = Opt("p_at") is { } when ? DateTime.Parse(when, null, System.Globalization.DateTimeStyles.AdjustToUniversal) : (DateTime?)null;
                 var clientRef = Opt("p_client_ref");
                 var (pin, reason) = (Opt("p_pin"), Opt("p_reason")?.Trim() is { Length: > 0 } r ? r : null);
-                if (method is not ("qr" or "manual" or "offline" or "password")) throw Err("bad_input");
+                var idType = Opt("p_id_type");
+                if (method is not ("qr" or "manual" or "offline" or "password" or "id")) throw Err("bad_input");
+                if ((method == "id") != (idType is not null) && !(method == "offline" && idType is not null)) throw Err("bad_input");
+                if (idType is not null && IdTypes.Label(idType) == idType) throw Err("bad_id_type");   // G20 (0066): a fixed list
                 if (at is { } t0 && (method != "offline" || t0 > now.AddMinutes(5) || t0 < now.AddHours(-48))) throw Err("bad_input");
                 if (reason?.Length > 500) throw Err("bad_reason");
                 if (clientRef is not null && All<GymCheckIn>().FirstOrDefault(c => c.ClientRef == clientRef) is { } again) return again.Id;
@@ -1145,7 +1154,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     : !ActiveMember(memberId)) throw Err("no_active_membership");
                 // 0049: qr needs this desk's fresh scan; manual and offline need the PIN, or an Admin or System admin with a reason
                 DemoPass? scanned = null;
-                if (method == "qr")
+                if (idType is not null) { }   // G20: the desk looked at the ID; no secret to check
+                else if (method == "qr")
                     scanned = _passes.Where(x => x.Member == memberId && x.ScannedBy == uid && x.ScannedAt > now.AddMinutes(-10) && x.CheckInId is null)
                         .OrderByDescending(x => x.ScannedAt).FirstOrDefault() ?? throw Err("scan_required");
                 else if (method == "password")
@@ -1166,8 +1176,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     if (saved.Pin != pin) { _pins[memberId] = saved.Fails >= 4 ? (saved.Pin, 0, now.AddMinutes(15)) : (saved.Pin, saved.Fails + 1, saved.LockedUntil); return null; }
                     _pins[memberId] = (saved.Pin, 0, saved.LockedUntil);
                 }
-                var row = Add(new GymCheckIn { MemberId = memberId, CheckedInAt = at ?? now, Method = method, ClientRef = clientRef, RecordedBy = uid, Reason = reason });
+                var row = Add(new GymCheckIn { MemberId = memberId, CheckedInAt = at ?? now, Method = method, ClientRef = clientRef, RecordedBy = uid, Reason = reason, IdType = idType });
                 if (scanned is not null) scanned.CheckInId = row.Id;
+                if (idType is not null) Audit("check_in.id", "gym_check_ins", row.Id.ToString());
                 return row.Id;
             }
             case "desk_member_snapshot":
@@ -1369,11 +1380,11 @@ public sealed partial class DemoGateway : ISupabaseGateway
         var quarterly = Add(new MembershipPackage { Name = "Quarterly", Description = "90 days of access at a lower monthly rate.", Price = 4000, DurationDays = 90 });
         Add(new MembershipPackage { Name = "Annual", Description = "A full year, best value for regulars.", Price = 14000, DurationDays = 365 });
 
-        var pool = Add(new Amenity { Name = "Pool", Description = "25 m lap pool, open 6:00 to 21:00.", Price = 300, DurationDays = 30 });
-        var sauna = Add(new Amenity { Name = "Sauna", Description = "Dry sauna next to the locker rooms.", Price = 200, DurationDays = 30,
+        var pool = Add(new Amenity { Name = "Pool", Description = "25 m lap pool, open 6:00 to 21:00.", Price = 300 });
+        var sauna = Add(new Amenity { Name = "Sauna", Description = "Dry sauna next to the locker rooms.", Price = 200,
                                       Availability = "unavailable", StatusReason = "Cleaning", BackAt = DateTime.UtcNow.AddMinutes(90) });
-        Add(new Amenity { Name = "Group classes", Description = "Spin, yoga and circuit classes on the studio floor.", Price = 500, DurationDays = 30 });
-        Add(new Amenity { Name = "Boxing ring", Description = "Closed for maintenance.", Price = 400, DurationDays = 30, IsActive = false });
+        Add(new Amenity { Name = "Group classes", Description = "Spin, yoga and circuit classes on the studio floor.", Price = 500 });
+        Add(new Amenity { Name = "Boxing ring", Description = "Closed for maintenance.", Price = 400, IsActive = false });
         foreach (var p in All<MembershipPackage>()) p.PublishedAt = now.AddDays(-120);   // on sale from the start (0061)
         foreach (var x in All<Amenity>()) x.PublishedAt = now.AddDays(-120);
         Add(new AmenityFollow { MemberId = "u-alex", AmenityId = pool.Id });     // Alex saved the pool and the sauna

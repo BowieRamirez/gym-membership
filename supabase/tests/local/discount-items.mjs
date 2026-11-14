@@ -32,7 +32,7 @@ async function test(name, fn) {
 const admin = await user('admin'), sub = await user('subadmin'), desk = await user('employee'), coach = await user('coach');
 await openCashShifts(db);
 const pkg = async name => Number((await db.query(`insert into membership_packages(name,price,duration_days) values($1,1000,30) returning membership_package_id`, [name])).rows[0].membership_package_id);
-const amen = async name => Number((await db.query(`insert into amenities(name,price,duration_days) values($1,300,30) returning amenity_id`, [name])).rows[0].amenity_id);
+const amen = async name => Number((await db.query(`insert into amenities(name,price,duration_days) values($1,300,null) returning amenity_id`, [name])).rows[0].amenity_id);
 const monthly = await pkg('G Monthly'), annual = await pkg('G Annual'), pool = await amen('G Pool'), sauna = await amen('G Sauna');
 const until = () => new Date(Date.now() + 30 * 86400000).toISOString();
 const create = (who, code, items, { percent = 10, limit = 20, show = true, expires = until() } = {}) =>

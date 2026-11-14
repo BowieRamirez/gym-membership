@@ -1,6 +1,6 @@
 // Phase 5 of the 2026-11-09 plan (0052, owner decisions F12, F13, F14): book an amenity, then pay; the desk approves; holds run out;
 // the payment's expiry is the hold; cancel up to 1 hour before for a refund; "I didn't use it" within 24 hours; coaches say which amenities they run.
-import { start, openCashShifts } from './harness.mjs';
+import { start, openCashShifts, oldPass } from './harness.mjs';
 import assert from 'node:assert/strict';
 
 const { server, client: db } = await start();
@@ -130,8 +130,7 @@ try {
   });
   await test('a member with a pass still books without paying until it expires', async () => {
     const uid = await member(), a = await amenity('B Pass', 30);
-    const p = (await as(uid, 'select * from avail_amenity($1)', [a]))[0];
-    await as(desk, 'select verify_payment($1,true)', [p.payment_id]);
+    await oldPass(db, uid, a);   // 0066: bought before passes stopped selling
     const r = await book(uid, a, '10:00');
     assert.deepEqual([r.status, r.payment_id], ['confirmed', null]);
   });
@@ -212,8 +211,7 @@ try {
   });
   await test('only a paid booking of your own can be claimed, and membership refund decisions do not take amenity claims', async () => {
     const uid = await member(), other = await member(), a = await amenity('B Own', 30);
-    const p = (await as(uid, 'select * from avail_amenity($1)', [a]))[0];
-    await as(desk, 'select verify_payment($1,true)', [p.payment_id]);
+    await oldPass(db, uid, a);   // 0066: bought before passes stopped selling
     const r = await book(uid, a, '10:00');   // a pass booking: nothing paid for it
     await shift(r.reservation_id, `now() - interval '2 hours'`);
     await assert.rejects(as(uid, `select claim_amenity_no_show($1,'x')`, [r.reservation_id]), /not_refundable/);
@@ -245,7 +243,7 @@ try {
   await test('with assigned coaches, only one of them in the gym counts; without, any coach does', async () => {
     await db.query('update coach_visits set checked_out_at=now(),checked_out_by=coach_id where checked_out_at is null');
     const uid = await member(), run = await amenity('C Assigned', 30), free = await amenity('C Free', 30);
-    for (const a of [run, free]) { const p = (await as(uid, 'select * from avail_amenity($1)', [a]))[0]; await as(desk, 'select verify_payment($1,true)', [p.payment_id]); }
+    for (const a of [run, free]) await oldPass(db, uid, a);
     await as(coach, 'select set_runs_amenity($1,true)', [run]);
     const use = async a => {
       const ua = (await db.query('select user_amenity_id from user_amenities where member_id=$1 and amenity_id=$2', [uid, a])).rows[0].user_amenity_id;
