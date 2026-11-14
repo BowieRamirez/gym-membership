@@ -384,7 +384,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     // G9 (0061): a published package changes only by being archived
                     if (old.PublishedAt is not null && ((p.Name, p.Description, p.Price, p.DurationDays) != (old.Name, old.Description, old.Price, old.DurationDays) || !p.Benefits.SequenceEqual(old.Benefits)))
                         throw Err("package_published");
-                    var kept = Clone(p); kept.PublishedAt = old.PublishedAt; kept.ReplacesId = old.ReplacesId;
+                    var kept = Clone(p); kept.PublishedAt = old.PublishedAt; kept.ReplacesId = old.ReplacesId; kept.ImagePath = old.ImagePath;
                     list[index] = kept;
                     break;
                 case (Amenity a, Amenity old):       // a catalog edit never changes the live status, like the column rights in the database
@@ -433,6 +433,22 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 var amenities = All<Amenity>().Where(a => filter((T)(object)a)).ToList();
                 if (amenities.Any(a => !a.IsActive)) throw Err("record_archived");
                 foreach (var a in amenities) a.ImagePath = (string?)(object?)value;
+                return Task.CompletedTask;
+            }
+            catch (Exception ex) { return Task.FromException(ex); }
+        }
+        if (typeof(T) == typeof(MembershipPackage) && column.Body is MemberExpression { Member.Name: nameof(MembershipPackage.ImagePath) })
+        {
+            try
+            {
+                Require("catalog:manage");
+                var filter = where.Compile();
+                foreach (var p in All<MembershipPackage>().Where(p => filter((T)(object)p)).ToList())
+                {
+                    if (!p.IsActive) throw Err("record_archived");
+                    if (p.PublishedAt is not null) throw Err("package_published");   // G9 (0061): a published package changes only through a new version
+                    p.ImagePath = (string?)(object?)value;
+                }
                 return Task.CompletedTask;
             }
             catch (Exception ex) { return Task.FromException(ex); }

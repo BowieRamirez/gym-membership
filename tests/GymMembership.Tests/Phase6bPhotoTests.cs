@@ -166,8 +166,10 @@ public class Phase6bPhotoTests
         var vm = new CatalogAdminViewModel(new AdminService(gw), new Picker());
         await vm.OnAppearingAsync();
         var selected = vm.Amenities.First();
-        await vm.UploadAmenityPhotoCommand.ExecuteAsync(selected);
-        Assert.NotNull(vm.Amenities.Single(a => a.Id == selected.Id).ImagePath);
+        await vm.RunActionCommand.ExecuteAsync((selected, "Edit"));
+        await vm.PickPhotoCommand.ExecuteAsync(null);
+        await vm.MainCommand.ExecuteAsync(null);
+        Assert.NotNull(vm.Amenities.Single(r => r.Amenity.Id == selected.Amenity.Id).Amenity.ImagePath);
         Assert.NotNull(vm.Notice);
         Assert.Null(vm.ErrorMessage);
     }

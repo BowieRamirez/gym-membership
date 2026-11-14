@@ -52,19 +52,20 @@ public class CrudTests
         var gw = await As("admin@demo.io");
         var vm = new CatalogAdminViewModel(new AdminService(gw)); var archive = new ArchiveService(gw);
         await vm.OnAppearingAsync();
-        var amenity = vm.Amenities.First();
+        var amenityRow = vm.Amenities.First();
+        var amenity = amenityRow.Amenity;
         var passes = (await gw.ListAsync<UserAmenity>()).Count;
 
-        vm.DeleteAmenityCommand.Execute(amenity);
+        await vm.RunActionCommand.ExecuteAsync((amenityRow, "Archive"));
         Assert.Same(amenity, vm.DeletingAmenity);
         vm.KeepAmenityCommand.Execute(null);
         Assert.Null(vm.DeletingAmenity);
-        Assert.Contains(amenity, vm.Amenities);
+        Assert.Contains(amenityRow, vm.Amenities);
 
-        vm.DeleteAmenityCommand.Execute(amenity);
+        await vm.RunActionCommand.ExecuteAsync((amenityRow, "Archive"));
         await vm.ConfirmDeleteAmenityCommand.ExecuteAsync(null);
         Assert.Null(vm.DeletingAmenity);
-        Assert.DoesNotContain(vm.Amenities, a => a.Id == amenity.Id);
+        Assert.DoesNotContain(vm.Amenities, r => r.Amenity.Id == amenity.Id);
         Assert.Single(await gw.ListAsync<Amenity>(a => a.Id == amenity.Id));   // the row is still there
         Assert.Equal(passes, (await gw.ListAsync<UserAmenity>()).Count);
 
@@ -72,7 +73,7 @@ public class CrudTests
         Assert.Contains("amenity", row.Reason);
         Assert.True((await archive.RestoreAsync(row)).Ok);
         await vm.LoadCommand.ExecuteAsync(null);
-        Assert.Contains(vm.Amenities, a => a.Id == amenity.Id);
+        Assert.Contains(vm.Amenities, r => r.Amenity.Id == amenity.Id);
     }
 
     [Fact]
@@ -81,10 +82,8 @@ public class CrudTests
         var gw = await As("subadmin@demo.io");
         var vm = new CatalogAdminViewModel(new AdminService(gw));
         await vm.OnAppearingAsync();
-        var amenity = vm.Amenities.First();
-        vm.DeleteAmenityCommand.Execute(amenity);
-        Assert.NotNull(vm.ErrorMessage);
-        Assert.Null(vm.DeletingAmenity);
+        var amenity = vm.Amenities.First().Amenity;
+        Assert.DoesNotContain("Archive", vm.ActionsFor(vm.Amenities.First()));
         Assert.False((await new AdminService(gw).DeleteAmenityAsync(amenity)).Ok);
     }
 

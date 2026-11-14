@@ -1411,6 +1411,9 @@ public interface IAdminService
     Task<AppResult<bool>> DeleteDraftAsync(string kind, int id);
     Task<AppResult<bool>> SaveAmenityAsync(Amenity amenity);
     Task<AppResult<string>> SetAmenityPhotoAsync(int amenityId, string fileName, byte[] data);
+    /// <summary>Phase 4: a draft package's photo (a published one changes only through a new version).</summary>
+    Task<AppResult<string>> SetPackagePhotoAsync(int packageId, string fileName, byte[] data);
+    Task<AppResult<string?>> CatalogPhotoUrlAsync(string path);
     Task<AppResult<IReadOnlyList<MembershipPackage>>> AllPackagesAsync();
     Task<AppResult<IReadOnlyList<Amenity>>> AllAmenitiesAsync();
     Task<AppResult<IReadOnlyList<RevenueRow>>> RevenueAsync(DateOnly from, DateOnly to);
@@ -1526,12 +1529,12 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
     public Task<AppResult<bool>> DeleteDiscountAsync(Discount d) => Rpc("delete_discount", new() { ["p_id"] = d.Id });
 
     public Task<AppResult<bool>> SavePackageAsync(MembershipPackage p) =>
-        Safe.RunAsync(async () => { if (p.Id == 0) await gw.InsertAsync(p); else await gw.UpdateAsync(p); return true; });
+        Safe.RunAsync(async () => { if (p.Id == 0) p.Id = (await gw.InsertAsync(p)).Id; else await gw.UpdateAsync(p); return true; });
     public Task<AppResult<bool>> PublishAsync(string kind, int id) => Rpc("publish_catalog_item", new() { ["p_kind"] = kind, ["p_id"] = id });
     public Task<AppResult<int>> NewPackageVersionAsync(int packageId) => Safe.RunAsync(() => gw.RpcAsync<int>("new_package_version", new() { ["p_id"] = packageId }));
     public Task<AppResult<bool>> DeleteDraftAsync(string kind, int id) => Rpc("delete_catalog_item", new() { ["p_kind"] = kind, ["p_id"] = id });
     public Task<AppResult<bool>> SaveAmenityAsync(Amenity a) =>
-        Safe.RunAsync(async () => { if (a.Id == 0) await gw.InsertAsync(a); else await gw.UpdateAsync(a); return true; });
+        Safe.RunAsync(async () => { if (a.Id == 0) a.Id = (await gw.InsertAsync(a)).Id; else await gw.UpdateAsync(a); return true; });
 
     public Task<AppResult<string>> SetAmenityPhotoAsync(int amenityId, string fileName, byte[] data)
     {
@@ -1546,6 +1549,19 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
             return path;
         });
     }
+
+    public Task<AppResult<string>> SetPackagePhotoAsync(int packageId, string fileName, byte[] data)
+    {
+        if (!ProfileService.IsAcceptableImage(fileName, data)) return Task.FromResult(AppResult<string>.Fail(AppErrorKind.Validation, "bad_image"));
+        return Safe.RunAsync(async () =>
+        {
+            var path = await gw.UploadAsync("gym-assets", $"packages/{packageId}/{Guid.NewGuid():N}{Path.GetExtension(fileName).ToLowerInvariant()}", data);
+            await gw.UpdateWhereAsync<MembershipPackage, string?>(p => p.Id == packageId, p => p.ImagePath, path);
+            return path;
+        });
+    }
+
+    public Task<AppResult<string?>> CatalogPhotoUrlAsync(string path) => Safe.RunAsync(() => gw.SignedUrlAsync("gym-assets", path));
 
     public Task<AppResult<IReadOnlyList<MembershipPackage>>> AllPackagesAsync() => Safe.RunAsync(() => gw.ListAsync<MembershipPackage>());
     public Task<AppResult<IReadOnlyList<Amenity>>> AllAmenitiesAsync() => Safe.RunAsync(() => gw.ListAsync<Amenity>());

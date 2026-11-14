@@ -67,6 +67,14 @@ try {
     Invoke-Element (Wait-Id 'CancelAccountDeletion')
     Write-Output 'PASS native account menu opens deletion popup; required reason enables Confirm; Cancel closes it'
     Invoke-Name 'Packages and amenities'
+    # Phase 4: Add in the side panel names what is missing and saves nothing
+    Invoke-Element (Wait-Id 'AddPackage')
+    Invoke-Element (Wait-Id 'PanelMain')
+    $null = Wait-Id 'MissingFields'
+    Invoke-Element (Wait-Id 'ClosePanel')
+    Write-Output 'PASS side panel opens; Add with nothing filled in names the missing fields'
+    # G6: a package on sale can't come back from the archive, so this archives and restores an amenity, from its Actions menu
+    Invoke-Element (Wait-Id 'AmenityActions')
     Invoke-Name 'Archive'
     Invoke-Name 'Yes, archive'
     Invoke-Name 'Logs & Archive'
@@ -84,10 +92,10 @@ try {
     Invoke-Element (Wait-Id 'ArchiveConfirmRestore')
     Start-Sleep -Milliseconds 500
     $reasonFilter = Find-Id 'ArchiveReason'
-    $reasonFilter.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue('Deactivated gym plan')
+    $reasonFilter.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue('Deactivated amenity')
     Invoke-Element (Find-Id 'ArchiveApply')
     $null = Wait-Id 'ArchiveEmpty'
-    Write-Output 'PASS read-only details restore the archived plan; it disappears from the archive'
+    Write-Output 'PASS read-only details restore the archived amenity; it disappears from the archive'
     Invoke-Name 'Sign out'
     # sign-out asks first ("Sign out?"); WinUI names the dialog's confirm button PrimaryButton
     Invoke-Element (Wait-Id 'PrimaryButton')

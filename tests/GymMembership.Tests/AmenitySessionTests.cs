@@ -105,7 +105,7 @@ public class AmenitySessionTests
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
         var vm = new CatalogAdminViewModel(new AdminService(gw));
         await vm.OnAppearingAsync();
-        var amenity = vm.Amenities.Single(a => a.Id == id);
+        var amenity = vm.Amenities.Single(r => r.Amenity.Id == id).Amenity;
 
         vm.StartSessionPriceCommand.Execute(amenity);
         Assert.Same(amenity, vm.PricingAmenity);
@@ -134,18 +134,20 @@ public class AmenitySessionTests
         var vm = new CatalogAdminViewModel(new AdminService(gw));
         await vm.OnAppearingAsync();
 
-        vm.EditAmenityCommand.Execute(vm.Amenities.Single(a => a.Id == id));
-        Assert.Equal("Price for 30 days", vm.AmenityPriceLabel);
-        vm.NewAmenityDescription = "New words";
-        await vm.AddAmenityCommand.ExecuteAsync(null);
+        await vm.RunActionCommand.ExecuteAsync((vm.Amenities.Single(r => r.Amenity.Id == id), "Edit"));
+        Assert.Equal(("Price for the pass", false), (vm.PriceLabel, vm.CanChooseSoldAs));   // switching is Sell per session, which asks first
+        vm.FormDescription = "New words";
+        await vm.MainCommand.ExecuteAsync(null);
         Assert.Equal(30, (await gw.ListAsync<Amenity>(a => a.Id == id)).Single().DurationDays);
 
-        Assert.Equal("Price per session", vm.AmenityPriceLabel);
-        vm.NewAmenityName = "Ice bath"; vm.NewAmenityPrice = 0;   // D4: ₱0 could never be paid
-        await vm.AddAmenityCommand.ExecuteAsync(null);
-        Assert.Equal("Enter a price above ₱0.", vm.ErrorMessage);
-        vm.NewAmenityPrice = 120;
-        await vm.AddAmenityCommand.ExecuteAsync(null);
+        vm.AddAmenityCommand.Execute(null);
+        vm.SellPerSessionCommand.Execute(null);
+        Assert.Equal("Price per session", vm.PriceLabel);
+        (vm.FormName, vm.FormDescription, vm.FormPrice) = ("Ice bath", "Cold plunge.", 0);   // D4: ₱0 could never be paid
+        await vm.MainCommand.ExecuteAsync(null);
+        Assert.True(vm.PriceMissing);
+        vm.FormPrice = 120;
+        await vm.MainCommand.ExecuteAsync(null);
         Assert.Null((await gw.ListAsync<Amenity>()).Single(a => a.Name == "Ice bath").DurationDays);
 
         var admin = new AdminService(gw);

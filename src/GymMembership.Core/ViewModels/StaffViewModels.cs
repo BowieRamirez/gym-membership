@@ -1238,25 +1238,314 @@ public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? a
     }
 }
 
+/// <summary>Phase 4: one package on Packages and amenities. A draft version sits right under the package it will replace.</summary>
+public sealed record CatalogPackageRow(MembershipPackage Package, string? PhotoUrl, bool IsVersion, bool HasDraftVersion)
+{
+    public string StateText => Package.State == CatalogState.Draft ? "Draft" : "On sale";
+    public string PriceText => Package.Price > 0 ? $"₱{Package.Price:N2}" : "Not set";
+    public string Subtitle => IsVersion ? "New version, replaces the one above when published"
+        : string.IsNullOrWhiteSpace(Package.Description) ? "No description yet" : Package.Description!;
+}
+
+public sealed record CatalogAmenityRow(Amenity Amenity, string? PhotoUrl)
+{
+    public string StateText => Amenity.State == CatalogState.Draft ? "Draft" : "On sale";
+    public string SoldAsText => Amenity.Price <= 0 ? "Price not set" : Amenity.DurationDays is { } d ? $"₱{Amenity.Price:N2} for {d} days" : $"₱{Amenity.Price:N2} per session";
+    public string Subtitle => string.IsNullOrWhiteSpace(Amenity.Description) ? "No description yet" : Amenity.Description!;
+}
+
+/// <summary>One benefit line in the side panel (packages only).</summary>
+public sealed partial class BenefitLine : ObservableObject { [ObservableProperty] private string text = ""; }
+
+/// <summary>
+/// Packages and amenities (G6 to G9, approved mockup docs/mockups/catalog-add.html): one Actions menu per row offering only what the row's
+/// state allows, and one side panel that adds, edits, saves as a draft, puts on sale, and compares a new version before it is published.
+/// </summary>
 public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? picker = null) : LoadableViewModel
 {
-    /// <summary>Only the super admin archives (D15); a sub-admin who tries is told so.</summary>
+    /// <summary>Only the super admin archives (D15).</summary>
     [ObservableProperty] private bool canArchive;
 
-    public ObservableCollection<MembershipPackage> Packages { get; } = new();
-    public ObservableCollection<Amenity> Amenities { get; } = new();
-    [ObservableProperty] private string newPackageName = "";
-    [ObservableProperty] private string newDescription = "";
-    [ObservableProperty] private decimal newPrice = 30;
-    [ObservableProperty] private int newDays = 30;
-    [ObservableProperty] private string newAmenityName = "";
-    [ObservableProperty] private decimal newAmenityPrice = 200;
-    [ObservableProperty] private string newAmenityDescription = "";
-    // like packages: one form adds an amenity, or edits the one held here
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(AmenitySaveLabel), nameof(IsEditingAmenity), nameof(AmenityPriceLabel))] private Amenity? editingAmenity;
-    public string AmenityPriceLabel => EditingAmenity?.DurationDays is { } days ? $"Price for {days} days" : "Price per session";
+    public ObservableCollection<CatalogPackageRow> Packages { get; } = new();
+    public ObservableCollection<CatalogAmenityRow> Amenities { get; } = new();
 
-    // Today's amenities are priced for timed passes, so nothing switches until staff enter a session price (D11).
+    public override Task OnAppearingAsync() => LoadAsync();
+
+    [RelayCommand]
+    private async Task LoadAsync()
+    {
+        await RunAsync(svc.IsSuperAdminAsync, yes => CanArchive = yes);
+        if (await svc.AllPackagesAsync() is { Ok: true, Value: { } packages })
+        {
+            var live = packages.Where(p => p.IsActive).OrderBy(p => p.Id).ToList();
+            var rows = new List<CatalogPackageRow>();
+            foreach (var p in live.Where(p => p.PublishedAt is not null))
+            {
+                var version = live.FirstOrDefault(v => v.ReplacesId == p.Id && v.PublishedAt is null);
+                rows.Add(new(p, await SignedPhoto(p.ImagePath), false, version is not null));
+                if (version is not null) rows.Add(new(version, await SignedPhoto(version.ImagePath), true, false));
+            }
+            foreach (var d in live.Where(d => d.PublishedAt is null && !rows.Any(r => r.Package.Id == d.Id)))
+                rows.Add(new(d, await SignedPhoto(d.ImagePath), false, false));
+            Fill(Packages, rows);
+        }
+        if (await svc.AllAmenitiesAsync() is { Ok: true, Value: { } amenities })
+        {
+            var rows = new List<CatalogAmenityRow>();
+            foreach (var a in amenities.Where(a => a.IsActive).OrderBy(a => a.PublishedAt is null).ThenBy(a => a.Id)) rows.Add(new(a, await SignedPhoto(a.ImagePath)));
+            Fill(Amenities, rows);
+        }
+    }
+
+    async Task<string?> SignedPhoto(string? path) => path is null ? null : (await svc.CatalogPhotoUrlAsync(path)).Value;
+
+    // ---------- the Actions menu ----------
+    public IReadOnlyList<string> ActionsFor(object row) => row switch
+    {
+        CatalogPackageRow { Package.State: CatalogState.Draft, IsVersion: true } => ["Edit draft", "Review and publish", "Delete draft"],
+        CatalogPackageRow { Package.State: CatalogState.Draft } => ["Edit draft", "Add to sale", "Delete draft"],
+        CatalogPackageRow r => [.. r.HasDraftVersion ? [] : new[] { "Create new version" }, .. CanArchive ? new[] { "Archive" } : []],
+        CatalogAmenityRow { Amenity.State: CatalogState.Draft } => ["Edit draft", "Add to sale", "Delete draft"],
+        CatalogAmenityRow r => ["Edit", .. r.Amenity.DurationDays is null ? [] : new[] { "Sell per session" }, .. CanArchive ? new[] { "Archive" } : []],
+        _ => []
+    };
+
+    [RelayCommand]
+    private async Task RunActionAsync((object Row, string Action) pick)
+    {
+        ErrorMessage = Notice = null;
+        switch (pick.Row, pick.Action)
+        {
+            case (CatalogPackageRow r, "Edit draft"): OpenPackage(r.Package); break;
+            case (CatalogPackageRow r, "Add to sale" or "Review and publish"): OpenPackage(r.Package); await MainAsync(); break;
+            case (CatalogPackageRow r, "Create new version"):
+                if (!await RunAsync(() => svc.NewPackageVersionAsync(r.Package.Id), _ => { })) return;
+                await LoadAsync();
+                if (Packages.FirstOrDefault(v => v.IsVersion && v.Package.ReplacesId == r.Package.Id) is { } version) OpenPackage(version.Package);
+                break;
+            case (CatalogPackageRow r, "Delete draft"): await DeleteDraftAsync("plan", r.Package.Id, r.Package.Name); break;
+            case (CatalogPackageRow r, "Archive"): Deleting = r.Package; break;
+            case (CatalogAmenityRow r, "Edit draft" or "Edit"): OpenAmenity(r.Amenity); break;
+            case (CatalogAmenityRow r, "Add to sale"): OpenAmenity(r.Amenity); await MainAsync(); break;
+            case (CatalogAmenityRow r, "Sell per session"): StartSessionPrice(r.Amenity); break;
+            case (CatalogAmenityRow r, "Delete draft"): await DeleteDraftAsync("amenity", r.Amenity.Id, r.Amenity.Name); break;
+            case (CatalogAmenityRow r, "Archive"): DeletingAmenity = r.Amenity; break;
+        }
+    }
+
+    async Task DeleteDraftAsync(string kind, int id, string name)
+    {
+        if (!await Confirm.AskAsync($"Delete the draft {name}?", "It has never been on sale, so it goes for good.", "Delete draft")) return;
+        if (!await RunAsync(() => svc.DeleteDraftAsync(kind, id))) return;
+        Notice = $"Deleted the draft {name}.";
+        await LoadAsync();
+    }
+
+    // ---------- the side panel ----------
+    [ObservableProperty] private bool isPanelOpen;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(PriceLabel), nameof(ShowsDays))] private bool isPackagePanel;
+    [ObservableProperty] private bool isComparing;
+    [ObservableProperty] private string panelTitle = "";
+    [ObservableProperty] private string panelSubtitle = "";
+    [ObservableProperty] private string mainLabel = "Add";
+    [ObservableProperty] private bool canSaveDraft = true;
+    [ObservableProperty] private bool canChooseSoldAs = true;
+    [ObservableProperty] private string? versionNote;
+
+    [ObservableProperty] private string formName = "";
+    [ObservableProperty] private string formDescription = "";
+    [ObservableProperty] private decimal formPrice;
+    [ObservableProperty] private int formDays = 30;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(PriceLabel), nameof(ShowsDays))] private bool soldAsPass = true;
+    public string PriceLabel => IsPackagePanel ? "Price" : SoldAsPass ? "Price for the pass" : "Price per session";
+    public bool ShowsDays => IsPackagePanel || SoldAsPass;
+    public ObservableCollection<BenefitLine> Benefits { get; } = new();
+    [ObservableProperty] private string newBenefit = "";
+
+    [ObservableProperty] private string? photoUrl;
+    [ObservableProperty] private string? photoText;
+    (string FileName, byte[] Data)? _pendingPhoto;
+
+    [ObservableProperty] private string? missingText;
+    [ObservableProperty] private bool nameMissing, descriptionMissing, priceMissing, daysMissing;
+
+    [ObservableProperty] private IReadOnlyList<PackageChange> changes = [];
+    [ObservableProperty] private string? renewalNote;
+
+    MembershipPackage? _package;   // the package or draft in the panel (Id 0 = not saved yet)
+    Amenity? _amenity;
+
+    [RelayCommand] private void AddPackage() => OpenPackage(new MembershipPackage { DurationDays = 30 });
+    [RelayCommand] private void AddAmenity() => OpenAmenity(new Amenity { DurationDays = 30 });
+
+    void Open(bool package, string name, string? description, decimal price, string? photo)
+    {
+        ErrorMessage = Notice = null;
+        (IsPackagePanel, IsComparing, FormName, FormDescription, FormPrice, NewBenefit, _pendingPhoto, PhotoText) = (package, false, name, description ?? "", price, "", null, null);
+        ClearMissing();
+        PhotoUrl = photo;
+        IsPanelOpen = true;
+    }
+
+    void OpenPackage(MembershipPackage p)
+    {
+        (_package, _amenity) = (p, null);
+        var replaces = p.ReplacesId is { } id ? Packages.FirstOrDefault(r => r.Package.Id == id)?.Package : null;
+        (PanelTitle, PanelSubtitle, MainLabel) = replaces is not null
+            ? ($"New version of {replaces.Name}", $"A draft. {replaces.Name} stays on sale until you publish this.", "Review and publish")
+            : (p.Id == 0 ? "Add a package" : "Edit draft", "Save as draft to finish it later. Add puts it on sale.", "Add");
+        (CanSaveDraft, CanChooseSoldAs) = (true, true);
+        VersionNote = replaces is null ? null : $"This is a draft of a new version. {replaces.Name} stays on sale as it is until you publish this one. Discount codes for the old version don't carry over.";
+        FormDays = p.DurationDays;
+        Benefits.Clear();
+        foreach (var b in p.Benefits) Benefits.Add(new BenefitLine { Text = b });
+        Open(true, p.Name, p.Description, p.Price, Packages.FirstOrDefault(r => r.Package.Id == p.Id && p.Id != 0)?.PhotoUrl);
+    }
+
+    void OpenAmenity(Amenity a)
+    {
+        (_package, _amenity) = (null, a);
+        var published = a.State == CatalogState.Published;
+        (PanelTitle, PanelSubtitle, MainLabel, CanSaveDraft, CanChooseSoldAs) = published
+            ? ($"Edit {a.Name}", "Changes apply to new purchases. Passes and sessions already paid keep what was paid.", "Save changes", false, false)
+            : (a.Id == 0 ? "Add an amenity" : "Edit draft", "Save as draft to finish it later. Add puts it on sale.", "Add", true, true);
+        VersionNote = null;
+        (SoldAsPass, FormDays) = (a.DurationDays is not null, a.DurationDays ?? 30);
+        Benefits.Clear();
+        Open(false, a.Name, a.Description, a.Price, Amenities.FirstOrDefault(r => r.Amenity.Id == a.Id && a.Id != 0)?.PhotoUrl);
+    }
+
+    [RelayCommand] private void ClosePanel() => (IsPanelOpen, IsComparing) = (false, false);
+    [RelayCommand] private void BackToEdit() => IsComparing = false;
+    [RelayCommand] private void SellAsPass() => SoldAsPass = true;
+    [RelayCommand] private void SellPerSession() => SoldAsPass = false;
+
+    [RelayCommand]
+    private void AddBenefit()
+    {
+        if (string.IsNullOrWhiteSpace(NewBenefit)) return;
+        Benefits.Add(new BenefitLine { Text = NewBenefit.Trim() });
+        NewBenefit = "";
+    }
+    [RelayCommand] private void RemoveBenefit(BenefitLine line) => Benefits.Remove(line);
+
+    [RelayCommand]
+    private async Task PickPhotoAsync()
+    {
+        if (picker is null || await picker.PickAsync() is not { } file) return;
+        _pendingPhoto = file;
+        PhotoText = $"{file.FileName}, saved with the {(IsPackagePanel ? "package" : "amenity")}";
+    }
+
+    void ClearMissing() { MissingText = null; NameMissing = DescriptionMissing = PriceMissing = DaysMissing = false; }
+    // a field's note goes as soon as it is filled in; the summary goes with the first change
+    partial void OnFormNameChanged(string value) { NameMissing = false; MissingText = null; }
+    partial void OnFormDescriptionChanged(string value) { DescriptionMissing = false; MissingText = null; }
+    partial void OnFormPriceChanged(decimal value) { PriceMissing = false; MissingText = null; }
+    partial void OnFormDaysChanged(int value) { DaysMissing = false; MissingText = null; }
+
+    /// <summary>Add (and Review and publish) checks what publishing needs (0061's missing_fields) before anything is saved.</summary>
+    bool Complete()
+    {
+        ClearMissing();
+        (NameMissing, DescriptionMissing, PriceMissing, DaysMissing) = (string.IsNullOrWhiteSpace(FormName), string.IsNullOrWhiteSpace(FormDescription), FormPrice <= 0, ShowsDays && FormDays <= 0);
+        var missing = new[] { (NameMissing, "a name"), (DescriptionMissing, "a description"), (PriceMissing, "a price"), (DaysMissing, "the days") }.Where(m => m.Item1).Select(m => m.Item2).ToList();
+        if (missing.Count == 0) return true;
+        var list = missing.Count == 1 ? missing[0] : string.Join(", ", missing.SkipLast(1)) + " and " + missing[^1];
+        MissingText = $"Add needs {(missing.Count == 1 ? "1 more thing" : $"{missing.Count} more things")}: {list}. Or save it as a draft and finish later.";
+        return false;
+    }
+
+    /// <summary>Writes the panel to its row (a new row is a draft) and then the chosen photo, which needs the row's id.</summary>
+    async Task<bool> SaveAsync()
+    {
+        var description = string.IsNullOrWhiteSpace(FormDescription) ? null : FormDescription.Trim();
+        bool ok;
+        int id;
+        if (IsPackagePanel)
+        {
+            var p = _package!;
+            (p.Name, p.Description, p.Price, p.DurationDays) = (FormName.Trim(), description, FormPrice, FormDays);
+            p.Benefits = Benefits.Select(b => b.Text.Trim()).Where(b => b.Length > 0).ToList();
+            ok = await RunAsync(() => svc.SavePackageAsync(p));
+            id = p.Id;
+        }
+        else
+        {
+            var a = _amenity!;
+            (a.Name, a.Description, a.Price) = (FormName.Trim(), description, FormPrice);
+            if (CanChooseSoldAs) a.DurationDays = SoldAsPass ? FormDays : null;
+            ok = await RunAsync(() => svc.SaveAmenityAsync(a));
+            id = a.Id;
+        }
+        if (!ok || _pendingPhoto is not { } photo) return ok;
+        if (!await RunAsync(() => IsPackagePanel ? svc.SetPackagePhotoAsync(id, photo.FileName, photo.Data) : svc.SetAmenityPhotoAsync(id, photo.FileName, photo.Data), _ => { })) return false;
+        _pendingPhoto = null;
+        return true;
+    }
+
+    [RelayCommand]
+    private async Task SaveDraftAsync()
+    {
+        ClearMissing();
+        if (string.IsNullOrWhiteSpace(FormName)) { (NameMissing, MissingText) = (true, "A draft needs a name."); return; }
+        if (ShowsDays && FormDays <= 0) { (DaysMissing, MissingText) = (true, "Days must be more than zero."); return; }
+        var ok = await SaveAsync();
+        await LoadAsync();
+        if (!ok) return;
+        IsPanelOpen = false;
+        Notice = $"Saved {FormName.Trim()} as a draft.";
+    }
+
+    /// <summary>Add, Review and publish, or Save changes, as the panel's main button says.</summary>
+    [RelayCommand]
+    private async Task MainAsync()
+    {
+        if (!Complete()) return;
+        var terms = IsPackagePanel ? $"₱{FormPrice:N2} for {FormDays} days." : SoldAsPass ? $"Pass: ₱{FormPrice:N2} for {FormDays} days." : $"₱{FormPrice:N2} per session.";
+        var ask = (_package, _amenity) switch
+        {
+            ({ ReplacesId: not null }, _) => ((string, string, string)?)null,   // the comparison is the check
+            (_, { State: CatalogState.Published }) => ($"Save changes to {FormName.Trim()}?", $"{terms} New purchases use the new details.", "Save changes"),
+            (not null, _) => ($"Put {FormName.Trim()} on sale?", $"{terms} Once on sale it can't be changed; you make a new version instead.", "Add to sale"),
+            _ => ($"Put {FormName.Trim()} on sale?", $"{terms} Members can buy it at once.", "Add to sale"),
+        };
+        if (ask is { } q && !await Confirm.AskAsync(q.Item1, q.Item2, q.Item3)) return;
+        var saved = await SaveAsync();
+        await LoadAsync();
+        if (!saved) return;
+        var name = FormName.Trim();
+        if (_package is { ReplacesId: { } oldId } version)
+        {
+            if ((await svc.AllPackagesAsync()).Value?.FirstOrDefault(p => p.Id == oldId) is not { } old) return;
+            Changes = PackageChanges.Between(old, version);
+            RenewalNote = $"Members on the old version keep what they paid for until it ends. When they renew, they move to the new version at ₱{version.Price:N2}; the renewal screen says so.";
+            IsComparing = true;
+            return;
+        }
+        if (_amenity is { State: CatalogState.Published })
+        {
+            IsPanelOpen = false;
+            Notice = $"Saved changes to {name}.";
+            return;
+        }
+        if (!await RunAsync(() => svc.PublishAsync(IsPackagePanel ? "plan" : "amenity", IsPackagePanel ? _package!.Id : _amenity!.Id))) return;
+        IsPanelOpen = false;
+        await LoadAsync();
+        Notice = $"{name} is on sale.";
+    }
+
+    [RelayCommand]
+    private async Task PublishVersionAsync()
+    {
+        if (_package is not { ReplacesId: not null } version) return;
+        if (!await RunAsync(() => svc.PublishAsync("plan", version.Id))) return;
+        (IsPanelOpen, IsComparing) = (false, false);
+        await LoadAsync();
+        Notice = $"The new {version.Name} is on sale. The old one is archived; members on it keep their terms.";
+    }
+
+    // ---------- selling an amenity per session (D11) ----------
     [ObservableProperty] private Amenity? pricingAmenity;
     [ObservableProperty] private decimal sessionPrice;
 
@@ -1276,136 +1565,29 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
         Notice = $"{a.Name} now sells per session.";
         await LoadAsync();
     }
-    public string AmenitySaveLabel => EditingAmenity is null ? "Add amenity" : "Save changes";
-    public bool IsEditingAmenity => EditingAmenity is not null;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(SaveLabel), nameof(IsEditing))] private MembershipPackage? editing;
 
-    public string SaveLabel => Editing is null ? "Add package" : "Save changes";
-    public bool IsEditing => Editing is not null;
-
-    public override Task OnAppearingAsync() => LoadAsync();
-
-    [RelayCommand]
-    private async Task LoadAsync()
-    {
-        await RunAsync(svc.IsSuperAdminAsync, yes => CanArchive = yes);
-        await RunAsync(svc.AllPackagesAsync, r => Fill(Packages, r.Where(p => p.IsActive)));
-        await RunAsync(svc.AllAmenitiesAsync, r => Fill(Amenities, r.Where(a => a.IsActive)));
-    }
-
-    // one form serves both "add" and "edit": Editing holds the package being changed, or null for a new one
-    [RelayCommand]
-    private async Task SavePackageAsync()
-    {
-        if (string.IsNullOrWhiteSpace(NewPackageName)) { ErrorMessage = "Give the package a name."; return; }
-        if (NewPrice <= 0 || NewDays <= 0) { ErrorMessage = "Price and days must be more than zero."; return; }
-        if (!await Confirm.AskAsync(Editing is null ? $"Add {NewPackageName.Trim()}?" : $"Save changes to {NewPackageName.Trim()}?",
-                $"₱{NewPrice:N2} for {NewDays} days.", Editing is null ? "Add package" : "Save changes")) return;
-        var p = Editing ?? new MembershipPackage();
-        p.Name = NewPackageName.Trim(); p.Description = string.IsNullOrWhiteSpace(NewDescription) ? null : NewDescription.Trim();
-        p.Price = NewPrice; p.DurationDays = NewDays;
-        if (await RunAsync(() => svc.SavePackageAsync(p))) { CancelEdit(); await LoadAsync(); }
-    }
-
-    [RelayCommand]
-    private void EditPackage(MembershipPackage p)
-    { Editing = p; NewPackageName = p.Name; NewDescription = p.Description ?? ""; NewPrice = p.Price; NewDays = p.DurationDays; }
-
-    [RelayCommand]
-    private void CancelEdit()
-    { Editing = null; NewPackageName = ""; NewDescription = ""; NewPrice = 30; NewDays = 30; }
-
-    // delete asks first: DeletePackage picks the row, ConfirmDelete does it
+    // ---------- archive asks first (System admin only, D15) ----------
     [ObservableProperty] private MembershipPackage? deleting;
     [ObservableProperty] private Amenity? deletingAmenity;
 
-    [RelayCommand]
-    private void DeleteAmenity(Amenity a)
-    {
-        if (!CanArchive) { ErrorMessage = "Only a System admin can archive an amenity. Turn it off instead to stop selling it."; return; }
-        DeletingAmenity = a;
-    }
     [RelayCommand] private void KeepAmenity() => DeletingAmenity = null;
+    [RelayCommand] private void KeepPackage() => Deleting = null;
 
     [RelayCommand]
     private async Task ConfirmDeleteAmenityAsync()
     {
         if (DeletingAmenity is not { } a) return;
         DeletingAmenity = null;
-        if (!await RunAsync(() => svc.DeleteAmenityAsync(a))) return;
-        CancelAmenityEdit();
-        await LoadAsync();
+        if (await RunAsync(() => svc.DeleteAmenityAsync(a))) await LoadAsync();
     }
-
-    [RelayCommand]
-    private void DeletePackage(MembershipPackage p)
-    {
-        if (!CanArchive) { ErrorMessage = "Only a System admin can archive a package. Turn it off instead to stop selling it."; return; }
-        Deleting = p;
-    }
-    [RelayCommand] private void KeepPackage() => Deleting = null;
 
     [RelayCommand]
     private async Task ConfirmDeleteAsync()
     {
         if (Deleting is not { } p) return;
         Deleting = null;
-        if (!await RunAsync(() => svc.DeletePackageAsync(p))) return;
-        if (Editing?.Id == p.Id) CancelEdit();
-        await LoadAsync();
+        if (await RunAsync(() => svc.DeletePackageAsync(p))) await LoadAsync();
     }
-
-    [RelayCommand]
-    private async Task TogglePackageAsync(MembershipPackage p)
-    {
-        if (!await (p.IsActive ? Confirm.AskAsync($"Stop selling {p.Name}?", "Members can't buy it until you turn it back on. Anyone who has it keeps it.", "Turn off")
-                               : Confirm.AskAsync($"Sell {p.Name} again?", "Members can buy it again.", "Turn on"))) return;
-        p.IsActive = !p.IsActive; if (await RunAsync(() => svc.SavePackageAsync(p))) await LoadAsync(); else p.IsActive = !p.IsActive; }
-
-    [RelayCommand]
-    private async Task AddAmenityAsync()
-    {
-        if (string.IsNullOrWhiteSpace(NewAmenityName)) { ErrorMessage = "Give the amenity a name."; return; }
-        if (NewAmenityPrice <= 0) { ErrorMessage = "Enter a price above ₱0."; return; }   // D4: ₱0 could never be paid
-        if (!await Confirm.AskAsync(EditingAmenity is null ? $"Add {NewAmenityName.Trim()}?" : $"Save changes to {NewAmenityName.Trim()}?",
-                EditingAmenity?.DurationDays is { } days ? $"Pass: ₱{NewAmenityPrice:N2} for {days} days." : $"₱{NewAmenityPrice:N2} per session.", EditingAmenity is null ? "Add amenity" : "Save changes")) return;
-        var a = EditingAmenity ?? new Amenity();
-        a.Name = NewAmenityName.Trim(); a.Price = NewAmenityPrice;
-        a.Description = string.IsNullOrWhiteSpace(NewAmenityDescription) ? null : NewAmenityDescription.Trim();
-        if (await RunAsync(() => svc.SaveAmenityAsync(a))) { CancelAmenityEdit(); await LoadAsync(); }
-    }
-
-    [RelayCommand]
-    private void EditAmenity(Amenity a)
-    { EditingAmenity = a; NewAmenityName = a.Name; NewAmenityPrice = a.Price; NewAmenityDescription = a.Description ?? ""; }
-
-    [RelayCommand]
-    private void CancelAmenityEdit()
-    { EditingAmenity = null; NewAmenityName = ""; NewAmenityPrice = 200; NewAmenityDescription = ""; }
-
-    [RelayCommand]
-    private async Task UploadAmenityPhotoAsync(Amenity amenity)
-    {
-        if (IsBusy || picker is null) return;
-        IsBusy = true; ErrorMessage = Notice = null;
-        try
-        {
-            if (await picker.PickAsync() is not { } file) return;
-            var result = await svc.SetAmenityPhotoAsync(amenity.Id, file.FileName, file.Data);
-            if (!result.Ok) { ErrorMessage = ErrorText.For(result.Error, result.Message); return; }
-            await LoadAsync();
-            Notice = $"Photo updated for {amenity.Name}.";
-        }
-        catch (Exception ex) { ErrorMessage = ErrorText.For(ErrorMapper.Map(ex), ex.Message); }
-        finally { IsBusy = false; }
-    }
-
-    [RelayCommand]
-    private async Task ToggleAmenityAsync(Amenity a)
-    {
-        if (!await (a.IsActive ? Confirm.AskAsync($"Stop selling {a.Name} passes?", "Members can't buy a pass until you turn it back on. Passes already bought keep working.", "Turn off")
-                               : Confirm.AskAsync($"Sell {a.Name} passes again?", "Members can buy a pass again.", "Turn on"))) return;
-        a.IsActive = !a.IsActive; if (await RunAsync(() => svc.SaveAmenityAsync(a))) await LoadAsync(); else a.IsActive = !a.IsActive; }
 }
 
 /// <summary>A package or amenity to tick on the new-code form (G3).</summary>

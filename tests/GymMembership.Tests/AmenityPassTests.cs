@@ -73,12 +73,12 @@ public class AmenityPassTests
         var gw = await WithSauna();
         var catalog = new CatalogAdminViewModel(new AdminService(gw));
         await catalog.LoadCommand.ExecuteAsync(null);
-        catalog.EditAmenityCommand.Execute(catalog.Amenities.Single(a => a.Name == "Steam Room"));
-        Assert.Equal(300, catalog.NewAmenityPrice);
-        catalog.NewAmenityPrice = 350; catalog.NewAmenityDescription = "Now with cold plunge";
-        await catalog.AddAmenityCommand.ExecuteAsync(null);
+        await catalog.RunActionCommand.ExecuteAsync((catalog.Amenities.Single(r => r.Amenity.Name == "Steam Room"), "Edit"));
+        Assert.Equal(300, catalog.FormPrice);
+        catalog.FormPrice = 350; catalog.FormDescription = "Now with cold plunge";
+        await catalog.MainCommand.ExecuteAsync(null);
         Assert.Null(catalog.ErrorMessage);
-        Assert.Null(catalog.EditingAmenity);
+        Assert.False(catalog.IsPanelOpen);
         var saved = (await gw.ListAsync<Amenity>()).Single(a => a.Name == "Steam Room");
         Assert.Equal((350m, 30, "Now with cold plunge"), (saved.Price, saved.DurationDays, saved.Description));
         Assert.Single(await gw.ListAsync<Amenity>(), a => a.Name == "Steam Room");   // edited, not added again

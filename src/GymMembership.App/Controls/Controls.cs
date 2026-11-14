@@ -303,7 +303,7 @@ public class StatusChip : ContentView
     readonly Ellipse _dot = new();
     readonly Label _label = new() { VerticalOptions = LayoutOptions.Center, FontSize = 13 };
 
-    static readonly HashSet<string> Good = new(["verified", "active", "completed", "approved", "present", "available"], StringComparer.OrdinalIgnoreCase);
+    static readonly HashSet<string> Good = new(["verified", "active", "completed", "approved", "present", "available", "on sale"], StringComparer.OrdinalIgnoreCase);
     static readonly HashSet<string> Bad = new(["rejected", "expired", "cancelled", "absent", "no_show", "inactive", "unavailable", "deleted"], StringComparer.OrdinalIgnoreCase);
     static readonly HashSet<string> Wait = new(["pending", "late", "in_use"], StringComparer.OrdinalIgnoreCase);
 

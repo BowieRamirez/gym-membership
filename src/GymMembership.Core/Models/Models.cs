@@ -68,6 +68,7 @@ public static class PayMethod
   [Column("published_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? PublishedAt { get; set; }
   [Column("replaces_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? ReplacesId { get; set; }
   [Column("benefits")] public List<string> Benefits { get; set; } = [];
+  [Column("image_path", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? ImagePath { get; set; }   // 0013; set only by the photo upload
   [System.Text.Json.Serialization.JsonIgnore] public CatalogState State => Catalog.StateOf(IsActive, PublishedAt); }
 
 public enum CatalogState { Draft, Published, Archived }
@@ -79,18 +80,19 @@ public static class Catalog
 }
 
 /// <summary>G9: what a new version changes, for the side-by-side check before publishing.</summary>
+public sealed record PackageChange(string Field, string Old, string New);
+
 public static class PackageChanges
 {
-    public sealed record Change(string Field, string Old, string New);
-
-    public static IReadOnlyList<Change> Between(MembershipPackage old, MembershipPackage next) =>
+    public static IReadOnlyList<PackageChange> Between(MembershipPackage old, MembershipPackage next) =>
         new[]
         {
-            new Change("Name", old.Name, next.Name),
-            new Change("Description", old.Description ?? "", next.Description ?? ""),
-            new Change("Price", $"₱{old.Price:N2}", $"₱{next.Price:N2}"),
-            new Change("Duration", $"{old.DurationDays} days", $"{next.DurationDays} days"),
-            new Change("Benefits", string.Join("; ", old.Benefits), string.Join("; ", next.Benefits)),
+            new PackageChange("Name", old.Name, next.Name),
+            new PackageChange("Description", old.Description ?? "", next.Description ?? ""),
+            new PackageChange("Price", $"₱{old.Price:N2}", $"₱{next.Price:N2}"),
+            new PackageChange("Duration", $"{old.DurationDays} days", $"{next.DurationDays} days"),
+            new PackageChange("Benefits", string.Join("; ", old.Benefits), string.Join("; ", next.Benefits)),
+            new PackageChange("Photo", old.ImagePath is null ? "None" : "Same", next.ImagePath is null ? "None" : next.ImagePath == old.ImagePath ? "Same" : "New photo"),
         }.Where(c => c.Old != c.New).ToList();
 }
 

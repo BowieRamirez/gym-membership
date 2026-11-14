@@ -5,9 +5,11 @@
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
+            xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
             x:Class="GymMembership.App.Views.PackagesPage" x:DataType="vm:PackagesViewModel" Title="Packages">
 
     <v:BasePage.Resources>
+        <toolkit:IntToBoolConverter x:Key="Any" />
         <!-- phone: name and length on the left, the price on the right, one line about it, then the button at its own width -->
         <DataTemplate x:Key="PackagePhone" x:DataType="m:MembershipPackage">
             <Border Style="{StaticResource Panel}" Padding="16,14">
@@ -20,6 +22,9 @@
                         <Label Grid.Column="1" Text="{Binding Price, StringFormat='₱{0:N0}'}" Style="{StaticResource Numeral}" FontSize="30" VerticalOptions="Center" />
                     </Grid>
                     <Label Text="{Binding Description}" Style="{StaticResource Muted}" FontSize="15" IsVisible="{Binding Description, Converter={StaticResource HasText}}" />
+                    <VerticalStackLayout Spacing="2" BindableLayout.ItemsSource="{Binding Benefits}" IsVisible="{Binding Benefits.Count, Converter={StaticResource Any}}">
+                        <BindableLayout.ItemTemplate><DataTemplate x:DataType="x:String"><Label Text="{Binding ., StringFormat='• {0}'}" FontSize="14" /></DataTemplate></BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
                     <Button Text="Choose next term" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" Clicked="OnAvail" />
                 </VerticalStackLayout>
             </Border>
@@ -32,6 +37,9 @@
                     <Label Text="{Binding Price, StringFormat='₱{0:N0}'}" Style="{StaticResource Numeral}" FontSize="44" />
                     <Label Text="{Binding DurationDays, StringFormat='{0} days of access'}" Style="{StaticResource Caption}" />
                     <Label Text="{Binding Description}" Style="{StaticResource Muted}" IsVisible="{Binding Description, Converter={StaticResource HasText}}" />
+                    <VerticalStackLayout Spacing="2" BindableLayout.ItemsSource="{Binding Benefits}" IsVisible="{Binding Benefits.Count, Converter={StaticResource Any}}">
+                        <BindableLayout.ItemTemplate><DataTemplate x:DataType="x:String"><Label Text="{Binding ., StringFormat='• {0}'}" FontSize="14" /></DataTemplate></BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
                     <Button Text="Choose next term" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" Margin="0,8,0,0" Clicked="OnAvail" />
                 </VerticalStackLayout>
             </Border>

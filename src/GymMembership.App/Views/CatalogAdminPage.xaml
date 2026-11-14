@@ -7,230 +7,351 @@
             xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.CatalogAdminPage" x:DataType="vm:CatalogAdminViewModel" Title="Packages and amenities">
 
-    <!-- 9.8: tables (were grids of cards, a yellow Edit on each package and five buttons on each amenity). Every action stays one click
-         away as a chip; the destructive ones last (D28). Narrow windows get the same facts stacked. -->
+    <!-- Phase 4 (G8, approved mockup docs/mockups/catalog-add.html): one Actions button per row, offering only what the row's state
+         allows; adding and editing happen in a side panel over the list. Narrow windows get the same facts stacked. -->
     <v:BasePage.Resources>
-        <DataTemplate x:Key="PackageRow" x:DataType="m:MembershipPackage">
+        <Style x:Key="Thumb" TargetType="Border">
+            <Setter Property="StrokeShape" Value="RoundRectangle 8" />
+            <Setter Property="StrokeThickness" Value="0" />
+            <Setter Property="WidthRequest" Value="52" />
+            <Setter Property="HeightRequest" Value="38" />
+            <Setter Property="VerticalOptions" Value="Center" />
+            <Setter Property="HorizontalOptions" Value="Start" />
+            <!-- Line, not Surface: a new version's row is Surface, and its empty tile must still show -->
+            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+        </Style>
+
+        <DataTemplate x:Key="PackageRow" x:DataType="vm:CatalogPackageRow">
             <VerticalStackLayout>
-                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,130,80,110,1.6*">
-                    <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
-                    <Label Grid.Column="1" Text="{Binding Price, StringFormat='₱{0:N2}'}" HorizontalOptions="End" VerticalOptions="Center" />
-                    <Label Grid.Column="2" Text="{Binding DurationDays}" HorizontalOptions="End" VerticalOptions="Center" />
-                    <c:StatusChip Grid.Column="3" VerticalOptions="Center" Status="{Binding IsActive, Converter={StaticResource RecordStatus}}" />
-                    <FlexLayout Grid.Column="4" Wrap="Wrap" JustifyContent="End" Margin="0,8,0,0">
-                        <Button Text="Edit" Style="{StaticResource FilterChip}" Margin="8,0,0,8" Clicked="OnEditPackage" />
-                        <Button Text="Deactivate" Style="{StaticResource FilterChip}" Margin="8,0,0,8" Clicked="OnTogglePackage">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsActive}" Value="False"><Setter Property="Text" Value="Activate" /></DataTrigger></Button.Triggers>
-                        </Button>
-                        <Button Text="Archive" Style="{StaticResource FilterChip}" Margin="8,0,0,8" Clicked="OnDeletePackage" />
-                    </FlexLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="52,*,120,70,120,100" ColumnSpacing="14">
+                    <Grid.Triggers><DataTrigger TargetType="Grid" Binding="{Binding IsVersion}" Value="True">
+                        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}" />
+                    </DataTrigger></Grid.Triggers>
+                    <Border Style="{StaticResource Thumb}"><Image Source="{Binding PhotoUrl}" Aspect="AspectFill" IsVisible="{Binding PhotoUrl, Converter={StaticResource IsNotNull}}" /></Border>
+                    <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
+                        <Label Text="{Binding Package.Name}" FontFamily="BarlowSemiBold" />
+                        <Label Text="{Binding Subtitle}" Style="{StaticResource Caption}" LineBreakMode="TailTruncation" />
+                    </VerticalStackLayout>
+                    <Label Grid.Column="2" Text="{Binding PriceText}" HorizontalOptions="End" VerticalOptions="Center" />
+                    <Label Grid.Column="3" Text="{Binding Package.DurationDays}" HorizontalOptions="End" VerticalOptions="Center" />
+                    <c:StatusChip Grid.Column="4" VerticalOptions="Center" Status="{Binding StateText}" />
+                    <Button Grid.Column="5" Text="Actions" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="End" VerticalOptions="Center"
+                            Clicked="OnRowActions" AutomationId="PackageActions"
+                            SemanticProperties.Description="{Binding Package.Name, StringFormat='Actions for package {0}'}" />
                 </Grid>
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
         </DataTemplate>
-        <DataTemplate x:Key="PackageCard" x:DataType="m:MembershipPackage">
+        <DataTemplate x:Key="PackageCard" x:DataType="vm:CatalogPackageRow">
             <VerticalStackLayout>
-                <VerticalStackLayout Spacing="4" Padding="14,12">
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                        <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
-                        <c:StatusChip Grid.Column="1" VerticalOptions="Center" Status="{Binding IsActive, Converter={StaticResource RecordStatus}}" />
-                    </Grid>
-                    <Label Style="{StaticResource Caption}">
-                        <Label.Text>
-                            <MultiBinding StringFormat="{}₱{0:N2}, {1} days"><Binding Path="Price" /><Binding Path="DurationDays" /></MultiBinding>
-                        </Label.Text>
-                    </Label>
-                    <FlexLayout Wrap="Wrap" Margin="0,4,0,0">
-                        <Button Text="Edit" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnEditPackage" />
-                        <Button Text="Deactivate" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnTogglePackage">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsActive}" Value="False"><Setter Property="Text" Value="Activate" /></DataTrigger></Button.Triggers>
-                        </Button>
-                        <Button Text="Archive" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnDeletePackage" />
-                    </FlexLayout>
-                </VerticalStackLayout>
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Padding="14,12">
+                    <Border Style="{StaticResource Thumb}"><Image Source="{Binding PhotoUrl}" Aspect="AspectFill" IsVisible="{Binding PhotoUrl, Converter={StaticResource IsNotNull}}" /></Border>
+                    <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                        <Label Text="{Binding Package.Name}" FontFamily="BarlowSemiBold" />
+                        <Label Style="{StaticResource Caption}">
+                            <Label.Text><MultiBinding StringFormat="{}{0}, {1} days · {2}"><Binding Path="PriceText" /><Binding Path="Package.DurationDays" /><Binding Path="StateText" /></MultiBinding></Label.Text>
+                        </Label>
+                        <Label Text="{Binding Subtitle}" Style="{StaticResource Caption}" />
+                    </VerticalStackLayout>
+                    <Button Grid.Column="2" Text="Actions" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" Clicked="OnRowActions" AutomationId="PackageActions"
+                            SemanticProperties.Description="{Binding Package.Name, StringFormat='Actions for package {0}'}" />
+                </Grid>
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
         </DataTemplate>
 
-        <DataTemplate x:Key="AmenityRow" x:DataType="m:Amenity">
+        <DataTemplate x:Key="AmenityRow" x:DataType="vm:CatalogAmenityRow">
             <VerticalStackLayout>
-                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,170,90,110,2*">
-                    <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
-                    <Label Grid.Column="1" VerticalOptions="Center" IsVisible="{Binding DurationDays, Converter={StaticResource IsNotNull}}">
-                        <Label.Text>
-                            <MultiBinding StringFormat="{}₱{0:N2} for {1} days"><Binding Path="Price" /><Binding Path="DurationDays" /></MultiBinding>
-                        </Label.Text>
-                    </Label>
-                    <Label Grid.Column="1" Text="{Binding Price, StringFormat='₱{0:N2} per session'}" VerticalOptions="Center" IsVisible="{Binding DurationDays, Converter={StaticResource IsNull}}" />
-                    <Label Grid.Column="2" Text="Set" Style="{StaticResource Muted}" VerticalOptions="Center" IsVisible="{Binding ImagePath, Converter={StaticResource IsNotNull}}" />
-                    <Label Grid.Column="2" Text="None" Style="{StaticResource Muted}" VerticalOptions="Center" IsVisible="{Binding ImagePath, Converter={StaticResource IsNull}}" />
-                    <c:StatusChip Grid.Column="3" VerticalOptions="Center" Status="{Binding IsActive, Converter={StaticResource RecordStatus}}" />
-                    <FlexLayout Grid.Column="4" Wrap="Wrap" JustifyContent="End" Margin="0,8,0,0">
-                        <Button Text="Edit" Style="{StaticResource FilterChip}" Margin="8,0,0,8" Clicked="OnEditAmenity" />
-                        <Button Text="Add or replace photo" Style="{StaticResource FilterChip}" Margin="8,0,0,8" Clicked="OnUploadAmenityPhoto"
-                                SemanticProperties.Hint="Choose a JPG, PNG or WebP up to 5 MB for this amenity" />
-                        <Button Text="Set session price" Style="{StaticResource FilterChip}" Margin="8,0,0,8" Clicked="OnSetSessionPrice" AutomationId="SetSessionPrice"
-                                IsVisible="{Binding DurationDays, Converter={StaticResource IsNotNull}}" />
-                        <Button Text="Deactivate" Style="{StaticResource FilterChip}" Margin="8,0,0,8" Clicked="OnToggleAmenity">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsActive}" Value="False"><Setter Property="Text" Value="Activate" /></DataTrigger></Button.Triggers>
-                        </Button>
-                        <Button Text="Archive" Style="{StaticResource FilterChip}" Margin="8,0,0,8" Clicked="OnDeleteAmenity" AutomationId="ArchiveAmenity" />
-                    </FlexLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="52,*,190,120,100" ColumnSpacing="14">
+                    <Border Style="{StaticResource Thumb}"><Image Source="{Binding PhotoUrl}" Aspect="AspectFill" IsVisible="{Binding PhotoUrl, Converter={StaticResource IsNotNull}}" /></Border>
+                    <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
+                        <Label Text="{Binding Amenity.Name}" FontFamily="BarlowSemiBold" />
+                        <Label Text="{Binding Subtitle}" Style="{StaticResource Caption}" LineBreakMode="TailTruncation" />
+                    </VerticalStackLayout>
+                    <Label Grid.Column="2" Text="{Binding SoldAsText}" VerticalOptions="Center" />
+                    <c:StatusChip Grid.Column="3" VerticalOptions="Center" Status="{Binding StateText}" />
+                    <Button Grid.Column="4" Text="Actions" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="End" VerticalOptions="Center"
+                            Clicked="OnRowActions" AutomationId="AmenityActions"
+                            SemanticProperties.Description="{Binding Amenity.Name, StringFormat='Actions for amenity {0}'}" />
                 </Grid>
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
         </DataTemplate>
-        <DataTemplate x:Key="AmenityCard" x:DataType="m:Amenity">
+        <DataTemplate x:Key="AmenityCard" x:DataType="vm:CatalogAmenityRow">
             <VerticalStackLayout>
-                <VerticalStackLayout Spacing="4" Padding="14,12">
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                        <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
-                        <c:StatusChip Grid.Column="1" VerticalOptions="Center" Status="{Binding IsActive, Converter={StaticResource RecordStatus}}" />
-                    </Grid>
-                    <Label Style="{StaticResource Caption}" IsVisible="{Binding DurationDays, Converter={StaticResource IsNotNull}}">
-                        <Label.Text>
-                            <MultiBinding StringFormat="{}₱{0:N2} for {1} days"><Binding Path="Price" /><Binding Path="DurationDays" /></MultiBinding>
-                        </Label.Text>
-                    </Label>
-                    <Label Text="{Binding Price, StringFormat='₱{0:N2} per session'}" Style="{StaticResource Caption}" IsVisible="{Binding DurationDays, Converter={StaticResource IsNull}}" />
-                    <Label Text="Photo set" Style="{StaticResource Caption}" IsVisible="{Binding ImagePath, Converter={StaticResource IsNotNull}}" />
-                    <FlexLayout Wrap="Wrap" Margin="0,4,0,0">
-                        <Button Text="Edit" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnEditAmenity" />
-                        <Button Text="Add or replace photo" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnUploadAmenityPhoto"
-                                SemanticProperties.Hint="Choose a JPG, PNG or WebP up to 5 MB for this amenity" />
-                        <Button Text="Set session price" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnSetSessionPrice" AutomationId="SetSessionPrice"
-                                IsVisible="{Binding DurationDays, Converter={StaticResource IsNotNull}}" />
-                        <Button Text="Deactivate" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnToggleAmenity">
-                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsActive}" Value="False"><Setter Property="Text" Value="Activate" /></DataTrigger></Button.Triggers>
-                        </Button>
-                        <Button Text="Archive" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnDeleteAmenity" AutomationId="ArchiveAmenity" />
-                    </FlexLayout>
-                </VerticalStackLayout>
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Padding="14,12">
+                    <Border Style="{StaticResource Thumb}"><Image Source="{Binding PhotoUrl}" Aspect="AspectFill" IsVisible="{Binding PhotoUrl, Converter={StaticResource IsNotNull}}" /></Border>
+                    <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                        <Label Text="{Binding Amenity.Name}" FontFamily="BarlowSemiBold" />
+                        <Label Style="{StaticResource Caption}">
+                            <Label.Text><MultiBinding StringFormat="{}{0} · {1}"><Binding Path="SoldAsText" /><Binding Path="StateText" /></MultiBinding></Label.Text>
+                        </Label>
+                    </VerticalStackLayout>
+                    <Button Grid.Column="2" Text="Actions" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" Clicked="OnRowActions" AutomationId="AmenityActions"
+                            SemanticProperties.Description="{Binding Amenity.Name, StringFormat='Actions for amenity {0}'}" />
+                </Grid>
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
         </DataTemplate>
     </v:BasePage.Resources>
 
-    <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
-        <VerticalStackLayout Padding="{OnIdiom Phone='20,16,20,24', Default='16,12,16,20'}" Spacing="14">
-            <c:Banner Message="{Binding ErrorMessage}" />
-            <c:Banner Kind="notice" Message="{Binding Notice}" />
-            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" HorizontalOptions="Start" />
+    <Grid>
+        <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
+            <VerticalStackLayout Padding="{OnIdiom Phone='20,16,20,24', Default='16,12,16,20'}" Spacing="14">
+                <Label Text="A draft is only seen here. Add puts it on sale. A package on sale can't be changed; make a new version." Style="{StaticResource Muted}" />
+                <c:Banner Message="{Binding ErrorMessage}" />
+                <c:Banner Kind="notice" Message="{Binding Notice}" />
+                <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" HorizontalOptions="Start" />
 
-            <Border Style="{StaticResource Panel}" IsVisible="{Binding PricingAmenity, Converter={StaticResource IsNotNull}}">
-                <VerticalStackLayout Spacing="10">
-                    <c:CardTitle Text="{Binding PricingAmenity.Name, StringFormat='Sell “{0}” per session'}" />
-                    <Label Text="Members will pay for each booking instead of buying a timed pass. Passes already sold stay valid until they expire." Style="{StaticResource Caption}" />
-                    <VerticalStackLayout Spacing="4" WidthRequest="160" HorizontalOptions="Start">
-                        <Label Text="Price per session" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}"><Entry Text="{Binding SessionPrice}" Keyboard="Numeric" SemanticProperties.Description="Price per session" AutomationId="SessionPriceInput" /></Border>
+                <Border Style="{StaticResource Panel}" IsVisible="{Binding PricingAmenity, Converter={StaticResource IsNotNull}}">
+                    <VerticalStackLayout Spacing="10">
+                        <c:CardTitle Text="{Binding PricingAmenity.Name, StringFormat='Sell “{0}” per session'}" />
+                        <Label Text="Members will pay for each booking instead of buying a timed pass. Passes already sold stay valid until they expire." Style="{StaticResource Caption}" />
+                        <VerticalStackLayout Spacing="4" WidthRequest="160" HorizontalOptions="Start">
+                            <Label Text="Price per session" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding SessionPrice}" Keyboard="Numeric" SemanticProperties.Description="Price per session" AutomationId="SessionPriceInput" /></Border>
+                        </VerticalStackLayout>
+                        <HorizontalStackLayout Spacing="8">
+                            <Button Text="Sell per session" Style="{StaticResource SmallButton}" Command="{Binding SaveSessionPriceCommand}" AutomationId="SaveSessionPrice" />
+                            <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelSessionPriceCommand}" />
+                        </HorizontalStackLayout>
                     </VerticalStackLayout>
-                    <HorizontalStackLayout Spacing="8">
-                        <Button Text="Sell per session" Style="{StaticResource SmallButton}" Command="{Binding SaveSessionPriceCommand}" AutomationId="SaveSessionPrice" />
-                        <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelSessionPriceCommand}" />
-                    </HorizontalStackLayout>
-                </VerticalStackLayout>
-            </Border>
+                </Border>
 
-            <Border Style="{StaticResource Panel}" IsVisible="{Binding DeletingAmenity, Converter={StaticResource IsNotNull}}">
-                <VerticalStackLayout Spacing="10">
-                    <c:CardTitle Text="{Binding DeletingAmenity.Name, StringFormat='Archive “{0}”? Passes already sold keep working.'}" />
-                    <HorizontalStackLayout Spacing="8">
-                        <Button Text="Yes, archive" Style="{StaticResource SmallButton}" Command="{Binding ConfirmDeleteAmenityCommand}" AutomationId="ConfirmArchiveAmenity" />
-                        <Button Text="Keep it" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepAmenityCommand}" />
-                    </HorizontalStackLayout>
-                </VerticalStackLayout>
-            </Border>
+                <Border Style="{StaticResource Panel}" IsVisible="{Binding DeletingAmenity, Converter={StaticResource IsNotNull}}">
+                    <VerticalStackLayout Spacing="10">
+                        <c:CardTitle Text="{Binding DeletingAmenity.Name, StringFormat='Archive “{0}”? Passes already sold keep working.'}" />
+                        <HorizontalStackLayout Spacing="8">
+                            <Button Text="Yes, archive" Style="{StaticResource SmallButton}" Command="{Binding ConfirmDeleteAmenityCommand}" AutomationId="ConfirmArchiveAmenity" />
+                            <Button Text="Keep it" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepAmenityCommand}" />
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
 
-            <Border Style="{StaticResource Panel}" IsVisible="{Binding Deleting, Converter={StaticResource IsNotNull}}">
-                <VerticalStackLayout Spacing="10">
-                    <c:CardTitle Text="{Binding Deleting.Name, StringFormat='Archive “{0}”? History will be retained.'}" />
-                    <HorizontalStackLayout Spacing="8">
-                        <Button Text="Yes, archive" Style="{StaticResource SmallButton}" Command="{Binding ConfirmDeleteCommand}" />
-                        <Button Text="Keep it" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepPackageCommand}" />
-                    </HorizontalStackLayout>
-                </VerticalStackLayout>
-            </Border>
+                <Border Style="{StaticResource Panel}" IsVisible="{Binding Deleting, Converter={StaticResource IsNotNull}}">
+                    <VerticalStackLayout Spacing="10">
+                        <c:CardTitle Text="{Binding Deleting.Name, StringFormat='Archive “{0}”? Members who have it keep their terms.'}" />
+                        <HorizontalStackLayout Spacing="8">
+                            <Button Text="Yes, archive" Style="{StaticResource SmallButton}" Command="{Binding ConfirmDeleteCommand}" AutomationId="ConfirmArchivePackage" />
+                            <Button Text="Keep it" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepPackageCommand}" />
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
 
-            <Label Text="Membership packages" Style="{StaticResource SectionTitle}" />
-            <Border Style="{StaticResource Panel}">
-                <FlexLayout Wrap="Wrap" AlignItems="End">
-                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="200">
-                        <Label Text="Name" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}"><Entry Text="{Binding NewPackageName}" /></Border>
+                <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0">
+                    <Label Text="Membership packages" Style="{StaticResource SectionTitle}" VerticalOptions="Center" />
+                    <Button Grid.Column="1" Text="Add package" Style="{StaticResource SmallButton}" Command="{Binding AddPackageCommand}" AutomationId="AddPackage" />
+                </Grid>
+                <Border Style="{StaticResource TablePanel}">
+                    <VerticalStackLayout>
+                        <VerticalStackLayout x:Name="PackageHead">
+                            <Grid Style="{StaticResource TableHead}" ColumnDefinitions="52,*,120,70,120,100" ColumnSpacing="14">
+                                <Label Text="Photo" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="1" Text="Package" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="2" Text="Price" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                <Label Grid.Column="3" Text="Days" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                <Label Grid.Column="4" Text="State" Style="{StaticResource Caption}" />
+                            </Grid>
+                            <BoxView Style="{StaticResource Hairline}" />
+                        </VerticalStackLayout>
+                        <c:TableBody BindableLayout.ItemsSource="{Binding Packages}" Header="{x:Reference PackageHead}" WideFrom="900"
+                                     RowTemplate="{StaticResource PackageRow}" CardTemplate="{StaticResource PackageCard}"
+                                     BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource PackageCard}, Default={StaticResource PackageRow}}">
+                            <BindableLayout.EmptyView><Label Text="No packages yet. Add one with Add package." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                        </c:TableBody>
                     </VerticalStackLayout>
-                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="260">
-                        <Label Text="Description" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}"><Entry Text="{Binding NewDescription}" /></Border>
-                    </VerticalStackLayout>
-                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="110">
-                        <Label Text="Price" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}"><Entry Text="{Binding NewPrice}" Keyboard="Numeric" /></Border>
-                    </VerticalStackLayout>
-                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="110">
-                        <Label Text="Days" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}"><Entry Text="{Binding NewDays}" Keyboard="Numeric" /></Border>
-                    </VerticalStackLayout>
-                    <Button Text="{Binding SaveLabel}" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Command="{Binding SavePackageCommand}" />
-                    <Button Text="Cancel edit" Style="{StaticResource SmallOutlineButton}" Margin="0,0,0,8" IsVisible="{Binding IsEditing}" Command="{Binding CancelEditCommand}" />
-                </FlexLayout>
-            </Border>
-            <Border Style="{StaticResource TablePanel}">
-                <VerticalStackLayout>
-                    <VerticalStackLayout x:Name="PackageHead">
-                        <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,130,80,110,1.6*">
-                            <Label Text="Package" Style="{StaticResource Caption}" />
-                            <Label Grid.Column="1" Text="Price" Style="{StaticResource Caption}" HorizontalOptions="End" />
-                            <Label Grid.Column="2" Text="Days" Style="{StaticResource Caption}" HorizontalOptions="End" />
-                            <Label Grid.Column="3" Text="Status" Style="{StaticResource Caption}" />
-                        </Grid>
-                        <BoxView Style="{StaticResource Hairline}" />
-                    </VerticalStackLayout>
-                    <c:TableBody BindableLayout.ItemsSource="{Binding Packages}" Header="{x:Reference PackageHead}" WideFrom="900"
-                                 RowTemplate="{StaticResource PackageRow}" CardTemplate="{StaticResource PackageCard}"
-                                 BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource PackageCard}, Default={StaticResource PackageRow}}">
-                        <BindableLayout.EmptyView><Label Text="No packages yet. Add one above." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
-                    </c:TableBody>
-                </VerticalStackLayout>
-            </Border>
+                </Border>
 
-            <Label Text="Amenities" Style="{StaticResource SectionTitle}" />
-            <Border Style="{StaticResource Panel}">
-                <FlexLayout Wrap="Wrap" AlignItems="End">
-                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="260">
-                        <Label Text="Name" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}"><Entry Text="{Binding NewAmenityName}" /></Border>
+                <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0">
+                    <Label Text="Amenities" Style="{StaticResource SectionTitle}" VerticalOptions="Center" />
+                    <Button Grid.Column="1" Text="Add amenity" Style="{StaticResource SmallOutlineButton}" Command="{Binding AddAmenityCommand}" AutomationId="AddAmenity" />
+                </Grid>
+                <Border Style="{StaticResource TablePanel}">
+                    <VerticalStackLayout>
+                        <VerticalStackLayout x:Name="AmenityHead">
+                            <Grid Style="{StaticResource TableHead}" ColumnDefinitions="52,*,190,120,100" ColumnSpacing="14">
+                                <Label Text="Photo" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="1" Text="Amenity" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="2" Text="Sold as" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="3" Text="State" Style="{StaticResource Caption}" />
+                            </Grid>
+                            <BoxView Style="{StaticResource Hairline}" />
+                        </VerticalStackLayout>
+                        <c:TableBody BindableLayout.ItemsSource="{Binding Amenities}" Header="{x:Reference AmenityHead}" WideFrom="900"
+                                     RowTemplate="{StaticResource AmenityRow}" CardTemplate="{StaticResource AmenityCard}"
+                                     BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource AmenityCard}, Default={StaticResource AmenityRow}}">
+                            <BindableLayout.EmptyView><Label Text="No amenities yet. Add one with Add amenity." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                        </c:TableBody>
                     </VerticalStackLayout>
-                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="110">
-                        <Label Text="{Binding AmenityPriceLabel}" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}"><Entry Text="{Binding NewAmenityPrice}" Keyboard="Numeric" SemanticProperties.Description="{Binding AmenityPriceLabel}" /></Border>
+                </Border>
+                <Label Text="Archived packages and amenities are on the Archive page." Style="{StaticResource Caption}" />
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <!-- the side panel: over a dimmed list, closed by its Close button or a click on the dimmed part -->
+        <BoxView Color="Black" Opacity="{AppThemeBinding Light=0.28, Dark=0.55}" IsVisible="{Binding IsPanelOpen}">
+            <BoxView.GestureRecognizers><TapGestureRecognizer Command="{Binding ClosePanelCommand}" /></BoxView.GestureRecognizers>
+        </BoxView>
+        <Border IsVisible="{Binding IsPanelOpen}" HorizontalOptions="{OnIdiom Phone=Fill, Default=End}" WidthRequest="{OnIdiom Phone=-1, Default=480}"
+                StrokeThickness="0" Padding="0"
+                BackgroundColor="{AppThemeBinding Light={StaticResource CardLight}, Dark={StaticResource CardDark}}">
+            <Border.Shadow><Shadow Brush="Black" Offset="-12,0" Radius="30" Opacity="0.3" /></Border.Shadow>
+            <Grid RowDefinitions="Auto,Auto,*,Auto">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="22,18,22,12">
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="{Binding PanelTitle}" Style="{StaticResource Heading}" SemanticProperties.HeadingLevel="Level2" />
+                        <Label Text="{Binding PanelSubtitle}" Style="{StaticResource Caption}" />
                     </VerticalStackLayout>
-                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="260">
-                        <Label Text="Description" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}"><Entry Text="{Binding NewAmenityDescription}" Placeholder="What members get" /></Border>
-                    </VerticalStackLayout>
-                    <Button Text="{Binding AmenitySaveLabel}" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Command="{Binding AddAmenityCommand}" />
-                    <Button Text="Cancel edit" Style="{StaticResource SmallOutlineButton}" Margin="0,0,0,8" IsVisible="{Binding IsEditingAmenity}" Command="{Binding CancelAmenityEditCommand}" />
-                </FlexLayout>
-            </Border>
-            <Border Style="{StaticResource TablePanel}">
-                <VerticalStackLayout>
-                    <VerticalStackLayout x:Name="AmenityHead">
-                        <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,170,90,110,2*">
-                            <Label Text="Amenity" Style="{StaticResource Caption}" />
-                            <Label Grid.Column="1" Text="Price" Style="{StaticResource Caption}" />
-                            <Label Grid.Column="2" Text="Photo" Style="{StaticResource Caption}" />
-                            <Label Grid.Column="3" Text="Status" Style="{StaticResource Caption}" />
-                        </Grid>
-                        <BoxView Style="{StaticResource Hairline}" />
-                    </VerticalStackLayout>
-                    <c:TableBody BindableLayout.ItemsSource="{Binding Amenities}" Header="{x:Reference AmenityHead}" WideFrom="1150"
-                                 RowTemplate="{StaticResource AmenityRow}" CardTemplate="{StaticResource AmenityCard}"
-                                 BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource AmenityCard}, Default={StaticResource AmenityRow}}">
-                        <BindableLayout.EmptyView><Label Text="No amenities yet. Add one above." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
-                    </c:TableBody>
-                </VerticalStackLayout>
-            </Border>
-        </VerticalStackLayout>
-    </ScrollView>
+                    <Button Grid.Column="1" Text="Close" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Start" Command="{Binding ClosePanelCommand}" AutomationId="ClosePanel" />
+                </Grid>
+                <BoxView Grid.Row="1" Style="{StaticResource Hairline}" />
+
+                <ScrollView Grid.Row="2">
+                    <Grid Padding="22,16">
+                        <!-- the form -->
+                        <VerticalStackLayout Spacing="14" IsVisible="{Binding IsComparing, Converter={StaticResource Not}}">
+                            <c:Banner Message="{Binding ErrorMessage}" />
+                            <Border Style="{StaticResource Panel}" IsVisible="{Binding VersionNote, Converter={StaticResource IsNotNull}}"
+                                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}">
+                                <Label Text="{Binding VersionNote}" />
+                            </Border>
+                            <Border Style="{StaticResource Panel}" IsVisible="{Binding MissingText, Converter={StaticResource IsNotNull}}"
+                                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}">
+                                <Label Text="{Binding MissingText}" AutomationId="MissingFields" TextColor="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" FontFamily="BarlowSemiBold" />
+                            </Border>
+
+                            <!-- photo first (optional) -->
+                            <Border StrokeShape="RoundRectangle 14" StrokeDashArray="4,3" StrokeThickness="2" HeightRequest="150"
+                                    Stroke="{AppThemeBinding Light={StaticResource EdgeLight}, Dark={StaticResource EdgeDark}}">
+                                <Grid>
+                                    <Image Source="{Binding PhotoUrl}" Aspect="AspectFill" IsVisible="{Binding PhotoUrl, Converter={StaticResource IsNotNull}}" />
+                                    <VerticalStackLayout Spacing="6" HorizontalOptions="Center" VerticalOptions="Center" IsVisible="{Binding PhotoUrl, Converter={StaticResource IsNull}}">
+                                        <Button Text="Choose a photo" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Center" Command="{Binding PickPhotoCommand}" AutomationId="PickPhoto"
+                                                SemanticProperties.Hint="Choose a JPG, PNG or WebP up to 5 MB" />
+                                        <Label Text="JPG, PNG or WebP, up to 5 MB. Optional." Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                                    </VerticalStackLayout>
+                                    <Button Text="Replace photo" Style="{StaticResource SmallButton}" HorizontalOptions="Start" VerticalOptions="End" Margin="10"
+                                            Command="{Binding PickPhotoCommand}" IsVisible="{Binding PhotoUrl, Converter={StaticResource IsNotNull}}" />
+                                </Grid>
+                            </Border>
+                            <Label Text="{Binding PhotoText}" Style="{StaticResource Caption}" IsVisible="{Binding PhotoText, Converter={StaticResource IsNotNull}}" Margin="0,-8,0,0" />
+
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="Name" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><Entry Text="{Binding FormName}" AutomationId="FormName" SemanticProperties.Description="Name" /></Border>
+                                <Label Text="Give it a name." Style="{StaticResource FieldError}" IsVisible="{Binding NameMissing}" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="Description" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><Editor Text="{Binding FormDescription}" AutoSize="TextChanges" MinimumHeightRequest="72" AutomationId="FormDescription" SemanticProperties.Description="Description" /></Border>
+                                <Label Text="Write what members get." Style="{StaticResource FieldError}" IsVisible="{Binding DescriptionMissing}" />
+                            </VerticalStackLayout>
+
+                            <!-- amenities: a pass for some days, or per session (changing a published one is Sell per session) -->
+                            <VerticalStackLayout Spacing="4" IsVisible="{Binding IsPackagePanel, Converter={StaticResource Not}}">
+                                <Label Text="Sold as" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource SegmentTrack}" IsVisible="{Binding CanChooseSoldAs}">
+                                    <HorizontalStackLayout Spacing="2">
+                                        <Button Text="Pass for some days" Style="{StaticResource Segment}" Command="{Binding SellAsPassCommand}" AutomationId="SoldAsPass">
+                                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding SoldAsPass}" Value="True">
+                                                <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                                            </DataTrigger></Button.Triggers>
+                                        </Button>
+                                        <Button Text="Per session" Style="{StaticResource Segment}" Command="{Binding SellPerSessionCommand}" AutomationId="SoldPerSession">
+                                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding SoldAsPass}" Value="False">
+                                                <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                                            </DataTrigger></Button.Triggers>
+                                        </Button>
+                                    </HorizontalStackLayout>
+                                </Border>
+                                <Label Text="A pass gives unlimited use for the days set. Per session: members book a time slot and pay each time." Style="{StaticResource Caption}" IsVisible="{Binding CanChooseSoldAs}" />
+                                <Label Text="To sell a pass amenity per session instead, close this and use Sell per session in its Actions menu." Style="{StaticResource Caption}" IsVisible="{Binding CanChooseSoldAs, Converter={StaticResource Not}}" />
+                            </VerticalStackLayout>
+
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                                <VerticalStackLayout Spacing="4">
+                                    <Label Text="{Binding PriceLabel}" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><Entry Text="{Binding FormPrice}" Keyboard="Numeric" AutomationId="FormPrice" SemanticProperties.Description="{Binding PriceLabel}" /></Border>
+                                    <Label Text="Set a price above ₱0." Style="{StaticResource FieldError}" IsVisible="{Binding PriceMissing}" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Column="1" Spacing="4" IsVisible="{Binding ShowsDays}">
+                                    <Label Text="Days of access" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><Entry Text="{Binding FormDays}" Keyboard="Numeric" AutomationId="FormDays" SemanticProperties.Description="Days of access" /></Border>
+                                    <Label Text="Days must be more than zero." Style="{StaticResource FieldError}" IsVisible="{Binding DaysMissing}" />
+                                </VerticalStackLayout>
+                            </Grid>
+
+                            <!-- packages: benefits, one per line, shown to members -->
+                            <VerticalStackLayout Spacing="8" IsVisible="{Binding IsPackagePanel}">
+                                <Label Text="Benefits, one per line (shown to members)" Style="{StaticResource Caption}" />
+                                <VerticalStackLayout Spacing="8" BindableLayout.ItemsSource="{Binding Benefits}">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:BenefitLine">
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                <Border Style="{StaticResource Field}"><Entry Text="{Binding Text}" SemanticProperties.Description="Benefit" /></Border>
+                                                <Button Grid.Column="1" Text="Remove" Style="{StaticResource LinkButton}" Clicked="OnRemoveBenefit"
+                                                        SemanticProperties.Description="{Binding Text, StringFormat='Remove benefit {0}'}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </VerticalStackLayout>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <Border Style="{StaticResource Field}"><Entry Text="{Binding NewBenefit}" Placeholder="Add a benefit" ReturnCommand="{Binding AddBenefitCommand}" AutomationId="NewBenefit" SemanticProperties.Description="New benefit" /></Border>
+                                    <Button Grid.Column="1" Text="Add" Style="{StaticResource SmallOutlineButton}" Command="{Binding AddBenefitCommand}" SemanticProperties.Description="Add this benefit" />
+                                </Grid>
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+
+                        <!-- a new version: old and new side by side before it goes on sale -->
+                        <VerticalStackLayout Spacing="14" IsVisible="{Binding IsComparing}">
+                            <c:Banner Message="{Binding ErrorMessage}" />
+                            <Label Text="Check the changes. Publish puts the new version on sale and takes the old one off sale in one step." />
+                            <Border Style="{StaticResource Panel}" Padding="0">
+                                <VerticalStackLayout>
+                                    <Grid ColumnDefinitions="100,*,*" ColumnSpacing="10" Padding="12,8"
+                                          BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}">
+                                        <Label Grid.Column="1" Text="On sale now" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold" />
+                                        <Label Grid.Column="2" Text="New version" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold" />
+                                    </Grid>
+                                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Changes}">
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="m:PackageChange">
+                                                <VerticalStackLayout>
+                                                    <BoxView Style="{StaticResource Hairline}" />
+                                                    <Grid ColumnDefinitions="100,*,*" ColumnSpacing="10" Padding="12,9">
+                                                        <Label Text="{Binding Field}" Style="{StaticResource Caption}" />
+                                                        <Label Grid.Column="1" Text="{Binding Old}" Style="{StaticResource Muted}" TextDecorations="Strikethrough" />
+                                                        <Label Grid.Column="2" Text="{Binding New}" FontFamily="BarlowSemiBold" />
+                                                    </Grid>
+                                                </VerticalStackLayout>
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
+                                        <BindableLayout.EmptyView><Label Text="Nothing has changed yet. Go back to edit the new version." Style="{StaticResource Muted}" Margin="12,9" /></BindableLayout.EmptyView>
+                                    </VerticalStackLayout>
+                                </VerticalStackLayout>
+                            </Border>
+                            <Label Text="Everything not listed stays the same." Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Panel}" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}">
+                                <Label Text="{Binding RenewalNote}" />
+                            </Border>
+                        </VerticalStackLayout>
+                    </Grid>
+                </ScrollView>
+
+                <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" Padding="22,14">
+                    <Grid.Triggers><DataTrigger TargetType="Grid" Binding="{Binding IsComparing}" Value="True"><Setter Property="IsVisible" Value="False" /></DataTrigger></Grid.Triggers>
+                    <Button Text="Save as draft" Style="{StaticResource SmallOutlineButton}" Command="{Binding SaveDraftCommand}" IsVisible="{Binding CanSaveDraft}" AutomationId="SaveDraft" />
+                    <Button Grid.Column="2" Text="{Binding MainLabel}" Style="{StaticResource SmallButton}" Command="{Binding MainCommand}" AutomationId="PanelMain" />
+                </Grid>
+                <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" Padding="22,14" IsVisible="{Binding IsComparing}">
+                    <Button Text="Back to edit" Style="{StaticResource SmallOutlineButton}" Command="{Binding BackToEditCommand}" />
+                    <Button Grid.Column="2" Text="Publish new version" Style="{StaticResource SmallButton}" Command="{Binding PublishVersionCommand}" AutomationId="PublishVersion" />
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
 </v:BasePage>

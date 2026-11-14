@@ -105,16 +105,17 @@ public class ConfirmationTests
     }
 
     [Fact]
-    public async Task Going_back_keeps_a_package_on_sale()
+    public async Task Going_back_keeps_a_new_package_unsaved()
     {
         var gw = await As("admin@demo.io");
         var vm = new CatalogAdminViewModel(new AdminService(gw));
         await vm.LoadCommand.ExecuteAsync(null);
-        var package = vm.Packages.First(p => p.IsActive);
+        vm.AddPackageCommand.Execute(null);
+        (vm.FormName, vm.FormDescription, vm.FormPrice) = ("Student", "With a school ID.", 1000);
         Answer(false);
-        await vm.TogglePackageCommand.ExecuteAsync(package);
-        Assert.True(package.IsActive);
-        Assert.True((await gw.ListAsync<MembershipPackage>(p => p.Id == package.Id)).Single().IsActive);
+        await vm.MainCommand.ExecuteAsync(null);
+        Assert.True(vm.IsPanelOpen);
+        Assert.DoesNotContain(await gw.ListAsync<MembershipPackage>(), p => p.Name == "Student");
     }
 
     // Every action on the approved D14 list asks before it does anything. Behaviour is covered above for a sample;
@@ -150,10 +151,9 @@ public class ConfirmationTests
         { "StaffViewModels.cs", "UsersViewModel", "ToggleActive" },
         { "StaffViewModels.cs", "UsersViewModel", "ToggleRole" },
         { "StaffViewModels.cs", "UsersViewModel", "AddUser" },
-        { "StaffViewModels.cs", "CatalogAdminViewModel", "TogglePackage" },
-        { "StaffViewModels.cs", "CatalogAdminViewModel", "ToggleAmenity" },
-        { "StaffViewModels.cs", "CatalogAdminViewModel", "SavePackage" },
-        { "StaffViewModels.cs", "CatalogAdminViewModel", "AddAmenity" },
+        { "StaffViewModels.cs", "CatalogAdminViewModel", "Main" },
+        { "StaffViewModels.cs", "CatalogAdminViewModel", "DeleteDraft" },
+        { "StaffViewModels.cs", "CatalogAdminViewModel", "SaveSessionPrice" },
         { "StaffViewModels.cs", "DiscountsViewModel", "RunAction" },
         { "StaffViewModels.cs", "DiscountsViewModel", "Add" },
         { "StaffViewModels.cs", "GymSettingsViewModel", "Save" },
