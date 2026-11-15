@@ -117,7 +117,7 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 | 8 | Amenities per session only; ID check-in | 11, 12 | G19, G20, G21 | DEPLOYED |
 | 9 | Try to break the new parts; final check and report | All | Phases 1-8 | IN PROGRESS |
 | 10 | Membership refunds: only the unused days, only in the first 7 days | 13 | G22, G23 | DEPLOYED (0067, 0068) |
-| 11 | Terms and Policy checkbox at sign-up | 14 | G24, G25 | DONE (0069 not pushed yet) |
+| 11 | Terms and Policy checkbox at sign-up | 14 | G24, G25 | DONE bar the 0069 push (5932691) |
 
 ### Phase 1: cashier shift-in bug and account names (items 1, 3)
 - [x] Baseline, 2026-11-12: xUnit 975/975. Database files and UI scripts were not run before the change (all pass after, below).
@@ -227,22 +227,22 @@ Error text `terms_required`: "Tick the box to agree to the Terms and Policy."
 refused; (3) the checkbox state survives opening and closing the terms; (4) font scale 1.3 on the phone: the agree line wraps, the
 box stays tappable (44 px); (5) the terms screen scrolls to the end on a small phone.
 
-- [ ] **Task 1, database.** Test first `supabase/tests/local/terms-at-sign-up.mjs` (in `npm test`): a self sign-up (no role in
+- [x] **Task 1, database (2026-11-15):** 8/8 in terms-at-sign-up.mjs; the trigger also lets through create-user (must_change_password) and dashboard accounts (no name); older test helpers updated; npm test 588 ok. Was: Test first `supabase/tests/local/terms-at-sign-up.mjs` (in `npm test`): a self sign-up (no role in
   `raw_app_meta_data`) without `terms_version` is refused `terms_required`; with it, `profiles.terms_version` and `terms_accepted_at`
   are set; an insert with a role (as `create-user` does) needs none; a member can read their own acceptance, not another's; the app
   role can't write either column. `0069`: the two columns; `require_sign_up_terms()` before insert on `auth.users`; an after-insert
   trigger named after `on_auth_user_created` copies the version and `now()` to the profile; both functions revoked from public, anon,
   authenticated.
-- [ ] **Task 2, Core and demo.** xUnit first (`TermsAtSignUpTests`): register unticked gives "Tick the box to agree to the Terms and
+- [x] **Task 2, Core and demo (2026-11-15):** TermsAtSignUpTests; the error shows under the box (`TermsError`), not the banner; `TermsOpen` with Open/Close commands; xUnit 1052/1052. Was: xUnit first (`TermsAtSignUpTests`): register unticked gives "Tick the box to agree to the Terms and
   Policy." and creates no account; ticked sends `TermsInfo.Version`; the demo refuses a blank version; `TermsInfo.Text` starts with
   the version line and says the 7-day refund rule (`RefundRules.Line`). The 32 test callers of `SignUpAsync`/`RegisterAsync` pass the
   version / `true`.
-- [ ] **Task 3, the terms text.** `Resources/Raw/terms.md` per the spec's list, plain words, headed sections, "Draft, to be checked"
+- [x] **Task 3, the terms text (2026-11-15):** terms.md written from the app rules; two unverifiable claims removed. Was: `Resources/Raw/terms.md` per the spec's list, plain words, headed sections, "Draft, to be checked"
   line at the top; `impeccable clarify` on it.
-- [ ] **Task 4, screens.** `impeccable shape`, mockup `docs/mockups/register-terms.html` (Windows and phone, unticked error, terms
+- [x] **Task 4, screens (2026-11-15):** mockup approved by the owner; built; Windows checked at 1600 and 820 wide in dark (wide: sheet over the form, brand dims; narrow: terms fill the window). Not checked: Windows light, Pixel 7 (no emulator). Was: `impeccable shape`, mockup `docs/mockups/register-terms.html` (Windows and phone, unticked error, terms
   open) for the owner's approval **before** the app changes; then the Register page CheckBox + link, the terms sheet (Windows side
   sheet, phone full page); Windows 1100 light / 1600 dark, Pixel 7 light/dark and font 1.3.
-- [ ] **Task 5, finish.** Dry run, push `0069`, live grants (anon refused on both functions, columns not readable by anon); three UI
+- [ ] **Task 5, finish (partly, 2026-11-15):** both builds pass; ponytail-review (1 line cut); committed 5932691. Dry run lists only 0069, NOT pushed: live, it would refuse sign-ups from the released v0.5.0 app, so it waits on the owner (now or with v0.6.0). Left: push, live grants, three UI scripts. Was: Dry run, push `0069`, live grants (anon refused on both functions, columns not readable by anon); three UI
   scripts; both builds; `ponytail-review`; commit; plan updated.
 
 ## How to check (demo mode)
