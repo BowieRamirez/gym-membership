@@ -109,7 +109,7 @@ public sealed partial class DemoGateway
                 var category=a.GetValueOrDefault("p_category")?.ToString();
                 if(category is not null && RefundReasons.All.All(x=>x.Key!=category)) throw Err("bad_input");
                 if(now>=term.EndsAt) throw Err("refund_window_closed");
-                if(RefundMath.HalfUsed(term.StartsAt,term.DurationDays,now)) throw Err("refund_half_used");   // G22 (0067)
+                if(RefundMath.WeekPassed(term.StartsAt,now)) throw Err("refund_week_passed");   // G23 (0068)
                 var activated=All<GymCheckIn>().Any(c=>c.MemberId==Uid&&c.CheckedInAt>=term.StartsAt&&c.CheckedInAt<term.EndsAt);   // 0043
                 if(activated && category is null) throw Err("refund_reason_required");
                 var r=Add(new RefundRequest {TermId=term.Id,PaymentId=p.Id,MemberId=Uid,Amount=RefundMath.Due(p.Amount,term.DurationDays,term.StartsAt,now),Reason=reason,RequestedAt=now,WasActivated=activated,ReviewReason=activated?category:null});

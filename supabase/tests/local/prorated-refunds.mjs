@@ -1,5 +1,5 @@
 // Phase 10 of the 2026-11-12 plan, G22 (owner, 2026-11-15): a membership refund is only the unused days, counted when staff approve,
-// and none once half the term has passed (asking before half is what counts). 30 days for ₱1,500: ₱50 a day.
+// and (G23, 0068) only within 7 days of the term's start; asking in time is what counts. 30 days for ₱1,500: ₱50 a day.
 import { start, openCashShifts } from './harness.mjs';
 import assert from 'node:assert/strict';
 
@@ -43,7 +43,7 @@ const amount = async (r) => Number((await db.query('select amount from refund_re
 
 try {
   console.log('\nThe refund is the days left when staff approve');
-  for (const [used, due] of [[7, 1150], [14, 800]])
+  for (const [used, due] of [[1, 1450], [7, 1150]])
     await test(`${used} of 30 days used: ₱${due}`, async () => {
       const m = await member(); await age(m.term, used - 1);   // the day in progress is day `used`
       const r = await ask(m);
@@ -63,17 +63,19 @@ try {
     assert.equal(await amount(r), 1035);   // 1350 × 23 / 30
   });
 
-  console.log('\nHalf used: no refund, but asking in time counts');
-  await test('asking with 15 of 30 days used is refused', async () => {
-    const m = await member(); await age(m.term, 14);
-    await assert.rejects(ask(m), /refund_half_used/);
+  console.log('\nOnly the first week: asking in time counts');
+  await test('asking on day 8 (7 days and a minute after the start) is refused, and on day 15', async () => {
+    for (const days of [7, 14]) {
+      const m = await member(); await age(m.term, days);
+      await assert.rejects(ask(m), /refund_week_passed/);
+    }
   });
-  await test('asked on day 14, approved on day 16: 14 days left, ₱700', async () => {
-    const m = await member(); await age(m.term, 13);
+  await test('asked on day 7, approved on day 9: 21 days left, ₱1,050', async () => {
+    const m = await member(); await age(m.term, 6);
     const r = await ask(m);
-    await age(m.term, 15);   // two days go by before staff get to it
+    await age(m.term, 8);   // two days go by before staff get to it
     await approve(r);
-    assert.equal(await amount(r), 700);
+    assert.equal(await amount(r), 1050);
   });
   await test('approved after the term has fully ended: nothing to refund, staff reject instead', async () => {
     const m = await member(); await age(m.term, 2);

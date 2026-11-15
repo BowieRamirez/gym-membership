@@ -1,5 +1,8 @@
 # Membership refunds: only the unused days (short design)
 
+> **Changed the same day by G23 (0068):** the halfway cutoff is replaced by a **7-day window from the term's start** (owner: "so it won't
+> hurt the business"); a term bought ahead can be cancelled any time before it starts. The amount rule below is unchanged.
+
 Date: 2026-11-15. Owner decision G22 in `docs/superpowers/plans/2026-11-12-owner-fixes.md`. Changes D9/D21 (2026-11-05): a refund is no longer
 always the full payment.
 

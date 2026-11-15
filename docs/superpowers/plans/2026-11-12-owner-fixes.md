@@ -2,7 +2,7 @@
 
 Created: 2026-11-12
 Last updated: 2026-11-15 (Phase 9 checks done; report and PR waiting on the owner)
-Status: IN PROGRESS (Phase 9: checks done, PR on the owner's go-ahead; Phase 10 (item 13, G22) DEPLOYED, 0067 live). Next migration `0068`. Phases 1 to 3 and 5 to 8 deployed (`0059` to `0066` live, Edge Function `verify-member-password` live); Phase 4 committed and pushed (no database change). G1 to G18 answered.
+Status: IN PROGRESS (Phase 9: checks done, PR on the owner's go-ahead; Phase 10 (item 13, G22, G23) DEPLOYED, 0067 and 0068 live). Next migration `0069`. Phases 1 to 3 and 5 to 8 deployed (`0059` to `0066` live, Edge Function `verify-member-password` live); Phase 4 committed and pushed (no database change). G1 to G18 answered.
 Branch: `owner-fixes-2026-11-12`, a new branch from `main` at `b91cafe` (v0.5.0 plus the test-wait fix). Every phase of this plan stays on this branch; the owner merges to `main` when the plan is done.
 
 **Goal:** Work through the owner's 9-item list of fixes (received 2026-11-12), plus item 10 added the same day and items 11 and 12 added 2026-11-14: the cashier shift-in bug, discount codes that can't be changed once made and are shown to the members they fit, clean account names, an Actions menu and a proper add form for packages and amenities, drafts, publishing, archiving and versions for packages, a Membership checking page at the desk, amenity bookings held by a down payment with a solo or coached session, and gym closing days set by Admin that block bookings and are announced in chat.
@@ -25,7 +25,7 @@ Status vocabulary: `PLANNED`, `WAITING` (decisions open), `IN PROGRESS`, `BLOCKE
 
 **Rules**
 - Business rules live in the database and are mirrored in `DemoGateway`; hiding something in the UI is not enough.
-- New migrations continue from the latest number: **next is `0068`**. Never rewrite an applied migration.
+- New migrations continue from the latest number: **next is `0069`**. Never rewrite an applied migration.
 - **A migration that recreates functions** (drop and create) must revoke their grants explicitly from `anon` and `authenticated` where needed: Supabase's default privileges grant execute on every new function. After each push, check the live grants read-only (see `0055`/`0056`).
 - Logic goes in Core with an xUnit test in `tests/GymMembership.Tests`; database rules get a check in `supabase/tests/local` (and `rules.mjs` keeps failing when an app-called function has no break attempt, D16).
 - **Skills, every phase:** `superpowers:test-driven-development` for each Core and database rule (failing test first); `superpowers:systematic-debugging` for every bug (item 1 above all); `superpowers:verification-before-completion` before ticking a task; `ponytail:ponytail-review` on the phase diff before finishing (`CLAUDE.md`); context-mode tools for large outputs.
@@ -98,6 +98,7 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 - [x] **G20 — ID check-in (item 12):** **Owner, 2026-11-14: accepted as recommended (no ID number kept).** Recommend: on Membership checking, after finding the member by name, a third way in beside the desk PIN and the password: "Checked their ID". The desk picks the ID type (Driver's license, National ID, Passport, School ID, Other) and confirms "The name and photo match this member". The check-in is recorded with method `id`, the ID type and who checked it, and shows in today's list as "ID checked (Driver's license)". No ID number or photo of the ID is stored. The member's photo on the card is what the desk compares against. Works offline (no secret is typed). Say if the ID number (or its last 4 digits) should be kept.
 - [x] **G21 — who may check in by ID (item 12):** **Owner, 2026-11-14: accepted as recommended.** Recommend: front desk, Admin and System admin, for any active member, with or without a desk PIN. The Admin-only reason path (F8, `0063`) stays as it is. Every ID check-in is in the audit log, so a desk that uses it for everyone can be seen. Say if it should be only for members with no PIN (as the reason path), or Admin only.
 - [x] **G22 — membership refunds only the unused days (item 13, added 2026-11-15):** **Owner, 2026-11-15** (design `docs/superpowers/specs/2026-11-15-prorated-refunds-design.md`, approved). Changes D9/D21: refund = what was paid × days left ÷ term days, counted when staff approve; no refund once half the term has passed (asked at or after half is refused); a request made before half can still be approved after it. Built in the database (option 1).
+- [x] **G23 — refund window is the first 7 days (item 13):** **Owner, 2026-11-15**, after asking whether the halfway cutoff was advisable: "just do 1 week it can be refunded so it won't hurt the business". Asked: amount stays the unused days (recommended), and the week counts from the term's start (recommended); a term bought ahead can be cancelled before it starts. Replaces G22's halfway cutoff (`0068`).
 - [x] **G15 — old apps (all items):** **Owner, 2026-11-14: accepted as recommended (v0.6.0).** Recommend: as before, the server refuses old flows (unpaid holds, editing codes, buying drafts); desks and phones need the new build. Release as v0.6.0 when the plan is done.
 
 ## 3. Phases and item coverage
@@ -113,7 +114,7 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 | 7 | Gym closing days | 10 | G16, G17, G18 | DEPLOYED |
 | 8 | Amenities per session only; ID check-in | 11, 12 | G19, G20, G21 | DEPLOYED |
 | 9 | Try to break the new parts; final check and report | All | Phases 1-8 | IN PROGRESS |
-| 10 | Membership refunds: only the unused days, none after half | 13 | G22 | DEPLOYED |
+| 10 | Membership refunds: only the unused days, only in the first 7 days | 13 | G22, G23 | DEPLOYED (0067, 0068) |
 
 ### Phase 1: cashier shift-in bug and account names (items 1, 3)
 - [x] Baseline, 2026-11-12: xUnit 975/975. Database files and UI scripts were not run before the change (all pass after, below).
@@ -295,3 +296,4 @@ Added by the owner on 2026-11-14, as sent (before the final check):
 - **2026-11-14 (night):** Owner: "G19 to G21 as recommended, start Phase 8", then "approved, build it" for the ID-step mockup. `0066` built test-first (11 checks; nine older files updated where they bought passes), Core and demo (9 xUnit), ID step built, `0066` pushed live and grants checked. Phase 8 DEPLOYED.
 - **2026-11-15:** Owner: "start phase 9". Break test `owner-fixes-break.mjs` written (19/19 after fixing two mistakes in the test itself: a wrong column name, and an admin is refused editing `discounts` by hand outright rather than with `discount_locked`). No database hole found. Full suite, xUnit, builds and UI scripts pass; live grants closed. Committed, not pushed.
 - **2026-11-15:** Owner: a refund gave back the whole ₱1,500 with 28 days left. Explained D9/D21; owner chose "refund only the unused days" (counted at approval), none after half, asking in time counts (G22). Design approved, built test-first, `0067` live. Also: refusals on the real backend now show their own sentence (`520a16a`), refunds page text shortened.
+- **2026-11-15:** Owner asked whether the halfway cutoff was advisable; advised the ₱800-to-₱0 jump on day 15 and the need to show the rule before purchase. Owner: refunds only in the first 7 days (G23), unused days, counted from the term's start. `0068` built test-first (database 41/41 files, 580 checks; xUnit 1043/1043; three UI scripts) and pushed live; anon refused on the four refund functions. Still open: showing the refund rule before a member pays.

@@ -3,16 +3,16 @@ using GymMembership.Core.Models;
 namespace GymMembership.Core.Services;
 
 /// <summary>G22 (owner, 2026-11-15; 0067 does the same in the database): a membership refund is the unused days of what was paid, counted
-/// when staff approve, and a member may ask only before half the term has passed. A started day counts as used.</summary>
+/// when staff approve. G23 (0068): a member may ask only in the term's first 7 days. A started day counts as used.</summary>
 public static class RefundMath
 {
     public static int DaysUsed(DateTime starts, int total, DateTime at) =>
         at <= starts ? 0 : Math.Min(total, (int)Math.Ceiling((at - starts).TotalSeconds / 86400));
     public static decimal Due(decimal paid, int total, DateTime starts, DateTime at) =>
         Math.Round(paid * (total - DaysUsed(starts, total, at)) / total, 2, MidpointRounding.AwayFromZero);   // as Postgres round()
-    public static bool HalfUsed(DateTime starts, int total, DateTime at) => DaysUsed(starts, total, at) * 2 >= total;
-    /// <summary>The last moment a request is accepted: 14 days after the start of a 30-day term.</summary>
-    public static DateTime LastDayToAsk(DateTime starts, int total) => starts.AddDays((total + 1) / 2 - 1);
+    /// <summary>The last moment a request is accepted: 7 days after the term starts.</summary>
+    public static DateTime LastDayToAsk(DateTime starts) => starts.AddDays(7);
+    public static bool WeekPassed(DateTime starts, DateTime at) => at > LastDayToAsk(starts);
 }
 
 /// <summary>Why a member asks for a refund on a term they have used. Staff review these; none of them is automatic. Guidance, not legal advice.</summary>
@@ -33,19 +33,20 @@ public static class RefundReasons
 }
 
 public sealed record TermCard(MembershipTerm Term, string State, bool Activated, RefundRequest? Refund, bool CanRequestRefund,
-    decimal RefundEstimate = 0, DateTime? LastDayToAsk = null, bool PastHalf = false)
+    decimal RefundEstimate = 0, DateTime? LastDayToAsk = null, bool PastWindow = false)
 {
     public string Dates => $"{Term.StartsAt.AddHours(8):d MMM yyyy, h:mm tt} – {Term.EndsAt.AddHours(8):d MMM yyyy, h:mm tt} (Manila)";
     /// <summary>Phone rows: the days only (Manila), "13 Oct – 12 Nov 2026"; the full times stay on Windows and in the refund dialog.</summary>
     public string ShortDates => $"{Term.StartsAt.AddHours(8):d MMM} – {Term.EndsAt.AddHours(8):d MMM yyyy}";
     /// <summary>Phone rows: a line only when a refund request or a cancellation exists; the chip and the refund dialog say the rest.</summary>
     public string? RefundNote => Refund is { } r ? RefundCard.StateText(r) : Term.CancelledAt is not null ? "This term is cancelled."
-        : PastHalf ? "Half of this term has passed, so it can't be refunded." : null;
+        : PastWindow ? PastWindowText : null;
+    const string PastWindowText = "Refunds are only for a term's first 7 days, and this one is past that.";
     string AskBy => $"{LastDayToAsk?.AddHours(8):d MMM, h:mm tt}";   // Manila
     public string RefundText => Refund is { } r ? RefundCard.StateText(r) : Term.CancelledAt is not null ? "This term is cancelled."
         : CanRequestRefund ? (Activated ? $"You've checked in during this term, so staff review a refund. Ask by {AskBy}; it covers the days left when they approve."
                                        : $"Cancel by {AskBy} for about ₱{RefundEstimate:N2}, the days left when staff approve.")
-        : PastHalf ? "Half of this term has passed, so it can't be refunded."
+        : PastWindow ? PastWindowText
         : State == Status.Expired ? "This term has ended." : "No verified payment available for a refund.";
 }
 public sealed record RefundCard(RefundRequest Request, string Member, string PackageName, string Dates, int LaterTerms = 0, string Period = "")
@@ -124,10 +125,10 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
             var p = payments.FirstOrDefault(p => p.Id == t.PaymentId);
             var refund = refunds.FirstOrDefault(r => r.TermId == t.Id);
             var state = t.CancelledAt is not null ? Status.Cancelled : t.EndsAt <= now ? Status.Expired : t.StartsAt > now ? Status.Scheduled : Status.Active;
-            var canAsk = t.CancelledAt is null && p is { Status: Status.Verified, Amount: > 0 } && now < t.EndsAt && refund is null && !RefundMath.HalfUsed(t.StartsAt, t.DurationDays, now);
+            var canAsk = t.CancelledAt is null && p is { Status: Status.Verified, Amount: > 0 } && now < t.EndsAt && refund is null && !RefundMath.WeekPassed(t.StartsAt, now);
             return new TermCard(t, state, checkIns.Any(c => c.CheckedInAt >= t.StartsAt && c.CheckedInAt < t.EndsAt), refund, canAsk,
-                canAsk ? RefundMath.Due(p!.Amount, t.DurationDays, t.StartsAt, now) : 0, RefundMath.LastDayToAsk(t.StartsAt, t.DurationDays),
-                t.CancelledAt is null && refund is null && now < t.EndsAt && RefundMath.HalfUsed(t.StartsAt, t.DurationDays, now));
+                canAsk ? RefundMath.Due(p!.Amount, t.DurationDays, t.StartsAt, now) : 0, RefundMath.LastDayToAsk(t.StartsAt),
+                t.CancelledAt is null && refund is null && now < t.EndsAt && RefundMath.WeekPassed(t.StartsAt, now));
         }).ToList();
     });
 

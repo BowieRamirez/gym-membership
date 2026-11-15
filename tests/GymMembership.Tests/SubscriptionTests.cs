@@ -202,13 +202,13 @@ public class SubscriptionTests
     {
         var (gw, clock, svc, monthly, _) = await Setup();
         var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
-        clock.Now=clock.Now.AddDays(10);
+        clock.Now=clock.Now.AddDays(5);   // inside the first week (G23)
         var card=Assert.Single((await svc.TermsAsync()).Value!);
         Assert.False(card.Activated);
-        Assert.StartsWith("Cancel by ",card.RefundText); Assert.Contains("about ₱1,000.00",card.RefundText);
+        Assert.StartsWith("Cancel by ",card.RefundText); Assert.Contains("about ₱1,250.00",card.RefundText);
         Assert.True((await svc.RequestRefundAsync(card.Term.Id,"Never came")).Ok);
         var request=Assert.Single((await svc.RefundsAsync()).Value!).Request;
-        Assert.Equal((false,(string?)null,1000m),(request.WasActivated,request.ReviewReason,request.Amount));   // G22: 10 of 30 used
+        Assert.Equal((false,(string?)null,1250m),(request.WasActivated,request.ReviewReason,request.Amount));   // G22: 5 of 30 used
     }
 
     [Fact]
