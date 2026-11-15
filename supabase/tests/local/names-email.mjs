@@ -26,7 +26,7 @@ async function as(uid, sql, args = [], claims = {}) {
 }
 async function user(meta) {
   return (await db.query(`insert into auth.users(email,raw_user_meta_data) values($1,$2) returning id`,
-    [`p11-${++serial}@test.io`, JSON.stringify(meta)])).rows[0].id;
+    [`p11-${++serial}@test.io`, JSON.stringify({ terms_version: '2026-11-15', ...meta })])).rows[0].id;   // 0069: the app sends it
 }
 async function staff(role) {
   return (await db.query('insert into auth.users(email,raw_user_meta_data,raw_app_meta_data) values($1,$2,$3) returning id',
@@ -68,7 +68,7 @@ try {
   await test('adding a last name: a complete name is refused, blank or non-letters are refused, anonymous cannot call it', async () => {
     const id = await user({ full_name: 'Ana Reyes' });
     await assert.rejects(as(id, 'select add_my_last_name($1)', ['Santos']), /name_complete/);
-    const one = (await db.query(`insert into auth.users(email,raw_user_meta_data) values('p11-one@test.io','{"full_name":"Two Words"}') returning id`)).rows[0].id;
+    const one = (await db.query(`insert into auth.users(email,raw_user_meta_data) values('p11-one@test.io','{"full_name":"Two Words","terms_version":"2026-11-15"}') returning id`)).rows[0].id;
     await db.query("alter table profiles disable trigger profiles_name_parts"); // an old row, as 0035 left it
     await db.query("update profiles set last_name = '', full_name = 'Two' where id = $1", [one]);
     await db.query("alter table profiles enable trigger profiles_name_parts");
@@ -179,7 +179,7 @@ try {
     const old = `p11-${serial}@test.io`;
     await db.query(`update auth.users set email='Moved@Test.io' where id=$1`, [id]);
     assert.equal((await db.query('select username from profiles where id=$1', [id])).rows[0].username, 'moved@test.io');
-    await db.query(`insert into auth.users(email,raw_user_meta_data) values($1,'{"full_name":"New Person"}')`, [old]);
+    await db.query(`insert into auth.users(email,raw_user_meta_data) values($1,'{"full_name":"New Person","terms_version":"2026-11-15"}')`, [old]);
   });
 } finally {
   console.log(`\n${passed} passed, ${failed} failed`);

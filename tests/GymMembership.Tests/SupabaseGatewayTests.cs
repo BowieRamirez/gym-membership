@@ -122,7 +122,7 @@ public sealed class SupabaseGatewayTests : IDisposable
     {
         var gw = new SupabaseGateway(new SupabaseSettings(_url, "anon-key"));
         _reply = _ => (200, SessionJson("new@demo.io"));
-        await gw.SignUpAsync(" New@Demo.io ", "secret12", "Mary Ann", "Santos");
+        await gw.SignUpAsync(" New@Demo.io ", "secret12", "Mary Ann", "Santos", TermsInfo.Version);
         var signUp = _seen.First(s => s.Path.EndsWith("/auth/v1/signup"));
         var root = JsonDocument.Parse(signUp.Body).RootElement;
         Assert.Equal("new@demo.io", root.GetProperty("email").GetString()!.ToLowerInvariant());
@@ -130,6 +130,7 @@ public sealed class SupabaseGatewayTests : IDisposable
         Assert.Equal("Mary Ann", root.GetProperty("data").GetProperty("first_name").GetString());
         Assert.Equal("Santos", root.GetProperty("data").GetProperty("last_name").GetString());
         Assert.Equal("new@demo.io", root.GetProperty("data").GetProperty("username").GetString());
+        Assert.Equal(TermsInfo.Version, root.GetProperty("data").GetProperty("terms_version").GetString());   // 0069
     }
 
     // ---------- email codes (Phase 11) ----------
@@ -214,7 +215,7 @@ public sealed class SupabaseGatewayTests : IDisposable
     {
         var gw = new SupabaseGateway(new SupabaseSettings(_url, "anon-key"));
         _reply = _ => (422, """{"code":422,"error_code":"user_already_exists","msg":"User already registered"}""");
-        var result = await Safe.RunAsync(async () => { await gw.SignUpAsync("a@b.io", "secret12", "Ana", "Reyes"); return true; });
+        var result = await Safe.RunAsync(async () => { await gw.SignUpAsync("a@b.io", "secret12", "Ana", "Reyes", TermsInfo.Version); return true; });
         Assert.Equal(AppErrorKind.Validation, result.Error);
         Assert.Equal("email_taken", result.Message);
     }

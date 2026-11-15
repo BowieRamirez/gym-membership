@@ -140,9 +140,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
         ? Task.FromException<bool>(failure)
         : Task.FromResult(_accounts.Keys.Any(k => string.Equals(k, email.Trim(), StringComparison.OrdinalIgnoreCase)));
 
-    public Task SignUpAsync(string email, string password, string firstName, string lastName)
+    public Task SignUpAsync(string email, string password, string firstName, string lastName, string termsVersion)
     {
         email = email.Trim();
+        if (string.IsNullOrWhiteSpace(termsVersion)) return Task.FromException(Err("terms_required"));   // 0069
         if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName) || !email.Contains('@')) return Task.FromException(Err("bad_input"));
         if (!AccountRules.IsPassword(password)) return Task.FromException(Err("weak_password"));   // Supabase Auth's letters_digits rule (D5)
         if (_accounts.ContainsKey(email)) return Task.FromException(Err("email_taken"));

@@ -111,7 +111,7 @@ public sealed class SupabaseGateway : ISupabaseGateway
         await c.Auth.SignIn(email.Trim(), password);
     }
 
-    public async Task SignUpAsync(string email, string password, string firstName, string lastName)
+    public async Task SignUpAsync(string email, string password, string firstName, string lastName, string termsVersion)
     {
         var c = await ReadyAsync();
         Session? session;
@@ -123,7 +123,7 @@ public sealed class SupabaseGateway : ISupabaseGateway
                 Data = new Dictionary<string, object>
                 {
                     ["first_name"] = firstName, ["last_name"] = lastName, ["full_name"] = NameParts.Join(firstName, lastName),
-                    ["username"] = email.Trim().ToLowerInvariant()
+                    ["username"] = email.Trim().ToLowerInvariant(), ["terms_version"] = termsVersion   // 0069
                 }
             });
         }

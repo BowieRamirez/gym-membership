@@ -23,7 +23,7 @@ public class PaymentTests
     {
         var gw = new DemoGateway();
         var auth = new AuthService(gw);
-        Assert.True((await auth.RegisterAsync("Ana", "Reyes", "ana@demo.io", "secret12")).Ok);
+        Assert.True((await auth.RegisterAsync("Ana", "Reyes", "ana@demo.io", "secret12", true)).Ok);
         var member = new MembershipService(gw);
 
         // 1. a pending payment with a code to type into the e-wallet message and a deadline
@@ -153,7 +153,7 @@ public class PaymentTests
         Assert.Equal("zero_amount", (await staff.RecordCounterAsync(PayKind.WalkIn, PayMethod.Cash, null, null, "Pedro Ramos", null, null)).Message);
 
         var auth = new AuthService(gw);
-        Assert.True((await auth.RegisterAsync("Free", "Rider", "free@demo.io", "secret12")).Ok);
+        Assert.True((await auth.RegisterAsync("Free", "Rider", "free@demo.io", "secret12", true)).Ok);
         var member = new MembershipService(gw);
         Assert.Equal("item_not_for_sale", (await member.AvailAsync(free.Id)).Message);
         Assert.Empty(await gw.ListAsync<UserMembershipPackage>(m => m.MemberId == gw.CurrentUserId));   // nothing left behind
@@ -222,7 +222,7 @@ public class PaymentTests
     public async Task A_guest_cannot_buy_amenities_hire_coaches_book_sessions_or_chat()
     {
         var gw = new DemoGateway();
-        await new AuthService(gw).RegisterAsync("Guest", "User", "guest@demo.io", "secret12");
+        await new AuthService(gw).RegisterAsync("Guest", "User", "guest@demo.io", "secret12", true);
 
         Assert.Equal(AppErrorKind.Validation, (await Safe.RunAsync(() => gw.RpcAsync<Payment>("avail_amenity", new() { ["p_amenity_id"] = 1 }))).Error);
         Assert.Equal(AppErrorKind.Validation, (await new CoachService(gw).HireAsync("u-coach1")).Error);

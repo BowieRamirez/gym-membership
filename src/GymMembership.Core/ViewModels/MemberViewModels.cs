@@ -164,6 +164,15 @@ public partial class RegisterViewModel(IAuthService auth, IAppNavigator nav) : L
     [ObservableProperty] private string email = "";
     [ObservableProperty] private string password = "";
     [ObservableProperty] private string confirmPassword = "";
+    /// <summary>G25: the "I agree to the Terms and Policy" box; reading the terms is optional, ticking is not.</summary>
+    [ObservableProperty] private bool agreedToTerms;
+    /// <summary>Shown under the box, where they are looking, when Create account is pressed without the tick.</summary>
+    [ObservableProperty] private string? termsError;
+    /// <summary>The terms sheet over the form; closing it keeps everything typed and never ticks the box.</summary>
+    [ObservableProperty] private bool termsOpen;
+    partial void OnAgreedToTermsChanged(bool value) { if (value) TermsError = null; }
+    [RelayCommand] private void OpenTerms() => TermsOpen = true;
+    [RelayCommand] private void CloseTerms() => TermsOpen = false;
     /// <summary>Set when the address already has an account. Only a hint: submitting is still allowed, and the server decides.</summary>
     [ObservableProperty] private string? emailTaken;
 
@@ -191,7 +200,8 @@ public partial class RegisterViewModel(IAuthService auth, IAppNavigator nav) : L
     {
         _emailCheck?.Cancel();   // otherwise the new account's own address could come back as "in use" while the page changes
         if (Password != ConfirmPassword) { ErrorMessage = "The passwords don't match."; return; }
-        if (await RunAsync(() => auth.RegisterAsync(FirstName, LastName, Email, Password))) nav.GoTo(AppRole.Member);
+        if (!AgreedToTerms) { TermsError = ErrorText.For(AppErrorKind.Validation, "terms_required"); return; }
+        if (await RunAsync(() => auth.RegisterAsync(FirstName, LastName, Email, Password, AgreedToTerms))) nav.GoTo(AppRole.Member);
     }
 
     [RelayCommand] private void BackToSignIn() => nav.GoToLogin();

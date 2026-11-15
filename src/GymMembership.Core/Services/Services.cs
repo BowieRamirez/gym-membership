@@ -41,7 +41,7 @@ public interface IAuthService
     /// <summary>True while the person still has the temporary password the owner gave them.</summary>
     Task<AppResult<bool>> MustChangePasswordAsync();
     /// <summary>Open sign-up: creates a member account and signs it in. It stays a guest until a payment is verified.</summary>
-    Task<AppResult<bool>> RegisterAsync(string firstName, string lastName, string email, string password);
+    Task<AppResult<bool>> RegisterAsync(string firstName, string lastName, string email, string password, bool agreedToTerms);
     /// <summary>The register page's live check. An address that isn't a valid email isn't looked up.</summary>
     Task<AppResult<bool>> EmailInUseAsync(string email);
     Task<AppResult<EmailStatus>> EmailStatusAsync();
@@ -121,13 +121,14 @@ public sealed class AuthService(ISupabaseGateway gw) : IAuthService
 {
     public string? UserId => gw.CurrentUserId;
 
-    public async Task<AppResult<bool>> RegisterAsync(string firstName, string lastName, string email, string password)
+    public async Task<AppResult<bool>> RegisterAsync(string firstName, string lastName, string email, string password, bool agreedToTerms)
     {
+        if (!agreedToTerms) return AppResult<bool>.Fail(AppErrorKind.Validation, "terms_required");   // G25 (0069)
         firstName = firstName.Trim().Normalize(); lastName = lastName.Trim().Normalize(); email = email.Trim();
         if (!AccountRules.IsName(firstName, lastName)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_name");
         if (!AccountRules.IsEmail(email)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_email");
         if (!AccountRules.IsPassword(password)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_password");
-        return await Safe.RunAsync(async () => { await gw.SignUpAsync(email, password, firstName, lastName); return true; });
+        return await Safe.RunAsync(async () => { await gw.SignUpAsync(email, password, firstName, lastName, TermsInfo.Version); return true; });
     }
 
     public Task<AppResult<bool>> EmailInUseAsync(string email)

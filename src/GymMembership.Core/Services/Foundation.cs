@@ -35,7 +35,7 @@ public static class ErrorMapper
         if (Has(m, "forbidden", "42501", "jwt", "row-level security", "invalid login", "invalid_credentials", "not authenticated")) return AppErrorKind.Unauthorized;
         if (Has(m, "item_not_for_sale", "already_published", "package_published", "package_archived", "name_taken", "draft_exists", "not_published", "published_archive_instead", "account_has_commitments", "account_archived", "record_archived", "record_not_restorable", "code_limit_reached", "code_taken", "discount_used", "name_complete", "shift_has_sessions", "slot_taken", "member_busy", "stale_proposal", "coach_unavailable", "coach_busy", "already_started", "not_in_use", "amenity_unavailable", "not_archived", "already_processed", "already_availed", "renewal_pending", "already_requested", "refund_in_progress", "not_refundable", "pending_session_request", "active_coaching_session", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
         if (Has(m, "account_inactive", "no_open_shift", "shift_open", "note_required", "bad_archive_reason", "bad_correction_reason", "discount_fixed", "discount_locked", "wrong_pin", "has_desk_pin", "bad_down_payment", "coach_not_free", "not_confirmed", "balance_paid", "wrong_member_password", "proof_invalid", "auth_unavailable", "pin_locked", "no_desk_pin", "pin_required", "scan_required", "bad_pin", "refund_reason_required", "no_coach_present", "self_archive", "last_active_admin", "no_active_membership", "self_verify", "self_decision", "not_renewable", "wrong_member", "not_found", "23514",
-                   "missing_fields", "refund_window_closed", "refund_week_passed", "nothing_to_refund", "too_soon", "too_late_to_cancel", "not_ended", "claim_window_closed", "payment_expired", "gym_closed", "day_closed", "day_past", "coach_not_in_gym", "bad_rate", "invite_member_inactive", "invalid_code", "code_already_used", "code_not_for_item", "no_items", "item_not_found", "limit_required", "bad_hours", "off_grid", "outside_gym_hours", "too_long", "past_slot", "too_far_ahead", "no_pass", "limit_below_used", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "super_admin_protected", "bad_code", "code_not_verified", "resend_wait", "same_password", "end must be after start")) return AppErrorKind.Validation;
+                   "missing_fields", "refund_window_closed", "refund_week_passed", "nothing_to_refund", "terms_required", "too_soon", "too_late_to_cancel", "not_ended", "claim_window_closed", "payment_expired", "gym_closed", "day_closed", "day_past", "coach_not_in_gym", "bad_rate", "invite_member_inactive", "invalid_code", "code_already_used", "code_not_for_item", "no_items", "item_not_found", "limit_required", "bad_hours", "off_grid", "outside_gym_hours", "too_long", "past_slot", "too_far_ahead", "no_pass", "limit_below_used", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "super_admin_protected", "bad_code", "code_not_verified", "resend_wait", "same_password", "end must be after start")) return AppErrorKind.Validation;
         return AppErrorKind.Unknown;
     }
 
@@ -178,6 +178,7 @@ public static class ErrorText
         "renewal_pending" => "A membership or extension payment is already waiting. Finish that payment first.",
         "refund_window_closed" => "This term has ended, so a refund can't be requested.",
         "refund_week_passed" => "Refunds are only for a term's first 7 days, and this one is past that.",   // G23 (0068)
+        "terms_required" => "Tick the box to agree to the Terms and Policy.",   // G25 (0069)
         "nothing_to_refund" => "This term has ended, so there is nothing left to refund. Reject the request instead.",
         "refund_reason_required" => "Choose why you are asking for a refund.",
         "no_coach_present" => "Amenities can only be used while a coach is in the gym, and no coach is here right now.",
@@ -280,7 +281,8 @@ public interface ISupabaseGateway
 {
     string? CurrentUserId { get; }
     Task SignInAsync(string email, string password);
-    Task SignUpAsync(string email, string password, string firstName, string lastName);
+    /// <param name="termsVersion">The Terms and Policy version the member agreed to (G25, 0069); the server refuses a sign-up without it.</param>
+    Task SignUpAsync(string email, string password, string firstName, string lastName, string termsVersion);
     /// <summary>Whether an account uses this address. Works signed out; the server limits how often it can be asked.</summary>
     Task<bool> EmailInUseAsync(string email);
     /// <summary>The signed-in person's sign-in email, or null when nobody is signed in.</summary>

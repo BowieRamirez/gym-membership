@@ -99,6 +99,8 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 - [x] **G21 — who may check in by ID (item 12):** **Owner, 2026-11-14: accepted as recommended.** Recommend: front desk, Admin and System admin, for any active member, with or without a desk PIN. The Admin-only reason path (F8, `0063`) stays as it is. Every ID check-in is in the audit log, so a desk that uses it for everyone can be seen. Say if it should be only for members with no PIN (as the reason path), or Admin only.
 - [x] **G22 — membership refunds only the unused days (item 13, added 2026-11-15):** **Owner, 2026-11-15** (design `docs/superpowers/specs/2026-11-15-prorated-refunds-design.md`, approved). Changes D9/D21: refund = what was paid × days left ÷ term days, counted when staff approve; no refund once half the term has passed (asked at or after half is refused); a request made before half can still be approved after it. Built in the database (option 1).
 - [x] **G23 — refund window is the first 7 days (item 13):** **Owner, 2026-11-15**, after asking whether the halfway cutoff was advisable: "just do 1 week it can be refunded so it won't hurt the business". Asked: amount stays the unused days (recommended), and the week counts from the term's start (recommended); a term bought ahead can be cancelled before it starts. Replaces G22's halfway cutoff (`0068`).
+- [x] **G24 — Terms and Policy text (item 14, added 2026-11-15):** **Owner, 2026-11-15:** drafted from the app's real rules (recommended), marked draft for the owner or someone qualified to check.
+- [x] **G25 — how terms are shown and recorded (item 14):** **Owner, 2026-11-15:** option 1: text shipped in the app with a version; sign-up sends the version; the server saves it with the time and refuses a self sign-up without it. Design `docs/superpowers/specs/2026-11-15-terms-at-sign-up-design.md` approved.
 - [x] **G15 — old apps (all items):** **Owner, 2026-11-14: accepted as recommended (v0.6.0).** Recommend: as before, the server refuses old flows (unpaid holds, editing codes, buying drafts); desks and phones need the new build. Release as v0.6.0 when the plan is done.
 
 ## 3. Phases and item coverage
@@ -115,6 +117,7 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 | 8 | Amenities per session only; ID check-in | 11, 12 | G19, G20, G21 | DEPLOYED |
 | 9 | Try to break the new parts; final check and report | All | Phases 1-8 | IN PROGRESS |
 | 10 | Membership refunds: only the unused days, only in the first 7 days | 13 | G22, G23 | DEPLOYED (0067, 0068) |
+| 11 | Terms and Policy checkbox at sign-up | 14 | G24, G25 | DONE (0069 not pushed yet) |
 
 ### Phase 1: cashier shift-in bug and account names (items 1, 3)
 - [x] Baseline, 2026-11-12: xUnit 975/975. Database files and UI scripts were not run before the change (all pass after, below).
@@ -210,6 +213,37 @@ where `paid` is the payment amount. Asking is allowed while `used * 2 < total`, 
   "Estimated refund" until approval. Copy through `impeccable clarify`; capture before and after.
 - [x] **Task 4, finish (2026-11-15):** dry run listed only 0067; pushed; anon gets 42501 on term_days_used and the three refund functions. Three UI scripts pass; Windows and Android real builds pass; `ponytail-review` lean. Was: Dry run, push `0067` live, check live grants (anon refused on the three functions and `term_days_used` not
   exposed); three UI scripts; both builds; `ponytail-review`; commit; plan updated.
+
+### Phase 11: Terms and Policy at sign-up (item 14, G24, G25)
+Spec: `docs/superpowers/specs/2026-11-15-terms-at-sign-up-design.md`. Migration `0069_terms_at_sign_up.sql`.
+
+**Names:** `TermsInfo.Version = "2026-11-15"` and `TermsInfo.Text` (Core, `Services/Terms.cs`; the text is `Resources/Raw/terms.md`,
+read by the app, the version also in its first line). Gateway `SignUpAsync(string email, string password, string firstName,
+string lastName, string termsVersion)` sends `terms_version` in user metadata. `IAuthService.RegisterAsync(first, last, email,
+password, bool agreedToTerms)` refuses `terms_required` before calling the server. `RegisterViewModel.AgreedToTerms` (bool).
+Error text `terms_required`: "Tick the box to agree to the Terms and Policy."
+
+**Review focus:** (1) an admin-made account (role in app metadata) is never refused; (2) a self sign-up with a blank version is
+refused; (3) the checkbox state survives opening and closing the terms; (4) font scale 1.3 on the phone: the agree line wraps, the
+box stays tappable (44 px); (5) the terms screen scrolls to the end on a small phone.
+
+- [ ] **Task 1, database.** Test first `supabase/tests/local/terms-at-sign-up.mjs` (in `npm test`): a self sign-up (no role in
+  `raw_app_meta_data`) without `terms_version` is refused `terms_required`; with it, `profiles.terms_version` and `terms_accepted_at`
+  are set; an insert with a role (as `create-user` does) needs none; a member can read their own acceptance, not another's; the app
+  role can't write either column. `0069`: the two columns; `require_sign_up_terms()` before insert on `auth.users`; an after-insert
+  trigger named after `on_auth_user_created` copies the version and `now()` to the profile; both functions revoked from public, anon,
+  authenticated.
+- [ ] **Task 2, Core and demo.** xUnit first (`TermsAtSignUpTests`): register unticked gives "Tick the box to agree to the Terms and
+  Policy." and creates no account; ticked sends `TermsInfo.Version`; the demo refuses a blank version; `TermsInfo.Text` starts with
+  the version line and says the 7-day refund rule (`RefundRules.Line`). The 32 test callers of `SignUpAsync`/`RegisterAsync` pass the
+  version / `true`.
+- [ ] **Task 3, the terms text.** `Resources/Raw/terms.md` per the spec's list, plain words, headed sections, "Draft, to be checked"
+  line at the top; `impeccable clarify` on it.
+- [ ] **Task 4, screens.** `impeccable shape`, mockup `docs/mockups/register-terms.html` (Windows and phone, unticked error, terms
+  open) for the owner's approval **before** the app changes; then the Register page CheckBox + link, the terms sheet (Windows side
+  sheet, phone full page); Windows 1100 light / 1600 dark, Pixel 7 light/dark and font 1.3.
+- [ ] **Task 5, finish.** Dry run, push `0069`, live grants (anon refused on both functions, columns not readable by anon); three UI
+  scripts; both builds; `ponytail-review`; commit; plan updated.
 
 ## How to check (demo mode)
 - Real config `src/GymMembership.App/Resources/Raw/supabase.json` must be moved out of the project before a demo build and put back right after (never commit it, never leave a `.bak` in the repo). Android demo builds also need `--no-incremental`; to see a demo APK on the emulator build it with `-p:EmbedAssembliesIntoApk=true`; afterwards build the real app with `--no-incremental` so `supabase.json` is packed again.

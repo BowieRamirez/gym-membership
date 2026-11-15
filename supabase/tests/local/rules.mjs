@@ -375,7 +375,7 @@ await test('the app role cannot call the internal helpers or cron jobs', async (
 console.log('\nhow Supabase Auth really creates accounts');
 // Supabase Auth inserts the user first and writes app_metadata afterwards, so this is how an Admin-API account really arrives
 async function userTwoStep(email, role, name) {
-  const id = (await db.query(`insert into auth.users (email, raw_user_meta_data, raw_app_meta_data) values ($1, $2, '{"provider":"email"}') returning id`, [email, JSON.stringify({ full_name: name })])).rows[0].id;
+  const id = (await db.query(`insert into auth.users (email, raw_user_meta_data, raw_app_meta_data) values ($1, $2, '{"provider":"email"}') returning id`, [email, JSON.stringify({ full_name: name, must_change_password: true })])).rows[0].id;   // as create-user sends it (0069)
   await db.query(`update auth.users set raw_app_meta_data = raw_app_meta_data || $2::jsonb where id = $1`, [id, JSON.stringify({ role })]);
   return id;
 }
@@ -406,7 +406,7 @@ await test('digits, symbols, doubled or edge separators and bad lengths are refu
     assert.match(await code(setName(alex, bad)), /23514/, JSON.stringify(bad));
 });
 await test('sign-up with a bad name fails, with no name it falls back to the letters in the email', async () => {
-  const signUp = (email, name) => db.query(`insert into auth.users (email, raw_user_meta_data) values ($1, $2) returning id`, [email, JSON.stringify(name === undefined ? {} : { full_name: name })]);
+  const signUp = (email, name) => db.query(`insert into auth.users (email, raw_user_meta_data) values ($1, $2) returning id`, [email, JSON.stringify(name === undefined ? {} : { full_name: name, terms_version: '2026-11-15' })]);   // 0069: the app sends it
   assert.match(await code(signUp('bad@t.io', 'R2D2 Unit')), /23514/);
   const nameOf = async (email, name) => (await db.query(`select full_name from profiles where id = $1`, [(await signUp(email, name)).rows[0].id])).rows[0].full_name;
   assert.equal(await nameOf('jane.doe99@t.io'), 'jane doe');

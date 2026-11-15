@@ -18,7 +18,7 @@ async function asRole(role, sql, values = []) {
 const check = async (ip, email) => (await asRole('service_role', 'select check_email_in_use($1,$2) as in_use', [ip, email])).rows[0].in_use;
 const reset = () => db.query('truncate email_checks');
 
-await db.query(`insert into auth.users(email,raw_user_meta_data,raw_app_meta_data) values('taken@demo.io','{"full_name":"Taken User"}','{}'),('Mixed.Case@demo.io','{"full_name":"Mixed Case"}','{}')`);
+await db.query(`insert into auth.users(email,raw_user_meta_data,raw_app_meta_data) values('taken@demo.io','{"full_name":"Taken User","terms_version":"2026-11-15"}','{}'),('Mixed.Case@demo.io','{"full_name":"Mixed Case","terms_version":"2026-11-15"}','{}')`);
 
 try {
   await test('finds an address in any case and with surrounding spaces, and only an exact match', async () => {

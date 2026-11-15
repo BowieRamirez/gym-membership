@@ -14,7 +14,7 @@ public class SubscriptionTests
     internal static async Task<(DemoGateway Gw, Clock Clock, SubscriptionService Svc, MembershipPackage Monthly, MembershipPackage Annual)> Setup()
     {
         var clock = new Clock(); var gw = new DemoGateway(clock: clock);
-        await gw.SignUpAsync("phase7@demo.io", "secret12", "Ana", "Reyes");
+        await gw.SignUpAsync("phase7@demo.io", "secret12", "Ana", "Reyes", TermsInfo.Version);
         var packages = await gw.ListAsync<MembershipPackage>();
         return (gw, clock, new SubscriptionService(gw, clock), packages.First(p => p.Name == "Monthly"), packages.First(p => p.Name == "Annual"));
     }
@@ -326,7 +326,7 @@ public class SubscriptionTests
         var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
         Assert.False((await new MembershipService(gw).MyPaymentsAsync()).Value!.Single().CanCancel);
         Assert.False((await svc.CancelPendingPaymentAsync(p.Id)).Ok);
-        await gw.SignUpAsync("other7@demo.io","secret12","Other","Person");
+        await gw.SignUpAsync("other7@demo.io","secret12","Other","Person", TermsInfo.Version);
         var mine=(await svc.ExtendAsync(monthly.Id)).Value!;
         await gw.SignInAsync("phase7@demo.io","secret12");
         Assert.False((await svc.CancelPendingPaymentAsync(mine.Id)).Ok);
