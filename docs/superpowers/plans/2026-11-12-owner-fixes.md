@@ -101,6 +101,7 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 - [x] **G23 — refund window is the first 7 days (item 13):** **Owner, 2026-11-15**, after asking whether the halfway cutoff was advisable: "just do 1 week it can be refunded so it won't hurt the business". Asked: amount stays the unused days (recommended), and the week counts from the term's start (recommended); a term bought ahead can be cancelled before it starts. Replaces G22's halfway cutoff (`0068`).
 - [x] **G24 — Terms and Policy text (item 14, added 2026-11-15):** **Owner, 2026-11-15:** drafted from the app's real rules (recommended), marked draft for the owner or someone qualified to check.
 - [x] **G25 — how terms are shown and recorded (item 14):** **Owner, 2026-11-15:** option 1: text shipped in the app with a version; sign-up sends the version; the server saves it with the time and refuses a self sign-up without it. Design `docs/superpowers/specs/2026-11-15-terms-at-sign-up-design.md` approved.
+- [x] **G26 — a paid term fills a gap (reported 2026-11-15):** a refund left a gap before a term bought ahead, so a new payment queued after it and the member stayed inactive. **Owner, 2026-11-15:** option (a): a paid term starts on the first moment no live term covers; terms bought ahead that it runs into move back by the overlap. Member 473da740 fixed by hand on live: payment 11 term (a test) cancelled with no refund, payment 13 term starts 15 Nov.
 - [x] **G15 — old apps (all items):** **Owner, 2026-11-14: accepted as recommended (v0.6.0).** Recommend: as before, the server refuses old flows (unpaid holds, editing codes, buying drafts); desks and phones need the new build. Release as v0.6.0 when the plan is done.
 
 ## 3. Phases and item coverage
@@ -117,6 +118,7 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 | 8 | Amenities per session only; ID check-in | 11, 12 | G19, G20, G21 | DEPLOYED |
 | 9 | Try to break the new parts; final check and report | All | Phases 1-8 | IN PROGRESS |
 | 10 | Membership refunds: only the unused days, only in the first 7 days | 13 | G22, G23 | DEPLOYED (0067, 0068) |
+| 12 | Paid term fills a gap (G26) | – | G26 | DEPLOYED (0070 live) |
 | 11 | Terms and Policy checkbox at sign-up | 14 | G24, G25 | DEPLOYED (0069 live, 5932691) |
 
 ### Phase 1: cashier shift-in bug and account names (items 1, 3)

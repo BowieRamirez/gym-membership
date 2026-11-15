@@ -188,7 +188,7 @@
                     <!-- the rule under the table it explains, as in the approved mockup; on phones folded behind a link so the screen isn't a wall of text -->
                     <Button Text="How paid terms work" Style="{StaticResource LinkButton}" HorizontalOptions="Start" Margin="-4,-8,0,-8" Clicked="OnToggleTermsRule"
                             IsVisible="{OnIdiom Phone=True, Default=False}" />
-                    <Label x:Name="TermsRule" Text="Extensions start after your last paid term. No upgrades or unused-time credits. Other paid terms keep their dates if one is cancelled, so a gap may remain."
+                    <Label x:Name="TermsRule" Text="A new term starts when your current one ends, or right away if none is running. A term bought ahead moves back if the new one runs into it. No upgrades or unused-time credits."
                            Style="{StaticResource Caption}" IsVisible="{OnIdiom Phone=False, Default=True}" />
 
                     <Label Text="Payments" Style="{StaticResource SectionTitle}" Margin="{OnIdiom Phone=0, Default='0,10,0,0'}" />

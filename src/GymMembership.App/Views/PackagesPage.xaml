@@ -51,7 +51,7 @@
             <Button Text="How buying a package works" Style="{StaticResource LinkButton}" HorizontalOptions="Start" Margin="-4,-8,0,-8" Clicked="OnToggleRules"
                     IsVisible="{OnIdiom Phone=True, Default=False}" />
             <!-- G23 (2026-11-15): the refund rule is said before anyone pays; the last sentence is RefundRules.Line (RefundLineTests checks it) -->
-            <Label x:Name="Rules" Text="Choose your next package. Pay by QR and send proof on My membership. After verification, a paid extension starts after your last paid term, or immediately if it has ended. No upgrades or automatic charges.&#10;Refunds: only in a term's first 7 days, for the days not used."
+            <Label x:Name="Rules" Text="Choose your next package. Pay by QR and send proof on My membership. After verification, it starts right away, or when your current term ends. No upgrades or automatic charges.&#10;Refunds: only in a term's first 7 days, for the days not used."
                    Style="{OnIdiom Phone={StaticResource Caption}, Default={StaticResource Muted}}" MaximumWidthRequest="760" HorizontalOptions="Start" IsVisible="{OnIdiom Phone=False, Default=True}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />

@@ -8,7 +8,7 @@ These terms cover your gym membership and how this app uses your information. By
 You sign in with your email and password. Keep your password to yourself; anything done with your account is treated as done by you. Your name must be your real first and last name, because the front desk checks it when you come in.
 
 ## Packages and terms
-A package gives you gym access for a set number of days, called a term. A term you buy while another is running starts when your last paid term ends. A term bought after your last one has ended starts as soon as the payment is verified. There are no upgrades, no automatic charges and no credit for unused time when you buy another package.
+A package gives you gym access for a set number of days, called a term. A term you buy starts as soon as the payment is verified, or when your current term ends if one is running. If it runs into a term you bought ahead, that term moves back, so you keep every paid day. There are no upgrades, no automatic charges and no credit for unused time when you buy another package.
 
 ## Paying
 You can pay by QR transfer and send the reference and a screenshot in the app, or pay cash or GCash at the front desk. A QR payment must be paid and sent within the time shown in the app, or it expires and the package isn't bought. A payment counts once the front desk has checked it. Discount codes work once per person, only for what each code says.

@@ -47,9 +47,14 @@ public sealed partial class DemoGateway
         if(All<MembershipTerm>().Any(t=>t.PaymentId==pay.Id)) throw Err("already_processed");
         var renewal=All<MembershipRenewal>().FirstOrDefault(r=>r.Id==pay.RenewalId);
         var umpId=pay.UserMembershipPackageId??renewal!.UserMembershipPackageId;
-        var start=All<MembershipTerm>().Where(t=>t.MemberId==pay.MemberId && t.CancelledAt is null).Select(t=>t.EndsAt)
-            .Append(pay.VerifiedAt!.Value).Max();
+        // G26 (0070): the first moment no live term covers, so a gap is filled; terms it runs into move back by the overlap
+        var live=All<MembershipTerm>().Where(t=>t.MemberId==pay.MemberId && t.CancelledAt is null).ToList();
+        var start=pay.VerifiedAt!.Value;
+        while(live.Where(t=>t.StartsAt<=start && t.EndsAt>start).Select(t=>(DateTime?)t.EndsAt).Max() is {} e) start=e;
         var end=start.AddDays(pay.PackageSnapshotDays!.Value);
+        var later=live.Where(t=>t.StartsAt>=start).ToList();
+        if(later.Count>0 && later.Min(t=>t.StartsAt) is var next && next<end)
+            foreach(var t in later) {t.StartsAt+=end-next; t.EndsAt+=end-next;}
         Add(new MembershipTerm {MemberId=pay.MemberId!,MembershipId=umpId,PaymentId=pay.Id,PackageId=pay.PackageSnapshotId!.Value,
             PackageName=pay.PackageSnapshotName!,DurationDays=pay.PackageSnapshotDays.Value,AmountPaid=pay.Amount,StartsAt=start,EndsAt=end,CreatedAt=SubscriptionNow});
         if(renewal is not null) {renewal.Status=Status.Completed;renewal.CompletedAt=pay.VerifiedAt;renewal.PreviousEndsAt=start;renewal.NewStartsAt=start;renewal.NewEndsAt=end;}
