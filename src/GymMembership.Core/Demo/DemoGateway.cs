@@ -1379,7 +1379,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
     void Seed()
     {
         var now = SubscriptionNow;   // the injected clock: a test's fixed day must see the seed's memberships as running
-        DateTime At(int days, double hour) => DateTime.Today.AddDays(days).AddHours(hour).ToUniversalTime(); // seed in the viewer's local time
+        // shifts and sessions on the gym's clock (Manila, UTC+8, no daylight saving), not the computer's: on a UTC machine (CI) a
+        // 6 AM shift landed at 2 PM Manila and the free-coach test found no one
+        var manilaToday = DateTime.UtcNow.AddHours(8).Date;
+        DateTime At(int days, double hour) => DateTime.SpecifyKind(manilaToday.AddDays(days).AddHours(hour - 8), DateTimeKind.Utc);
         foreach (var r in new[] { "admin", "employee", "coach", "member", "subadmin" }) Add(new Role { Name = r });
         // F10: one announcement, so Messages shows the pinned conversation with something in it
         _announcements.Add(new DemoAnnouncement { Id = 1, Author = "u-admin", Body = "New yoga class on Thursdays at 6:00 PM. Sign up at the front desk.", Posted = now.AddDays(-1) });
