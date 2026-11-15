@@ -100,9 +100,8 @@
                         </Grid>
                         <BoxView Style="{StaticResource Hairline}" />
                     </VerticalStackLayout>
-                    <c:TableBody BindableLayout.ItemsSource="{Binding Requests}" Header="{x:Reference RequestsHead}" WideFrom="700"
-                                 RowTemplate="{StaticResource RequestRow}" CardTemplate="{StaticResource RequestCard}"
-                                 BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource RequestCard}, Default={StaticResource RequestRow}}" />
+                    <c:TableBody Items="{Binding Requests}" Header="{x:Reference RequestsHead}" WideFrom="700"
+                                 RowTemplate="{StaticResource RequestRow}" CardTemplate="{StaticResource RequestCard}" />
                 </VerticalStackLayout>
             </Border>
         </VerticalStackLayout>
@@ -119,10 +118,9 @@
                     </Grid>
                     <BoxView Style="{StaticResource Hairline}" />
                 </VerticalStackLayout>
-                <c:TableBody BindableLayout.ItemsSource="{Binding Trainees}" Header="{x:Reference MembersHead}" WideFrom="900"
-                             RowTemplate="{StaticResource MemberRow}" CardTemplate="{StaticResource MemberCard}"
-                             BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource MemberCard}, Default={StaticResource MemberRow}}">
-                    <BindableLayout.EmptyView><Label Text="No members yet. Members can ask you while Taking new members is on in Settings." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                <c:TableBody Items="{Binding Trainees}" Header="{x:Reference MembersHead}" WideFrom="900"
+                             RowTemplate="{StaticResource MemberRow}" CardTemplate="{StaticResource MemberCard}">
+                    <c:TableBody.Empty><Label Text="No members yet. Members can ask you while Taking new members is on in Settings." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                 </c:TableBody>
             </VerticalStackLayout>
         </Border>

@@ -121,10 +121,9 @@
                             </Grid>
                             <BoxView Style="{StaticResource Hairline}" />
                         </VerticalStackLayout>
-                        <c:TableBody BindableLayout.ItemsSource="{Binding ToVerify}" Header="{x:Reference PayHead}" WideFrom="560"
-                                     RowTemplate="{StaticResource PayRow}" CardTemplate="{StaticResource PayCard}"
-                                     BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource PayCard}, Default={StaticResource PayRow}}">
-                            <BindableLayout.EmptyView><Label Text="No payments waiting. New QR payments show up here." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                        <c:TableBody Items="{Binding ToVerify}" Header="{x:Reference PayHead}" WideFrom="560"
+                                     RowTemplate="{StaticResource PayRow}" CardTemplate="{StaticResource PayCard}">
+                            <c:TableBody.Empty><Label Text="No payments waiting. New QR payments show up here." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                         </c:TableBody>
                     </VerticalStackLayout>
                 </Border>
@@ -139,10 +138,9 @@
                             </Grid>
                             <BoxView Style="{StaticResource Hairline}" />
                         </VerticalStackLayout>
-                        <c:TableBody BindableLayout.ItemsSource="{Binding InGym}" Header="{x:Reference CoachHead}" WideFrom="420"
-                                     RowTemplate="{StaticResource CoachRow}" CardTemplate="{StaticResource CoachCard}"
-                                     BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource CoachCard}, Default={StaticResource CoachRow}}">
-                            <BindableLayout.EmptyView><Label Text="No coaches checked in. Check them in on the Membership checking page." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                        <c:TableBody Items="{Binding InGym}" Header="{x:Reference CoachHead}" WideFrom="420"
+                                     RowTemplate="{StaticResource CoachRow}" CardTemplate="{StaticResource CoachCard}">
+                            <c:TableBody.Empty><Label Text="No coaches checked in. Check them in on the Membership checking page." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                         </c:TableBody>
                     </VerticalStackLayout>
                 </Border>

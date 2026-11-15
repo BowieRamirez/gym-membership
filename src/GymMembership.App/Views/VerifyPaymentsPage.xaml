@@ -171,10 +171,9 @@
                         </Grid>
                         <BoxView Style="{StaticResource Hairline}" />
                     </VerticalStackLayout>
-                    <c:TableBody BindableLayout.ItemsSource="{Binding Pending}" Header="{x:Reference QueueHead}" WideFrom="1100"
-                                 RowTemplate="{StaticResource QueueRow}" CardTemplate="{StaticResource QueueCard}"
-                                 BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource QueueCard}, Default={StaticResource QueueRow}}">
-                        <BindableLayout.EmptyView><Label Text="No payments are waiting. Members' e-wallet payments show up here." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                    <c:TableBody Items="{Binding Pending}" Header="{x:Reference QueueHead}" WideFrom="1100"
+                                 RowTemplate="{StaticResource QueueRow}" CardTemplate="{StaticResource QueueCard}">
+                        <c:TableBody.Empty><Label Text="No payments are waiting. Members' e-wallet payments show up here." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                     </c:TableBody>
                 </VerticalStackLayout>
             </Border>
@@ -191,9 +190,8 @@
                         </Grid>
                         <BoxView Style="{StaticResource Hairline}" />
                     </VerticalStackLayout>
-                    <c:TableBody BindableLayout.ItemsSource="{Binding Claims}" Header="{x:Reference ClaimHead}" WideFrom="1100"
-                                 RowTemplate="{StaticResource ClaimRow}" CardTemplate="{StaticResource ClaimCard}"
-                                 BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource ClaimCard}, Default={StaticResource ClaimRow}}" />
+                    <c:TableBody Items="{Binding Claims}" Header="{x:Reference ClaimHead}" WideFrom="1100"
+                                 RowTemplate="{StaticResource ClaimRow}" CardTemplate="{StaticResource ClaimCard}" />
                 </VerticalStackLayout>
             </Border>
         </VerticalStackLayout></ScrollView>

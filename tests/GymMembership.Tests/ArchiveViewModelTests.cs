@@ -116,13 +116,13 @@ public class ArchiveViewModelTests
     public async Task Pagination_keeps_applied_filters_until_apply_is_clicked()
     {
         var (gw, vm) = await Setup(); var admin = new AdminService(gw);
-        for (var i = 0; i < 33; i++)
+        for (var i = 0; i < ArchiveService.PageSize + 3; i++)
         {
             var plan = new MembershipPackage { Name = $"Archived {i}", Price = 1, DurationDays = 1 };
             await admin.SavePackageAsync(plan); await admin.DeletePackageAsync(plan);
         }
         vm.TypeIndex = 3; await vm.ApplyCommand.ExecuteAsync(null);
-        Assert.Equal(30, vm.Rows.Count); Assert.True(vm.HasMore);
+        Assert.Equal(ArchiveService.PageSize, vm.Rows.Count); Assert.True(vm.HasMore);
         var ids = vm.Rows.Select(r => r.RecordId).ToArray(); vm.TypeIndex = 2;
         await vm.NextCommand.ExecuteAsync(null);
         Assert.Equal(1, vm.Page); Assert.Equal(3, vm.Rows.Count); Assert.All(vm.Rows, r => Assert.Equal("plan", r.Type));

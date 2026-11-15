@@ -78,10 +78,9 @@
                         </Grid>
                         <BoxView Style="{StaticResource Hairline}" />
                     </VerticalStackLayout>
-                    <c:TableBody BindableLayout.ItemsSource="{Binding Posted}" Header="{x:Reference PostedHead}" WideFrom="760"
-                                 RowTemplate="{StaticResource PostedRow}" CardTemplate="{StaticResource PostedCard}"
-                                 BindableLayout.ItemTemplate="{StaticResource PostedRow}">
-                        <BindableLayout.EmptyView><Label Text="Nothing posted yet." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                    <c:TableBody Items="{Binding Posted}" Header="{x:Reference PostedHead}" WideFrom="760"
+                                 RowTemplate="{StaticResource PostedRow}" CardTemplate="{StaticResource PostedCard}">
+                        <c:TableBody.Empty><Label Text="Nothing posted yet." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                     </c:TableBody>
                 </VerticalStackLayout>
             </Border>

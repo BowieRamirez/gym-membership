@@ -152,10 +152,9 @@
                         </Grid>
                         <BoxView Style="{StaticResource Hairline}" />
                     </VerticalStackLayout>
-                    <c:TableBody BindableLayout.ItemsSource="{Binding Shifts}" Header="{x:Reference ShiftHead}" WideFrom="1050"
-                                 RowTemplate="{StaticResource ShiftRow}" CardTemplate="{StaticResource ShiftCard}"
-                                 BindableLayout.ItemTemplate="{StaticResource ShiftRow}">
-                        <BindableLayout.EmptyView><Label Text="No cash shifts were opened in this period." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                    <c:TableBody Items="{Binding Shifts}" Header="{x:Reference ShiftHead}" WideFrom="1050"
+                                 RowTemplate="{StaticResource ShiftRow}" CardTemplate="{StaticResource ShiftCard}">
+                        <c:TableBody.Empty><Label Text="No cash shifts were opened in this period." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                     </c:TableBody>
                 </VerticalStackLayout>
             </Border>

@@ -62,7 +62,7 @@ public sealed class SupabaseGatewayTests : IDisposable
         var request = JsonDocument.Parse(Last.Body).RootElement;
         Assert.Equal("2026-10-01", request.GetProperty("p_from").GetString());
         Assert.Equal("Retired", request.GetProperty("p_reason").GetString());
-        Assert.Equal(60, request.GetProperty("p_offset").GetInt32()); Assert.Equal(31, request.GetProperty("p_limit").GetInt32());
+        Assert.Equal(2 * ArchiveService.PageSize, request.GetProperty("p_offset").GetInt32()); Assert.Equal(ArchiveService.PageSize + 1, request.GetProperty("p_limit").GetInt32());
         _reply = _ => (200, "null");
         Assert.True((await service.RestoreAsync(row)).Ok);
         Assert.EndsWith("/rpc/restore_archived_record", Last.Path);

@@ -154,10 +154,9 @@
                             </Grid>
                             <BoxView Style="{StaticResource Hairline}" />
                         </VerticalStackLayout>
-                        <c:TableBody BindableLayout.ItemsSource="{Binding Packages}" Header="{x:Reference PackageHead}" WideFrom="900"
-                                     RowTemplate="{StaticResource PackageRow}" CardTemplate="{StaticResource PackageCard}"
-                                     BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource PackageCard}, Default={StaticResource PackageRow}}">
-                            <BindableLayout.EmptyView><Label Text="No packages yet. Add one with Add package." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                        <c:TableBody Items="{Binding Packages}" Header="{x:Reference PackageHead}" WideFrom="900"
+                                     RowTemplate="{StaticResource PackageRow}" CardTemplate="{StaticResource PackageCard}">
+                            <c:TableBody.Empty><Label Text="No packages yet. Add one with Add package." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                         </c:TableBody>
                     </VerticalStackLayout>
                 </Border>
@@ -177,10 +176,9 @@
                             </Grid>
                             <BoxView Style="{StaticResource Hairline}" />
                         </VerticalStackLayout>
-                        <c:TableBody BindableLayout.ItemsSource="{Binding Amenities}" Header="{x:Reference AmenityHead}" WideFrom="900"
-                                     RowTemplate="{StaticResource AmenityRow}" CardTemplate="{StaticResource AmenityCard}"
-                                     BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource AmenityCard}, Default={StaticResource AmenityRow}}">
-                            <BindableLayout.EmptyView><Label Text="No amenities yet. Add one with Add amenity." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                        <c:TableBody Items="{Binding Amenities}" Header="{x:Reference AmenityHead}" WideFrom="900"
+                                     RowTemplate="{StaticResource AmenityRow}" CardTemplate="{StaticResource AmenityCard}">
+                            <c:TableBody.Empty><Label Text="No amenities yet. Add one with Add amenity." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                         </c:TableBody>
                     </VerticalStackLayout>
                 </Border>

@@ -176,12 +176,11 @@
                                 </Grid>
                                 <BoxView Style="{StaticResource Hairline}" />
                             </VerticalStackLayout>
-                            <c:TableBody BindableLayout.ItemsSource="{Binding Terms}" Header="{x:Reference TermsHead}" WideFrom="900"
-                                         RowTemplate="{StaticResource TermRow}" CardTemplate="{StaticResource TermCard}"
-                                         BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource TermCard}, Default={StaticResource TermRow}}">
-                                <BindableLayout.EmptyView>
+                            <c:TableBody Items="{Binding Terms}" Header="{x:Reference TermsHead}" WideFrom="900"
+                                         RowTemplate="{StaticResource TermRow}" CardTemplate="{StaticResource TermCard}">
+                                <c:TableBody.Empty>
                                     <Label Text="No paid terms yet. Choose a package, pay and wait for verification." Style="{StaticResource Muted}" Margin="14" />
-                                </BindableLayout.EmptyView>
+                                </c:TableBody.Empty>
                             </c:TableBody>
                         </VerticalStackLayout>
                     </Border>
@@ -220,10 +219,9 @@
                                 </Grid>
                                 <BoxView Style="{StaticResource Hairline}" />
                             </VerticalStackLayout>
-                            <c:TableBody BindableLayout.ItemsSource="{Binding Payments}" Header="{x:Reference PaymentsHead}" WideFrom="1000"
-                                         RowTemplate="{StaticResource PaymentRow}" CardTemplate="{StaticResource PaymentCard}"
-                                         BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource PaymentCard}, Default={StaticResource PaymentRow}}">
-                                <BindableLayout.EmptyView><Label Text="{Binding PaymentsEmptyText, Source={RelativeSource AncestorType={x:Type vm:MyMembershipViewModel}}}" Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                            <c:TableBody Items="{Binding Payments}" Header="{x:Reference PaymentsHead}" WideFrom="1000"
+                                         RowTemplate="{StaticResource PaymentRow}" CardTemplate="{StaticResource PaymentCard}">
+                                <c:TableBody.Empty><Label Text="{Binding PaymentsEmptyText, Source={RelativeSource AncestorType={x:Type vm:MyMembershipViewModel}}}" Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                             </c:TableBody>
                         </VerticalStackLayout>
                     </Border>

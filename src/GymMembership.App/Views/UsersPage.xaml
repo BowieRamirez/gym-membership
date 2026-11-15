@@ -141,10 +141,9 @@
                         </Grid>
                         <BoxView Style="{StaticResource Hairline}" />
                     </VerticalStackLayout>
-                    <c:TableBody BindableLayout.ItemsSource="{Binding Users}" Header="{x:Reference AccountHead}" WideFrom="700"
-                                 RowTemplate="{StaticResource AccountRow}" CardTemplate="{StaticResource AccountCard}"
-                                 BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource AccountCard}, Default={StaticResource AccountRow}}">
-                        <BindableLayout.EmptyView><Label Text="No active accounts." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                    <c:TableBody Items="{Binding Users}" Header="{x:Reference AccountHead}" WideFrom="700"
+                                 RowTemplate="{StaticResource AccountRow}" CardTemplate="{StaticResource AccountCard}">
+                        <c:TableBody.Empty><Label Text="No active accounts." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                     </c:TableBody>
                 </VerticalStackLayout>
             </Border>

@@ -108,10 +108,9 @@
                             <BoxView Style="{StaticResource Hairline}" />
                         </VerticalStackLayout>
                         <!-- a table from 1300 px of table width; narrower, the phone cards -->
-                        <c:TableBody BindableLayout.ItemsSource="{Binding Sessions}" Header="{x:Reference SessionsHead}" WideFrom="1300"
-                                     RowTemplate="{StaticResource SessionRow}" CardTemplate="{StaticResource SessionCard}"
-                                     BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource SessionCard}, Default={StaticResource SessionRow}}">
-                            <BindableLayout.EmptyView><Label Text="{Binding EmptyText, Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}}" Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                        <c:TableBody Items="{Binding Sessions}" Header="{x:Reference SessionsHead}" WideFrom="1300"
+                                     RowTemplate="{StaticResource SessionRow}" CardTemplate="{StaticResource SessionCard}">
+                            <c:TableBody.Empty><Label Text="{Binding EmptyText, Source={RelativeSource AncestorType={x:Type vm:SessionsViewModel}}}" Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                         </c:TableBody>
                     </VerticalStackLayout>
                 </Border>

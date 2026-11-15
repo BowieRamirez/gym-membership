@@ -156,10 +156,9 @@
                         </Grid>
                         <BoxView Style="{StaticResource Hairline}" />
                     </VerticalStackLayout>
-                    <c:TableBody BindableLayout.ItemsSource="{Binding Discounts}" Header="{x:Reference CodeHead}" WideFrom="1000"
-                                 RowTemplate="{StaticResource CodeRow}" CardTemplate="{StaticResource CodeCard}"
-                                 BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource CodeCard}, Default={StaticResource CodeRow}}">
-                        <BindableLayout.EmptyView><Label Text="No discount codes yet. Add one above." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                    <c:TableBody Items="{Binding Discounts}" Header="{x:Reference CodeHead}" WideFrom="1000"
+                                 RowTemplate="{StaticResource CodeRow}" CardTemplate="{StaticResource CodeCard}">
+                        <c:TableBody.Empty><Label Text="No discount codes yet. Add one above." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                     </c:TableBody>
                 </VerticalStackLayout>
             </Border>

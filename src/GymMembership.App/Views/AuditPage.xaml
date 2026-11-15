@@ -140,9 +140,8 @@
                             </Grid>
                             <BoxView Style="{StaticResource Hairline}" />
                         </VerticalStackLayout>
-                        <c:TableBody BindableLayout.ItemsSource="{Binding Entries}" Header="{x:Reference AuditHead}" WideFrom="1150"
-                                     RowTemplate="{StaticResource AuditRowTemplate}" CardTemplate="{StaticResource AuditCardTemplate}"
-                                     BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource AuditCardTemplate}, Default={StaticResource AuditRowTemplate}}" />
+                        <c:TableBody Items="{Binding Entries}" Header="{x:Reference AuditHead}" WideFrom="1150"
+                                     RowTemplate="{StaticResource AuditRowTemplate}" CardTemplate="{StaticResource AuditCardTemplate}" />
                         <Label Text="No entries match these filters." Style="{StaticResource Muted}" Margin="14" IsVisible="{Binding IsEmpty}" AutomationId="AuditEmpty" />
                     </VerticalStackLayout>
                 </Border>

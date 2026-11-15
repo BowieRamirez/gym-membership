@@ -108,10 +108,9 @@
                                 </Grid>
                                 <BoxView Style="{StaticResource Hairline}" />
                             </VerticalStackLayout>
-                            <c:TableBody BindableLayout.ItemsSource="{Binding Requests}" Header="{x:Reference RequestsHead}" WideFrom="1300"
-                                         RowTemplate="{StaticResource RequestRow}" CardTemplate="{StaticResource RequestCard}"
-                                         BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource RequestCard}, Default={StaticResource RequestRow}}">
-                                <BindableLayout.EmptyView><Label Text="Nothing pending." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                            <c:TableBody Items="{Binding Requests}" Header="{x:Reference RequestsHead}" WideFrom="1300"
+                                         RowTemplate="{StaticResource RequestRow}" CardTemplate="{StaticResource RequestCard}">
+                                <c:TableBody.Empty><Label Text="Nothing pending." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                             </c:TableBody>
                         </VerticalStackLayout>
                     </Border>

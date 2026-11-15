@@ -188,17 +188,69 @@ public class AuthLayout : Grid
 }
 
 /// <summary>
-/// The rows of a table that is a table only while it has room: at WideFrom or wider it uses RowTemplate and shows Header (the
-/// column captions and their hairline); narrower, and on phones, it uses CardTemplate and hides Header, so fixed columns never
-/// squeeze the text ones down to a letter per line. Set the starting BindableLayout.ItemTemplate in XAML as before.
+/// A table's rows: RowTemplate (and the Header captions) from WideFrom, CardTemplate narrower and on phones, so fixed columns
+/// never squeeze text to a letter per line. Owner, 2026-11-15: at most ten rows at a
+/// time (PageWindow), with "1–10 of 34" and Previous / Next under them; the pager hides at ten or fewer. Pages hand their
+/// list to Items (not BindableLayout.ItemsSource) so the pager can live inside; Empty shows when there are no rows.
 /// </summary>
 public class TableBody : VerticalStackLayout
 {
+    public static readonly BindableProperty ItemsProperty = BindableProperty.Create(nameof(Items), typeof(System.Collections.IEnumerable), typeof(TableBody),
+        propertyChanged: (b, o, n) => ((TableBody)b).Watch(o as System.Collections.Specialized.INotifyCollectionChanged, n as System.Collections.Specialized.INotifyCollectionChanged));
+    public System.Collections.IEnumerable? Items { get => (System.Collections.IEnumerable?)GetValue(ItemsProperty); set => SetValue(ItemsProperty, value); }
     public DataTemplate? RowTemplate { get; set; }
     public DataTemplate? CardTemplate { get; set; }
     public View? Header { get; set; }
+    public View? Empty { get => BindableLayout.GetEmptyView(_rows) as View; set => BindableLayout.SetEmptyView(_rows, value); }
     public double WideFrom { get; set; } = 1000;
     bool? wide;
+
+    readonly VerticalStackLayout _rows = new();
+    readonly Label _range = new() { VerticalOptions = LayoutOptions.Center };
+    readonly Button _previous = new() { Text = "Previous" }, _next = new() { Text = "Next" };
+    readonly Grid _pager;
+    int _page;
+    bool _queued;
+
+    public TableBody()
+    {
+        if (Application.Current?.Resources.TryGetValue("Muted", out var muted) == true) _range.Style = (Style)muted;
+        if (Application.Current?.Resources.TryGetValue("SmallOutlineButton", out var button) == true) _previous.Style = _next.Style = (Style)button;
+        _previous.Clicked += (_, _) => { _page--; Refresh(); };
+        _next.Clicked += (_, _) => { _page++; Refresh(); };
+        SemanticProperties.SetDescription(_previous, "Previous page"); SemanticProperties.SetDescription(_next, "Next page");
+        _pager = new Grid { ColumnDefinitions = { new(GridLength.Star), new(GridLength.Auto), new(GridLength.Auto) }, ColumnSpacing = 8, Padding = new Thickness(14, 10), IsVisible = false };
+        _pager.Add(_range); _pager.Add(_previous, 1); _pager.Add(_next, 2);
+        Add(_rows); Add(_pager);
+    }
+
+    void Watch(System.Collections.Specialized.INotifyCollectionChanged? old, System.Collections.Specialized.INotifyCollectionChanged? now)
+    {
+        if (old is not null) old.CollectionChanged -= OnItemsChanged;
+        if (now is not null) now.CollectionChanged += OnItemsChanged;
+        _page = 0;
+        Refresh();
+    }
+
+    // a reload clears and refills the list one row at a time: redraw once afterwards, keeping the page (moved back if it ran out)
+    void OnItemsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        if (_queued) return;
+        _queued = true;
+        Dispatcher.Dispatch(() => { _queued = false; Refresh(); });
+    }
+
+    void Refresh()
+    {
+        var all = Items?.Cast<object>().ToList() ?? [];
+        var window = GymMembership.Core.Services.PageWindow.Of(all.Count, _page);
+        _page = window.Page;
+        BindableLayout.SetItemsSource(_rows, all.Skip(window.Skip).Take(GymMembership.Core.Services.PageWindow.Size).ToList());
+        _pager.IsVisible = window.Needed;
+        _range.Text = window.Text;
+        _previous.IsEnabled = window.HasPrevious;
+        _next.IsEnabled = window.HasNext;
+    }
 
     protected override void OnSizeAllocated(double width, double height)
     {
@@ -207,7 +259,7 @@ public class TableBody : VerticalStackLayout
         var now = DeviceInfo.Idiom != DeviceIdiom.Phone && width >= WideFrom - (wide == true ? 24 : 0);
         if (now == wide || width <= 0) return;
         wide = now;
-        BindableLayout.SetItemTemplate(this, now ? RowTemplate : CardTemplate);
+        BindableLayout.SetItemTemplate(_rows, now ? RowTemplate : CardTemplate);
         if (Header is not null) Header.IsVisible = now;
     }
 }

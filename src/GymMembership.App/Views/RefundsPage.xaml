@@ -84,10 +84,9 @@
                             </Grid>
                             <BoxView Style="{StaticResource Hairline}" />
                         </VerticalStackLayout>
-                        <c:TableBody BindableLayout.ItemsSource="{Binding Requests}" Header="{x:Reference RefundHead}" WideFrom="1000"
-                                     RowTemplate="{StaticResource RefundRow}" CardTemplate="{StaticResource RefundCard}"
-                                     BindableLayout.ItemTemplate="{StaticResource RefundRow}">
-                            <BindableLayout.EmptyView><Label Text="No cancellation or refund requests." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                        <c:TableBody Items="{Binding Requests}" Header="{x:Reference RefundHead}" WideFrom="1000"
+                                     RowTemplate="{StaticResource RefundRow}" CardTemplate="{StaticResource RefundCard}">
+                            <c:TableBody.Empty><Label Text="No cancellation or refund requests." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                         </c:TableBody>
                     </VerticalStackLayout>
                 </Border>
