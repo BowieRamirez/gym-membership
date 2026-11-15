@@ -31,3 +31,18 @@ public class FillGapTests
         Assert.True((await new MembershipService(gw).AccessAsync()).Value!.Active);
     }
 }
+
+// Reported 2026-11-15: on the real backend a term bought today showed "scheduled". Supabase rows arrive in local time (Manila),
+// the demo's in UTC; a term that started less than 8 hours ago looked as if it had not started. Every term rule works in UTC.
+public class TermTimeZoneTests
+{
+    [Fact]
+    public void A_term_that_started_an_hour_ago_is_active_when_the_backend_gives_local_time()
+    {
+        var now = new DateTime(2026, 11, 15, 10, 36, 0, DateTimeKind.Utc);
+        var term = new MembershipTerm { StartsAt = now.AddHours(-1).ToLocalTime(), EndsAt = now.AddDays(30).ToLocalTime() };
+        Assert.Equal(Status.Active, SubscriptionService.StateOf(SubscriptionService.InUtc(term), now));
+        Assert.Equal(DateTimeKind.Utc, term.StartsAt.Kind);
+        Assert.Equal(now.AddHours(-1), term.StartsAt);
+    }
+}

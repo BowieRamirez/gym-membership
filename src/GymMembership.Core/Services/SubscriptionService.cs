@@ -118,6 +118,16 @@ public interface ISubscriptionService
 public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time = null) : ISubscriptionService
 {
     readonly TimeProvider clock = time ?? TimeProvider.System;
+
+    /// <summary>The real backend gives timestamps in local time (Manila), the demo in UTC; every term rule and the
+    /// "+8 hours" dates on screen work in UTC (reported 2026-11-15: a term bought today showed "scheduled").</summary>
+    public static MembershipTerm InUtc(MembershipTerm t)
+    {
+        t.StartsAt = t.StartsAt.ToUniversalTime(); t.EndsAt = t.EndsAt.ToUniversalTime(); t.CancelledAt = t.CancelledAt?.ToUniversalTime();
+        return t;
+    }
+    public static string StateOf(MembershipTerm t, DateTime nowUtc) =>
+        t.CancelledAt is not null ? Status.Cancelled : t.EndsAt <= nowUtc ? Status.Expired : t.StartsAt > nowUtc ? Status.Scheduled : Status.Active;
     public Task<AppResult<IReadOnlyList<TermCard>>> TermsAsync() => Safe.RunAsync<IReadOnlyList<TermCard>>(async () =>
     {
         var uid = gw.CurrentUserId;
@@ -126,13 +136,13 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
         var refunds = await gw.ListAsync<RefundRequest>(r => r.MemberId == uid);
         var checkIns = await gw.ListAsync<GymCheckIn>(c => c.MemberId == uid);
         var now = clock.GetUtcNow().UtcDateTime;
-        return terms.OrderBy(t => t.CancelledAt is not null || t.EndsAt <= now).ThenBy(t => t.StartsAt).Select(t =>
+        return terms.Select(InUtc).OrderBy(t => t.CancelledAt is not null || t.EndsAt <= now).ThenBy(t => t.StartsAt).Select(t =>
         {
             var p = payments.FirstOrDefault(p => p.Id == t.PaymentId);
             var refund = refunds.FirstOrDefault(r => r.TermId == t.Id);
-            var state = t.CancelledAt is not null ? Status.Cancelled : t.EndsAt <= now ? Status.Expired : t.StartsAt > now ? Status.Scheduled : Status.Active;
+            var state = StateOf(t, now);
             var canAsk = t.CancelledAt is null && p is { Status: Status.Verified, Amount: > 0 } && now < t.EndsAt && refund is null && !RefundMath.WeekPassed(t.StartsAt, now);
-            return new TermCard(t, state, checkIns.Any(c => c.CheckedInAt >= t.StartsAt && c.CheckedInAt < t.EndsAt), refund, canAsk,
+            return new TermCard(t, state, checkIns.Any(c => c.CheckedInAt.ToUniversalTime() >= t.StartsAt && c.CheckedInAt.ToUniversalTime() < t.EndsAt), refund, canAsk,
                 canAsk ? RefundMath.Due(p!.Amount, t.DurationDays, t.StartsAt, now) : 0, RefundMath.LastDayToAsk(t.StartsAt),
                 t.CancelledAt is null && refund is null && now < t.EndsAt && RefundMath.WeekPassed(t.StartsAt, now));
         }).ToList();
