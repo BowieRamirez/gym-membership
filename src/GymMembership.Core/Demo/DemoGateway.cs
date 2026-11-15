@@ -916,6 +916,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 return null;
             }
             // ----- coaching -----
+            case "taken_coaches":
+                return All<CoachHire>().Where(h => h.Status == Status.Active).Select(h => h.CoachId).Distinct().ToList();
             case "hire_coach":
             {
                 RequireActive();

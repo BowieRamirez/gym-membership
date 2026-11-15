@@ -104,3 +104,28 @@ public class CoachPresenceTests
         Assert.Equal("You are checked out.", vm.Notice);
     }
 }
+
+// G28 (owner, 2026-11-15; 0071): the Coaches page tags a hired coach; a coach can still take more members.
+public class CoachOneMemberTests
+{
+    [Fact]
+    public async Task A_coach_hired_by_someone_else_is_tagged_hired_and_can_still_be_hired()
+    {
+        var (gw, _, subs, monthly, _) = await SubscriptionTests.Setup();   // a new member, not Alex who hired Lena
+        var p = (await subs.ExtendAsync(monthly.Id)).Value!; await SubscriptionTests.Verify(gw, p);
+        var svc = new CoachService(gw);
+        var cards = (await svc.ListCoachesAsync()).Value!;
+        var lena = cards.Single(c => c.Name == "Lena Cruz");
+        Assert.True(lena.Taken); Assert.False(lena.Hired); Assert.Equal("hired", lena.HireBadge);
+        var kai = cards.Single(c => c.Name == "Kai Mendoza");
+        Assert.False(kai.Taken); Assert.Null(kai.HireBadge); Assert.True(kai.CanHire);
+
+        Assert.True((await svc.HireAsync(lena.Coach.UserId)).Ok);   // many members per coach
+        var mine = (await svc.ListCoachesAsync()).Value!.Single(c => c.Name == "Lena Cruz");
+        Assert.True(mine.Hired); Assert.False(mine.Taken);
+
+        await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);   // Alex sees their own coach as hired, not taken
+        var own = (await svc.ListCoachesAsync()).Value!.Single(c => c.Name == "Lena Cruz");
+        Assert.True(own.Hired); Assert.False(own.Taken); Assert.Equal("hired", own.HireBadge);
+    }
+}

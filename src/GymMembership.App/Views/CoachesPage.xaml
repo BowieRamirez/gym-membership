@@ -30,6 +30,7 @@
                                     <Label Text="{Binding Name}" Style="{StaticResource Heading}" />
                                     <Label Text="{Binding Coach.Specialty}" FontFamily="BarlowMedium" />
                                     <Label Text="Not taking new members right now." Style="{StaticResource Caption}" IsVisible="{Binding Closed}" />
+                                    <c:StatusChip Status="{Binding HireBadge}" IsVisible="{Binding HireBadge, Converter={StaticResource HasText}}" Margin="0,2" />
                                     <Label Text="Your coach" Style="{StaticResource Caption}" IsVisible="{Binding Hired}" />
                                     <Label Text="In the gym now" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold" IsVisible="{Binding InGym}" />
                                     <Label Text="Not in the gym right now. You can hire them when they are in." Style="{StaticResource Caption}" IsVisible="{Binding InGym, Converter={StaticResource Not}}" />

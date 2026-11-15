@@ -781,8 +781,10 @@ public static partial class CoachRate
 }
 
 /// <summary>InGym: the coach has an open physical visit (0032). The list shows only coaches in the gym, plus your own coach.</summary>
-public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId, IReadOnlyList<ShiftPost>? Shifts = null, string? PhotoUrl = null, bool InGym = true)
+public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId, IReadOnlyList<ShiftPost>? Shifts = null, string? PhotoUrl = null, bool InGym = true, bool Taken = false)
 {
+    /// <summary>G28 (0071): Taken = another member has an active hire with this coach. Any hire shows the "Hired" tag; hiring is unchanged.</summary>
+    public string? HireBadge => Hired || Taken ? "hired" : null;
     public string Letters => Initials.From(Name);
     /// <summary>The coach paused hiring and this member has no hire to keep: shown grayed out, Hire disabled.</summary>
     public bool Closed => !Coach.IsAvailable && !Hired;
@@ -790,7 +792,7 @@ public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId
     public bool CanHire => !Closed && InGym;
     public string RateText => CoachRate.Text(Coach.HourlyRate);
 
-    public bool SameAs(CoachCard o) => Name == o.Name && Hired == o.Hired && HireId == o.HireId && InGym == o.InGym && PhotoUrl == o.PhotoUrl && ShiftsText == o.ShiftsText
+    public bool SameAs(CoachCard o) => Name == o.Name && Hired == o.Hired && HireId == o.HireId && InGym == o.InGym && Taken == o.Taken && PhotoUrl == o.PhotoUrl && ShiftsText == o.ShiftsText
         && Coach.IsAvailable == o.Coach.IsAvailable && Coach.Bio == o.Coach.Bio && Coach.Specialty == o.Coach.Specialty && Coach.HourlyRate == o.Coach.HourlyRate;
 
     public string ShiftsText => Shifts is { Count: > 0 }
@@ -840,6 +842,7 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
         var now = DateTime.UtcNow;
         var shifts = await gw.ListAsync<ShiftPost>(s => s.Status == "scheduled" && s.End > now);
         var inGym = (await gw.ListAsync<CoachVisit>(v => v.CheckedOutAt == null)).Select(v => v.CoachId).ToHashSet();
+        var taken = (await gw.RpcAsync<List<string>>("taken_coaches")).ToHashSet();
         // owner, 2026-11-15 (replaces D9's hiding): every active coach, in the gym first, then your own, then by next shift
         var shown = coaches.Where(c => profiles.GetValueOrDefault(c.UserId)?.IsActive != false)
             .OrderBy(c => !inGym.Contains(c.UserId)).ThenBy(c => !hires.Any(h => h.CoachId == c.UserId))
@@ -850,7 +853,8 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
             var name = p is null ? "Coach" : string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName;
             var photo = (await Safe.RunAsync(() => photos.UrlAsync(p?.AvatarPath))).Value;
             return new CoachCard(c, name, hires.Any(h => h.CoachId == c.UserId), hires.FirstOrDefault(h => h.CoachId == c.UserId)?.Id,
-                shifts.Where(s => s.CoachId == c.UserId).OrderBy(s => s.Start).ToList(), photo, inGym.Contains(c.UserId));
+                shifts.Where(s => s.CoachId == c.UserId).OrderBy(s => s.Start).ToList(), photo, inGym.Contains(c.UserId),
+                taken.Contains(c.UserId) && !hires.Any(h => h.CoachId == c.UserId));
         }));
     });
 
