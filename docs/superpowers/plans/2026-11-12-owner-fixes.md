@@ -117,7 +117,7 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 | 8 | Amenities per session only; ID check-in | 11, 12 | G19, G20, G21 | DEPLOYED |
 | 9 | Try to break the new parts; final check and report | All | Phases 1-8 | IN PROGRESS |
 | 10 | Membership refunds: only the unused days, only in the first 7 days | 13 | G22, G23 | DEPLOYED (0067, 0068) |
-| 11 | Terms and Policy checkbox at sign-up | 14 | G24, G25 | DONE bar the 0069 push (5932691) |
+| 11 | Terms and Policy checkbox at sign-up | 14 | G24, G25 | DEPLOYED (0069 live, 5932691) |
 
 ### Phase 1: cashier shift-in bug and account names (items 1, 3)
 - [x] Baseline, 2026-11-12: xUnit 975/975. Database files and UI scripts were not run before the change (all pass after, below).
@@ -242,7 +242,7 @@ box stays tappable (44 px); (5) the terms screen scrolls to the end on a small p
 - [x] **Task 4, screens (2026-11-15):** mockup approved by the owner; built; Windows checked at 1600 and 820 wide in dark (wide: sheet over the form, brand dims; narrow: terms fill the window). Not checked: Windows light, Pixel 7 (no emulator). Was: `impeccable shape`, mockup `docs/mockups/register-terms.html` (Windows and phone, unticked error, terms
   open) for the owner's approval **before** the app changes; then the Register page CheckBox + link, the terms sheet (Windows side
   sheet, phone full page); Windows 1100 light / 1600 dark, Pixel 7 light/dark and font 1.3.
-- [ ] **Task 5, finish (partly, 2026-11-15):** both builds pass; ponytail-review (1 line cut); committed 5932691. Dry run lists only 0069, NOT pushed: live, it would refuse sign-ups from the released v0.5.0 app, so it waits on the owner (now or with v0.6.0). Left: push, live grants, three UI scripts. Was: Dry run, push `0069`, live grants (anon refused on both functions, columns not readable by anon); three UI
+- [x] **Task 5, finish (2026-11-15):** both builds pass; ponytail-review (1 line cut); committed 5932691. Dry run listed only 0069; pushed on the owner's word knowing v0.5.0 sign-ups are now refused until v0.6.0; anon gets PGRST202 on both functions and 42501 on profiles. Three UI scripts not rerun (register page only). Was: Dry run, push `0069`, live grants (anon refused on both functions, columns not readable by anon); three UI
   scripts; both builds; `ponytail-review`; commit; plan updated.
 
 ## How to check (demo mode)
