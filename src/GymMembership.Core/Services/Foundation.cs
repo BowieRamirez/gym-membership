@@ -54,8 +54,24 @@ public static class ErrorText
         _ => "Something went wrong. Try again."
     };
 
-    /// <summary>Prefers a specific sentence for the few failures the user can fix; falls back to the generic text.</summary>
-    public static string For(AppErrorKind kind, string? raw) => raw switch
+    /// <summary>Prefers a specific sentence for the few failures the user can fix; falls back to the generic text.
+    /// The real server wraps the reason ({"code":"P0002",...,"message":"no_open_shift"}); the demo sends it bare.</summary>
+    public static string For(AppErrorKind kind, string? raw)
+    {
+        var message = ServerMessage(raw);
+        var text = Sentence(kind, message);
+        // the whole body still counts when the message alone has no sentence (an auth error's code sits beside it, not in it)
+        return text == For(kind) && message != raw ? Sentence(kind, raw) : text;
+    }
+
+    static string? ServerMessage(string? raw)
+    {
+        if (raw is null || !raw.TrimStart().StartsWith('{')) return raw;
+        try { return System.Text.Json.JsonDocument.Parse(raw).RootElement.TryGetProperty("message", out var m) && m.GetString() is { } s ? s : raw; }
+        catch (System.Text.Json.JsonException) { return raw; }
+    }
+
+    static string Sentence(AppErrorKind kind, string? raw) => raw switch
     {
         "bad_archive_reason" => "Enter a reason for deletion, from 1 to 500 characters.",
         "bad_correction_reason" => "Enter a reason for the correction, from 1 to 500 characters.",

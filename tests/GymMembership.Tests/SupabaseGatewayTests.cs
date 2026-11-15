@@ -600,6 +600,20 @@ public sealed class SupabaseGatewayTests : IDisposable
         Assert.Equal(expected, result.Error);
     }
 
+    // 2026-11-15 (owner): Record money repaid said "That clashes with an existing record" on the real backend. PostgREST sends
+    // {"code":"P0002",...,"message":"no_open_shift"}, and the plain sentences were only looked up by the bare name (what the demo sends).
+    [Theory]
+    [InlineData("""{"code":"P0002","details":null,"hint":null,"message":"no_open_shift"}""", "Start your cash shift on the Cashier page first")]
+    [InlineData("""{"code":"P0002","details":null,"hint":null,"message":"discount_locked"}""", "A code can't be changed once it's made")]
+    [InlineData("""{"code":"22023","details":null,"hint":null,"message":"code_already_used"}""", "You've already used this code")]
+    public async Task A_refusal_from_the_real_server_shows_its_plain_sentence(string json, string expected)
+    {
+        var gw = await SignedInAsync();
+        _reply = _ => (400, json);
+        var result = await Safe.RunAsync(async () => { await gw.RpcAsync("record_membership_refund_paid", new() { ["p_request_id"] = 1 }); return true; });
+        Assert.StartsWith(expected, ErrorText.For(result.Error, result.Message));
+    }
+
     [Fact]
     public async Task Edge_function_calls_carry_the_signed_in_users_token_and_the_body()
     {
