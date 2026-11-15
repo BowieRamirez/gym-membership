@@ -924,7 +924,6 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (!ActiveMember(uid)) throw Err("no_active_membership");
                 var coachId = S("p_coach_id");
                 if (!All<Coach>().Any(c => c.UserId == coachId && c.IsAvailable) || !(All<Profile>().FirstOrDefault(p => p.Id == coachId)?.IsActive ?? false)) throw Err("not_found");
-                if (OpenVisit(coachId) is null) throw Err("coach_not_in_gym");
                 if (CoachesMember(coachId, uid)) throw Err("duplicate key value violates unique constraint");
                 var hire = Add(new CoachHire { MemberId = uid, CoachId = coachId, Status = Status.Active, HiredAt = now });
                 Notify(coachId, "system", "New trainee", All<Profile>().First(p => p.Id == uid).FullName);

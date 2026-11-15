@@ -36,7 +36,7 @@ public class CoachPresenceTests
         Assert.True((await svc.CheckOutAsync()).Ok);
         var away = await List(gw, svc);
         var kai = away.Single(c => c.Name == "Kai Mendoza");
-        Assert.False(kai.InGym); Assert.False(kai.CanHire);
+        Assert.False(kai.InGym); Assert.True(kai.CanHire);   // G29: hire any time
         Assert.True(away.TakeWhile(c => c.InGym).Count() == away.Count(c => c.InGym));   // in the gym first
 
         await gw.SignInAsync("kai@demo.io", DemoGateway.DemoPassword);
@@ -47,7 +47,7 @@ public class CoachPresenceTests
     }
 
     [Fact]
-    public async Task Your_own_coach_stays_listed_when_away_and_a_new_hire_needs_the_coach_in()
+    public async Task Your_own_coach_stays_listed_when_away_and_an_away_coach_can_still_be_hired()
     {
         var (gw, svc, _) = await Setup("coach@demo.io");
         Assert.True((await svc.CheckOutAsync()).Ok);
@@ -58,8 +58,7 @@ public class CoachPresenceTests
         await gw.SignInAsync("kai@demo.io", DemoGateway.DemoPassword);
         Assert.True((await svc.CheckOutAsync()).Ok);
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
-        var hire = await svc.HireAsync("u-coach2");   // a stale list still showing Kai
-        Assert.Equal("This coach just left the gym. You can hire them when they are back.", ErrorText.For(hire.Error, hire.Message));
+        Assert.True((await svc.HireAsync("u-coach2")).Ok);   // G29 (0072): the deal is between member and coach, any time
     }
 
     [Fact]

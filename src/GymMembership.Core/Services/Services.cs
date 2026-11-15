@@ -788,8 +788,8 @@ public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId
     public string Letters => Initials.From(Name);
     /// <summary>The coach paused hiring and this member has no hire to keep: shown grayed out, Hire disabled.</summary>
     public bool Closed => !Coach.IsAvailable && !Hired;
-    /// <summary>Hiring needs the coach in the gym (server rule coach_not_in_gym); an away coach is listed but Hire waits.</summary>
-    public bool CanHire => !Closed && InGym;
+    /// <summary>G29 (0072): any coach taking members can be hired at any time, in the gym or not.</summary>
+    public bool CanHire => !Closed;
     public string RateText => CoachRate.Text(Coach.HourlyRate);
 
     public bool SameAs(CoachCard o) => Name == o.Name && Hired == o.Hired && HireId == o.HireId && InGym == o.InGym && Taken == o.Taken && PhotoUrl == o.PhotoUrl && ShiftsText == o.ShiftsText

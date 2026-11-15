@@ -33,7 +33,7 @@
                                     <c:StatusChip Status="{Binding HireBadge}" IsVisible="{Binding HireBadge, Converter={StaticResource HasText}}" Margin="0,2" />
                                     <Label Text="Your coach" Style="{StaticResource Caption}" IsVisible="{Binding Hired}" />
                                     <Label Text="In the gym now" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold" IsVisible="{Binding InGym}" />
-                                    <Label Text="Not in the gym right now. You can hire them when they are in." Style="{StaticResource Caption}" IsVisible="{Binding InGym, Converter={StaticResource Not}}" />
+                                    <Label Text="Not in the gym right now." Style="{StaticResource Caption}" IsVisible="{Binding InGym, Converter={StaticResource Not}}" />
                                 </VerticalStackLayout>
                             </Grid>
                             <Label Text="{Binding Coach.Bio}" Style="{StaticResource Muted}" FontSize="{OnIdiom Phone=15, Default=16}" />

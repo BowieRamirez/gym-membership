@@ -309,7 +309,7 @@ await test('a coach posts a shift, trainees are told, overlap is refused', async
   await run(coach, `insert into shift_posts (coach_id, starts_at, ends_at, note) values ($1,$2,$3,'Floor')`, [coach, t0, t1]);
   assert.match(await code(run(coach, `insert into shift_posts (coach_id, starts_at, ends_at) values ($1,$2,$3)`, [coach, t0, t1])), /23P01/);
   assert.equal((await run(alex, `select * from shift_posts`)).rowCount, 1);
-  assert.equal((await run(eve, `select * from shift_posts`)).rowCount, 0);
+  assert.equal((await run(eve, `select * from shift_posts`)).rowCount, 1);   // G29 (0072): every member sees coaches' shifts
   assert.match(await code(run(alex, `insert into shift_posts (coach_id, starts_at, ends_at) values ($1,$2,$3)`, [coach, t2, t3])), /42501/);
 });
 await test('ending a hire closes chat for new messages but keeps history', async () => {
