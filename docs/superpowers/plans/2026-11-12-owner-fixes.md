@@ -102,6 +102,7 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 - [x] **G24 — Terms and Policy text (item 14, added 2026-11-15):** **Owner, 2026-11-15:** drafted from the app's real rules (recommended), marked draft for the owner or someone qualified to check.
 - [x] **G25 — how terms are shown and recorded (item 14):** **Owner, 2026-11-15:** option 1: text shipped in the app with a version; sign-up sends the version; the server saves it with the time and refuses a self sign-up without it. Design `docs/superpowers/specs/2026-11-15-terms-at-sign-up-design.md` approved.
 - [x] **G26 — a paid term fills a gap (reported 2026-11-15):** a refund left a gap before a term bought ahead, so a new payment queued after it and the member stayed inactive. **Owner, 2026-11-15:** option (a): a paid term starts on the first moment no live term covers; terms bought ahead that it runs into move back by the overlap. Member 473da740 fixed by hand on live: payment 11 term (a test) cancelled with no refund, payment 13 term starts 15 Nov.
+- [x] **G27 — coaches page lists every active coach (reported 2026-11-15):** **Owner, 2026-11-15:** option (b), replacing D9's hiding: every active coach is listed, the ones in the gym first ("In the gym now"), then your own, then by next shift; an away coach shows "Not in the gym right now. You can hire them when they are in." and Hire stays off (server rule coach_not_in_gym unchanged). App only, no migration.
 - [x] **G15 — old apps (all items):** **Owner, 2026-11-14: accepted as recommended (v0.6.0).** Recommend: as before, the server refuses old flows (unpaid holds, editing codes, buying drafts); desks and phones need the new build. Release as v0.6.0 when the plan is done.
 
 ## 3. Phases and item coverage
@@ -119,6 +120,7 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 | 9 | Try to break the new parts; final check and report | All | Phases 1-8 | IN PROGRESS |
 | 10 | Membership refunds: only the unused days, only in the first 7 days | 13 | G22, G23 | DEPLOYED (0067, 0068) |
 | 12 | Paid term fills a gap (G26) | – | G26 | DEPLOYED (0070 live) |
+| 13 | Coaches page lists every active coach (G27) | – | G27 | DONE (app only, ships with v0.6.0) |
 | 11 | Terms and Policy checkbox at sign-up | 14 | G24, G25 | DEPLOYED (0069 live, 5932691) |
 
 ### Phase 1: cashier shift-in bug and account names (items 1, 3)

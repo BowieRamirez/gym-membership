@@ -31,7 +31,8 @@
                                     <Label Text="{Binding Coach.Specialty}" FontFamily="BarlowMedium" />
                                     <Label Text="Not taking new members right now." Style="{StaticResource Caption}" IsVisible="{Binding Closed}" />
                                     <Label Text="Your coach" Style="{StaticResource Caption}" IsVisible="{Binding Hired}" />
-                                    <Label Text="Not in the gym right now." Style="{StaticResource Caption}" IsVisible="{Binding InGym, Converter={StaticResource Not}}" />
+                                    <Label Text="In the gym now" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold" IsVisible="{Binding InGym}" />
+                                    <Label Text="Not in the gym right now. You can hire them when they are in." Style="{StaticResource Caption}" IsVisible="{Binding InGym, Converter={StaticResource Not}}" />
                                 </VerticalStackLayout>
                             </Grid>
                             <Label Text="{Binding Coach.Bio}" Style="{StaticResource Muted}" FontSize="{OnIdiom Phone=15, Default=16}" />
@@ -42,7 +43,7 @@
                             <Label Text="{Binding RateText}" FontFamily="BarlowSemiBold" />
                             <FlexLayout Wrap="Wrap">
                                 <Button Text="Hire" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                        IsVisible="{Binding Hired, Converter={StaticResource Not}}" IsEnabled="{Binding Closed, Converter={StaticResource Not}}" Clicked="OnHire" />
+                                        IsVisible="{Binding Hired, Converter={StaticResource Not}}" IsEnabled="{Binding CanHire}" Clicked="OnHire" />
                                 <Button Text="Message" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding Hired}" Clicked="OnMessage" />
                                 <Button Text="End hire" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding Hired}" Clicked="OnEndHire" />
                             </FlexLayout>

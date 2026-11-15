@@ -786,6 +786,8 @@ public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId
     public string Letters => Initials.From(Name);
     /// <summary>The coach paused hiring and this member has no hire to keep: shown grayed out, Hire disabled.</summary>
     public bool Closed => !Coach.IsAvailable && !Hired;
+    /// <summary>Hiring needs the coach in the gym (server rule coach_not_in_gym); an away coach is listed but Hire waits.</summary>
+    public bool CanHire => !Closed && InGym;
     public string RateText => CoachRate.Text(Coach.HourlyRate);
 
     public bool SameAs(CoachCard o) => Name == o.Name && Hired == o.Hired && HireId == o.HireId && InGym == o.InGym && PhotoUrl == o.PhotoUrl && ShiftsText == o.ShiftsText
@@ -838,8 +840,10 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
         var now = DateTime.UtcNow;
         var shifts = await gw.ListAsync<ShiftPost>(s => s.Status == "scheduled" && s.End > now);
         var inGym = (await gw.ListAsync<CoachVisit>(v => v.CheckedOutAt == null)).Select(v => v.CoachId).ToHashSet();
-        // absent coaches are hidden, not grayed out; your own coach stays so Message and End hire keep working (D9)
-        var shown = coaches.Where(c => inGym.Contains(c.UserId) || hires.Any(h => h.CoachId == c.UserId));
+        // owner, 2026-11-15 (replaces D9's hiding): every active coach, in the gym first, then your own, then by next shift
+        var shown = coaches.Where(c => profiles.GetValueOrDefault(c.UserId)?.IsActive != false)
+            .OrderBy(c => !inGym.Contains(c.UserId)).ThenBy(c => !hires.Any(h => h.CoachId == c.UserId))
+            .ThenBy(c => shifts.Where(s => s.CoachId == c.UserId).Select(s => (DateTime?)s.Start).Min() ?? DateTime.MaxValue);
         return await Task.WhenAll(shown.Select(async c =>
         {
             var p = profiles.GetValueOrDefault(c.UserId);

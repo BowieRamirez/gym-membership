@@ -29,11 +29,15 @@ public class CoachPresenceTests
     }
 
     [Fact]
-    public async Task A_coach_who_checks_out_leaves_the_list_and_returns_after_checking_in()
+    public async Task A_coach_who_checks_out_stays_listed_as_away_and_can_be_hired_again_once_in()
     {
+        // owner, 2026-11-15 (replaces D9's hiding): every active coach is listed, the ones in the gym first, so members can plan around shifts
         var (gw, svc, _) = await Setup("kai@demo.io");
         Assert.True((await svc.CheckOutAsync()).Ok);
-        Assert.DoesNotContain(await List(gw, svc), c => c.Name == "Kai Mendoza");
+        var away = await List(gw, svc);
+        var kai = away.Single(c => c.Name == "Kai Mendoza");
+        Assert.False(kai.InGym); Assert.False(kai.CanHire);
+        Assert.True(away.TakeWhile(c => c.InGym).Count() == away.Count(c => c.InGym));   // in the gym first
 
         await gw.SignInAsync("kai@demo.io", DemoGateway.DemoPassword);
         Assert.True((await svc.CheckInAsync()).Ok);
