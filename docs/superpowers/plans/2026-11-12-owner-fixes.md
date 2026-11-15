@@ -125,7 +125,7 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 | 13 | Coaches page lists every active coach (G27) | – | G27 | DONE (app only, ships with v0.6.0) |
 | 14 | Hired tag on coaches (G28) | – | G28 | DEPLOYED (0071 live) |
 | 15 | Hire any coach at any time, shifts visible (G29) | – | G29 | DEPLOYED (0072 live) |
-| 16 | Hire requests: the coach accepts or declines (G30) | – | G30 | DONE (0073/0074 wait for v0.6.0) |
+| 16 | Hire requests: the coach accepts or declines (G30) | – | G30 | DEPLOYED (0073, 0074 live) |
 | 11 | Terms and Policy checkbox at sign-up | 14 | G24, G25 | DEPLOYED (0069 live, 5932691) |
 
 ### Phase 1: cashier shift-in bug and account names (items 1, 3)
@@ -287,7 +287,7 @@ either account cancels open requests; (5) an old installed app calling `hire_coa
   with Hire requests and Your members; Windows and phone) for the owner's approval **before** the screens change. Then: members
   list moves from My shifts to the coach's Sessions page; Hire requests section with Accept / Decline; member card Requested
   state with Cancel request. Windows 1600 dark / 1100 light; Pixel 7 when an emulator is available.
-- [ ] **Task 4, finish (partly, 2026-11-15):** DB 609 ok, xUnit 1059, three UI scripts pass, Windows and Android builds pass. 0073 pushed alone (statuses only; the new app read "pending" and the live enum lacked it, so the Coaches page failed). 0074 NOT pushed: once live every Hire becomes a request but coaches on the released app have no Accept button, so they go live with v0.6.0 on the owner's word. Was: Full DB suite and xUnit; dry run, push 0073 then 0074, live grants (anon refused on `answer_hire`,
+- [x] **Task 4, finish (2026-11-15):** DB 609 ok, xUnit 1059, three UI scripts pass, Windows and Android builds pass. 0073 pushed alone (statuses only; the new app read "pending" and the live enum lacked it, so the Coaches page failed). 0074 pushed 2026-11-15 on the owner's word ("coaches has to accept"); anon refused on answer_hire and cancel_hire_request. Hire #10 (testmember one, junel sabado) was made active before 0074. Was: Full DB suite and xUnit; dry run, push 0073 then 0074, live grants (anon refused on `answer_hire`,
   `cancel_hire_request`); both builds; `ponytail-review`; commit; plan and memory updated.
 
 ## How to check (demo mode)
