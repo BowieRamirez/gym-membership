@@ -297,7 +297,8 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     {
         Notice = null;
         if (!IsWalkIn && (Member is null || Item is null)) { ErrorMessage = "Choose the member and what they are paying for."; return; }
-        if (!await Confirm.AskAsync("Record this payment?", $"{OrderWho}\n{OrderWhat}\n{TotalText}\n{OrderHow}", "Record payment")) return;
+        if (!await Confirm.AskAsync("Record this payment?", $"{OrderWho}\n{OrderWhat}\n{TotalText}\n{OrderHow}"
+                + (Kind is "Membership" or "Renewal" ? $"\n\nTell them: {RefundRules.Line}" : ""), "Record payment")) return;   // G23
         Payment? paid = null;
         if (!await RunAsync(() => svc.RecordCounterAsync(KindKey(Kind), MethodKey(Method), IsWalkIn ? null : Member!.MemberId, Item?.Id,
                 IsWalkIn ? WalkInName : null, NeedsReference ? ReferenceNo : null, IsWalkIn ? null : DiscountCode), p => paid = p)) return;

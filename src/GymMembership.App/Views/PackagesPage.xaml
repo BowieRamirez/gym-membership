@@ -4,8 +4,7 @@
             xmlns:v="clr-namespace:GymMembership.App.Views"
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
-            xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
-            xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+            xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"            xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
             x:Class="GymMembership.App.Views.PackagesPage" x:DataType="vm:PackagesViewModel" Title="Packages">
 
     <v:BasePage.Resources>
@@ -51,7 +50,8 @@
             <!-- the rules: shown on Windows, folded behind a link on phones so the packages come first -->
             <Button Text="How buying a package works" Style="{StaticResource LinkButton}" HorizontalOptions="Start" Margin="-4,-8,0,-8" Clicked="OnToggleRules"
                     IsVisible="{OnIdiom Phone=True, Default=False}" />
-            <Label x:Name="Rules" Text="Choose your next package. Pay by QR and send proof on My membership. After verification, a paid extension starts after your last paid term, or immediately if it has ended. No upgrades, automatic charges or unused-time credits."
+            <!-- G23 (2026-11-15): the refund rule is said before anyone pays; the last sentence is RefundRules.Line (RefundLineTests checks it) -->
+            <Label x:Name="Rules" Text="Choose your next package. Pay by QR and send proof on My membership. After verification, a paid extension starts after your last paid term, or immediately if it has ended. No upgrades or automatic charges.&#10;Refunds: only in a term's first 7 days, for the days not used."
                    Style="{OnIdiom Phone={StaticResource Caption}, Default={StaticResource Muted}}" MaximumWidthRequest="760" HorizontalOptions="Start" IsVisible="{OnIdiom Phone=False, Default=True}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />

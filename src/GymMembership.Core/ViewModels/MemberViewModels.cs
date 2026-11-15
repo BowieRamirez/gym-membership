@@ -222,7 +222,7 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
     {
         Notice = null;
         var code = string.IsNullOrWhiteSpace(DiscountCode) ? "" : $"\nDiscount code {DiscountCode.Trim()} is applied when you pay.";
-        if (!await Confirm.AskAsync($"Buy {package.Name}?", $"₱{package.Price:N2} for {package.DurationDays} days.{code}\nYou pay by QR on My membership.", "Buy membership")) return;
+        if (!await Confirm.AskAsync($"Buy {package.Name}?", $"₱{package.Price:N2} for {package.DurationDays} days.{code}\nYou pay by QR on My membership.\n\n{RefundRules.Line}", "Buy membership")) return;
         if (!await RunAsync(() => subscription.ExtendAsync(package.Id, DiscountCode), _ => { })) return;
         DiscountCode = null;
         nav.GoToMembership();

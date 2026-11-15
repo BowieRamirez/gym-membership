@@ -2,6 +2,12 @@ using GymMembership.Core.Models;
 
 namespace GymMembership.Core.Services;
 
+/// <summary>G23: the one sentence said before anyone pays for a membership (Packages, the Buy confirm, the cashier confirm).</summary>
+public static class RefundRules
+{
+    public const string Line = "Refunds: only in a term's first 7 days, for the days not used.";
+}
+
 /// <summary>G22 (owner, 2026-11-15; 0067 does the same in the database): a membership refund is the unused days of what was paid, counted
 /// when staff approve. G23 (0068): a member may ask only in the term's first 7 days. A started day counts as used.</summary>
 public static class RefundMath
