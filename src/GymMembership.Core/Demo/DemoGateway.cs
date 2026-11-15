@@ -1443,6 +1443,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
 
         Add(new CoachHire { MemberId = "u-alex", CoachId = "u-coach1", HiredAt = now.AddDays(-20) });
         Add(new CoachHire { MemberId = "u-bea", CoachId = "u-coach1", HiredAt = now.AddDays(-2) });
+        Add(new CoachHire { MemberId = "u-carlo", CoachId = "u-coach1", Status = Status.Pending, HiredAt = now.AddHours(-5) });   // G30: a waiting request on Lena's Sessions page
 
         Add(new TimeRequest { CoachId = "u-coach1", MemberId = null, RequestedBy = "coach", RequestedStart = At(1, 10), RequestedEnd = At(1, 11), Message = "Open slot, strength session" });
         var alexAsks = Add(new TimeRequest { CoachId = "u-coach1", MemberId = "u-alex", RequestedBy = "member", RequestedStart = At(2, 17), RequestedEnd = At(2, 18), Message = "Evening session after work?" });

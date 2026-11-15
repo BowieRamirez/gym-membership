@@ -1,6 +1,7 @@
 using GymMembership.Core.Demo;
 using GymMembership.Core.Models;
 using GymMembership.Core.Services;
+using GymMembership.Core.ViewModels;
 using Xunit;
 
 // G30 (owner, 2026-11-15; 0073/0074): Hire sends a request; the coach accepts or declines on their Sessions page.
@@ -12,12 +13,12 @@ public class HireRequestTests
         var p = (await subs.ExtendAsync(monthly.Id)).Value!; await SubscriptionTests.Verify(gw, p);
         return (gw, new CoachService(gw));
     }
-    /// <summary>The coach accepts every waiting request, then the member signs back in.</summary>
+    /// <summary>The coach accepts the newest waiting request, then the member signs back in.</summary>
     internal static async Task Accept(DemoGateway gw, string coachEmail, string memberEmail, string memberPassword)
     {
         await gw.SignInAsync(coachEmail, DemoGateway.DemoPassword);
         var svc = new CoachService(gw);
-        foreach (var r in (await svc.HireRequestsAsync()).Value!) Assert.True((await svc.AnswerHireAsync(r.HireId, true)).Ok);
+        Assert.True((await svc.AnswerHireAsync((await svc.HireRequestsAsync()).Value!.Last().HireId, true)).Ok);   // the newest: the one just sent
         await gw.SignInAsync(memberEmail, memberPassword);
     }
     static async Task<CoachCard> Card(CoachService svc, string name) => (await svc.ListCoachesAsync()).Value!.Single(c => c.Name == name);
@@ -28,7 +29,7 @@ public class HireRequestTests
         var (gw, svc) = await NewMember();
         Assert.True((await svc.HireAsync("u-coach2")).Ok);
         var kai = await Card(svc, "Kai Mendoza");
-        Assert.True(kai.Requested); Assert.False(kai.Hired); Assert.False(kai.CanHire); Assert.Equal("requested", kai.HireBadge);
+        Assert.True(kai.Requested); Assert.False(kai.Hired); Assert.False(kai.CanHire); Assert.Equal("requested", kai.HireBadge); Assert.False(kai.ShowHire); Assert.Equal("Waiting for Kai to accept.", kai.WaitingText);
 
         var again = await svc.HireAsync("u-coach2");
         Assert.Equal("You have already asked this coach. Wait for them to answer, or cancel the request.", ErrorText.For(again.Error, again.Message));
@@ -69,5 +70,31 @@ public class HireRequestTests
         var kai = await Card(svc, "Kai Mendoza");
         Assert.False(kai.Requested); Assert.False(kai.Hired); Assert.True(kai.CanHire);
         Assert.Contains(await gw.ListAsync<UserNotification>(n => n.UserId == gw.CurrentUserId), n => n.Title == "Hire declined");
+    }
+
+    [Fact]
+    public async Task On_the_coach_Sessions_page_Accept_moves_the_member_to_Your_members_and_Decline_removes_the_request()
+    {
+        Confirm.Answer = (_, _, _) => Task.FromResult(true);
+        var (gw, svc) = await NewMember();
+        Assert.True((await svc.HireAsync("u-coach2")).Ok);
+        await gw.SignInAsync("kai@demo.io", DemoGateway.DemoPassword);
+        var vm = new TraineesViewModel(svc, new ChatService(gw, new NotificationService(gw)), new NamesAndEmailTests.NullNavigator());
+        await vm.OnAppearingAsync();
+        var ana = Assert.Single(vm.Requests);
+        Assert.True(vm.HasRequests);
+        await vm.AcceptCommand.ExecuteAsync(ana);
+        Assert.Empty(vm.Requests); Assert.False(vm.HasRequests);
+        Assert.Contains(vm.Trainees, t => t.Name == "Ana Reyes");
+        Assert.Equal("Ana Reyes is now your member.", vm.Notice);
+
+        await gw.SignInAsync("phase7@demo.io", "secret12");
+        await svc.EndHireAsync(vm.Trainees.Single(t => t.Name == "Ana Reyes").HireId);
+        Assert.True((await svc.HireAsync("u-coach2")).Ok);
+        await gw.SignInAsync("kai@demo.io", DemoGateway.DemoPassword);
+        await vm.LoadCommand.ExecuteAsync(null);
+        await vm.DeclineCommand.ExecuteAsync(vm.Requests.Single());
+        Assert.Empty(vm.Requests);
+        Assert.DoesNotContain(vm.Trainees, t => t.Name == "Ana Reyes");
     }
 }

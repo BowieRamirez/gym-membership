@@ -16,4 +16,5 @@ public partial class CoachesPage : BasePage
 	void OnHire(object? sender, EventArgs e) => Row<CoachesViewModel>(sender, v => v.HireCommand);
 	void OnMessage(object? sender, EventArgs e) => Row<CoachesViewModel>(sender, v => v.MessageCommand);
 	void OnEndHire(object? sender, EventArgs e) => Row<CoachesViewModel>(sender, v => v.EndHireCommand);
+	void OnCancelRequest(object? sender, EventArgs e) => Row<CoachesViewModel>(sender, v => v.CancelRequestCommand);
 }

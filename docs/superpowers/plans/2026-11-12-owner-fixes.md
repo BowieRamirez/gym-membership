@@ -125,7 +125,7 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 | 13 | Coaches page lists every active coach (G27) | – | G27 | DONE (app only, ships with v0.6.0) |
 | 14 | Hired tag on coaches (G28) | – | G28 | DEPLOYED (0071 live) |
 | 15 | Hire any coach at any time, shifts visible (G29) | – | G29 | DEPLOYED (0072 live) |
-| 16 | Hire requests: the coach accepts or declines (G30) | – | G30 | IN PROGRESS |
+| 16 | Hire requests: the coach accepts or declines (G30) | – | G30 | DONE (0073/0074 wait for v0.6.0) |
 | 11 | Terms and Policy checkbox at sign-up | 14 | G24, G25 | DEPLOYED (0069 live, 5932691) |
 
 ### Phase 1: cashier shift-in bug and account names (items 1, 3)
@@ -273,21 +273,21 @@ them to answer, or cancel the request." Confirm on Hire: "Send a hire request to
 membership has lapsed is refused; (3) two answers to one request (double tap, two devices) give one result; (4) archiving
 either account cancels open requests; (5) an old installed app calling `hire_coach` gets a request, not a hire, and still works.
 
-- [ ] **Task 1, database.** Test first `supabase/tests/local/hire-requests.mjs` (in `npm test`): hire makes `pending`, coach
+- [x] **Task 1, database (2026-11-15):** hire-requests.mjs 9/9 (plus chat threads only from accepted hires: 0074 re-creates chat_threads from 0051 with `status in (active, ended)`); error renamed `hire_already_requested` (refunds already use `already_requested`); 8 older files accept through `answer_hire`; suite 609 ok. Was: Test first `supabase/tests/local/hire-requests.mjs` (in `npm test`): hire makes `pending`, coach
   notified; pending unlocks nothing (`coaches_member` false, `request_time` refused); a second request to the same coach refused
   `already_requested`, to another coach allowed; only that coach answers, only once; accept sets `active` and the member is
   notified; accept refused `no_active_membership` when the term ended; decline sets `declined`; member cancels own pending only;
   after decline/cancel the member may ask again; archiving cancels open requests; anon refused on the new functions (D16).
   Older tests that hire through `hire_coach` then use coach features have their coach accept first (helper `accept(coach, hireId)`).
-- [ ] **Task 2, Core and demo.** xUnit first (`HireRequestTests`): Hire leaves the card `Requested` with badge "requested" and
+- [x] **Task 2, Core and demo (2026-11-15):** HireRequestTests 4/4; demo seed is Carlo (expired) asking Lena, not Alex asking Kai (that broke 17 demo flows); xUnit 1059/1059. Was: xUnit first (`HireRequestTests`): Hire leaves the card `Requested` with badge "requested" and
   no messaging; cancel returns to Hire; the coach sees the request, accepts, the member's card shows "hired" and the trainee
   appears in `TraineesAsync`; decline returns the member's card to Hire. Demo mirrors every rule; demo seed adds one pending
   request (Carlo to Lena) for the screens. Wording through `impeccable clarify`.
-- [ ] **Task 3, screens.** `impeccable shape`, mockup `docs/mockups/hire-requests.html` (member card states; coach Sessions page
+- [x] **Task 3, screens (2026-11-15):** mockup approved; coach Sessions page shows Hire requests (only while waiting) and Your members as tables, cards on a narrow window; My shifts no longer lists members; member card Requested / Cancel request. Checked Windows 1600 and 820 dark; phone not checked (no emulator). Was: `impeccable shape`, mockup `docs/mockups/hire-requests.html` (member card states; coach Sessions page
   with Hire requests and Your members; Windows and phone) for the owner's approval **before** the screens change. Then: members
   list moves from My shifts to the coach's Sessions page; Hire requests section with Accept / Decline; member card Requested
   state with Cancel request. Windows 1600 dark / 1100 light; Pixel 7 when an emulator is available.
-- [ ] **Task 4, finish.** Full DB suite and xUnit; dry run, push 0073 then 0074, live grants (anon refused on `answer_hire`,
+- [ ] **Task 4, finish (partly, 2026-11-15):** DB 609 ok, xUnit 1059, three UI scripts pass, Windows and Android builds pass. 0073/0074 NOT pushed: once live every Hire becomes a request but coaches on the released app have no Accept button, so they go live with v0.6.0 on the owner's word. Was: Full DB suite and xUnit; dry run, push 0073 then 0074, live grants (anon refused on `answer_hire`,
   `cancel_hire_request`); both builds; `ponytail-review`; commit; plan and memory updated.
 
 ## How to check (demo mode)

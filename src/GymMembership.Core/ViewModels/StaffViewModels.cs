@@ -652,10 +652,33 @@ public partial class CoachProfileViewModel(ICoachService svc) : LoadableViewMode
 public partial class TraineesViewModel(ICoachService svc, IChatService messages, IAppNavigator nav) : LoadableViewModel
 {
     public ObservableCollection<TraineeRow> Trainees { get; } = new();
+    /// <summary>G30 (0074): members waiting for this coach to accept; the section shows only while there are any.</summary>
+    public ObservableCollection<HireRequestRow> Requests { get; } = new();
+    [ObservableProperty] private bool hasRequests;
 
     public override Task OnAppearingAsync() => LoadAsync();
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.TraineesAsync, rows => Fill(Trainees, rows));
+    [RelayCommand]
+    private async Task LoadAsync()
+    {
+        await RunAsync(svc.HireRequestsAsync, rows => { Fill(Requests, rows); HasRequests = Requests.Count > 0; });
+        await RunAsync(svc.TraineesAsync, rows => Fill(Trainees, rows));
+    }
+
+    [RelayCommand]
+    private async Task AcceptAsync(HireRequestRow row)
+    {
+        Notice = null;
+        if (await RunAsync(() => svc.AnswerHireAsync(row.HireId, true))) { Notice = $"{row.Name} is now your member."; await LoadAsync(); }
+    }
+
+    [RelayCommand]
+    private async Task DeclineAsync(HireRequestRow row)
+    {
+        Notice = null;
+        if (!await Confirm.AskAsync($"Decline {row.Name}?", "They will be told you declined. They can ask again later.", "Decline")) return;
+        if (await RunAsync(() => svc.AnswerHireAsync(row.HireId, false))) await LoadAsync();
+    }
 
     [RelayCommand]
     private void Message(TraineeRow row) { messages.Pending = (row.CoachId, row.MemberId); nav.GoToMessages(); }
@@ -664,8 +687,8 @@ public partial class TraineesViewModel(ICoachService svc, IChatService messages,
     private async Task RemoveAsync(TraineeRow row)
     {
         Notice = null;
-        if (!await Confirm.AskAsync($"Remove {row.Name}?", "They will no longer be your trainee.", "Remove trainee")) return;
-        if (await RunAsync(() => svc.EndHireAsync(row.HireId))) { Notice = $"{row.Name} is no longer your trainee."; await LoadAsync(); }
+        if (!await Confirm.AskAsync($"Remove {row.Name}?", "They will no longer be your member.", "Remove member")) return;
+        if (await RunAsync(() => svc.EndHireAsync(row.HireId))) { Notice = $"{row.Name} is no longer your member."; await LoadAsync(); }
     }
 }
 

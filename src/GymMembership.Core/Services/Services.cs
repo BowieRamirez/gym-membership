@@ -785,6 +785,8 @@ public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId
 {
     /// <summary>G30 (0074): this member asked the coach and is waiting for an answer.</summary>
     public bool Requested => RequestId is not null;
+    public bool ShowHire => !Hired && !Requested;
+    public string WaitingText => $"Waiting for {Name.Split(' ')[0]} to accept.";
     /// <summary>G28 (0071): Taken = another member has an active hire with this coach. Any hire shows the "Hired" tag; hiring is unchanged.</summary>
     public string? HireBadge => Requested ? "requested" : Hired || Taken ? "hired" : null;
     public string Letters => Initials.From(Name);
@@ -806,10 +808,17 @@ public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId
 public sealed record HireRequestRow(int HireId, string MemberId, string Name, string? PhotoUrl, DateTime AskedAt)
 {
     public string Letters => Initials.From(Name);
-    public string AskedText => $"Asked {Fmt.Date(AskedAt)}";
+    public string AskedDate => Fmt.Date(AskedAt);
+    public string AskedText => $"Asked {AskedDate}";
 }
 
-public sealed record TraineeRow(int HireId, string CoachId, string MemberId, string Name, string NextText, int Completed);
+public sealed record TraineeRow(int HireId, string CoachId, string MemberId, string Name, string NextText, int Completed)
+{
+    public string Letters => Initials.From(Name);
+    public string CompletedText => Completed == 1 ? "1 session" : $"{Completed} sessions";
+    /// <summary>The table already says "Next session"; the phone card keeps the "Next:" words.</summary>
+    public string NextWhen => NextText.StartsWith("Next: ") ? NextText[6..] : NextText;
+}
 
 /// <summary>A coach on the front desk's check-in page. InSince is null while they are not in the gym.</summary>
 public sealed record CoachPresenceRow(string CoachId, string Name, DateTime? InSince)

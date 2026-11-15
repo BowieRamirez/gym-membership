@@ -76,6 +76,8 @@
             <Button x:Name="CalendarToggle" Text="Show calendar" IsVisible="False" Style="{StaticResource OutlineButton}" Clicked="OnToggleCalendar"
                     SemanticProperties.Hint="Shows your sessions, bookings and your coach's open times by month" />
 
+            <!-- coach only (G30): Hire requests and Your members, TraineesPage's content, above the sessions -->
+            <ContentView x:Name="CoachHost" />
             <c:SideLayout StackedSideWidth="600">
                 <VerticalStackLayout Spacing="4">
                 <!-- status filter chips; they wrap onto a second line on a narrow phone; the yellow one is in use -->
