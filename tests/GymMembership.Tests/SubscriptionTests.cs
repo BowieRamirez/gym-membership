@@ -181,7 +181,7 @@ public class SubscriptionTests
         Assert.Equal("bad_input",(await svc.RequestRefundAsync(card.Term.Id,"Bad","because")).Message);
         Assert.True((await svc.RequestRefundAsync(card.Term.Id,"Details",category)).Ok);
         var request=Assert.Single((await svc.RefundsAsync()).Value!).Request;
-        Assert.Equal((true,category,p.Amount),(request.WasActivated,request.ReviewReason,request.Amount));
+        Assert.Equal((true,category,1400m),(request.WasActivated,request.ReviewReason,request.Amount));   // G22: day 2 of 30 begun, 28 left
     }
 
     [Fact]
@@ -198,17 +198,17 @@ public class SubscriptionTests
     }
 
     [Fact]
-    public async Task A_paid_term_with_no_check_in_is_a_full_refund_even_days_after_it_started()
+    public async Task A_paid_term_with_no_check_in_needs_no_review_and_is_owed_the_days_left()
     {
         var (gw, clock, svc, monthly, _) = await Setup();
         var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
         clock.Now=clock.Now.AddDays(10);
         var card=Assert.Single((await svc.TermsAsync()).Value!);
         Assert.False(card.Activated);
-        Assert.Contains("full refund",card.RefundText);
+        Assert.StartsWith("Cancel by ",card.RefundText); Assert.Contains("about ₱1,000.00",card.RefundText);
         Assert.True((await svc.RequestRefundAsync(card.Term.Id,"Never came")).Ok);
         var request=Assert.Single((await svc.RefundsAsync()).Value!).Request;
-        Assert.Equal((false,(string?)null,p.Amount),(request.WasActivated,request.ReviewReason,request.Amount));
+        Assert.Equal((false,(string?)null,1000m),(request.WasActivated,request.ReviewReason,request.Amount));   // G22: 10 of 30 used
     }
 
     [Fact]
@@ -220,14 +220,14 @@ public class SubscriptionTests
         clock.Now=clock.Now.AddDays(10);
         var queued=(await svc.TermsAsync()).Value!.Single(t=>t.Term.PaymentId==next.Id);
         Assert.False(queued.Activated); Assert.True(queued.CanRequestRefund);
-        Assert.Contains("full refund",queued.RefundText);
+        Assert.Contains($"about ₱{next.Amount:N2}",queued.RefundText);   // not started: everything back
 
         Assert.True((await svc.RequestRefundAsync(queued.Term.Id,"Plans changed")).Ok);
         await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
         var row=Assert.Single((await svc.RefundsAsync()).Value!);
         Assert.Equal((false,(string?)null,next.Amount),(row.Request.WasActivated,row.Request.ReviewReason,row.Request.Amount));
-        Assert.Equal("No check-in during this term: full refund owed.",row.ReviewText);
-        Assert.Equal("Full refund",row.AmountLabel);
+        Assert.Equal("No check-in during this term: the days left are owed.",row.ReviewText);
+        Assert.Equal("Estimated refund",row.AmountLabel);
         Assert.Equal(0,row.LaterTerms);
     }
 
@@ -247,7 +247,7 @@ public class SubscriptionTests
         await vm.OnAppearingAsync();
         var row=Assert.Single(vm.Requests);
         Assert.Equal("Checked in during this term, needs review: gym didn't provide the agreed service.",row.ReviewText);
-        Assert.Equal("Refund requested",row.AmountLabel);
+        Assert.Equal("Estimated refund",row.AmountLabel);
         Assert.Equal(1,row.LaterTerms);
         Assert.Equal("This member also has 1 later paid term. It stays and is not refunded.",row.LaterTermsWarning);
 

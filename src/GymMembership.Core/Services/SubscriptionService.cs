@@ -2,6 +2,19 @@ using GymMembership.Core.Models;
 
 namespace GymMembership.Core.Services;
 
+/// <summary>G22 (owner, 2026-11-15; 0067 does the same in the database): a membership refund is the unused days of what was paid, counted
+/// when staff approve, and a member may ask only before half the term has passed. A started day counts as used.</summary>
+public static class RefundMath
+{
+    public static int DaysUsed(DateTime starts, int total, DateTime at) =>
+        at <= starts ? 0 : Math.Min(total, (int)Math.Ceiling((at - starts).TotalSeconds / 86400));
+    public static decimal Due(decimal paid, int total, DateTime starts, DateTime at) =>
+        Math.Round(paid * (total - DaysUsed(starts, total, at)) / total, 2, MidpointRounding.AwayFromZero);   // as Postgres round()
+    public static bool HalfUsed(DateTime starts, int total, DateTime at) => DaysUsed(starts, total, at) * 2 >= total;
+    /// <summary>The last moment a request is accepted: 14 days after the start of a 30-day term.</summary>
+    public static DateTime LastDayToAsk(DateTime starts, int total) => starts.AddDays((total + 1) / 2 - 1);
+}
+
 /// <summary>Why a member asks for a refund on a term they have used. Staff review these; none of them is automatic. Guidance, not legal advice.</summary>
 public static class RefundReasons
 {
@@ -19,15 +32,20 @@ public static class RefundReasons
     public static string StaffText(string? key) => All.FirstOrDefault(r => r.Key == key)?.Staff ?? "no reason given";
 }
 
-public sealed record TermCard(MembershipTerm Term, string State, bool Activated, RefundRequest? Refund, bool CanRequestRefund)
+public sealed record TermCard(MembershipTerm Term, string State, bool Activated, RefundRequest? Refund, bool CanRequestRefund,
+    decimal RefundEstimate = 0, DateTime? LastDayToAsk = null, bool PastHalf = false)
 {
     public string Dates => $"{Term.StartsAt.AddHours(8):d MMM yyyy, h:mm tt} – {Term.EndsAt.AddHours(8):d MMM yyyy, h:mm tt} (Manila)";
     /// <summary>Phone rows: the days only (Manila), "13 Oct – 12 Nov 2026"; the full times stay on Windows and in the refund dialog.</summary>
     public string ShortDates => $"{Term.StartsAt.AddHours(8):d MMM} – {Term.EndsAt.AddHours(8):d MMM yyyy}";
     /// <summary>Phone rows: a line only when a refund request or a cancellation exists; the chip and the refund dialog say the rest.</summary>
-    public string? RefundNote => Refund is { } r ? RefundCard.StateText(r) : Term.CancelledAt is not null ? "This term is cancelled." : null;
+    public string? RefundNote => Refund is { } r ? RefundCard.StateText(r) : Term.CancelledAt is not null ? "This term is cancelled."
+        : PastHalf ? "Half of this term has passed, so it can't be refunded." : null;
+    string AskBy => $"{LastDayToAsk?.AddHours(8):d MMM, h:mm tt}";   // Manila
     public string RefundText => Refund is { } r ? RefundCard.StateText(r) : Term.CancelledAt is not null ? "This term is cancelled."
-        : CanRequestRefund ? (Activated ? "You have checked in during this term. You can ask for a refund, and staff review each request." : "You haven't used this term yet. You can cancel it for a full refund.")
+        : CanRequestRefund ? (Activated ? $"You've checked in during this term, so staff review a refund. Ask by {AskBy}; it covers the days left when they approve."
+                                       : $"Cancel by {AskBy} for about ₱{RefundEstimate:N2}, the days left when staff approve.")
+        : PastHalf ? "Half of this term has passed, so it can't be refunded."
         : State == Status.Expired ? "This term has ended." : "No verified payment available for a refund.";
 }
 public sealed record RefundCard(RefundRequest Request, string Member, string PackageName, string Dates, int LaterTerms = 0, string Period = "")
@@ -45,7 +63,8 @@ public sealed record RefundCard(RefundRequest Request, string Member, string Pac
     public string ActionText => CanDecide ? "Review" : CanRepay ? "Repay" : "View";
     public bool NeedsAction => CanDecide || CanRepay;
     /// <summary>A term the member has used is only asked for until staff decide, so it must not read as a refund already owed.</summary>
-    public string AmountLabel => Request.WasActivated == true ? "Refund requested" : "Full refund";
+    /// <summary>G22: a membership refund is worked out when staff approve, so until then it is an estimate.</summary>
+    public string AmountLabel => !Request.IsBooking && Request.Status == "pending" ? "Estimated refund" : "Refund";
     public string ReviewText => Request.Kind switch
     {
         "cancel" => $"{Request.DecisionReason?.TrimEnd('.') ?? "Booking cancelled: down payment refunded"}.",   // G13 (0064): 24 hours or more before, the gym, or slot taken
@@ -54,7 +73,7 @@ public sealed record RefundCard(RefundRequest Request, string Member, string Pac
     };
     string MembershipReview => Request.WasActivated switch
     {
-        false => "No check-in during this term: full refund owed.",
+        false => "No check-in during this term: the days left are owed.",   // G22
         true => $"Checked in during this term, needs review: {RefundReasons.StaffText(Request.ReviewReason)}.",
         null => "",
     };
@@ -105,7 +124,10 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
             var p = payments.FirstOrDefault(p => p.Id == t.PaymentId);
             var refund = refunds.FirstOrDefault(r => r.TermId == t.Id);
             var state = t.CancelledAt is not null ? Status.Cancelled : t.EndsAt <= now ? Status.Expired : t.StartsAt > now ? Status.Scheduled : Status.Active;
-            return new TermCard(t, state, checkIns.Any(c => c.CheckedInAt >= t.StartsAt && c.CheckedInAt < t.EndsAt), refund, t.CancelledAt is null && p is { Status: Status.Verified, Amount: > 0 } && now < t.EndsAt && refund is null);
+            var canAsk = t.CancelledAt is null && p is { Status: Status.Verified, Amount: > 0 } && now < t.EndsAt && refund is null && !RefundMath.HalfUsed(t.StartsAt, t.DurationDays, now);
+            return new TermCard(t, state, checkIns.Any(c => c.CheckedInAt >= t.StartsAt && c.CheckedInAt < t.EndsAt), refund, canAsk,
+                canAsk ? RefundMath.Due(p!.Amount, t.DurationDays, t.StartsAt, now) : 0, RefundMath.LastDayToAsk(t.StartsAt, t.DurationDays),
+                t.CancelledAt is null && refund is null && now < t.EndsAt && RefundMath.HalfUsed(t.StartsAt, t.DurationDays, now));
         }).ToList();
     });
 

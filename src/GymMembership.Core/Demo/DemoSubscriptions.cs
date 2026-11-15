@@ -109,9 +109,10 @@ public sealed partial class DemoGateway
                 var category=a.GetValueOrDefault("p_category")?.ToString();
                 if(category is not null && RefundReasons.All.All(x=>x.Key!=category)) throw Err("bad_input");
                 if(now>=term.EndsAt) throw Err("refund_window_closed");
+                if(RefundMath.HalfUsed(term.StartsAt,term.DurationDays,now)) throw Err("refund_half_used");   // G22 (0067)
                 var activated=All<GymCheckIn>().Any(c=>c.MemberId==Uid&&c.CheckedInAt>=term.StartsAt&&c.CheckedInAt<term.EndsAt);   // 0043
                 if(activated && category is null) throw Err("refund_reason_required");
-                var r=Add(new RefundRequest {TermId=term.Id,PaymentId=p.Id,MemberId=Uid,Amount=p.Amount,Reason=reason,RequestedAt=now,WasActivated=activated,ReviewReason=activated?category:null});
+                var r=Add(new RefundRequest {TermId=term.Id,PaymentId=p.Id,MemberId=Uid,Amount=RefundMath.Due(p.Amount,term.DurationDays,term.StartsAt,now),Reason=reason,RequestedAt=now,WasActivated=activated,ReviewReason=activated?category:null});
                 Audit("refund.request","refund_requests",r.Id.ToString());result=Clone(r);return true;
             }
             case "decide_membership_refund":
@@ -121,10 +122,12 @@ public sealed partial class DemoGateway
                 if(r.MemberId==Uid) throw Err("self_decision");
                 if(r.Status!="pending") throw Err("already_processed");
                 var p=All<Payment>().First(p=>p.Id==r.PaymentId);
-                if(p.Status!=Status.Verified||r.Amount!=p.Amount) throw Err("not_refundable");
+                if(p.Status!=Status.Verified||r.Amount<=0||r.Amount>p.Amount) throw Err("not_refundable");
                 var t=All<MembershipTerm>().First(t=>t.Id==r.TermId);
                 if(approve && t.CancelledAt is not null) throw Err("already_processed");
-                if(approve) {t.CancelledAt=now;t.CancelledBy=Uid;t.CancellationReason="Refund approved";ProjectTerms(r.MemberId);}
+                var due=RefundMath.Due(p.Amount,t.DurationDays,t.StartsAt,now);   // G22: the days left now, when access ends
+                if(approve && due<=0) throw Err("nothing_to_refund");
+                if(approve) {r.Amount=due;t.CancelledAt=now;t.CancelledBy=Uid;t.CancellationReason="Refund approved";ProjectTerms(r.MemberId);}
                 r.Status=approve?"approved":"rejected";r.DecidedBy=Uid;r.DecidedAt=now;r.DecisionReason=reason;
                 Notify(r.MemberId,"payment",approve?"Cancellation approved; refund awaiting repayment":"Cancellation request rejected",reason);
                 Audit("refund.decide","refund_requests",r.Id.ToString());return true;
@@ -137,7 +140,7 @@ public sealed partial class DemoGateway
                 if(r.MemberId==Uid) throw Err("self_decision");
                 if(r.Status!="approved") throw Err("already_processed");
                 var p=All<Payment>().First(p=>p.Id==r.PaymentId);
-                if(p.Status!=Status.Verified||r.Amount!=p.Amount) throw Err("not_refundable");
+                if(p.Status!=Status.Verified||r.Amount<=0||r.Amount>p.Amount) throw Err("not_refundable");
                 if(method==PayMethod.Cash) r.CashShiftId=OpenShiftOf(Uid);   // 0050: cash paid back comes out of the payer's drawer
                 r.Status="paid";r.PaidAt=now;r.PaidBy=Uid;r.RepaymentMethod=method;r.RepaymentReference=reference;
                 Notify(r.MemberId,"payment","Refund repaid",method);Audit("refund.paid","refund_requests",r.Id.ToString());return true;
