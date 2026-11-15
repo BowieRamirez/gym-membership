@@ -84,7 +84,7 @@ public class PageLayoutTests
         {
             var xaml = File.ReadAllText(page);
             var heads = xaml.Split("StaticResource TableHead}").Length - 1;
-            Assert.True(heads == xaml.Split("<c:TableBody ").Length - 1, $"{Path.GetFileName(page)}: every table head needs a TableBody");
+            Assert.True(heads <= xaml.Split("<c:TableBody ").Length - 1, $"{Path.GetFileName(page)}: every table head needs a TableBody");   // headless tables (no captions) are TableBodies too
         }
     }
 

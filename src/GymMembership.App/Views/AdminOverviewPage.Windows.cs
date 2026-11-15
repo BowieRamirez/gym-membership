@@ -148,9 +148,9 @@ public sealed class AdminOverviewPage : BasePage
 
     static View Activity(AdminOverviewViewModel vm)
     {
-        var rows = new VerticalStackLayout();
-        BindableLayout.SetItemsSource(rows, vm.Activity);
-        BindableLayout.SetItemTemplate(rows, new DataTemplate(() =>
+        var rows = new TableBody { WideFrom = 0 };   // owner, 2026-11-15: every table shows 10 rows with Previous / Next
+        rows.Items = vm.Activity;
+        rows.RowTemplate = rows.CardTemplate = (new DataTemplate(() =>
         {
             var row = new Grid { Style = Resource<Style>("TableRow"), ColumnDefinitions = { new(GridLength.Star), new(GridLength.Auto) } };
             var what = new Label { Style = Resource<Style>("BaseLabel"), VerticalOptions = LayoutOptions.Center, FormattedText = new FormattedString() };
@@ -194,9 +194,9 @@ public sealed class AdminOverviewPage : BasePage
         count.VerticalOptions = LayoutOptions.Center;
         count.SetBinding(Label.TextProperty, nameof(vm.CheckInsText));
         bar.Add(count, 2);
-        var list = new VerticalStackLayout();
-        BindableLayout.SetItemsSource(list, vm.CheckIns);
-        BindableLayout.SetItemTemplate(list, new DataTemplate(() =>
+        var list = new TableBody { WideFrom = 0 };   // 10 rows a page, like every table
+        list.Items = vm.CheckIns;
+        list.RowTemplate = list.CardTemplate = (new DataTemplate(() =>
         {
             var row = new Grid { Style = Resource<Style>("TableRow"), ColumnDefinitions = { new(52), new(GridLength.Star), new(GridLength.Auto) } };
             row.Add(Bound("Muted", nameof(CheckInRow.TimeText)));

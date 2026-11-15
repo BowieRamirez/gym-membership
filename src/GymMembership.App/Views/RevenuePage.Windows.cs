@@ -149,10 +149,10 @@ public partial class RevenuePage
 
     static View Shares(string title, System.Collections.ObjectModel.ObservableCollection<RevenueShare> shares, View foot)
     {
-        var rows = new VerticalStackLayout { Spacing = 2 };
-        BindableLayout.SetItemsSource(rows, shares);
-        BindableLayout.SetEmptyView(rows, Text("Nothing in this period.", "Muted"));
-        BindableLayout.SetItemTemplate(rows, new DataTemplate(() =>
+        var rows = new TableBody { WideFrom = 0 };   // 10 rows a page, like every table
+        rows.Items = shares;
+        rows.Empty = Text("Nothing in this period.", "Muted");
+        rows.RowTemplate = rows.CardTemplate = (new DataTemplate(() =>
         {
             var row = new Grid { ColumnSpacing = 12, Padding = new Thickness(0, 6), ColumnDefinitions = { new(100), new(GridLength.Star), new(GridLength.Auto), new(44) } };
             var name = Text("", "BaseLabel"); name.FontFamily = "BarlowMedium"; name.VerticalOptions = LayoutOptions.Center;
@@ -201,10 +201,10 @@ public partial class RevenuePage
             if (i > 0) t.HorizontalOptions = LayoutOptions.End;
             head.Add(t, i);
         }
-        var rows = new VerticalStackLayout();
-        BindableLayout.SetItemsSource(rows, vm.DayRows);
-        BindableLayout.SetEmptyView(rows, new Label { Text = "No days in this period.", Style = Resource<Style>("Muted"), Margin = new Thickness(14) });
-        BindableLayout.SetItemTemplate(rows, new DataTemplate(() =>
+        var rows = new TableBody { WideFrom = 0 };   // 10 days a page, like every table
+        rows.Items = vm.DayRows;
+        rows.Empty = new Label { Text = "No days in this period.", Style = Resource<Style>("Muted"), Margin = new Thickness(14) };
+        rows.RowTemplate = rows.CardTemplate = (new DataTemplate(() =>
         {
             var row = new Grid { Style = Resource<Style>("TableRow"), Padding = new Thickness(14, 10), ColumnDefinitions = Columns() };
             var day = Text("", "BaseLabel"); day.FontFamily = "BarlowMedium";
