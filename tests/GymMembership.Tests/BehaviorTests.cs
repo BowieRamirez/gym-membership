@@ -127,6 +127,7 @@ public class BehaviorTests
         var svc = new SessionService(gw);
         var booked = (await svc.SessionsAsync()).Value!.First(r => r.Session.Status == "scheduled").Session;
         Assert.True((await new CoachService(gw).HireAsync("u-coach2")).Ok);
+        await HireRequestTests.Accept(gw, "kai@demo.io", "member@demo.io", DemoGateway.DemoPassword);   // G30: the coach accepts
         Assert.True((await svc.RequestAsync("u-coach2", booked.ScheduledStart.AddMinutes(30), booked.ScheduledEnd.AddMinutes(30), "overlaps")).Ok);
         var overlap = (await svc.RequestsAsync()).Value!.Rows.First(r => r.Request.Message == "overlaps");
         await gw.SignInAsync("kai@demo.io", DemoGateway.DemoPassword);

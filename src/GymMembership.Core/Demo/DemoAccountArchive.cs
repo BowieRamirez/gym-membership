@@ -32,6 +32,7 @@ public sealed partial class DemoGateway
             All<Payment>().Any(p => p.Status == Status.Pending && p.MemberId == userId))
             throw Err("account_has_commitments");
         profile.IsActive = false;
+        CancelHireRequestsOf(profile.Id);
         profile.DeletedAt = SubscriptionNow; profile.DeletedBy = Uid; profile.DeletionReason = reason;
         Add(new AuditEntry { ActorId = Uid, Action = "user.archive", Entity = "profiles", EntityId = userId,
             CreatedAt = SubscriptionNow, Details = new() { ["reason"] = reason } });
@@ -46,5 +47,10 @@ public sealed partial class DemoGateway
             CreatedAt = SubscriptionNow, Details = new() { ["reason"] = profile.DeletionReason ?? "" } });
         profile.IsActive = true;
         profile.DeletedAt = null; profile.DeletedBy = null; profile.DeletionReason = null;
+    }
+    // 0074: an archived or deactivated account's waiting hire requests are cancelled
+    void CancelHireRequestsOf(string id)
+    {
+        foreach (var h in All<CoachHire>().Where(h => h.Status == Status.Pending && (h.MemberId == id || h.CoachId == id))) { h.Status = Status.Cancelled; h.EndedAt = DateTime.UtcNow; }
     }
 }

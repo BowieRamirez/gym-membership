@@ -55,10 +55,10 @@ public class AccountTests
     {
         var gw = new DemoGateway();
         var auth = new AuthService(gw);
-        Assert.Equal(AppErrorKind.Validation, (await auth.RegisterAsync("", "", "new@demo.io", "secret12")).Error);
-        Assert.Equal(AppErrorKind.Validation, (await auth.RegisterAsync("New", "Person", "new@demo.io", "123")).Error);
-        Assert.Equal(AppErrorKind.Validation, (await auth.RegisterAsync("Dupe", "Person", "member@demo.io", "secret12")).Error);
-        Assert.True((await auth.RegisterAsync("New", "Person", "new@demo.io", "secret12")).Ok);
+        Assert.Equal(AppErrorKind.Validation, (await auth.RegisterAsync("", "", "new@demo.io", "secret12", true)).Error);
+        Assert.Equal(AppErrorKind.Validation, (await auth.RegisterAsync("New", "Person", "new@demo.io", "123", true)).Error);
+        Assert.Equal(AppErrorKind.Validation, (await auth.RegisterAsync("Dupe", "Person", "member@demo.io", "secret12", true)).Error);
+        Assert.True((await auth.RegisterAsync("New", "Person", "new@demo.io", "secret12", true)).Ok);
         Assert.False((await auth.MustChangePasswordAsync()).Value);   // they chose their own password
 
         var plans = new MembershipService(gw);
@@ -83,7 +83,7 @@ public class AccountTests
     public async Task Register_refuses_names_that_are_not_letters(string name)
     {
         var auth = new AuthService(new DemoGateway());
-        var r = await auth.RegisterAsync(name, "Santos", "new@demo.io", "secret12");
+        var r = await auth.RegisterAsync(name, "Santos", "new@demo.io", "secret12", true);
         Assert.Equal(AppErrorKind.Validation, r.Error);
         Assert.Equal("bad_name", r.Message);
     }
@@ -101,8 +101,8 @@ public class AccountTests
     public async Task Register_refuses_a_name_over_60_characters()
     {
         var auth = new AuthService(new DemoGateway());
-        Assert.Equal("bad_name", (await auth.RegisterAsync(new string('a', 61), "Santos", "new@demo.io", "secret12")).Message);
-        Assert.True((await auth.RegisterAsync(new string('a', 53), "Santos", "new@demo.io", "secret12")).Ok);   // 60 with the space
+        Assert.Equal("bad_name", (await auth.RegisterAsync(new string('a', 61), "Santos", "new@demo.io", "secret12", true)).Message);
+        Assert.True((await auth.RegisterAsync(new string('a', 53), "Santos", "new@demo.io", "secret12", true)).Ok);   // 60 with the space
     }
 
     [Theory]
@@ -110,17 +110,17 @@ public class AccountTests
     [InlineData("Juan", "dela Cruz")]
     [InlineData("José", "Peña")]
     public async Task Register_accepts_real_names(string first, string last) =>
-        Assert.True((await new AuthService(new DemoGateway()).RegisterAsync(first, last, "new@demo.io", "secret12")).Ok);
+        Assert.True((await new AuthService(new DemoGateway()).RegisterAsync(first, last, "new@demo.io", "secret12", true)).Ok);
 
     [Fact]
     public async Task A_name_typed_with_separate_accent_marks_is_stored_composed_and_marks_the_server_refuses_are_refused_here()
     {
         // the live database's [[:alpha:]] (en_US.UTF-8) refuses a separate combining accent and Devanagari vowel signs (checked 2026-11-08)
         var gw = new DemoGateway();
-        Assert.True((await new AuthService(gw).RegisterAsync("José", "Peña", "new@demo.io", "secret12")).Ok);
+        Assert.True((await new AuthService(gw).RegisterAsync("José", "Peña", "new@demo.io", "secret12", true)).Ok);
         var me = (await gw.ListAsync<Profile>(p => p.Id == gw.CurrentUserId)).Single();
         Assert.Equal(("José", "Peña"), (me.FirstName, me.LastName));
-        Assert.Equal("bad_name", (await new AuthService(new DemoGateway()).RegisterAsync("हिन", "Person", "new@demo.io", "secret12")).Message);
+        Assert.Equal("bad_name", (await new AuthService(new DemoGateway()).RegisterAsync("हिन", "Person", "new@demo.io", "secret12", true)).Message);
     }
 
     [Theory]
@@ -129,16 +129,16 @@ public class AccountTests
     [InlineData("a b@c.com")]
     [InlineData("a@@c.com")]
     public async Task Register_refuses_malformed_emails(string email) =>
-        Assert.Equal("bad_email", (await new AuthService(new DemoGateway()).RegisterAsync("New", "Person", email, "secret12")).Message);
+        Assert.Equal("bad_email", (await new AuthService(new DemoGateway()).RegisterAsync("New", "Person", email, "secret12", true)).Message);
 
     [Fact]
     public async Task Register_caps_the_email_at_100_characters_and_the_part_before_the_at_at_64()
     {
         var auth = new AuthService(new DemoGateway());
-        Assert.Equal("bad_email", (await auth.RegisterAsync("New", "Person", new string('a', 65) + "@demo.io", "secret12")).Message);
-        Assert.Equal("bad_email", (await auth.RegisterAsync("New", "Person", "a@" + new string('b', 95) + ".com", "secret12")).Message);   // 101 characters
-        Assert.True((await auth.RegisterAsync("New", "Person", "a@" + new string('b', 94) + ".com", "secret12")).Ok);                    // 100 characters
-        Assert.True((await auth.RegisterAsync("Other", "Person", new string('a', 64) + "@demo.io", "secret12")).Ok);
+        Assert.Equal("bad_email", (await auth.RegisterAsync("New", "Person", new string('a', 65) + "@demo.io", "secret12", true)).Message);
+        Assert.Equal("bad_email", (await auth.RegisterAsync("New", "Person", "a@" + new string('b', 95) + ".com", "secret12", true)).Message);   // 101 characters
+        Assert.True((await auth.RegisterAsync("New", "Person", "a@" + new string('b', 94) + ".com", "secret12", true)).Ok);                    // 100 characters
+        Assert.True((await auth.RegisterAsync("Other", "Person", new string('a', 64) + "@demo.io", "secret12", true)).Ok);
     }
 
     [Fact]
@@ -147,9 +147,9 @@ public class AccountTests
         // D5: the same rule as Supabase Auth's "letters_digits", which counts only a to z and 0 to 9
         var auth = new AuthService(new DemoGateway());
         foreach (var bad in new[] { "abcde12", "abcdefgh", "12345678", "ññññññ12", "абвгдеж1", new string('x', 64), new string('x', 64) + "1" })
-            Assert.Equal("bad_password", (await auth.RegisterAsync("New", "Person", "new@demo.io", bad)).Message);
-        Assert.True((await auth.RegisterAsync("New", "Person", "new@demo.io", "abcdefg1")).Ok);
-        Assert.True((await auth.RegisterAsync("Other", "Person", "other@demo.io", new string('x', 63) + "1")).Ok);
+            Assert.Equal("bad_password", (await auth.RegisterAsync("New", "Person", "new@demo.io", bad, true)).Message);
+        Assert.True((await auth.RegisterAsync("New", "Person", "new@demo.io", "abcdefg1", true)).Ok);
+        Assert.True((await auth.RegisterAsync("Other", "Person", "other@demo.io", new string('x', 63) + "1", true)).Ok);
     }
 
     [Fact]
@@ -172,7 +172,7 @@ public class AccountTests
     public async Task The_demo_refuses_a_weak_password_even_when_the_app_check_is_skipped()
     {
         // the server (Supabase Auth, the Edge Functions) is the real check; the demo stands in for it
-        await Assert.ThrowsAnyAsync<Exception>(() => new DemoGateway().SignUpAsync("weak@demo.io", "abcdefgh", "Weak", "Person"));
+        await Assert.ThrowsAnyAsync<Exception>(() => new DemoGateway().SignUpAsync("weak@demo.io", "abcdefgh", "Weak", "Person", TermsInfo.Version));
         var gw = await As("admin@demo.io");
         await Assert.ThrowsAnyAsync<Exception>(() => gw.InvokeFunctionAsync("create-user", new()
             { ["first_name"] = "Weak", ["last_name"] = "Person", ["email"] = "weak@demo.io", ["role"] = "member", ["password"] = "abcdefgh" }));

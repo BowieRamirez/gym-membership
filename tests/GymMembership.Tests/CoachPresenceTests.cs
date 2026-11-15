@@ -29,11 +29,15 @@ public class CoachPresenceTests
     }
 
     [Fact]
-    public async Task A_coach_who_checks_out_leaves_the_list_and_returns_after_checking_in()
+    public async Task A_coach_who_checks_out_stays_listed_as_away_and_can_be_hired_again_once_in()
     {
+        // owner, 2026-11-15 (replaces D9's hiding): every active coach is listed, the ones in the gym first, so members can plan around shifts
         var (gw, svc, _) = await Setup("kai@demo.io");
         Assert.True((await svc.CheckOutAsync()).Ok);
-        Assert.DoesNotContain(await List(gw, svc), c => c.Name == "Kai Mendoza");
+        var away = await List(gw, svc);
+        var kai = away.Single(c => c.Name == "Kai Mendoza");
+        Assert.False(kai.InGym); Assert.True(kai.CanHire);   // G29: hire any time
+        Assert.True(away.TakeWhile(c => c.InGym).Count() == away.Count(c => c.InGym));   // in the gym first
 
         await gw.SignInAsync("kai@demo.io", DemoGateway.DemoPassword);
         Assert.True((await svc.CheckInAsync()).Ok);
@@ -43,7 +47,7 @@ public class CoachPresenceTests
     }
 
     [Fact]
-    public async Task Your_own_coach_stays_listed_when_away_and_a_new_hire_needs_the_coach_in()
+    public async Task Your_own_coach_stays_listed_when_away_and_an_away_coach_can_still_be_hired()
     {
         var (gw, svc, _) = await Setup("coach@demo.io");
         Assert.True((await svc.CheckOutAsync()).Ok);
@@ -54,8 +58,7 @@ public class CoachPresenceTests
         await gw.SignInAsync("kai@demo.io", DemoGateway.DemoPassword);
         Assert.True((await svc.CheckOutAsync()).Ok);
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
-        var hire = await svc.HireAsync("u-coach2");   // a stale list still showing Kai
-        Assert.Equal("This coach just left the gym. You can hire them when they are back.", ErrorText.For(hire.Error, hire.Message));
+        Assert.True((await svc.HireAsync("u-coach2")).Ok);   // G29 (0072): the deal is between member and coach, any time
     }
 
     [Fact]
@@ -98,5 +101,31 @@ public class CoachPresenceTests
         await vm.ToggleVisitCommand.ExecuteAsync(null);
         Assert.False(vm.InGym); Assert.Equal("Check in", vm.VisitButton);
         Assert.Equal("You are checked out.", vm.Notice);
+    }
+}
+
+// G28 (owner, 2026-11-15; 0071): the Coaches page tags a hired coach; a coach can still take more members.
+public class CoachOneMemberTests
+{
+    [Fact]
+    public async Task A_coach_hired_by_someone_else_is_tagged_hired_and_can_still_be_hired()
+    {
+        var (gw, _, subs, monthly, _) = await SubscriptionTests.Setup();   // a new member, not Alex who hired Lena
+        var p = (await subs.ExtendAsync(monthly.Id)).Value!; await SubscriptionTests.Verify(gw, p);
+        var svc = new CoachService(gw);
+        var cards = (await svc.ListCoachesAsync()).Value!;
+        var lena = cards.Single(c => c.Name == "Lena Cruz");
+        Assert.True(lena.Taken); Assert.False(lena.Hired); Assert.Equal("hired", lena.HireBadge);
+        var kai = cards.Single(c => c.Name == "Kai Mendoza");
+        Assert.False(kai.Taken); Assert.Null(kai.HireBadge); Assert.True(kai.CanHire);
+
+        Assert.True((await svc.HireAsync(lena.Coach.UserId)).Ok);   // many members per coach
+        await HireRequestTests.Accept(gw, "coach@demo.io", "phase7@demo.io", "secret12");   // G30: the coach accepts
+        var mine = (await svc.ListCoachesAsync()).Value!.Single(c => c.Name == "Lena Cruz");
+        Assert.True(mine.Hired); Assert.False(mine.Taken);
+
+        await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);   // Alex sees their own coach as hired, not taken
+        var own = (await svc.ListCoachesAsync()).Value!.Single(c => c.Name == "Lena Cruz");
+        Assert.True(own.Hired); Assert.False(own.Taken); Assert.Equal("hired", own.HireBadge);
     }
 }

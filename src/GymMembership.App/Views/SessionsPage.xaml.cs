@@ -15,6 +15,8 @@ public partial class SessionsPage : BasePage
 
 	protected override void OnAppearing()
 	{
+		if (CoachHost.Content is null && Shell.Current is CoachShell)
+			HostBelow(CoachHost, _services.GetRequiredService<TraineesPage>());   // G30: requests and members, moved from My shifts
 		if (CalendarHost.Content is null && Shell.Current is MemberShell)
 		{
 			HostBelow(CalendarHost, _services.GetRequiredService<MemberCalendarPage>());

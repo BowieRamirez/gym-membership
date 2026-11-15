@@ -23,9 +23,12 @@ async function test(name, fn) {
 
 // --- people: created the way Supabase does, through auth.users + the trigger
 async function user(email, role, name) {
+  // since 0059 a sign-up must carry a last name; a one-word person here is an old account, given its name the way 0035 left it
+  const oneWord = typeof name === 'string' && name.trim() !== '' && !/\s/.test(name.trim());
   const r = await db.query(
     `insert into auth.users (email, raw_user_meta_data, raw_app_meta_data) values ($1, $2, $3) returning id`,
-    [email, JSON.stringify({ full_name: name }), JSON.stringify({ role })]);
+    [email, JSON.stringify({ full_name: oneWord ? null : name }), JSON.stringify({ role })]);
+  if (oneWord) await db.query(`update profiles set first_name = $2, last_name = '' where id = $1`, [r.rows[0].id, name.trim()]);
   return r.rows[0].id;
 }
 const admin = await user('admin@t.io', 'admin', 'Owner');
@@ -35,9 +38,11 @@ const alex = await user('alex@t.io', 'member', 'Alex');
 const bea = await user('bea@t.io', 'member', 'Bea');
 await openCashShifts(db);
 await db.query(`insert into membership_packages (name, price, duration_days) values ('Monthly', 1000, 30), ('Annual', 10000, 365)`);
-await db.query(`insert into amenities (name, price, duration_days) values ('Boxing', 300, 30)`);
+await db.query(`insert into amenities (name, price, duration_days) values ('Boxing', 300, null)`);   // 0066: sold per session
 await db.query(`insert into discounts (code, percent, starts_at, expires_at, max_uses) values ('WELCOME10', 10, now() - interval '1 day', now() + interval '30 days', 100),
                 ('OLD20', 20, now() - interval '10 days', now() - interval '1 day', 100)`);
+// since 0060 a code fits only what its items say; these fit everything, as every code did before
+await db.query(`insert into discount_items (discount_id, kind) select discount_id, k from discounts, unnest(array['package','amenity']) k`);
 const monthly = 1;
 
 console.log('\nsign-up trigger');
@@ -174,7 +179,7 @@ await test('a code works once per member', async () => {
   const dp = (await run(d, `select * from avail_membership($1, 'WELCOME10')`, [monthly])).rows[0];
   await run(desk, `select verify_payment($1, false, 'no')`, [dp.payment_id]);              // rejected: code is free again
   await run(d, `select * from avail_membership($1, 'WELCOME10')`, [monthly]);               // can reuse after a rejection
-  assert.match(await code(run(d, `select * from avail_membership($1, 'WELCOME10')`, [monthly])), /already_availed|invalid_code/);
+  assert.match(await code(run(d, `select * from avail_membership($1, 'WELCOME10')`, [monthly])), /already_availed|code_already_used/);
 });
 
 console.log('\ncounter payments, voids, renewals');
@@ -198,10 +203,10 @@ await test('a walk-in is recorded with a name, the default price, and a check-in
   assert.equal(Number(w.amount), 150); assert.equal(w.walk_in_name, 'Juan Dela Cruz'); assert.equal(w.member_id, null);
   assert.equal((await run(desk, `select * from gym_check_ins where payment_id=$1`, [w.payment_id])).rowCount, 1);
 });
-await test('an amenity bought at the counter activates with an expiry', async () => {
+await test('an amenity bought at the counter is one session, active at once', async () => {
   const a = (await run(desk, `select * from record_counter_payment('amenity','gcash',$1,1,null,'GC-777')`, [eve])).rows[0];
-  const r = await run(eve, `select status, expires_at is not null e from user_amenities where user_amenity_id=$1`, [a.user_amenity_id]);
-  assert.deepEqual(r.rows[0], { status: 'active', e: true });
+  const r = await run(eve, `select status, is_session from user_amenities where user_amenity_id=$1`, [a.user_amenity_id]);
+  assert.deepEqual(r.rows[0], { status: 'active', is_session: true });
 });
 await test('only an admin can void; voiding cancels the membership and is audited', async () => {
   assert.match(await code(run(desk, `select void_payment($1,'oops')`, [counter.payment_id])), /forbidden/);
@@ -238,8 +243,9 @@ await db.query('insert into coach_visits(coach_id,checked_in_by) values($1,$1)',
 let hire;
 await test('an active member hires a coach; a guest cannot', async () => {
   hire = (await run(alex, `select hire_coach($1) id`, [coach])).rows[0].id;
+  await run(coach, `select answer_hire($1,true)`, [hire]);   // G30 (0074): the coach accepts
   assert.match(await code(run(bea, `select hire_coach($1)`, [coach])), /no_active_membership/);
-  assert.match(await code(run(alex, `select hire_coach($1)`, [coach])), /23505/);
+  assert.match(await code(run(alex, `select hire_coach($1)`, [coach])), /hire_already_requested/);
 });
 await test('the coach sees the trainee and the trainee sees the coach, nobody else does', async () => {
   assert.equal((await run(coach, `select * from coach_hires`)).rowCount, 1);
@@ -271,7 +277,7 @@ await test('a member requests a time; the coach approves and a session is create
 });
 const overlapCoach = await user('overlap-coach@t.io', 'coach', 'Coach Other');
 await db.query('insert into coach_visits(coach_id,checked_in_by) values($1,$1)', [overlapCoach]);
-await run(alex, 'select hire_coach($1)', [overlapCoach]);
+await run(overlapCoach, 'select answer_hire($1,true)', [(await run(alex, 'select hire_coach($1) id', [overlapCoach])).rows[0].id]);   // G30 (0074): the coach accepts
 await test('overlapping sessions are refused', async () => {
   const r2 = (await run(alex, `select request_time($1,$2,$3) id`, [overlapCoach, new Date(t0.getTime() + 18e5), t2])).rows[0].id;
   assert.match(await code(run(overlapCoach, `select respond_time_request($1,true)`, [r2])), /23P01/);
@@ -304,7 +310,7 @@ await test('a coach posts a shift, trainees are told, overlap is refused', async
   await run(coach, `insert into shift_posts (coach_id, starts_at, ends_at, note) values ($1,$2,$3,'Floor')`, [coach, t0, t1]);
   assert.match(await code(run(coach, `insert into shift_posts (coach_id, starts_at, ends_at) values ($1,$2,$3)`, [coach, t0, t1])), /23P01/);
   assert.equal((await run(alex, `select * from shift_posts`)).rowCount, 1);
-  assert.equal((await run(eve, `select * from shift_posts`)).rowCount, 0);
+  assert.equal((await run(eve, `select * from shift_posts`)).rowCount, 1);   // G29 (0072): every member sees coaches' shifts
   assert.match(await code(run(alex, `insert into shift_posts (coach_id, starts_at, ends_at) values ($1,$2,$3)`, [coach, t2, t3])), /42501/);
 });
 await test('ending a hire closes chat for new messages but keeps history', async () => {
@@ -370,12 +376,12 @@ await test('the app role cannot call the internal helpers or cron jobs', async (
 console.log('\nhow Supabase Auth really creates accounts');
 // Supabase Auth inserts the user first and writes app_metadata afterwards, so this is how an Admin-API account really arrives
 async function userTwoStep(email, role, name) {
-  const id = (await db.query(`insert into auth.users (email, raw_user_meta_data, raw_app_meta_data) values ($1, $2, '{"provider":"email"}') returning id`, [email, JSON.stringify({ full_name: name })])).rows[0].id;
+  const id = (await db.query(`insert into auth.users (email, raw_user_meta_data, raw_app_meta_data) values ($1, $2, '{"provider":"email"}') returning id`, [email, JSON.stringify({ full_name: name, must_change_password: true })])).rows[0].id;   // as create-user sends it (0069)
   await db.query(`update auth.users set raw_app_meta_data = raw_app_meta_data || $2::jsonb where id = $1`, [id, JSON.stringify({ role })]);
   return id;
 }
 await test('an account made through the Admin API gets the role written after it was inserted', async () => {
-  const boss = await userTwoStep('boss@t.io', 'admin', 'Boss');
+  const boss = await userTwoStep('boss@t.io', 'admin', 'Boss Person');
   const rows = async (id) => (await db.query(`select (select string_agg(r.name, ',') from user_roles ur join roles r using(role_id) where ur.user_id=$1) roles, (select count(*) from members where user_id=$1)::int m, (select count(*) from coaches where user_id=$1)::int c`, [id])).rows[0];
   assert.deepEqual(await rows(boss), { roles: 'admin', m: 0, c: 0 });
   const c2 = await userTwoStep('c2@t.io', 'coach', 'Coach Two');
@@ -401,8 +407,8 @@ await test('digits, symbols, doubled or edge separators and bad lengths are refu
     assert.match(await code(setName(alex, bad)), /23514/, JSON.stringify(bad));
 });
 await test('sign-up with a bad name fails, with no name it falls back to the letters in the email', async () => {
-  const signUp = (email, name) => db.query(`insert into auth.users (email, raw_user_meta_data) values ($1, $2) returning id`, [email, JSON.stringify(name === undefined ? {} : { full_name: name })]);
-  assert.match(await code(signUp('bad@t.io', 'R2D2')), /23514/);
+  const signUp = (email, name) => db.query(`insert into auth.users (email, raw_user_meta_data) values ($1, $2) returning id`, [email, JSON.stringify(name === undefined ? {} : { full_name: name, terms_version: '2026-11-15' })]);   // 0069: the app sends it
+  assert.match(await code(signUp('bad@t.io', 'R2D2 Unit')), /23514/);
   const nameOf = async (email, name) => (await db.query(`select full_name from profiles where id = $1`, [(await signUp(email, name)).rows[0].id])).rows[0].full_name;
   assert.equal(await nameOf('jane.doe99@t.io'), 'jane doe');
   assert.equal(await nameOf('99@t.io'), 'Member');
@@ -688,7 +694,7 @@ await test('a conversation taken by someone who has since been deactivated can b
 });
 await test('the inbox is bounded: staff get the 500 most recently active member threads, not every thread there is', async () => {
   await db.query(`insert into auth.users (email, raw_user_meta_data, raw_app_meta_data)
-                  select 'bulk' || g || '@t.io', jsonb_build_object('full_name', 'Bulk'), jsonb_build_object('role', 'member') from generate_series(1, 505) g`);
+                  select 'bulk' || g || '@t.io', jsonb_build_object('full_name', 'Bulk Member'), jsonb_build_object('role', 'member') from generate_series(1, 505) g`);
   await db.query(`insert into support_threads (member_id) select user_id from members where user_id not in (select member_id from support_threads)`);
   const inbox = (await threads(desk)).filter(r => r.kind === 'support');
   assert.equal(inbox.length, 500);

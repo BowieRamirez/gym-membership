@@ -13,7 +13,7 @@ public interface IArchiveService
 
 public sealed class ArchiveService(ISupabaseGateway gw) : IArchiveService
 {
-    public const int PageSize = 30;
+    public const int PageSize = 10;   // owner, 2026-11-15: every table shows 10 at a time
 
     public Task<AppResult<ArchivePage>> ListAsync(ArchiveFilter filter, int page)
     {

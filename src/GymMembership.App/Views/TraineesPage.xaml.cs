@@ -12,4 +12,6 @@ public partial class TraineesPage : BasePage
 
 	void OnMessage(object? sender, EventArgs e) => Row<TraineesViewModel>(sender, v => v.MessageCommand);
 	void OnRemove(object? sender, EventArgs e) => Row<TraineesViewModel>(sender, v => v.RemoveCommand);
+	void OnAccept(object? sender, EventArgs e) => Row<TraineesViewModel>(sender, v => v.AcceptCommand);
+	void OnDecline(object? sender, EventArgs e) => Row<TraineesViewModel>(sender, v => v.DeclineCommand);
 }

@@ -14,24 +14,28 @@ public static class AuditLabels
     {
         ["user.create"] = "Account created", ["user.archive"] = "Account deleted", ["user.restore"] = "Account restored",
         ["user.activate"] = "Account reactivated", ["user.deactivate"] = "Account deactivated",
-        ["user.correct_name"] = "Name corrected", ["user.reset_password"] = "Password reset",
+        ["user.correct_name"] = "Name corrected", ["user.add_last_name"] = "Last name added", ["user.reset_password"] = "Password reset",
         ["role.assign"] = "Role given", ["role.revoke"] = "Role removed",
         ["payment.record"] = "Payment recorded", ["payment.verify"] = "Payment verified", ["payment.reject"] = "Payment rejected",
         ["payment.void"] = "Payment voided", ["payment.cancel"] = "Payment cancelled",
+        ["check_in.id"] = "Checked in by ID",
         ["refund.request"] = "Refund requested", ["refund.decide"] = "Refund decided", ["refund.paid"] = "Refund repaid",
-        ["reservation.book"] = "Booking made", ["reservation.hold"] = "Booking held for payment", ["reservation.cancel"] = "Booking cancelled", ["reservation.end"] = "Booking ended",
+        ["reservation.book"] = "Booking made", ["reservation.hold"] = "Booking held for payment", ["reservation.request"] = "Booking requested", ["reservation.balance"] = "Booking balance taken", ["reservation.request"] = "Booking requested", ["reservation.balance"] = "Booking balance taken", ["reservation.cancel"] = "Booking cancelled", ["reservation.end"] = "Booking ended",
         ["reservation.extend"] = "Booking extended",
         ["amenity.status"] = "Amenity status changed", ["amenity.runs"] = "Coach runs amenity changed",
+        ["discount.create"] = "Code added", ["discount.turn_off"] = "Code turned off", ["discount.turn_on"] = "Code turned on", ["discount.delete"] = "Code deleted",
         ["catalog.archive"] = "Archived", ["catalog.restore"] = "Restored from archive",
+        ["catalog.publish"] = "Published", ["catalog.new_version"] = "New version drafted", ["catalog.delete"] = "Deleted draft",
         ["cash_shift.open"] = "Cash shift started", ["cash_shift.close"] = "Cash shift ended",
         ["announcement.post"] = "Announcement posted",
+        ["gym.close"] = "Gym closed for a day", ["gym.reopen"] = "Gym opened again",   // G16 (0065)
     };
 
     /// <summary>Action type: the part of the code before the dot. The filter sends the key.</summary>
     public static readonly IReadOnlyDictionary<string, string> Areas = new Dictionary<string, string>
     {
-        ["user"] = "Account", ["role"] = "Role", ["payment"] = "Payment", ["refund"] = "Refund",
-        ["reservation"] = "Booking", ["amenity"] = "Amenity", ["catalog"] = "Catalog", ["cash_shift"] = "Cash shift", ["announcement"] = "Announcement",
+        ["user"] = "Account", ["role"] = "Role", ["payment"] = "Payment", ["check_in"] = "Check-in", ["refund"] = "Refund",
+        ["reservation"] = "Booking", ["amenity"] = "Amenity", ["catalog"] = "Catalog", ["cash_shift"] = "Cash shift", ["announcement"] = "Announcement", ["discount"] = "Discount code", ["gym"] = "Gym",
     };
 
     /// <summary>Object type: the table the entry is about. The filter sends the key.</summary>
@@ -39,7 +43,7 @@ public static class AuditLabels
     {
         ["profiles"] = "Account", ["user_roles"] = "Role", ["payments"] = "Payment", ["refund_requests"] = "Refund request",
         ["reservations"] = "Booking", ["amenities"] = "Amenity", ["membership_packages"] = "Package", ["discounts"] = "Discount code",
-        ["cash_shifts"] = "Cash shift", ["announcements"] = "Announcement",
+        ["cash_shifts"] = "Cash shift", ["announcements"] = "Announcement", ["gym_closures"] = "Closed day", ["gym_check_ins"] = "Check-in",
     };
 
     public static string Action(string code) => Actions.GetValueOrDefault(code, code);

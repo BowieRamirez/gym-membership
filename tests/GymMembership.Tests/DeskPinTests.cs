@@ -101,7 +101,7 @@ public class DeskPinTests
         for (var n = 0; n < 5; n++) { vm.Pin = "9999"; await vm.ConfirmPinCommand.ExecuteAsync(null); }
         vm.Pin = "1234";
         await vm.ConfirmPinCommand.ExecuteAsync(null);
-        Assert.Equal("Too many wrong PINs: this member's desk PIN is locked for 15 minutes. Scan their QR code instead, or ask an Admin.", vm.ErrorMessage);
+        Assert.Equal("Too many wrong tries (PIN or password): this member is locked for 15 minutes. Scan their QR code instead, or ask an Admin.", vm.ErrorMessage);
         Assert.Empty((await gw.ListAsync<GymCheckIn>(c => c.MemberId == "u-alex")).Where(c => c.Method == "manual"));
     }
 
@@ -136,6 +136,21 @@ public class DeskPinTests
         var row = (await gw.ListAsync<GymCheckIn>(c => c.MemberId == "u-carlo")).Single();
         Assert.Equal(("manual", "Known member, phone broken"), (row.Method, row.Reason));
         Assert.Equal(who, (await new AttendanceService(gw).CheckInsOnAsync(DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8)))).Value!.Last().By);
+    }
+
+    [Theory]
+    [InlineData("admin@demo.io")]
+    [InlineData("subadmin@demo.io")]
+    public async Task A_member_who_has_a_PIN_is_not_checked_in_with_a_reason_and_a_blank_PIN(string email)
+    {
+        var (gw, vm) = await Desk(email);
+        var before = await CheckIns(gw, "u-alex");
+        await vm.CheckInCommand.ExecuteAsync(await Find(vm, "alex"));   // Alex has PIN 1234
+        vm.Reason = "Known member";
+        await vm.ConfirmPinCommand.ExecuteAsync(null);
+        Assert.Equal("This member has a desk PIN, so a reason isn't enough. Ask them to type their PIN, or use Sign in instead.", vm.ErrorMessage);
+        Assert.NotNull(vm.PinFor);
+        Assert.Equal(before, await CheckIns(gw, "u-alex"));
     }
 
     [Fact]

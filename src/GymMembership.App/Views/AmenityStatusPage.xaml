@@ -13,6 +13,46 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
+            <!-- G13 (approved mockup docs/mockups/amenity-down-payment.html): today's bookings with a balance still to pay at the desk -->
+            <VerticalStackLayout Spacing="8" IsVisible="{Binding HasBalances}">
+                <Label Text="Today's bookings with a balance" Style="{StaticResource SectionTitle}" />
+                <Border Style="{StaticResource Panel}">
+                    <VerticalStackLayout Spacing="8">
+                        <VerticalStackLayout Spacing="0" BindableLayout.ItemsSource="{Binding Balances}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="svc:BalanceRow">
+                                    <VerticalStackLayout>
+                                        <Grid ColumnDefinitions="140,*,*,120,Auto" ColumnSpacing="12" Padding="0,8">
+                                            <Label Text="{Binding When}" VerticalOptions="Center" />
+                                            <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
+                                                <Label Text="{Binding Member}" FontFamily="BarlowSemiBold" />
+                                                <Label Text="{Binding Amenity}" Style="{StaticResource Caption}" />
+                                            </VerticalStackLayout>
+                                            <VerticalStackLayout Grid.Column="2" VerticalOptions="Center">
+                                                <Label Text="{Binding CoachText}" />
+                                                <Label Text="{Binding PaidText}" Style="{StaticResource Caption}" />
+                                            </VerticalStackLayout>
+                                            <Label Grid.Column="3" Text="{Binding BalanceText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" HorizontalOptions="End" />
+                                            <HorizontalStackLayout Grid.Column="4" Spacing="8" VerticalOptions="Center">
+                                                <Button Text="Take in cash" Style="{StaticResource SmallButton}" Clicked="OnTakeCash" AutomationId="TakeBalanceCash"
+                                                        SemanticProperties.Description="{Binding Member, StringFormat='Take the balance of {0} in cash'}" />
+                                                <Button Text="GCash" Style="{StaticResource SmallOutlineButton}" Clicked="OnTakeGcash"
+                                                        SemanticProperties.Description="{Binding Member, StringFormat='Take the balance of {0} by GCash'}" />
+                                            </HorizontalStackLayout>
+                                        </Grid>
+                                        <BoxView Style="{StaticResource Hairline}" />
+                                    </VerticalStackLayout>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" WidthRequest="260" HorizontalOptions="Start">
+                            <Label Text="GCash reference (for GCash only)" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding BalanceReference}" SemanticProperties.Description="GCash reference for the balance" /></Border>
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+
             <!-- the editor for the amenity you chose -->
             <Border Style="{StaticResource Panel}" IsVisible="{Binding IsEditing}" MaximumWidthRequest="{OnIdiom Phone=10000, Default=640}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}">
                 <VerticalStackLayout Spacing="10">

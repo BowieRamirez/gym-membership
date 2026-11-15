@@ -47,9 +47,9 @@ async function fixture() {
   for (const uid of [member, otherMember]) {
     const pay = (await as(uid,'select * from extend_membership($1)',[pkg]))[0];
     await as(desk,'select verify_payment($1,true)',[pay.payment_id]);
-    await as(uid,'select hire_coach($1)',[coach]);
+    await as(coach,'select answer_hire($1,true)',[(await as(uid,'select hire_coach($1) id',[coach]))[0].id]);   // G30 (0074): the coach accepts
   }
-  await as(member,'select hire_coach($1)',[otherCoach]);
+  await as(otherCoach,'select answer_hire($1,true)',[(await as(member,'select hire_coach($1) id',[otherCoach]))[0].id]);
   return {coach,otherCoach,member,otherMember};
 }
 const request = async (member,coach,c=db) => (await as(member,'select request_time($1,$2,$3) id',[coach,startTime,endTime],c))[0].id;

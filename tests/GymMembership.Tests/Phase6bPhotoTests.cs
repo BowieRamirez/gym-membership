@@ -148,7 +148,7 @@ public class Phase6bPhotoTests
         var uid = gw.CurrentUserId!;
         var id = (await gw.ListAsync<Amenity>()).First().Id;
         var admin = new AdminService(gw);
-        await gw.SignUpAsync("second-admin@demo.io", DemoGateway.DemoPassword, "Second", "Admin");
+        await gw.SignUpAsync("second-admin@demo.io", DemoGateway.DemoPassword, "Second", "Admin", TermsInfo.Version);
         var secondId = gw.CurrentUserId!;
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
         Assert.True((await admin.AssignRoleAsync(secondId, "admin")).Ok);
@@ -166,8 +166,10 @@ public class Phase6bPhotoTests
         var vm = new CatalogAdminViewModel(new AdminService(gw), new Picker());
         await vm.OnAppearingAsync();
         var selected = vm.Amenities.First();
-        await vm.UploadAmenityPhotoCommand.ExecuteAsync(selected);
-        Assert.NotNull(vm.Amenities.Single(a => a.Id == selected.Id).ImagePath);
+        await vm.RunActionCommand.ExecuteAsync((selected, "Edit"));
+        await vm.PickPhotoCommand.ExecuteAsync(null);
+        await vm.MainCommand.ExecuteAsync(null);
+        Assert.NotNull(vm.Amenities.Single(r => r.Amenity.Id == selected.Amenity.Id).Amenity.ImagePath);
         Assert.NotNull(vm.Notice);
         Assert.Null(vm.ErrorMessage);
     }

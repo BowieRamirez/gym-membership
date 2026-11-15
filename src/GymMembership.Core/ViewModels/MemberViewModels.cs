@@ -164,6 +164,15 @@ public partial class RegisterViewModel(IAuthService auth, IAppNavigator nav) : L
     [ObservableProperty] private string email = "";
     [ObservableProperty] private string password = "";
     [ObservableProperty] private string confirmPassword = "";
+    /// <summary>G25: the "I agree to the Terms and Policy" box; reading the terms is optional, ticking is not.</summary>
+    [ObservableProperty] private bool agreedToTerms;
+    /// <summary>Shown under the box, where they are looking, when Create account is pressed without the tick.</summary>
+    [ObservableProperty] private string? termsError;
+    /// <summary>The terms sheet over the form; closing it keeps everything typed and never ticks the box.</summary>
+    [ObservableProperty] private bool termsOpen;
+    partial void OnAgreedToTermsChanged(bool value) { if (value) TermsError = null; }
+    [RelayCommand] private void OpenTerms() => TermsOpen = true;
+    [RelayCommand] private void CloseTerms() => TermsOpen = false;
     /// <summary>Set when the address already has an account. Only a hint: submitting is still allowed, and the server decides.</summary>
     [ObservableProperty] private string? emailTaken;
 
@@ -191,7 +200,8 @@ public partial class RegisterViewModel(IAuthService auth, IAppNavigator nav) : L
     {
         _emailCheck?.Cancel();   // otherwise the new account's own address could come back as "in use" while the page changes
         if (Password != ConfirmPassword) { ErrorMessage = "The passwords don't match."; return; }
-        if (await RunAsync(() => auth.RegisterAsync(FirstName, LastName, Email, Password))) nav.GoTo(AppRole.Member);
+        if (!AgreedToTerms) { TermsError = ErrorText.For(AppErrorKind.Validation, "terms_required"); return; }
+        if (await RunAsync(() => auth.RegisterAsync(FirstName, LastName, Email, Password, AgreedToTerms))) nav.GoTo(AppRole.Member);
     }
 
     [RelayCommand] private void BackToSignIn() => nav.GoToLogin();
@@ -200,8 +210,8 @@ public partial class RegisterViewModel(IAuthService auth, IAppNavigator nav) : L
 public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav, ISubscriptionService subscription) : LoadableViewModel
 {
     public ObservableCollection<MembershipPackage> Packages { get; } = new();
-    /// <summary>F5: codes staff chose to show here that this member can still use. The section hides when there are none.</summary>
-    public ObservableCollection<PackageCode> Codes { get; } = new();
+    /// <summary>G4 (0060): shown codes this member can still use that fit a package, newest first. The section hides when there are none.</summary>
+    public ObservableCollection<AvailableCode> Codes { get; } = new();
     [ObservableProperty] private bool hasCodes;
     [ObservableProperty] private string? discountCode;
 
@@ -211,10 +221,10 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
     private async Task LoadAsync()
     {
         if (!await RunAsync(svc.ListPackagesAsync, rows => Fill(Packages, rows))) return;
-        await RunAsync(svc.PackageCodesAsync, rows => { Fill(Codes, rows); HasCodes = Codes.Count > 0; });
+        await RunAsync(svc.AvailableCodesAsync, rows => { Fill(Codes, rows.Where(c => c.FitsAnyPackage)); HasCodes = Codes.Count > 0; });
     }
 
-    [RelayCommand] private void UseCode(PackageCode code) => DiscountCode = code.Code;
+    [RelayCommand] private void UseCode(AvailableCode code) => DiscountCode = code.Code;
 
     // avail creates a pending QR payment; paying it and sending the proof happens on My membership
     [RelayCommand]
@@ -222,7 +232,7 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
     {
         Notice = null;
         var code = string.IsNullOrWhiteSpace(DiscountCode) ? "" : $"\nDiscount code {DiscountCode.Trim()} is applied when you pay.";
-        if (!await Confirm.AskAsync($"Buy {package.Name}?", $"₱{package.Price:N2} for {package.DurationDays} days.{code}\nYou pay by QR on My membership.", "Buy membership")) return;
+        if (!await Confirm.AskAsync($"Buy {package.Name}?", $"₱{package.Price:N2} for {package.DurationDays} days.{code}\nYou pay by QR on My membership.\n\n{RefundRules.Line}", "Buy membership")) return;
         if (!await RunAsync(() => subscription.ExtendAsync(package.Id, DiscountCode), _ => { })) return;
         DiscountCode = null;
         nav.GoToMembership();
@@ -416,8 +426,16 @@ public partial class CoachesViewModel(ICoachService svc, IChatService messages, 
     [RelayCommand]
     private async Task HireAsync(CoachCard card)
     {
-        if (!await Confirm.AskAsync($"Hire {card.Name}?", "They become your coach. You can message them and book sessions together.", "Hire coach")) return;
+        // G30 (0074): a request; messaging and sessions open once the coach accepts
+        if (!await Confirm.AskAsync($"Send a hire request to {card.Name}?", "They will accept or decline it. Once they accept, you can message them and book sessions together.", "Send request")) return;
         if (await RunAsync(() => svc.HireAsync(card.Coach.UserId))) await LoadAsync();
+    }
+
+    [RelayCommand]
+    private async Task CancelRequestAsync(CoachCard card)
+    {
+        if (card.RequestId is not { } id || !await Confirm.AskAsync($"Cancel your request to {card.Name}?", "You can ask again later.", "Cancel request")) return;
+        if (await RunAsync(() => svc.CancelHireRequestAsync(id))) await LoadAsync();
     }
 
     [RelayCommand]
@@ -1020,8 +1038,22 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
     }
 
     // ---------- name: shown only, locked after sign-up (0040) ----------
-    [ObservableProperty] private string firstName = "";
-    [ObservableProperty] private string lastName = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(NeedsLastName))] private string firstName = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(NeedsLastName))] private string lastName = "";
+
+    // item 3 (0059): an old one-word name. The person types their own last name once; nothing is guessed.
+    public bool NeedsLastName => FirstName.Length > 0 && string.IsNullOrWhiteSpace(LastName);
+    [ObservableProperty] private string missingLastName = "";
+
+    [RelayCommand]
+    private async Task AddLastNameAsync()
+    {
+        Notice = null;
+        if (!await RunAsync(() => profile.AddMyLastNameAsync(MissingLastName))) return;
+        MissingLastName = "";
+        await LoadPhotoAsync(names: true);
+        Notice = $"Your name is now {SavedName}.";
+    }
 
     // ---------- email: send a code to it, then type the code ----------
     [ObservableProperty] private string emailAddress = "";

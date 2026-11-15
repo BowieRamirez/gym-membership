@@ -21,7 +21,7 @@ public class NamesAndEmailTests
     public async Task Register_stores_first_and_last_name_and_builds_the_full_name()
     {
         var gw = new DemoGateway();
-        Assert.True((await new AuthService(gw).RegisterAsync(" Mary Ann ", "Santos", "mary@demo.io", "secret12")).Ok);
+        Assert.True((await new AuthService(gw).RegisterAsync(" Mary Ann ", "Santos", "mary@demo.io", "secret12", true)).Ok);
         var me = Me(gw);
         Assert.Equal(("Mary Ann", "Santos", "Mary Ann Santos"), (me.FirstName, me.LastName, me.FullName));
     }
@@ -33,14 +33,14 @@ public class NamesAndEmailTests
     [InlineData("Mary", "Santos!")]
     [InlineData("A", "Santos")]
     public async Task Register_needs_both_names_in_letters(string first, string last) =>
-        Assert.Equal("bad_name", (await new AuthService(new DemoGateway()).RegisterAsync(first, last, "new@demo.io", "secret12")).Message);
+        Assert.Equal("bad_name", (await new AuthService(new DemoGateway()).RegisterAsync(first, last, "new@demo.io", "secret12", true)).Message);
 
     [Fact]
     public async Task First_and_last_name_together_stay_within_60_characters()
     {
         var auth = new AuthService(new DemoGateway());
-        Assert.Equal("bad_name", (await auth.RegisterAsync(new string('a', 30), new string('b', 30), "new@demo.io", "secret12")).Message);   // 61 with the space
-        Assert.True((await auth.RegisterAsync(new string('a', 30), new string('b', 29), "new@demo.io", "secret12")).Ok);
+        Assert.Equal("bad_name", (await auth.RegisterAsync(new string('a', 30), new string('b', 30), "new@demo.io", "secret12", true)).Message);   // 61 with the space
+        Assert.True((await auth.RegisterAsync(new string('a', 30), new string('b', 29), "new@demo.io", "secret12", true)).Ok);
     }
 
     [Fact]
@@ -97,6 +97,17 @@ public class NamesAndEmailTests
         var gw = await As("admin@demo.io");
         await new AdminService(gw).SetActiveAsync("u-coach1", false);
         Assert.Equal("record_archived", (await new AdminService(gw).CorrectNameAsync("u-coach1", "New", "Name", "Reason")).Message);
+    }
+
+    // owner, 2026-11-13: a coach couldn't sign in and nobody could see which email the account signs in with
+    [Fact]
+    public async Task Users_and_roles_shows_each_account_s_sign_in_email()
+    {
+        var gw = await As("admin@demo.io");
+        var vm = new UsersViewModel(new AdminService(gw));
+        await vm.OnAppearingAsync();
+        var coach = vm.Users.Single(u => u.UserId == "u-coach1");
+        Assert.Equal(("Lena Cruz", "coach@demo.io"), (coach.Username, coach.Email));
     }
 
     [Fact]
@@ -219,7 +230,7 @@ public class NamesAndEmailTests
     {
         var gw = new DemoGateway();
         var vm = new RegisterViewModel(new AuthService(gw), new NullNavigator())
-        { FirstName = "Mary", LastName = "Santos", Email = "mary@demo.io", Password = "secret12", ConfirmPassword = "secret12" };
+        { FirstName = "Mary", LastName = "Santos", Email = "mary@demo.io", Password = "secret12", ConfirmPassword = "secret12", AgreedToTerms = true };
         await vm.RegisterCommand.ExecuteAsync(null);
         Assert.Null(vm.ErrorMessage);
         Assert.Equal("Mary Santos", Me(gw).FullName);

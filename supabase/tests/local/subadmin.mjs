@@ -71,8 +71,13 @@ try {
     await as(superAdmin, `select revoke_role($1,'subadmin')`, [member]);
   });
   await test('a sub-admin edits packages but cannot archive or delete them', async () => {
-    await as(sub, 'update membership_packages set price=1100 where membership_package_id=$1', [pack]);
-    assert.equal(Number((await db.query('select price from membership_packages where membership_package_id=$1', [pack])).rows[0].price), 1100);
+    // G9 (0061): a package on sale is locked; the sub-admin changes it through a new version
+    await assert.rejects(as(sub, 'update membership_packages set price=1100 where membership_package_id=$1', [pack]), /package_published/);
+    const version = (await as(sub, 'select new_package_version($1) id', [pack]))[0].id;
+    await as(sub, 'update membership_packages set price=1100 where membership_package_id=$1', [version]);
+    assert.equal(Number((await db.query('select price from membership_packages where membership_package_id=$1', [version])).rows[0].price), 1100);
+    await as(sub, `delete from membership_packages where membership_package_id=$1`, [version]).catch(() => {});   // the table refuses deletes (0024)
+    assert.ok((await db.query('select 1 from membership_packages where membership_package_id=$1', [version])).rowCount);
     await refused(as(sub, `select archive_catalog_record('plan',$1,'old')`, [pack]));
     await refused(as(sub, 'delete from membership_packages where membership_package_id=$1', [pack]));
     assert.ok((await db.query('select 1 from membership_packages where membership_package_id=$1', [pack])).rowCount);

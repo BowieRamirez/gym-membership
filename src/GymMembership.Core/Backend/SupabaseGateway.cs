@@ -111,7 +111,7 @@ public sealed class SupabaseGateway : ISupabaseGateway
         await c.Auth.SignIn(email.Trim(), password);
     }
 
-    public async Task SignUpAsync(string email, string password, string firstName, string lastName)
+    public async Task SignUpAsync(string email, string password, string firstName, string lastName, string termsVersion)
     {
         var c = await ReadyAsync();
         Session? session;
@@ -123,7 +123,7 @@ public sealed class SupabaseGateway : ISupabaseGateway
                 Data = new Dictionary<string, object>
                 {
                     ["first_name"] = firstName, ["last_name"] = lastName, ["full_name"] = NameParts.Join(firstName, lastName),
-                    ["username"] = email.Trim().ToLowerInvariant()
+                    ["username"] = email.Trim().ToLowerInvariant(), ["terms_version"] = termsVersion   // 0069
                 }
             });
         }
@@ -259,11 +259,11 @@ public sealed class SupabaseGateway : ISupabaseGateway
         await c.Rpc(function, args);
     }
 
-    public async Task InvokeFunctionAsync(string name, Dictionary<string, object> body)
+    public async Task<string> InvokeFunctionAsync(string name, Dictionary<string, object> body)
     {
         var c = await ReadyAsync();
-        // the signed-in admin's own token goes along, and the function checks it is an admin (supabase/functions/_shared/admin.ts)
-        try { await c.Functions.Invoke(name, c.Auth.CurrentSession?.AccessToken, new Supabase.Functions.Client.InvokeFunctionOptions { Body = body }); }
+        // the signed-in staff member's own token goes along, and the function checks who it is (supabase/functions/_shared/admin.ts)
+        try { return await c.Functions.Invoke(name, c.Auth.CurrentSession?.AccessToken, new Supabase.Functions.Client.InvokeFunctionOptions { Body = body }); }
         catch (Exception ex) when (ErrorCode(ex.Message) is { } code) { throw new Exception(code, ex); }   // {"error":"email_taken"} -> email_taken
     }
 

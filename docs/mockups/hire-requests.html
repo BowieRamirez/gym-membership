@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hire requests</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  /* the app's own tokens (Resources/Styles/Colors.xaml) */
+  :root {
+    --page: #0E0E0E; --card: #1A1A1A; --surface: #242424; --line: #2A2A2A; --edge: #757575; --rail: #161616;
+    --ink: #F2F2F2; --muted: #A6A6A6; --signal: #FFEC00; --good: #4CC38A; --bad: #FF7B70; --black: #111111;
+  }
+  .light { --page: #EEEEEE; --card: #FFFFFF; --surface: #F5F5F5; --line: #E4E4E4; --edge: #808080; --rail: #FFFFFF;
+           --ink: #111111; --muted: #5B5B5B; --good: #1E7A4E; --bad: #C42B21; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #2b2b2b; color: #F2F2F2; font: 15px/1.45 Barlow, system-ui, sans-serif; padding: 32px 24px 64px; }
+  h1.doc { font: 700 26px "Barlow Semi Condensed"; margin: 0 0 4px; }
+  p.doc { color: #bdbdbd; margin: 0 0 28px; max-width: 76ch; }
+  .label { font: 600 13px Barlow; letter-spacing: .02em; color: #cfcfcf; margin: 36px 0 10px; }
+  .row { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+
+  .win { width: 1280px; max-width: 100%; background: var(--page); color: var(--ink); border-radius: 10px; overflow: hidden; display: flex; position: relative; }
+  .rail { width: 72px; background: var(--rail); display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 18px 0; }
+  .rail i { width: 26px; height: 26px; border-radius: 7px; background: #2c2c2c; display: block; }
+  .rail i.on { background: var(--signal); width: 40px; height: 40px; border-radius: 10px; }
+  .rail .hf { width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--signal); color: var(--signal); display: grid; place-items: center; font: 700 14px "Barlow Semi Condensed"; }
+  main { flex: 1; padding: 22px 28px 32px; }
+  .title { font: 600 30px "Barlow Semi Condensed"; margin: 0 0 18px; }
+  .sec { font: 600 20px "Barlow Semi Condensed"; margin: 26px 0 4px; display: flex; align-items: baseline; gap: 10px; }
+  .sec .count { font: 600 13px Barlow; background: var(--signal); color: var(--black); border-radius: 10px; padding: 1px 8px; }
+  .sub { color: var(--muted); margin: 0 0 10px; font-size: 14px; }
+  .chips { display: flex; gap: 8px; margin: 2px 0 10px; }
+  .chip { height: 32px; padding: 0 14px; border-radius: 16px; border: 1.5px solid var(--ink); display: inline-grid; place-items: center; font: 600 14px Barlow; }
+  .chip.on { background: var(--signal); border-color: var(--signal); color: var(--black); }
+
+  .table { background: var(--card); border-radius: 14px; overflow: hidden; }
+  .tr { display: grid; align-items: center; padding: 10px 16px; border-top: 1px solid var(--line); min-height: 56px; }
+  .tr.head { border-top: 0; min-height: 40px; color: var(--muted); font-size: 13px; }
+  .req .tr { grid-template-columns: 1.4fr 1fr 1fr auto; }
+  .mem .tr { grid-template-columns: 1.4fr 1.6fr 1fr auto; }
+  .ses .tr { grid-template-columns: 1.2fr 1fr 1.3fr .8fr .8fr; }
+  .who { display: flex; align-items: center; gap: 12px; font-weight: 600; }
+  .av { width: 34px; height: 34px; border-radius: 50%; background: #F2F2F2; color: #111; display: grid; place-items: center; font: 700 13px Barlow; flex: none; }
+  .light .av { background: #111; color: #fff; }
+  .muted { color: var(--muted); }
+  .acts { display: flex; gap: 8px; justify-content: flex-end; }
+  .btn { height: 34px; padding: 0 16px; border-radius: 17px; background: var(--signal); color: var(--black); font: 700 14px Barlow; display: inline-grid; place-items: center; }
+  .ghost { height: 34px; padding: 0 16px; border-radius: 17px; border: 1.5px solid var(--ink); font: 600 14px Barlow; display: inline-grid; place-items: center; }
+  .status { display: inline-flex; align-items: center; gap: 6px; background: var(--surface); border-radius: 12px; padding: 3px 10px; font-size: 13px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--signal); }
+  .dot.g { background: var(--good); } .dot.b { background: #6EA8FF; }
+  .note { position: absolute; background: #FFEC00; color: #111; font: 600 12px Barlow; padding: 10px 14px; border-radius: 8px; max-width: 240px; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
+
+  /* phone */
+  .phone { width: 390px; background: var(--page); color: var(--ink); border-radius: 36px; overflow: hidden; border: 10px solid #000; padding: 18px 16px 24px; }
+  .phone .title { font-size: 26px; margin-bottom: 10px; }
+  .pcard { background: var(--card); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; }
+  .pcard .top { display: flex; align-items: center; gap: 12px; }
+  .pcard .meta { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .pcard .acts { justify-content: flex-start; margin-top: 10px; }
+
+  /* member coach cards */
+  .ccard { width: 360px; background: var(--card); color: var(--ink); border-radius: 16px; padding: 16px; }
+  .ccard .top { display: flex; gap: 14px; }
+  .ccard .big { width: 64px; height: 64px; border-radius: 50%; background: #F2F2F2; color: #111; display: grid; place-items: center; font: 700 22px Barlow; flex: none; }
+  .ccard h2 { margin: 0; font: 600 20px Barlow; }
+  .ccard .spec { font-weight: 500; }
+  .ccard .cap { font-size: 13px; color: var(--muted); }
+  .ccard .bio { color: var(--muted); margin: 12px 0 8px; }
+  .ccard .rate { font-weight: 600; margin: 8px 0 12px; }
+</style>
+</head>
+<body>
+  <h1 class="doc">Hire requests (G30)</h1>
+  <p class="doc">Hire now sends a request. The coach answers on their Sessions page; their accepted members are listed there too (moved from My shifts). Real copy, the app's colours and type. Lists are tables, as the owner asked for Refunds; on a phone each row folds into a short card.</p>
+
+  <div class="label">1 · Coach, Windows (dark): Sessions with a request waiting</div>
+  <div class="win">
+    <div class="rail"><div class="hf">HF</div><i></i><i class="on"></i><i></i><i></i><i></i><i></i></div>
+    <main>
+      <p class="title">Sessions</p>
+
+      <div class="sec">Hire requests <span class="count">2</span></div>
+      <p class="sub">Members who asked you to coach them. Accept to start messaging and booking sessions together.</p>
+      <div class="table req">
+        <div class="tr head"><span>Member</span><span>Asked</span><span></span><span></span></div>
+        <div class="tr"><span class="who"><span class="av">AR</span>Ana Reyes</span><span class="muted">Sun 15 Nov</span><span></span>
+          <span class="acts"><span class="btn">Accept</span><span class="ghost">Decline</span></span></div>
+        <div class="tr"><span class="who"><span class="av">JM</span>Joel Manalo</span><span class="muted">Sat 14 Nov</span><span></span>
+          <span class="acts"><span class="btn">Accept</span><span class="ghost">Decline</span></span></div>
+      </div>
+
+      <div class="sec">Your members</div>
+      <p class="sub">Members you coach. Message them, or remove them when you stop training together.</p>
+      <div class="table mem">
+        <div class="tr head"><span>Member</span><span>Next session</span><span>Completed</span><span></span></div>
+        <div class="tr"><span class="who"><span class="av">AT</span>Alex Tan</span><span>Mon 16 Nov, 5:00 PM to 6:00 PM</span><span class="muted">6 sessions</span>
+          <span class="acts"><span class="ghost">Message</span><span class="ghost">Remove</span></span></div>
+        <div class="tr"><span class="who"><span class="av">BL</span>Bea Lim</span><span class="muted">No session booked</span><span class="muted">0 sessions</span>
+          <span class="acts"><span class="ghost">Message</span><span class="ghost">Remove</span></span></div>
+      </div>
+
+      <div class="sec">Sessions</div>
+      <div class="chips"><span class="chip on">All</span><span class="chip">Scheduled</span><span class="chip">Completed</span><span class="chip">Cancelled or no-show</span></div>
+      <div class="table ses">
+        <div class="tr head"><span>Session</span><span>With</span><span>When</span><span>Amenity</span><span>Status</span></div>
+        <div class="tr"><span>Strength session</span><span>Alex Tan</span><span>Mon 16 Nov, 5:00 PM to 6:00 PM</span><span class="muted">Weights</span><span><span class="status"><span class="dot b"></span>Scheduled</span></span></div>
+      </div>
+    </main>
+    <div class="note" style="right: 28px; top: 74px">Only shows while requests are waiting. Accept is the one yellow button on the row; Decline asks once before it goes.</div>
+  </div>
+
+  <div class="row">
+    <div>
+      <div class="label">2 · Coach, phone (light): rows fold into short cards</div>
+      <div class="phone light">
+        <p class="title">Sessions</p>
+        <div class="sec" style="margin-top:4px">Hire requests <span class="count">2</span></div>
+        <p class="sub">Accept to start messaging and booking sessions together.</p>
+        <div class="pcard"><div class="top"><span class="av">AR</span><div><b>Ana Reyes</b><div class="meta">Asked Sun 15 Nov</div></div></div>
+          <div class="acts"><span class="btn">Accept</span><span class="ghost">Decline</span></div></div>
+        <div class="pcard"><div class="top"><span class="av">JM</span><div><b>Joel Manalo</b><div class="meta">Asked Sat 14 Nov</div></div></div>
+          <div class="acts"><span class="btn">Accept</span><span class="ghost">Decline</span></div></div>
+        <div class="sec">Your members</div>
+        <div class="pcard"><div class="top"><span class="av">AT</span><div><b>Alex Tan</b><div class="meta">Next: Mon 16 Nov, 5:00 PM · 6 completed</div></div></div>
+          <div class="acts"><span class="ghost">Message</span><span class="ghost">Remove</span></div></div>
+      </div>
+    </div>
+    <div>
+      <div class="label">3 · Member, Coaches page: the three states of a card</div>
+      <div class="row" style="gap:16px">
+        <div class="ccard"><div class="top"><span class="big">KM</span><div><h2>Kai Mendoza</h2><div class="spec">Boxing and mobility</div><div class="cap">In the gym now</div></div></div>
+          <p class="bio">Former amateur boxer. Sessions focus on footwork, conditioning and joint mobility.</p>
+          <div class="rate">₱700.00 per hour</div><span class="ghost">Hire</span></div>
+        <div class="ccard"><div class="top"><span class="big">KM</span><div><h2>Kai Mendoza</h2><div class="spec">Boxing and mobility</div>
+          <div style="margin:4px 0"><span class="status"><span class="dot"></span>Requested</span></div><div class="cap">Waiting for Kai to accept.</div></div></div>
+          <p class="bio">Former amateur boxer. Sessions focus on footwork, conditioning and joint mobility.</p>
+          <div class="rate">₱700.00 per hour</div><span class="ghost">Cancel request</span></div>
+        <div class="ccard"><div class="top"><span class="big">KM</span><div><h2>Kai Mendoza</h2><div class="spec">Boxing and mobility</div>
+          <div style="margin:4px 0"><span class="status"><span class="dot"></span>Hired</span></div><div class="cap">Your coach</div></div></div>
+          <p class="bio">Former amateur boxer. Sessions focus on footwork, conditioning and joint mobility.</p>
+          <div class="rate">₱700.00 per hour</div><span class="ghost">Message</span> <span class="ghost">End hire</span></div>
+      </div>
+      <p class="doc" style="margin-top:12px">Hire asks first: "Send a hire request to Kai Mendoza? They will accept or decline it. Once they accept, you can message them and book sessions together." The member gets a notification when the coach accepts or declines.</p>
+    </div>
+  </div>
+</body>
+</html>

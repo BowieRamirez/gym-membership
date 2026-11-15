@@ -33,9 +33,9 @@ public static class ErrorMapper
     {
         var m = message.ToLowerInvariant();
         if (Has(m, "forbidden", "42501", "jwt", "row-level security", "invalid login", "invalid_credentials", "not authenticated")) return AppErrorKind.Unauthorized;
-        if (Has(m, "account_has_commitments", "account_archived", "record_archived", "record_not_restorable", "code_limit_reached", "shift_has_sessions", "slot_taken", "member_busy", "stale_proposal", "coach_unavailable", "coach_busy", "already_started", "not_in_use", "amenity_unavailable", "not_archived", "already_processed", "already_availed", "renewal_pending", "already_requested", "refund_in_progress", "not_refundable", "pending_session_request", "active_coaching_session", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
-        if (Has(m, "account_inactive", "no_open_shift", "shift_open", "note_required", "bad_archive_reason", "bad_correction_reason", "discount_fixed", "discount_locked", "wrong_pin", "pin_locked", "no_desk_pin", "pin_required", "scan_required", "bad_pin", "refund_reason_required", "no_coach_present", "self_archive", "last_active_admin", "no_active_membership", "self_verify", "self_decision", "not_renewable", "wrong_member", "not_found", "23514",
-                   "refund_window_closed", "too_soon", "too_late_to_cancel", "not_ended", "claim_window_closed", "payment_expired", "gym_closed", "coach_not_in_gym", "bad_rate", "invite_member_inactive", "invalid_code", "limit_required", "bad_hours", "off_grid", "outside_gym_hours", "too_long", "past_slot", "too_far_ahead", "no_pass", "limit_below_used", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "super_admin_protected", "bad_code", "code_not_verified", "resend_wait", "same_password", "end must be after start")) return AppErrorKind.Validation;
+        if (Has(m, "item_not_for_sale", "already_published", "package_published", "package_archived", "name_taken", "draft_exists", "not_published", "published_archive_instead", "account_has_commitments", "account_archived", "record_archived", "record_not_restorable", "code_limit_reached", "code_taken", "discount_used", "name_complete", "shift_has_sessions", "slot_taken", "member_busy", "stale_proposal", "coach_unavailable", "coach_busy", "already_started", "not_in_use", "amenity_unavailable", "not_archived", "already_processed", "already_availed", "renewal_pending", "already_requested", "refund_in_progress", "not_refundable", "pending_session_request", "active_coaching_session", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
+        if (Has(m, "account_inactive", "no_open_shift", "shift_open", "note_required", "bad_archive_reason", "bad_correction_reason", "discount_fixed", "discount_locked", "wrong_pin", "has_desk_pin", "bad_down_payment", "coach_not_free", "not_confirmed", "balance_paid", "wrong_member_password", "proof_invalid", "auth_unavailable", "pin_locked", "no_desk_pin", "pin_required", "scan_required", "bad_pin", "refund_reason_required", "no_coach_present", "self_archive", "last_active_admin", "no_active_membership", "self_verify", "self_decision", "not_renewable", "wrong_member", "not_found", "23514",
+                   "missing_fields", "refund_window_closed", "refund_week_passed", "nothing_to_refund", "terms_required", "too_soon", "too_late_to_cancel", "not_ended", "claim_window_closed", "payment_expired", "gym_closed", "day_closed", "day_past", "coach_not_in_gym", "hire_already_requested", "bad_rate", "invite_member_inactive", "invalid_code", "code_already_used", "code_not_for_item", "no_items", "item_not_found", "limit_required", "bad_hours", "off_grid", "outside_gym_hours", "too_long", "past_slot", "too_far_ahead", "no_pass", "limit_below_used", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "super_admin_protected", "bad_code", "code_not_verified", "resend_wait", "same_password", "end must be after start")) return AppErrorKind.Validation;
         return AppErrorKind.Unknown;
     }
 
@@ -54,17 +54,53 @@ public static class ErrorText
         _ => "Something went wrong. Try again."
     };
 
-    /// <summary>Prefers a specific sentence for the few failures the user can fix; falls back to the generic text.</summary>
-    public static string For(AppErrorKind kind, string? raw) => raw switch
+    /// <summary>Prefers a specific sentence for the few failures the user can fix; falls back to the generic text.
+    /// The real server wraps the reason ({"code":"P0002",...,"message":"no_open_shift"}); the demo sends it bare.</summary>
+    public static string For(AppErrorKind kind, string? raw)
+    {
+        var message = ServerMessage(raw);
+        var text = Sentence(kind, message);
+        // the whole body still counts when the message alone has no sentence (an auth error's code sits beside it, not in it)
+        return text == For(kind) && message != raw ? Sentence(kind, raw) : text;
+    }
+
+    static string? ServerMessage(string? raw)
+    {
+        if (raw is null || !raw.TrimStart().StartsWith('{')) return raw;
+        try { return System.Text.Json.JsonDocument.Parse(raw).RootElement.TryGetProperty("message", out var m) && m.GetString() is { } s ? s : raw; }
+        catch (System.Text.Json.JsonException) { return raw; }
+    }
+
+    static string Sentence(AppErrorKind kind, string? raw) => raw switch
     {
         "bad_archive_reason" => "Enter a reason for deletion, from 1 to 500 characters.",
         "bad_correction_reason" => "Enter a reason for the correction, from 1 to 500 characters.",
         "discount_fixed" => "A code and its percent can't change. To change them, archive this code and add a new one.",
-        "discount_locked" => "This code has been used, so it can't be changed. Turn it off and add a new code if you need different terms.",
+        "discount_locked" => "A code can't be changed once it's made. Turn it off and add a new code with the terms you need.",
+        "code_already_used" => "You've already used this code. Each code works once per person.",
+        "code_not_for_item" => "That code doesn't work for this. Check what the code is for.",
+        "no_items" => "Choose at least one package or amenity the code can be used for.",
+        "item_not_found" => "One of the packages or amenities you chose is no longer on sale. Reload the page and choose again.",
+        "code_taken" => "That code already exists, maybe in the Archive. Choose a different code.",
+        // G6, G9 (0061)
+        "item_not_for_sale" => "That isn't on sale. Reload the page and choose again.",
+        "missing_fields" => "Fill in the name, description and a price above zero before adding it.",
+        "already_published" => "That's already on sale. Reload the page.",
+        "package_published" => "A package on sale can't be changed. Create a new version, change that, then publish it.",
+        "package_archived" => "An archived package can't go back on sale. Create a new package or a new version instead.",
+        "name_taken" => "A package on sale already has that name. Choose a different name, or create a new version of that package.",
+        "draft_exists" => "This package already has a draft version. Finish or delete that draft first.",
+        "not_published" => "Only a package that's on sale can get a new version.",
+        "published_archive_instead" => "This has been on sale, so it can't be deleted. Archive it instead; its history stays.",
+        "discount_used" => "This code has been used on a payment, so it can't be deleted. Turn it off or archive it instead.",
         "wrong_pin" => "That PIN is wrong. Ask the member to try again. After 5 wrong tries it locks for 15 minutes.",
-        "pin_locked" => "Too many wrong PINs: this member's desk PIN is locked for 15 minutes. Scan their QR code instead, or ask an Admin.",
+        "pin_locked" => "Too many wrong tries (PIN or password): this member is locked for 15 minutes. Scan their QR code instead, or ask an Admin.",
+        "wrong_member_password" => "Wrong password. Ask the member to try again. After 5 wrong tries (PIN or password) it locks for 15 minutes.",
+        "proof_invalid" => "The password check ran out. Ask the member to type their password again.",
+        "auth_unavailable" => "The password can't be checked right now. Try the desk PIN, or scan their QR code.",
         "no_desk_pin" => "This member hasn't set a desk PIN yet (Settings in their app). An Admin or System admin can check them in with a reason.",
         "pin_required" => "Enter the member's desk PIN.",
+        "has_desk_pin" => "This member has a desk PIN, so a reason isn't enough. Ask them to type their PIN, or use Sign in instead.",
         "no_open_shift" => "Start your cash shift on the Cashier page first: cash you take or pay back goes through your drawer.",
         "shift_open" => "Your shift is already open. End it before starting a new one.",
         "note_required" => "Add a note: the amount differs from what's expected.",
@@ -98,7 +134,10 @@ public static class ErrorText
         "not_in_use" => "This booking is not in use right now.",
         "stale_proposal" => "Your coach changed the proposal since you opened it. The list now shows the latest one.",
         "gym_closed" => "The gym is closed right now. Coaches can check in during opening hours.",
+        "day_closed" => "The gym is closed that day. See Announcements for why, and choose another day.",   // G17 (0065)
+        "day_past" => "That day has passed. Choose today or a later day.",
         "coach_not_in_gym" => "This coach just left the gym. You can hire them when they are back.",
+        "hire_already_requested" => "You have already asked this coach. Wait for them to answer, or cancel the request.",
         "bad_rate" => "Enter an hourly rate above ₱0 with at most two decimals, for example 350 or 350.50.",
         _ when raw?.Contains("coaches_rate_positive", StringComparison.OrdinalIgnoreCase) == true => For(kind, "bad_rate"),
         _ when raw?.Contains("shift_posts_no_overlap", StringComparison.OrdinalIgnoreCase) == true => "You already have a shift at that time. Pick another start or fewer hours.",
@@ -109,8 +148,13 @@ public static class ErrorText
         "account_inactive" => "This account is inactive and cannot receive a new booking, coaching hire or pending payment.",
         "invalid_code" => "That discount code isn't valid, or it has expired.",
         "bad_walk_in_price" => "Enter a walk-in price above ₱0.",
+        "bad_down_payment" => "The down payment is a percent from 1 to 100.",
+        "coach_not_free" => "That coach isn't free for the whole time any more. Pick another coach or another time.",
+        "not_confirmed" => "This booking isn't confirmed yet: its down payment hasn't been verified.",
+        "balance_paid" => "The balance is already paid at the desk, so the booking can't be cancelled here. The desk can void that payment first.",
         "zero_amount" => "A payment of ₱0 can't be recorded. Ask an administrator to set a price above ₱0.",
         "bad_input" => "Fill in every field, then try again.",
+        "name_complete" => "Your name is already complete. A System admin can correct it if it is wrong.",
         "bad_name" => "Enter a first and a last name in letters. Spaces, hyphens and apostrophes are fine. At least 2 letters each, 60 characters together.",
         "bad_email" => "Enter a valid email address, for example name@example.com. Up to 100 characters.",
         "bad_password" => "Use 8 to 64 characters for your password, with at least one letter and one number.",
@@ -121,7 +165,7 @@ public static class ErrorText
         "bad_back_at" => "Pick a return time that is still ahead.",
         "bad_reason" => "Keep the reason under 200 characters.",
         "bad_status" => "Choose Available, In use or Unavailable.",
-        "bad_discount" => "Enter a code and a percent between 1 and 100.",
+        "bad_discount" => "Enter a code of 3 to 30 letters, numbers or dashes, a percent between 1 and 100, and a last day from today on.",
         "email_confirmation_required" => "Check your email and confirm your address, then sign in.",
         _ when raw?.Contains("invalid login credentials", StringComparison.OrdinalIgnoreCase) == true || raw?.Contains("invalid_credentials", StringComparison.OrdinalIgnoreCase) == true => "Email or password is incorrect. Try again, or use Forgot password? to reset your password.",
         "wrong_password" => "Your current password isn't right.",
@@ -134,6 +178,9 @@ public static class ErrorText
         "already_availed" => "You already have this, or a payment for it is waiting. Renew it, or wait for the payment to be reviewed.",
         "renewal_pending" => "A membership or extension payment is already waiting. Finish that payment first.",
         "refund_window_closed" => "This term has ended, so a refund can't be requested.",
+        "refund_week_passed" => "Refunds are only for a term's first 7 days, and this one is past that.",   // G23 (0068)
+        "terms_required" => "Tick the box to agree to the Terms and Policy.",   // G25 (0069)
+        "nothing_to_refund" => "This term has ended, so there is nothing left to refund. Reject the request instead.",
         "refund_reason_required" => "Choose why you are asking for a refund.",
         "no_coach_present" => "Amenities can only be used while a coach is in the gym, and no coach is here right now.",
         "payment_expired" => "That unpaid payment has expired. Create a fresh payment.",
@@ -235,7 +282,8 @@ public interface ISupabaseGateway
 {
     string? CurrentUserId { get; }
     Task SignInAsync(string email, string password);
-    Task SignUpAsync(string email, string password, string firstName, string lastName);
+    /// <param name="termsVersion">The Terms and Policy version the member agreed to (G25, 0069); the server refuses a sign-up without it.</param>
+    Task SignUpAsync(string email, string password, string firstName, string lastName, string termsVersion);
     /// <summary>Whether an account uses this address. Works signed out; the server limits how often it can be asked.</summary>
     Task<bool> EmailInUseAsync(string email);
     /// <summary>The signed-in person's sign-in email, or null when nobody is signed in.</summary>
@@ -263,5 +311,6 @@ public interface ISupabaseGateway
     /// <summary>A short-lived link to a private file (a payment screenshot, the gym's QR), or null if it does not exist.</summary>
     Task<string?> SignedUrlAsync(string bucket, string path);
     /// <summary>Calls an Edge Function (create-user, reset-password), which holds the service-role key the app never has.</summary>
-    Task InvokeFunctionAsync(string name, Dictionary<string, object> body);
+    /// <returns>The function's JSON answer.</returns>
+    Task<string> InvokeFunctionAsync(string name, Dictionary<string, object> body);
 }

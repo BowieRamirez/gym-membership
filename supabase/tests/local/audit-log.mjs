@@ -23,7 +23,7 @@ async function as(uid, sql, args = [], headers = null) {
 }
 async function person(role, name) {
   return (await db.query('insert into auth.users(email,raw_user_meta_data,raw_app_meta_data) values($1,$2,$3) returning id',
-    [`audit-${++serial}@test.io`, JSON.stringify({ full_name: name }), JSON.stringify(role ? { role } : {})])).rows[0].id;
+    [`audit-${++serial}@test.io`, JSON.stringify({ full_name: name, terms_version: '2026-11-15' }), JSON.stringify(role ? { role } : {})])).rows[0].id;
 }
 const page = (uid, args = {}) => as(uid, `select * from audit_records(p_from=>$1, p_to=>$2, p_user=>$3, p_area=>$4, p_entity=>$5, p_offset=>$6, p_limit=>$7)`,
   [args.from ?? null, args.to ?? null, args.user ?? '', args.area ?? '', args.entity ?? '', args.offset ?? 0, args.limit ?? 11]);

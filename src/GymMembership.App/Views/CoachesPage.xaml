@@ -30,7 +30,10 @@
                                     <Label Text="{Binding Name}" Style="{StaticResource Heading}" />
                                     <Label Text="{Binding Coach.Specialty}" FontFamily="BarlowMedium" />
                                     <Label Text="Not taking new members right now." Style="{StaticResource Caption}" IsVisible="{Binding Closed}" />
+                                    <c:StatusChip Status="{Binding HireBadge}" IsVisible="{Binding HireBadge, Converter={StaticResource HasText}}" Margin="0,2" />
                                     <Label Text="Your coach" Style="{StaticResource Caption}" IsVisible="{Binding Hired}" />
+                                    <Label Text="{Binding WaitingText}" Style="{StaticResource Caption}" IsVisible="{Binding Requested}" />
+                                    <Label Text="In the gym now" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold" IsVisible="{Binding InGym}" />
                                     <Label Text="Not in the gym right now." Style="{StaticResource Caption}" IsVisible="{Binding InGym, Converter={StaticResource Not}}" />
                                 </VerticalStackLayout>
                             </Grid>
@@ -42,7 +45,8 @@
                             <Label Text="{Binding RateText}" FontFamily="BarlowSemiBold" />
                             <FlexLayout Wrap="Wrap">
                                 <Button Text="Hire" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                        IsVisible="{Binding Hired, Converter={StaticResource Not}}" IsEnabled="{Binding Closed, Converter={StaticResource Not}}" Clicked="OnHire" />
+                                        IsVisible="{Binding ShowHire}" IsEnabled="{Binding CanHire}" Clicked="OnHire" />
+                                <Button Text="Cancel request" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding Requested}" Clicked="OnCancelRequest" />
                                 <Button Text="Message" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding Hired}" Clicked="OnMessage" />
                                 <Button Text="End hire" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding Hired}" Clicked="OnEndHire" />
                             </FlexLayout>

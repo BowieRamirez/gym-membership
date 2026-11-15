@@ -11,6 +11,9 @@ static class Fmt
 
     /// <summary>"6:05 PM"</summary>
     public static string Time(DateTime d) => $"{Local(d):h:mm tt}";
+
+    /// <summary>"Sun 15 Nov"</summary>
+    public static string Date(DateTime d) => $"{Local(d):ddd d MMM}";
 }
 
 // ===================== Messenger =====================

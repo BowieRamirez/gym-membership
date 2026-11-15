@@ -81,8 +81,8 @@ try {
     await as(admin, `select record_membership_refund_paid($1,'cash')`, [req.refund_request_id]);
     assert.equal((await db.query('select cash_shift_id from refund_requests where refund_request_id=$1', [req.refund_request_id])).rows[0].cash_shift_id, adminShift.shift_id);
     const s = (await mine(admin))[0];
-    assert.equal(Number(s.cash_out), 1000); assert.equal(Number(s.expected), 4000);
-    await close(admin, 4000);
+    assert.equal(Number(s.cash_out), 966.67); assert.equal(Number(s.expected), 4033.33);   // G22 (0067): day 1 of 30 used, PHP 966.67 back
+    await close(admin, 4033.33);
   });
   await test('a voided cash payment drops out of the expected cash', async () => {
     const p = (await walkIn(desk))[0];

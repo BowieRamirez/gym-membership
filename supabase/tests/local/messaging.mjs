@@ -122,7 +122,7 @@ try {
     const pay = (await as(m, 'select * from extend_membership($1,null)', [pack2]))[0];
     await as(desk2, 'select verify_payment($1,true)', [pay.payment_id]);
     await db.query('insert into coach_visits(coach_id,checked_in_by) values($1,$1)', [c]);
-    await as(m, 'select hire_coach($1)', [c]);
+    await as(c, 'select answer_hire($1,true)', [(await as(m, 'select hire_coach($1) id', [c]))[0].id]);   // G30 (0074): the coach accepts
     await as(c, 'insert into shift_posts(coach_id,starts_at,ends_at) values($1,$2,$3)', [c, at('06:00'), at('22:00')]);
     return { c, m };
   }

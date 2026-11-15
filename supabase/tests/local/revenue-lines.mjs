@@ -55,7 +55,7 @@ try {
     assert.equal(rows.filter(r => !r.refund).length, sum.reduce((s, r) => s + Number(r.payments), 0));
     assert.ok(!rows.some(r => r.payment === String(voided.pay.payment_id)));
     const refund = rows.find(r => r.refund);
-    assert.equal(Number(refund.amount), -1000); assert.equal(refund.payer, 'Refund Person'); assert.ok(refund.receipt);
+    assert.equal(Number(refund.amount), -966.67);   // G22 (0067): day 1 of 30 used assert.equal(refund.payer, 'Refund Person'); assert.ok(refund.receipt);
     assert.equal(rows.filter(r => r.payment === String(refunded.pay.payment_id)).length, 2);
   });
   await test('labels: member or walk-in name, package or walk-in item, receipt number, method', async () => {

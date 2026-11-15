@@ -23,7 +23,7 @@ public class PaymentTests
     {
         var gw = new DemoGateway();
         var auth = new AuthService(gw);
-        Assert.True((await auth.RegisterAsync("Ana", "Reyes", "ana@demo.io", "secret12")).Ok);
+        Assert.True((await auth.RegisterAsync("Ana", "Reyes", "ana@demo.io", "secret12", true)).Ok);
         var member = new MembershipService(gw);
 
         // 1. a pending payment with a code to type into the e-wallet message and a deadline
@@ -141,19 +141,23 @@ public class PaymentTests
         // 0046 refuses it on the server for every path; the demo stands in for that
         var gw = await As("admin@demo.io");
         var settings = (await gw.ListAsync<GymSettings>()).First(); settings.WalkInPrice = 0; await gw.UpdateAsync(settings);
-        var free = (await gw.ListAsync<MembershipPackage>()).First(p => p.Name == "Monthly"); free.Price = 0; await gw.UpdateAsync(free);
-        Assert.True((await new AdminService(gw).SaveDiscountAsync(new Discount { Code = "ALLFREE", Percent = 100, MaxUses = 5, ExpiresAt = DateTime.UtcNow.AddDays(1) })).Ok);
+        // G6 (0061): a package at zero can't go on sale at all (publishing needs a price above zero)
+        var admin = new AdminService(gw);
+        Assert.True((await admin.SavePackageAsync(new MembershipPackage { Name = "Free", Description = "Nothing to pay", Price = 0, DurationDays = 30 })).Ok);
+        var free = (await gw.ListAsync<MembershipPackage>()).Single(p => p.Name == "Free");
+        Assert.Equal("missing_fields", (await admin.PublishAsync("plan", free.Id)).Message);
+        Assert.True((await new AdminService(gw).CreateDiscountAsync(new Discount { Code = "ALLFREE", Percent = 100, MaxUses = 5, ExpiresAt = DateTime.UtcNow.AddDays(1) }, DiscountItem.Everything)).Ok);
 
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();
         var staff = new PaymentStaffService(gw);
         Assert.Equal("zero_amount", (await staff.RecordCounterAsync(PayKind.WalkIn, PayMethod.Cash, null, null, "Pedro Ramos", null, null)).Message);
 
         var auth = new AuthService(gw);
-        Assert.True((await auth.RegisterAsync("Free", "Rider", "free@demo.io", "secret12")).Ok);
+        Assert.True((await auth.RegisterAsync("Free", "Rider", "free@demo.io", "secret12", true)).Ok);
         var member = new MembershipService(gw);
-        Assert.Equal("zero_amount", (await member.AvailAsync(free.Id)).Message);
+        Assert.Equal("item_not_for_sale", (await member.AvailAsync(free.Id)).Message);
         Assert.Empty(await gw.ListAsync<UserMembershipPackage>(m => m.MemberId == gw.CurrentUserId));   // nothing left behind
-        Assert.Equal("zero_amount", (await member.AvailAsync(free.Id, "ALLFREE")).Message);   // 100% of ₱0 is no discount
+        Assert.Equal("item_not_for_sale", (await member.AvailAsync(free.Id, "ALLFREE")).Message);   // 100% of ₱0 is no discount
         var quarterly = await Package(gw, "Quarterly");
         var pay = (await member.AvailAsync(quarterly.Id, "ALLFREE")).Value!;
         Assert.Equal((0m, quarterly.Price), (pay.Amount, pay.DiscountAmount));
@@ -218,7 +222,7 @@ public class PaymentTests
     public async Task A_guest_cannot_buy_amenities_hire_coaches_book_sessions_or_chat()
     {
         var gw = new DemoGateway();
-        await new AuthService(gw).RegisterAsync("Guest", "User", "guest@demo.io", "secret12");
+        await new AuthService(gw).RegisterAsync("Guest", "User", "guest@demo.io", "secret12", true);
 
         Assert.Equal(AppErrorKind.Validation, (await Safe.RunAsync(() => gw.RpcAsync<Payment>("avail_amenity", new() { ["p_amenity_id"] = 1 }))).Error);
         Assert.Equal(AppErrorKind.Validation, (await new CoachService(gw).HireAsync("u-coach1")).Error);

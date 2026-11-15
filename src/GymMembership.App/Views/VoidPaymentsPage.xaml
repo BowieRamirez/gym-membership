@@ -70,10 +70,9 @@
                             </Grid>
                             <BoxView Style="{StaticResource Hairline}" />
                         </VerticalStackLayout>
-                        <c:TableBody BindableLayout.ItemsSource="{Binding Recent}" Header="{x:Reference RecentHead}" WideFrom="1000"
-                                     RowTemplate="{StaticResource PaymentRow}" CardTemplate="{StaticResource PaymentCard}"
-                                     BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource PaymentCard}, Default={StaticResource PaymentRow}}">
-                            <BindableLayout.EmptyView><Label Text="No verified payments yet." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                        <c:TableBody Items="{Binding Recent}" Header="{x:Reference RecentHead}" WideFrom="1000"
+                                     RowTemplate="{StaticResource PaymentRow}" CardTemplate="{StaticResource PaymentCard}">
+                            <c:TableBody.Empty><Label Text="No verified payments yet." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                         </c:TableBody>
                     </VerticalStackLayout>
                 </Border>

@@ -18,7 +18,7 @@ public class RegisterEmailCheckTests
         public Task SignOutAsync() => throw new NotImplementedException();
         public Task<AppResult<bool>> ChangePasswordAsync(string current, string next) => throw new NotImplementedException();
         public Task<AppResult<bool>> MustChangePasswordAsync() => throw new NotImplementedException();
-        public Task<AppResult<bool>> RegisterAsync(string firstName, string lastName, string email, string password) => throw new NotImplementedException();
+        public Task<AppResult<bool>> RegisterAsync(string firstName, string lastName, string email, string password, bool agreedToTerms) => throw new NotImplementedException();
         public Task<AppResult<EmailStatus>> EmailStatusAsync() => throw new NotImplementedException();
         public Task<AppResult<bool>> SendEmailCodeAsync(string email) => throw new NotImplementedException();
         public Task<AppResult<bool>> ConfirmEmailAsync(string email, string code) => throw new NotImplementedException();
@@ -125,7 +125,7 @@ public class RegisterEmailCheckTests
     {
         var gw = new DemoGateway();
         var vm = new RegisterViewModel(new AuthService(gw), new NullNavigator())
-        { FirstName = "Ana", LastName = "Reyes", Email = "member@demo.io", Password = "secret12", ConfirmPassword = "secret12" };
+        { FirstName = "Ana", LastName = "Reyes", Email = "member@demo.io", Password = "secret12", ConfirmPassword = "secret12", AgreedToTerms = true };
         await vm.RegisterCommand.ExecuteAsync(null);
         Assert.Equal(ErrorText.For(AppErrorKind.Validation, "email_taken"), vm.ErrorMessage);
     }

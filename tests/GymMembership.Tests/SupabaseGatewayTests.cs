@@ -62,7 +62,7 @@ public sealed class SupabaseGatewayTests : IDisposable
         var request = JsonDocument.Parse(Last.Body).RootElement;
         Assert.Equal("2026-10-01", request.GetProperty("p_from").GetString());
         Assert.Equal("Retired", request.GetProperty("p_reason").GetString());
-        Assert.Equal(60, request.GetProperty("p_offset").GetInt32()); Assert.Equal(31, request.GetProperty("p_limit").GetInt32());
+        Assert.Equal(2 * ArchiveService.PageSize, request.GetProperty("p_offset").GetInt32()); Assert.Equal(ArchiveService.PageSize + 1, request.GetProperty("p_limit").GetInt32());
         _reply = _ => (200, "null");
         Assert.True((await service.RestoreAsync(row)).Ok);
         Assert.EndsWith("/rpc/restore_archived_record", Last.Path);
@@ -122,7 +122,7 @@ public sealed class SupabaseGatewayTests : IDisposable
     {
         var gw = new SupabaseGateway(new SupabaseSettings(_url, "anon-key"));
         _reply = _ => (200, SessionJson("new@demo.io"));
-        await gw.SignUpAsync(" New@Demo.io ", "secret12", "Mary Ann", "Santos");
+        await gw.SignUpAsync(" New@Demo.io ", "secret12", "Mary Ann", "Santos", TermsInfo.Version);
         var signUp = _seen.First(s => s.Path.EndsWith("/auth/v1/signup"));
         var root = JsonDocument.Parse(signUp.Body).RootElement;
         Assert.Equal("new@demo.io", root.GetProperty("email").GetString()!.ToLowerInvariant());
@@ -130,6 +130,7 @@ public sealed class SupabaseGatewayTests : IDisposable
         Assert.Equal("Mary Ann", root.GetProperty("data").GetProperty("first_name").GetString());
         Assert.Equal("Santos", root.GetProperty("data").GetProperty("last_name").GetString());
         Assert.Equal("new@demo.io", root.GetProperty("data").GetProperty("username").GetString());
+        Assert.Equal(TermsInfo.Version, root.GetProperty("data").GetProperty("terms_version").GetString());   // 0069
     }
 
     // ---------- email codes (Phase 11) ----------
@@ -214,7 +215,7 @@ public sealed class SupabaseGatewayTests : IDisposable
     {
         var gw = new SupabaseGateway(new SupabaseSettings(_url, "anon-key"));
         _reply = _ => (422, """{"code":422,"error_code":"user_already_exists","msg":"User already registered"}""");
-        var result = await Safe.RunAsync(async () => { await gw.SignUpAsync("a@b.io", "secret12", "Ana", "Reyes"); return true; });
+        var result = await Safe.RunAsync(async () => { await gw.SignUpAsync("a@b.io", "secret12", "Ana", "Reyes", TermsInfo.Version); return true; });
         Assert.Equal(AppErrorKind.Validation, result.Error);
         Assert.Equal("email_taken", result.Message);
     }
@@ -322,8 +323,9 @@ public sealed class SupabaseGatewayTests : IDisposable
         var gw = await SignedInAsync();
         _reply = _ => (200, """{"result":"active","member":"u-9","name":"Alex Tan","expires":"2026-11-30T16:00:00+00:00"}""");
         var scan = (await new AttendanceService(gw).ScanAsync(" GYM1-abc ")).Value!;
-        Assert.Equal("/rest/v1/rpc/scan_member", Last.Path);
-        Assert.Contains("\"p_code\":\"GYM1-abc\"", Last.Body);
+        Seen call; lock (_seen) call = _seen.Single(s => s.Path == "/rest/v1/rpc/scan_member");
+        Assert.Contains("\"p_code\":\"GYM1-abc\"", call.Body);
+        Assert.StartsWith("/rest/v1/profiles", Last.Path);   // G10: then the member's photo, for the card
         Assert.Equal(("active", "u-9", "Alex Tan", true), (scan.Result, scan.Member, scan.Name, scan.CanCheckIn));
         Assert.Equal(new DateTime(2026, 11, 30, 16, 0, 0, DateTimeKind.Utc), scan.Expires!.Value.ToUniversalTime());
     }
@@ -553,6 +555,26 @@ public sealed class SupabaseGatewayTests : IDisposable
     }
 
     [Fact]
+    public async Task Starting_a_shift_reads_the_new_row_whose_totals_are_still_empty()
+    {
+        // item 1, 2026-11-12: open_cash_shift returns the raw cash_shifts row, and an open row has no cash_in, cash_out or expected yet
+        // (0050's check). Reading it failed, so Start shift stopped before showing the shift the server had just opened.
+        var gw = await SignedInAsync();
+        var paths = new List<string>();
+        _reply = r =>
+        {
+            paths.Add(r.Path);
+            return r.Path.EndsWith("/my_cash_shift")
+                ? (200, """[{"shift_id":8,"opened_at":"2026-11-12T01:00:00+00:00","opening_float":5000.00,"cash_in":0,"cash_out":0,"expected":5000.00}]""")
+                : (200, """{"shift_id":8,"cashier_id":"u-emp","opened_at":"2026-11-12T01:00:00+00:00","opening_float":5000.00,"open_note":null,"closed_at":null,"cash_in":null,"cash_out":null,"expected":null,"counted":null,"close_note":null}""");
+        };
+        var opened = await new PaymentStaffService(gw).OpenShiftAsync(5000, null);
+        Assert.True(opened.Ok, opened.Message);
+        Assert.Equal((8, 5000m, 5000m, true), (opened.Value!.Id, opened.Value.OpeningFloat, opened.Value.Expected, opened.Value.IsOpen));
+        Assert.Equal(new[] { "/rest/v1/rpc/open_cash_shift", "/rest/v1/rpc/my_cash_shift" }, paths);
+    }
+
+    [Fact]
     public async Task Reports_come_back_as_typed_rows_and_a_number_function_returns_a_number()
     {
         var gw = await SignedInAsync();
@@ -577,6 +599,20 @@ public sealed class SupabaseGatewayTests : IDisposable
         _reply = _ => (status, json);
         var result = await Safe.RunAsync(async () => { await gw.RpcAsync("avail_membership", new() { ["p_package_id"] = 1 }); return true; });
         Assert.Equal(expected, result.Error);
+    }
+
+    // 2026-11-15 (owner): Record money repaid said "That clashes with an existing record" on the real backend. PostgREST sends
+    // {"code":"P0002",...,"message":"no_open_shift"}, and the plain sentences were only looked up by the bare name (what the demo sends).
+    [Theory]
+    [InlineData("""{"code":"P0002","details":null,"hint":null,"message":"no_open_shift"}""", "Start your cash shift on the Cashier page first")]
+    [InlineData("""{"code":"P0002","details":null,"hint":null,"message":"discount_locked"}""", "A code can't be changed once it's made")]
+    [InlineData("""{"code":"22023","details":null,"hint":null,"message":"code_already_used"}""", "You've already used this code")]
+    public async Task A_refusal_from_the_real_server_shows_its_plain_sentence(string json, string expected)
+    {
+        var gw = await SignedInAsync();
+        _reply = _ => (400, json);
+        var result = await Safe.RunAsync(async () => { await gw.RpcAsync("record_membership_refund_paid", new() { ["p_request_id"] = 1 }); return true; });
+        Assert.StartsWith(expected, ErrorText.For(result.Error, result.Message));
     }
 
     [Fact]

@@ -246,7 +246,7 @@ public class OfflineDeskTests
         await vm.SearchCommand.ExecuteAsync(null);
         var hit = Assert.Single(vm.Hits);
         Assert.False(hit.CanCheckIn);
-        Assert.Equal("No active membership", hit.PlanText);
+        Assert.Equal(("No membership", "Open Cashier"), (hit.PlanText, hit.NextStepText));   // G10, G11
         await vm.CheckInCommand.ExecuteAsync(hit);
         Assert.Equal("Nora Vale has no active membership.", vm.ErrorMessage);
         Assert.Null(vm.PinFor);

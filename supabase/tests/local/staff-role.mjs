@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 // the way Supabase Auth creates a user: the row first, the role a moment later
 async function twoStep(db, email, role) {
-  const id = (await db.query(`insert into auth.users(email,raw_user_meta_data) values($1,'{"first_name":"Two","last_name":"Step"}') returning id`, [email])).rows[0].id;
+  const id = (await db.query(`insert into auth.users(email,raw_user_meta_data) values($1,'{"first_name":"Two","last_name":"Step","must_change_password":true}') returning id`, [email])).rows[0].id;
   await db.query(`update auth.users set raw_app_meta_data = raw_app_meta_data || jsonb_build_object('role', $2::text) where id=$1`, [id, role]);
   return id;
 }

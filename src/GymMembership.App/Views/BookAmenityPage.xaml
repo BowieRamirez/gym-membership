@@ -5,23 +5,10 @@
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.BookAmenityPage" x:DataType="vm:BookAmenityViewModel" Title="Book an amenity">
 
     <v:BasePage.Resources>
-        <!-- a start time or a length: a chip; the picked one yellow, as the Cashier's chips; ones that don't fit faded and not tappable -->
-        <Style x:Key="PickChip" TargetType="Button" BasedOn="{StaticResource FilterChip}" x:DataType="vm:PickChip">
-            <Setter Property="Margin" Value="0,0,6,6" />
-            <Style.Triggers>
-                <DataTrigger TargetType="Button" Binding="{Binding IsPicked}" Value="True">
-                    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
-                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" />
-                    <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
-                </DataTrigger>
-                <DataTrigger TargetType="Button" Binding="{Binding CanPick}" Value="False">
-                    <Setter Property="Opacity" Value="0.38" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
         <!-- how to pay: an outlined option, the chosen one with the selection outline (ink in light, yellow in dark) -->
         <Style x:Key="PayOption" TargetType="Border" BasedOn="{StaticResource Row}">
             <Setter Property="Padding" Value="12,10" />
@@ -159,13 +146,24 @@
                                                     <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
                                                         <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
                                                     </DataTrigger>
+                                                    <!-- G16 (0065): a closed day, crossed out in red; it still opens to say why -->
+                                                    <DataTrigger TargetType="Border" Binding="{Binding IsClosed}" Value="True">
+                                                        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
+                                                        <Setter Property="StrokeThickness" Value="1.5" />
+                                                        <Setter Property="StrokeDashArray" Value="3,2" />
+                                                        <Setter Property="BackgroundColor" Value="Transparent" />
+                                                    </DataTrigger>
                                                 </Border.Triggers>
                                                 <Grid RowDefinitions="Auto,*">
                                                     <!-- today: the number on a small yellow block, as the Dashboard -->
                                                     <Border StrokeThickness="0" StrokeShape="RoundRectangle 6" Padding="5,0" HorizontalOptions="Start" BackgroundColor="Transparent">
                                                         <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding IsToday}" Value="True"><Setter Property="BackgroundColor" Value="{StaticResource Signal}" /></DataTrigger></Border.Triggers>
                                                         <Label Text="{Binding Number}" FontFamily="BarlowSemiBold" FontSize="14">
-                                                            <Label.Triggers><DataTrigger TargetType="Label" Binding="{Binding IsToday}" Value="True"><Setter Property="TextColor" Value="{StaticResource Black}" /></DataTrigger></Label.Triggers>
+                                                            <Label.Triggers><DataTrigger TargetType="Label" Binding="{Binding IsToday}" Value="True"><Setter Property="TextColor" Value="{StaticResource Black}" /></DataTrigger>
+                                                                <DataTrigger TargetType="Label" Binding="{Binding IsClosed}" Value="True">
+                                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
+                                                                    <Setter Property="TextDecorations" Value="Strikethrough" />
+                                                                </DataTrigger></Label.Triggers>
                                                         </Label>
                                                     </Border>
                                                     <!-- a dot: you already have a booking that day -->
@@ -187,8 +185,16 @@
                             <VerticalStackLayout Grid.Column="{OnIdiom Phone=0, Default=1}" Grid.Row="{OnIdiom Phone=1, Default=0}"
                                                  Padding="{OnIdiom Phone='12,0,12,12', Default='18,8,18,16'}" Spacing="12">
                                 <VerticalStackLayout Spacing="6">
-                                    <Label Text="{Binding DayText}" FontFamily="BarlowSemiBold" FontSize="16" />
-                                    <Label Text="Start time" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding DayText}" FontFamily="BarlowSemiBold" FontSize="16" IsVisible="{Binding IsDayClosed, Converter={StaticResource Not}}" />
+                                    <!-- G16 (0065): a closed day says why, in place of its times -->
+                                    <Border Style="{StaticResource Row}" Padding="14,12" StrokeShape="RoundRectangle 12" IsVisible="{Binding IsDayClosed}" AutomationId="ClosedDayNote">
+                                        <VerticalStackLayout Spacing="4">
+                                            <Label Text="{Binding DayText, StringFormat='Closed {0}'}" FontFamily="BarlowSemiBold" TextColor="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
+                                            <Label Text="{Binding TimesNote}" />
+                                            <Label Text="Pick another day to see free times." Style="{StaticResource Caption}" />
+                                        </VerticalStackLayout>
+                                    </Border>
+                                    <Label Text="Start time" Style="{StaticResource Caption}" IsVisible="{Binding IsDayClosed, Converter={StaticResource Not}}" />
                                     <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Times}">
                                         <BindableLayout.ItemTemplate>
                                             <DataTemplate x:DataType="vm:PickChip">
@@ -196,7 +202,9 @@
                                             </DataTemplate>
                                         </BindableLayout.ItemTemplate>
                                     </FlexLayout>
-                                    <Label Text="{Binding TimesNote}" Style="{StaticResource Caption}" IsVisible="{Binding TimesNote, Converter={StaticResource HasText}}" />
+                                    <Label Text="{Binding TimesNote}" Style="{StaticResource Caption}" IsVisible="{Binding TimesNote, Converter={StaticResource HasText}}">
+                                        <Label.Triggers><DataTrigger TargetType="Label" Binding="{Binding IsDayClosed}" Value="True"><Setter Property="IsVisible" Value="False" /></DataTrigger></Label.Triggers>
+                                    </Label>
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Spacing="6" IsVisible="{Binding Time, Converter={StaticResource IsNotNull}}">
                                     <Label Text="How long" Style="{StaticResource Caption}" />
@@ -208,25 +216,82 @@
                                         </BindableLayout.ItemTemplate>
                                     </FlexLayout>
                                 </VerticalStackLayout>
+                                <!-- G14 (approved mockup docs/mockups/amenity-down-payment.html): Solo, or With a coach who is free the whole time -->
+                                <VerticalStackLayout Spacing="6" IsVisible="{Binding Time, Converter={StaticResource IsNotNull}}">
+                                    <Label Text="Who" Style="{StaticResource Caption}" />
+                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                        <Border Style="{StaticResource PayOption}">
+                                            <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding IsSolo}" Value="True"><Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /><Setter Property="StrokeThickness" Value="2" /></DataTrigger></Border.Triggers>
+                                            <Grid>
+                                                <VerticalStackLayout Spacing="2"><Label Text="Solo" FontFamily="BarlowSemiBold" /><Label Text="A coach is in the gym, as always" Style="{StaticResource Caption}" /></VerticalStackLayout>
+                                                <Button Margin="-12,-10" BackgroundColor="Transparent" BorderWidth="0" Text="" Command="{Binding SoloCommand}" SemanticProperties.Description="Book solo" AutomationId="BookSolo" />
+                                            </Grid>
+                                        </Border>
+                                        <Border Grid.Column="1" Style="{StaticResource PayOption}">
+                                            <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding IsWithCoach}" Value="True"><Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /><Setter Property="StrokeThickness" Value="2" /></DataTrigger></Border.Triggers>
+                                            <Grid>
+                                                <VerticalStackLayout Spacing="2"><Label Text="With a coach" FontFamily="BarlowSemiBold" /><Label Text="{Binding CoachFeeText}" Style="{StaticResource Caption}" /></VerticalStackLayout>
+                                                <Button Margin="-12,-10" BackgroundColor="Transparent" BorderWidth="0" Text="" Command="{Binding WithCoachCommand}" SemanticProperties.Description="Book with a coach" AutomationId="BookWithCoach" />
+                                            </Grid>
+                                        </Border>
+                                    </Grid>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="6" IsVisible="{Binding IsWithCoach}">
+                                    <Label Text="{Binding CoachesTitle}" Style="{StaticResource Caption}" />
+                                    <VerticalStackLayout Spacing="6" BindableLayout.ItemsSource="{Binding Coaches}">
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:CoachChoice">
+                                                <Border Style="{StaticResource PayOption}">
+                                                    <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding IsPicked}" Value="True"><Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /><Setter Property="StrokeThickness" Value="2" /></DataTrigger></Border.Triggers>
+                                                    <Grid>
+                                                        <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                                                        <Button Margin="-12,-10" BackgroundColor="Transparent" BorderWidth="0" Text="" Clicked="OnCoach"
+                                                                SemanticProperties.Description="{Binding Name, StringFormat='Book with {0}'}" />
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
+                                    </VerticalStackLayout>
+                                    <Label Text="No coach who runs this is free for the whole time. Pick another time, or book solo." Style="{StaticResource Caption}"
+                                           IsVisible="{Binding HasCoaches, Converter={StaticResource Not}}" />
+                                </VerticalStackLayout>
+                                <!-- G4: a code, with the member's codes that fit this amenity one tap away -->
                                 <VerticalStackLayout Spacing="6" IsVisible="{Binding PayFirst}">
-                                    <Label Text="Pay with" Style="{StaticResource Caption}" />
+                                    <Label Text="Code" Style="{StaticResource Caption}" />
+                                    <!-- one wrapping layout only: a FlexLayout inside another took WinUI down when the sheet opened -->
+                                    <VerticalStackLayout Spacing="6">
+                                        <Border Style="{StaticResource Field}" WidthRequest="170" HorizontalOptions="Start">
+                                            <Entry Text="{Binding Code}" Placeholder="Optional" AutomationId="BookingCode" SemanticProperties.Description="Discount code" />
+                                        </Border>
+                                        <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Codes}" IsVisible="{Binding HasCodes}">
+                                            <BindableLayout.ItemTemplate>
+                                                <DataTemplate x:DataType="m:AvailableCode">
+                                                    <Button Style="{StaticResource FilterChip}" Margin="0,0,6,6" Clicked="OnCode" Text="{Binding Code, StringFormat='{0}'}"
+                                                            SemanticProperties.Description="{Binding Code, StringFormat='Use code {0}'}" />
+                                                </DataTemplate>
+                                            </BindableLayout.ItemTemplate>
+                                        </FlexLayout>
+                                    </VerticalStackLayout>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="6" IsVisible="{Binding PayFirst}">
+                                    <Label Text="Pay the down payment with" Style="{StaticResource Caption}" />
                                     <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                                         <Border Style="{StaticResource PayOption}">
                                             <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding PayQr}" Value="True"><Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /><Setter Property="StrokeThickness" Value="2" /></DataTrigger></Border.Triggers>
                                             <Grid>
-                                                <VerticalStackLayout Spacing="2"><Label Text="GCash or QR" FontFamily="BarlowSemiBold" /><Label Text="Send proof now" Style="{StaticResource Caption}" /></VerticalStackLayout>
+                                                <VerticalStackLayout Spacing="2"><Label Text="GCash" FontFamily="BarlowSemiBold" /><Label Text="Send proof now" Style="{StaticResource Caption}" /></VerticalStackLayout>
                                                 <!-- a clear button over the option, so it works by keyboard and screen reader too -->
                                                 <Button Margin="-12,-10" BackgroundColor="Transparent" BorderWidth="0" Text="" Command="{Binding PickMethodCommand}" CommandParameter="qr"
-                                                        SemanticProperties.Description="Pay by GCash or QR" />
+                                                        SemanticProperties.Description="Pay the down payment by GCash" />
                                             </Grid>
                                         </Border>
                                         <Border Grid.Column="1" Style="{StaticResource PayOption}">
                                             <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding PayCash}" Value="True"><Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /><Setter Property="StrokeThickness" Value="2" /></DataTrigger></Border.Triggers>
                                             <Grid>
-                                                <VerticalStackLayout Spacing="2"><Label Text="At the desk" FontFamily="BarlowSemiBold" /><Label Text="Cash, before the hold ends" Style="{StaticResource Caption}" /></VerticalStackLayout>
+                                                <VerticalStackLayout Spacing="2"><Label Text="At the desk" FontFamily="BarlowSemiBold" /><Label Text="Cash" Style="{StaticResource Caption}" /></VerticalStackLayout>
                                                 <!-- a clear button over the option, so it works by keyboard and screen reader too -->
                                                 <Button Margin="-12,-10" BackgroundColor="Transparent" BorderWidth="0" Text="" Command="{Binding PickMethodCommand}" CommandParameter="cash"
-                                                        SemanticProperties.Description="Pay at the desk in cash" />
+                                                        SemanticProperties.Description="Pay the down payment at the desk in cash" />
                                             </Grid>
                                         </Border>
                                     </Grid>

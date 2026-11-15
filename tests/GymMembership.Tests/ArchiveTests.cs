@@ -21,8 +21,8 @@ public class ArchiveTests
         Assert.Equal(history, (await gw.ListAsync<UserMembershipPackage>()).Count);
         var row = Assert.Single((await archive.ListAsync(new(Type: "plan"), 0)).Value!.Rows, r => r.RecordId == plan.Id.ToString());
         Assert.NotNull(row.ArchivedAt); Assert.Contains("plan", row.Reason);
-        Assert.True((await archive.RestoreAsync(row)).Ok);
-        Assert.True((await gw.ListAsync<MembershipPackage>()).Single(p => p.Id == plan.Id).IsActive);
+        Assert.Equal("package_archived", (await archive.RestoreAsync(row)).Message);   // G6 (0061): a new version instead
+        Assert.False((await gw.ListAsync<MembershipPackage>()).Single(p => p.Id == plan.Id).IsActive);
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public class ArchiveTests
         Assert.False(row.CanRestore); Assert.Equal("record_not_restorable", (await service.RestoreAsync(row)).Message);
         var code = (await gw.ListAsync<Discount>()).Single(d => d.Id.ToString() == row.RecordId);
         code.ExpiresAt = DateTime.UtcNow.AddYears(1);
-        Assert.Equal("record_archived", (await admin.SaveDiscountAsync(code)).Message);
+        await Assert.ThrowsAnyAsync<Exception>(() => gw.UpdateAsync(code));   // G2 (0060): no code is edited, archived or not
     }
 
     [Fact]

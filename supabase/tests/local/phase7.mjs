@@ -28,6 +28,7 @@ await openCashShifts(db);
 const [monthly, annual] = (await db.query(`insert into membership_packages(name,price,duration_days)
   values('Phase Seven Monthly',1000,30),('Phase Seven Annual',10000,365) returning membership_package_id`)).rows.map(x => x.membership_package_id);
 await db.query(`insert into discounts(code,percent,starts_at,expires_at,max_uses) values('PHASE7',10,now()-interval '1 day',now()+interval '1 day',100)`);
+await db.query(`insert into discount_items (discount_id, kind) select discount_id, k from discounts, unnest(array['package','amenity']) k`);   // G3 (0060): a code fits what it lists
 const extend = async (uid, pkg = monthly, discount = null, client = db) =>
   (await as(uid, `select * from extend_membership($1,$2)`, [pkg, discount], client))[0];
 async function verify(pay) { await as(desk, 'select verify_payment($1,true)', [pay.payment_id]); }
@@ -38,6 +39,8 @@ async function fixture(pkg = monthly, discount = null) {
   await verify(pay);
   return {uid, pay, term: (await terms(uid))[0]};
 }
+// G22 (0067): a term that started at verification has day 1 used when it's refunded: 29 of 30 days come back
+const day1 = paid => Math.round(paid * 29 / 30 * 100) / 100;
 async function request(uid, term) { return (await as(uid,'select * from request_membership_refund($1,$2,$3)',[term.term_id,'Changed my plans','change_of_mind']))[0]; }
 async function decide(id, approve = true) { await as(admin,'select decide_membership_refund($1,$2,$3)',[id,approve,approve ? 'Approved' : 'Not approved']); }
 async function paid(id, method = 'cash', reference = null) { await as(admin,'select record_membership_refund_paid($1,$2,$3)',[id,method,reference]); }
@@ -81,14 +84,14 @@ try {
   });
   await test('pending combined request refunds only actual paid amount and does not stop access', async () => {
     const {uid, term} = await fixture(monthly,'PHASE7'), r = await request(uid,term);
-    assert.equal(r.status,'pending'); assert.equal(Number(r.amount),900); assert.equal(await active(uid),true);
+    assert.equal(r.status,'pending'); assert.equal(Number(r.amount),day1(900)); assert.equal(await active(uid),true);
     await assert.rejects(request(uid,term),/already_requested|already_processed/);
   });
   await test('a paid term with no check-in is a full refund with no category, even after it started', async () => {
     const {uid,pay,term} = await fixture();
     await db.query("update payments set verified_at=now()-interval '10 days' where payment_id=$1",[pay.payment_id]);
     const r = (await as(uid,'select * from request_membership_refund($1,$2)',[term.term_id,'Never came']))[0];
-    assert.deepEqual([r.was_activated,r.review_reason,Number(r.amount)],[false,null,Number(pay.amount)]);
+    assert.deepEqual([r.was_activated,r.review_reason,Number(r.amount)],[false,null,day1(Number(pay.amount))]);
   });
   await test('a check-in before the term does not activate it', async () => {
     const {uid,term} = await fixture();
@@ -111,7 +114,7 @@ try {
       } finally { await db.query('rollback'); }
     }
     const r = await request(uid,term);
-    assert.equal(Number(r.amount),Number(pay.amount));   // staff approve the full amount or reject
+    assert.equal(Number(r.amount),day1(Number(pay.amount)));   // G22: the days left, or staff reject
   });
   await test('a term that has ended cannot be requested, at exactly the end and after', async () => {
     for (const seconds of [0,1,86400]) {
@@ -205,12 +208,12 @@ try {
     const cash = async () => (await as(desk,'select * from daily_cash_summary($1)',[day])).reduce((n,x)=>n+Number(x.total),0);
     const before = await total(), cashBefore = await cash();
     await decide(r.refund_request_id);
-    assert.equal(await total(),before-900); assert.equal(await cash(),cashBefore);
+    assert.equal(await total(),before-day1(900)); assert.equal(await cash(),cashBefore);
     await paid(r.refund_request_id);
-    assert.equal(await total(),before-900); assert.equal(await cash(),cashBefore-900);
+    assert.equal(await total(),before-day1(900)); assert.equal(await cash(),cashBefore-day1(900));
     assert.equal((await as(a.uid,'select status from payments where payment_id=$1',[a.pay.payment_id]))[0].status,'verified');
     const b = await fixture(monthly,'PHASE7'), pending = await request(b.uid,b.term), withB = await total();
-    assert.equal(withB,before-900+900);   // the new receipt, with its request still pending, counts in full
+    assert.equal(withB,before-day1(900)+900);   // the new receipt, with its request still pending, counts in full
     await decide(pending.refund_request_id,false); assert.equal(await total(),withB);
   });
   await test('voiding an earlier payment never deletes or moves a later paid term', async () => {
@@ -298,7 +301,7 @@ try {
     const buy = async () => { const uid = await user();
       const p = (await as(desk,`select * from record_counter_payment('membership','cash',$1,$2)`,[uid,monthly]))[0]; return {uid,p,term:(await terms(uid))[0]}; };
     const a = await buy(); assert.equal(a.term.payment_id,a.p.payment_id);
-    const r = await request(a.uid,a.term); assert.equal(r.status,'pending'); assert.equal(Number(r.amount),1000);
+    const r = await request(a.uid,a.term); assert.equal(r.status,'pending'); assert.equal(Number(r.amount),day1(1000));
     const b = await buy(); await db.query(`update payments set verified_at=now()-interval '25 hours' where payment_id=$1`,[b.p.payment_id]);
     assert.equal((await request(b.uid,b.term)).status,'pending');
   });
@@ -356,7 +359,7 @@ try {
     assert.equal((await payRow(pay)).status, 'verified'); assert.equal(await active(uid), true);
   });
   await test('an amenity payment cannot be cancelled this way', async () => {
-    const {uid} = await fixture(), amenity = (await db.query(`insert into amenities(name,price,duration_days) values('Cancel Test Sauna',200,30) returning amenity_id`)).rows[0].amenity_id;
+    const {uid} = await fixture(), amenity = (await db.query(`insert into amenities(name,price,duration_days) values('Cancel Test Sauna',200,null) returning amenity_id`)).rows[0].amenity_id;
     const pay = (await as(uid, 'select * from avail_amenity($1)', [amenity]))[0];
     await assert.rejects(cancelPending(uid, pay), /not_found/); assert.equal((await payRow(pay)).status, 'pending');
   });

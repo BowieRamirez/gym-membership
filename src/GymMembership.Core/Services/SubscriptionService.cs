@@ -2,6 +2,25 @@ using GymMembership.Core.Models;
 
 namespace GymMembership.Core.Services;
 
+/// <summary>G23: the one sentence said before anyone pays for a membership (Packages, the Buy confirm, the cashier confirm).</summary>
+public static class RefundRules
+{
+    public const string Line = "Refunds: only in a term's first 7 days, for the days not used.";
+}
+
+/// <summary>G22 (owner, 2026-11-15; 0067 does the same in the database): a membership refund is the unused days of what was paid, counted
+/// when staff approve. G23 (0068): a member may ask only in the term's first 7 days. A started day counts as used.</summary>
+public static class RefundMath
+{
+    public static int DaysUsed(DateTime starts, int total, DateTime at) =>
+        at <= starts ? 0 : Math.Min(total, (int)Math.Ceiling((at - starts).TotalSeconds / 86400));
+    public static decimal Due(decimal paid, int total, DateTime starts, DateTime at) =>
+        Math.Round(paid * (total - DaysUsed(starts, total, at)) / total, 2, MidpointRounding.AwayFromZero);   // as Postgres round()
+    /// <summary>The last moment a request is accepted: 7 days after the term starts.</summary>
+    public static DateTime LastDayToAsk(DateTime starts) => starts.AddDays(7);
+    public static bool WeekPassed(DateTime starts, DateTime at) => at > LastDayToAsk(starts);
+}
+
 /// <summary>Why a member asks for a refund on a term they have used. Staff review these; none of them is automatic. Guidance, not legal advice.</summary>
 public static class RefundReasons
 {
@@ -19,30 +38,49 @@ public static class RefundReasons
     public static string StaffText(string? key) => All.FirstOrDefault(r => r.Key == key)?.Staff ?? "no reason given";
 }
 
-public sealed record TermCard(MembershipTerm Term, string State, bool Activated, RefundRequest? Refund, bool CanRequestRefund)
+public sealed record TermCard(MembershipTerm Term, string State, bool Activated, RefundRequest? Refund, bool CanRequestRefund,
+    decimal RefundEstimate = 0, DateTime? LastDayToAsk = null, bool PastWindow = false)
 {
     public string Dates => $"{Term.StartsAt.AddHours(8):d MMM yyyy, h:mm tt} – {Term.EndsAt.AddHours(8):d MMM yyyy, h:mm tt} (Manila)";
     /// <summary>Phone rows: the days only (Manila), "13 Oct – 12 Nov 2026"; the full times stay on Windows and in the refund dialog.</summary>
     public string ShortDates => $"{Term.StartsAt.AddHours(8):d MMM} – {Term.EndsAt.AddHours(8):d MMM yyyy}";
     /// <summary>Phone rows: a line only when a refund request or a cancellation exists; the chip and the refund dialog say the rest.</summary>
-    public string? RefundNote => Refund is { } r ? RefundCard.StateText(r) : Term.CancelledAt is not null ? "This term is cancelled." : null;
+    public string? RefundNote => Refund is { } r ? RefundCard.StateText(r) : Term.CancelledAt is not null ? "This term is cancelled."
+        : PastWindow ? PastWindowText : null;
+    const string PastWindowText = "Refunds are only for a term's first 7 days, and this one is past that.";
+    string AskBy => $"{LastDayToAsk?.AddHours(8):d MMM, h:mm tt}";   // Manila
     public string RefundText => Refund is { } r ? RefundCard.StateText(r) : Term.CancelledAt is not null ? "This term is cancelled."
-        : CanRequestRefund ? (Activated ? "You have checked in during this term. You can ask for a refund, and staff review each request." : "You haven't used this term yet. You can cancel it for a full refund.")
+        : CanRequestRefund ? (Activated ? $"You've checked in during this term, so staff review a refund. Ask by {AskBy}; it covers the days left when they approve."
+                                       : $"Cancel by {AskBy} for about ₱{RefundEstimate:N2}, the days left when staff approve.")
+        : PastWindow ? PastWindowText
         : State == Status.Expired ? "This term has ended." : "No verified payment available for a refund.";
 }
-public sealed record RefundCard(RefundRequest Request, string Member, string PackageName, string Dates, int LaterTerms = 0)
+public sealed record RefundCard(RefundRequest Request, string Member, string PackageName, string Dates, int LaterTerms = 0, string Period = "")
 {
+    /// <summary>The table's Status column: what is left to do, in two words (State has the full sentence for the side panel).</summary>
+    public string Status => Request.Status switch
+    {
+        "pending" when Request.IsBooking => "Front desk",
+        "pending" => "To review",
+        "approved" => "To repay",
+        "rejected" => "Rejected",
+        "paid" => "Repaid",
+        _ => Request.Status
+    };
+    public string ActionText => CanDecide ? "Review" : CanRepay ? "Repay" : "View";
+    public bool NeedsAction => CanDecide || CanRepay;
     /// <summary>A term the member has used is only asked for until staff decide, so it must not read as a refund already owed.</summary>
-    public string AmountLabel => Request.WasActivated == true ? "Refund requested" : "Full refund";
+    /// <summary>G22: a membership refund is worked out when staff approve, so until then it is an estimate.</summary>
+    public string AmountLabel => !Request.IsBooking && Request.Status == "pending" ? "Estimated refund" : "Refund";
     public string ReviewText => Request.Kind switch
     {
-        "cancel" => "Booking cancelled 1 hour or more before the start: full refund owed.",
+        "cancel" => $"{Request.DecisionReason?.TrimEnd('.') ?? "Booking cancelled: down payment refunded"}.",   // G13 (0064): 24 hours or more before, the gym, or slot taken
         "no_show" => Request.Status == "pending" ? "The member says they didn't use the booking." : $"Didn't use it: {(Request.Status == "rejected" ? "declined" : "approved")} by the front desk.",
         _ => MembershipReview
     };
     string MembershipReview => Request.WasActivated switch
     {
-        false => "No check-in during this term: full refund owed.",
+        false => "No check-in during this term: the days left are owed.",   // G22
         true => $"Checked in during this term, needs review: {RefundReasons.StaffText(Request.ReviewReason)}.",
         null => "",
     };
@@ -80,6 +118,16 @@ public interface ISubscriptionService
 public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time = null) : ISubscriptionService
 {
     readonly TimeProvider clock = time ?? TimeProvider.System;
+
+    /// <summary>The real backend gives timestamps in local time (Manila), the demo in UTC; every term rule and the
+    /// "+8 hours" dates on screen work in UTC (reported 2026-11-15: a term bought today showed "scheduled").</summary>
+    public static MembershipTerm InUtc(MembershipTerm t)
+    {
+        t.StartsAt = t.StartsAt.ToUniversalTime(); t.EndsAt = t.EndsAt.ToUniversalTime(); t.CancelledAt = t.CancelledAt?.ToUniversalTime();
+        return t;
+    }
+    public static string StateOf(MembershipTerm t, DateTime nowUtc) =>
+        t.CancelledAt is not null ? Status.Cancelled : t.EndsAt <= nowUtc ? Status.Expired : t.StartsAt > nowUtc ? Status.Scheduled : Status.Active;
     public Task<AppResult<IReadOnlyList<TermCard>>> TermsAsync() => Safe.RunAsync<IReadOnlyList<TermCard>>(async () =>
     {
         var uid = gw.CurrentUserId;
@@ -88,12 +136,15 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
         var refunds = await gw.ListAsync<RefundRequest>(r => r.MemberId == uid);
         var checkIns = await gw.ListAsync<GymCheckIn>(c => c.MemberId == uid);
         var now = clock.GetUtcNow().UtcDateTime;
-        return terms.OrderBy(t => t.CancelledAt is not null || t.EndsAt <= now).ThenBy(t => t.StartsAt).Select(t =>
+        return terms.Select(InUtc).OrderBy(t => t.CancelledAt is not null || t.EndsAt <= now).ThenBy(t => t.StartsAt).Select(t =>
         {
             var p = payments.FirstOrDefault(p => p.Id == t.PaymentId);
             var refund = refunds.FirstOrDefault(r => r.TermId == t.Id);
-            var state = t.CancelledAt is not null ? Status.Cancelled : t.EndsAt <= now ? Status.Expired : t.StartsAt > now ? Status.Scheduled : Status.Active;
-            return new TermCard(t, state, checkIns.Any(c => c.CheckedInAt >= t.StartsAt && c.CheckedInAt < t.EndsAt), refund, t.CancelledAt is null && p is { Status: Status.Verified, Amount: > 0 } && now < t.EndsAt && refund is null);
+            var state = StateOf(t, now);
+            var canAsk = t.CancelledAt is null && p is { Status: Status.Verified, Amount: > 0 } && now < t.EndsAt && refund is null && !RefundMath.WeekPassed(t.StartsAt, now);
+            return new TermCard(t, state, checkIns.Any(c => c.CheckedInAt.ToUniversalTime() >= t.StartsAt && c.CheckedInAt.ToUniversalTime() < t.EndsAt), refund, canAsk,
+                canAsk ? RefundMath.Due(p!.Amount, t.DurationDays, t.StartsAt, now) : 0, RefundMath.LastDayToAsk(t.StartsAt),
+                t.CancelledAt is null && refund is null && now < t.EndsAt && RefundMath.WeekPassed(t.StartsAt, now));
         }).ToList();
     });
 
@@ -103,6 +154,9 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
         if (!string.IsNullOrWhiteSpace(discountCode)) args["p_discount_code"] = discountCode.Trim();
         return gw.RpcAsync<Payment>("extend_membership",args);
     });
+
+    // "17 Oct – 16 Nov 2026"; the year shows twice only when the term crosses one
+    static string ShortPeriod(DateTime from, DateTime to) => from.Year == to.Year ? $"{from:d MMM} – {to:d MMM yyyy}" : $"{from:d MMM yyyy} – {to:d MMM yyyy}";
 
     public Task<AppResult<IReadOnlyList<RefundCard>>> RefundsAsync() => Safe.RunAsync<IReadOnlyList<RefundCard>>(async () =>
     {
@@ -115,11 +169,12 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
         {
             if (r.IsBooking && bookings.GetValueOrDefault(r.ReservationId ?? 0) is { } b)   // F13: a booking refund names the amenity and the booked time
                 return new RefundCard(r, names.GetValueOrDefault(r.MemberId, "Member"), $"{amenities.GetValueOrDefault(b.AmenityId, "Amenity")} booking",
-                    $"{b.StartsAt.ToUniversalTime().AddHours(8):d MMM yyyy, h:mm tt} – {b.EndsAt.ToUniversalTime().AddHours(8):h:mm tt} (Manila)");
+                    $"{b.StartsAt.ToUniversalTime().AddHours(8):d MMM yyyy, h:mm tt} – {b.EndsAt.ToUniversalTime().AddHours(8):h:mm tt} (Manila)",
+                    Period: $"{b.StartsAt.ToUniversalTime().AddHours(8):d MMM, h:mm tt}");
             var term = terms.FirstOrDefault(t => t.Id == r.TermId);
             var dates = term is null ? "" : $"{term.StartsAt.AddHours(8):d MMM yyyy, h:mm tt} – {term.EndsAt.AddHours(8):d MMM yyyy, h:mm tt} (Manila)";
             var later = term is null ? 0 : terms.Count(t => t.MemberId == r.MemberId && t.CancelledAt is null && t.StartsAt >= term.EndsAt);
-            return new RefundCard(r,names.GetValueOrDefault(r.MemberId,"Member"),term?.PackageName ?? "Membership",dates,later);
+            return new RefundCard(r,names.GetValueOrDefault(r.MemberId,"Member"),term?.PackageName ?? "Membership",dates,later,term is null ? "" : ShortPeriod(term.StartsAt.AddHours(8),term.EndsAt.AddHours(8)));
         }).ToList();
     });
 

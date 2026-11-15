@@ -1,3 +1,5 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
 using GymMembership.Core.Services;
 
@@ -30,9 +32,13 @@ public partial class MyMembershipViewModel
     }
 }
 
-public class RefundsViewModel(ISubscriptionService subscription) : LoadableViewModel
+public partial class RefundsViewModel(ISubscriptionService subscription) : LoadableViewModel
 {
     public ObservableCollection<RefundCard> Requests { get; } = new();
+    /// <summary>The request open in the side panel; each reload swaps in its fresh row, so the panel never shows a stale status.</summary>
+    [ObservableProperty] private RefundCard? selected;
+    [RelayCommand] private void Open(RefundCard row) { Selected = row; Notice = null; }
+    [RelayCommand] private void Close() => Selected = null;
     public bool DialogOpen { get; set; }
     bool _loading;
     public override Task OnAppearingAsync() => LoadAsync();
@@ -41,7 +47,7 @@ public class RefundsViewModel(ISubscriptionService subscription) : LoadableViewM
     {
         if (_loading) return;
         _loading=true;
-        try { await RunAsync(subscription.RefundsAsync, rows => Fill(Requests,rows)); }
+        try { await RunAsync(subscription.RefundsAsync, rows => { Fill(Requests,rows); Selected = Requests.FirstOrDefault(r => r.Request.Id == Selected?.Request.Id); }); }
         finally { _loading=false; }
     }
     public async Task DecideAsync(RefundCard row, bool approve, string reason)

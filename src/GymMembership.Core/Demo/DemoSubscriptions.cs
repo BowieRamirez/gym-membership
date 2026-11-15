@@ -47,9 +47,14 @@ public sealed partial class DemoGateway
         if(All<MembershipTerm>().Any(t=>t.PaymentId==pay.Id)) throw Err("already_processed");
         var renewal=All<MembershipRenewal>().FirstOrDefault(r=>r.Id==pay.RenewalId);
         var umpId=pay.UserMembershipPackageId??renewal!.UserMembershipPackageId;
-        var start=All<MembershipTerm>().Where(t=>t.MemberId==pay.MemberId && t.CancelledAt is null).Select(t=>t.EndsAt)
-            .Append(pay.VerifiedAt!.Value).Max();
+        // G26 (0070): the first moment no live term covers, so a gap is filled; terms it runs into move back by the overlap
+        var live=All<MembershipTerm>().Where(t=>t.MemberId==pay.MemberId && t.CancelledAt is null).ToList();
+        var start=pay.VerifiedAt!.Value;
+        while(live.Where(t=>t.StartsAt<=start && t.EndsAt>start).Select(t=>(DateTime?)t.EndsAt).Max() is {} e) start=e;
         var end=start.AddDays(pay.PackageSnapshotDays!.Value);
+        var later=live.Where(t=>t.StartsAt>=start).ToList();
+        if(later.Count>0 && later.Min(t=>t.StartsAt) is var next && next<end)
+            foreach(var t in later) {t.StartsAt+=end-next; t.EndsAt+=end-next;}
         Add(new MembershipTerm {MemberId=pay.MemberId!,MembershipId=umpId,PaymentId=pay.Id,PackageId=pay.PackageSnapshotId!.Value,
             PackageName=pay.PackageSnapshotName!,DurationDays=pay.PackageSnapshotDays.Value,AmountPaid=pay.Amount,StartsAt=start,EndsAt=end,CreatedAt=SubscriptionNow});
         if(renewal is not null) {renewal.Status=Status.Completed;renewal.CompletedAt=pay.VerifiedAt;renewal.PreviousEndsAt=start;renewal.NewStartsAt=start;renewal.NewEndsAt=end;}
@@ -61,8 +66,8 @@ public sealed partial class DemoGateway
         RequireActive();
         if(!All<Member>().Any(m=>m.UserId==member) || !All<Profile>().Any(p=>p.Id==member && p.IsActive)) throw Err("not_found");
         if(All<Payment>().Any(p=>p.MemberId==member && p.Status==Status.Pending && p.Kind is PayKind.Membership or PayKind.Renewal)) throw Err("renewal_pending");
-        var pkg=All<MembershipPackage>().FirstOrDefault(p=>p.Id==packageId && p.IsActive)??throw Err("not_found");
-        var discount=Discounted(member,args,pkg.Price);
+        var pkg=PackageForSale(packageId);
+        var discount=Discounted(member,args,pkg.Price,"package",pkg.Id);
         var ump=All<UserMembershipPackage>().Where(u=>u.MemberId==member && u.StartsAt is not null).OrderByDescending(u=>u.Id).FirstOrDefault();
         Payment pay;
         if(ump is null)
@@ -109,9 +114,10 @@ public sealed partial class DemoGateway
                 var category=a.GetValueOrDefault("p_category")?.ToString();
                 if(category is not null && RefundReasons.All.All(x=>x.Key!=category)) throw Err("bad_input");
                 if(now>=term.EndsAt) throw Err("refund_window_closed");
+                if(RefundMath.WeekPassed(term.StartsAt,now)) throw Err("refund_week_passed");   // G23 (0068)
                 var activated=All<GymCheckIn>().Any(c=>c.MemberId==Uid&&c.CheckedInAt>=term.StartsAt&&c.CheckedInAt<term.EndsAt);   // 0043
                 if(activated && category is null) throw Err("refund_reason_required");
-                var r=Add(new RefundRequest {TermId=term.Id,PaymentId=p.Id,MemberId=Uid,Amount=p.Amount,Reason=reason,RequestedAt=now,WasActivated=activated,ReviewReason=activated?category:null});
+                var r=Add(new RefundRequest {TermId=term.Id,PaymentId=p.Id,MemberId=Uid,Amount=RefundMath.Due(p.Amount,term.DurationDays,term.StartsAt,now),Reason=reason,RequestedAt=now,WasActivated=activated,ReviewReason=activated?category:null});
                 Audit("refund.request","refund_requests",r.Id.ToString());result=Clone(r);return true;
             }
             case "decide_membership_refund":
@@ -121,10 +127,12 @@ public sealed partial class DemoGateway
                 if(r.MemberId==Uid) throw Err("self_decision");
                 if(r.Status!="pending") throw Err("already_processed");
                 var p=All<Payment>().First(p=>p.Id==r.PaymentId);
-                if(p.Status!=Status.Verified||r.Amount!=p.Amount) throw Err("not_refundable");
+                if(p.Status!=Status.Verified||r.Amount<=0||r.Amount>p.Amount) throw Err("not_refundable");
                 var t=All<MembershipTerm>().First(t=>t.Id==r.TermId);
                 if(approve && t.CancelledAt is not null) throw Err("already_processed");
-                if(approve) {t.CancelledAt=now;t.CancelledBy=Uid;t.CancellationReason="Refund approved";ProjectTerms(r.MemberId);}
+                var due=RefundMath.Due(p.Amount,t.DurationDays,t.StartsAt,now);   // G22: the days left now, when access ends
+                if(approve && due<=0) throw Err("nothing_to_refund");
+                if(approve) {r.Amount=due;t.CancelledAt=now;t.CancelledBy=Uid;t.CancellationReason="Refund approved";ProjectTerms(r.MemberId);}
                 r.Status=approve?"approved":"rejected";r.DecidedBy=Uid;r.DecidedAt=now;r.DecisionReason=reason;
                 Notify(r.MemberId,"payment",approve?"Cancellation approved; refund awaiting repayment":"Cancellation request rejected",reason);
                 Audit("refund.decide","refund_requests",r.Id.ToString());return true;
@@ -137,7 +145,7 @@ public sealed partial class DemoGateway
                 if(r.MemberId==Uid) throw Err("self_decision");
                 if(r.Status!="approved") throw Err("already_processed");
                 var p=All<Payment>().First(p=>p.Id==r.PaymentId);
-                if(p.Status!=Status.Verified||r.Amount!=p.Amount) throw Err("not_refundable");
+                if(p.Status!=Status.Verified||r.Amount<=0||r.Amount>p.Amount) throw Err("not_refundable");
                 if(method==PayMethod.Cash) r.CashShiftId=OpenShiftOf(Uid);   // 0050: cash paid back comes out of the payer's drawer
                 r.Status="paid";r.PaidAt=now;r.PaidBy=Uid;r.RepaymentMethod=method;r.RepaymentReference=reference;
                 Notify(r.MemberId,"payment","Refund repaid",method);Audit("refund.paid","refund_requests",r.Id.ToString());return true;

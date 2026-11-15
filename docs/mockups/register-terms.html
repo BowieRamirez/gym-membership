@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Register: Terms and Policy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  /* the app's own tokens (Resources/Styles/Colors.xaml) */
+  :root {
+    --page: #0E0E0E; --card: #1A1A1A; --surface: #242424; --line: #2A2A2A; --edge: #757575;
+    --ink: #F2F2F2; --muted: #A6A6A6; --signal: #FFEC00; --bad: #FF7B70; --black: #111111;
+  }
+  .light { --page: #EEEEEE; --card: #FFFFFF; --surface: #F5F5F5; --line: #E4E4E4; --edge: #808080;
+           --ink: #111111; --muted: #5B5B5B; --bad: #C42B21; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #2b2b2b; color: #F2F2F2; font: 15px/1.45 Barlow, system-ui, sans-serif; padding: 32px 24px 64px; }
+  h1.doc { font: 700 26px "Barlow Semi Condensed"; margin: 0 0 4px; }
+  p.doc { color: #bdbdbd; margin: 0 0 28px; max-width: 72ch; }
+  .label { font: 600 13px Barlow; letter-spacing: .02em; color: #cfcfcf; margin: 36px 0 10px; }
+  .row { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+
+  /* frames */
+  .win { width: 1100px; max-width: 100%; height: 760px; background: var(--page); color: var(--ink); border-radius: 10px; overflow: hidden; position: relative; display: flex; }
+  .phone { width: 390px; height: 844px; background: var(--page); color: var(--ink); border-radius: 36px; overflow: hidden; position: relative; border: 10px solid #000; }
+  .brand { flex: 1; background: #161616; padding: 56px; display: flex; flex-direction: column; justify-content: center; gap: 14px; }
+  .badge { width: 96px; height: 96px; border-radius: 50%; border: 6px solid var(--signal); background: #fff; display: grid; place-items: center; color: #111; font: 700 26px "Barlow Semi Condensed"; }
+  .gname { font: 600 34px/1.15 "Barlow Semi Condensed"; color: #fff; max-width: 12ch; }
+  .tag { color: #A6A6A6; max-width: 28ch; margin: 0; }
+  .bar { width: 56px; height: 4px; border-radius: 2px; background: var(--signal); }
+  .form { width: 520px; padding: 40px 64px; display: flex; flex-direction: column; gap: 16px; overflow: hidden; }
+  .phone .form { width: auto; padding: 22px 24px; gap: 14px; }
+  .display { font: 700 34px/1.1 "Barlow Semi Condensed"; margin: 0; }
+  .muted { color: var(--muted); margin: 0; }
+  .cap { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .field { height: 46px; border: 1.5px solid var(--edge); border-radius: 12px; background: var(--surface); padding: 0 14px; display: flex; align-items: center; color: var(--muted); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .btn { height: 48px; border-radius: 24px; background: var(--signal); color: var(--black); font: 700 16px Barlow; display: grid; place-items: center; }
+  .foot { text-align: center; font-size: 14px; color: var(--muted); }
+  .foot b { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+
+  /* the new part */
+  .agree { display: flex; gap: 12px; align-items: flex-start; min-height: 44px; padding-top: 4px; }
+  .box { flex: none; width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--edge); margin-top: 1px; display: grid; place-items: center; }
+  .box.on { background: var(--signal); border-color: var(--signal); }
+  .box.on::after { content: ""; width: 11px; height: 6px; border-left: 2.5px solid var(--black); border-bottom: 2.5px solid var(--black); transform: rotate(-45deg) translate(1px,-1px); }
+  .box.err { border-color: var(--bad); }
+  .agree a { color: var(--ink); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+  .ferr { color: var(--bad); font-size: 13px; margin: -8px 0 0 34px; }
+  .note { position: absolute; background: #FFEC00; color: #111; font: 600 12px Barlow; padding: 10px 14px; border-radius: 8px; max-width: 230px; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
+
+  /* terms sheet */
+  .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.55); }
+  .sheet { position: absolute; top: 0; right: 0; bottom: 0; width: 560px; background: var(--card); border-left: 1px solid var(--line); display: flex; flex-direction: column; }
+  .phone .sheet { width: auto; left: 0; border: 0; }
+  .sheet header { display: flex; align-items: center; justify-content: space-between; padding: 22px 28px 14px; border-bottom: 1px solid var(--line); }
+  .phone .sheet header { padding: 18px 20px 12px; }
+  .sheet h2 { font: 700 24px "Barlow Semi Condensed"; margin: 0; }
+  .close { height: 36px; padding: 0 16px; border-radius: 18px; border: 1.5px solid var(--ink); font: 600 14px Barlow; display: grid; place-items: center; }
+  .body { padding: 18px 28px 28px; overflow: hidden; max-width: 64ch; }
+  .phone .body { padding: 16px 20px; }
+  .ver { font-size: 13px; color: var(--muted); margin: 0 0 14px; }
+  .body h3 { font: 600 17px Barlow; margin: 18px 0 4px; }
+  .body p { margin: 0 0 6px; }
+</style>
+</head>
+<body>
+  <h1 class="doc">Create your account: Terms and Policy</h1>
+  <p class="doc">Item 14 (G24, G25). One new row above Create account. The box must be ticked; reading the terms is optional and never loses what was typed. Real copy, the app's own colours and type. Windows is shown dark, the phone light; both themes and font 1.3 are checked in the build.</p>
+
+  <div class="label">1 · Windows: the new row, not ticked yet</div>
+  <div class="win">
+    <div class="brand"><div class="badge">HF</div><div class="gname">Health &amp; Fitness Gym Center</div><p class="tag">Members, coaches and the front desk, in one place.</p><div class="bar"></div></div>
+    <div class="form">
+      <div><p class="display">Create your account</p><p class="muted">Look around right away. Pick a package and get your payment verified to unlock amenities, coaches, messages and sessions.</p></div>
+      <div class="two"><div><div class="cap">First name</div><div class="field">Tess</div></div><div><div class="cap">Last name</div><div class="field">Reyes</div></div></div>
+      <div><div class="cap">Email</div><div class="field">tess@example.com</div></div>
+      <div><div class="cap">Password</div><div class="field">••••••••</div></div>
+      <div><div class="cap">Repeat password</div><div class="field">••••••••</div></div>
+      <div class="agree"><div class="box"></div><div>I agree to the <a>Terms and Policy</a></div></div>
+      <div class="btn">Create account</div>
+      <div class="foot">Already a member? <b>Sign in</b></div>
+    </div>
+  </div>
+
+  <div class="label">2 · Windows: Create account pressed without the tick (nothing is sent)</div>
+  <div class="win">
+    <div class="brand"><div class="badge">HF</div><div class="gname">Health &amp; Fitness Gym Center</div><p class="tag">Members, coaches and the front desk, in one place.</p><div class="bar"></div></div>
+    <div class="form">
+      <div><p class="display">Create your account</p><p class="muted">Look around right away. Pick a package and get your payment verified to unlock amenities, coaches, messages and sessions.</p></div>
+      <div class="two"><div><div class="cap">First name</div><div class="field">Tess</div></div><div><div class="cap">Last name</div><div class="field">Reyes</div></div></div>
+      <div><div class="cap">Email</div><div class="field">tess@example.com</div></div>
+      <div><div class="cap">Password</div><div class="field">••••••••</div></div>
+      <div><div class="cap">Repeat password</div><div class="field">••••••••</div></div>
+      <div class="agree"><div class="box err"></div><div>I agree to the <a>Terms and Policy</a></div></div>
+      <div class="ferr">Tick the box to agree to the Terms and Policy.</div>
+      <div class="btn">Create account</div>
+      <div class="foot">Already a member? <b>Sign in</b></div>
+    </div>
+    <div class="note" style="left: 640px; top: 600px">The error sits under the box, where they are looking; not in the banner at the top.</div>
+  </div>
+
+  <div class="label">3 · Windows: "Terms and Policy" opens a side sheet over the form</div>
+  <div class="win">
+    <div class="brand"><div class="badge">HF</div><div class="gname">Health &amp; Fitness Gym Center</div><p class="tag">Members, coaches and the front desk, in one place.</p><div class="bar"></div></div>
+    <div class="form">
+      <div><p class="display">Create your account</p></div>
+      <div class="two"><div><div class="cap">First name</div><div class="field">Tess</div></div><div><div class="cap">Last name</div><div class="field">Reyes</div></div></div>
+    </div>
+    <div class="scrim"></div>
+    <div class="sheet">
+      <header><h2>Terms and Policy</h2><div class="close">Close</div></header>
+      <div class="body">
+        <p class="ver">Version 2026-11-15 · Draft: to be checked by the gym owner, or someone qualified, before it is relied on.</p>
+        <p>These terms cover your gym membership and how this app uses your information. By creating an account you agree to them.</p>
+        <h3>Your account</h3>
+        <p>You sign in with your email and password. Keep your password to yourself; anything done with your account is treated as done by you.</p>
+        <h3>Packages and terms</h3>
+        <p>A package gives you gym access for a set number of days, called a term. A term you buy while another is running starts when your last paid term ends.</p>
+        <h3>Refunds</h3>
+        <p>Refunds: only in a term's first 7 days, for the days not used. You ask in the app, under My membership. The amount is the days left on the day staff approve your request…</p>
+      </div>
+    </div>
+    <div class="note" style="left: 60px; top: 560px">Close (or Esc) returns to the form with everything still typed. Reading never ticks the box.</div>
+  </div>
+
+  <div class="row">
+    <div>
+      <div class="label">4 · Phone (light): the row wraps; the whole sentence is tappable</div>
+      <div class="phone light">
+        <div class="form">
+          <div><p class="display">Create your account</p></div>
+          <div class="two"><div><div class="cap">First name</div><div class="field">Tess</div></div><div><div class="cap">Last name</div><div class="field">Reyes</div></div></div>
+          <div><div class="cap">Email</div><div class="field">tess@example.com</div></div>
+          <div><div class="cap">Password</div><div class="field">••••••••</div></div>
+          <div><div class="cap">Repeat password</div><div class="field">••••••••</div></div>
+          <div class="agree"><div class="box on"></div><div>I agree to the <a>Terms and Policy</a></div></div>
+          <div class="btn">Create account</div>
+          <div class="foot">Already a member? <b>Sign in</b></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="label">5 · Phone (light): the terms fill the screen; Close or Back</div>
+      <div class="phone light">
+        <div class="sheet">
+          <header><h2>Terms and Policy</h2><div class="close">Close</div></header>
+          <div class="body">
+            <p class="ver">Version 2026-11-15 · Draft: to be checked by the gym owner, or someone qualified, before it is relied on.</p>
+            <p>These terms cover your gym membership and how this app uses your information. By creating an account you agree to them.</p>
+            <h3>Your account</h3>
+            <p>You sign in with your email and password. Keep your password to yourself; anything done with your account is treated as done by you.</p>
+            <h3>Packages and terms</h3>
+            <p>A package gives you gym access for a set number of days, called a term.</p>
+            <h3>Paying</h3>
+            <p>You can pay by QR transfer and send the reference and a screenshot in the app, or pay cash or GCash at the front desk…</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

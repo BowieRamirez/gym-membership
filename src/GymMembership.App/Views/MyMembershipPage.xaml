@@ -176,19 +176,18 @@
                                 </Grid>
                                 <BoxView Style="{StaticResource Hairline}" />
                             </VerticalStackLayout>
-                            <c:TableBody BindableLayout.ItemsSource="{Binding Terms}" Header="{x:Reference TermsHead}" WideFrom="900"
-                                         RowTemplate="{StaticResource TermRow}" CardTemplate="{StaticResource TermCard}"
-                                         BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource TermCard}, Default={StaticResource TermRow}}">
-                                <BindableLayout.EmptyView>
+                            <c:TableBody Items="{Binding Terms}" Header="{x:Reference TermsHead}" WideFrom="900"
+                                         RowTemplate="{StaticResource TermRow}" CardTemplate="{StaticResource TermCard}">
+                                <c:TableBody.Empty>
                                     <Label Text="No paid terms yet. Choose a package, pay and wait for verification." Style="{StaticResource Muted}" Margin="14" />
-                                </BindableLayout.EmptyView>
+                                </c:TableBody.Empty>
                             </c:TableBody>
                         </VerticalStackLayout>
                     </Border>
                     <!-- the rule under the table it explains, as in the approved mockup; on phones folded behind a link so the screen isn't a wall of text -->
                     <Button Text="How paid terms work" Style="{StaticResource LinkButton}" HorizontalOptions="Start" Margin="-4,-8,0,-8" Clicked="OnToggleTermsRule"
                             IsVisible="{OnIdiom Phone=True, Default=False}" />
-                    <Label x:Name="TermsRule" Text="Extensions start after your last paid term. No upgrades or unused-time credits. Other paid terms keep their dates if one is cancelled, so a gap may remain."
+                    <Label x:Name="TermsRule" Text="A new term starts when your current one ends, or right away if none is running. A term bought ahead moves back if the new one runs into it. No upgrades or unused-time credits."
                            Style="{StaticResource Caption}" IsVisible="{OnIdiom Phone=False, Default=True}" />
 
                     <Label Text="Payments" Style="{StaticResource SectionTitle}" Margin="{OnIdiom Phone=0, Default='0,10,0,0'}" />
@@ -220,10 +219,9 @@
                                 </Grid>
                                 <BoxView Style="{StaticResource Hairline}" />
                             </VerticalStackLayout>
-                            <c:TableBody BindableLayout.ItemsSource="{Binding Payments}" Header="{x:Reference PaymentsHead}" WideFrom="1000"
-                                         RowTemplate="{StaticResource PaymentRow}" CardTemplate="{StaticResource PaymentCard}"
-                                         BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource PaymentCard}, Default={StaticResource PaymentRow}}">
-                                <BindableLayout.EmptyView><Label Text="{Binding PaymentsEmptyText, Source={RelativeSource AncestorType={x:Type vm:MyMembershipViewModel}}}" Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                            <c:TableBody Items="{Binding Payments}" Header="{x:Reference PaymentsHead}" WideFrom="1000"
+                                         RowTemplate="{StaticResource PaymentRow}" CardTemplate="{StaticResource PaymentCard}">
+                                <c:TableBody.Empty><Label Text="{Binding PaymentsEmptyText, Source={RelativeSource AncestorType={x:Type vm:MyMembershipViewModel}}}" Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                             </c:TableBody>
                         </VerticalStackLayout>
                     </Border>

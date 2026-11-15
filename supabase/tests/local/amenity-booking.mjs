@@ -1,6 +1,6 @@
 // Phase 5 of the 2026-11-09 plan (0052, owner decisions F12, F13, F14): book an amenity, then pay; the desk approves; holds run out;
 // the payment's expiry is the hold; cancel up to 1 hour before for a refund; "I didn't use it" within 24 hours; coaches say which amenities they run.
-import { start, openCashShifts } from './harness.mjs';
+import { start, openCashShifts, oldPass } from './harness.mjs';
 import assert from 'node:assert/strict';
 
 const { server, client: db } = await start();
@@ -45,12 +45,12 @@ const refundOf = async id => (await db.query('select * from refund_requests wher
 
 try {
   // ---------- F12: book, then pay ----------
-  await test('booking with no pass holds the slot and creates the payment for one session', async () => {
+  await test('booking with no pass makes a request and a down payment for one session (G13: half of 150)', async () => {
     const uid = await member(), a = await amenity('B Hold');
     const r = await book(uid, a, '10:00', 90);
     assert.equal(r.status, 'awaiting_payment');
     const p = await payOf(r);
-    assert.deepEqual([p.status, p.kind, p.method, Number(p.amount), p.member_id], ['pending', 'amenity', 'qr', 150, uid]);
+    assert.deepEqual([p.status, p.kind, p.method, Number(p.amount), p.member_id], ['pending', 'amenity', 'qr', 75, uid]);
     assert.equal(new Date(r.ends_at) - new Date(r.starts_at), 90 * 60000);
   });
   await test('the hold ends after the payment expiry hours or 1 hour before the start, whichever comes first', async () => {
@@ -70,12 +70,14 @@ try {
     const next = new Date(Math.ceil((Date.now() + 1000) / 1800000) * 1800000).toISOString();
     await assert.rejects(as(uid, 'select * from book_amenity($1,$2,30,$3::payment_method)', [a, next, 'qr']), /too_soon/);
   });
-  await test('two members cannot hold the same slot, and a hold keeps its cooldown', async () => {
+  await test('G13: a confirmed booking keeps its slot and cooldown; requests no longer hold one', async () => {
     const one = await member(), two = await member(), a = await amenity('B Clash');
-    await book(one, a, '10:00');
-    await assert.rejects(book(two, a, '10:30'), /slot_taken/);
-    await assert.rejects(book(two, a, '11:00'), /slot_taken/);   // 11:00-11:30 is the hold's cooldown
-    assert.equal((await book(two, a, '11:30')).status, 'awaiting_payment');
+    await approve(await book(one, a, '10:00'));
+    assert.equal((await book(two, a, '10:00')).status, 'awaiting_payment');   // a request may still be made...
+    const cool = await book(two, a, '11:00'); await approve(cool);              // ...but 11:00-11:30 is the cooldown
+    assert.equal((await res(cool.reservation_id)).cancel_reason, 'Slot taken');
+    const after = await book(two, a, '11:30'); await approve(after);
+    assert.equal((await res(after.reservation_id)).status, 'confirmed');
   });
   await test('length is 30 minutes to 2 hours in 30-minute steps', async () => {
     const uid = await member(), a = await amenity('B Length');
@@ -128,15 +130,17 @@ try {
   });
   await test('a member with a pass still books without paying until it expires', async () => {
     const uid = await member(), a = await amenity('B Pass', 30);
-    const p = (await as(uid, 'select * from avail_amenity($1)', [a]))[0];
-    await as(desk, 'select verify_payment($1,true)', [p.payment_id]);
+    await oldPass(db, uid, a);   // 0066: bought before passes stopped selling
     const r = await book(uid, a, '10:00');
     assert.deepEqual([r.status, r.payment_id], ['confirmed', null]);
   });
-  await test('the grid shows holds as taken', async () => {
+  await test('G13: the grid shows confirmed bookings as taken; someone else\'s request does not show', async () => {
     const uid = await member(), other = await member(), a = await amenity('B Grid');
-    await book(uid, a, '10:00');
-    const g = (await as(other, 'select amenity_grid($1::date) g', [day]))[0].g;
+    const r = await book(uid, a, '10:00');
+    let g = (await as(other, 'select amenity_grid($1::date) g', [day]))[0].g;
+    assert.ok(!g.blocks.some(b => b.amenity == a));
+    await approve(r);
+    g = (await as(other, 'select amenity_grid($1::date) g', [day]))[0].g;
     assert.ok(g.blocks.some(b => b.amenity == a && !b.mine));
   });
   await test('the member cancels an unpaid hold: no refund, the payment is withdrawn, the slot is free', async () => {
@@ -149,23 +153,25 @@ try {
   });
 
   // ---------- F13: refunds and no-shows ----------
-  await test('cancelling a paid booking 1 hour or more before gives a full refund, approved at once', async () => {
+  await test('G13: cancelling a paid booking 24 hours or more before refunds the down payment, approved at once', async () => {
     const uid = await member(), a = await amenity('B Refund');
     const r = await book(uid, a, '10:00');
     await approve(r);
     await as(uid, `select cancel_reservation($1,'')`, [r.reservation_id]);
     const f = await refundOf(r.reservation_id);
-    assert.deepEqual([f.status, Number(f.amount), f.kind, f.payment_id, f.term_id], ['approved', 150, 'cancel', r.payment_id, null]);
+    assert.deepEqual([f.status, Number(f.amount), f.kind, f.payment_id, f.term_id], ['approved', 75, 'cancel', r.payment_id, null]);
     assert.equal((await res(r.reservation_id)).status, 'cancelled');
     await as(admin, `select record_membership_refund_paid($1,'cash')`, [f.refund_request_id]);
     assert.equal((await refundOf(r.reservation_id)).status, 'paid');
   });
-  await test('cancelling a paid booking 59 minutes before is refused', async () => {
+  await test('G13: cancelling a paid booking less than 24 hours before is allowed, and the gym keeps the down payment', async () => {
     const uid = await member(), a = await amenity('B Late');
     const r = await book(uid, a, '10:00');
     await approve(r);
     await shift(r.reservation_id, `now() + interval '59 minutes'`);
-    await assert.rejects(as(uid, `select cancel_reservation($1,'')`, [r.reservation_id]), /too_late_to_cancel/);
+    await as(uid, `select cancel_reservation($1,'')`, [r.reservation_id]);
+    assert.equal((await res(r.reservation_id)).status, 'cancelled');
+    assert.equal(await refundOf(r.reservation_id), undefined);
   });
   await test('"I didn\'t use it" within 24 hours after the end makes a claim the front desk decides', async () => {
     const uid = await member(), a = await amenity('B Claim');
@@ -205,8 +211,7 @@ try {
   });
   await test('only a paid booking of your own can be claimed, and membership refund decisions do not take amenity claims', async () => {
     const uid = await member(), other = await member(), a = await amenity('B Own', 30);
-    const p = (await as(uid, 'select * from avail_amenity($1)', [a]))[0];
-    await as(desk, 'select verify_payment($1,true)', [p.payment_id]);
+    await oldPass(db, uid, a);   // 0066: bought before passes stopped selling
     const r = await book(uid, a, '10:00');   // a pass booking: nothing paid for it
     await shift(r.reservation_id, `now() - interval '2 hours'`);
     await assert.rejects(as(uid, `select claim_amenity_no_show($1,'x')`, [r.reservation_id]), /not_refundable/);
@@ -238,7 +243,7 @@ try {
   await test('with assigned coaches, only one of them in the gym counts; without, any coach does', async () => {
     await db.query('update coach_visits set checked_out_at=now(),checked_out_by=coach_id where checked_out_at is null');
     const uid = await member(), run = await amenity('C Assigned', 30), free = await amenity('C Free', 30);
-    for (const a of [run, free]) { const p = (await as(uid, 'select * from avail_amenity($1)', [a]))[0]; await as(desk, 'select verify_payment($1,true)', [p.payment_id]); }
+    for (const a of [run, free]) await oldPass(db, uid, a);
     await as(coach, 'select set_runs_amenity($1,true)', [run]);
     const use = async a => {
       const ua = (await db.query('select user_amenity_id from user_amenities where member_id=$1 and amenity_id=$2', [uid, a])).rows[0].user_amenity_id;

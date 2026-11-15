@@ -8,6 +8,11 @@ public partial class RefundsPage : BasePage
 {
     public RefundsPage(RefundsViewModel vm, VoidPaymentsPage voids) {InitializeComponent();BindingContext=vm;HostPart(Switch, Part, voids);}
     protected override TimeSpan? AutoRefresh => TimeSpan.FromSeconds(20);
+    void OnOpen(object? sender, EventArgs e)
+    {
+        if(BindingContext is RefundsViewModel vm && (sender as BindableObject)?.BindingContext is RefundCard row) vm.OpenCommand.Execute(row);
+    }
+    void OnClose(object? sender, EventArgs e) => (BindingContext as RefundsViewModel)?.CloseCommand.Execute(null);
     async void OnApprove(object? sender, EventArgs e) => await DecideAsync(sender,true);
     async void OnReject(object? sender, EventArgs e) => await DecideAsync(sender,false);
     async Task DecideAsync(object? sender,bool approve)

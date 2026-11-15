@@ -19,8 +19,10 @@ public class AmenitySessionTests
     {
         var gw = new DemoGateway(clock: new Clock());
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
-        Assert.True((await new AdminService(gw).SaveAmenityAsync(new Amenity { Name = "Crud room", Price = 150, DurationDays = days })).Ok);
+        Assert.True((await new AdminService(gw).SaveAmenityAsync(new Amenity { Name = "Crud room", Description = "Small studio", Price = 150 })).Ok);
         var id = (await gw.ListAsync<Amenity>()).Single(a => a.Name == "Crud room").Id;
+        Assert.True((await new AdminService(gw).PublishAsync("amenity", id)).Ok);   // G6 (0061): added as a draft
+        gw.OwnerSetPassDays(id, days);   // G19 (0066): only an amenity left from before can still be a pass
         foreach (var visit in await gw.ListAsync<CoachVisit>(v => v.CheckedOutAt == null)) Assert.True((await new CoachService(gw).CheckOutAsync(visit.CoachId)).Ok);   // the demo starts with a coach in
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         return (gw, id);
@@ -89,8 +91,8 @@ public class AmenitySessionTests
     public async Task A_timed_pass_still_books_many_times()
     {
         var (gw, id) = await WithAmenity(days: 30);
-        Assert.Equal("₱150.00 for 30 days", (await Card(gw)).PassText);
-        await Buy(gw, id);
+        Assert.Equal("Not on sale right now", (await Card(gw)).PassText);   // G19 (0066)
+        gw.OwnerAddPass("u-alex", id, 30);   // bought before
         Assert.True((await Book(gw, id, Tomorrow10)).Ok);
         Assert.True((await Book(gw, id, Tomorrow10.AddHours(4))).Ok);
     }
@@ -99,12 +101,12 @@ public class AmenitySessionTests
     public async Task Staff_set_a_session_price_on_a_pass_amenity_and_passes_already_sold_keep_working()
     {
         var (gw, id) = await WithAmenity(days: 30);
-        await Buy(gw, id);
+        gw.OwnerAddPass("u-alex", id, 30);   // bought before 0066
 
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
         var vm = new CatalogAdminViewModel(new AdminService(gw));
         await vm.OnAppearingAsync();
-        var amenity = vm.Amenities.Single(a => a.Id == id);
+        var amenity = vm.Amenities.Single(r => r.Amenity.Id == id).Amenity;
 
         vm.StartSessionPriceCommand.Execute(amenity);
         Assert.Same(amenity, vm.PricingAmenity);
@@ -133,18 +135,19 @@ public class AmenitySessionTests
         var vm = new CatalogAdminViewModel(new AdminService(gw));
         await vm.OnAppearingAsync();
 
-        vm.EditAmenityCommand.Execute(vm.Amenities.Single(a => a.Id == id));
-        Assert.Equal("Price for 30 days", vm.AmenityPriceLabel);
-        vm.NewAmenityDescription = "New words";
-        await vm.AddAmenityCommand.ExecuteAsync(null);
+        await vm.RunActionCommand.ExecuteAsync((vm.Amenities.Single(r => r.Amenity.Id == id), "Edit"));
+        Assert.Equal(("Price for the pass", true), (vm.PriceLabel, vm.IsOldPass));   // switching is Sell per session, which asks first
+        vm.FormDescription = "New words";
+        await vm.MainCommand.ExecuteAsync(null);
         Assert.Equal(30, (await gw.ListAsync<Amenity>(a => a.Id == id)).Single().DurationDays);
 
-        Assert.Equal("Price per session", vm.AmenityPriceLabel);
-        vm.NewAmenityName = "Ice bath"; vm.NewAmenityPrice = 0;   // D4: ₱0 could never be paid
-        await vm.AddAmenityCommand.ExecuteAsync(null);
-        Assert.Equal("Enter a price above ₱0.", vm.ErrorMessage);
-        vm.NewAmenityPrice = 120;
-        await vm.AddAmenityCommand.ExecuteAsync(null);
+        vm.AddAmenityCommand.Execute(null);
+        Assert.Equal("Price per session", vm.PriceLabel);
+        (vm.FormName, vm.FormDescription, vm.FormPrice) = ("Ice bath", "Cold plunge.", 0);   // D4: ₱0 could never be paid
+        await vm.MainCommand.ExecuteAsync(null);
+        Assert.True(vm.PriceMissing);
+        vm.FormPrice = 120;
+        await vm.MainCommand.ExecuteAsync(null);
         Assert.Null((await gw.ListAsync<Amenity>()).Single(a => a.Name == "Ice bath").DurationDays);
 
         var admin = new AdminService(gw);
@@ -157,7 +160,7 @@ public class AmenitySessionTests
     public async Task A_booking_in_the_next_slot_needs_a_coach_in_the_gym_and_a_later_one_does_not()
     {
         var (gw, id) = await WithAmenity(days: 30);
-        await Buy(gw, id);
+        gw.OwnerAddPass("u-alex", id, 30);   // bought before 0066
         var nextSlot = new DateTime(2026, 10, 20, 2, 30, 0, DateTimeKind.Utc);
         Assert.Equal("no_coach_present", (await Book(gw, id, nextSlot)).Message);
         Assert.True((await Book(gw, id, Tomorrow10)).Ok);
@@ -170,7 +173,7 @@ public class AmenitySessionTests
     public async Task Using_an_amenity_needs_a_coach_in_the_gym_and_the_board_says_so()
     {
         var (gw, id) = await WithAmenity(days: 30);
-        await Buy(gw, id);
+        gw.OwnerAddPass("u-alex", id, 30);   // bought before 0066
         var pass = (await gw.ListAsync<UserAmenity>(u => u.AmenityId == id)).Single();
         var amenities = new AmenityService(gw);
         Assert.False((await amenities.BoardAsync()).Value!.CoachInGym);

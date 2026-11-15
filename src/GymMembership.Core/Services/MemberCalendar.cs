@@ -34,10 +34,11 @@ public sealed record CalendarEntry(DateTime StartUtc, DateTime EndUtc, string Ki
 {
     static readonly CultureInfo En = CultureInfo.InvariantCulture;
     static DateTime Manila(DateTime utc) => utc.ToUniversalTime().AddHours(8);
-    public string Time => $"{Manila(StartUtc).ToString("h:mm tt", En)} to {Manila(EndUtc).ToString("h:mm tt", En)}";
-    public string KindText => Kind switch { "session" => "Session", "booking" => "Amenity booking", "shift" => "Coach on the floor", _ => "Open time" };
+    public string Time => IsClosed ? "All day. Nothing can be booked this day." : $"{Manila(StartUtc).ToString("h:mm tt", En)} to {Manila(EndUtc).ToString("h:mm tt", En)}";
+    public bool IsClosed => Kind == "closed";
+    public string KindText => Kind switch { "session" => "Session", "booking" => "Amenity booking", "shift" => "Coach on the floor", "closed" => "Gym closed", _ => "Open time" };
     /// <summary>The word a day tile has room for; the day's list carries the full title.</summary>
-    public string Short => Kind switch { "session" => "Session", "shift" => "Shift", "open" => "Open slot", _ => Title };
+    public string Short => Kind switch { "session" => "Session", "shift" => "Shift", "open" => "Open slot", "closed" => "Closed", _ => Title };
     /// <summary>F15: tapping a coach's open time asks for it, with the same rules as Time requests.</summary>
     public bool CanRequest => Kind == "open" && StartUtc > DateTime.UtcNow;
     public bool CanOpen => Kind == "booking";
@@ -52,11 +53,14 @@ public sealed record MemberDay(DateOnly Date, bool InMonth, bool IsToday, bool I
     /// <summary>What Entry1 and Entry2 are (session, booking, shift, open), for their dots.</summary>
     public string? Kind1 { get; init; }
     public string? Kind2 { get; init; }
+    /// <summary>G16 (0065): the gym is closed that day; the tile is crossed out in red.</summary>
+    public bool IsClosed { get; init; }
     public string Description
     {
         get
         {
             var parts = new List<string>();
+            if (IsClosed) parts.Add("gym closed");
             if (HasSession) parts.Add("a session");
             if (HasBooking) parts.Add("an amenity booking");
             if (HasOpen) parts.Add("your coach has open time");
@@ -71,13 +75,13 @@ public static class MemberCalendar
 
     public static IReadOnlyList<MemberDay> Days(DateOnly month, IReadOnlyList<CalendarEntry> entries, DateOnly today, DateOnly? selected)
     {
-        var byDay = entries.GroupBy(e => Day(e.StartUtc)).ToDictionary(g => g.Key, g => g.OrderBy(e => e.StartUtc).ToList());
+        var byDay = entries.GroupBy(e => Day(e.StartUtc)).ToDictionary(g => g.Key, g => g.OrderBy(e => e.Kind != "closed").ThenBy(e => e.StartUtc).ToList());   // a closed day says so first
         return AttendanceCalendar.MonthGrid(month.Year, month.Month).Select(d =>
         {
             var on = byDay.GetValueOrDefault(d) ?? [];
             return new MemberDay(d, d.Month == month.Month, d == today, d == selected, on.Count > 0 ? on[0].Short : null, on.Count > 1 ? on[1].Short : null,
                 on.Count > 2 ? $"+{on.Count - 2} more" : null, on.Any(e => e.Kind == "session"), on.Any(e => e.Kind == "booking"), on.Any(e => e.Kind == "open"))
-            { Kind1 = on.ElementAtOrDefault(0)?.Kind, Kind2 = on.ElementAtOrDefault(1)?.Kind };
+            { Kind1 = on.ElementAtOrDefault(0)?.Kind, Kind2 = on.ElementAtOrDefault(1)?.Kind, IsClosed = on.Any(e => e.Kind == "closed") };
         }).ToList();
     }
 }
@@ -115,6 +119,12 @@ public sealed class MemberCalendarService(ISupabaseGateway gw) : IMemberCalendar
                 .Select(r => new CalendarEntry(r.RequestedStart.ToUniversalTime(), r.RequestedEnd.ToUniversalTime(), "open", $"Open with {Coach(r.CoachId)}", r.CoachId)));
         }
         var gym = (await gw.ListAsync<GymSettings>()).First();
+        // G16 (0065): a closed day is one entry over the gym's hours, with its reason
+        foreach (var (day, why) in await GymClosures.ByDayAsync(gw))
+        {
+            var opens = DateTime.SpecifyKind(day.ToDateTime(TimeOnly.MinValue) + gym.OpensAt - TimeSpan.FromHours(8), DateTimeKind.Utc);
+            if (In(opens)) entries.Add(new CalendarEntry(opens, opens - gym.OpensAt + gym.ClosesAt, "closed", $"Gym closed: {why}"));
+        }
         return new MemberCalendarData(entries.OrderBy(e => e.StartUtc).ToList(), coaches.Count > 0, gym.OpensAt, gym.ClosesAt);
     });
 }

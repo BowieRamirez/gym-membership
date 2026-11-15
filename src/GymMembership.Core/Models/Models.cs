@@ -59,11 +59,49 @@ public static class PayMethod
   [Column("payment_expiry_hours")] public int PaymentExpiryHours { get; set; } = 48; [Column("receipt_prefix")] public string ReceiptPrefix { get; set; } = "OR";
   // one opening and closing time for every day, Manila wall-clock (0028)
   [Column("opens_at")] public TimeSpan OpensAt { get; set; } = TimeSpan.FromHours(6); [Column("closes_at")] public TimeSpan ClosesAt { get; set; } = TimeSpan.FromHours(22);
-  [Column("opening_float")] public decimal OpeningFloat { get; set; } = 5000; }   // F2 (0050): the drawer float a cashier starts a shift with
+  [Column("opening_float")] public decimal OpeningFloat { get; set; } = 5000;
+  [Column("down_payment_percent")] public int DownPaymentPercent { get; set; } = 50; }   // G13 (0064): of an amenity booking's price   // F2 (0050): the drawer float a cashier starts a shift with
+
+/// <summary>G16 (0065): a whole Manila day the gym is closed; written only by close_gym_day and reopen_gym_day.</summary>
+[Table("gym_closures")] public class GymClosure : BaseModel
+{ [PrimaryKey("closed_on", true)] public DateTime ClosedOn { get; set; } [Column("reason")] public string Reason { get; set; } = "";
+  [Column("closed_by")] public string ClosedBy { get; set; } = ""; [Column("closed_at")] public DateTime ClosedAt { get; set; }
+  public DateOnly Day => DateOnly.FromDateTime(ClosedOn); }
 
 [Table("membership_packages")] public class MembershipPackage : BaseModel
 { [PrimaryKey("membership_package_id")] public int Id { get; set; } [Column("name")] public string Name { get; set; } = ""; [Column("description")] public string? Description { get; set; }
-  [Column("price")] public decimal Price { get; set; } [Column("duration_days")] public int DurationDays { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true; }
+  [Column("price")] public decimal Price { get; set; } [Column("duration_days")] public int DurationDays { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true;
+  // G6/G9 (0061): null = a draft; set only by publish_catalog_item. A version points at the package it replaces.
+  [Column("published_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? PublishedAt { get; set; }
+  [Column("replaces_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? ReplacesId { get; set; }
+  [Column("benefits")] public List<string> Benefits { get; set; } = [];
+  [Column("image_path", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? ImagePath { get; set; }   // 0013; set only by the photo upload
+  [System.Text.Json.Serialization.JsonIgnore] public CatalogState State => Catalog.StateOf(IsActive, PublishedAt); }
+
+public enum CatalogState { Draft, Published, Archived }
+
+public static class Catalog
+{
+    public static CatalogState StateOf(bool isActive, DateTime? publishedAt) =>
+        !isActive ? CatalogState.Archived : publishedAt is null ? CatalogState.Draft : CatalogState.Published;
+}
+
+/// <summary>G9: what a new version changes, for the side-by-side check before publishing.</summary>
+public sealed record PackageChange(string Field, string Old, string New);
+
+public static class PackageChanges
+{
+    public static IReadOnlyList<PackageChange> Between(MembershipPackage old, MembershipPackage next) =>
+        new[]
+        {
+            new PackageChange("Name", old.Name, next.Name),
+            new PackageChange("Description", old.Description ?? "", next.Description ?? ""),
+            new PackageChange("Price", $"₱{old.Price:N2}", $"₱{next.Price:N2}"),
+            new PackageChange("Duration", $"{old.DurationDays} days", $"{next.DurationDays} days"),
+            new PackageChange("Benefits", string.Join("; ", old.Benefits), string.Join("; ", next.Benefits)),
+            new PackageChange("Photo", old.ImagePath is null ? "None" : "Same", next.ImagePath is null ? "None" : next.ImagePath == old.ImagePath ? "Same" : "New photo"),
+        }.Where(c => c.Old != c.New).ToList();
+}
 
 [Table("user_membership_packages")] public class UserMembershipPackage : BaseModel
 { [PrimaryKey("user_membership_package_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("membership_package_id")] public int MembershipPackageId { get; set; }
@@ -116,6 +154,9 @@ public static class CashCount
 { [PrimaryKey("amenity_id")] public int Id { get; set; } [Column("name")] public string Name { get; set; } = ""; [Column("description")] public string? Description { get; set; }
   [Column("price")] public decimal Price { get; set; } [Column("duration_days")] public int? DurationDays { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true;
   [Column("image_path", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? ImagePath { get; set; }
+  [Column("coach_fee")] public decimal CoachFee { get; set; }   // G14 (0064): added when a member books With a coach
+  [Column("published_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? PublishedAt { get; set; }   // G6/G7 (0061): null = a draft
+  [System.Text.Json.Serialization.JsonIgnore] public CatalogState State => Catalog.StateOf(IsActive, PublishedAt);
   // live status: written only by set_amenity_status, so a catalog edit never sends these
   [Column("status", ignoreOnInsert: true, ignoreOnUpdate: true)] public string Availability { get; set; } = "available";
   [Column("status_reason", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? StatusReason { get; set; }
@@ -181,6 +222,7 @@ public class NotifiedMember : BaseModel
   [Column("client_ref", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? ClientRef { get; set; }
   [Column("recorded_by", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? RecordedBy { get; set; }
   [Column("reason", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? Reason { get; set; }   // F8: why an Admin skipped the PIN
+  [Column("id_type", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? IdType { get; set; }   // G20 (0066): the ID the desk looked at
   [PrimaryKey("check_in_id")] public int Id { get; set; } [Column("member_id")] public string? MemberId { get; set; } [Column("payment_id")] public int? PaymentId { get; set; }
   [Column("checked_in_at")] public DateTime CheckedInAt { get; set; } }
 
@@ -201,13 +243,34 @@ public class NotifiedMember : BaseModel
 { [PrimaryKey("discount_id")] public int Id { get; set; } [Column("code")] public string Code { get; set; } = ""; [Column("percent")] public int Percent { get; set; }
   [Column("starts_at")] public DateTime StartsAt { get; set; } = DateTime.UtcNow; [Column("expires_at")] public DateTime ExpiresAt { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true;
   [Column("max_uses")] public int? MaxUses { get; set; }   // null: a code from before limits existed, unlimited
-  [Column("show_on_packages")] public bool ShowOnPackages { get; set; } }   // F5: off keeps the code private
+  [Column("show_on_packages")] public bool ShowOnPackages { get; set; }   // F5/G4: off keeps the code private
+  [Column("paused")] public bool Paused { get; set; }   // G1 (0060): turned off for now; still on the Discounts page
+  [Column("created_at")] public DateTime CreatedAt { get; set; } }
 
-/// <summary>F5: a code a member can still use, from packages_codes() (0048).</summary>
-public sealed class PackageCode : BaseModel
-{ [Column("code")] public string Code { get; set; } = ""; [Column("percent")] public int Percent { get; set; } [Column("expires_at")] public DateTime ExpiresAt { get; set; }
+/// <summary>G3 (0060): a package or amenity a code fits; ItemId null means every package (or every amenity).</summary>
+[Table("discount_items")] public class DiscountItem : BaseModel
+{ [Column("discount_id")] public int DiscountId { get; set; } [Column("kind")] public string Kind { get; set; } = ""; [Column("item_id")] public int? ItemId { get; set; }
+  public static DiscountItem Package(int? id) => new() { Kind = "package", ItemId = id };
+  public static DiscountItem Amenity(int? id) => new() { Kind = "amenity", ItemId = id };
+  /// <summary>Every package and every amenity: what every code fitted before 0060.</summary>
+  public static IReadOnlyList<DiscountItem> Everything => [Package(null), Amenity(null)]; }
+
+/// <summary>G4 (0060): a code this person can still use, from my_discount_codes(), with what it fits.</summary>
+public sealed class AvailableCode : BaseModel
+{ [Column("code")] public string Code { get; set; } = ""; [Column("percent")] public int Percent { get; set; }
+  [Column("expires_at")] public DateTime ExpiresAt { get; set; } [Column("created_at")] public DateTime CreatedAt { get; set; }
+  [Column("all_packages")] public bool AllPackages { get; set; } [Column("package_ids")] public List<int> PackageIds { get; set; } = [];
+  [Column("all_amenities")] public bool AllAmenities { get; set; } [Column("amenity_ids")] public List<int> AmenityIds { get; set; } = [];
+  /// <summary>Filled by the service from the catalog names: "All packages", "Monthly and Annual", "Pool".</summary>
+  [System.Text.Json.Serialization.JsonIgnore] public string FitsText { get; set; } = "";
+  [System.Text.Json.Serialization.JsonIgnore] public bool FitsAnyPackage => AllPackages || PackageIds.Count > 0;
+  /// <summary>G4: made in the last 7 days.</summary>
+  public bool IsNewAt(DateTime nowUtc) => nowUtc - CreatedAt.ToUniversalTime() < TimeSpan.FromDays(7);
+  [System.Text.Json.Serialization.JsonIgnore] public bool IsNew => IsNewAt(DateTime.UtcNow);
+  /// <summary>"For all packages", "For Monthly, Annual": the staff wording, lower-cased where it runs on from "For".</summary>
+  [System.Text.Json.Serialization.JsonIgnore] public string ForText => GymMembership.Core.Services.DiscountFits.For(FitsText);
   /// <summary>ExpiresAt is the midnight that ends the last day, as on the Discounts page.</summary>
-  [System.Text.Json.Serialization.JsonIgnore] public string Summary => $"{Percent}% off. Until {ExpiresAt.AddTicks(-1).ToLocalTime():d MMM yyyy}"; }
+  [System.Text.Json.Serialization.JsonIgnore] public string LastDayText => $"Last day {ExpiresAt.AddTicks(-1).ToLocalTime():d MMM yyyy}"; }
 
 // one conversation = one coach + one member. A message is sent as one of the two (sender_id) and only read_at changes afterwards
 [Table("messages")] public class ChatMessage : BaseModel
@@ -346,7 +409,12 @@ public sealed class MemberPass : BaseModel
   [PrimaryKey("reservation_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("amenity_id")] public int AmenityId { get; set; }
   [Column("coach_id")] public string? CoachId { get; set; } [Column("training_session_id")] public int? TrainingSessionId { get; set; }
   [Column("starts_at")] public DateTime StartsAt { get; set; } [Column("ends_at")] public DateTime EndsAt { get; set; } [Column("status")] public string Status { get; set; } = "confirmed";
-  [Column("cancelled_at")] public DateTime? CancelledAt { get; set; } [Column("cancelled_by")] public string? CancelledBy { get; set; } [Column("cancel_reason")] public string? CancelReason { get; set; } }
+  [Column("cancelled_at")] public DateTime? CancelledAt { get; set; } [Column("cancelled_by")] public string? CancelledBy { get; set; } [Column("cancel_reason")] public string? CancelReason { get; set; }
+  // G13 (0064): what the booking costs, the part paid to reserve it, and the balance's payment once the desk takes it
+  [Column("total_price", ignoreOnInsert: true, ignoreOnUpdate: true)] public decimal TotalPrice { get; set; }
+  [Column("down_payment", ignoreOnInsert: true, ignoreOnUpdate: true)] public decimal DownPayment { get; set; }
+  [Column("balance_payment_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? BalancePaymentId { get; set; }
+  [System.Text.Json.Serialization.JsonIgnore] public decimal Balance => TotalPrice - DownPayment; }
 
 public record RevenueRow(DateTime Day, string Kind, string Method, long Payments, decimal Total)
 {

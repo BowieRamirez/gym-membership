@@ -19,7 +19,7 @@ public sealed record MyProfile(string Name, string? AvatarPath, string FirstName
 
 public interface IProfileService
 {
-    /// <summary>Raised after the profile picture changes, so an open header can redraw.</summary>
+    /// <summary>Raised after the profile picture or the name changes, so an open header can redraw its picture and initials.</summary>
     event Action? AvatarChanged;
     Task<AppResult<MyProfile>> MeAsync();
     /// <summary>Checks the file, uploads it to your folder in the avatars bucket and makes it your picture. Returns the stored path.</summary>
@@ -28,6 +28,8 @@ public interface IProfileService
     Task<AppResult<string?>> AvatarUrlAsync(string? path);
     /// <summary>Tells the server you are in the app (it counts at most once every 5 minutes). The result can be ignored.</summary>
     Task<AppResult<bool>> TouchSeenAsync();
+    /// <summary>Item 3 (0059): fills in your blank last name, once. A complete name is refused (name_complete).</summary>
+    Task<AppResult<bool>> AddMyLastNameAsync(string lastName);
     /// <summary>Renames you; the full name everyone sees becomes "first last".</summary>
 }
 
@@ -42,6 +44,13 @@ public sealed class ProfileService(ISupabaseGateway gw) : IProfileService
         Extensions.Contains(Path.GetExtension(fileName).ToLowerInvariant()) && data.Length is > 0 and <= MaxBytes;
 
     public event Action? AvatarChanged;
+
+    public async Task<AppResult<bool>> AddMyLastNameAsync(string lastName)
+    {
+        var result = await Safe.RunAsync(async () => { await gw.RpcAsync("add_my_last_name", new() { ["p_last"] = lastName.Trim() }); return true; });
+        if (result.Ok) AvatarChanged?.Invoke();   // the header's initials change with the name
+        return result;
+    }
 
     public Task<AppResult<bool>> TouchSeenAsync() => Safe.RunAsync(async () => { await gw.RpcAsync("touch_last_seen"); return true; });
 

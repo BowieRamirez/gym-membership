@@ -82,15 +82,20 @@ try {
     const row = (await list(owner, 'code', 'expired')).rows.find(r => r.record_id === String(expired));
     assert.equal(row.can_restore, false); assert.equal(row.reason, 'Expired code'); assert.ok(row.archived_at);
     await assert.rejects(restore('code', expired), /record_not_restorable/);
-    await assert.rejects(as(owner, `update discounts set expires_at=now()+interval '30 days' where discount_id=$1`, [expired]), /record_archived/);
+    await assert.rejects(as(owner, `update discounts set expires_at=now()+interval '30 days' where discount_id=$1`, [expired]), /record_archived|permission denied/);   // 0060: no direct writes to codes at all
   });
+  let draftPlan;
   await test('restoring clears archive metadata and records original reason in audit', async () => {
-    await restore('plan', plan);
-    const row = (await db.query('select is_active,archived_at,archived_by,archive_reason from membership_packages where membership_package_id=$1', [plan])).rows[0];
+    // G6 (0061): an archived published plan never comes back on sale; an archived draft can
+    await assert.rejects(restore('plan', plan), /package_archived/);
+    draftPlan = (await db.query(`insert into membership_packages(name,price,duration_days,published_at) values('Draft plan',1000,30,null) returning membership_package_id`)).rows[0].membership_package_id;
+    await archive('plan', draftPlan, 'Retired gym plan');
+    await restore('plan', draftPlan);
+    const row = (await db.query('select is_active,archived_at,archived_by,archive_reason from membership_packages where membership_package_id=$1', [draftPlan])).rows[0];
     assert.deepEqual(row, { is_active: true, archived_at: null, archived_by: null, archive_reason: null });
-    assert.equal((await db.query(`select details->>'reason' reason from audit_log where action='catalog.restore' and entity_id=$1`, [String(plan)])).rows[0].reason, 'Retired gym plan');
-    await assert.rejects(restore('plan', plan), /not_archived/);
-    await as(owner, `update membership_packages set price=1100 where membership_package_id=$1`, [plan]);
+    assert.equal((await db.query(`select details->>'reason' reason from audit_log where action='catalog.restore' and entity_id=$1`, [String(draftPlan)])).rows[0].reason, 'Retired gym plan');
+    await assert.rejects(restore('plan', draftPlan), /not_archived/);
+    await as(owner, `update membership_packages set price=1100 where membership_package_id=$1`, [draftPlan]);
     for (const [type, id] of [['amenity',amenity],['code',code],['account',desk]]) await restore(type, id);
   });
   await test('ordinary inactive accounts appear with audited date and restore as active', async () => {
@@ -118,8 +123,8 @@ try {
     await assert.rejects(as(owner, `insert into amenities(name,price,is_active,archived_at,archived_by,archive_reason) values('Forged inactive',0,false,'2000-01-01',$1,'Forged') returning *`, [member]), /permission denied/);
     const row = (await as(owner, `insert into amenities(name,price,is_active) values('Created inactive',0,false) returning *`)).rows[0];
     assert.equal(row.archived_by, owner); assert.equal(row.archive_reason, 'Created inactive'); assert.ok(row.archived_at.getFullYear() > 2000);
-    await as(owner, `update membership_packages set archived_at='2000-01-01',archived_by=$1,archive_reason='Forged' where membership_package_id=$2`, [member, plan]);
-    const active = (await db.query('select archived_at,archived_by,archive_reason from membership_packages where membership_package_id=$1', [plan])).rows[0];
+    await as(owner, `update membership_packages set archived_at='2000-01-01',archived_by=$1,archive_reason='Forged' where membership_package_id=$2`, [member, draftPlan]);
+    const active = (await db.query('select archived_at,archived_by,archive_reason from membership_packages where membership_package_id=$1', [draftPlan])).rows[0];
     assert.deepEqual(active, { archived_at: null, archived_by: null, archive_reason: null });
   });
   await test('inactive admin cannot list, restore or write gym assets', async () => {

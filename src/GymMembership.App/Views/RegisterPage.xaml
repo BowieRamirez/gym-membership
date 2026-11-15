@@ -9,7 +9,8 @@
             Title="Create an account" ControlTemplate="{StaticResource AuthShell}">
 
     <!-- Same layout as sign in (AuthShell). Each field says what is wrong when you leave it, not only on submit. -->
-    <ScrollView>
+    <Grid>
+    <ScrollView x:Name="Form">
         <VerticalStackLayout Padding="{OnIdiom Phone='24,20,24,24', Default='64,40'}" Spacing="18" MaximumWidthRequest="440"
                              VerticalOptions="{OnIdiom Phone=Start, Default=Center}" HorizontalOptions="Fill">
 
@@ -51,6 +52,27 @@
                 <Label x:Name="ConfirmPasswordError" Style="{StaticResource FieldError}" />
             </VerticalStackLayout>
 
+            <!-- G25: the box must be ticked; the sentence ticks it too, and only the link opens the terms (reading is optional) -->
+            <VerticalStackLayout Spacing="2">
+                <HorizontalStackLayout Spacing="4">
+                    <CheckBox WidthRequest="{OnPlatform WinUI=32, Default=-1}" MinimumWidthRequest="0" IsChecked="{Binding AgreedToTerms}" VerticalOptions="Center"
+                              Color="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}"
+                              AutomationId="AgreeToTerms" SemanticProperties.Description="I agree to the Terms and Policy">
+                        <CheckBox.Triggers>
+                            <DataTrigger TargetType="CheckBox" Binding="{Binding TermsError, Converter={StaticResource HasText}}" Value="True">
+                                <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
+                            </DataTrigger>
+                        </CheckBox.Triggers>
+                    </CheckBox>
+                    <Label Text="I agree to the" FontSize="14" VerticalOptions="Center">
+                        <Label.GestureRecognizers><TapGestureRecognizer Tapped="OnAgreeText" /></Label.GestureRecognizers>
+                    </Label>
+                    <Button Text="Terms and Policy" Style="{StaticResource LinkButton}" Command="{Binding OpenTermsCommand}" VerticalOptions="Center" AutomationId="OpenTerms" />
+                </HorizontalStackLayout>
+                <Label Text="{Binding TermsError}" IsVisible="{Binding TermsError, Converter={StaticResource HasText}}" Style="{StaticResource FieldError}"
+                       Margin="{OnPlatform WinUI='36,0,0,0', Default='44,0,0,0'}" AutomationId="TermsError" />
+            </VerticalStackLayout>
+
             <Grid>
                 <Button Text="Create account" Style="{StaticResource SignalButton}" Command="{Binding RegisterCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}" />
                 <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" WidthRequest="20" HeightRequest="20" HorizontalOptions="Start" Margin="20,0"
@@ -62,4 +84,20 @@
             </HorizontalStackLayout>
         </VerticalStackLayout>
     </ScrollView>
+
+    <!-- The terms: a sheet over the form (the brand panel dims, see code-behind); the whole screen on a phone. Close, Esc or Back returns with everything still typed. -->
+    <Border IsVisible="{Binding TermsOpen}" Style="{StaticResource Panel}" Padding="0" StrokeThickness="0" StrokeShape="{OnIdiom Phone='RoundRectangle 0', Default='RoundRectangle 18'}"
+            Margin="{OnIdiom Phone=0, Default='0,14,14,14'}" AutomationId="TermsSheet">
+        <Grid RowDefinitions="Auto,Auto,*">
+            <Grid ColumnDefinitions="*,Auto" Padding="{OnIdiom Phone='20,16,20,12', Default='28,20,28,14'}" ColumnSpacing="12">
+                <Label Text="Terms and Policy" Style="{StaticResource Heading}" VerticalOptions="Center" SemanticProperties.HeadingLevel="Level1" />
+                <Button x:Name="CloseTermsButton" Grid.Column="1" Text="Close" Style="{StaticResource SmallOutlineButton}" Command="{Binding CloseTermsCommand}" VerticalOptions="Center" AutomationId="CloseTerms" />
+            </Grid>
+            <BoxView Grid.Row="1" Style="{StaticResource Hairline}" />
+            <ScrollView Grid.Row="2">
+                <VerticalStackLayout x:Name="TermsText" Padding="{OnIdiom Phone='20,14,20,28', Default='28,16,28,32'}" Spacing="6" MaximumWidthRequest="620" HorizontalOptions="Start" />
+            </ScrollView>
+        </Grid>
+    </Border>
+    </Grid>
 </v:BasePage>

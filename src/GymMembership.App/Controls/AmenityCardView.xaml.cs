@@ -20,7 +20,12 @@ public partial class AmenityCardView : ContentView
 	EventHandler? _bookClicked;
 	public event EventHandler? BookClicked { add { _bookClicked += value; ShowBook(); } remove { _bookClicked -= value; ShowBook(); } }
 
-	void ShowBook() => Book.IsVisible = _bookClicked is not null && BindingContext is AmenityCard { CanBook: true };
+	void ShowBook()
+	{
+		Book.IsVisible = _bookClicked is not null && BindingContext is AmenityCard { CanBook: true };
+		// every card has a Book button: say which amenity, so a screen reader doesn't hear "Book" five times
+		if (BindingContext is AmenityCard card) SemanticProperties.SetDescription(Book, $"Book {card.Amenity.Name}");
+	}
 	void OnBook(object? sender, EventArgs e) => _bookClicked?.Invoke(this, e);
 
 	// the switch also fires when a refresh sets it; only a change the coach made counts

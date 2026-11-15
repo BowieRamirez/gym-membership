@@ -110,9 +110,10 @@
 
             <!-- 9.8: rows divided by hairlines in one panel (were a card per row) -->
             <Border Style="{StaticResource TablePanel}">
-            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Rows}">
-                <BindableLayout.EmptyView><Label Text="No receipts or approved refunds in this period." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
-                <BindableLayout.ItemTemplate>
+            <!-- one layout at every width (WideFrom out of reach), 10 rows a page like every table -->
+            <c:TableBody Items="{Binding Rows}" WideFrom="100000">
+                <c:TableBody.Empty><Label Text="No receipts or approved refunds in this period." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
+                <c:TableBody.CardTemplate>
                     <DataTemplate x:DataType="m:RevenueRow">
                         <VerticalStackLayout>
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="14,10">
@@ -125,8 +126,8 @@
                             <BoxView Style="{StaticResource Hairline}" />
                         </VerticalStackLayout>
                     </DataTemplate>
-                </BindableLayout.ItemTemplate>
-            </VerticalStackLayout>
+                </c:TableBody.CardTemplate>
+            </c:TableBody>
             </Border>
             </VerticalStackLayout>
 
@@ -152,10 +153,9 @@
                         </Grid>
                         <BoxView Style="{StaticResource Hairline}" />
                     </VerticalStackLayout>
-                    <c:TableBody BindableLayout.ItemsSource="{Binding Shifts}" Header="{x:Reference ShiftHead}" WideFrom="1050"
-                                 RowTemplate="{StaticResource ShiftRow}" CardTemplate="{StaticResource ShiftCard}"
-                                 BindableLayout.ItemTemplate="{StaticResource ShiftRow}">
-                        <BindableLayout.EmptyView><Label Text="No cash shifts were opened in this period." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                    <c:TableBody Items="{Binding Shifts}" Header="{x:Reference ShiftHead}" WideFrom="1050"
+                                 RowTemplate="{StaticResource ShiftRow}" CardTemplate="{StaticResource ShiftCard}">
+                        <c:TableBody.Empty><Label Text="No cash shifts were opened in this period." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                     </c:TableBody>
                 </VerticalStackLayout>
             </Border>

@@ -4,6 +4,24 @@ using GymMembership.Core.Models;
 
 namespace GymMembership.Core.Services;
 
+/// <summary>G16 (0065): closed days from today (Manila) on, with their reasons; every calendar that offers a day reads this.</summary>
+public static class GymClosures
+{
+    public static async Task<IReadOnlyDictionary<DateOnly, string>> ByDayAsync(ISupabaseGateway gw)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8)).ToDateTime(TimeOnly.MinValue);
+        return (await gw.ListAsync<GymClosure>(c => c.ClosedOn >= today)).ToDictionary(c => c.Day, c => c.Reason);
+    }
+}
+
+/// <summary>G18: what closing a day would cancel, as closure_preview counts it.</summary>
+public sealed record ClosurePreview(int Bookings, int Paid, int Sessions, int Shifts, int Requests)
+{
+    static string N(int n, string one) => $"{n} {one}{(n == 1 ? "" : "s")}";
+    public string Text => $"{N(Bookings, "booking")}{(Paid > 0 ? $" ({Paid} paid, refunded)" : "")}, {N(Sessions, "session")} and {N(Shifts, "shift")} will be cancelled."
+        + (Requests > 0 ? $" {N(Requests, "session request")} will be declined." : "");
+}
+
 static class Directory_
 {
     /// <summary>Every profile the caller may read, by id. The full name, or the username if none was given.</summary>
@@ -23,7 +41,7 @@ public interface IAuthService
     /// <summary>True while the person still has the temporary password the owner gave them.</summary>
     Task<AppResult<bool>> MustChangePasswordAsync();
     /// <summary>Open sign-up: creates a member account and signs it in. It stays a guest until a payment is verified.</summary>
-    Task<AppResult<bool>> RegisterAsync(string firstName, string lastName, string email, string password);
+    Task<AppResult<bool>> RegisterAsync(string firstName, string lastName, string email, string password, bool agreedToTerms);
     /// <summary>The register page's live check. An address that isn't a valid email isn't looked up.</summary>
     Task<AppResult<bool>> EmailInUseAsync(string email);
     Task<AppResult<EmailStatus>> EmailStatusAsync();
@@ -103,13 +121,14 @@ public sealed class AuthService(ISupabaseGateway gw) : IAuthService
 {
     public string? UserId => gw.CurrentUserId;
 
-    public async Task<AppResult<bool>> RegisterAsync(string firstName, string lastName, string email, string password)
+    public async Task<AppResult<bool>> RegisterAsync(string firstName, string lastName, string email, string password, bool agreedToTerms)
     {
+        if (!agreedToTerms) return AppResult<bool>.Fail(AppErrorKind.Validation, "terms_required");   // G25 (0069)
         firstName = firstName.Trim().Normalize(); lastName = lastName.Trim().Normalize(); email = email.Trim();
         if (!AccountRules.IsName(firstName, lastName)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_name");
         if (!AccountRules.IsEmail(email)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_email");
         if (!AccountRules.IsPassword(password)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_password");
-        return await Safe.RunAsync(async () => { await gw.SignUpAsync(email, password, firstName, lastName); return true; });
+        return await Safe.RunAsync(async () => { await gw.SignUpAsync(email, password, firstName, lastName, TermsInfo.Version); return true; });
     }
 
     public Task<AppResult<bool>> EmailInUseAsync(string email)
@@ -274,8 +293,8 @@ public sealed record PaymentItem(int Id, string What, string PaymentCode, string
 public interface IMembershipService
 {
     Task<AppResult<IReadOnlyList<MembershipPackage>>> ListPackagesAsync();
-    /// <summary>F5: codes staff chose to show on Packages that this member can still use.</summary>
-    Task<AppResult<IReadOnlyList<PackageCode>>> PackageCodesAsync();
+    /// <summary>G4 (0060): codes staff chose to show that this member can still use, each with FitsText filled from the catalog.</summary>
+    Task<AppResult<IReadOnlyList<AvailableCode>>> AvailableCodesAsync();
     Task<AppResult<IReadOnlyList<MembershipRow>>> MyMembershipsAsync();
     Task<AppResult<IReadOnlyList<PaymentItem>>> MyPaymentsAsync();
     Task<AppResult<Access>> AccessAsync();
@@ -287,6 +306,8 @@ public interface IMembershipService
     /// <summary>Starts a fresh payment for the same item after a rejection or expiry.</summary>
     Task<AppResult<Payment>> PayAgainAsync(PaymentItem item);
     Task<AppResult<GymSettings>> GymAsync();
+    /// <summary>G16: closed days from today on, with their reasons.</summary>
+    Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync();
     /// <summary>A link to the gym's payment QR image, or null if the owner has not uploaded one.</summary>
     Task<AppResult<string?>> QrUrlAsync();
 }
@@ -301,14 +322,22 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
         var uid = gw.CurrentUserId;
         var active = await gw.RpcAsync<bool>("is_active_member");
         var pays = await gw.ListAsync<Payment>(p => p.MemberId == uid);
-        return new Access(active, pays.Any(p => p.Status == Status.Pending));
+        // only what the member menu shows: a plan payment waiting matters to the locked pages; an amenity down payment must not rebuild the menu
+        return new Access(active, !active && pays.Any(p => p.Status == Status.Pending && p.Kind is PayKind.Membership or PayKind.Renewal));
     });
 
     public Task<AppResult<IReadOnlyList<MembershipPackage>>> ListPackagesAsync() =>
         Safe.RunAsync(() => gw.ListAsync<MembershipPackage>(p => p.IsActive == true));
 
-    public Task<AppResult<IReadOnlyList<PackageCode>>> PackageCodesAsync() =>
-        Safe.RunAsync<IReadOnlyList<PackageCode>>(async () => await gw.RpcAsync<List<PackageCode>>("packages_codes", new()) ?? []);
+    public Task<AppResult<IReadOnlyList<AvailableCode>>> AvailableCodesAsync() => Safe.RunAsync<IReadOnlyList<AvailableCode>>(async () =>
+    {
+        var codes = await gw.RpcAsync<List<AvailableCode>>("my_discount_codes", new()) ?? [];
+        if (codes.Count == 0) return codes;
+        var packages = (await gw.ListAsync<MembershipPackage>(p => p.IsActive == true)).ToDictionary(p => p.Id, p => p.Name);
+        var amenities = (await gw.ListAsync<Amenity>(a => a.IsActive == true)).ToDictionary(a => a.Id, a => a.Name);
+        foreach (var c in codes) c.FitsText = DiscountFits.Text(c.AllPackages, c.PackageIds, c.AllAmenities, c.AmenityIds, packages, amenities);
+        return codes;
+    });
 
     public static MembershipRow ToRow(UserMembershipPackage m, MembershipPackage? p, DateTime now)
     {
@@ -369,6 +398,7 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
             _ => AppResult<Payment>.Fail(AppErrorKind.Validation, "not_found")
         };
 
+    public Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync() => Safe.RunAsync(() => GymClosures.ByDayAsync(gw));
     public Task<AppResult<GymSettings>> GymAsync() => Safe.RunAsync(async () => (await gw.ListAsync<GymSettings>()).First());
 
     public Task<AppResult<string?>> QrUrlAsync() => Safe.RunAsync(async () =>
@@ -429,7 +459,9 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
         var look = await PaymentLookup.LoadAsync(gw);
         var held = (await gw.ListAsync<Reservation>(r => r.Status == "awaiting_payment")).Where(r => r.PaymentId is not null).ToDictionary(r => r.PaymentId!.Value);
         return payments.Select(p => held.GetValueOrDefault(p.Id) is { } r
-            ? new PaymentRow(p, names.GetValueOrDefault(p.MemberId ?? "", "Unknown"), $"{look.Item(p)} booking", p.ProofPath is not null, BookingTime(r.StartsAt, r.EndsAt))
+            // G13, G14 (0064): the down payment, the coach and what's left to pay at the desk
+            ? new PaymentRow(p, names.GetValueOrDefault(p.MemberId ?? "", "Unknown"), $"{look.Item(p)} booking · down payment", p.ProofPath is not null,
+                $"{BookingTime(r.StartsAt, r.EndsAt)} · {(r.CoachId is { } c ? $"with {names.GetValueOrDefault(c, "a coach")}" : "solo")} · balance ₱{r.Balance:N2} at the desk")
             : new PaymentRow(p, p.WalkInName ?? names.GetValueOrDefault(p.MemberId ?? "", "Unknown"), look.Item(p), p.ProofPath is not null)).ToList();
     }
 
@@ -515,7 +547,13 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
 
     public Task<AppResult<CashShift>> OpenShiftAsync(decimal openingFloat, string? note) => openingFloat < 0
         ? Task.FromResult(AppResult<CashShift>.Fail(AppErrorKind.Validation, "bad_input"))
-        : Safe.RunAsync(() => gw.RpcAsync<CashShift>("open_cash_shift", new() { ["p_float"] = openingFloat, ["p_note"] = note?.Trim() ?? "" }));
+        : Safe.RunAsync(async () =>
+        {
+            // item 1 (2026-11-12): the row open_cash_shift returns has no totals yet (null until closed, 0050), which a CashShift can't
+            // hold; reading it failed after the shift was already open. my_cash_shift returns the same shift with its live totals.
+            await gw.RpcAsync("open_cash_shift", new() { ["p_float"] = openingFloat, ["p_note"] = note?.Trim() ?? "" });
+            return (await gw.RpcAsync<List<CashShift>>("my_cash_shift", new())).Single();
+        });
 
     public Task<AppResult<CashShift>> CloseShiftAsync(decimal counted, string? note) => counted < 0
         ? Task.FromResult(AppResult<CashShift>.Fail(AppErrorKind.Validation, "bad_input"))
@@ -533,7 +571,8 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
             case PayKind.Membership:
                 return (await gw.ListAsync<MembershipPackage>(p => p.IsActive == true)).Select(p => new CounterItem(p.Id, p.Name, p.Price)).ToList();
             case PayKind.Amenity:
-                return (await gw.ListAsync<Amenity>(a => a.IsActive == true)).Select(a => new CounterItem(a.Id, a.Name, a.Price)).ToList();
+                // G19 (0066): sessions only; an amenity still set up as a pass isn't sold until it has a session price
+                return (await gw.ListAsync<Amenity>(a => a.IsActive == true)).Where(a => a.DurationDays is null).Select(a => new CounterItem(a.Id, a.Name, a.Price)).ToList();
             case PayKind.Renewal:
                 var packages = await gw.ListAsync<MembershipPackage>();
                 return (await gw.ListAsync<UserMembershipPackage>(m => m.MemberId == memberId && (m.Status == "active" || m.Status == "expired")))
@@ -566,11 +605,11 @@ public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow,
         Models.Status.Pending => "Waiting for your payment to be verified",
         Models.Status.Active when PassIsSession => "1 session ready to book",
         Models.Status.Active => PassUntil is { } until ? $"Pass active until {until.ToLocalTime():d MMM yyyy}" : "Pass active",
-        _ => Amenity.DurationDays is { } days ? $"₱{Amenity.Price:N2} for {days} days" : $"₱{Amenity.Price:N2} per session, up to 2 hours"
+        _ => Amenity.DurationDays is not null ? "Not on sale right now" : $"₱{Amenity.Price:N2} per session, up to 2 hours"   // G19 (0066): passes aren't sold
     };
     /// <summary>F12: a pass or a session already paid books without paying again.</summary>
     public bool HasPass => PassStatus == Models.Status.Active;
-    public bool CanBook => CanFollow && !IsUnavailable;
+    public bool CanBook => CanFollow && !IsUnavailable && (HasPass || Amenity.DurationDays is null);
 
     /// <summary>F14: who runs it (other coaches, when a coach is looking). An amenity nobody runs works with any coach in the gym.</summary>
     public string RunText
@@ -742,14 +781,22 @@ public static partial class CoachRate
 }
 
 /// <summary>InGym: the coach has an open physical visit (0032). The list shows only coaches in the gym, plus your own coach.</summary>
-public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId, IReadOnlyList<ShiftPost>? Shifts = null, string? PhotoUrl = null, bool InGym = true)
+public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId, IReadOnlyList<ShiftPost>? Shifts = null, string? PhotoUrl = null, bool InGym = true, bool Taken = false, int? RequestId = null)
 {
+    /// <summary>G30 (0074): this member asked the coach and is waiting for an answer.</summary>
+    public bool Requested => RequestId is not null;
+    public bool ShowHire => !Hired && !Requested;
+    public string WaitingText => $"Waiting for {Name.Split(' ')[0]} to accept.";
+    /// <summary>G28 (0071): Taken = another member has an active hire with this coach. Any hire shows the "Hired" tag; hiring is unchanged.</summary>
+    public string? HireBadge => Requested ? "requested" : Hired || Taken ? "hired" : null;
     public string Letters => Initials.From(Name);
     /// <summary>The coach paused hiring and this member has no hire to keep: shown grayed out, Hire disabled.</summary>
     public bool Closed => !Coach.IsAvailable && !Hired;
+    /// <summary>G29 (0072): any coach taking members can be asked at any time, in the gym or not; not twice while waiting (G30).</summary>
+    public bool CanHire => !Closed && !Requested;
     public string RateText => CoachRate.Text(Coach.HourlyRate);
 
-    public bool SameAs(CoachCard o) => Name == o.Name && Hired == o.Hired && HireId == o.HireId && InGym == o.InGym && PhotoUrl == o.PhotoUrl && ShiftsText == o.ShiftsText
+    public bool SameAs(CoachCard o) => Name == o.Name && Hired == o.Hired && HireId == o.HireId && InGym == o.InGym && Taken == o.Taken && RequestId == o.RequestId && PhotoUrl == o.PhotoUrl && ShiftsText == o.ShiftsText
         && Coach.IsAvailable == o.Coach.IsAvailable && Coach.Bio == o.Coach.Bio && Coach.Specialty == o.Coach.Specialty && Coach.HourlyRate == o.Coach.HourlyRate;
 
     public string ShiftsText => Shifts is { Count: > 0 }
@@ -757,7 +804,21 @@ public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId
         : "No shifts posted yet.";
 }
 
-public sealed record TraineeRow(int HireId, string CoachId, string MemberId, string Name, string NextText, int Completed);
+/// <summary>G30: a member waiting for the coach to accept their hire request.</summary>
+public sealed record HireRequestRow(int HireId, string MemberId, string Name, string? PhotoUrl, DateTime AskedAt)
+{
+    public string Letters => Initials.From(Name);
+    public string AskedDate => Fmt.Date(AskedAt);
+    public string AskedText => $"Asked {AskedDate}";
+}
+
+public sealed record TraineeRow(int HireId, string CoachId, string MemberId, string Name, string NextText, int Completed)
+{
+    public string Letters => Initials.From(Name);
+    public string CompletedText => Completed == 1 ? "1 session" : $"{Completed} sessions";
+    /// <summary>The table already says "Next session"; the phone card keeps the "Next:" words.</summary>
+    public string NextWhen => NextText.StartsWith("Next: ") ? NextText[6..] : NextText;
+}
 
 /// <summary>A coach on the front desk's check-in page. InSince is null while they are not in the gym.</summary>
 public sealed record CoachPresenceRow(string CoachId, string Name, DateTime? InSince)
@@ -772,6 +833,12 @@ public interface ICoachService
     Task<AppResult<IReadOnlyList<CoachCard>>> ListCoachesAsync();
     Task<AppResult<bool>> HireAsync(string coachId);
     Task<AppResult<bool>> EndHireAsync(int hireId);
+    /// <summary>G30: the coach answers a waiting hire request.</summary>
+    Task<AppResult<bool>> AnswerHireAsync(int hireId, bool accept);
+    /// <summary>G30: the member withdraws their own waiting request.</summary>
+    Task<AppResult<bool>> CancelHireRequestAsync(int hireId);
+    /// <summary>G30: the signed-in coach's waiting requests, oldest first.</summary>
+    Task<AppResult<IReadOnlyList<HireRequestRow>>> HireRequestsAsync();
     Task<AppResult<Coach?>> MyCoachAsync();
     Task<AppResult<bool>> UpdateProfileAsync(string? bio, string? specialty, decimal? rate, bool available);
     Task<AppResult<IReadOnlyList<TraineeRow>>> TraineesAsync();
@@ -796,18 +863,23 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
         var coaches = await gw.ListAsync<Coach>();   // paused coaches stay listed, shown as closed
         var profiles = (await gw.ListAsync<Profile>()).ToDictionary(p => p.Id);
         var hires = await gw.ListAsync<CoachHire>(h => h.MemberId == uid && h.Status == "active");
+        var asked = await gw.ListAsync<CoachHire>(h => h.MemberId == uid && h.Status == "pending");
         var now = DateTime.UtcNow;
         var shifts = await gw.ListAsync<ShiftPost>(s => s.Status == "scheduled" && s.End > now);
         var inGym = (await gw.ListAsync<CoachVisit>(v => v.CheckedOutAt == null)).Select(v => v.CoachId).ToHashSet();
-        // absent coaches are hidden, not grayed out; your own coach stays so Message and End hire keep working (D9)
-        var shown = coaches.Where(c => inGym.Contains(c.UserId) || hires.Any(h => h.CoachId == c.UserId));
+        var taken = (await gw.RpcAsync<List<string>>("taken_coaches")).ToHashSet();
+        // owner, 2026-11-15 (replaces D9's hiding): every active coach, in the gym first, then your own, then by next shift
+        var shown = coaches.Where(c => profiles.GetValueOrDefault(c.UserId)?.IsActive != false)
+            .OrderBy(c => !inGym.Contains(c.UserId)).ThenBy(c => !hires.Any(h => h.CoachId == c.UserId))
+            .ThenBy(c => shifts.Where(s => s.CoachId == c.UserId).Select(s => (DateTime?)s.Start).Min() ?? DateTime.MaxValue);
         return await Task.WhenAll(shown.Select(async c =>
         {
             var p = profiles.GetValueOrDefault(c.UserId);
             var name = p is null ? "Coach" : string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName;
             var photo = (await Safe.RunAsync(() => photos.UrlAsync(p?.AvatarPath))).Value;
             return new CoachCard(c, name, hires.Any(h => h.CoachId == c.UserId), hires.FirstOrDefault(h => h.CoachId == c.UserId)?.Id,
-                shifts.Where(s => s.CoachId == c.UserId).OrderBy(s => s.Start).ToList(), photo, inGym.Contains(c.UserId));
+                shifts.Where(s => s.CoachId == c.UserId).OrderBy(s => s.Start).ToList(), photo, inGym.Contains(c.UserId),
+                taken.Contains(c.UserId) && !hires.Any(h => h.CoachId == c.UserId), asked.FirstOrDefault(h => h.CoachId == c.UserId)?.Id);
         }));
     });
 
@@ -834,6 +906,25 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
 
     public Task<AppResult<bool>> EndHireAsync(int hireId) => Safe.RunAsync(async () =>
     { await gw.RpcAsync("end_hire", new() { ["p_hire_id"] = hireId }); return true; });
+
+    public Task<AppResult<bool>> AnswerHireAsync(int hireId, bool accept) => Safe.RunAsync(async () =>
+    { await gw.RpcAsync("answer_hire", new() { ["p_hire_id"] = hireId, ["p_accept"] = accept }); return true; });
+
+    public Task<AppResult<bool>> CancelHireRequestAsync(int hireId) => Safe.RunAsync(async () =>
+    { await gw.RpcAsync("cancel_hire_request", new() { ["p_hire_id"] = hireId }); return true; });
+
+    public Task<AppResult<IReadOnlyList<HireRequestRow>>> HireRequestsAsync() => Safe.RunAsync<IReadOnlyList<HireRequestRow>>(async () =>
+    {
+        var uid = gw.CurrentUserId;
+        var asks = await gw.ListAsync<CoachHire>(h => h.CoachId == uid && h.Status == "pending");
+        var profiles = (await gw.ListAsync<Profile>()).ToDictionary(p => p.Id);
+        return await Task.WhenAll(asks.OrderBy(h => h.HiredAt).Select(async h =>
+        {
+            var p = profiles.GetValueOrDefault(h.MemberId);
+            var photo = (await Safe.RunAsync(() => photos.UrlAsync(p?.AvatarPath))).Value;
+            return new HireRequestRow(h.Id, h.MemberId, p?.FullName is { Length: > 0 } n ? n : "Member", photo, h.HiredAt);
+        }));
+    });
 
     public Task<AppResult<Coach?>> MyCoachAsync() => Safe.RunAsync<Coach?>(async () =>
     { var uid = gw.CurrentUserId; return (await gw.ListAsync<Coach>(c => c.UserId == uid)).FirstOrDefault(); });
@@ -1132,12 +1223,43 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
 }
 
 // ===================== Attendance and check-ins =====================
-public sealed record MemberHit(string MemberId, string Username, bool HasActiveMembership, DateTime? PaidUntil = null, string? AvatarPath = null)
+/// <summary>
+/// G10, G11 (Membership checking): why someone can't check in, in plain words, and the desk's next step for it. Status is what
+/// scan_member says (active, pending, expired, inactive); an expired member with no end date never had a membership.
+/// </summary>
+public static class MemberCheck
 {
-    public string PlanStatus => HasActiveMembership ? "active" : "inactive";
-    /// <summary>Forgot phone: what staff check before letting someone in without a QR.</summary>
-    public string PlanText => !HasActiveMembership ? "No active membership" : PaidUntil is { } until ? $"Paid until {until.AddHours(8):d MMM yyyy}" : "Paid";
+    public static string Reason(string status, DateTime? ended) => status switch
+    {
+        "pending" => "Payment not verified yet",
+        "inactive" => "Account deactivated",
+        "expired" when ended is { } e => $"Expired on {e.AddHours(8):d MMM}",   // Manila has no daylight saving
+        "expired" => "No membership",
+        _ => "",
+    };
+
+    /// <summary>The page staff open next, as (button text, Shell route); null when there is nothing the desk can do.</summary>
+    public static (string Text, string Route)? NextStep(string status) => status switch
+    {
+        "pending" => ("Open Payments to verify", "verify"),
+        "expired" => ("Open Cashier", "cashier"),
+        _ => null,
+    };
+}
+
+/// <param name="Status">Online only: active, pending, expired or inactive (G10). Null on the saved list, which knows paid or not.</param>
+public sealed record MemberHit(string MemberId, string Username, bool HasActiveMembership, DateTime? PaidUntil = null, string? AvatarPath = null,
+    string? Status = null, DateTime? EndedAt = null)
+{
+    public string PlanStatus => HasActiveMembership ? "active" : Status == "expired" && EndedAt is null ? "no_membership" : Status ?? "inactive";
+    /// <summary>Forgot phone: what staff check before letting someone in without a QR; the reason when they can't (G10).</summary>
+    public string PlanText => HasActiveMembership ? PaidUntil is { } until ? $"Paid until {until.AddHours(8):d MMM yyyy}" : "Paid"
+        : Status is { } s ? MemberCheck.Reason(s, EndedAt) : "No active membership";
     public bool CanCheckIn => HasActiveMembership;
+    /// <summary>G11: the next step at the desk for someone who can't check in, e.g. Open Cashier.</summary>
+    public string? NextStepText => CanCheckIn || Status is null ? null : MemberCheck.NextStep(Status)?.Text;
+    public string? NextStepRoute => CanCheckIn || Status is null ? null : MemberCheck.NextStep(Status)?.Route;
+    public bool HasNextStep => NextStepText is not null;
 }
 
 public interface IAttendanceService
@@ -1147,7 +1269,11 @@ public interface IAttendanceService
     /// <param name="method">qr (the default: needs a pass this desk just scanned), manual or offline (0044, 0049).</param>
     /// <param name="pin">The member's desk PIN, for manual (F8). A wrong one fails as wrong_pin.</param>
     /// <param name="reason">Admin and System admin only: why they check in by name without the PIN.</param>
-    Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null, string? pin = null, string? reason = null);
+    /// <param name="proof">Method password (G12): the one-use proof from <see cref="VerifyPasswordAsync"/>.</param>
+    Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null, string? pin = null, string? reason = null, string? proof = null, string? idType = null);
+    /// <summary>G12, login mode: the member's own account password, checked by the server; a proof for one check-in, or
+    /// wrong_member_password / pin_locked. Needs the internet. The password is never kept.</summary>
+    Task<AppResult<string>> VerifyPasswordAsync(string memberId, string password);
     /// <summary>F8: true for Admin and System admin, who may check in by name without the PIN, with a reason.</summary>
     Task<AppResult<bool>> CanSkipPinAsync();
     Task<AppResult<IReadOnlyList<MemberHit>>> FindMembersAsync(string usernameFragment);
@@ -1168,9 +1294,20 @@ public sealed class MemberScan
     public DateTime? Expires { get; set; }
     /// <summary>Set when this came from the saved list (OfflineDesk) rather than the server. It says how old that list is.</summary>
     public string? SavedNote { get; set; }
+    /// <summary>G10: the member's photo path, looked up after the scan so the card can show their face.</summary>
+    public string? AvatarPath { get; set; }
 
     public bool CanCheckIn => Result is "active" or "saved" && Member is not null;
     public bool IsSaved => Result.StartsWith("saved");
+    /// <summary>G10: why this member can't check in, in plain words; blank when they can or the code named nobody.</summary>
+    public string ReasonText => Member is null ? "" : MemberCheck.Reason(Result, Expires);
+    /// <summary>G11: the desk's next step, e.g. Open Cashier.</summary>
+    public string? NextStepText => MemberCheck.NextStep(Result)?.Text;
+    public string? NextStepRoute => MemberCheck.NextStep(Result)?.Route;
+    public bool HasNextStep => Member is not null && NextStepText is not null;
+    /// <summary>G10: the card's main line: the reason for someone who can't check in, otherwise the status.</summary>
+    public string HeadlineText => !CanCheckIn && ReasonText.Length > 0 ? ReasonText : StatusText;
+    public bool NeedsAdmin => Member is not null && Result == "inactive";
     public string StatusText => Result switch
     {
         "saved" => $"Paid on the saved list. {SavedNote}",
@@ -1185,11 +1322,26 @@ public sealed class MemberScan
     public string ExpiryText => Expires is { } e ? (Result is "active" or "saved" ? "Membership ends " : "Membership ended ") + RevenuePdf.Manila(e) + " (Manila)" : IsSaved ? "" : "No end date";
 }
 
-public sealed record CheckInRow(string Name, DateTime At, string? Method = null, string? By = null, string? Reason = null)
+/// <summary>G20 (0066): the IDs the desk may check a member in with; only the type is kept, never the number.</summary>
+public static class IdTypes
+{
+    static readonly (string Code, string Label)[] All =
+        [("drivers_license", "Driver's license"), ("national_id", "National ID"), ("passport", "Passport"), ("school_id", "School ID"), ("other", "Other")];
+    public static IReadOnlyList<string> Labels { get; } = All.Select(t => t.Label).ToArray();
+    public static string Label(string code) => All.FirstOrDefault(t => t.Code == code).Label ?? code;
+    public static string? Code(string? label) => All.FirstOrDefault(t => t.Label == label).Code;
+}
+
+public sealed record CheckInRow(string Name, DateTime At, string? Method = null, string? By = null, string? Reason = null, string? IdType = null)
 {
     public string TimeText => At.AddHours(8).ToString("h:mm tt", CultureInfo.InvariantCulture);   // Manila has no daylight saving
     /// <summary>How it came in (0044); blank for check-ins recorded before that. A reason means an Admin skipped the PIN (F8).</summary>
-    public string HowText => Method switch { "qr" => "QR", "manual" when Reason is not null => "By name, no PIN", "manual" => "By name", "offline" => "Sent later", _ => "" };
+    public string HowText => (Method, IdType) switch
+    {
+        ("offline", { } t) => $"ID checked ({IdTypes.Label(t)}), sent later",
+        (_, { } t) => $"ID checked ({IdTypes.Label(t)})",
+        ("qr", _) => "QR", ("manual", _) when Reason is not null => "By name, no PIN", ("manual", _) => "By name", ("offline", _) => "Sent later", _ => ""
+    };
     /// <summary>F8: who recorded it, and why an Admin skipped the PIN; blank for check-ins from before this was kept.</summary>
     public string ByText => By is null ? "" : Reason is null ? $"By {By}" : $"By {By}. Reason: {Reason}";
     /// <summary>F19: the second line of a row on the Check-in page, "QR · By Marco Santos".</summary>
@@ -1208,15 +1360,26 @@ public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = 
         return true;
     });
 
-    public async Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null, string? pin = null, string? reason = null)
+    public async Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null, string? pin = null, string? reason = null, string? proof = null, string? idType = null)
     {
         Dictionary<string, object> args = new() { ["p_member_id"] = memberId };
         if (method is not null) args["p_method"] = method;
+        if (proof is not null) args["p_proof"] = proof;
+        if (idType is not null) args["p_id_type"] = idType;
         if (!string.IsNullOrEmpty(pin)) args["p_pin"] = pin;
         if (!string.IsNullOrWhiteSpace(reason)) args["p_reason"] = reason.Trim();
         var id = await Safe.RunAsync(() => gw.RpcAsync<int?>("record_check_in", args));
         // 0049: a wrong PIN comes back as no id, not an error, so the server can keep its count of wrong tries
         return !id.Ok ? AppResult<bool>.Fail(id.Error, id.Message) : id.Value is null ? AppResult<bool>.Fail(AppErrorKind.Validation, "wrong_pin") : AppResult<bool>.Success(true);
+    }
+
+    public async Task<AppResult<string>> VerifyPasswordAsync(string memberId, string password)
+    {
+        var result = await Safe.RunAsync(async () =>
+            System.Text.Json.JsonDocument.Parse(await gw.InvokeFunctionAsync("verify-member-password", new() { ["member_id"] = memberId, ["password"] = password }))
+                .RootElement.GetProperty("proof").GetString()!);
+        // "wrong_password" is also the code for a staff member's own wrong password in Settings; this one is the member's
+        return result.Message == "wrong_password" ? AppResult<string>.Fail(AppErrorKind.Validation, "wrong_member_password") : result;
     }
 
     public Task<AppResult<bool>> CanSkipPinAsync() => Safe.RunAsync(async () =>
@@ -1231,16 +1394,26 @@ public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = 
         var members = await gw.ListAsync<Member>();
         var profiles = await gw.ListAsync<Profile>();
         var now = clock.GetUtcNow().UtcDateTime;
-        var active = (await gw.ListAsync<UserMembershipPackage>(m => m.Status == "active")).Where(m => m.EndsAt > now).GroupBy(m => m.MemberId).ToDictionary(g => g.Key, g => g.Max(m => m.EndsAt));
-        return members.Join(profiles, m => m.UserId, p => p.Id, (m, p) => new MemberHit(m.UserId, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName, active.ContainsKey(m.UserId), active.GetValueOrDefault(m.UserId), p.AvatarPath))
+        var memberships = await gw.ListAsync<UserMembershipPackage>();
+        var active = memberships.Where(m => m.Status == "active" && m.EndsAt > now).GroupBy(m => m.MemberId).ToDictionary(g => g.Key, g => g.Max(m => m.EndsAt));
+        var ended = memberships.Where(m => m.EndsAt <= now).GroupBy(m => m.MemberId).ToDictionary(g => g.Key, g => g.Max(m => m.EndsAt));
+        var waiting = (await gw.ListAsync<Payment>(p => p.Status == Status.Pending)).Where(p => p.Kind is PayKind.Membership or PayKind.Renewal).Select(p => p.MemberId).ToHashSet();
+        // G10: the same order scan_member uses: deactivated, active, waiting for a payment, otherwise expired (or never had one)
+        string StatusOf(Profile p) => !p.IsActive ? "inactive" : active.ContainsKey(p.Id) ? "active" : waiting.Contains(p.Id) ? "pending" : "expired";
+        return members.Join(profiles, m => m.UserId, p => p.Id, (m, p) => new MemberHit(m.UserId, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName,
+                p.IsActive && active.ContainsKey(m.UserId), active.GetValueOrDefault(m.UserId), p.AvatarPath, StatusOf(p), ended.GetValueOrDefault(m.UserId)))
             .Where(h => h.Username.Contains(fragment, StringComparison.OrdinalIgnoreCase)).Take(20).ToList();
     });
 
     public Task<AppResult<MemberPass>> MyPassAsync() =>
         Safe.RunAsync(async () => (await gw.RpcAsync<List<MemberPass>>("issue_member_pass", new())).Single());
 
-    public Task<AppResult<MemberScan>> ScanAsync(string code) =>
-        Safe.RunAsync(() => gw.RpcAsync<MemberScan>("scan_member", new() { ["p_code"] = code.Trim() }));
+    public Task<AppResult<MemberScan>> ScanAsync(string code) => Safe.RunAsync(async () =>
+    {
+        var scan = await gw.RpcAsync<MemberScan>("scan_member", new() { ["p_code"] = code.Trim() });
+        if (scan.Member is { } id) scan.AvatarPath = (await gw.ListAsync<Profile>(p => p.Id == id)).FirstOrDefault()?.AvatarPath;
+        return scan;
+    });
 
     public Task<AppResult<IReadOnlyList<CheckInRow>>> CheckInsOnAsync(DateOnly manilaDay) => Safe.RunAsync<IReadOnlyList<CheckInRow>>(async () =>
     {
@@ -1250,7 +1423,7 @@ public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = 
         var names = await Directory_.UserNamesAsync(gw);
         return rows.OrderBy(c => c.CheckedInAt)
             .Select(c => new CheckInRow(c.MemberId is { } m ? names.GetValueOrDefault(m, "Member") : "Walk-in", c.CheckedInAt, c.Method,
-                c.RecordedBy is { } by ? names.GetValueOrDefault(by) : null, c.Reason)).ToList();
+                c.RecordedBy is { } by ? names.GetValueOrDefault(by) : null, c.Reason, c.IdType)).ToList();
     });
 }
 
@@ -1306,7 +1479,8 @@ public sealed class NotificationService(ISupabaseGateway gw) : INotificationServ
 }
 
 // ===================== Admin =====================
-public sealed record UserRow(string UserId, string Username, bool IsActive, IReadOnlyList<string> Roles, string FirstName = "", string LastName = "")
+/// <summary>Username is the name shown; Email is the address the account signs in with (profiles.username follows it, 0035).</summary>
+public sealed record UserRow(string UserId, string Username, bool IsActive, IReadOnlyList<string> Roles, string FirstName = "", string LastName = "", string Email = "")
 {
     public string RoleText => string.Join(", ", Roles.Select(RoleTitle));   // 9.8: titles in lists, as the audit log shows them
     /// <summary>What a role is called on screen, the one place for it (D17): the code admin is the System admin, subadmin is the Admin,
@@ -1328,20 +1502,39 @@ public sealed record UserRow(string UserId, string Username, bool IsActive, IRea
     public bool IsSuperAdmin => Roles.Contains("admin");
     public string SubAdminActionText => IsSubAdmin ? "Remove admin" : "Make admin";
     /// <summary>Front desk, sub-admin or super admin: only the super admin manages these accounts (D15).</summary>
+    /// <summary>Item 3 (0059): a first name and no last name, from before both were required. Corrected, never guessed.</summary>
+    public bool NameIncomplete => string.IsNullOrWhiteSpace(LastName);
     public bool IsStaff => Roles.Any(r => r is "admin" or "subadmin" or "employee");
     public string ActiveActionText => IsActive ? "Deactivate" : "Reactivate";
     public string ActiveStatus => RecordStatus.Of(IsActive);
 }
-public sealed record DiscountRow(Discount Discount, string State, long Used = 0, long Pending = 0)
+/// <summary>G3 (0060): what a code fits, in words. One place for staff and members, so both read the same.</summary>
+public static class DiscountFits
 {
-    /// <summary>The chip word (D13): an expired code is Inactive; the card still shows its last day.</summary>
-    public string StatusText => RecordStatus.Of(State == "active");
+    public static string Text(bool allPackages, IEnumerable<int> packageIds, bool allAmenities, IEnumerable<int> amenityIds,
+        IReadOnlyDictionary<int, string> packageNames, IReadOnlyDictionary<int, string> amenityNames)
+    {
+        static string? Part(bool all, string allText, IEnumerable<int> ids, IReadOnlyDictionary<int, string> names) =>
+            all ? allText : ids.Select(names.GetValueOrDefault).OfType<string>().ToList() is { Count: > 0 } n ? string.Join(", ", n) : null;
+        var parts = new[] { Part(allPackages, "All packages", packageIds, packageNames), Part(allAmenities, "All amenities", amenityIds, amenityNames) }.OfType<string>().ToList();
+        return parts.Count > 0 ? string.Join(" · ", parts) : "Nothing on sale now";
+    }
+
+    /// <summary>"For all packages", "For Monthly, Annual": the same words running on from "For".</summary>
+    public static string For(string fitsText) => "For " + fitsText.Replace("All packages", "all packages").Replace("All amenities", "all amenities");
+}
+
+public sealed record DiscountRow(Discount Discount, string State, long Used = 0, long Pending = 0, string FitsText = "")
+{
+    /// <summary>The chip word (D13): an expired code is Inactive; a code turned off for now says so (G1).</summary>
+    public string StatusText => State == "active" && Discount.Paused ? "Turned off" : RecordStatus.Of(State == "active");
     // used = verified + voided; pending payments hold a place too
     /// <summary>The last day it works: ExpiresAt is the midnight that ends that day, so showing it directly reads one day late.</summary>
     public DateTime LastDay => Discount.ExpiresAt.AddTicks(-1);
     public string Usage => (Discount.MaxUses is { } max ? $"{Used} of {max} used" : $"{Used} used, no limit") + (Pending > 0 ? $", {Pending} pending" : "");
-    /// <summary>F7: once any payment holds a place, nothing about the code can change; it can only be turned off.</summary>
-    public bool CanEdit => Used + Pending == 0;
+    /// <summary>G1: offered only while no payment holds or used a place; the server also counts rejected and expired ones (discount_used).</summary>
+    public bool CanDelete => Used + Pending == 0;
+    public string ForText => DiscountFits.For(FitsText);
 }
 public sealed record DiscountUse(long Id, long Used, long Pending);
 
@@ -1361,11 +1554,26 @@ public interface IAdminService
     Task<AppResult<bool>> DeletePackageAsync(MembershipPackage package);
     Task<AppResult<bool>> DeleteAmenityAsync(Amenity amenity);
     Task<AppResult<IReadOnlyList<DiscountRow>>> DiscountsAsync();
-    Task<AppResult<bool>> SaveDiscountAsync(Discount discount);
+    /// <summary>G2/G3 (0060): makes the code and what it fits in one step. A code can't be edited afterwards.</summary>
+    Task<AppResult<int>> CreateDiscountAsync(Discount discount, IReadOnlyList<DiscountItem> items);
+    /// <summary>G1: turns a live code off for now, or back on.</summary>
+    Task<AppResult<bool>> SetDiscountPausedAsync(Discount discount, bool paused);
+    /// <summary>Moves the code to the Archive (a System admin, D15); payments keep pointing at it.</summary>
+    Task<AppResult<bool>> ArchiveDiscountAsync(Discount discount);
+    /// <summary>G1: removes a code no payment ever named (a System admin).</summary>
     Task<AppResult<bool>> DeleteDiscountAsync(Discount discount);
     Task<AppResult<bool>> SavePackageAsync(MembershipPackage package);
+    /// <summary>G6 (0061): puts a draft on sale once its required fields are filled; a package version archives the one it replaces. kind: "plan" or "amenity".</summary>
+    Task<AppResult<bool>> PublishAsync(string kind, int id);
+    /// <summary>G9: copies a published package into a draft that replaces it when published. Returns the draft's id.</summary>
+    Task<AppResult<int>> NewPackageVersionAsync(int packageId);
+    /// <summary>G6: removes a draft for real; anything published is archived instead.</summary>
+    Task<AppResult<bool>> DeleteDraftAsync(string kind, int id);
     Task<AppResult<bool>> SaveAmenityAsync(Amenity amenity);
     Task<AppResult<string>> SetAmenityPhotoAsync(int amenityId, string fileName, byte[] data);
+    /// <summary>Phase 4: a draft package's photo (a published one changes only through a new version).</summary>
+    Task<AppResult<string>> SetPackagePhotoAsync(int packageId, string fileName, byte[] data);
+    Task<AppResult<string?>> CatalogPhotoUrlAsync(string path);
     Task<AppResult<IReadOnlyList<MembershipPackage>>> AllPackagesAsync();
     Task<AppResult<IReadOnlyList<Amenity>>> AllAmenitiesAsync();
     Task<AppResult<IReadOnlyList<RevenueRow>>> RevenueAsync(DateOnly from, DateOnly to);
@@ -1382,6 +1590,12 @@ public interface IAdminService
     Task<AppResult<GymSettings>> GymSettingsAsync();
     /// <summary>Saves the gym name, QR account name and walk-in price, and uploads a new payment QR image when one is given.</summary>
     Task<AppResult<bool>> SaveGymSettingsAsync(GymSettings settings, (string FileName, byte[] Data)? qrImage);
+    /// <summary>G16: every closed day, the latest first (past ones stay as history).</summary>
+    Task<AppResult<IReadOnlyList<GymClosure>>> ClosuresAsync();
+    /// <summary>G18: what closing the day would cancel.</summary>
+    Task<AppResult<ClosurePreview>> ClosurePreviewAsync(DateOnly day);
+    Task<AppResult<bool>> CloseDayAsync(DateOnly day, string reason);
+    Task<AppResult<bool>> ReopenDayAsync(DateOnly day);
 }
 
 public sealed class AdminService(ISupabaseGateway gw) : IAdminService
@@ -1392,7 +1606,7 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         var roles = await gw.ListAsync<Role>();
         var links = await gw.ListAsync<UserRole>();
         return profiles.Where(p => p.DeletedAt is null).Select(p => new UserRow(p.Id, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName, p.IsActive,
-            links.Where(l => l.UserId == p.Id).Select(l => roles.First(r => r.RoleId == l.RoleId).Name).OrderBy(n => n).ToList(), p.FirstName, p.LastName)).ToList();
+            links.Where(l => l.UserId == p.Id).Select(l => roles.First(r => r.RoleId == l.RoleId).Name).OrderBy(n => n).ToList(), p.FirstName, p.LastName, p.Username)).ToList();
     });
 
     public Task<AppResult<bool>> IsSuperAdminAsync() => Safe.RunAsync(async () =>
@@ -1447,25 +1661,46 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
     {
         var now = DateTime.UtcNow;
         var uses = (await gw.RpcAsync<List<DiscountUse>>("discount_usage", new()) ?? []).ToDictionary(u => u.Id);
+        var items = (await gw.ListAsync<DiscountItem>()).ToLookup(i => i.DiscountId);
+        var packages = (await gw.ListAsync<MembershipPackage>()).ToDictionary(p => p.Id, p => p.Name);
+        var amenities = (await gw.ListAsync<Amenity>()).ToDictionary(a => a.Id, a => a.Name);
+        string Fits(int id)
+        {
+            var mine = items[id].ToList();
+            bool All(string kind) => mine.Any(i => i.Kind == kind && i.ItemId is null);
+            IEnumerable<int> Ids(string kind) => mine.Where(i => i.Kind == kind && i.ItemId is not null).Select(i => i.ItemId!.Value);
+            return DiscountFits.Text(All("package"), Ids("package"), All("amenity"), Ids("amenity"), packages, amenities);
+        }
         return (await gw.ListAsync<Discount>()).OrderByDescending(d => d.ExpiresAt)
             .Select(d => new DiscountRow(d, !d.IsActive ? "inactive" : d.ExpiresAt <= now ? "expired" : "active",
-                uses.GetValueOrDefault(d.Id)?.Used ?? 0, uses.GetValueOrDefault(d.Id)?.Pending ?? 0)).ToList();
+                uses.GetValueOrDefault(d.Id)?.Used ?? 0, uses.GetValueOrDefault(d.Id)?.Pending ?? 0, Fits(d.Id))).ToList();
     });
 
-    public async Task<AppResult<bool>> SaveDiscountAsync(Discount d)
+    public async Task<AppResult<int>> CreateDiscountAsync(Discount d, IReadOnlyList<DiscountItem> items)
     {
-        if (string.IsNullOrWhiteSpace(d.Code) || d.Percent is < 1 or > 100) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_discount");
-        if (d.MaxUses < 1 || d.Id == 0 && d.MaxUses is null) return AppResult<bool>.Fail(AppErrorKind.Validation, "limit_required");
-        d.Code = d.Code.Trim().ToUpperInvariant();
-        return await Safe.RunAsync(async () => { if (d.Id == 0) await gw.InsertAsync(d); else await gw.UpdateAsync(d); return true; });
+        var code = d.Code.Trim().ToUpperInvariant();
+        if (code.Length == 0 || d.Percent is < 1 or > 100) return AppResult<int>.Fail(AppErrorKind.Validation, "bad_discount");
+        if (d.MaxUses is not > 0) return AppResult<int>.Fail(AppErrorKind.Validation, "limit_required");
+        if (items.Count == 0) return AppResult<int>.Fail(AppErrorKind.Validation, "no_items");
+        var list = items.Select(i => new Dictionary<string, object?> { ["kind"] = i.Kind, ["id"] = i.ItemId }).ToList();
+        return await Safe.RunAsync(async () => await gw.RpcAsync<int>("create_discount", new()
+        {
+            ["p_code"] = code, ["p_percent"] = d.Percent, ["p_expires_at"] = d.ExpiresAt.ToUniversalTime().ToString("O"), ["p_max_uses"] = d.MaxUses,
+            ["p_show"] = d.ShowOnPackages, ["p_items"] = list
+        }));
     }
 
-    public Task<AppResult<bool>> DeleteDiscountAsync(Discount d) => Rpc("archive_catalog_record", new() { ["p_type"] = "code", ["p_id"] = d.Id, ["p_reason"] = "Deactivated code" });
+    public Task<AppResult<bool>> SetDiscountPausedAsync(Discount d, bool paused) => Rpc("set_discount_paused", new() { ["p_id"] = d.Id, ["p_paused"] = paused });
+    public Task<AppResult<bool>> ArchiveDiscountAsync(Discount d) => Rpc("archive_catalog_record", new() { ["p_type"] = "code", ["p_id"] = d.Id, ["p_reason"] = "Archived code" });
+    public Task<AppResult<bool>> DeleteDiscountAsync(Discount d) => Rpc("delete_discount", new() { ["p_id"] = d.Id });
 
     public Task<AppResult<bool>> SavePackageAsync(MembershipPackage p) =>
-        Safe.RunAsync(async () => { if (p.Id == 0) await gw.InsertAsync(p); else await gw.UpdateAsync(p); return true; });
+        Safe.RunAsync(async () => { if (p.Id == 0) p.Id = (await gw.InsertAsync(p)).Id; else await gw.UpdateAsync(p); return true; });
+    public Task<AppResult<bool>> PublishAsync(string kind, int id) => Rpc("publish_catalog_item", new() { ["p_kind"] = kind, ["p_id"] = id });
+    public Task<AppResult<int>> NewPackageVersionAsync(int packageId) => Safe.RunAsync(() => gw.RpcAsync<int>("new_package_version", new() { ["p_id"] = packageId }));
+    public Task<AppResult<bool>> DeleteDraftAsync(string kind, int id) => Rpc("delete_catalog_item", new() { ["p_kind"] = kind, ["p_id"] = id });
     public Task<AppResult<bool>> SaveAmenityAsync(Amenity a) =>
-        Safe.RunAsync(async () => { if (a.Id == 0) await gw.InsertAsync(a); else await gw.UpdateAsync(a); return true; });
+        Safe.RunAsync(async () => { if (a.Id == 0) a.Id = (await gw.InsertAsync(a)).Id; else await gw.UpdateAsync(a); return true; });
 
     public Task<AppResult<string>> SetAmenityPhotoAsync(int amenityId, string fileName, byte[] data)
     {
@@ -1480,6 +1715,19 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
             return path;
         });
     }
+
+    public Task<AppResult<string>> SetPackagePhotoAsync(int packageId, string fileName, byte[] data)
+    {
+        if (!ProfileService.IsAcceptableImage(fileName, data)) return Task.FromResult(AppResult<string>.Fail(AppErrorKind.Validation, "bad_image"));
+        return Safe.RunAsync(async () =>
+        {
+            var path = await gw.UploadAsync("gym-assets", $"packages/{packageId}/{Guid.NewGuid():N}{Path.GetExtension(fileName).ToLowerInvariant()}", data);
+            await gw.UpdateWhereAsync<MembershipPackage, string?>(p => p.Id == packageId, p => p.ImagePath, path);
+            return path;
+        });
+    }
+
+    public Task<AppResult<string?>> CatalogPhotoUrlAsync(string path) => Safe.RunAsync(() => gw.SignedUrlAsync("gym-assets", path));
 
     public Task<AppResult<IReadOnlyList<MembershipPackage>>> AllPackagesAsync() => Safe.RunAsync(() => gw.ListAsync<MembershipPackage>());
     public Task<AppResult<IReadOnlyList<Amenity>>> AllAmenitiesAsync() => Safe.RunAsync(() => gw.ListAsync<Amenity>());
@@ -1555,6 +1803,7 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
     {
         if (string.IsNullOrWhiteSpace(s.GymName)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
         if (s.WalkInPrice <= 0) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_walk_in_price");   // D4: ₱0 could never be paid
+        if (s.DownPaymentPercent is < 1 or > 100) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_down_payment");   // G13, as 0064's check
         static bool OnGrid(TimeSpan t) => t.Seconds == 0 && t.Minutes is 0 or 30 && t >= TimeSpan.Zero && t < TimeSpan.FromDays(1);
         if (!OnGrid(s.OpensAt) || !OnGrid(s.ClosesAt) || s.ClosesAt <= s.OpensAt) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_hours");
         return await Safe.RunAsync(async () =>
@@ -1564,6 +1813,13 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
             return true;
         });
     }
+
+    static string Day(DateOnly d) => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+    public Task<AppResult<IReadOnlyList<GymClosure>>> ClosuresAsync() => Safe.RunAsync<IReadOnlyList<GymClosure>>(async () =>
+        (await gw.ListAsync<GymClosure>()).OrderByDescending(c => c.ClosedOn).ToList());
+    public Task<AppResult<ClosurePreview>> ClosurePreviewAsync(DateOnly day) => Safe.RunAsync(() => gw.RpcAsync<ClosurePreview>("closure_preview", new() { ["p_date"] = Day(day) }));
+    public Task<AppResult<bool>> CloseDayAsync(DateOnly day, string reason) => Rpc("close_gym_day", new() { ["p_date"] = Day(day), ["p_reason"] = reason.Trim() });
+    public Task<AppResult<bool>> ReopenDayAsync(DateOnly day) => Rpc("reopen_gym_day", new() { ["p_date"] = Day(day) });
 
     Task<AppResult<bool>> Rpc(string fn, Dictionary<string, object> args) =>
         Safe.RunAsync(async () => { await gw.RpcAsync(fn, args); return true; });

@@ -45,7 +45,15 @@
                                     <Label Text="{Binding LastName}" FontFamily="BarlowSemiBold" AutomationId="SettingsLastName" />
                                 </VerticalStackLayout>
                             </Grid>
-                            <Label Text="Names can't be changed after sign-up. If yours is wrong, ask the gym to correct it." Style="{StaticResource Caption}" />
+                            <!-- item 3 (0059): an old one-word name. The person adds their own last name, once; the gym never guesses it. -->
+                            <VerticalStackLayout Spacing="8" IsVisible="{Binding NeedsLastName}">
+                                <Label Text="Add your last name" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><Entry Text="{Binding MissingLastName}" MaxLength="{x:Static svc:AccountRules.MaxName}" ReturnCommand="{Binding AddLastNameCommand}"
+                                        AutomationId="AddLastNameBox" SemanticProperties.Description="Your last name" /></Border>
+                                <Button Text="Save last name" Command="{Binding AddLastNameCommand}" HorizontalOptions="Start" AutomationId="AddLastName" />
+                                <Label Text="You can add it once. After that, only the gym can correct it." Style="{StaticResource Caption}" />
+                            </VerticalStackLayout>
+                            <Label Text="Names can't be changed after sign-up. If yours is wrong, ask the gym to correct it." Style="{StaticResource Caption}" IsVisible="{Binding NeedsLastName, Converter={StaticResource Not}}" />
                         </VerticalStackLayout>
 
                         <!-- Email: send a code to the address, then type it. A new address becomes the sign-in email. -->

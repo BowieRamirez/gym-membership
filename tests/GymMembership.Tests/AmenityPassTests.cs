@@ -17,19 +17,20 @@ public class AmenityPassTests
     static async Task<DemoGateway> WithSauna()
     {
         var gw = await As("admin@demo.io");
-        Assert.True((await new AdminService(gw).SaveAmenityAsync(new Amenity { Name = "Steam Room", Price = 300, DurationDays = 30, Description = "Dry sauna, 6 seats" })).Ok);   // a timed pass, as amenities sold before per-session pricing are
+        Assert.True((await new AdminService(gw).SaveAmenityAsync(new Amenity { Name = "Steam Room", Price = 300, Description = "Dry sauna, 6 seats" })).Ok);   // G19 (0066): sold per session
+        Assert.True((await new AdminService(gw).PublishAsync("amenity", (await gw.ListAsync<Amenity>()).Single(a => a.Name == "Steam Room").Id)).Ok);   // G6 (0061): added as a draft
         return gw;
     }
 
     static async Task<AmenityCard> Card(AmenityBoardViewModel vm, string name) { await vm.LoadCommand.ExecuteAsync(null); return vm.Cards.Single(c => c.Amenity.Name == name); }
 
     [Fact]
-    public async Task A_member_sees_the_price_buys_a_pass_and_it_turns_on_once_verified()
+    public async Task A_member_sees_the_price_buys_a_session_and_it_turns_on_once_verified()
     {
         var gw = await As("member@demo.io", await WithSauna());
         var vm = new AmenityBoardViewModel(new AmenityService(gw));
         var card = await Card(vm, "Steam Room");
-        Assert.Equal("₱300.00 for 30 days", card.PassText);
+        Assert.Equal("₱300.00 per session, up to 2 hours", card.PassText);
         Assert.Equal("Dry sauna, 6 seats", card.Amenity.Description);
 
         Assert.True((await Safe.RunAsync(() => gw.RpcAsync<Payment>("avail_amenity", new() { ["p_amenity_id"] = card.Amenity.Id }))).Ok);   // a pass bought earlier, or at the counter
@@ -42,7 +43,7 @@ public class AmenityPassTests
 
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         card = await Card(vm, "Steam Room");
-        Assert.StartsWith("Pass active until ", card.PassText);
+        Assert.Equal("1 session ready to book", card.PassText);
         Assert.True(card.HasPass);
     }
 
@@ -67,19 +68,19 @@ public class AmenityPassTests
     }
 
     [Fact]
-    public async Task An_admin_edits_an_amenity_price_days_and_description()
+    public async Task An_admin_edits_an_amenity_price_and_description()
     {
         var gw = await WithSauna();
         var catalog = new CatalogAdminViewModel(new AdminService(gw));
         await catalog.LoadCommand.ExecuteAsync(null);
-        catalog.EditAmenityCommand.Execute(catalog.Amenities.Single(a => a.Name == "Steam Room"));
-        Assert.Equal(300, catalog.NewAmenityPrice);
-        catalog.NewAmenityPrice = 350; catalog.NewAmenityDescription = "Now with cold plunge";
-        await catalog.AddAmenityCommand.ExecuteAsync(null);
+        await catalog.RunActionCommand.ExecuteAsync((catalog.Amenities.Single(r => r.Amenity.Name == "Steam Room"), "Edit"));
+        Assert.Equal(300, catalog.FormPrice);
+        catalog.FormPrice = 350; catalog.FormDescription = "Now with cold plunge";
+        await catalog.MainCommand.ExecuteAsync(null);
         Assert.Null(catalog.ErrorMessage);
-        Assert.Null(catalog.EditingAmenity);
+        Assert.False(catalog.IsPanelOpen);
         var saved = (await gw.ListAsync<Amenity>()).Single(a => a.Name == "Steam Room");
-        Assert.Equal((350m, 30, "Now with cold plunge"), (saved.Price, saved.DurationDays, saved.Description));
+        Assert.Equal((350m, (int?)null, "Now with cold plunge"), (saved.Price, saved.DurationDays, saved.Description));
         Assert.Single(await gw.ListAsync<Amenity>(), a => a.Name == "Steam Room");   // edited, not added again
     }
 

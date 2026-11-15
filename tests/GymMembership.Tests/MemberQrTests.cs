@@ -174,12 +174,16 @@ public class MemberQrTests
         var gw = new DemoGateway();
         var (_, svc) = await As("employee@demo.io", gw);
         Assert.True((await svc.CheckInAsync("u-alex", "manual", pin: "1234")).Ok);
+        // F8: a reason only for a member with no desk PIN: Carlo buys a month at the counter and never set one
+        await gw.OpenDrawerAsync();
+        var monthly = (await new MembershipService(gw).ListPackagesAsync()).Value!.First(p => p.Name == "Monthly");
+        Assert.True((await new PaymentStaffService(gw).RecordCounterAsync("membership", "cash", "u-carlo", monthly.Id, null, null, null)).Ok);
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
-        Assert.True((await svc.CheckInAsync("u-alex", "manual", reason: "Phone broken, known member")).Ok);
+        Assert.True((await svc.CheckInAsync("u-carlo", "manual", reason: "Phone broken, known member")).Ok);
         var vm = new AdminOverviewViewModel(new AdminService(gw), new SubscriptionService(gw), svc);
         await vm.LoadCheckInsAsync();
         Assert.Contains(vm.CheckIns, r => r.Name == "Alex Tan" && r.HowText == "By name" && r.By == "Marco Santos" && r.Reason is null);
-        Assert.Contains(vm.CheckIns, r => r.HowText == "By name, no PIN" && r.By == "Dana Reyes" && r.Reason == "Phone broken, known member");
+        Assert.Contains(vm.CheckIns, r => r.Name == "Carlo Diaz" && r.HowText == "By name, no PIN" && r.By == "Dana Reyes" && r.Reason == "Phone broken, known member");
         Assert.Contains(vm.CheckIns, r => r.ByText == "By Marco Santos");
         Assert.Contains(vm.CheckIns, r => r.ByText == "By Dana Reyes. Reason: Phone broken, known member");
         Assert.Matches(@"^\d+ check-ins?$", vm.CheckInsText);

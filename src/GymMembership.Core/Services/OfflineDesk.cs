@@ -21,7 +21,7 @@ public sealed class SavedMember
 /// F8: the PIN the member typed (or an Admin's reason) goes with the queue, because only the server can check it.
 /// ponytail: the PIN sits in plain text in the desk's local file until it is sent (minutes, usually); encrypt the store if desks stay offline for long.
 /// </summary>
-public sealed record QueuedCheckIn(Guid Ref, string MemberId, string Name, DateTime AtUtc, string? Pin = null, string? Reason = null);
+public sealed record QueuedCheckIn(Guid Ref, string MemberId, string Name, DateTime AtUtc, string? Pin = null, string? Reason = null, string? IdType = null);
 public sealed record RefusedCheckIn(string Name, DateTime AtUtc, string Why);
 
 /// <summary>
@@ -87,9 +87,9 @@ public sealed class OfflineDesk
         .Where(m => m.Name.Contains(fragment.Trim(), StringComparison.OrdinalIgnoreCase)).Take(20)
         .Select(m => Covering(m, Now) is { } term ? new MemberHit(m.Member, m.Name, true, term.Ends) : new MemberHit(m.Member, m.Name, false)).ToList();
 
-    public void Queue(string memberId, string name, string? pin, string? reason = null)
+    public void Queue(string memberId, string name, string? pin, string? reason = null, string? idType = null)
     {
-        _state.Queue.Add(new QueuedCheckIn(Guid.NewGuid(), memberId, name, Now, pin, reason));
+        _state.Queue.Add(new QueuedCheckIn(Guid.NewGuid(), memberId, name, Now, pin, reason, idType));
         Write();
     }
 
@@ -105,6 +105,7 @@ public sealed class OfflineDesk
             };
             if (item.Pin is not null) args["p_pin"] = item.Pin;
             if (item.Reason is not null) args["p_reason"] = item.Reason;
+            if (item.IdType is not null) args["p_id_type"] = item.IdType;   // G20: the desk looked at an ID
             var id = await Safe.RunAsync(() => _gw.RpcAsync<int?>("record_check_in", args));
             // 0049: a wrong PIN comes back as no id
             var result = id is { Ok: true, Value: null } ? AppResult<int?>.Fail(AppErrorKind.Validation, "wrong_pin") : id;

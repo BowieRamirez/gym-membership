@@ -14,7 +14,7 @@ public class SubscriptionTests
     internal static async Task<(DemoGateway Gw, Clock Clock, SubscriptionService Svc, MembershipPackage Monthly, MembershipPackage Annual)> Setup()
     {
         var clock = new Clock(); var gw = new DemoGateway(clock: clock);
-        await gw.SignUpAsync("phase7@demo.io", "secret12", "Ana", "Reyes");
+        await gw.SignUpAsync("phase7@demo.io", "secret12", "Ana", "Reyes", TermsInfo.Version);
         var packages = await gw.ListAsync<MembershipPackage>();
         return (gw, clock, new SubscriptionService(gw, clock), packages.First(p => p.Name == "Monthly"), packages.First(p => p.Name == "Annual"));
     }
@@ -57,8 +57,12 @@ public class SubscriptionTests
         var p = (await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
         var extension = (await svc.ExtendAsync(annual.Id)).Value!;
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
-        annual.Name="Changed Annual"; annual.Price=18000; annual.DurationDays=366;
-        await gw.UpdateAsync(annual);
+        // G9 (0061): the catalog changes through a new version, which archives the package this payment named
+        var admin=new AdminService(gw);
+        var versionId=(await admin.NewPackageVersionAsync(annual.Id)).Value;
+        var version=(await admin.AllPackagesAsync()).Value!.Single(x=>x.Id==versionId);
+        version.Name="Changed Annual"; version.Price=18000; version.DurationDays=366;
+        Assert.True((await admin.SavePackageAsync(version)).Ok); Assert.True((await admin.PublishAsync("plan",version.Id)).Ok);
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         Assert.True((await new PaymentStaffService(gw).VerifyAsync(extension.Id,true)).Ok);
         await gw.SignInAsync("phase7@demo.io","secret12");
@@ -76,7 +80,7 @@ public class SubscriptionTests
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         Assert.True((await new PaymentStaffService(gw).VerifyAsync(extension.Id,false,"Proof does not match")).Ok);
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
-        annual.Price=18000; await gw.UpdateAsync(annual);
+        annual.Price=18000; await Assert.ThrowsAnyAsync<Exception>(()=>gw.UpdateAsync(annual));   // G9 (0061): a package on sale keeps its price
         await gw.SignInAsync("phase7@demo.io","secret12");
         var memberships = new MembershipService(gw);
         var item = (await memberships.MyPaymentsAsync()).Value!.Single(p=>p.Id==extension.Id);
@@ -84,7 +88,7 @@ public class SubscriptionTests
         var retry = await memberships.PayAgainAsync(item);
         Assert.True(retry.Ok,retry.Message);
         Assert.Equal(annual.Id,retry.Value!.PackageSnapshotId);
-        Assert.Equal(("Annual",18000m,365),(retry.Value.PackageSnapshotName,retry.Value.Amount,retry.Value.PackageSnapshotDays));
+        Assert.Equal(("Annual",14000m,365),(retry.Value.PackageSnapshotName,retry.Value.Amount,retry.Value.PackageSnapshotDays));
     }
 
     [Fact]
@@ -139,6 +143,28 @@ public class SubscriptionTests
         Assert.False(Assert.Single(vm.Requests).CanRepay);
     }
 
+    [Fact]
+    public async Task Refund_table_row_says_what_to_do_and_the_open_request_follows_each_reload()
+    {
+        var (gw, _, svc, monthly, _) = await Setup();
+        var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
+        var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
+        Assert.True((await svc.RequestRefundAsync(term.Id,"Changed plans","change_of_mind")).Ok);
+        await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
+        var vm=new GymMembership.Core.ViewModels.RefundsViewModel(svc);
+        await vm.OnAppearingAsync();
+        var row=Assert.Single(vm.Requests);
+        Assert.Equal(("To review","Review"),(row.Status,row.ActionText));
+        Assert.Matches(@"^\d{1,2} \w{3} – \d{1,2} \w{3} \d{4}$",row.Period);   // short enough for a table column
+        vm.OpenCommand.Execute(row);
+        Assert.Same(row,vm.Selected);
+        await vm.DecideAsync(row,true,"Approve");
+        Assert.Same(Assert.Single(vm.Requests),vm.Selected);   // the panel shows the fresh row, now to repay
+        Assert.Equal(("To repay","Repay"),(vm.Selected!.Status,vm.Selected.ActionText));
+        vm.CloseCommand.Execute(null);
+        Assert.Null(vm.Selected);
+    }
+
     [Theory]
     [InlineData("service_not_provided")] [InlineData("misled")] [InlineData("contract_allows")] [InlineData("illness_or_relocation")] [InlineData("change_of_mind")]
     public async Task A_term_with_a_check_in_goes_to_review_with_a_reason_even_after_24_hours(string category)
@@ -155,7 +181,7 @@ public class SubscriptionTests
         Assert.Equal("bad_input",(await svc.RequestRefundAsync(card.Term.Id,"Bad","because")).Message);
         Assert.True((await svc.RequestRefundAsync(card.Term.Id,"Details",category)).Ok);
         var request=Assert.Single((await svc.RefundsAsync()).Value!).Request;
-        Assert.Equal((true,category,p.Amount),(request.WasActivated,request.ReviewReason,request.Amount));
+        Assert.Equal((true,category,1400m),(request.WasActivated,request.ReviewReason,request.Amount));   // G22: day 2 of 30 begun, 28 left
     }
 
     [Fact]
@@ -172,17 +198,17 @@ public class SubscriptionTests
     }
 
     [Fact]
-    public async Task A_paid_term_with_no_check_in_is_a_full_refund_even_days_after_it_started()
+    public async Task A_paid_term_with_no_check_in_needs_no_review_and_is_owed_the_days_left()
     {
         var (gw, clock, svc, monthly, _) = await Setup();
         var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
-        clock.Now=clock.Now.AddDays(10);
+        clock.Now=clock.Now.AddDays(5);   // inside the first week (G23)
         var card=Assert.Single((await svc.TermsAsync()).Value!);
         Assert.False(card.Activated);
-        Assert.Contains("full refund",card.RefundText);
+        Assert.StartsWith("Cancel by ",card.RefundText); Assert.Contains("about ₱1,250.00",card.RefundText);
         Assert.True((await svc.RequestRefundAsync(card.Term.Id,"Never came")).Ok);
         var request=Assert.Single((await svc.RefundsAsync()).Value!).Request;
-        Assert.Equal((false,(string?)null,p.Amount),(request.WasActivated,request.ReviewReason,request.Amount));
+        Assert.Equal((false,(string?)null,1250m),(request.WasActivated,request.ReviewReason,request.Amount));   // G22: 5 of 30 used
     }
 
     [Fact]
@@ -194,14 +220,14 @@ public class SubscriptionTests
         clock.Now=clock.Now.AddDays(10);
         var queued=(await svc.TermsAsync()).Value!.Single(t=>t.Term.PaymentId==next.Id);
         Assert.False(queued.Activated); Assert.True(queued.CanRequestRefund);
-        Assert.Contains("full refund",queued.RefundText);
+        Assert.Contains($"about ₱{next.Amount:N2}",queued.RefundText);   // not started: everything back
 
         Assert.True((await svc.RequestRefundAsync(queued.Term.Id,"Plans changed")).Ok);
         await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
         var row=Assert.Single((await svc.RefundsAsync()).Value!);
         Assert.Equal((false,(string?)null,next.Amount),(row.Request.WasActivated,row.Request.ReviewReason,row.Request.Amount));
-        Assert.Equal("No check-in during this term: full refund owed.",row.ReviewText);
-        Assert.Equal("Full refund",row.AmountLabel);
+        Assert.Equal("No check-in during this term: the days left are owed.",row.ReviewText);
+        Assert.Equal("Estimated refund",row.AmountLabel);
         Assert.Equal(0,row.LaterTerms);
     }
 
@@ -221,7 +247,7 @@ public class SubscriptionTests
         await vm.OnAppearingAsync();
         var row=Assert.Single(vm.Requests);
         Assert.Equal("Checked in during this term, needs review: gym didn't provide the agreed service.",row.ReviewText);
-        Assert.Equal("Refund requested",row.AmountLabel);
+        Assert.Equal("Estimated refund",row.AmountLabel);
         Assert.Equal(1,row.LaterTerms);
         Assert.Equal("This member also has 1 later paid term. It stays and is not refunded.",row.LaterTermsWarning);
 
@@ -269,8 +295,9 @@ public class SubscriptionTests
         var (gw, _, svc, _, _) = await Setup();
         await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
         // D4: a payment is ₱0 only when a discount brought it there
-        var trial=await gw.InsertAsync(new MembershipPackage {Name="Trial",Price=100,DurationDays=7,IsActive=true});
-        await gw.InsertAsync(new Discount {Code="TRIALFREE",Percent=100,MaxUses=5,StartsAt=DateTime.UtcNow.AddMinutes(-1),ExpiresAt=DateTime.UtcNow.AddDays(1),IsActive=true});
+        var trial=await gw.InsertAsync(new MembershipPackage {Name="Trial",Description="A week to try",Price=100,DurationDays=7,IsActive=true});
+        Assert.True((await new AdminService(gw).PublishAsync("plan",trial.Id)).Ok);   // G6 (0061): added as a draft
+        Assert.True((await new AdminService(gw).CreateDiscountAsync(new Discount {Code="TRIALFREE",Percent=100,MaxUses=5,ExpiresAt=DateTime.UtcNow.AddDays(1)},DiscountItem.Everything)).Ok);
         await gw.SignInAsync("phase7@demo.io","secret12");
         var p=(await svc.ExtendAsync(trial.Id,"TRIALFREE")).Value!; Assert.Equal(0m,p.Amount); await Verify(gw,p);
         var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
@@ -299,7 +326,7 @@ public class SubscriptionTests
         var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
         Assert.False((await new MembershipService(gw).MyPaymentsAsync()).Value!.Single().CanCancel);
         Assert.False((await svc.CancelPendingPaymentAsync(p.Id)).Ok);
-        await gw.SignUpAsync("other7@demo.io","secret12","Other","Person");
+        await gw.SignUpAsync("other7@demo.io","secret12","Other","Person", TermsInfo.Version);
         var mine=(await svc.ExtendAsync(monthly.Id)).Value!;
         await gw.SignInAsync("phase7@demo.io","secret12");
         Assert.False((await svc.CancelPendingPaymentAsync(mine.Id)).Ok);

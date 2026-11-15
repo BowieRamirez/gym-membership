@@ -297,7 +297,8 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     {
         Notice = null;
         if (!IsWalkIn && (Member is null || Item is null)) { ErrorMessage = "Choose the member and what they are paying for."; return; }
-        if (!await Confirm.AskAsync("Record this payment?", $"{OrderWho}\n{OrderWhat}\n{TotalText}\n{OrderHow}", "Record payment")) return;
+        if (!await Confirm.AskAsync("Record this payment?", $"{OrderWho}\n{OrderWhat}\n{TotalText}\n{OrderHow}"
+                + (Kind is "Membership" or "Renewal" ? $"\n\nTell them: {RefundRules.Line}" : ""), "Record payment")) return;   // G23
         Payment? paid = null;
         if (!await RunAsync(() => svc.RecordCounterAsync(KindKey(Kind), MethodKey(Method), IsWalkIn ? null : Member!.MemberId, Item?.Id,
                 IsWalkIn ? WalkInName : null, NeedsReference ? ReferenceNo : null, IsWalkIn ? null : DiscountCode), p => paid = p)) return;
@@ -342,7 +343,7 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
     public bool HasScan => Scan is not null;
 
     // D12: when the connection drops, the desk works from its saved list (OfflineDesk)
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(OfflineText))] private bool isOffline;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OfflineText), nameof(CanUsePassword))] private bool isOffline;
     public string OfflineText => offline?.OfflineText ?? "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasQueue))] private string queueText = "";
     public bool HasQueue => QueueText.Length > 0;
@@ -359,9 +360,9 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
         OnPropertyChanged(nameof(OfflineText));
     }
 
-    void QueueFor(string memberId, string name, string? pin, string? reason)
+    void QueueFor(string memberId, string name, string? pin, string? reason, string? idType = null)
     {
-        offline!.Queue(memberId, name, pin, reason);
+        offline!.Queue(memberId, name, pin, reason, idType);
         IsOffline = true; ErrorMessage = null;
         Notice = $"{name} is saved and will be sent when the connection is back.";
         ShowQueue();
@@ -430,7 +431,12 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
         var result = await svc.ScanAsync(code);
         if (WentOffline(result)) { IsOffline = true; ErrorMessage = null; Scan = new MemberScan { Result = "saved_no_qr" }; ShowQueue(); return; }
         await RunAsync(() => Task.FromResult(result), s => { Scan = s; IsOffline = false; });
+        // G10: the card shows the face, or the initials while the photo loads or when there is none
+        (ScanPhoto, ScanLetters) = (null, Scan?.Name is { } n ? Initials.From(n) : "");
+        if (profile is not null && Scan is { AvatarPath: { } path } shown && (await profile.AvatarUrlAsync(path)) is { Ok: true, Value: { } url } && Scan == shown) ScanPhoto = url;
     }
+    [ObservableProperty] private string? scanPhoto;
+    [ObservableProperty] private string scanLetters = "";
 
     [RelayCommand]
     private async Task CheckInScannedAsync()
@@ -472,7 +478,7 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
     public bool HasPinStep => PinFor is not null;
     [ObservableProperty] private string pin = "";
     [ObservableProperty] private string reason = "";
-    [ObservableProperty] private bool canSkipPin;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowsReason))] private bool canSkipPin;
     /// <summary>F8: the member's photo, so staff can compare the face; the initials when there is none.</summary>
     [ObservableProperty] private string? pinPhoto;
     [ObservableProperty] private string pinLetters = "";
@@ -499,7 +505,62 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
     void ClosePin()
     {
         if (PinFor is { } hit && Hits.All(h => h.MemberId != hit.MemberId)) Hits.Insert(Math.Min(_pinRow, Hits.Count), hit);
-        (PinFor, Pin, Reason, PinPhoto) = (null, "", "", null);
+        (PinFor, Pin, Reason, PinPhoto, Password, IsPasswordMode) = (null, "", "", null, "", false);
+        (IsIdMode, IdType, IdMatches) = (false, null, false);
+    }
+
+    // ---- G12, login mode: no phone and no PIN, so the member types their own account password; online only, never kept ----
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPinMode), nameof(ShowsReason))] private bool isPasswordMode;
+    [ObservableProperty] private string password = "";
+    public bool CanUsePassword => !IsOffline;
+
+    [RelayCommand] private void UsePassword() { (IsPasswordMode, Pin, ErrorMessage) = (true, "", null); (IsIdMode, IdType, IdMatches) = (false, null, false); }
+    [RelayCommand] private void UsePin() { (IsPasswordMode, Password, ErrorMessage) = (false, "", null); (IsIdMode, IdType, IdMatches) = (false, null, false); }
+
+    // ---- G20/G21 (0066): the desk looks at the member's ID and compares it with the photo on the card; only the ID's type is kept ----
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPinMode), nameof(ShowsReason))] private bool isIdMode;
+    [ObservableProperty] private string? idType;
+    [ObservableProperty] private bool idMatches;
+    /// <summary>One chip per ID type; the picked one is IdType.</summary>
+    public IReadOnlyList<PickChip> IdChips { get; } = Services.IdTypes.Labels.Select(l => new PickChip(l, true)).ToList();
+    partial void OnIdTypeChanged(string? value) { foreach (var c in IdChips) c.IsPicked = c.Text == value; }
+    [RelayCommand] private void PickIdType(PickChip chip) { (IdType, ErrorMessage) = (chip.Text, null); }
+    /// <summary>The desk PIN step shows unless the password or the ID step is open; an Admin's reason goes only with it.</summary>
+    public bool IsPinMode => !IsPasswordMode && !IsIdMode;
+    public bool ShowsReason => CanSkipPin && IsPinMode;
+
+    [RelayCommand] private void UseId() { (IsIdMode, IsPasswordMode, Pin, Password, ErrorMessage) = (true, false, "", "", null); }
+
+    [RelayCommand]
+    private async Task ConfirmIdAsync()
+    {
+        if (PinFor is not { } hit) return;
+        Notice = null;
+        if (Services.IdTypes.Code(IdType) is not { } type) { ErrorMessage = "Pick the type of ID the member showed."; return; }
+        if (!IdMatches) { ErrorMessage = "Tick that the name and photo match this member."; return; }
+        if (IsOffline) { QueueFor(hit.MemberId, hit.Username, null, null, type); ClosePin(); return; }
+        var result = await svc.CheckInAsync(hit.MemberId, "id", idType: type);
+        if (WentOffline(result)) { QueueFor(hit.MemberId, hit.Username, null, null, type); ClosePin(); return; }
+        if (!result.Ok) { ErrorMessage = ErrorText.For(result.Error, result.Message); return; }
+        ClosePin(); ErrorMessage = null;
+        Notice = $"{hit.Username} is checked in.";
+        await LoadTodayAsync();
+    }
+
+    [RelayCommand]
+    private async Task ConfirmPasswordAsync()
+    {
+        if (PinFor is not { } hit) return;
+        Notice = null;
+        var typed = Password;
+        Password = "";   // cleared after every try, right or wrong
+        if (typed.Length == 0) { ErrorMessage = "Ask the member to type their account password."; return; }
+        var proof = await svc.VerifyPasswordAsync(hit.MemberId, typed);
+        if (!proof.Ok) { ErrorMessage = ErrorText.For(proof.Error, proof.Message); return; }
+        if (!await RunAsync(() => svc.CheckInAsync(hit.MemberId, "password", proof: proof.Value))) return;
+        ClosePin(); ErrorMessage = null;
+        Notice = $"{hit.Username} is checked in.";
+        await LoadTodayAsync();
     }
 
     [RelayCommand] private void CancelPin() { ClosePin(); ErrorMessage = null; }
@@ -591,10 +652,33 @@ public partial class CoachProfileViewModel(ICoachService svc) : LoadableViewMode
 public partial class TraineesViewModel(ICoachService svc, IChatService messages, IAppNavigator nav) : LoadableViewModel
 {
     public ObservableCollection<TraineeRow> Trainees { get; } = new();
+    /// <summary>G30 (0074): members waiting for this coach to accept; the section shows only while there are any.</summary>
+    public ObservableCollection<HireRequestRow> Requests { get; } = new();
+    [ObservableProperty] private bool hasRequests;
 
     public override Task OnAppearingAsync() => LoadAsync();
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.TraineesAsync, rows => Fill(Trainees, rows));
+    [RelayCommand]
+    private async Task LoadAsync()
+    {
+        await RunAsync(svc.HireRequestsAsync, rows => { Fill(Requests, rows); HasRequests = Requests.Count > 0; });
+        await RunAsync(svc.TraineesAsync, rows => Fill(Trainees, rows));
+    }
+
+    [RelayCommand]
+    private async Task AcceptAsync(HireRequestRow row)
+    {
+        Notice = null;
+        if (await RunAsync(() => svc.AnswerHireAsync(row.HireId, true))) { Notice = $"{row.Name} is now your member."; await LoadAsync(); }
+    }
+
+    [RelayCommand]
+    private async Task DeclineAsync(HireRequestRow row)
+    {
+        Notice = null;
+        if (!await Confirm.AskAsync($"Decline {row.Name}?", "They will be told you declined. They can ask again later.", "Decline")) return;
+        if (await RunAsync(() => svc.AnswerHireAsync(row.HireId, false))) await LoadAsync();
+    }
 
     [RelayCommand]
     private void Message(TraineeRow row) { messages.Pending = (row.CoachId, row.MemberId); nav.GoToMessages(); }
@@ -603,8 +687,8 @@ public partial class TraineesViewModel(ICoachService svc, IChatService messages,
     private async Task RemoveAsync(TraineeRow row)
     {
         Notice = null;
-        if (!await Confirm.AskAsync($"Remove {row.Name}?", "They will no longer be your trainee.", "Remove trainee")) return;
-        if (await RunAsync(() => svc.EndHireAsync(row.HireId))) { Notice = $"{row.Name} is no longer your trainee."; await LoadAsync(); }
+        if (!await Confirm.AskAsync($"Remove {row.Name}?", "They will no longer be your member.", "Remove member")) return;
+        if (await RunAsync(() => svc.EndHireAsync(row.HireId))) { Notice = $"{row.Name} is no longer your member."; await LoadAsync(); }
     }
 }
 
@@ -942,9 +1026,11 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     [ObservableProperty] private int postHours = 4;
     [ObservableProperty] private string? postNote;
     [ObservableProperty] private bool canPost;                       // the selected day still has gym time ahead
+    [ObservableProperty] private string closedNote = "";              // G17 (0065): why no shift can be posted that day
     public bool HasShifts => coach is not null;
     List<ShiftPost> shifts = [];
     GymSettings? hours;
+    IReadOnlyDictionary<DateOnly, string> closed = new Dictionary<DateOnly, string>();
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsMonth), nameof(IsWeek), nameof(PeriodTitle))] private string viewMode = "Month";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(PeriodTitle))] private DateOnly focus;
@@ -982,6 +1068,7 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     {
         if (Focus == default) { Focus = Today; SelectedDay = Today; }
         if (coach is not null && hours is null && gym is not null) { var g = await gym.GymAsync(); if (g.Ok) hours = g.Value; }
+        if (coach is not null && gym is not null && await gym.ClosedDaysAsync() is { Ok: true, Value: { } c }) closed = c;
         if (coach is not null) await RunAsync(coach.TraineesAsync, t => TraineesText = t.Count.ToString());
         await ReloadAsync();
         Prefill();
@@ -991,7 +1078,8 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     void Prefill()
     {
         var start = hours is not null && SelectedDay is { } day ? ShiftSlot.DefaultStart(day, hours.OpensAt, hours.ClosesAt, Clock()) : null;
-        CanPost = start is not null;
+        ClosedNote = SelectedDay is { } sd && closed.TryGetValue(sd, out var why) ? $"The gym is closed this day: {why}." : "";
+        CanPost = start is not null && ClosedNote == "";
         if (start is { } s) PostTime = AttendanceCalendar.LocalTime(s, Zone).TimeOfDay;
         PostHours = 4;
     }
@@ -1112,6 +1200,20 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
 public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? archive = null) : LoadableViewModel
 {
     public ObservableCollection<UserRow> Users { get; } = new();
+    IReadOnlyList<UserRow> active = [];
+    // item 3 (0059): active accounts with a first name and no last name, for a system admin to correct
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasIncomplete), nameof(IncompleteText))] private int incompleteCount;
+    [ObservableProperty] private bool onlyIncomplete;
+    public bool HasIncomplete => IncompleteCount > 0;
+    public string IncompleteText => $"Name incomplete ({IncompleteCount})";
+    partial void OnOnlyIncompleteChanged(bool value) => ShowUsers();
+    [RelayCommand] private void ToggleIncomplete() => OnlyIncomplete = !OnlyIncomplete;
+    void ShowUsers()
+    {
+        IncompleteCount = active.Count(u => u.NameIncomplete);
+        if (IncompleteCount == 0) OnlyIncomplete = false;
+        Fill(Users, OnlyIncomplete ? active.Where(u => u.NameIncomplete) : active);
+    }
     /// <summary>Switched off but not deleted: they can be switched back on here.</summary>
     public ObservableCollection<UserRow> Deactivated { get; } = new();
     /// <summary>What can be added: a sub-admin adds members and coaches only (D15).</summary>
@@ -1145,7 +1247,7 @@ public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? a
         await RunAsync(svc.IsSuperAdminAsync, yes => IsSuperAdmin = yes);
         Roles = IsSuperAdmin ? ["Member", "Coach", "Front desk", "Admin"] : ["Member", "Coach"];
         if (!Roles.Contains(NewRole)) NewRole = "Member";
-        await RunAsync(svc.UsersAsync, rows => { Fill(Users, rows.Where(r => r.IsActive)); Fill(Deactivated, rows.Where(r => !r.IsActive)); });
+        await RunAsync(svc.UsersAsync, rows => { active = rows.Where(r => r.IsActive).ToList(); ShowUsers(); Fill(Deactivated, rows.Where(r => !r.IsActive)); });
     }
 
     [RelayCommand]
@@ -1224,25 +1326,311 @@ public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? a
     }
 }
 
+/// <summary>Phase 4: one package on Packages and amenities. A draft version sits right under the package it will replace.</summary>
+public sealed record CatalogPackageRow(MembershipPackage Package, string? PhotoUrl, bool IsVersion, bool HasDraftVersion)
+{
+    public string StateText => Package.State == CatalogState.Draft ? "Draft" : "On sale";
+    public string PriceText => Package.Price > 0 ? $"₱{Package.Price:N2}" : "Not set";
+    public string Subtitle => IsVersion ? "New version, replaces the one above when published"
+        : string.IsNullOrWhiteSpace(Package.Description) ? "No description yet" : Package.Description!;
+}
+
+public sealed record CatalogAmenityRow(Amenity Amenity, string? PhotoUrl)
+{
+    public string StateText => Amenity.State == CatalogState.Draft ? "Draft" : "On sale";
+    public string SoldAsText => Amenity.Price <= 0 ? "Price not set" : Amenity.DurationDays is { } d ? $"₱{Amenity.Price:N2} for {d} days" : $"₱{Amenity.Price:N2} per session";
+    public string Subtitle => string.IsNullOrWhiteSpace(Amenity.Description) ? "No description yet" : Amenity.Description!;
+}
+
+/// <summary>One benefit line in the side panel (packages only).</summary>
+public sealed partial class BenefitLine : ObservableObject { [ObservableProperty] private string text = ""; }
+
+/// <summary>
+/// Packages and amenities (G6 to G9, approved mockup docs/mockups/catalog-add.html): one Actions menu per row offering only what the row's
+/// state allows, and one side panel that adds, edits, saves as a draft, puts on sale, and compares a new version before it is published.
+/// </summary>
 public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? picker = null) : LoadableViewModel
 {
-    /// <summary>Only the super admin archives (D15); a sub-admin who tries is told so.</summary>
+    /// <summary>Only the super admin archives (D15).</summary>
     [ObservableProperty] private bool canArchive;
 
-    public ObservableCollection<MembershipPackage> Packages { get; } = new();
-    public ObservableCollection<Amenity> Amenities { get; } = new();
-    [ObservableProperty] private string newPackageName = "";
-    [ObservableProperty] private string newDescription = "";
-    [ObservableProperty] private decimal newPrice = 30;
-    [ObservableProperty] private int newDays = 30;
-    [ObservableProperty] private string newAmenityName = "";
-    [ObservableProperty] private decimal newAmenityPrice = 200;
-    [ObservableProperty] private string newAmenityDescription = "";
-    // like packages: one form adds an amenity, or edits the one held here
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(AmenitySaveLabel), nameof(IsEditingAmenity), nameof(AmenityPriceLabel))] private Amenity? editingAmenity;
-    public string AmenityPriceLabel => EditingAmenity?.DurationDays is { } days ? $"Price for {days} days" : "Price per session";
+    public ObservableCollection<CatalogPackageRow> Packages { get; } = new();
+    public ObservableCollection<CatalogAmenityRow> Amenities { get; } = new();
 
-    // Today's amenities are priced for timed passes, so nothing switches until staff enter a session price (D11).
+    public override Task OnAppearingAsync() => LoadAsync();
+
+    [RelayCommand]
+    private async Task LoadAsync()
+    {
+        await RunAsync(svc.IsSuperAdminAsync, yes => CanArchive = yes);
+        if (await svc.AllPackagesAsync() is { Ok: true, Value: { } packages })
+        {
+            var live = packages.Where(p => p.IsActive).OrderBy(p => p.Id).ToList();
+            var rows = new List<CatalogPackageRow>();
+            foreach (var p in live.Where(p => p.PublishedAt is not null))
+            {
+                var version = live.FirstOrDefault(v => v.ReplacesId == p.Id && v.PublishedAt is null);
+                rows.Add(new(p, await SignedPhoto(p.ImagePath), false, version is not null));
+                if (version is not null) rows.Add(new(version, await SignedPhoto(version.ImagePath), true, false));
+            }
+            foreach (var d in live.Where(d => d.PublishedAt is null && !rows.Any(r => r.Package.Id == d.Id)))
+                rows.Add(new(d, await SignedPhoto(d.ImagePath), false, false));
+            Fill(Packages, rows);
+        }
+        if (await svc.AllAmenitiesAsync() is { Ok: true, Value: { } amenities })
+        {
+            var rows = new List<CatalogAmenityRow>();
+            foreach (var a in amenities.Where(a => a.IsActive).OrderBy(a => a.PublishedAt is null).ThenBy(a => a.Id)) rows.Add(new(a, await SignedPhoto(a.ImagePath)));
+            Fill(Amenities, rows);
+        }
+    }
+
+    async Task<string?> SignedPhoto(string? path) => path is null ? null : (await svc.CatalogPhotoUrlAsync(path)).Value;
+
+    // ---------- the Actions menu ----------
+    public IReadOnlyList<string> ActionsFor(object row) => row switch
+    {
+        CatalogPackageRow { Package.State: CatalogState.Draft, IsVersion: true } => ["Edit draft", "Review and publish", "Delete draft"],
+        CatalogPackageRow { Package.State: CatalogState.Draft } => ["Edit draft", "Add to sale", "Delete draft"],
+        CatalogPackageRow r => [.. r.HasDraftVersion ? [] : new[] { "Create new version" }, .. CanArchive ? new[] { "Archive" } : []],
+        CatalogAmenityRow { Amenity.State: CatalogState.Draft } => ["Edit draft", "Add to sale", "Delete draft"],
+        CatalogAmenityRow r => ["Edit", .. r.Amenity.DurationDays is null ? [] : new[] { "Sell per session" }, .. CanArchive ? new[] { "Archive" } : []],
+        _ => []
+    };
+
+    [RelayCommand]
+    private async Task RunActionAsync((object Row, string Action) pick)
+    {
+        ErrorMessage = Notice = null;
+        switch (pick.Row, pick.Action)
+        {
+            case (CatalogPackageRow r, "Edit draft"): OpenPackage(r.Package); break;
+            case (CatalogPackageRow r, "Add to sale" or "Review and publish"): OpenPackage(r.Package); await MainAsync(); break;
+            case (CatalogPackageRow r, "Create new version"):
+                if (!await RunAsync(() => svc.NewPackageVersionAsync(r.Package.Id), _ => { })) return;
+                await LoadAsync();
+                if (Packages.FirstOrDefault(v => v.IsVersion && v.Package.ReplacesId == r.Package.Id) is { } version) OpenPackage(version.Package);
+                break;
+            case (CatalogPackageRow r, "Delete draft"): await DeleteDraftAsync("plan", r.Package.Id, r.Package.Name); break;
+            case (CatalogPackageRow r, "Archive"): Deleting = r.Package; break;
+            case (CatalogAmenityRow r, "Edit draft" or "Edit"): OpenAmenity(r.Amenity); break;
+            case (CatalogAmenityRow r, "Add to sale"): OpenAmenity(r.Amenity); await MainAsync(); break;
+            case (CatalogAmenityRow r, "Sell per session"): StartSessionPrice(r.Amenity); break;
+            case (CatalogAmenityRow r, "Delete draft"): await DeleteDraftAsync("amenity", r.Amenity.Id, r.Amenity.Name); break;
+            case (CatalogAmenityRow r, "Archive"): DeletingAmenity = r.Amenity; break;
+        }
+    }
+
+    async Task DeleteDraftAsync(string kind, int id, string name)
+    {
+        if (!await Confirm.AskAsync($"Delete the draft {name}?", "It has never been on sale, so it goes for good.", "Delete draft")) return;
+        if (!await RunAsync(() => svc.DeleteDraftAsync(kind, id))) return;
+        Notice = $"Deleted the draft {name}.";
+        await LoadAsync();
+    }
+
+    // ---------- the side panel ----------
+    [ObservableProperty] private bool isPanelOpen;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(PriceLabel))] private bool isPackagePanel;
+    [ObservableProperty] private bool isComparing;
+    [ObservableProperty] private string panelTitle = "";
+    [ObservableProperty] private string panelSubtitle = "";
+    [ObservableProperty] private string mainLabel = "Add";
+    [ObservableProperty] private bool canSaveDraft = true;
+    [ObservableProperty] private string? versionNote;
+
+    [ObservableProperty] private string formName = "";
+    [ObservableProperty] private string formDescription = "";
+    [ObservableProperty] private decimal formPrice;
+    [ObservableProperty] private int formDays = 30;
+    [ObservableProperty] private decimal formCoachFee;   // G14 (0064): amenities only, added when a member books With a coach
+    /// <summary>G19 (0066): a new amenity is sold per session; one still set up as a pass keeps its days until Sell per session.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(PriceLabel))] private bool isOldPass;
+    public string PriceLabel => IsPackagePanel ? "Price" : IsOldPass ? "Price for the pass" : "Price per session";
+    public ObservableCollection<BenefitLine> Benefits { get; } = new();
+    [ObservableProperty] private string newBenefit = "";
+
+    [ObservableProperty] private string? photoUrl;
+    [ObservableProperty] private string? photoText;
+    (string FileName, byte[] Data)? _pendingPhoto;
+
+    [ObservableProperty] private string? missingText;
+    [ObservableProperty] private bool nameMissing, descriptionMissing, priceMissing, daysMissing;
+
+    [ObservableProperty] private IReadOnlyList<PackageChange> changes = [];
+    [ObservableProperty] private string? renewalNote;
+
+    MembershipPackage? _package;   // the package or draft in the panel (Id 0 = not saved yet)
+    Amenity? _amenity;
+
+    [RelayCommand] private void AddPackage() => OpenPackage(new MembershipPackage { DurationDays = 30 });
+    [RelayCommand] private void AddAmenity() => OpenAmenity(new Amenity());
+
+    void Open(bool package, string name, string? description, decimal price, string? photo)
+    {
+        ErrorMessage = Notice = null;
+        (IsPackagePanel, IsComparing, FormName, FormDescription, FormPrice, NewBenefit, _pendingPhoto, PhotoText) = (package, false, name, description ?? "", price, "", null, null);
+        ClearMissing();
+        PhotoUrl = photo;
+        IsPanelOpen = true;
+    }
+
+    void OpenPackage(MembershipPackage p)
+    {
+        (_package, _amenity) = (p, null);
+        var replaces = p.ReplacesId is { } id ? Packages.FirstOrDefault(r => r.Package.Id == id)?.Package : null;
+        (PanelTitle, PanelSubtitle, MainLabel) = replaces is not null
+            ? ($"New version of {replaces.Name}", $"A draft. {replaces.Name} stays on sale until you publish this.", "Review and publish")
+            : (p.Id == 0 ? "Add a package" : "Edit draft", "Save as draft to finish it later. Add puts it on sale.", "Add");
+        CanSaveDraft = true;
+        VersionNote = replaces is null ? null : $"This is a draft of a new version. {replaces.Name} stays on sale as it is until you publish this one. Discount codes for the old version don't carry over.";
+        FormDays = p.DurationDays;
+        Benefits.Clear();
+        foreach (var b in p.Benefits) Benefits.Add(new BenefitLine { Text = b });
+        Open(true, p.Name, p.Description, p.Price, Packages.FirstOrDefault(r => r.Package.Id == p.Id && p.Id != 0)?.PhotoUrl);
+    }
+
+    void OpenAmenity(Amenity a)
+    {
+        (_package, _amenity) = (null, a);
+        var published = a.State == CatalogState.Published;
+        (PanelTitle, PanelSubtitle, MainLabel, CanSaveDraft) = published
+            ? ($"Edit {a.Name}", "Changes apply to new purchases. Passes and sessions already paid keep what was paid.", "Save changes", false)
+            : (a.Id == 0 ? "Add an amenity" : "Edit draft", "Save as draft to finish it later. Add puts it on sale.", "Add", true);
+        VersionNote = null;
+        (IsOldPass, FormCoachFee) = (a.DurationDays is not null, a.CoachFee);
+        Benefits.Clear();
+        Open(false, a.Name, a.Description, a.Price, Amenities.FirstOrDefault(r => r.Amenity.Id == a.Id && a.Id != 0)?.PhotoUrl);
+    }
+
+    [RelayCommand] private void ClosePanel() => (IsPanelOpen, IsComparing) = (false, false);
+    [RelayCommand] private void BackToEdit() => IsComparing = false;
+
+    [RelayCommand]
+    private void AddBenefit()
+    {
+        if (string.IsNullOrWhiteSpace(NewBenefit)) return;
+        Benefits.Add(new BenefitLine { Text = NewBenefit.Trim() });
+        NewBenefit = "";
+    }
+    [RelayCommand] private void RemoveBenefit(BenefitLine line) => Benefits.Remove(line);
+
+    [RelayCommand]
+    private async Task PickPhotoAsync()
+    {
+        if (picker is null || await picker.PickAsync() is not { } file) return;
+        _pendingPhoto = file;
+        PhotoText = $"{file.FileName}, saved with the {(IsPackagePanel ? "package" : "amenity")}";
+    }
+
+    void ClearMissing() { MissingText = null; NameMissing = DescriptionMissing = PriceMissing = DaysMissing = false; }
+    // a field's note goes as soon as it is filled in; the summary goes with the first change
+    partial void OnFormNameChanged(string value) { NameMissing = false; MissingText = null; }
+    partial void OnFormDescriptionChanged(string value) { DescriptionMissing = false; MissingText = null; }
+    partial void OnFormPriceChanged(decimal value) { PriceMissing = false; MissingText = null; }
+    partial void OnFormDaysChanged(int value) { DaysMissing = false; MissingText = null; }
+
+    /// <summary>Add (and Review and publish) checks what publishing needs (0061's missing_fields) before anything is saved.</summary>
+    bool Complete()
+    {
+        ClearMissing();
+        (NameMissing, DescriptionMissing, PriceMissing, DaysMissing) = (string.IsNullOrWhiteSpace(FormName), string.IsNullOrWhiteSpace(FormDescription), FormPrice <= 0, IsPackagePanel && FormDays <= 0);
+        var missing = new[] { (NameMissing, "a name"), (DescriptionMissing, "a description"), (PriceMissing, "a price"), (DaysMissing, "the days") }.Where(m => m.Item1).Select(m => m.Item2).ToList();
+        if (missing.Count == 0) return true;
+        var list = missing.Count == 1 ? missing[0] : string.Join(", ", missing.SkipLast(1)) + " and " + missing[^1];
+        MissingText = $"Add needs {(missing.Count == 1 ? "1 more thing" : $"{missing.Count} more things")}: {list}. Or save it as a draft and finish later.";
+        return false;
+    }
+
+    /// <summary>Writes the panel to its row (a new row is a draft) and then the chosen photo, which needs the row's id.</summary>
+    async Task<bool> SaveAsync()
+    {
+        var description = string.IsNullOrWhiteSpace(FormDescription) ? null : FormDescription.Trim();
+        bool ok;
+        int id;
+        if (IsPackagePanel)
+        {
+            var p = _package!;
+            (p.Name, p.Description, p.Price, p.DurationDays) = (FormName.Trim(), description, FormPrice, FormDays);
+            p.Benefits = Benefits.Select(b => b.Text.Trim()).Where(b => b.Length > 0).ToList();
+            ok = await RunAsync(() => svc.SavePackageAsync(p));
+            id = p.Id;
+        }
+        else
+        {
+            var a = _amenity!;
+            (a.Name, a.Description, a.Price, a.CoachFee) = (FormName.Trim(), description, FormPrice, Math.Max(0, FormCoachFee));
+            ok = await RunAsync(() => svc.SaveAmenityAsync(a));
+            id = a.Id;
+        }
+        if (!ok || _pendingPhoto is not { } photo) return ok;
+        if (!await RunAsync(() => IsPackagePanel ? svc.SetPackagePhotoAsync(id, photo.FileName, photo.Data) : svc.SetAmenityPhotoAsync(id, photo.FileName, photo.Data), _ => { })) return false;
+        _pendingPhoto = null;
+        return true;
+    }
+
+    [RelayCommand]
+    private async Task SaveDraftAsync()
+    {
+        ClearMissing();
+        if (string.IsNullOrWhiteSpace(FormName)) { (NameMissing, MissingText) = (true, "A draft needs a name."); return; }
+        if (IsPackagePanel && FormDays <= 0) { (DaysMissing, MissingText) = (true, "Days must be more than zero."); return; }
+        var ok = await SaveAsync();
+        await LoadAsync();
+        if (!ok) return;
+        IsPanelOpen = false;
+        Notice = $"Saved {FormName.Trim()} as a draft.";
+    }
+
+    /// <summary>Add, Review and publish, or Save changes, as the panel's main button says.</summary>
+    [RelayCommand]
+    private async Task MainAsync()
+    {
+        if (!Complete()) return;
+        var terms = IsPackagePanel ? $"₱{FormPrice:N2} for {FormDays} days." : IsOldPass ? $"Pass: ₱{FormPrice:N2} for {_amenity!.DurationDays} days." : $"₱{FormPrice:N2} per session.";
+        var ask = (_package, _amenity) switch
+        {
+            ({ ReplacesId: not null }, _) => ((string, string, string)?)null,   // the comparison is the check
+            (_, { State: CatalogState.Published }) => ($"Save changes to {FormName.Trim()}?", $"{terms} New purchases use the new details.", "Save changes"),
+            (not null, _) => ($"Put {FormName.Trim()} on sale?", $"{terms} Once on sale it can't be changed; you make a new version instead.", "Add to sale"),
+            _ => ($"Put {FormName.Trim()} on sale?", $"{terms} Members can buy it at once.", "Add to sale"),
+        };
+        if (ask is { } q && !await Confirm.AskAsync(q.Item1, q.Item2, q.Item3)) return;
+        var saved = await SaveAsync();
+        await LoadAsync();
+        if (!saved) return;
+        var name = FormName.Trim();
+        if (_package is { ReplacesId: { } oldId } version)
+        {
+            if ((await svc.AllPackagesAsync()).Value?.FirstOrDefault(p => p.Id == oldId) is not { } old) return;
+            Changes = PackageChanges.Between(old, version);
+            RenewalNote = $"Members on the old version keep what they paid for until it ends. When they renew, they move to the new version at ₱{version.Price:N2}; the renewal screen says so.";
+            IsComparing = true;
+            return;
+        }
+        if (_amenity is { State: CatalogState.Published })
+        {
+            IsPanelOpen = false;
+            Notice = $"Saved changes to {name}.";
+            return;
+        }
+        if (!await RunAsync(() => svc.PublishAsync(IsPackagePanel ? "plan" : "amenity", IsPackagePanel ? _package!.Id : _amenity!.Id))) return;
+        IsPanelOpen = false;
+        await LoadAsync();
+        Notice = $"{name} is on sale.";
+    }
+
+    [RelayCommand]
+    private async Task PublishVersionAsync()
+    {
+        if (_package is not { ReplacesId: not null } version) return;
+        if (!await RunAsync(() => svc.PublishAsync("plan", version.Id))) return;
+        (IsPanelOpen, IsComparing) = (false, false);
+        await LoadAsync();
+        Notice = $"The new {version.Name} is on sale. The old one is archived; members on it keep their terms.";
+    }
+
+    // ---------- selling an amenity per session (D11) ----------
     [ObservableProperty] private Amenity? pricingAmenity;
     [ObservableProperty] private decimal sessionPrice;
 
@@ -1262,149 +1650,55 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
         Notice = $"{a.Name} now sells per session.";
         await LoadAsync();
     }
-    public string AmenitySaveLabel => EditingAmenity is null ? "Add amenity" : "Save changes";
-    public bool IsEditingAmenity => EditingAmenity is not null;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(SaveLabel), nameof(IsEditing))] private MembershipPackage? editing;
 
-    public string SaveLabel => Editing is null ? "Add package" : "Save changes";
-    public bool IsEditing => Editing is not null;
-
-    public override Task OnAppearingAsync() => LoadAsync();
-
-    [RelayCommand]
-    private async Task LoadAsync()
-    {
-        await RunAsync(svc.IsSuperAdminAsync, yes => CanArchive = yes);
-        await RunAsync(svc.AllPackagesAsync, r => Fill(Packages, r.Where(p => p.IsActive)));
-        await RunAsync(svc.AllAmenitiesAsync, r => Fill(Amenities, r.Where(a => a.IsActive)));
-    }
-
-    // one form serves both "add" and "edit": Editing holds the package being changed, or null for a new one
-    [RelayCommand]
-    private async Task SavePackageAsync()
-    {
-        if (string.IsNullOrWhiteSpace(NewPackageName)) { ErrorMessage = "Give the package a name."; return; }
-        if (NewPrice <= 0 || NewDays <= 0) { ErrorMessage = "Price and days must be more than zero."; return; }
-        if (!await Confirm.AskAsync(Editing is null ? $"Add {NewPackageName.Trim()}?" : $"Save changes to {NewPackageName.Trim()}?",
-                $"₱{NewPrice:N2} for {NewDays} days.", Editing is null ? "Add package" : "Save changes")) return;
-        var p = Editing ?? new MembershipPackage();
-        p.Name = NewPackageName.Trim(); p.Description = string.IsNullOrWhiteSpace(NewDescription) ? null : NewDescription.Trim();
-        p.Price = NewPrice; p.DurationDays = NewDays;
-        if (await RunAsync(() => svc.SavePackageAsync(p))) { CancelEdit(); await LoadAsync(); }
-    }
-
-    [RelayCommand]
-    private void EditPackage(MembershipPackage p)
-    { Editing = p; NewPackageName = p.Name; NewDescription = p.Description ?? ""; NewPrice = p.Price; NewDays = p.DurationDays; }
-
-    [RelayCommand]
-    private void CancelEdit()
-    { Editing = null; NewPackageName = ""; NewDescription = ""; NewPrice = 30; NewDays = 30; }
-
-    // delete asks first: DeletePackage picks the row, ConfirmDelete does it
+    // ---------- archive asks first (System admin only, D15) ----------
     [ObservableProperty] private MembershipPackage? deleting;
     [ObservableProperty] private Amenity? deletingAmenity;
 
-    [RelayCommand]
-    private void DeleteAmenity(Amenity a)
-    {
-        if (!CanArchive) { ErrorMessage = "Only a System admin can archive an amenity. Turn it off instead to stop selling it."; return; }
-        DeletingAmenity = a;
-    }
     [RelayCommand] private void KeepAmenity() => DeletingAmenity = null;
+    [RelayCommand] private void KeepPackage() => Deleting = null;
 
     [RelayCommand]
     private async Task ConfirmDeleteAmenityAsync()
     {
         if (DeletingAmenity is not { } a) return;
         DeletingAmenity = null;
-        if (!await RunAsync(() => svc.DeleteAmenityAsync(a))) return;
-        CancelAmenityEdit();
-        await LoadAsync();
+        if (await RunAsync(() => svc.DeleteAmenityAsync(a))) await LoadAsync();
     }
-
-    [RelayCommand]
-    private void DeletePackage(MembershipPackage p)
-    {
-        if (!CanArchive) { ErrorMessage = "Only a System admin can archive a package. Turn it off instead to stop selling it."; return; }
-        Deleting = p;
-    }
-    [RelayCommand] private void KeepPackage() => Deleting = null;
 
     [RelayCommand]
     private async Task ConfirmDeleteAsync()
     {
         if (Deleting is not { } p) return;
         Deleting = null;
-        if (!await RunAsync(() => svc.DeletePackageAsync(p))) return;
-        if (Editing?.Id == p.Id) CancelEdit();
-        await LoadAsync();
+        if (await RunAsync(() => svc.DeletePackageAsync(p))) await LoadAsync();
     }
+}
 
-    [RelayCommand]
-    private async Task TogglePackageAsync(MembershipPackage p)
-    {
-        if (!await (p.IsActive ? Confirm.AskAsync($"Stop selling {p.Name}?", "Members can't buy it until you turn it back on. Anyone who has it keeps it.", "Turn off")
-                               : Confirm.AskAsync($"Sell {p.Name} again?", "Members can buy it again.", "Turn on"))) return;
-        p.IsActive = !p.IsActive; if (await RunAsync(() => svc.SavePackageAsync(p))) await LoadAsync(); else p.IsActive = !p.IsActive; }
-
-    [RelayCommand]
-    private async Task AddAmenityAsync()
-    {
-        if (string.IsNullOrWhiteSpace(NewAmenityName)) { ErrorMessage = "Give the amenity a name."; return; }
-        if (NewAmenityPrice <= 0) { ErrorMessage = "Enter a price above ₱0."; return; }   // D4: ₱0 could never be paid
-        if (!await Confirm.AskAsync(EditingAmenity is null ? $"Add {NewAmenityName.Trim()}?" : $"Save changes to {NewAmenityName.Trim()}?",
-                EditingAmenity?.DurationDays is { } days ? $"Pass: ₱{NewAmenityPrice:N2} for {days} days." : $"₱{NewAmenityPrice:N2} per session.", EditingAmenity is null ? "Add amenity" : "Save changes")) return;
-        var a = EditingAmenity ?? new Amenity();
-        a.Name = NewAmenityName.Trim(); a.Price = NewAmenityPrice;
-        a.Description = string.IsNullOrWhiteSpace(NewAmenityDescription) ? null : NewAmenityDescription.Trim();
-        if (await RunAsync(() => svc.SaveAmenityAsync(a))) { CancelAmenityEdit(); await LoadAsync(); }
-    }
-
-    [RelayCommand]
-    private void EditAmenity(Amenity a)
-    { EditingAmenity = a; NewAmenityName = a.Name; NewAmenityPrice = a.Price; NewAmenityDescription = a.Description ?? ""; }
-
-    [RelayCommand]
-    private void CancelAmenityEdit()
-    { EditingAmenity = null; NewAmenityName = ""; NewAmenityPrice = 200; NewAmenityDescription = ""; }
-
-    [RelayCommand]
-    private async Task UploadAmenityPhotoAsync(Amenity amenity)
-    {
-        if (IsBusy || picker is null) return;
-        IsBusy = true; ErrorMessage = Notice = null;
-        try
-        {
-            if (await picker.PickAsync() is not { } file) return;
-            var result = await svc.SetAmenityPhotoAsync(amenity.Id, file.FileName, file.Data);
-            if (!result.Ok) { ErrorMessage = ErrorText.For(result.Error, result.Message); return; }
-            await LoadAsync();
-            Notice = $"Photo updated for {amenity.Name}.";
-        }
-        catch (Exception ex) { ErrorMessage = ErrorText.For(ErrorMapper.Map(ex), ex.Message); }
-        finally { IsBusy = false; }
-    }
-
-    [RelayCommand]
-    private async Task ToggleAmenityAsync(Amenity a)
-    {
-        if (!await (a.IsActive ? Confirm.AskAsync($"Stop selling {a.Name} passes?", "Members can't buy a pass until you turn it back on. Passes already bought keep working.", "Turn off")
-                               : Confirm.AskAsync($"Sell {a.Name} passes again?", "Members can buy a pass again.", "Turn on"))) return;
-        a.IsActive = !a.IsActive; if (await RunAsync(() => svc.SaveAmenityAsync(a))) await LoadAsync(); else a.IsActive = !a.IsActive; }
+/// <summary>A package or amenity to tick on the new-code form (G3).</summary>
+public partial class ItemChoice(string kind, int id, string name) : ObservableObject
+{
+    public string Kind { get; } = kind; public int Id { get; } = id; public string Name { get; } = name;
+    [ObservableProperty] private bool isChosen;
 }
 
 public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
 {
-    /// <summary>Only the super admin archives codes (D15).</summary>
+    /// <summary>Only the super admin archives and deletes codes (D15).</summary>
     [ObservableProperty] private bool canArchive;
+    /// <summary>Live codes: not archived, not expired. A code turned off for now stays here (G1).</summary>
     public ObservableCollection<DiscountRow> Discounts { get; } = new();
     [ObservableProperty] private string newCode = "";
     [ObservableProperty] private int newPercent = 10;
     [ObservableProperty] private DateTime validUntil = DateTime.Today.AddDays(30);
     [ObservableProperty] private int newLimit = 100;
-    /// <summary>F5: off by default, so a code made for one person stays private.</summary>
-    [ObservableProperty] private bool newShowOnPackages;
+    /// <summary>G4: on by default; off keeps a code private, for one person.</summary>
+    [ObservableProperty] private bool newShowToMembers = true;
+    // G3: what the new code fits
+    [ObservableProperty] private bool allPackages;
+    [ObservableProperty] private bool allAmenities;
+    public ObservableCollection<ItemChoice> PackageChoices { get; } = new();
+    public ObservableCollection<ItemChoice> AmenityChoices { get; } = new();
 
     public override Task OnAppearingAsync() => LoadAsync();
 
@@ -1413,82 +1707,65 @@ public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
     {
         await RunAsync(svc.IsSuperAdminAsync, yes => CanArchive = yes);
         await RunAsync(svc.DiscountsAsync, rows => Fill(Discounts, rows.Where(r => r.Discount.IsActive && r.Discount.ExpiresAt > DateTime.UtcNow)));
+        await RunAsync(svc.AllPackagesAsync, rows => Fill(PackageChoices, rows.Where(p => p.IsActive).Select(p => new ItemChoice("package", p.Id, p.Name))));
+        await RunAsync(svc.AllAmenitiesAsync, rows => Fill(AmenityChoices, rows.Where(a => a.IsActive).Select(a => new ItemChoice("amenity", a.Id, a.Name))));
     }
+
+    /// <summary>What the form says the code fits; "all" wins over single ticks.</summary>
+    public IReadOnlyList<DiscountItem> ChosenItems() =>
+        (AllPackages ? [DiscountItem.Package(null)] : PackageChoices.Where(c => c.IsChosen).Select(c => DiscountItem.Package(c.Id)))
+        .Concat(AllAmenities ? [DiscountItem.Amenity(null)] : AmenityChoices.Where(c => c.IsChosen).Select(c => DiscountItem.Amenity(c.Id))).ToList();
 
     [RelayCommand]
     private async Task AddAsync()
     {
-        Notice = null;
-        // valid through the end of the chosen day, local time
-        var d = new Discount { Code = NewCode, Percent = NewPercent, MaxUses = NewLimit, ExpiresAt = ValidUntil.Date.AddDays(1).ToUniversalTime(), ShowOnPackages = NewShowOnPackages };
-        if (!await RunAsync(() => svc.SaveDiscountAsync(d))) return;
-        Notice = $"Code {d.Code} is live." + (d.ShowOnPackages ? " Members see it on Packages." : "");
-        NewCode = ""; NewShowOnPackages = false;
-        await LoadAsync();
-    }
-
-    [RelayCommand]
-    private async Task ToggleAsync(DiscountRow row)
-    {
-        var d = row.Discount;
-        if (!await (d.IsActive ? Confirm.AskAsync($"Turn off code {d.Code}?", "Members can't use it until you turn it back on.", "Turn off")
-                               : Confirm.AskAsync($"Turn on code {d.Code}?", "Members can use it again.", "Turn on"))) return;
-        d.IsActive = !d.IsActive;
-        if (await RunAsync(() => svc.SaveDiscountAsync(d))) await LoadAsync(); else d.IsActive = !d.IsActive;
-    }
-
-    [ObservableProperty] private DiscountRow? editing;
-    [ObservableProperty] private int editLimit;
-    [ObservableProperty] private DateTime editUntil;
-    [ObservableProperty] private bool editShowOnPackages;
-    int _limitShown;
-
-    [RelayCommand]
-    private void EditCode(DiscountRow row)
-    {
-        if (!row.CanEdit) return;   // F7: the page offers no Edit on a used code; the database refuses it too
-        (Editing, EditLimit, EditUntil, EditShowOnPackages) = (row, row.Discount.MaxUses ?? Math.Max(1, (int)(row.Used + row.Pending)), row.LastDay.ToLocalTime().Date, row.Discount.ShowOnPackages);
-        _limitShown = EditLimit;
         Notice = null; ErrorMessage = null;
-    }
-    [RelayCommand] private void CancelEdit() => Editing = null;
-
-    [RelayCommand]
-    private async Task SaveEditAsync()
-    {
-        if (Editing is not { } row) return;
-        if (EditUntil.Date < DateTime.Today) { ErrorMessage = "Choose today or a later date."; return; }
-        var d = row.Discount;
-        // a field left alone keeps its value: changing only the date must not put a limit on an old unlimited code
-        int? limit = EditLimit == _limitShown ? d.MaxUses : EditLimit;
-        var expires = EditUntil.Date == row.LastDay.ToLocalTime().Date ? d.ExpiresAt : EditUntil.Date.AddDays(1).ToUniversalTime();
-        var summary = $"{(limit is { } uses ? $"Up to {uses} uses" : "No limit on uses")}, until {EditUntil:d MMM yyyy}. "
-            + (EditShowOnPackages ? "Shown on Packages." : "Not shown on Packages.");
-        if (!await Confirm.AskAsync($"Save changes to {d.Code}?", summary, "Save changes")) return;
-        var (oldLimit, oldExpires, oldShown) = (d.MaxUses, d.ExpiresAt, d.ShowOnPackages);
-        (d.MaxUses, d.ExpiresAt, d.ShowOnPackages) = (limit, expires, EditShowOnPackages);
-        if (!await RunAsync(() => svc.SaveDiscountAsync(d))) { (d.MaxUses, d.ExpiresAt, d.ShowOnPackages) = (oldLimit, oldExpires, oldShown); return; }
-        Editing = null;
-        Notice = $"Code {d.Code} saved. {summary}";
+        var items = ChosenItems();
+        if (items.Count == 0) { ErrorMessage = ErrorText.For(AppErrorKind.Validation, "no_items"); return; }
+        // valid through the end of the chosen day, local time
+        var d = new Discount { Code = NewCode.Trim().ToUpperInvariant(), Percent = NewPercent, MaxUses = NewLimit, ExpiresAt = ValidUntil.Date.AddDays(1).ToUniversalTime(), ShowOnPackages = NewShowToMembers };
+        var fits = DiscountFits.Text(AllPackages, PackageChoices.Where(c => c.IsChosen).Select(c => c.Id), AllAmenities, AmenityChoices.Where(c => c.IsChosen).Select(c => c.Id),
+            PackageChoices.ToDictionary(c => c.Id, c => c.Name), AmenityChoices.ToDictionary(c => c.Id, c => c.Name));
+        // G2: nothing can change afterwards, so the terms are read back before the code goes live
+        if (!await Confirm.AskAsync($"Add code {d.Code}?",
+                $"{d.Percent}% off, up to {d.MaxUses} uses, until {ValidUntil:d MMM yyyy}.\nFor: {fits}.\n"
+                + (d.ShowOnPackages ? "Members see it." : "Hidden from members.") + "\nA code can't be changed after it's added.", "Add code")) return;
+        if (!await RunAsync(() => svc.CreateDiscountAsync(d, items), _ => { })) return;
+        Notice = $"Code {d.Code} is live." + (d.ShowOnPackages ? " Members can see it." : "");
+        NewCode = ""; NewShowToMembers = true; AllPackages = AllAmenities = false;
         await LoadAsync();
     }
 
-    [ObservableProperty] private DiscountRow? deleting;
+    /// <summary>The Actions menu for one code, as on Users and roles: only what's allowed for it (G1).</summary>
+    public IReadOnlyList<string> ActionsFor(DiscountRow row) =>
+        new[] { row.Discount.Paused ? "Turn on" : "Turn off", CanArchive ? "Archive" : null, CanArchive && row.CanDelete ? "Delete" : null }.OfType<string>().ToList();
 
     [RelayCommand]
-    private void Delete(DiscountRow row)
+    private async Task RunActionAsync((DiscountRow Row, string Action) pick)
     {
-        if (!CanArchive) { ErrorMessage = "Only a System admin can archive a code. Turn it off instead."; return; }
-        Deleting = row;
-    }
-    [RelayCommand] private void Keep() => Deleting = null;
-
-    [RelayCommand]
-    private async Task ConfirmDeleteAsync()
-    {
-        if (Deleting is not { } row) return;
-        Deleting = null;
-        if (await RunAsync(() => svc.DeleteDiscountAsync(row.Discount))) await LoadAsync();
+        var (row, action) = pick; var d = row.Discount;
+        Notice = null; ErrorMessage = null;
+        switch (action)
+        {
+            case "Turn off":
+                if (!await Confirm.AskAsync($"Turn off code {d.Code}?", "Nobody can use it, and members don't see it, until you turn it back on.", "Turn off")) return;
+                if (!await RunAsync(() => svc.SetDiscountPausedAsync(d, true))) return;
+                Notice = $"Code {d.Code} is off."; break;
+            case "Turn on":
+                if (!await Confirm.AskAsync($"Turn on code {d.Code}?", "It can be used again, and members see it if it's shown to them.", "Turn on")) return;
+                if (!await RunAsync(() => svc.SetDiscountPausedAsync(d, false))) return;
+                Notice = $"Code {d.Code} is on."; break;
+            case "Archive":
+                if (!await Confirm.AskAsync($"Archive code {d.Code}?", "It stops working and moves to the Archive. Payments made with it keep it.", "Archive")) return;
+                if (!await RunAsync(() => svc.ArchiveDiscountAsync(d))) return;
+                Notice = $"Code {d.Code} is archived."; break;
+            case "Delete":
+                if (!await Confirm.AskAsync($"Delete code {d.Code}?", "No payment has used it. It's removed for good.", "Delete")) return;
+                if (!await RunAsync(() => svc.DeleteDiscountAsync(d))) return;
+                Notice = $"Code {d.Code} is deleted."; break;
+            default: return;
+        }
+        await LoadAsync();
     }
 }
 
@@ -1646,16 +1923,17 @@ public partial class GymSettingsViewModel(IAdminService svc, IProofPicker picker
     [ObservableProperty] private TimeSpan opensAt = TimeSpan.FromHours(6);
     [ObservableProperty] private TimeSpan closesAt = TimeSpan.FromHours(22);
     [ObservableProperty] private decimal openingFloat = 5000;   // F2: what each cashier's drawer starts with
+    [ObservableProperty] private int downPaymentPercent = 50;   // G13 (0064): of an amenity booking, paid to reserve it
     [ObservableProperty] private string qrStatus = "No QR uploaded yet. Members can't pay until you add one.";
     GymSettings? _loaded;
     (string FileName, byte[] Data)? _newQr;
 
-    public override Task OnAppearingAsync() => LoadAsync();
+    public override async Task OnAppearingAsync() { await LoadAsync(); await LoadClosuresAsync(); }
 
     [RelayCommand]
     private Task LoadAsync() => RunAsync(svc.GymSettingsAsync, g =>
     {
-        _loaded = g; GymName = g.GymName; QrAccountName = g.QrAccountName; WalkInPrice = g.WalkInPrice; OpensAt = g.OpensAt; ClosesAt = g.ClosesAt; OpeningFloat = g.OpeningFloat;
+        _loaded = g; GymName = g.GymName; QrAccountName = g.QrAccountName; WalkInPrice = g.WalkInPrice; OpensAt = g.OpensAt; ClosesAt = g.ClosesAt; OpeningFloat = g.OpeningFloat; DownPaymentPercent = g.DownPaymentPercent;
         QrStatus = string.IsNullOrWhiteSpace(g.QrImagePath) ? "No QR uploaded yet. Members can't pay until you add one." : "A payment QR is set. Choose a new image to replace it.";
     });
 
@@ -1675,12 +1953,57 @@ public partial class GymSettingsViewModel(IAdminService svc, IProofPicker picker
         var qr = _newQr is null ? "" : "\nThe payment QR members scan will change.";
         if (!await Confirm.AskAsync("Save gym settings?", $"Open {DateTime.Today.Add(OpensAt):h:mm tt} to {DateTime.Today.Add(ClosesAt):h:mm tt} every day.{qr}", "Save settings")) return;
         _loaded.GymName = GymName.Trim(); _loaded.QrAccountName = string.IsNullOrWhiteSpace(QrAccountName) ? null : QrAccountName.Trim(); _loaded.WalkInPrice = WalkInPrice;
-        _loaded.OpensAt = OpensAt; _loaded.ClosesAt = ClosesAt; _loaded.OpeningFloat = OpeningFloat;
+        _loaded.OpensAt = OpensAt; _loaded.ClosesAt = ClosesAt; _loaded.OpeningFloat = OpeningFloat; _loaded.DownPaymentPercent = DownPaymentPercent;
         if (!await RunAsync(() => svc.SaveGymSettingsAsync(_loaded, _newQr))) return;
         _newQr = null;
         Notice = "Saved.";
         await LoadAsync();
     }
+
+    // ---- G16-G18 (0065): closed days. Whole Manila days, today or later, with a reason; reopening is allowed up to the day itself. ----
+    static DateOnly ManilaToday => DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8));
+    public ObservableCollection<GymClosureRow> Closures { get; } = new();
+    public bool HasClosures => Closures.Count > 0;
+    public DateTime MinClosedDay => ManilaToday.ToDateTime(TimeOnly.MinValue);
+    [ObservableProperty] private DateTime closedDay = DateTime.Today.AddDays(1);
+    [ObservableProperty] private string closedReason = "";
+
+    async Task LoadClosuresAsync()
+    {
+        await RunAsync(svc.ClosuresAsync, rows => Fill(Closures, rows.Select(c => new GymClosureRow(c.Day, c.Reason, c.Day >= ManilaToday))));
+        OnPropertyChanged(nameof(HasClosures));
+    }
+
+    [RelayCommand]
+    private async Task CloseDayAsync()
+    {
+        Notice = null; ErrorMessage = null;
+        var day = DateOnly.FromDateTime(ClosedDay);
+        if (string.IsNullOrWhiteSpace(ClosedReason)) { ErrorMessage = "Type why the gym is closed, for example Holiday."; return; }
+        ClosurePreview? preview = null;
+        if (!await RunAsync(() => svc.ClosurePreviewAsync(day), p => preview = p)) return;
+        var when = day.ToString("dddd, d MMM", CultureInfo.InvariantCulture);
+        if (!await Confirm.AskAsync($"Close the gym on {when}?", $"{preview!.Text}\nEveryone is told: \"The gym is closed on {when}: {ClosedReason.Trim().TrimEnd('.')}.\"", "Close the gym")) return;
+        if (!await RunAsync(() => svc.CloseDayAsync(day, ClosedReason))) return;
+        Notice = $"Closed on {when}. Everyone has been told."; ClosedReason = "";
+        await LoadClosuresAsync();
+    }
+
+    [RelayCommand]
+    private async Task ReopenAsync(GymClosureRow row)
+    {
+        Notice = null;
+        if (!await Confirm.AskAsync($"Open the gym again on {row.DayText}?", "Everyone is told. Bookings, sessions and shifts that were cancelled stay cancelled.", "Open again")) return;
+        if (!await RunAsync(() => svc.ReopenDayAsync(row.Day))) return;
+        Notice = $"Open again on {row.DayText}.";
+        await LoadClosuresAsync();
+    }
+}
+
+/// <summary>A closed day on Gym settings; past ones stay as history and can't be reopened.</summary>
+public sealed record GymClosureRow(DateOnly Day, string Reason, bool CanReopen)
+{
+    public string DayText => Day.ToString("ddd d MMM yyyy", CultureInfo.InvariantCulture);
 }
 
 public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive = null) : LoadableViewModel
@@ -1770,8 +2093,36 @@ public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive
 public sealed record StatusChoice(string Value, string Label);
 
 /// <summary>Front desk and admin: mark an amenity available, in use or unavailable, and see who was alerted.</summary>
-public partial class AmenityStatusViewModel(IAmenityService svc) : LoadableViewModel
+public partial class AmenityStatusViewModel(IAmenityService svc, IReservationService? reservations = null) : LoadableViewModel
 {
+    // ---- G13 (0064): today's confirmed bookings with a balance; the desk takes it once, cash into the drawer or GCash with a reference ----
+    public ObservableCollection<BalanceRow> Balances { get; } = new();
+    public bool HasBalances => Balances.Count > 0;
+    [ObservableProperty] private string balanceReference = "";
+
+    public async Task LoadBalancesAsync(DateOnly manilaDay)
+    {
+        if (reservations is null) return;
+        if (await reservations.BalancesAsync(manilaDay) is { Ok: true, Value: { } rows }) Fill(Balances, rows);
+        OnPropertyChanged(nameof(HasBalances));
+    }
+    static DateOnly ManilaToday => DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8));
+
+    [RelayCommand] private Task TakeBalance(BalanceRow row) => TakeAsync(row, PayMethod.Cash);
+    [RelayCommand] private Task TakeBalanceGcash(BalanceRow row) => TakeAsync(row, PayMethod.Gcash);
+
+    async Task TakeAsync(BalanceRow row, string method)
+    {
+        if (reservations is null) return;
+        Notice = null;
+        if (method == PayMethod.Gcash && string.IsNullOrWhiteSpace(BalanceReference)) { ErrorMessage = "Type the GCash reference first."; return; }
+        if (!await Confirm.AskAsync($"Take {row.Member}'s balance?", $"{row.BalanceText} for {row.Amenity}, {row.When}, {(method == PayMethod.Cash ? "in cash into your drawer" : "by GCash")}.", "Take balance")) return;
+        if (!await RunAsync(() => reservations.TakeBalanceAsync(row.Booking.Id, method, method == PayMethod.Gcash ? BalanceReference : null), _ => { })) return;
+        BalanceReference = "";
+        Notice = $"{row.Member}'s balance is paid.";
+        Balances.Remove(row); OnPropertyChanged(nameof(HasBalances));
+    }
+
     public ObservableCollection<AmenityCard> Cards { get; } = new();
     public StatusChoice[] Choices { get; } = [new("available", "Available"), new("in_use", "In use"), new("unavailable", "Unavailable")];
 
@@ -1787,7 +2138,12 @@ public partial class AmenityStatusViewModel(IAmenityService svc) : LoadableViewM
 
     public override Task OnAppearingAsync() => LoadAsync();
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.BoardAsync, board => Fill(Cards, board.Cards));
+    [RelayCommand]
+    private async Task LoadAsync()
+    {
+        await RunAsync(svc.BoardAsync, board => Fill(Cards, board.Cards));
+        await LoadBalancesAsync(ManilaToday);
+    }
 
     // Quiet and in place: the error line, the notice and the open form stay as they are, and only cards that changed are swapped.
     public override async Task AutoRefreshAsync()
