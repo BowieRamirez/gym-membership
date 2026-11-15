@@ -71,7 +71,7 @@ public sealed partial class DemoGateway
                 RequireActive();
                 var uid = Uid;
                 var rows = new List<ChatThread>();
-                var pairs = All<CoachHire>().Select(h => (h.CoachId, h.MemberId)).Union(All<ChatMessage>().Select(m => (m.CoachId, m.MemberId)))
+                var pairs = All<CoachHire>().Where(h => h.Status is Status.Active or Status.Ended).Select(h => (h.CoachId, h.MemberId)).Union(All<ChatMessage>().Select(m => (m.CoachId, m.MemberId)))
                     .Where(p => p.CoachId == uid || p.MemberId == uid).ToList();
                 foreach (var (coachId, memberId) in pairs)
                 {

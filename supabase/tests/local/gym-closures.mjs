@@ -77,7 +77,7 @@ try {
   await test('nothing can be set up on a closed day: bookings, shifts, session requests and proposals', async () => {
     const m = await member(), c = await user('coach');
     await db.query('insert into coach_visits(coach_id,checked_in_by) values($1,$1)', [c]);
-    await as(m, 'select hire_coach($1)', [c]);
+    await as(c, 'select answer_hire($1,true)', [(await as(m, 'select hire_coach($1) id', [c]))[0].id]);   // G30 (0074): the coach accepts
     await as(c, 'insert into shift_posts(coach_id,starts_at,ends_at) values($1,$2,$3)', [c, at('06:00', next), at('22:00', next)]);
     const asked = (await as(m, 'select request_session($1,$2,$3,null,null) id', [c, at('10:00', next), at('11:00', next)]))[0].id;
     await close(admin, day);

@@ -924,10 +924,34 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (!ActiveMember(uid)) throw Err("no_active_membership");
                 var coachId = S("p_coach_id");
                 if (!All<Coach>().Any(c => c.UserId == coachId && c.IsAvailable) || !(All<Profile>().FirstOrDefault(p => p.Id == coachId)?.IsActive ?? false)) throw Err("not_found");
-                if (CoachesMember(coachId, uid)) throw Err("duplicate key value violates unique constraint");
-                var hire = Add(new CoachHire { MemberId = uid, CoachId = coachId, Status = Status.Active, HiredAt = now });
-                Notify(coachId, "system", "New trainee", All<Profile>().First(p => p.Id == uid).FullName);
+                // G30 (0074): a request the coach answers; one open (pending or active) per member and coach
+                if (All<CoachHire>().Any(h => h.MemberId == uid && h.CoachId == coachId && h.Status is Status.Pending or Status.Active)) throw Err("hire_already_requested");
+                var hire = Add(new CoachHire { MemberId = uid, CoachId = coachId, Status = Status.Pending, HiredAt = now });
+                Notify(coachId, "system", "New hire request", All<Profile>().First(p => p.Id == uid).FullName);
                 return hire.Id;
+            }
+            case "answer_hire":
+            {
+                RequireActive();
+                var h = All<CoachHire>().FirstOrDefault(x => x.Id == I("p_hire_id") && x.CoachId == uid) ?? throw Err("not_found");
+                if (h.Status != Status.Pending) throw Err("already_processed");
+                var coachName = All<Profile>().First(p => p.Id == uid).FullName;
+                if (B("p_accept"))
+                {
+                    if (!ActiveMember(h.MemberId)) throw Err("no_active_membership");
+                    h.Status = Status.Active; h.HiredAt = now;
+                    Notify(h.MemberId, "system", "Hire accepted", coachName);
+                }
+                else { h.Status = "declined"; h.EndedAt = now; Notify(h.MemberId, "system", "Hire declined", coachName); }
+                return null;
+            }
+            case "cancel_hire_request":
+            {
+                RequireActive();
+                var h = All<CoachHire>().FirstOrDefault(x => x.Id == I("p_hire_id") && x.MemberId == uid) ?? throw Err("not_found");
+                if (h.Status != Status.Pending) throw Err("already_processed");
+                h.Status = Status.Cancelled; h.EndedAt = now;
+                return null;
             }
             // 0032: the coach themselves, or check_ins:record for any coach; twice in a row is harmless
             case "coach_check_in" or "coach_check_out":
@@ -1239,7 +1263,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (profile.DeletedAt is not null) throw Err("account_archived");
                 if (!B("p_active") && RolesOf(profile.Id).Contains("admin")) throw Err("super_admin_protected");   // 0037
                 if (!B("p_active")) CheckAccountRemoval(profile);
-                if (!B("p_active")) StampArchive("account", profile.Id, "Deactivated account");
+                if (!B("p_active")) { StampArchive("account", profile.Id, "Deactivated account"); CancelHireRequestsOf(profile.Id); }
                 else _archiveMetadata.Remove(("account", profile.Id));   // deleted accounts were turned away above; only a restore brings those back
                 profile.IsActive = B("p_active");
                 Audit(B("p_active") ? "user.activate" : "user.deactivate", "profiles", S("p_user"));

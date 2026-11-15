@@ -37,10 +37,10 @@ try {
     assert.deepEqual(await taken(ben), []);
   });
   await test('once hired, every member sees the coach listed, and another member can still hire them', async () => {
-    await as(ana, 'select hire_coach($1)', [coach]);
+    await as(coach, 'select answer_hire($1,true)', [(await as(ana, 'select hire_coach($1) id', [coach]))[0].id]);   // G30 (0074): the coach accepts
     assert.deepEqual(await taken(ben), [coach]);
     assert.deepEqual(await taken(ana), [coach]);
-    await as(ben, 'select hire_coach($1)', [coach]);
+    await as(coach, 'select answer_hire($1,true)', [(await as(ben, 'select hire_coach($1) id', [coach]))[0].id]);
     assert.deepEqual(await taken(ben), [coach]);   // listed once
   });
   await test('when every hire ends the coach is no longer listed', async () => {

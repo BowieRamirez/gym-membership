@@ -243,8 +243,9 @@ await db.query('insert into coach_visits(coach_id,checked_in_by) values($1,$1)',
 let hire;
 await test('an active member hires a coach; a guest cannot', async () => {
   hire = (await run(alex, `select hire_coach($1) id`, [coach])).rows[0].id;
+  await run(coach, `select answer_hire($1,true)`, [hire]);   // G30 (0074): the coach accepts
   assert.match(await code(run(bea, `select hire_coach($1)`, [coach])), /no_active_membership/);
-  assert.match(await code(run(alex, `select hire_coach($1)`, [coach])), /23505/);
+  assert.match(await code(run(alex, `select hire_coach($1)`, [coach])), /hire_already_requested/);
 });
 await test('the coach sees the trainee and the trainee sees the coach, nobody else does', async () => {
   assert.equal((await run(coach, `select * from coach_hires`)).rowCount, 1);
@@ -276,7 +277,7 @@ await test('a member requests a time; the coach approves and a session is create
 });
 const overlapCoach = await user('overlap-coach@t.io', 'coach', 'Coach Other');
 await db.query('insert into coach_visits(coach_id,checked_in_by) values($1,$1)', [overlapCoach]);
-await run(alex, 'select hire_coach($1)', [overlapCoach]);
+await run(overlapCoach, 'select answer_hire($1,true)', [(await run(alex, 'select hire_coach($1) id', [overlapCoach])).rows[0].id]);   // G30 (0074): the coach accepts
 await test('overlapping sessions are refused', async () => {
   const r2 = (await run(alex, `select request_time($1,$2,$3) id`, [overlapCoach, new Date(t0.getTime() + 18e5), t2])).rows[0].id;
   assert.match(await code(run(overlapCoach, `select respond_time_request($1,true)`, [r2])), /23P01/);

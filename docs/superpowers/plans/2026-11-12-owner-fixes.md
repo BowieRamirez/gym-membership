@@ -125,6 +125,7 @@ Recommendations are proposals, not approved requirements. Record the answer and 
 | 13 | Coaches page lists every active coach (G27) | – | G27 | DONE (app only, ships with v0.6.0) |
 | 14 | Hired tag on coaches (G28) | – | G28 | DEPLOYED (0071 live) |
 | 15 | Hire any coach at any time, shifts visible (G29) | – | G29 | DEPLOYED (0072 live) |
+| 16 | Hire requests: the coach accepts or declines (G30) | – | G30 | IN PROGRESS |
 | 11 | Terms and Policy checkbox at sign-up | 14 | G24, G25 | DEPLOYED (0069 live, 5932691) |
 
 ### Phase 1: cashier shift-in bug and account names (items 1, 3)
@@ -252,6 +253,42 @@ box stays tappable (44 px); (5) the terms screen scrolls to the end on a small p
   sheet, phone full page); Windows 1100 light / 1600 dark, Pixel 7 light/dark and font 1.3.
 - [x] **Task 5, finish (2026-11-15):** both builds pass; ponytail-review (1 line cut); committed 5932691. Dry run listed only 0069; pushed on the owner's word knowing v0.5.0 sign-ups are now refused until v0.6.0; anon gets PGRST202 on both functions and 42501 on profiles. Three UI scripts not rerun (register page only). Was: Dry run, push `0069`, live grants (anon refused on both functions, columns not readable by anon); three UI
   scripts; both builds; `ponytail-review`; commit; plan updated.
+
+### Phase 12: Hire requests, the coach accepts or declines (G30)
+Spec: `docs/superpowers/specs/2026-11-15-hire-requests-design.md` (approved 2026-11-15). Migrations `0073_hire_request_statuses.sql`
+(enum values only) and `0074_hire_requests.sql`. Executed inline, like the phases before it.
+
+**Names:** statuses `pending`, `declined` added to `coach_hire_status`. DB functions `hire_coach(p_coach_id uuid) returns bigint`
+(now inserts `pending`; refuses `hire_already_requested`), `answer_hire(p_hire_id bigint, p_accept boolean) returns void`
+(refuses `not_found`, `already_processed`, `no_active_membership`), `cancel_hire_request(p_hire_id bigint) returns void`
+(refuses `not_found`, `already_processed`). Notifications: coach "New hire request", member "Hire accepted" / "Hire declined"
+(kind `system`, body the other person's full name). Core: `ICoachService.HireAsync` unchanged (sends the request);
+new `AnswerHireAsync(int hireId, bool accept)`, `CancelHireRequestAsync(int hireId)`, `HireRequestsAsync()` returning
+`IReadOnlyList<HireRequestRow>`; `record HireRequestRow(int HireId, string MemberId, string Name, string? PhotoUrl, DateTime AskedAt)`.
+`CoachCard` gains `int? RequestId` and `bool Requested => RequestId is not null`; `CanHire => !Closed && !Requested`;
+`HireBadge` is "requested" while pending. Error sentences: `hire_already_requested` "You have already asked this coach. Wait for
+them to answer, or cancel the request." Confirm on Hire: "Send a hire request to {name}? They will accept or decline it."
+
+**Review focus:** (1) a pending request never unlocks messages, sessions or time requests; (2) accept when the member's
+membership has lapsed is refused; (3) two answers to one request (double tap, two devices) give one result; (4) archiving
+either account cancels open requests; (5) an old installed app calling `hire_coach` gets a request, not a hire, and still works.
+
+- [ ] **Task 1, database.** Test first `supabase/tests/local/hire-requests.mjs` (in `npm test`): hire makes `pending`, coach
+  notified; pending unlocks nothing (`coaches_member` false, `request_time` refused); a second request to the same coach refused
+  `already_requested`, to another coach allowed; only that coach answers, only once; accept sets `active` and the member is
+  notified; accept refused `no_active_membership` when the term ended; decline sets `declined`; member cancels own pending only;
+  after decline/cancel the member may ask again; archiving cancels open requests; anon refused on the new functions (D16).
+  Older tests that hire through `hire_coach` then use coach features have their coach accept first (helper `accept(coach, hireId)`).
+- [ ] **Task 2, Core and demo.** xUnit first (`HireRequestTests`): Hire leaves the card `Requested` with badge "requested" and
+  no messaging; cancel returns to Hire; the coach sees the request, accepts, the member's card shows "hired" and the trainee
+  appears in `TraineesAsync`; decline returns the member's card to Hire. Demo mirrors every rule; demo seed adds one pending
+  request (Carlo to Lena) for the screens. Wording through `impeccable clarify`.
+- [ ] **Task 3, screens.** `impeccable shape`, mockup `docs/mockups/hire-requests.html` (member card states; coach Sessions page
+  with Hire requests and Your members; Windows and phone) for the owner's approval **before** the screens change. Then: members
+  list moves from My shifts to the coach's Sessions page; Hire requests section with Accept / Decline; member card Requested
+  state with Cancel request. Windows 1600 dark / 1100 light; Pixel 7 when an emulator is available.
+- [ ] **Task 4, finish.** Full DB suite and xUnit; dry run, push 0073 then 0074, live grants (anon refused on `answer_hire`,
+  `cancel_hire_request`); both builds; `ponytail-review`; commit; plan and memory updated.
 
 ## How to check (demo mode)
 - Real config `src/GymMembership.App/Resources/Raw/supabase.json` must be moved out of the project before a demo build and put back right after (never commit it, never leave a `.bak` in the repo). Android demo builds also need `--no-incremental`; to see a demo APK on the emulator build it with `-p:EmbedAssembliesIntoApk=true`; afterwards build the real app with `--no-incremental` so `supabase.json` is packed again.

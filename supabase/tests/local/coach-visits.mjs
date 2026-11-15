@@ -98,7 +98,7 @@ try {
     const pay = (await as(member, 'select * from extend_membership($1,null)', [pack]))[0];
     await as(desk, 'select verify_payment($1,true)', [pay.payment_id]);
     assert.equal((await open(coach)).length, 0);
-    await as(member, 'select hire_coach($1)', [coach]);   // owner, 2026-11-15: the deal is between member and coach, any time
+    await as(coach, 'select answer_hire($1,true)', [(await as(member, 'select hire_coach($1) id', [coach]))[0].id]);   // any time (G29); the coach accepts (G30)
     await db.query('insert into coach_visits(coach_id,checked_in_by) values($1,$1)', [coach]);
     await db.query('update coach_visits set checked_out_at=now() where coach_id=$1 and checked_out_at is null', [coach]);
     assert.equal((await as(member, `select status from coach_hires where coach_id=$1`, [coach]))[0].status, 'active');

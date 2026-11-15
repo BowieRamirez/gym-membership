@@ -120,6 +120,7 @@ public class CoachOneMemberTests
         Assert.False(kai.Taken); Assert.Null(kai.HireBadge); Assert.True(kai.CanHire);
 
         Assert.True((await svc.HireAsync(lena.Coach.UserId)).Ok);   // many members per coach
+        await HireRequestTests.Accept(gw, "coach@demo.io", "phase7@demo.io", "secret12");   // G30: the coach accepts
         var mine = (await svc.ListCoachesAsync()).Value!.Single(c => c.Name == "Lena Cruz");
         Assert.True(mine.Hired); Assert.False(mine.Taken);
 

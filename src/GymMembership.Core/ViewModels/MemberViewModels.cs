@@ -426,8 +426,16 @@ public partial class CoachesViewModel(ICoachService svc, IChatService messages, 
     [RelayCommand]
     private async Task HireAsync(CoachCard card)
     {
-        if (!await Confirm.AskAsync($"Hire {card.Name}?", "They become your coach. You can message them and book sessions together.", "Hire coach")) return;
+        // G30 (0074): a request; messaging and sessions open once the coach accepts
+        if (!await Confirm.AskAsync($"Send a hire request to {card.Name}?", "They will accept or decline it. Once they accept, you can message them and book sessions together.", "Send request")) return;
         if (await RunAsync(() => svc.HireAsync(card.Coach.UserId))) await LoadAsync();
+    }
+
+    [RelayCommand]
+    private async Task CancelRequestAsync(CoachCard card)
+    {
+        if (card.RequestId is not { } id || !await Confirm.AskAsync($"Cancel your request to {card.Name}?", "You can ask again later.", "Cancel request")) return;
+        if (await RunAsync(() => svc.CancelHireRequestAsync(id))) await LoadAsync();
     }
 
     [RelayCommand]
