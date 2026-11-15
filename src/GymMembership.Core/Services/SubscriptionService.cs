@@ -30,8 +30,20 @@ public sealed record TermCard(MembershipTerm Term, string State, bool Activated,
         : CanRequestRefund ? (Activated ? "You have checked in during this term. You can ask for a refund, and staff review each request." : "You haven't used this term yet. You can cancel it for a full refund.")
         : State == Status.Expired ? "This term has ended." : "No verified payment available for a refund.";
 }
-public sealed record RefundCard(RefundRequest Request, string Member, string PackageName, string Dates, int LaterTerms = 0)
+public sealed record RefundCard(RefundRequest Request, string Member, string PackageName, string Dates, int LaterTerms = 0, string Period = "")
 {
+    /// <summary>The table's Status column: what is left to do, in two words (State has the full sentence for the side panel).</summary>
+    public string Status => Request.Status switch
+    {
+        "pending" when Request.IsBooking => "Front desk",
+        "pending" => "To review",
+        "approved" => "To repay",
+        "rejected" => "Rejected",
+        "paid" => "Repaid",
+        _ => Request.Status
+    };
+    public string ActionText => CanDecide ? "Review" : CanRepay ? "Repay" : "View";
+    public bool NeedsAction => CanDecide || CanRepay;
     /// <summary>A term the member has used is only asked for until staff decide, so it must not read as a refund already owed.</summary>
     public string AmountLabel => Request.WasActivated == true ? "Refund requested" : "Full refund";
     public string ReviewText => Request.Kind switch
@@ -104,6 +116,9 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
         return gw.RpcAsync<Payment>("extend_membership",args);
     });
 
+    // "17 Oct – 16 Nov 2026"; the year shows twice only when the term crosses one
+    static string ShortPeriod(DateTime from, DateTime to) => from.Year == to.Year ? $"{from:d MMM} – {to:d MMM yyyy}" : $"{from:d MMM yyyy} – {to:d MMM yyyy}";
+
     public Task<AppResult<IReadOnlyList<RefundCard>>> RefundsAsync() => Safe.RunAsync<IReadOnlyList<RefundCard>>(async () =>
     {
         var requests = await gw.ListAsync<RefundRequest>();
@@ -115,11 +130,12 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
         {
             if (r.IsBooking && bookings.GetValueOrDefault(r.ReservationId ?? 0) is { } b)   // F13: a booking refund names the amenity and the booked time
                 return new RefundCard(r, names.GetValueOrDefault(r.MemberId, "Member"), $"{amenities.GetValueOrDefault(b.AmenityId, "Amenity")} booking",
-                    $"{b.StartsAt.ToUniversalTime().AddHours(8):d MMM yyyy, h:mm tt} – {b.EndsAt.ToUniversalTime().AddHours(8):h:mm tt} (Manila)");
+                    $"{b.StartsAt.ToUniversalTime().AddHours(8):d MMM yyyy, h:mm tt} – {b.EndsAt.ToUniversalTime().AddHours(8):h:mm tt} (Manila)",
+                    Period: $"{b.StartsAt.ToUniversalTime().AddHours(8):d MMM, h:mm tt}");
             var term = terms.FirstOrDefault(t => t.Id == r.TermId);
             var dates = term is null ? "" : $"{term.StartsAt.AddHours(8):d MMM yyyy, h:mm tt} – {term.EndsAt.AddHours(8):d MMM yyyy, h:mm tt} (Manila)";
             var later = term is null ? 0 : terms.Count(t => t.MemberId == r.MemberId && t.CancelledAt is null && t.StartsAt >= term.EndsAt);
-            return new RefundCard(r,names.GetValueOrDefault(r.MemberId,"Member"),term?.PackageName ?? "Membership",dates,later);
+            return new RefundCard(r,names.GetValueOrDefault(r.MemberId,"Member"),term?.PackageName ?? "Membership",dates,later,term is null ? "" : ShortPeriod(term.StartsAt.AddHours(8),term.EndsAt.AddHours(8)));
         }).ToList();
     });
 

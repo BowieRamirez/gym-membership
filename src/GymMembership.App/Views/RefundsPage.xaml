@@ -6,46 +6,133 @@
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.RefundsPage" x:DataType="vm:RefundsViewModel" Title="Refunds &amp; voids">
-    <!-- D30: Cancellations &amp; refunds and Void a payment are one page with the switch; the void half is VoidPaymentsPage's content (BasePage.HostPart) -->
+    <!-- D30: Cancellations &amp; refunds and Void a payment are one page with the switch; the void half is VoidPaymentsPage's content (BasePage.HostPart).
+         2026-11-15 (owner): refunds are a table like Void a payment, the open request in the side panel; no more cards. -->
+
+    <v:BasePage.Resources>
+        <!-- what is left to do reads heavier than what is finished -->
+        <Style x:Key="RefundStatus" TargetType="Label" BasedOn="{StaticResource Muted}" x:DataType="svc:RefundCard">
+            <Setter Property="VerticalOptions" Value="Center" />
+            <Style.Triggers>
+                <DataTrigger TargetType="Label" Binding="{Binding NeedsAction}" Value="True">
+                    <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <!-- desktop: one table row per request -->
+        <DataTemplate x:Key="RefundRow" x:DataType="svc:RefundCard">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,*,170,110,24,100,80">
+                    <Label Text="{Binding Member}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="1" Text="{Binding PackageName}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="2" Text="{Binding Period}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                    <Label Grid.Column="3" Text="{Binding Request.Amount, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center" />
+                    <Label Grid.Column="5" Text="{Binding Status}" Style="{StaticResource RefundStatus}" />
+                    <Button Grid.Column="6" Text="{Binding ActionText}" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="End" Clicked="OnOpen" />
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+        <!-- narrow window: the same facts stacked -->
+        <DataTemplate x:Key="RefundCard" x:DataType="svc:RefundCard">
+            <VerticalStackLayout>
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="14,10">
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="{Binding Member}" FontFamily="BarlowSemiBold" />
+                        <Label Text="{Binding PackageName}" />
+                        <Label Style="{StaticResource Caption}">
+                            <Label.Text>
+                                <MultiBinding StringFormat="{}{0} · {1}">
+                                    <Binding Path="Period" />
+                                    <Binding Path="Status" />
+                                </MultiBinding>
+                            </Label.Text>
+                        </Label>
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Column="1" Spacing="6" HorizontalOptions="End">
+                        <Label Text="{Binding Request.Amount, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" HorizontalOptions="End" />
+                        <Button Text="{Binding ActionText}" Style="{StaticResource SmallOutlineButton}" Clicked="OnOpen" />
+                    </VerticalStackLayout>
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+    </v:BasePage.Resources>
+
     <Grid RowDefinitions="Auto,*" MaximumWidthRequest="{StaticResource PageWidth}">
     <c:PartSwitch x:Name="Switch" First="Cancellations &amp; refunds" Second="Void a payment" Margin="16,12,16,0" />
     <ContentView x:Name="Part" Grid.Row="1" IsVisible="{Binding ShowSecond, Source={x:Reference Switch}, x:DataType=c:PartSwitch}" />
-    <ScrollView Grid.Row="1" Padding="16,12" IsVisible="{Binding ShowSecond, Source={x:Reference Switch}, x:DataType=c:PartSwitch, Converter={StaticResource Not}}"><VerticalStackLayout>
-        
-            <VerticalStackLayout Spacing="10" Padding="0,0,0,16">
-                <!-- 9.8: no heading repeating the page title; the rules in two sentences (were five) -->
-                <Label Text="An unused term is owed a full refund; a used one needs your review (guidance, not legal advice), and approving cancels only that term. Amenity bookings are refunded when cancelled 1 hour or more before, or when the front desk approves a claim. The app sends no money: return it yourself, then record the repayment." Style="{StaticResource Muted}" MaximumWidthRequest="760" HorizontalOptions="Start" />
-                <c:Banner Message="{Binding ErrorMessage}" />
-                <c:Banner Kind="notice" Message="{Binding Notice}" />
-            </VerticalStackLayout>
-        
-        <c:CardGrid Columns="{OnIdiom Phone=1, Default=4}" BindableLayout.ItemsSource="{Binding Requests}"><BindableLayout.EmptyView><Label Text="No cancellation or refund requests." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
-        <BindableLayout.ItemTemplate>
-            <DataTemplate x:DataType="svc:RefundCard">
-                <Border Style="{StaticResource Panel}">
-                    <VerticalStackLayout Spacing="8">
-                        <c:CardTitle Text="{Binding Member}" />
-                        <Label Text="{Binding PackageName}" />
-                        <Label Text="{Binding Dates}" Style="{StaticResource Caption}" />
-                        <VerticalStackLayout Spacing="0">
-                            <Label Text="{Binding AmountLabel}" Style="{StaticResource Caption}" />
-                            <Label Text="{Binding Request.Amount, StringFormat='₱{0:N2}'}" Style="{StaticResource PriceNumeral}" />
+    <ScrollView Grid.Row="1" IsVisible="{Binding ShowSecond, Source={x:Reference Switch}, x:DataType=c:PartSwitch, Converter={StaticResource Not}}">
+        <VerticalStackLayout Padding="16,12,16,20" Spacing="12">
+            <!-- 9.8: no heading repeating the page title; the rules in two sentences (were five) -->
+            <Label Text="An unused term is owed a full refund; a used one needs your review (guidance, not legal advice), and approving cancels only that term. Amenity bookings are refunded when cancelled 1 hour or more before, or when the front desk approves a claim. The app sends no money: return it yourself, then record the repayment." Style="{StaticResource Muted}" MaximumWidthRequest="760" HorizontalOptions="Start" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+            <c:SideLayout>
+                <Border Style="{StaticResource TablePanel}">
+                    <VerticalStackLayout>
+                        <VerticalStackLayout x:Name="RefundHead">
+                            <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,*,170,110,24,100,80">
+                                <Label Text="Member" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="1" Text="Item" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="2" Text="Period" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="3" Text="Amount" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                <Label Grid.Column="5" Text="Status" Style="{StaticResource Caption}" />
+                            </Grid>
+                            <BoxView Style="{StaticResource Hairline}" />
                         </VerticalStackLayout>
-                        <Label Text="{Binding Request.Reason, StringFormat='Member reason: {0}'}" />
-                        <Label Text="{Binding ReviewText}" FontFamily="BarlowSemiBold" IsVisible="{Binding ReviewText, Converter={StaticResource HasText}}" />
-                        <Label Text="{Binding LaterTermsWarning}" Style="{StaticResource Caption}" IsVisible="{Binding LaterTermsWarning, Converter={StaticResource HasText}}" />
-                        <Label Text="{Binding State}" Style="{StaticResource Muted}" />
-                        <Label Text="{Binding Request.DecisionReason}" IsVisible="{Binding Request.DecisionReason, Converter={StaticResource IsNotNull}}" />
-                        <VerticalStackLayout Spacing="8" IsVisible="{Binding CanDecide}">
-                            <!-- outline per card (9.8): a queue of requests is not one page-wide main action -->
-                            <Button Text="Approve cancellation / refund" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" Clicked="OnApprove" />
-                            <Button Text="Reject request" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" Clicked="OnReject" />
-                        </VerticalStackLayout>
-                        <Button Text="Record money repaid" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" IsVisible="{Binding CanRepay}" Clicked="OnPaid" />
+                        <c:TableBody BindableLayout.ItemsSource="{Binding Requests}" Header="{x:Reference RefundHead}" WideFrom="1000"
+                                     RowTemplate="{StaticResource RefundRow}" CardTemplate="{StaticResource RefundCard}"
+                                     BindableLayout.ItemTemplate="{StaticResource RefundRow}">
+                            <BindableLayout.EmptyView><Label Text="No cancellation or refund requests." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                        </c:TableBody>
                     </VerticalStackLayout>
                 </Border>
-            </DataTemplate>
-        </BindableLayout.ItemTemplate>
-    </c:CardGrid></VerticalStackLayout></ScrollView>
+
+                <!-- the side panel: the open request with its decision, or how to open one -->
+                <VerticalStackLayout Spacing="12">
+                    <ContentView IsVisible="{Binding Selected, Converter={StaticResource IsNotNull}}">
+                        <ContentView BindingContext="{Binding Selected}">
+                        <Border Style="{StaticResource SidePanel}" x:DataType="svc:RefundCard">
+                            <VerticalStackLayout Spacing="10">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <c:CardTitle Text="{Binding Member}" VerticalOptions="Center" />
+                                    <Button Grid.Column="1" Text="Close" Style="{StaticResource SmallOutlineButton}" Clicked="OnClose" />
+                                </Grid>
+                                <VerticalStackLayout Spacing="2">
+                                    <Label Text="{Binding PackageName}" />
+                                    <Label Text="{Binding Dates}" Style="{StaticResource Caption}" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="0">
+                                    <Label Text="{Binding AmountLabel}" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding Request.Amount, StringFormat='₱{0:N2}'}" Style="{StaticResource KpiValue}" />
+                                </VerticalStackLayout>
+                                <BoxView Style="{StaticResource Hairline}" />
+                                <VerticalStackLayout Spacing="2">
+                                    <Label Text="Member's reason" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding Request.Reason}" />
+                                </VerticalStackLayout>
+                                <Label Text="{Binding ReviewText}" FontFamily="BarlowSemiBold" IsVisible="{Binding ReviewText, Converter={StaticResource HasText}}" />
+                                <Label Text="{Binding LaterTermsWarning}" Style="{StaticResource Caption}" IsVisible="{Binding LaterTermsWarning, Converter={StaticResource HasText}}" />
+                                <Label Text="{Binding State}" Style="{StaticResource Muted}" />
+                                <Label Text="{Binding Request.DecisionReason}" IsVisible="{Binding Request.DecisionReason, Converter={StaticResource IsNotNull}}" />
+                                <VerticalStackLayout Spacing="8" IsVisible="{Binding CanDecide}">
+                                    <Button Text="Approve cancellation / refund" Style="{StaticResource SmallButton}" HorizontalOptions="Start" Clicked="OnApprove" />
+                                    <Button Text="Reject request" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" Clicked="OnReject" />
+                                </VerticalStackLayout>
+                                <Button Text="Record money repaid" Style="{StaticResource SmallButton}" HorizontalOptions="Start" IsVisible="{Binding CanRepay}" Clicked="OnPaid" />
+                            </VerticalStackLayout>
+                        </Border>
+                        </ContentView>
+                    </ContentView>
+                    <Border Style="{StaticResource SidePanel}" IsVisible="{Binding Selected, Converter={StaticResource IsNull}}">
+                        <Label Text="Choose Review or Repay on a request to see the member's reason and decide here." Style="{StaticResource Muted}" />
+                    </Border>
+                </VerticalStackLayout>
+            </c:SideLayout>
+        </VerticalStackLayout>
+    </ScrollView>
     </Grid>
 </v:BasePage>

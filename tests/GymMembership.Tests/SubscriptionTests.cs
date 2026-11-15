@@ -143,6 +143,28 @@ public class SubscriptionTests
         Assert.False(Assert.Single(vm.Requests).CanRepay);
     }
 
+    [Fact]
+    public async Task Refund_table_row_says_what_to_do_and_the_open_request_follows_each_reload()
+    {
+        var (gw, _, svc, monthly, _) = await Setup();
+        var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
+        var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
+        Assert.True((await svc.RequestRefundAsync(term.Id,"Changed plans","change_of_mind")).Ok);
+        await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
+        var vm=new GymMembership.Core.ViewModels.RefundsViewModel(svc);
+        await vm.OnAppearingAsync();
+        var row=Assert.Single(vm.Requests);
+        Assert.Equal(("To review","Review"),(row.Status,row.ActionText));
+        Assert.Matches(@"^\d{1,2} \w{3} – \d{1,2} \w{3} \d{4}$",row.Period);   // short enough for a table column
+        vm.OpenCommand.Execute(row);
+        Assert.Same(row,vm.Selected);
+        await vm.DecideAsync(row,true,"Approve");
+        Assert.Same(Assert.Single(vm.Requests),vm.Selected);   // the panel shows the fresh row, now to repay
+        Assert.Equal(("To repay","Repay"),(vm.Selected!.Status,vm.Selected.ActionText));
+        vm.CloseCommand.Execute(null);
+        Assert.Null(vm.Selected);
+    }
+
     [Theory]
     [InlineData("service_not_provided")] [InlineData("misled")] [InlineData("contract_allows")] [InlineData("illness_or_relocation")] [InlineData("change_of_mind")]
     public async Task A_term_with_a_check_in_goes_to_review_with_a_reason_even_after_24_hours(string category)
