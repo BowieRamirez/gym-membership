@@ -24,7 +24,7 @@
                     <Label Grid.Column="5" Text="{Binding Payment.Amount, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center" />
                     <HorizontalStackLayout Grid.Column="6" Spacing="6" HorizontalOptions="End" VerticalOptions="Center">
                         <Button Text="View screenshot" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding HasProof}" Clicked="OnViewProof" />
-                        <Button Text="{Binding ApproveText}" Style="{StaticResource SmallOutlineButton}" Clicked="OnApprove" />
+                        <Button Text="{Binding ApproveText}" Style="{StaticResource SmallOutlineButton}" Clicked="OnApprove" IsVisible="{Binding CanApprove}" />
                         <Button Text="Reject" Style="{StaticResource SmallOutlineButton}" Clicked="OnReject" />
                     </HorizontalStackLayout>
                 </Grid>
@@ -59,7 +59,7 @@
                     <Label Text="{Binding WaitText}" Style="{StaticResource Caption}" IsVisible="{Binding HasProof, Converter={StaticResource Not}}" />
                     <FlexLayout Wrap="Wrap" Margin="0,4,0,0">
                         <Button Text="View screenshot" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding HasProof}" Clicked="OnViewProof" />
-                        <Button Text="{Binding ApproveText}" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnApprove" />
+                        <Button Text="{Binding ApproveText}" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnApprove" IsVisible="{Binding CanApprove}" />
                         <Button Text="Reject" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnReject" />
                     </FlexLayout>
                 </VerticalStackLayout>

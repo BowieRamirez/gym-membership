@@ -11,7 +11,7 @@ You sign in with your email and password. Keep your password to yourself; anythi
 A package gives you gym access for a set number of days, called a term. A term you buy starts as soon as the payment is verified, or when your current term ends if one is running. If it runs into a term you bought ahead, that term moves back, so you keep every paid day. There are no upgrades, no automatic charges and no credit for unused time when you buy another package.
 
 ## Paying
-You can pay by QR transfer and send the reference and a screenshot in the app, or pay cash or GCash at the front desk. A QR payment must be paid and sent within the time shown in the app, or it expires and the package isn't bought. A payment counts once the front desk has checked it. Discount codes work once per person, only for what each code says.
+You can pay online in the app through Xendit, by GCash, Maya, QR Ph or card, or pay cash or GCash at the front desk. An online payment must be made within the time shown in the app, or it expires and the package isn't bought. An online payment counts as soon as Xendit confirms it; a payment at the front desk counts once the front desk records it. The gym pays Xendit's fee. Discount codes work once per person, only for what each code says.
 
 ## Refunds
 Refunds: only in a term's first 7 days, for the days not used. You ask in the app, under My membership. The amount is the days left on the day staff approve your request, so the sooner it is approved, the more you get back. A term bought ahead can be cancelled for a full refund any time before it starts. If you have checked in during the term, staff review the request and may decline it. The app sends no money: staff pay you back in cash or by GCash and record it.

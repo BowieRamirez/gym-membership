@@ -81,6 +81,17 @@ public class OnlinePaymentTests
     [Fact]
     public void PayMethod_Qr_reads_Online() => Assert.Equal("Online", PayMethod.Name(PayMethod.Qr));
 
+    [Fact]
+    public void Staff_row_for_an_online_payment_has_no_approve()
+    {
+        var online = new PaymentRow(new Payment { Method = PayMethod.Qr }, "Ana Reyes", "Quarterly", HasProof: false);
+        Assert.Equal(("Paying online", "Waiting for the member to pay online", false), (online.ProofText, online.WaitText, online.CanApprove));
+        var oldProof = new PaymentRow(new Payment { Method = PayMethod.Qr, ReferenceNo = "GC-1" }, "Bea", "Monthly", HasProof: true);
+        Assert.Equal(("GC-1", true), (oldProof.ProofText, oldProof.CanApprove));
+        var desk = new PaymentRow(new Payment { Method = PayMethod.Cash }, "Carlo", "Pool", HasProof: false, Booking: "Mon 10:00");
+        Assert.Equal(("Pays at the desk", true), (desk.ProofText, desk.CanApprove));
+    }
+
     // ---------- the screens ----------
     sealed class Opener : IUrlOpener { public string? Opened; public Task OpenAsync(string url) { Opened = url; return Task.CompletedTask; } }
 

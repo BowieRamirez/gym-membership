@@ -421,9 +421,11 @@ public sealed record PaymentRow(Payment Payment, string Payer, string Item, bool
     /// <summary>F12: a "pay at the desk" booking is approved by taking the cash (into the cashier's drawer, 0050).</summary>
     public string ApproveText => PaysAtDesk ? "Take cash" : "Verify";
     bool PaysAtDesk => Booking is not null && Payment.Method == PayMethod.Cash;
-    /// <summary>The reference column: the e-wallet reference, or what is still missing.</summary>
-    public string ProofText => HasProof ? Payment.ReferenceNo ?? "" : PaysAtDesk ? "Pays at the desk" : "No proof yet";
-    public string WaitText => PaysAtDesk ? "Pays at the desk in cash" : "Waiting for the member to pay and send proof";
+    /// <summary>The reference column: a proof sent before the Xendit switch, the desk, or online (Xendit verifies those itself).</summary>
+    public string ProofText => HasProof ? Payment.ReferenceNo ?? "" : PaysAtDesk ? "Pays at the desk" : "Paying online";
+    public string WaitText => PaysAtDesk ? "Pays at the desk in cash" : "Waiting for the member to pay online";
+    /// <summary>X11: the desk approves only a proof sent before the switch, or cash it takes; an online payment verifies itself.</summary>
+    public bool CanApprove => HasProof || PaysAtDesk;
 }
 
 /// <summary>F13: a member's "I didn't use it", next to what the desk checks: their check-ins that day and the amenity's status now.</summary>
