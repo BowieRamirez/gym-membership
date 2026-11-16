@@ -115,7 +115,6 @@ public class OnlinePaymentTests
         public Task<AppResult<Payment>> PayAgainAsync(PaymentItem item) => real.PayAgainAsync(item);
         public Task<AppResult<GymSettings>> GymAsync() => real.GymAsync();
         public Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync() => real.ClosedDaysAsync();
-        public Task<AppResult<string?>> QrUrlAsync() => real.QrUrlAsync();
     }
 
     [Fact]

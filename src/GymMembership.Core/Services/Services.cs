@@ -311,8 +311,6 @@ public interface IMembershipService
     Task<AppResult<GymSettings>> GymAsync();
     /// <summary>G16: closed days from today on, with their reasons.</summary>
     Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync();
-    /// <summary>A link to the gym's payment QR image, or null if the owner has not uploaded one.</summary>
-    Task<AppResult<string?>> QrUrlAsync();
 }
 
 /// <summary>xendit-checkout's answer: the checkout link to open, or Paid.</summary>
@@ -405,12 +403,6 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
 
     public Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync() => Safe.RunAsync(() => GymClosures.ByDayAsync(gw));
     public Task<AppResult<GymSettings>> GymAsync() => Safe.RunAsync(async () => (await gw.ListAsync<GymSettings>()).First());
-
-    public Task<AppResult<string?>> QrUrlAsync() => Safe.RunAsync(async () =>
-    {
-        var path = (await gw.ListAsync<GymSettings>()).FirstOrDefault()?.QrImagePath;
-        return string.IsNullOrWhiteSpace(path) ? null : await gw.SignedUrlAsync("gym-assets", path);
-    });
 }
 
 // ===================== Payment verification and the counter (staff) =====================
