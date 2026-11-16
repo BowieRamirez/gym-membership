@@ -4,7 +4,7 @@
 
 Created: 2026-11-16
 Last updated: 2026-11-16 (plan written, nothing built)
-Status: PLANNED. Next migration `0075`.
+Status: IN PROGRESS (Phases 1-4 done, review fixes 0077 live; Phase 5 waits on the owner's Xendit keys). Next migration `0078`.
 Branch: `xendit-payments-2026-11-16`, new from `main` at `b0166b9` (v0.6.0). Every phase stays on this branch; the owner merges to `main` when the plan is done.
 
 **Goal:** Members pay memberships, renewals, packages and amenity down payments online through Xendit's hosted checkout, and a paid checkout verifies and activates the purchase by itself, replacing the GCash-proof upload.
