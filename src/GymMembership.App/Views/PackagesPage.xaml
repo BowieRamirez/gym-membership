@@ -51,7 +51,7 @@
             <Button Text="How buying a package works" Style="{StaticResource LinkButton}" HorizontalOptions="Start" Margin="-4,-8,0,-8" Clicked="OnToggleRules"
                     IsVisible="{OnIdiom Phone=True, Default=False}" />
             <!-- G23 (2026-11-15): the refund rule is said before anyone pays; the last sentence is RefundRules.Line (RefundLineTests checks it) -->
-            <Label x:Name="Rules" Text="Choose your next package. Pay online on this page by GCash, Maya, QR Ph or card. Once paid, it starts right away, or when your current term ends. No upgrades or automatic charges.&#10;Refunds: only in a term's first 7 days, for the days not used."
+            <Label x:Name="Rules" Text="Choose your next package. Pay online on this page by GCash or QR Ph (scan it with Maya or any bank app). Once paid, it starts right away, or when your current term ends. No upgrades or automatic charges.&#10;Refunds: only in a term's first 7 days, for the days not used."
                    Style="{OnIdiom Phone={StaticResource Caption}, Default={StaticResource Muted}}" MaximumWidthRequest="760" HorizontalOptions="Start" IsVisible="{OnIdiom Phone=False, Default=True}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
@@ -119,7 +119,7 @@
                         <VerticalStackLayout Spacing="6">
                             <Button Text="Pay online" Style="{StaticResource SmallButton}" Command="{Binding PayOnlineCommand}" AutomationId="PayOnline"
                                     IsEnabled="{Binding Checking, Converter={StaticResource Not}}" />
-                            <Label Text="GCash, Maya, QR Ph or card, on Xendit's checkout page. Come back here when you're done." Style="{StaticResource Caption}" />
+                            <Label Text="GCash or QR Ph, on Xendit's checkout page. Come back here when you're done." Style="{StaticResource Caption}" />
                         </VerticalStackLayout>
                         <Label Text="{Binding PayNow.PaymentCode, StringFormat='Payment code {0}'}" Style="{StaticResource Caption}" SemanticProperties.Description="Payment code, for the front desk if you need help" />
                         <Button Text="Cancel this payment" Style="{StaticResource SmallOutlineButton}" Clicked="OnCancelPayment" />

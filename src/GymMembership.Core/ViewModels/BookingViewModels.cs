@@ -280,7 +280,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     {
         Notice = null;
         if (membership is null || row.Payment is not { } pay) return;
-        if (!await Confirm.AskAsync($"Pay the ₱{pay.Amount:N2} down payment online?", $"{row.Amenity}, {row.When}\nYou pay on Xendit's page by GCash, Maya, QR Ph or card, then come back here.", "Pay online")) return;
+        if (!await Confirm.AskAsync($"Pay the ₱{pay.Amount:N2} down payment online?", $"{row.Amenity}, {row.When}\nYou pay on Xendit's page by GCash or QR Ph, then come back here.", "Pay online")) return;
         OnlineCheckout? checkout = null;
         if (!await RunAsync(() => membership.PayOnlineAsync(pay.Id), c => checkout = c)) return;
         if (checkout!.Paid) { Notice = "Paid."; await LoadBookingsAsync(); return; }

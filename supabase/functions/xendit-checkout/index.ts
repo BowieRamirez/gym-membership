@@ -58,6 +58,7 @@ Deno.serve(async (req) => {
         reference_id: `${p.payment_code}-${Date.now()}`,   // unique per session; a payment may need several
         session_type: 'PAY', mode: 'PAYMENT_LINK', currency: 'PHP', country: 'PH', locale: 'en',
         amount: Number(p.amount), expires_at: expires,
+        allowed_payment_channels: ['GCASH', 'QRPH'],   // owner, 2026-11-16: GCash and QR Ph only (Maya and bank apps pay through QR Ph)
         description: `Gym payment ${p.payment_code}`,
         success_return_url: RETURN_URL, cancel_return_url: RETURN_URL,
       }),

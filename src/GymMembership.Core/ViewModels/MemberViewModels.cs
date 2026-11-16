@@ -273,7 +273,7 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
     {
         Notice = null;
         if (PayNow is not { } pay) return;
-        if (!await Confirm.AskAsync($"Pay ₱{pay.Amount:N2} online?", $"{pay.What}\nYou pay on Xendit's page by GCash, Maya, QR Ph or card, then come back here.", "Pay online")) return;
+        if (!await Confirm.AskAsync($"Pay ₱{pay.Amount:N2} online?", $"{pay.What}\nYou pay on Xendit's page by GCash or QR Ph, then come back here.", "Pay online")) return;
         OnlineCheckout? checkout = null;
         if (!await RunAsync(() => svc.PayOnlineAsync(pay.Id), c => checkout = c)) return;
         if (checkout!.Paid) { PayNow = null; nav.GoToMembership(); return; }

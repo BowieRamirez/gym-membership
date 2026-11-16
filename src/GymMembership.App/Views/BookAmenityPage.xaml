@@ -66,7 +66,7 @@
                                                 </Border>
                                             <HorizontalStackLayout Grid.Column="{OnIdiom Phone=0, Default=2}" Grid.Row="{OnIdiom Phone=2, Default=0}" Spacing="8" VerticalOptions="Center">
                                                 <Button Text="Pay online" Style="{StaticResource SmallButton}" IsVisible="{Binding CanPayOnline}" Clicked="OnPayOnline"
-                                                        SemanticProperties.Hint="Opens Xendit's checkout for the down payment: GCash, Maya, QR Ph or card." />
+                                                        SemanticProperties.Hint="Opens Xendit's checkout for the down payment: GCash or QR Ph." />
                                                 <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanCancel}" Clicked="OnCancel" />
                                                 <Button Text="End now" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanEnd}" Clicked="OnEnd"
                                                         SemanticProperties.Hint="Ends the session early. The amenity cools down for 30 minutes from now." />
@@ -279,7 +279,7 @@
                                         <Border Style="{StaticResource PayOption}">
                                             <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding PayQr}" Value="True"><Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /><Setter Property="StrokeThickness" Value="2" /></DataTrigger></Border.Triggers>
                                             <Grid>
-                                                <VerticalStackLayout Spacing="2"><Label Text="Online now" FontFamily="BarlowSemiBold" /><Label Text="GCash, Maya, QR Ph, card" Style="{StaticResource Caption}" /></VerticalStackLayout>
+                                                <VerticalStackLayout Spacing="2"><Label Text="Online now" FontFamily="BarlowSemiBold" /><Label Text="GCash or QR Ph" Style="{StaticResource Caption}" /></VerticalStackLayout>
                                                 <!-- a clear button over the option, so it works by keyboard and screen reader too -->
                                                 <Button Margin="-12,-10" BackgroundColor="Transparent" BorderWidth="0" Text="" Command="{Binding PickMethodCommand}" CommandParameter="qr"
                                                         SemanticProperties.Description="Pay the down payment online now, through Xendit" />
