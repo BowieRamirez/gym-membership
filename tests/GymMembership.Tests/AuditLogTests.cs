@@ -76,8 +76,9 @@ public class AuditLogTests
             Details = new() { ["reason"] = "=cmd" }, CreatedAt = new DateTime(2026, 11, 6, 1, 0, 0, DateTimeKind.Utc) }]);
         var lines = csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
         Assert.Equal(2, lines.Length);
-        Assert.StartsWith("\"Date and time (Manila)\",\"User\",\"Role\",\"IP address\",\"Action type\",\"Action\",\"Object type\",\"Object\",\"Change details\"", lines[0]);
-        Assert.Equal("\"2026-11-06 09:00\",\"Dana Reyes\",\"System admin\",\"203.0.113.7\",\"Account\",\"Account deleted\",\"Account\",\"Alex Tan\",\"Reason: =cmd\"", lines[1]);
+        // owner, 2026-11-16 (0083): no IP address in the log, so none in the export, even if an old row still had one
+        Assert.StartsWith("\"Date and time (Manila)\",\"User\",\"Role\",\"Action type\",\"Action\",\"Object type\",\"Object\",\"Change details\"", lines[0]);
+        Assert.Equal("\"2026-11-06 09:00\",\"Dana Reyes\",\"System admin\",\"Account\",\"Account deleted\",\"Account\",\"Alex Tan\",\"Reason: =cmd\"", lines[1]);
     }
 
     static async Task<(DemoGateway Gw, AuditViewModel Vm)> Signed(string email = "admin@demo.io")

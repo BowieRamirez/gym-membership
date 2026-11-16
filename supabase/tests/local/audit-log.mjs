@@ -5,8 +5,8 @@ import { start } from './harness.mjs';
 
 // cashier plan Y4 (0078): two entries written before 0078, one by a member and one by the desk, to see which address 0078 clears
 const { server, client: db } = await start({ beforeMigration: async (c, f) => {
-  if (f.startsWith('0078')) await c.query(`insert into audit_log(action, entity, ip_address, role) values
-    ('test.old_member', 'x', '192.0.2.9', 'member'), ('test.old_desk', 'x', '192.0.2.10', 'employee')`);
+  if (f.startsWith('0078') || f.startsWith('0083')) await c.query(`insert into audit_log(action, entity, ip_address, role) values
+    ('test.old_member', 'x', '192.0.2.9', 'member'), ('test.old_desk_' || $1, 'x', '192.0.2.10', 'employee')`, [f.slice(0, 4)]);
 } });
 let passed = 0, failed = 0, serial = 0;
 async function test(name, fn) {
@@ -38,16 +38,17 @@ const desk = await person('employee', 'Marco Santos');
 const member = await person(null, 'Alex Tan');
 
 try {
-  await test('an audited action records the role at the time and the address Cloudflare passed', async () => {
+  // owner, 2026-11-16 (0083): the log keeps no network address for anyone, staff included; the role is still recorded
+  await test('an audited action records the role at the time and no address, even for an admin', async () => {
     await as(sysAdmin, `select correct_name($1, 'Alex', 'Tan', 'Typo at the desk')`, [member],
       JSON.stringify({ 'cf-connecting-ip': '203.0.113.7', 'x-forwarded-for': '198.51.100.1, 10.0.0.1' }));
     const row = (await db.query(`select role, ip_address from audit_log where action='user.correct_name' order by audit_id desc limit 1`)).rows[0];
-    assert.deepEqual(row, { role: 'admin', ip_address: '203.0.113.7' });
+    assert.deepEqual(row, { role: 'admin', ip_address: null });
   });
-  await test('without cf-connecting-ip the first forwarded address is used; no headers or bad headers give null, never an error', async () => {
-    for (const [headers, ip] of [[JSON.stringify({ 'x-forwarded-for': ' 198.51.100.1 , 10.0.0.1' }), '198.51.100.1'], [null, null], ['not json', null], ['{}', null]]) {
+  await test('whatever the headers say, no address is kept and nothing errors', async () => {
+    for (const headers of [JSON.stringify({ 'x-forwarded-for': ' 198.51.100.1 , 10.0.0.1' }), null, 'not json', '{}']) {
       await as(sysAdmin, `select correct_name($1, 'Alex', 'Tan', 'Check')`, [member], headers);
-      assert.equal((await db.query(`select ip_address from audit_log order by audit_id desc limit 1`)).rows[0].ip_address, ip);
+      assert.equal((await db.query(`select ip_address from audit_log order by audit_id desc limit 1`)).rows[0].ip_address, null);
     }
   });
   await test('an entry with no actor (cron or migration) has no role and no address', async () => {
@@ -102,7 +103,7 @@ try {
     for (const uid of [sysAdmin, desk]) await assert.rejects(as(uid, 'select clear_old_audit_ips()'), /permission denied/);
   });
   // cashier plan Y4 (0078): members' addresses are not kept; staff addresses still are (D7)
-  await test("a member's action stores no address; the desk's still does", async () => {
+  await test("a member's action stores no address, and neither does an admin's (0083)", async () => {
     const pack = (await db.query(`insert into membership_packages(name,price,duration_days) values('Audit Monthly',1000,30) returning membership_package_id id`)).rows[0].id;
     const headers = JSON.stringify({ 'cf-connecting-ip': '203.0.113.50' });
     const buyer = await person(null, 'Bea Lim');   // "member" was made a coach by an earlier test
@@ -113,11 +114,12 @@ try {
     await as(desk, `select correct_name($1, 'Alex', 'Tan', 'Desk check')`, [member], headers).catch(() => {});
     await as(sysAdmin, `select correct_name($1, 'Alex', 'Tan', 'Admin check')`, [member], headers);
     const staff = (await db.query(`select ip_address from audit_log where action='user.correct_name' order by audit_id desc limit 1`)).rows[0];
-    assert.equal(staff.ip_address, '203.0.113.50');
+    assert.equal(staff.ip_address, null);
   });
-  await test('0078 cleared the addresses members left before it, not staff ones', async () => {
-    const rows = (await db.query(`select action, ip_address from audit_log where action in ('test.old_member','test.old_desk') order by action`)).rows;
-    assert.deepEqual(rows, [{ action: 'test.old_desk', ip_address: '192.0.2.10' }, { action: 'test.old_member', ip_address: null }]);
+  await test('0083 cleared every address saved before it, staff ones too', async () => {
+    const rows = (await db.query(`select action, ip_address from audit_log where action like 'test.old_%' order by action`)).rows;
+    assert.ok(rows.length >= 3, JSON.stringify(rows));
+    assert.ok(rows.every(r => r.ip_address === null), JSON.stringify(rows));
   });
   await test('the app still cannot write or change the log directly', async () => {
     await assert.rejects(as(sysAdmin, `insert into audit_log(action, entity) values('fake', 'x')`), /permission denied|row-level/);

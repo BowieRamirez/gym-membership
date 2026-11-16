@@ -290,7 +290,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     async Task DoneAsync(Payment paid)
     {
         Notice = $"Payment complete: ₱{paid.Amount:N2}. Receipt {paid.ReceiptNo}.";
-        Item = null; DiscountCode = ""; WalkInName = ""; Waiting = null;
+        Item = null; Member = null; DiscountCode = ""; WalkInName = ""; Waiting = null;   // the next customer starts clean (final review)
         var notice = Notice; await LoadShiftAsync(); Notice = notice;
         RecordCommand.NotifyCanExecuteChanged();
     }
@@ -332,8 +332,15 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         if (await RunAsync(() => svc.PaymentAsync(paymentId), p => fresh = p)) await DoneAsync(fresh!);
     }
 
-    /// <summary>The customer walked away: the payment is left to expire on its own (30 minutes) and the till is free again.</summary>
-    [RelayCommand] private void StopWaiting() { Waiting = null; Notice = "Left unpaid. It expires on its own in 30 minutes."; RecordCommand.NotifyCanExecuteChanged(); }
+    /// <summary>The customer walked away: the pending payment is cancelled, so the member can pay another way at once (final review).
+    /// A late scan on Xendit's still-open page goes to staff as "Online payment to refund".</summary>
+    [RelayCommand]
+    private async Task StopWaitingAsync()
+    {
+        if (Waiting is not { } pay) return;
+        if (!await RunAsync(() => svc.VerifyAsync(pay.Id, false, "Customer left at the desk"))) return;
+        Waiting = null; Notice = "Cancelled. Nothing was charged."; RecordCommand.NotifyCanExecuteChanged();
+    }
 }
 
 // admin: verified payments, newest first, so a mistake can be voided with a reason and then recorded again

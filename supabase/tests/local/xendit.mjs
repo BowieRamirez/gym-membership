@@ -214,6 +214,9 @@ try {
     }
     await assert.rejects(asRole('anon', `select confirm_online_payment('ps-evil',1,null)`), /permission denied/);
     await assert.rejects(asRole('anon', `select save_online_checkout(1,'ps-evil','https://evil')`), /permission denied/);
+    // 0082: notify() was open to anyone since 0003 (anyone could message any user); now only server functions use it
+    await assert.rejects(as(uid, `select notify($1,'payment','spam')`, [admin]), /permission denied/);
+    await assert.rejects(asRole('anon', `select notify($1,'payment','spam')`, [admin]), /permission denied/);
   });
 
   // cashier plan Y6 (0080): e-wallet at the desk goes through Xendit. The desk records a pending online payment (30 minutes);
@@ -246,6 +249,23 @@ try {
     await db.query('select expire_payments()');
     assert.equal((await payment(p.payment_id)).status, 'expired');
     assert.equal((await db.query(`select count(*) n from user_membership_packages where member_id=$1 and status in ('pending','active')`, [uid])).rows[0].n, '0');
+  });
+  // final review, Critical (0082): an unpaid anonymous Day pass has no member to notify; expiry must not fail on it (it rolled back
+  // every expiry run, and book_amenity runs expiry first, so all bookings failed)
+  await test('an unpaid desk Day pass expires without stopping the other expiries', async () => {
+    const dayPass = await deskOnline('walk_in', null, null, null);
+    const other = await buy(await user());
+    await db.query(`update payments set expires_at=now()-interval '1 minute' where payment_id = any($1)`, [[dayPass.payment_id, other.payment_id]]);
+    await db.query('select expire_payments()');
+    assert.deepEqual([(await payment(dayPass.payment_id)).status, (await payment(other.payment_id)).status], ['expired', 'expired']);
+  });
+  await test('Customer left: the desk rejects the pending payment, which frees the member at once', async () => {
+    const uid = await user();
+    const p = await deskOnline('membership', uid, pack);
+    await as(desk, `select verify_payment($1,false,'Customer left at the desk')`, [p.payment_id]);
+    assert.equal((await payment(p.payment_id)).status, 'rejected');
+    const cash = (await as(desk, `select * from record_counter_payment('membership'::payment_kind,'cash'::payment_method,$1,$2,null,null,null)`, [uid, pack]))[0];
+    assert.equal(cash.status, 'verified');
   });
   await test('only the desk may start one', async () => {
     const uid = await user();

@@ -64,13 +64,13 @@ public static class AuditLabels
 /// <summary>Builds the audit export. Every cell is quoted, and one starting with = + - @ or a tab or return gets a leading ' so a spreadsheet shows it instead of running it.</summary>
 public static class AuditCsv
 {
-    public static readonly string[] Header = ["Date and time (Manila)", "User", "Role", "IP address", "Action type", "Action", "Object type", "Object", "Change details"];
+    public static readonly string[] Header = ["Date and time (Manila)", "User", "Role", "Action type", "Action", "Object type", "Object", "Change details"];   // no IP address (0083)
 
     public static string Build(IEnumerable<AuditRecord> rows)
     {
         var csv = new StringBuilder();
         Line(csv, Header);
-        foreach (var r in rows) Line(csv, [r.WhenText, r.ActorName, r.RoleText, r.IpAddress ?? "", r.AreaText, r.ActionText, r.ObjectTypeText, r.ObjectText, r.DetailsText]);
+        foreach (var r in rows) Line(csv, [r.WhenText, r.ActorName, r.RoleText, r.AreaText, r.ActionText, r.ObjectTypeText, r.ObjectText, r.DetailsText]);
         return csv.ToString();
     }
 

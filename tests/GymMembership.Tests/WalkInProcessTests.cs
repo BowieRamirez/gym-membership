@@ -46,6 +46,32 @@ public class WalkInProcessTests
         Assert.Equal("Carlo Diaz", (await Last(gw)).WalkInName);
     }
 
+    [Fact]   // final review: the member chosen for the last sale must not name the next anonymous Day pass
+    public async Task After_a_sale_the_next_Day_pass_starts_anonymous()
+    {
+        var (gw, vm) = await Open();
+        vm.Search = "carlo"; await vm.FindCommand.ExecuteAsync(null);
+        vm.PickMemberCommand.Execute(vm.Hits.Single());
+        vm.PickItemCommand.Execute(vm.Options[0]);
+        await vm.RecordCommand.ExecuteAsync(null);
+        Assert.Null(vm.ErrorMessage);
+        vm.PickKindCommand.Execute("Day pass");
+        Assert.Equal("Day pass, no name", vm.OrderWho);
+        await vm.RecordCommand.ExecuteAsync(null);
+        Assert.Equal("Day pass", (await Last(gw)).WalkInName);
+    }
+
+    [Fact]   // final review: Customer left cancels the pending desk payment, so the member can pay another way at once
+    public async Task Customer_left_cancels_the_desk_payment()
+    {
+        var (gw, _) = await Open();
+        var svc = new PaymentStaffService(gw);
+        var bea = (await svc.ItemsAsync(PayKind.Membership, "u-carlo")).Value![0];
+        var pending = (await svc.StartDeskOnlineAsync(PayKind.Membership, "u-carlo", bea.Id, null, null)).Value!;
+        Assert.True((await svc.VerifyAsync(pending.Id, false, "Customer left at the desk")).Ok);
+        Assert.True((await svc.RecordCounterAsync(PayKind.Membership, PayMethod.Cash, "u-carlo", bea.Id, null, null, null)).Ok);
+    }
+
     [Fact]
     public async Task Nobody_found_then_register_them_as_a_member_and_they_are_chosen()
     {

@@ -77,6 +77,17 @@ for (const [name, actual, want] of [
   } catch (e) { failed++; console.log('  FAIL', name, e.message); }
 }
 
+// owner, 2026-11-16 (0083): the log keeps no IP address for anyone, so the Edge Functions' own log rows carry none either
+{
+  const name = 'Edge Function log rows carry no IP address';
+  try {
+    const shared = fs.readFileSync(new URL('../../functions/_shared/admin.ts', import.meta.url), 'utf8');
+    assert.match(shared, /ip_address: null/);
+    assert.doesNotMatch(shared, /cf-connecting-ip/);
+    passed++; console.log('  ok  ', name);
+  } catch (e) { failed++; console.log('  FAIL', name, e.message); }
+}
+
 // cashier plan Y6: the desk that recorded a desk online payment may open and check its checkout; nobody else's payment is reachable
 {
   const src = fs.readFileSync(new URL('../../functions/xendit-checkout/index.ts', import.meta.url), 'utf8');
