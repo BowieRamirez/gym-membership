@@ -169,6 +169,27 @@ try {
     await assert.rejects(asRole('anon', `select confirm_online_payment('ps-evil',1,null)`), /permission denied/);
     await assert.rejects(asRole('anon', `select save_online_checkout(1,'ps-evil','https://evil')`), /permission denied/);
   });
+
+  // Phase 5 break attempts: the only ways in are the two service functions; a direct write can't plant a checkout or mark it paid
+  await test('a member, the desk or an admin can\'t write the Xendit columns or mark a payment verified directly', async () => {
+    const uid = await user(), p = await buy(uid);
+    for (const who of [uid, desk, admin]) {
+      for (const sql of [`update payments set xendit_id='ps-evil' where payment_id=$1`, `update payments set xendit_url='https://evil' where payment_id=$1`,
+                         `update payments set online_paid_amount=1 where payment_id=$1`, `update payments set status='verified' where payment_id=$1`]) {
+        try { await as(who, sql, [p.payment_id]); } catch { /* refused outright is fine too */ }
+      }
+    }
+    const after = await payment(p.payment_id);
+    assert.deepEqual([after.xendit_id, after.xendit_url, after.online_paid_amount, after.status], [null, null, null, 'pending']);
+  });
+
+  await test('hostile input: a huge or odd Xendit id and a negative amount change nothing they shouldn\'t', async () => {
+    const p = await buy(await user()), id = xid();
+    await checkout(p, id);
+    await assert.rejects(confirm('x'.repeat(5000), 1), /not_found/);
+    assert.equal(await confirm(id, -1), 'refund');
+    assert.equal((await payment(p.payment_id)).status, 'pending');
+  });
 } finally {
   console.log(`\nxendit: ${passed} passed, ${failed} failed`);
   if (failed) process.exitCode = 1;
