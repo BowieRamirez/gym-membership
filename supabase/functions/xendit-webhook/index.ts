@@ -8,7 +8,8 @@ import { confirmPaid, paymentChannel, sameToken } from '../_shared/xendit.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'GET')
-    return new Response('Payment done. You can close this page and go back to the gym app.', { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+    // the same page whether the customer paid or cancelled, so it doesn't claim either; the app checks with Xendit
+    return new Response('You can close this page and go back to the gym app. The app shows whether the payment went through.', { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
   if (req.method !== 'POST') return reply({ error: 'bad_input' }, 405);
 
   if (!await sameToken(req.headers.get('x-callback-token') ?? '', Deno.env.get('XENDIT_WEBHOOK_TOKEN') ?? ''))

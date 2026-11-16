@@ -86,6 +86,8 @@ public class OnlinePaymentTests
     [InlineData("PAYMAYA", "Maya")]
     [InlineData("QRPH", "QR Ph")]
     [InlineData("CARDS", "Card")]
+    [InlineData("PH_GCASH", "GCash")]       // as Xendit's dashboard names it
+    [InlineData("PH_PAYMAYA", "Maya")]
     [InlineData("SHOPEEPAY", "SHOPEEPAY")]
     public void The_log_names_the_online_method(string channel, string words) =>
         Assert.Equal($"Paid with: {words}; Xendit id: ps-1", AuditLabels.Details(new Dictionary<string, object> { ["channel"] = channel, ["xendit_id"] = "ps-1" }));

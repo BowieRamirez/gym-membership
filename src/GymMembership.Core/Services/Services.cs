@@ -466,6 +466,8 @@ public interface IPaymentStaffService
     Task<AppResult<bool>> CheckOnlineAsync(int paymentId);
     /// <summary>One payment, fresh: the desk reads the receipt number once Xendit has confirmed it.</summary>
     Task<AppResult<Payment>> PaymentAsync(int paymentId);
+    /// <summary>The newest desk online payment this cashier started that is still waiting for Xendit, so reopening the Cashier can check it.</summary>
+    Task<AppResult<Payment?>> MyWaitingOnlineAsync();
     /// <summary>Cashier plan Y2: the desk registers a walk-in customer as a MEMBER (create-user lets the desk make members only). Returns their id.</summary>
     Task<AppResult<string>> RegisterMemberAsync(string firstName, string lastName, string email, string? phone, string password);
     /// <summary>What can be sold for a kind of payment. Renewals are the member's own memberships, so they need a memberId.</summary>
@@ -491,6 +493,14 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
     public Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId) => OnlinePay.OpenAsync(gw, paymentId);
     public Task<AppResult<bool>> CheckOnlineAsync(int paymentId) => OnlinePay.CheckAsync(gw, paymentId);
     public Task<AppResult<Payment>> PaymentAsync(int paymentId) => Safe.RunAsync(async () => (await gw.ListAsync<Payment>(p => p.Id == paymentId)).Single());
+
+    public Task<AppResult<Payment?>> MyWaitingOnlineAsync() => Safe.RunAsync(async () =>
+    {
+        var me = gw.CurrentUserId;
+        var now = DateTime.UtcNow;
+        return (await gw.ListAsync<Payment>(p => p.Status == "pending" && p.Method == PayMethod.Qr && p.RecordedBy == me))
+            .Where(p => p.ExpiresAt > now).OrderByDescending(p => p.CreatedAt).FirstOrDefault();
+    });
 
     public async Task<AppResult<string>> RegisterMemberAsync(string firstName, string lastName, string email, string? phone, string password)
     {

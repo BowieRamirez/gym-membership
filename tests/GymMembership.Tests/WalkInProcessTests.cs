@@ -72,6 +72,20 @@ public class WalkInProcessTests
         Assert.True((await svc.RecordCounterAsync(PayKind.Membership, PayMethod.Cash, "u-carlo", bea.Id, null, null, null)).Ok);
     }
 
+    [Fact]   // owner, 2026-11-16: leaving the Cashier lost the Check payment button for a desk payment still waiting for Xendit
+    public async Task Reopening_the_Cashier_picks_up_your_desk_payment_still_waiting_for_Xendit()
+    {
+        var (gw, _) = await Open();
+        var svc = new PaymentStaffService(gw);
+        var item = (await svc.ItemsAsync(PayKind.Membership, "u-carlo")).Value![0];
+        var pending = (await svc.StartDeskOnlineAsync(PayKind.Membership, "u-carlo", item.Id, null, null)).Value!;
+        var again = new CashierViewModel(svc, new AttendanceService(gw));
+        await again.OnAppearingAsync();
+        Assert.Equal(pending.Id, again.Waiting?.Id);
+        await again.CheckPaymentCommand.ExecuteAsync(null);   // demo: not paid until the checkout is opened
+        Assert.NotNull(again.Waiting);
+    }
+
     [Fact]
     public async Task Nobody_found_then_register_them_as_a_member_and_they_are_chosen()
     {

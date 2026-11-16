@@ -192,6 +192,7 @@ public class CashierTests
         public Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId) => throw new NotSupportedException();
         public Task<AppResult<bool>> CheckOnlineAsync(int paymentId) => throw new NotSupportedException();
         public Task<AppResult<Payment>> PaymentAsync(int paymentId) => throw new NotSupportedException();
+        public Task<AppResult<Payment?>> MyWaitingOnlineAsync() => Task.FromResult(AppResult<Payment?>.Success(null));
         public Task<AppResult<string>> RegisterMemberAsync(string firstName, string lastName, string email, string? phone, string password) => throw new NotSupportedException();
         public Task<AppResult<bool>> VerifyAsync(int paymentId, bool approve, string? reason = null) => throw new NotSupportedException();
         public Task<AppResult<IReadOnlyList<ClaimRow>>> ClaimsAsync() => throw new NotSupportedException();

@@ -160,7 +160,12 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
 
     static string KindKey(string k) => k switch { "Renewal" => PayKind.Renewal, "Amenity" => PayKind.Amenity, "Day pass" => PayKind.WalkIn, _ => PayKind.Membership };
 
-    public override async Task OnAppearingAsync() { await RefreshItemsAsync(); await LoadShiftAsync(); await LoadDeskBookingsAsync(); }
+    public override async Task OnAppearingAsync()
+    {
+        await RefreshItemsAsync(); await LoadShiftAsync(); await LoadDeskBookingsAsync();
+        // a desk payment still waiting for Xendit comes back with its Check payment button (leaving the page used to lose it)
+        if (Waiting is null) await RunAsync(svc.MyWaitingOnlineAsync, p => { Waiting = p; RecordCommand.NotifyCanExecuteChanged(); });
+    }
 
     // ---- cashier plan Y7: bookings paid in cash at the desk are taken here (Payments to verify is gone) ----
     public ObservableCollection<PaymentRow> DeskBookings { get; } = new();

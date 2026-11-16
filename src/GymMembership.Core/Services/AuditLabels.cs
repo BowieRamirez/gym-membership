@@ -58,7 +58,8 @@ public static class AuditLabels
             : $"{char.ToUpperInvariant(d.Key[0])}{d.Key[1..].Replace('_', ' ')}: {Convert.ToString(d.Value, CultureInfo.InvariantCulture)}"));
 
     /// <summary>Cashier plan Y5: Xendit's channel codes in words; an unknown one is shown as Xendit sent it.</summary>
-    public static string Channel(string code) => code switch { "GCASH" => "GCash", "PAYMAYA" => "Maya", "QRPH" => "QR Ph", "CARDS" => "Card", "" => "unknown", _ => code };
+    public static string Channel(string code) => (code.StartsWith("PH_") ? code[3..] : code) switch   // the dashboard says PH_GCASH, the API GCASH
+        { "GCASH" => "GCash", "PAYMAYA" => "Maya", "QRPH" => "QR Ph", "CARDS" => "Card", "" => "unknown", _ => code };
 }
 
 /// <summary>Builds the audit export. Every cell is quoted, and one starting with = + - @ or a tab or return gets a leading ' so a spreadsheet shows it instead of running it.</summary>
