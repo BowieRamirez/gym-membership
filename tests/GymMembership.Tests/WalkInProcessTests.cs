@@ -86,6 +86,22 @@ public class WalkInProcessTests
         Assert.NotNull(again.Waiting);
     }
 
+    [Fact]   // owner, 2026-11-16: Find shows only the table; Register new member shows only its form
+    public async Task Find_and_register_show_one_at_a_time()
+    {
+        var (_, vm) = await Open();
+        vm.Search = "a"; await vm.FindCommand.ExecuteAsync(null);
+        Assert.Equal((true, false), (vm.ShowHits, vm.IsRegistering));
+        vm.StartRegisterCommand.Execute(null);
+        Assert.Equal((false, true, false), (vm.ShowHits, vm.IsRegistering, vm.ShowNoMatch));
+        await vm.FindCommand.ExecuteAsync(null);
+        Assert.Equal((true, false), (vm.ShowHits, vm.IsRegistering));
+        vm.Search = "zzz"; await vm.FindCommand.ExecuteAsync(null);
+        Assert.True(vm.ShowNoMatch);
+        vm.StartRegisterCommand.Execute(null);
+        Assert.False(vm.ShowNoMatch);
+    }
+
     [Fact]
     public async Task Nobody_found_then_register_them_as_a_member_and_they_are_chosen()
     {

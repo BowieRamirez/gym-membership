@@ -184,7 +184,7 @@
                                         <Button Text="Register new member" Style="{StaticResource SmallOutlineButton}" Margin="0,0,12,8" Command="{Binding StartRegisterCommand}" AutomationId="CashierRegister" />
                                     </FlexLayout>
                                     <!-- cashier plan Y2: search first, so nobody gets a second account; then register them here -->
-                                    <Label Text="No member found. Check the spelling, or try their email or phone. New here? Register new member." Style="{StaticResource Muted}" IsVisible="{Binding NoMatch}" />
+                                    <Label Text="No member found. Check the spelling, or try their email or phone. New here? Register new member." Style="{StaticResource Muted}" IsVisible="{Binding ShowNoMatch}" />
                                     <Border Style="{StaticResource Panel}" IsVisible="{Binding IsRegistering}" MaximumWidthRequest="640" HorizontalOptions="Start">
                                         <VerticalStackLayout Spacing="10">
                                             <c:CardTitle Text="Register a new member" />
@@ -201,7 +201,7 @@
                                             </HorizontalStackLayout>
                                         </VerticalStackLayout>
                                     </Border>
-                                    <Border Style="{StaticResource TablePanel}" IsVisible="{Binding HasHits}">
+                                    <Border Style="{StaticResource TablePanel}" IsVisible="{Binding ShowHits}">
                                         <VerticalStackLayout>
                                             <VerticalStackLayout x:Name="HitHead" IsVisible="{OnIdiom Phone=False, Default=True}">
                                                 <Grid Style="{StaticResource TableHead}" ColumnDefinitions="1.2*,1.1*,1.6*,150,110" ColumnSpacing="12">

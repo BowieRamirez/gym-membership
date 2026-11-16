@@ -242,9 +242,14 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
 
     /// <summary>Cashier plan Y1: Find ran and nobody matched; the page says so (it used to fill a closed dropdown in silence).</summary>
     [ObservableProperty] private bool noMatch;
-    [RelayCommand] private Task FindAsync() => RunAsync(() => members.FindMembersAsync(Search), rows => { Fill(Hits, rows); NoMatch = rows.Count == 0; OnPropertyChanged(nameof(HasHits)); });
+    [RelayCommand] private Task FindAsync() => RunAsync(() => members.FindMembersAsync(Search), rows => { IsRegistering = false; Fill(Hits, rows); NoMatch = rows.Count == 0; OnPropertyChanged(nameof(HasHits)); OnPropertyChanged(nameof(ShowHits)); });
     /// <summary>The results table shows once a search found someone.</summary>
     public bool HasHits => Hits.Count > 0;
+    // owner, 2026-11-16: one at a time: Find shows the table, Register new member shows its form
+    public bool ShowHits => HasHits && !IsRegistering;
+    public bool ShowNoMatch => NoMatch && !IsRegistering;
+    partial void OnIsRegisteringChanged(bool value) { OnPropertyChanged(nameof(ShowHits)); OnPropertyChanged(nameof(ShowNoMatch)); }
+    partial void OnNoMatchChanged(bool value) => OnPropertyChanged(nameof(ShowNoMatch));
     [RelayCommand] private void PickMember(MemberHit hit) => Member = hit;
 
     // ---- cashier plan Y2: nobody matched, so the desk registers the customer as a member (search first, so nobody is made twice) ----
@@ -266,7 +271,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         string? id = null;
         if (!await RunAsync(() => svc.RegisterMemberAsync(NewFirstName, NewLastName, NewEmail, NewPhone, password), v => id = v)) return;
         Search = NewEmail.Trim();
-        await RunAsync(() => members.FindMembersAsync(Search), rows => { Fill(Hits, rows); NoMatch = rows.Count == 0; OnPropertyChanged(nameof(HasHits)); Member = rows.FirstOrDefault(h => h.MemberId == id); });
+        await RunAsync(() => members.FindMembersAsync(Search), rows => { Fill(Hits, rows); NoMatch = rows.Count == 0; OnPropertyChanged(nameof(HasHits)); OnPropertyChanged(nameof(ShowHits)); Member = rows.FirstOrDefault(h => h.MemberId == id); });
         IsRegistering = false;
         NewFirstName = NewLastName = NewEmail = NewPhone = "";
         Notice = $"{name} is a member now. Temporary password: {password}. Hand it over; they change it at first sign-in.";
