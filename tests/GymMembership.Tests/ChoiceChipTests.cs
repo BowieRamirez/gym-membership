@@ -30,5 +30,8 @@ public class ChoiceChipTests
         var control = App("Controls", "ChoiceChip.cs");
         Assert.DoesNotContain("_button.BackgroundColor =", control);
         Assert.DoesNotContain("_button.TextColor =", control);
+        // owner, 2026-11-16: a Transparent Button on Windows falls back to its default grey and hid the label; the overlay is see-through
+        Assert.Contains("Opacity = 0.01", control);
+        Assert.DoesNotContain("BackgroundColor = Colors.Transparent, BorderWidth", control);
     }
 }

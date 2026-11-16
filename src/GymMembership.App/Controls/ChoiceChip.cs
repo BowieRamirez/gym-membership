@@ -25,7 +25,9 @@ public class ChoiceChip : ContentView
 
     readonly Border _box;
     readonly Label _label = new() { FontFamily = "BarlowMedium", FontSize = 14, VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Center };
-    readonly Button _button = new() { Text = "", BackgroundColor = Colors.Transparent, BorderWidth = 0, Padding = 0, MinimumHeightRequest = 0, MinimumWidthRequest = 0 };
+    // see-through by opacity, not a colour: a Transparent Button on Windows falls back to the default grey button and hid the label
+    // (owner, 2026-11-16). At 0.01 it still takes the click, the keyboard focus and the screen reader.
+    readonly Button _button = new() { Text = "", Opacity = 0.01, BorderWidth = 0, Padding = 0, MinimumHeightRequest = 0, MinimumWidthRequest = 0 };
 
     public ChoiceChip()
     {
