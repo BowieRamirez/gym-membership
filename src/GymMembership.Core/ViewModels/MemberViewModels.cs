@@ -501,7 +501,10 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     [ObservableProperty] private string draft = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPhoto), nameof(PhotoName))] private (string Name, byte[] Data)? pendingPhoto;   // chosen, not sent yet
     [ObservableProperty] private bool hasMore;
-    [ObservableProperty] private string tab = "coach";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsCoachTab), nameof(IsSupportTab))] private string tab = "coach";
+    /// <summary>Which of the two chips is chosen, as yes/no for the ChoiceChips (owner, 2026-11-16: both chips stuck yellow on Windows).</summary>
+    public bool IsCoachTab => Tab == "coach";
+    public bool IsSupportTab => Tab == "support";
     [ObservableProperty] private string filter = "open";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsSearching))] private string searchText = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CanTake), nameof(CanRelease), nameof(CanClose), nameof(CanReopen))] private bool hasFilters;
