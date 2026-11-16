@@ -130,15 +130,13 @@ await test('a guest cannot avail an amenity or message a coach yet', async () =>
 });
 await test('a member cannot verify their own payment, and cannot even call verify', async () =>
   assert.match(await code(run(alex, `select verify_payment($1, true)`, [pay.payment_id])), /forbidden/));
-await test('proof needs a reference number and uploads to the payment', async () => {
-  assert.match(await code(run(alex, `select submit_payment_proof($1, '', 'x')`, [pay.payment_id])), /bad_input/);
-  await run(alex, `select submit_payment_proof($1, 'REF123', $2)`, [pay.payment_id, `${alex}/1-proof.png`]);
-});
-await test('staff were notified of the proof', async () =>
-  assert.equal((await run(desk, `select * from user_notifications where type='payment'`)).rowCount, 1));
+// 0075 (Xendit, X2): members pay online; proofs can no longer be sent. Proofs sent before then are set here by the table owner.
+await test('a member can no longer send a payment proof', async () =>
+  assert.match(await code(run(alex, `select submit_payment_proof($1, 'REF123', 'x')`, [pay.payment_id])), /42501/));
 await test('the same reference number cannot be used twice', async () => {
+  await db.query(`update payments set reference_no='REF123', proof_path=$2 where payment_id=$1`, [pay.payment_id, `${alex}/1-proof.png`]);
   const p2 = (await run(bea, `select * from avail_membership($1)`, [monthly])).rows[0];
-  assert.match(await code(run(bea, `select submit_payment_proof($1, 'REF123', 'x/y.png')`, [p2.payment_id])), /23505/);
+  assert.match(await code(db.query(`update payments set reference_no='REF123' where payment_id=$1`, [p2.payment_id])), /23505/);
   // leave bea's pending payment for later
 });
 await test('a rejection needs a reason and cancels the pending membership', async () => {

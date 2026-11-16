@@ -342,7 +342,7 @@ try {
   });
   await test('cancelling an unverified extension leaves the paid term alone and frees the member to extend again', async () => {
     const {uid, term} = await fixture(), pay = await extend(uid, annual);
-    await as(uid, `select submit_payment_proof($1,'REF-1','proofs/x.png')`, [pay.payment_id]);
+    await db.query(`update payments set reference_no='REF-1', proof_path='proofs/x.png' where payment_id=$1`, [pay.payment_id]);   // a proof sent before 0075
     await cancelPending(uid, pay);
     assert.equal((await payRow(pay)).status, 'rejected');
     assert.equal((await db.query('select status from membership_renewals where renewal_id=$1', [pay.renewal_id])).rows[0].status, 'cancelled');
