@@ -108,6 +108,24 @@ try {
     assert.ok(await staffNotes('Online payment to refund') > before);
   });
 
+  // final review, Important 1 (0077): a missing amount must never pass the amount check
+  await test('a missing amount is not activated', async () => {
+    const p = await buy(await user()), id = xid();
+    await checkout(p, id);
+    assert.equal(await confirm(id, null), 'refund');
+    assert.equal((await payment(p.payment_id)).status, 'pending');
+  });
+
+  // final review, Important 2 (0077): the app re-checks every 20 s and Xendit retries; staff hear about a refund once
+  await test('a refund is reported to staff once, however often it is confirmed again', async () => {
+    const p = await buy(await user()), id = xid();
+    await checkout(p, id);
+    const before = await staffNotes('Online payment to refund');
+    for (let i = 0; i < 3; i++) assert.equal(await confirm(id, Number(p.amount) + 5), 'refund');
+    const staff = Number((await db.query(`select count(distinct user_id) n from user_notifications where title='Online payment to refund'`)).rows[0].n);
+    assert.equal(await staffNotes('Online payment to refund') - before, staff);   // one notice per staff member, not three
+  });
+
   await test('paid after expiry is not activated', async () => {
     const uid = await user(), p = await buy(uid), id = xid();
     await checkout(p, id);

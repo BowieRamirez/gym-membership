@@ -4,10 +4,9 @@
 // confirmed here (in case the webhook was lost); EXPIRED or CANCELED, a new session replaces it (0076), never past the payment's
 // own deadline. With check: true nothing is created; the answer is only whether it is paid.
 import { adminClient, cors, reply } from '../_shared/admin.ts';
-import { confirmPaid, xendit } from '../_shared/xendit.ts';
+import { confirmPaid, nextStep, sessionExpiry, xendit } from '../_shared/xendit.ts';
 
 const RETURN_URL = `${Deno.env.get('SUPABASE_URL')}/functions/v1/xendit-webhook`;   // its GET says "go back to the app"
-const SESSION_MINUTES = 30;   // Xendit's default; sessions are meant to be short-lived
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -35,15 +34,20 @@ Deno.serve(async (req) => {
 
   try {
     const session = p.xendit_id ? await xendit(`/sessions/${encodeURIComponent(p.xendit_id)}`) : null;
-    if (session?.status === 'COMPLETED') {
-      const result = await confirmPaid(admin, p.xendit_id, Number(session.amount), session.channel_code ?? null);
+    const step = nextStep(session?.status ?? null);
+    if (step === 'confirm') {
+      // a missing amount is a mismatch in confirm_online_payment (0077), never a pass
+      const amount = typeof session.amount === 'number' ? session.amount : null;
+      const result = await confirmPaid(admin, p.xendit_id, amount, session.channel_code ?? null);
       return reply({ paid: result === 'confirmed' || result === 'already' });
     }
     if (check) return reply({ paid: false });
-    if (Date.parse(p.expires_at) <= Date.now()) return reply({ error: 'payment_expired' }, 409);
-    if (session?.status === 'ACTIVE' && p.xendit_url) return reply({ url: p.xendit_url });
+    if (step === 'reuse' && p.xendit_url) return reply({ url: p.xendit_url });
+    if (step === 'wait') return reply({ error: 'unavailable' }, 409);   // Xendit is still settling the last session
+    const end = sessionExpiry(Date.parse(p.expires_at), Date.now());
+    if (end === null) return reply({ error: 'payment_expired' }, 409);
 
-    const expires = new Date(Math.min(Date.parse(p.expires_at), Date.now() + SESSION_MINUTES * 60_000)).toISOString();
+    const expires = new Date(end).toISOString();
     const created = await xendit('/sessions', {
       method: 'POST',
       body: JSON.stringify({

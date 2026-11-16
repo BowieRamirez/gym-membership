@@ -17,10 +17,11 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   if (body.event !== 'payment_session.completed') return reply({ ok: true });
   const d = body.data ?? {};
-  if (typeof d.payment_session_id !== 'string' || typeof d.amount !== 'number') return reply({ ok: true });
+  if (typeof d.payment_session_id !== 'string') return reply({ ok: true });
+  const amount = typeof d.amount === 'number' ? d.amount : null;   // missing: recorded for staff to refund (0077), never confirmed
 
   try {
-    const result = await confirmPaid(adminClient(), d.payment_session_id, d.amount, d.channel_code ?? null);
+    const result = await confirmPaid(adminClient(), d.payment_session_id, amount, d.channel_code ?? null);
     console.log('xendit-webhook', d.payment_session_id, result);
     return reply({ ok: true });
   } catch (e) {

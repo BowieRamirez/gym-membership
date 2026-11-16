@@ -42,5 +42,23 @@ for (const [name, given, expected, want] of [
   catch (e) { failed++; console.log('  FAIL', `webhook token: ${name}`, e.message); }
 }
 
+// final review: replace a stored session only once Xendit says it can't be paid; end sessions 5 minutes before the payment's deadline
+const { nextStep, sessionExpiry } = await import('../../functions/_shared/xendit.ts');
+const min = 60_000, now = Date.parse('2026-11-16T08:00:00Z');
+for (const [name, actual, want] of [
+  ['no session yet: make one', nextStep(null), 'create'],
+  ['an open session is reused', nextStep('ACTIVE'), 'reuse'],
+  ['a paid session is confirmed', nextStep('COMPLETED'), 'confirm'],
+  ['an expired session is replaced', nextStep('EXPIRED'), 'create'],
+  ['a cancelled session is replaced', nextStep('CANCELED'), 'create'],
+  ['any other state is left alone', nextStep('PENDING'), 'wait'],
+  ['a far deadline: 30 minutes', sessionExpiry(now + 48 * 60 * min, now), now + 30 * min],
+  ['a near deadline: 5 minutes before it', sessionExpiry(now + 20 * min, now), now + 15 * min],
+  ['under 5 minutes plus 1 left: too late to start', sessionExpiry(now + 5 * min + 30_000, now), null],
+]) {
+  try { assert.deepEqual(actual, want); passed++; console.log('  ok  ', `xendit session: ${name}`); }
+  catch (e) { failed++; console.log('  FAIL', `xendit session: ${name}`, e.message); }
+}
+
 console.log(`Edge rules: ${passed} passed, ${failed} failed`);
 if (failed) process.exitCode = 1;

@@ -15,8 +15,24 @@ export async function xendit(path: string, init: RequestInit = {}): Promise<any>
   return body;
 }
 
+/** What xendit-checkout does with the payment's stored session, by its Xendit status. Only a session that can no longer be paid
+ *  (EXPIRED, CANCELED) is replaced; an unknown state is left alone, so a session that might still be paid is never dropped. */
+export function nextStep(status: string | null): 'create' | 'reuse' | 'confirm' | 'wait' {
+  if (status === null || status === 'EXPIRED' || status === 'CANCELED') return 'create';
+  if (status === 'ACTIVE') return 'reuse';
+  if (status === 'COMPLETED') return 'confirm';
+  return 'wait';
+}
+
+/** A new session's end: 30 minutes (Xendit's default), but 5 minutes before the payment's own deadline, so a payment made at the
+ *  last moment is confirmed before the payment expires. Null when that leaves under a minute: too late to start paying. */
+export function sessionExpiry(paymentExpiresMs: number, nowMs: number): number | null {
+  const end = Math.min(paymentExpiresMs - 5 * 60_000, nowMs + 30 * 60_000);
+  return end - nowMs < 60_000 ? null : end;
+}
+
 /** confirm_online_payment (0075): 'confirmed', 'already' or 'refund'. A database error is thrown, so the caller can answer 500. */
-export async function confirmPaid(admin: SupabaseClient, sessionId: string, amount: number, channel: string | null): Promise<string> {
+export async function confirmPaid(admin: SupabaseClient, sessionId: string, amount: number | null, channel: string | null): Promise<string> {
   const { data, error } = await admin.rpc('confirm_online_payment', { p_xendit_id: sessionId, p_amount: amount, p_channel: channel });
   if (error) throw new Error(error.message);
   return data as string;
