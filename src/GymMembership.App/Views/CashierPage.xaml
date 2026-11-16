@@ -147,12 +147,11 @@
                                             <Border Style="{StaticResource Field}"><Entry Text="{Binding Search}" Placeholder="Name, email or phone" ReturnCommand="{Binding FindCommand}" SemanticProperties.Description="Search members by name, email or phone" AutomationId="CashierSearch" /></Border>
                                         </VerticalStackLayout>
                                         <Button Text="Find" Style="{StaticResource SmallOutlineButton}" Margin="0,0,12,8" Command="{Binding FindCommand}" AutomationId="CashierFind" />
+                                        <!-- owner, 2026-11-16: always visible, so the desk can find it; search first still avoids a second account -->
+                                        <Button Text="Register new member" Style="{StaticResource SmallOutlineButton}" Margin="0,0,12,8" Command="{Binding StartRegisterCommand}" AutomationId="CashierRegister" />
                                     </FlexLayout>
                                     <!-- cashier plan Y2: search first, so nobody gets a second account; then register them here -->
-                                    <FlexLayout Wrap="Wrap" AlignItems="Center" IsVisible="{Binding NoMatch}">
-                                        <Label Text="No member found. Check the spelling, or try their email or phone." Style="{StaticResource Muted}" Margin="0,0,12,8" VerticalOptions="Center" />
-                                        <Button Text="Register new member" Style="{StaticResource SmallOutlineButton}" Margin="0,0,0,8" Command="{Binding StartRegisterCommand}" AutomationId="CashierRegister" />
-                                    </FlexLayout>
+                                    <Label Text="No member found. Check the spelling, or try their email or phone. New here? Register new member." Style="{StaticResource Muted}" IsVisible="{Binding NoMatch}" />
                                     <Border Style="{StaticResource Panel}" IsVisible="{Binding IsRegistering}" MaximumWidthRequest="640" HorizontalOptions="Start">
                                         <VerticalStackLayout Spacing="10">
                                             <c:CardTitle Text="Register a new member" />
