@@ -6,7 +6,9 @@
 import { adminClient, cors, reply } from '../_shared/admin.ts';
 import { confirmPaid, nextStep, paymentChannel, sessionExpiry, xendit } from '../_shared/xendit.ts';
 
-const RETURN_URL = `${Deno.env.get('SUPABASE_URL')}/functions/v1/xendit-webhook`;   // its GET says "go back to the app"
+// the designed "go back to the app" page (docs/pay-done, GitHub Pages; owner 2026-11-16): Supabase serves a function's HTML as plain text.
+// xendit-webhook's GET still answers in plain text for sessions made before this change.
+const RETURN_URL = 'https://bowieramirez.github.io/gym-membership/pay-done/';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
