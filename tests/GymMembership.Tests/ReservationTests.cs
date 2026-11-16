@@ -111,17 +111,17 @@ public class ReservationTests
         var (gw, vm) = await Member();
         await Pick(vm, "Group classes", "10:00");
         Assert.Equal(("Book and pay ₱250.00", true), (vm.BookText, vm.PayFirst));   // G13: half of ₱500
-        Assert.StartsWith("Not yours until the desk verifies the down payment", vm.HoldText);
+        Assert.StartsWith("Not yours until the down payment is paid online", vm.HoldText);
         var row = await Booked(vm, "Group classes", "10:00");
         Assert.Equal("₱500.00 per session, up to 2 hours", vm.Cards.Single(c => c.Amenity.Name == "Group classes").PassText);   // the hold is not a pass bought
-        Assert.Equal(("Waiting for down payment", "wait", true, true), (row.StatusText, row.Tone, row.CanSendProof, row.CanCancel));
-        Assert.StartsWith("Down payment ₱250.00 by GCash. Pay by ", row.Detail);
+        Assert.Equal(("Waiting for down payment", "wait", true, true), (row.StatusText, row.Tone, row.CanPayOnline, row.CanCancel));
+        Assert.StartsWith("Down payment ₱250.00 online. Pay by ", row.Detail);
         Assert.StartsWith("Requested.", vm.Notice);
 
         await AsDesk(gw, async desk =>
         {
             var pay = desk.Pending.Single(p => p.HasBooking);
-            Assert.Equal(("Group classes booking · down payment", "Verify", "QR"), (pay.Item, pay.ApproveText, pay.MethodText));
+            Assert.Equal(("Group classes booking · down payment", "Verify", "Online"), (pay.Item, pay.ApproveText, pay.MethodText));
             Assert.EndsWith("10:00 AM to 11:00 AM · solo · balance ₱250.00 at the desk", pay.Booking);
             await desk.ApproveCommand.ExecuteAsync(pay);
             Assert.Null(desk.ErrorMessage);
@@ -139,7 +139,7 @@ public class ReservationTests
         var (gw, vm) = await Member();
         var row = await Booked(vm, "Group classes", "14:00", 30, PayMethod.Cash);
         Assert.StartsWith("Down payment ₱250.00 at the front desk by ", row.Detail);
-        Assert.False(row.CanSendProof);
+        Assert.False(row.CanPayOnline);
         await AsDesk(gw, async desk =>
         {
             var pay = desk.Pending.Single(p => p.HasBooking);

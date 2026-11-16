@@ -131,7 +131,7 @@ public sealed record BookingRow(Reservation Booking, string Amenity, DateTime No
     public bool CanEnd => InUse;
     /// <summary>"I didn't use it": a paid booking, from its end for 24 hours, once.</summary>
     public bool CanClaim => Ended && Paid && Refund is null && NowUtc <= End.AddHours(24);
-    public bool CanSendProof => IsWaiting && Payment is { Method: PayMethod.Qr, ProofPath: null };
+    public bool CanPayOnline => IsWaiting && Payment is { Method: PayMethod.Qr, ProofPath: null };
 
     /// <summary>wait (yellow), good (green) or plain, for the status chip.</summary>
     public string Tone => IsWaiting && Refund is null ? "wait" : Refund?.Status is "approved" or "paid" || (Confirmed && !Ended && Refund is null) ? "good" : "plain";
@@ -155,8 +155,8 @@ public sealed record BookingRow(Reservation Booking, string Amenity, DateTime No
         { Status: "approved" } => $"{Price} to be repaid at the front desk.",
         _ when IsWaiting && Payment is { } p => (p.Method == PayMethod.Cash
             ? $"Down payment {Price} at the front desk by {At(p.ExpiresAt ?? Start)}."
-            : p.ProofPath is null ? $"Down payment {Price} by GCash. Pay by {At(p.ExpiresAt ?? Start)}."
-            : $"Down payment {Price} by GCash. Proof sent; the front desk is checking it.") + " Not yours until it's verified.",
+            : p.ProofPath is null ? $"Down payment {Price} online. Pay by {At(p.ExpiresAt ?? Start)}."
+            : $"Down payment {Price} by GCash. Proof sent; the front desk is checking it.") + " Not yours until it's paid.",
         _ when InUse => $"Ends at {Manila(End).ToString("h:mm tt", En)}.",
         _ when CanClaim => $"Didn't go? Tell the front desk by {At(End.AddHours(24))} and they'll check for a refund.",
         _ when Ended => "",

@@ -221,6 +221,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             if (FailWith is not null) throw FailWith;
             string S(string k) => Convert.ToString(body.GetValueOrDefault(k)) ?? "";
             if (name == "verify-member-password") return Task.FromResult(VerifyMemberPassword(S("member_id"), S("password")));
+            if (name == "xendit-checkout") return Task.FromResult(XenditCheckout(Convert.ToInt32(body.GetValueOrDefault("payment_id")), body.GetValueOrDefault("check") is true));
             if (!RolesOf(Uid).Any(r => r is "admin" or "subadmin") || !IsActiveUser) throw Err("forbidden");
             var super = RolesOf(Uid).Contains("admin");   // a sub-admin acts on members and coaches only
             switch (name)
@@ -255,6 +256,25 @@ public sealed partial class DemoGateway : ISupabaseGateway
             return Task.FromResult("{\"ok\":true}");
         }
         catch (Exception ex) { return Task.FromException<string>(ex); }
+    }
+
+    // Xendit plan (xendit-checkout, 0075): the same checks as the server; demo mode has no Xendit, so its checkout is paid at once
+    // and confirmed the way confirm_online_payment does it (no staff member, the checkout id as the reference).
+    string XenditCheckout(int paymentId, bool check)
+    {
+        var now = SubscriptionNow;
+        var pay = All<Payment>().FirstOrDefault(p => p.Id == paymentId && p.MemberId == Uid) ?? throw Err("not_found");
+        if (pay.Status == Status.Verified) return "{\"paid\":true}";
+        if (pay.Status != Status.Pending || pay.Method != PayMethod.Qr) throw Err("already_processed");
+        if (check) return "{\"paid\":false}";
+        if (pay.ExpiresAt <= now) throw Err("payment_expired");
+        pay.XenditId ??= $"ps-demo-{pay.Id}";
+        pay.Status = Status.Verified; pay.VerifiedAt = now; pay.ReceiptNo = ReceiptNo();
+        pay.ReferenceNo = pay.XenditId; pay.OnlineChannel = "GCASH";
+        ActivateTarget(pay);
+        Notify(pay.MemberId, "payment", "Payment received", pay.PaymentCode);
+        Audit("payment.online", "payments", pay.Id.ToString());
+        return "{\"paid\":true}";
     }
 
     // G12 (0062): desk_password_target, the Auth check, then desk_password_result. Wrong tries count with the desk PIN's.
@@ -801,19 +821,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (ump.Status is not (Status.Active or Status.Expired)) throw Err("not_renewable");
                 return Clone(CreateExtension(uid, NewestVersion(ump.MembershipPackageId), a));   // G9
             }
-            case "submit_payment_proof":
-            {
-                RequireActive();
-                var pay = All<Payment>().FirstOrDefault(p => p.Id == I("p_payment_id") && p.MemberId == uid) ?? throw Err("not_found");
-                var reference = Opt("p_reference_no"); var proof = Opt("p_proof_path");
-                if (reference is null || proof is null) throw Err("bad_input");
-                if (pay.Status != Status.Pending || pay.Method != PayMethod.Qr || pay.ExpiresAt <= now) throw Err("already_processed");
-                if (All<Payment>().Any(p => p.Id != pay.Id && p.ReferenceNo == reference && p.Status is Status.Pending or Status.Verified))
-                    throw Err("duplicate key value violates unique constraint \"payments_reference_no_key\"");
-                pay.ReferenceNo = reference; pay.ProofPath = proof;
-                NotifyStaff("payment", "Payment waiting for review");
-                return null;
-            }
+            case "submit_payment_proof": throw Err("permission denied for function submit_payment_proof");   // 0075: members pay online now
             case "verify_payment":
             {
                 Require("payments:verify");

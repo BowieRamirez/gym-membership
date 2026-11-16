@@ -269,12 +269,13 @@ sealed class PaymentLookup
 // ===================== Membership (member) =====================
 public sealed record MembershipRow(int Id, string PackageName, string Status, DateTime? EndsAt, int? DaysLeft, int DurationDays, bool CanRenew, decimal Price);
 
-/// <summary>One of the member's payments. QR payments show the code to type into the e-wallet and wait for a reference number and screenshot.</summary>
+/// <summary>One of the member's payments. Online (qr) payments are paid through Xendit's checkout (Xendit plan, 2026-11-16).</summary>
 public sealed record PaymentItem(int Id, string What, string PaymentCode, string Kind, string Method, decimal Amount, decimal DiscountAmount, string Status,
-    DateTime CreatedAt, DateTime? ExpiresAt, string? ReferenceNo, bool HasProof, string? ReceiptNo, string? RejectedReason, int? ItemId, int? PackageSnapshotId = null)
+    DateTime CreatedAt, DateTime? ExpiresAt, string? ReferenceNo, bool HasProof, string? ReceiptNo, string? RejectedReason, int? ItemId, int? PackageSnapshotId = null,
+    bool HasCheckout = false)
 {
-    /// <summary>A QR payment that still needs the member to pay, then send the reference number and screenshot.</summary>
-    public bool NeedsProof => Status == Models.Status.Pending && Method == PayMethod.Qr && !HasProof && (ExpiresAt is null || ExpiresAt > DateTime.UtcNow);
+    /// <summary>An online payment the member still has to pay (a proof sent before the switch is with the desk instead).</summary>
+    public bool NeedsPayment => Status == Models.Status.Pending && Method == PayMethod.Qr && !HasProof && (ExpiresAt is null || ExpiresAt > DateTime.UtcNow);
     public bool AwaitingReview => Status == Models.Status.Pending && HasProof;
     /// <summary>A membership or extension payment nobody has verified yet: the member can still withdraw it.</summary>
     public bool CanCancel => Status == Models.Status.Pending && Kind is PayKind.Membership or PayKind.Renewal;
@@ -301,8 +302,10 @@ public interface IMembershipService
     /// <summary>Starts a membership: a pending QR payment with a code to pay. The membership turns on when staff verify it.</summary>
     Task<AppResult<Payment>> AvailAsync(int packageId, string? discountCode = null);
     Task<AppResult<Payment>> RenewAsync(int membershipId, string? discountCode = null);
-    /// <summary>After paying by QR: the e-wallet reference number and a screenshot of the payment.</summary>
-    Task<AppResult<bool>> SubmitProofAsync(int paymentId, string referenceNo, string fileName, byte[] data);
+    /// <summary>Xendit's checkout for an online payment: a link to open, or Paid when it is already paid (demo mode pays at once).</summary>
+    Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId);
+    /// <summary>Asks the server whether the checkout was paid, and confirms it if Xendit's notice hasn't arrived (X10).</summary>
+    Task<AppResult<bool>> CheckOnlineAsync(int paymentId);
     /// <summary>Starts a fresh payment for the same item after a rejection or expiry.</summary>
     Task<AppResult<Payment>> PayAgainAsync(PaymentItem item);
     Task<AppResult<GymSettings>> GymAsync();
@@ -311,6 +314,9 @@ public interface IMembershipService
     /// <summary>A link to the gym's payment QR image, or null if the owner has not uploaded one.</summary>
     Task<AppResult<string?>> QrUrlAsync();
 }
+
+/// <summary>xendit-checkout's answer: the checkout link to open, or Paid.</summary>
+public sealed record OnlineCheckout(string? Url, bool Paid);
 
 /// <summary>What a member may open: full pages need an active plan; a pending payment only changes the wording.</summary>
 public sealed record Access(bool Active, bool PaymentPending);
@@ -363,7 +369,7 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
         var look = await PaymentLookup.LoadAsync(gw);
         return pays.OrderByDescending(p => p.CreatedAt).Select(p => new PaymentItem(p.Id,
             p.DiscountAmount > 0 ? look.Item(p) + " (discount)" : look.Item(p), p.PaymentCode, p.Kind, p.Method, p.Amount, p.DiscountAmount, p.Status,
-            p.CreatedAt, p.ExpiresAt, p.ReferenceNo, p.ProofPath is not null, p.ReceiptNo, p.RejectedReason, look.ItemId(p), p.PackageSnapshotId)).ToList();
+            p.CreatedAt, p.ExpiresAt, p.ReferenceNo, p.ProofPath is not null, p.ReceiptNo, p.RejectedReason, look.ItemId(p), p.PackageSnapshotId, p.XenditId is not null)).ToList();
     });
 
     static Dictionary<string, object> WithCode(Dictionary<string, object> args, string? code)
@@ -375,17 +381,16 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
     public Task<AppResult<Payment>> RenewAsync(int membershipId, string? discountCode = null) =>
         Safe.RunAsync(() => gw.RpcAsync<Payment>("renew_membership", WithCode(new() { ["p_ump_id"] = membershipId }, discountCode)));
 
-    public async Task<AppResult<bool>> SubmitProofAsync(int paymentId, string referenceNo, string fileName, byte[] data)
+    public Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId) => Safe.RunAsync(async () =>
     {
-        if (string.IsNullOrWhiteSpace(referenceNo)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
-        return await Safe.RunAsync(async () =>
-        {
-            var uid = gw.CurrentUserId ?? throw new Exception("not authenticated");
-            var path = await gw.UploadAsync("payment-proofs", $"{uid}/{paymentId}-{fileName}", data);
-            await gw.RpcAsync("submit_payment_proof", new() { ["p_payment_id"] = paymentId, ["p_reference_no"] = referenceNo.Trim(), ["p_proof_path"] = path });
-            return true;
-        });
-    }
+        var answer = System.Text.Json.JsonDocument.Parse(await gw.InvokeFunctionAsync("xendit-checkout", new() { ["payment_id"] = paymentId })).RootElement;
+        return new OnlineCheckout(answer.TryGetProperty("url", out var url) ? url.GetString() : null,
+            answer.TryGetProperty("paid", out var paid) && paid.GetBoolean());
+    });
+
+    public Task<AppResult<bool>> CheckOnlineAsync(int paymentId) => Safe.RunAsync(async () =>
+        System.Text.Json.JsonDocument.Parse(await gw.InvokeFunctionAsync("xendit-checkout", new() { ["payment_id"] = paymentId, ["check"] = true }))
+            .RootElement.TryGetProperty("paid", out var paid) && paid.GetBoolean());
 
     public async Task<AppResult<Payment>> PayAgainAsync(PaymentItem item) => item.PackageSnapshotId is { } package && item.Kind is PayKind.Membership or PayKind.Renewal
         ? await new SubscriptionService(gw).ExtendAsync(package)

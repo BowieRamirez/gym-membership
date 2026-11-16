@@ -17,7 +17,6 @@ public partial class MyMembershipViewModel
         if (IsBusy) return;
         Notice = null;
         if (!await RunAsync(() => subscription.CancelPendingPaymentAsync(item.Id))) return;
-        ReferenceNo = "";
         Notice = "Payment cancelled. Nothing was charged; you can choose a package again.";
         await LoadAsync();
     }

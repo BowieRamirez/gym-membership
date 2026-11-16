@@ -40,7 +40,7 @@ public partial class CoachChoice(FreeCoach coach) : ObservableObject
 /// A member with a pass or a session books straight away; anyone else holds the time until the payment is approved. Below, their bookings with
 /// Cancel, End now, Send proof and "I didn't use it" (F13).
 /// </summary>
-public partial class BookAmenityViewModel(IReservationService svc, IAmenityService amenities, IAppNavigator nav, IMembershipService? membership = null) : LoadableViewModel
+public partial class BookAmenityViewModel(IReservationService svc, IAmenityService amenities, IAppNavigator nav, IMembershipService? membership = null, IUrlOpener? opener = null) : LoadableViewModel
 {
     static readonly CultureInfo En = CultureInfo.InvariantCulture;
     static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8));   // Manila
@@ -81,7 +81,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     public PriceSplit Split => Picked is not { } p ? new(0, 0, 0, 0, 0)
         : PayFirst ? BookingPrice.Split(p.Amenity.Price, p.Amenity.CoachFee, IsWithCoach && PickedCoach is not null, Percent, CodePercent)
         : BookingPrice.Split(0, p.Amenity.CoachFee, IsWithCoach && PickedCoach is not null, 0);
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(PayQr), nameof(PayCash))] private string method = PayMethod.Qr;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(PayQr), nameof(PayCash), nameof(HoldText))] private string method = PayMethod.Qr;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsClaiming))] private BookingRow? claiming;
     [ObservableProperty] private string claimReason = "";
     AmenityGrid? _grid;
@@ -99,7 +99,8 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     public string DayText => Day.ToString("dddd d MMMM", En);
     public string BookText => PayFirst ? $"Book and pay ₱{Split.Down:N2}" : "Book";
     public bool CanBook => Time is not null && Length is not null && (!IsWithCoach || PickedCoach is not null);
-    public string HoldText => PayFirst ? "Not yours until the desk verifies the down payment. If someone else's is verified first, yours is refunded."
+    public string HoldText => PayFirst && PayCash ? "Not yours until the desk takes the down payment. If someone else's is paid first, yours is refunded."
+        : PayFirst ? "Not yours until the down payment is paid online. If someone else's is paid first, yours is refunded."
         : Split.Balance > 0 ? $"Uses your pass. The ₱{Split.Balance:N2} coach fee is paid at the desk." : "Uses your pass, nothing to pay.";
     /// <summary>Why times are faded: none left that day, or (paying first, today) the hold needs the start more than 1 hour away.</summary>
     public bool IsDayClosed => _closed.ContainsKey(Day);
@@ -235,7 +236,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     {
         if (Picked is not { } card || Time is null || Length is null) return;
         Notice = null;
-        var how = !PayFirst ? HoldText : (PayCash ? $"Pay the ₱{Split.Down:N2} down payment at the front desk." : $"Pay the ₱{Split.Down:N2} down payment by GCash and send your proof.")
+        var how = !PayFirst ? HoldText : (PayCash ? $"Pay the ₱{Split.Down:N2} down payment at the front desk." : $"Pay the ₱{Split.Down:N2} down payment online now.")
             + $" The ₱{Split.Balance:N2} balance is paid at the desk. It's yours once the desk verifies the down payment.";
         if (!await Confirm.AskAsync($"Book {card.Amenity.Name}?", $"{Summary}\n{how}", BookText)) return;
         Reservation? made = null;
@@ -251,7 +252,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
         var row = Bookings.FirstOrDefault(b => b.Booking.Id == made!.Id);
         Notice = made!.Status != "awaiting_payment" ? "Booked." : PayCash
             ? $"Requested. {row?.Detail ?? "Pay the down payment at the front desk."}"
-            : "Requested. Send your GCash proof for the down payment from My membership. It's yours once the desk verifies it.";
+            : "Requested. Tap Pay online on the booking below. It's yours once the down payment is paid.";
     }
 
     // ---------- my bookings ----------
@@ -273,7 +274,22 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     private async Task EndAsync(BookingRow row)
     { Notice = null; if (!await Confirm.AskAsync($"End your {row.Amenity} booking now?", "The amenity cools down for 30 minutes from now.", "End now")) return; if (await RunAsync(() => svc.EndAsync(row.Booking.Id))) { Notice = "Ended. The amenity cools down for 30 minutes from now."; await LoadBookingsAsync(); } }
 
-    [RelayCommand] private void SendProof() => nav.GoToMembership();
+    // Xendit's checkout for the down payment; demo mode is paid at once. Coming back to the page reloads the bookings.
+    [RelayCommand]
+    private async Task PayOnlineAsync(BookingRow row)
+    {
+        Notice = null;
+        if (membership is null || row.Payment is not { } pay) return;
+        if (!await Confirm.AskAsync($"Pay the ₱{pay.Amount:N2} down payment online?", $"{row.Amenity}, {row.When}\nYou pay on Xendit's page by GCash, Maya, QR Ph or card, then come back here.", "Pay online")) return;
+        OnlineCheckout? checkout = null;
+        if (!await RunAsync(() => membership.PayOnlineAsync(pay.Id), c => checkout = c)) return;
+        if (checkout!.Paid) { Notice = "Paid."; await LoadBookingsAsync(); return; }
+        if (checkout.Url is { } url && opener is not null)
+        {
+            await opener.OpenAsync(url);
+            Notice = "Finish paying on Xendit's page, then come back here.";
+        }
+    }
 
     [RelayCommand] private void Claim(BookingRow row) { Notice = null; Claiming = row; ClaimReason = ""; }
     [RelayCommand] private void KeepClaim() => Claiming = null;

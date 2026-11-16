@@ -226,20 +226,20 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
 
     [RelayCommand] private void UseCode(AvailableCode code) => DiscountCode = code.Code;
 
-    // avail creates a pending QR payment; paying it and sending the proof happens on My membership
+    // avail creates a pending online payment; paying it through Xendit happens on My membership
     [RelayCommand]
     private async Task AvailAsync(MembershipPackage package)
     {
         Notice = null;
         var code = string.IsNullOrWhiteSpace(DiscountCode) ? "" : $"\nDiscount code {DiscountCode.Trim()} is applied when you pay.";
-        if (!await Confirm.AskAsync($"Buy {package.Name}?", $"₱{package.Price:N2} for {package.DurationDays} days.{code}\nYou pay by QR on My membership.\n\n{RefundRules.Line}", "Buy membership")) return;
+        if (!await Confirm.AskAsync($"Buy {package.Name}?", $"₱{package.Price:N2} for {package.DurationDays} days.{code}\nYou pay online on My membership.\n\n{RefundRules.Line}", "Buy membership")) return;
         if (!await RunAsync(() => subscription.ExtendAsync(package.Id, DiscountCode), _ => { })) return;
         DiscountCode = null;
         nav.GoToMembership();
     }
 }
 
-public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker picker, ISubscriptionService subscription, IAttendanceService? codes = null) : LoadableViewModel
+public partial class MyMembershipViewModel(IMembershipService svc, ISubscriptionService subscription, IAttendanceService? codes = null, IUrlOpener? opener = null) : LoadableViewModel
 {
     public ObservableCollection<MembershipRow> Memberships { get; } = new();
     /// <summary>The payments the status filter lets through; the full list stays in <c>allPayments</c>.</summary>
@@ -258,8 +258,10 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
     /// <summary>Nothing running and no payment in progress (to pay or being checked): the highlight card itself offers the way in.</summary>
     [ObservableProperty] private bool canStart;
 
-    /// <summary>The QR payment the member still has to pay and send proof for, if any.</summary>
+    /// <summary>The online payment the member still has to pay through Xendit, if any.</summary>
     [ObservableProperty] private PaymentItem? payNow;
+    /// <summary>Back from Xendit's page: the server is asking Xendit whether it was paid (X10).</summary>
+    [ObservableProperty] private bool checking;
     /// <summary>F6: the member's one-use QR pass for the front desk, good for 5 minutes; never payment.</summary>
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasCode))] private string? myCode;
     public bool HasCode => !string.IsNullOrEmpty(MyCode);
@@ -280,11 +282,6 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
         var left = _passExpires!.Value - utcNow;
         PassLeftText = left.TotalSeconds < 60 ? "New code in under a minute" : $"New code in {(int)Math.Ceiling(left.TotalMinutes)} minutes";
     }
-    [ObservableProperty] private string referenceNo = "";
-    [ObservableProperty] private string? accountName;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasQr))] private string? qrUrl;
-    public bool HasQr => QrUrl is not null;
-
     public override Task OnAppearingAsync() => LoadAsync();
 
     [RelayCommand]
@@ -300,22 +297,31 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
                 Fill(Terms, rows);
                 TermEndsText = rows.FirstOrDefault(t => t.State == Status.Active) is { } t ? $"{t.Term.EndsAt.AddHours(8):d MMM yyyy}" : "No active term";   // Manila, as the terms table
             })) return;
-            var waiting = false;
-            if (!await RunAsync(svc.MyPaymentsAsync, rows =>
+            if (!await LoadPaymentsAsync()) return;
+            if (PayNow is { HasCheckout: true } open)
             {
-                allPayments = rows; ApplyFilter();
-                PaymentsWaitingText = rows.Count(p => p.Status == Status.Pending).ToString();
-                PayNow = rows.FirstOrDefault(p => p.NeedsProof);
-                waiting = PayNow is not null || rows.Any(p => p.AwaitingReview);
-            })) return;
-            if (!await RunAsync(svc.MyMembershipsAsync, rows => { Fill(Memberships, rows); UpdateHero(rows, waiting); })) return;
-            if (PayNow is not null)
-            {
-                if (!await RunAsync(svc.GymAsync, g => AccountName = g.QrAccountName)) return;
-                await RunAsync(svc.QrUrlAsync, url => QrUrl = url);
+                // back from Xendit's page: if its notice hasn't arrived yet, the server asks Xendit and confirms it
+                var paid = false;
+                Checking = true;
+                try { await RunAsync(() => svc.CheckOnlineAsync(open.Id), v => paid = v); }
+                finally { Checking = false; }
+                if (paid) await LoadPaymentsAsync();
             }
         }
         finally { _loading = false; }
+    }
+
+    async Task<bool> LoadPaymentsAsync()
+    {
+        var waiting = false;
+        if (!await RunAsync(svc.MyPaymentsAsync, rows =>
+        {
+            allPayments = rows; ApplyFilter();
+            PaymentsWaitingText = rows.Count(p => p.Status == Status.Pending).ToString();
+            PayNow = rows.FirstOrDefault(p => p.NeedsPayment);
+            waiting = PayNow is not null || rows.Any(p => p.AwaitingReview);
+        })) return false;
+        return await RunAsync(svc.MyMembershipsAsync, rows => { Fill(Memberships, rows); UpdateHero(rows, waiting); });
     }
 
     [RelayCommand] private void SetFilter(string f) => Filter = f;
@@ -341,7 +347,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
             LaneFraction = Math.Clamp((double)left / Math.Max(1, active.DurationDays), 0, 1);
         }
         else if (waitingOnPayment)
-        { HeroNumber = "–"; HeroCaption = PayNow is not null ? "Pay by QR and send your proof to start your membership." : "Waiting for staff to verify your payment."; LaneFraction = 0; }
+        { HeroNumber = "–"; HeroCaption = PayNow is not null ? "Pay online to start your membership." : "Waiting for staff to verify your payment."; LaneFraction = 0; }
         else if (Terms.FirstOrDefault(t => t.State == Status.Scheduled) is { } next)
         { HeroNumber = "0"; HeroCaption = $"No active access. Your next paid term starts {next.Term.StartsAt.AddHours(8):d MMM yyyy, h:mm tt} (Manila)."; LaneFraction = 0; }
         else if (expired is not null)
@@ -350,19 +356,21 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
         { HeroNumber = "–"; HeroCaption = "Pick a package to get started."; LaneFraction = 0; }
     }
 
-    // the reference number from the e-wallet receipt, plus a screenshot of it
+    // Xendit's checkout opens in the browser; coming back to this page checks it (LoadAsync). Demo mode is paid at once.
     [RelayCommand]
-    private async Task SendProofAsync()
+    private async Task PayOnlineAsync()
     {
         Notice = null;
         if (PayNow is not { } pay) return;
-        if (string.IsNullOrWhiteSpace(ReferenceNo)) { ErrorMessage = "Enter the reference number from your e-wallet receipt."; return; }
-        if (await picker.PickAsync() is not { } file) { ErrorMessage = "Choose a screenshot of your payment to send."; return; }
-        if (!await Confirm.AskAsync("Send this payment proof?", $"{pay.What}\n₱{pay.Amount:N2}\nReference {ReferenceNo.Trim()}\nThe front desk checks it against the gym's account.", "Send proof")) return;
-        if (!await RunAsync(() => svc.SubmitProofAsync(pay.Id, ReferenceNo, file.FileName, file.Data))) return;
-        ReferenceNo = "";
-        Notice = "Sent. The front desk will check it against the gym's account.";
-        await LoadAsync();
+        if (!await Confirm.AskAsync($"Pay ₱{pay.Amount:N2} online?", $"{pay.What}\nYou pay on Xendit's page by GCash, Maya, QR Ph or card, then come back here.", "Pay online")) return;
+        OnlineCheckout? checkout = null;
+        if (!await RunAsync(() => svc.PayOnlineAsync(pay.Id), c => checkout = c)) return;
+        if (checkout!.Paid) { Notice = "Paid. Your receipt is in your payments below."; await LoadAsync(); return; }
+        if (checkout.Url is { } url && opener is not null)
+        {
+            await opener.OpenAsync(url);
+            Notice = "Finish paying on Xendit's page, then come back here.";
+        }
     }
 
     [RelayCommand]
@@ -371,7 +379,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, IProofPicker 
         Notice = null;
         if (!await Confirm.AskAsync("Create a new payment?", $"{item.What}\n₱{item.Amount:N2}\nThe expired one stays in your history.", "Create payment")) return;
         if (!await RunAsync(() => svc.PayAgainAsync(item), _ => { })) return;
-        Notice = "New payment created. Pay by QR below, then send your proof.";
+        Notice = "New payment created. Pay online below.";
         await LoadAsync();
     }
 }

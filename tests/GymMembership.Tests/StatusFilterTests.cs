@@ -65,7 +65,7 @@ public class StatusFilterTests
     public async Task Membership_payments_filter_by_status()
     {
         var gw = await As("member");
-        var vm = new MyMembershipViewModel(new MembershipService(gw), new NoPicker(), new SubscriptionService(gw));
+        var vm = new MyMembershipViewModel(new MembershipService(gw), new SubscriptionService(gw));
         await vm.OnAppearingAsync();
         var all = vm.Payments.Count;
         Assert.NotEqual(0, all);
@@ -88,7 +88,7 @@ public class StatusFilterTests
     public async Task A_payment_waiting_for_review_shows_under_pending()
     {
         var gw = await As("bea");
-        var vm = new MyMembershipViewModel(new MembershipService(gw), new NoPicker(), new SubscriptionService(gw));
+        var vm = new MyMembershipViewModel(new MembershipService(gw), new SubscriptionService(gw));
         await vm.OnAppearingAsync();
         vm.SetFilterCommand.Execute("Pending");
         Assert.Contains(vm.Payments, p => p.PaymentCode == "GYM-7F3K2");

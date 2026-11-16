@@ -32,22 +32,12 @@ public class PaymentTests
         Assert.Equal((PayMethod.Qr, Status.Pending, 4000m), (pay.Method, pay.Status, pay.Amount));
         Assert.InRange((pay.ExpiresAt!.Value - DateTime.UtcNow).TotalHours, 47, 48);
         var item = (await member.MyPaymentsAsync()).Value!.Single();
-        Assert.True(item.NeedsProof);
+        Assert.True(item.NeedsPayment);
 
-        // 2. the member pays, then sends the reference number and a screenshot
-        Assert.Equal(AppErrorKind.Validation, (await member.SubmitProofAsync(pay.Id, "  ", "slip.png", [1])).Error);
-        Assert.True((await member.SubmitProofAsync(pay.Id, "GC-8841", "slip.png", [1, 2, 3])).Ok);
-        item = (await member.MyPaymentsAsync()).Value!.Single();
-        Assert.True(item.AwaitingReview);
-        Assert.False(item.NeedsProof);
-
-        // 3. the front desk sees it with its reference number, approves, and the plan switches on
+        // 2. the member pays online through Xendit (demo mode: paid at once), and the plan switches on with no staff step
+        Assert.True((await member.PayOnlineAsync(pay.Id)).Value!.Paid);
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
-        var staff = new PaymentStaffService(gw);
-        var row = (await staff.PendingAsync()).Value!.First(r => r.Payment.Id == pay.Id);
-        Assert.Equal(("Ana Reyes", "Quarterly", "GC-8841", true), (row.Payer, row.Item, row.Payment.ReferenceNo, row.HasProof));
-        Assert.True((await staff.VerifyAsync(pay.Id, true)).Ok);
-        Assert.Equal(AppErrorKind.Conflict, (await staff.VerifyAsync(pay.Id, true)).Error);
+        Assert.Equal(AppErrorKind.Conflict, (await new PaymentStaffService(gw).VerifyAsync(pay.Id, true)).Error);
 
         await gw.SignInAsync("ana@demo.io", "secret12");
         item = (await member.MyPaymentsAsync()).Value!.Single();
@@ -56,15 +46,6 @@ public class PaymentTests
         Assert.Equal(("Quarterly", "active"), (plan.PackageName, plan.Status));
         Assert.InRange(plan.DaysLeft!.Value, 89, 90);
         Assert.True((await member.AccessAsync()).Value!.Active);
-    }
-
-    [Fact]
-    public async Task A_reference_number_cannot_be_used_on_two_payments()
-    {
-        var gw = await As("carlo@demo.io");
-        var member = new MembershipService(gw);
-        var pay = (await member.AvailAsync((await Package(gw, "Monthly")).Id)).Value!;
-        Assert.Equal(AppErrorKind.Conflict, (await member.SubmitProofAsync(pay.Id, "GC-20260412-889", "x.png", [1])).Error);   // Bea's seeded reference
     }
 
     [Fact]
