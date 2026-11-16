@@ -1312,8 +1312,10 @@ public static class MemberCheck
 
 /// <param name="Status">Online only: active, pending, expired or inactive (G10). Null on the saved list, which knows paid or not.</param>
 public sealed record MemberHit(string MemberId, string Username, bool HasActiveMembership, DateTime? PaidUntil = null, string? AvatarPath = null,
-    string? Status = null, DateTime? EndedAt = null, string? Phone = null)
+    string? Status = null, DateTime? EndedAt = null, string? Phone = null, string? Email = null)
 {
+    /// <summary>The Cashier's contact column: phone and email, so two people with the same name can be told apart.</summary>
+    public string ContactText => string.Join(" · ", new[] { Phone, Email }.Where(s => !string.IsNullOrWhiteSpace(s)));
     public string PlanStatus => HasActiveMembership ? "active" : Status == "expired" && EndedAt is null ? "no_membership" : Status ?? "inactive";
     /// <summary>Forgot phone: what staff check before letting someone in without a QR; the reason when they can't (G10).</summary>
     public string PlanText => HasActiveMembership ? PaidUntil is { } until ? $"Paid until {until.AddHours(8):d MMM yyyy}" : "Paid"
@@ -1469,8 +1471,8 @@ public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = 
         bool Matches(Profile p, string name) => name.Contains(text, StringComparison.OrdinalIgnoreCase) || p.Username.Contains(text, StringComparison.OrdinalIgnoreCase)
             || (digits.Length >= 3 && Digits(p.Phone).Contains(digits));
         return members.Join(profiles, m => m.UserId, p => p.Id, (m, p) => (p, Hit: new MemberHit(m.UserId, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName,
-                p.IsActive && active.ContainsKey(m.UserId), active.GetValueOrDefault(m.UserId), p.AvatarPath, StatusOf(p), ended.GetValueOrDefault(m.UserId), p.Phone)))
-            .Where(x => Matches(x.p, x.Hit.Username)).Select(x => x.Hit).Take(20).ToList();
+                p.IsActive && active.ContainsKey(m.UserId), active.GetValueOrDefault(m.UserId), p.AvatarPath, StatusOf(p), ended.GetValueOrDefault(m.UserId), p.Phone, p.Username)))
+            .Where(x => Matches(x.p, x.Hit.Username)).Select(x => x.Hit).ToList();   // every match: the Cashier's table pages by 10
     });
 
     public Task<AppResult<MemberPass>> MyPassAsync() =>

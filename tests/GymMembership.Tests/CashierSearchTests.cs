@@ -35,6 +35,23 @@ public class CashierSearchTests
         Assert.Equal(("Bea Lim", "0917 555 0142"), (hit.Username, hit.Phone));
     }
 
+    [Fact]   // owner, 2026-11-16: the results are a table, 10 to a page; every match is listed, no longer cut at 20
+    public async Task Every_match_is_listed_for_the_table_to_page()
+    {
+        var gw = new DemoGateway();
+        for (var i = 0; i < 25; i++) await gw.SignUpAsync($"zed{i}@demo.io", "secret12", "Zed", $"Walker{i}", TermsInfo.Version);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        Assert.Equal(25, (await new AttendanceService(gw).FindMembersAsync("zed")).Value!.Count);
+    }
+
+    [Fact]
+    public async Task A_row_shows_the_phone_and_the_email_to_tell_two_people_apart()
+    {
+        var hit = Assert.Single((await Find("bea")).Hits);
+        Assert.Equal(("bea@demo.io", "0917 555 0142 · bea@demo.io"), (hit.Email, hit.ContactText));
+        Assert.Equal("carlo@demo.io", Assert.Single((await Find("carlo")).Hits).ContactText);   // no phone: just the email
+    }
+
     [Fact]
     public async Task Find_with_no_match_says_so()
     {

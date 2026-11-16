@@ -7,6 +7,39 @@
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.CashierPage" x:DataType="vm:CashierViewModel" Title="Cashier">
 
+    <v:BasePage.Resources>
+        <!-- owner, 2026-11-16: the search results are a table (as the app's other lists), 10 to a page; the contact column tells
+             two people with the same name apart; Choose is the row's one action -->
+        <DataTemplate x:Key="HitRow" x:DataType="svc:MemberHit">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="1.2*,1.1*,1.6*,150,110" ColumnSpacing="12">
+                    <Label Text="{Binding Username}" FontFamily="BarlowSemiBold" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="1" Text="{Binding PlanText}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="2" Text="{Binding ContactText}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    <c:StatusChip Grid.Column="3" Status="{Binding PlanStatus}" VerticalOptions="Center" />
+                    <Button Grid.Column="4" Text="Choose" Style="{StaticResource SmallOutlineButton}" Clicked="OnPickMember" HorizontalOptions="End" VerticalOptions="Center"
+                            SemanticProperties.Description="{Binding Username, StringFormat='Choose {0}'}" />
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+        <!-- narrow windows: the same facts stacked -->
+        <DataTemplate x:Key="HitCard" x:DataType="svc:MemberHit">
+            <VerticalStackLayout>
+                <Grid Padding="14,10" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="{Binding Username}" FontFamily="BarlowSemiBold" />
+                        <Label Text="{Binding PlanText}" Style="{StaticResource Caption}" />
+                        <Label Text="{Binding ContactText}" Style="{StaticResource Caption}" />
+                    </VerticalStackLayout>
+                    <Button Grid.Column="1" Text="Choose" Style="{StaticResource SmallOutlineButton}" Clicked="OnPickMember" VerticalOptions="Center"
+                            SemanticProperties.Description="{Binding Username, StringFormat='Choose {0}'}" />
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+    </v:BasePage.Resources>
+
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='20,16,20,24', Default='16,12,16,20'}" Spacing="14">
             <Label Text="Payments taken here count as verified at once and get a receipt number for the paper receipt." Style="{StaticResource Muted}" />
@@ -168,24 +201,21 @@
                                             </HorizontalStackLayout>
                                         </VerticalStackLayout>
                                     </Border>
-                                    <VerticalStackLayout Spacing="8" MaximumWidthRequest="640" HorizontalOptions="Start" BindableLayout.ItemsSource="{Binding Hits}">
-                                        <BindableLayout.ItemTemplate>
-                                            <DataTemplate x:DataType="svc:MemberHit">
-                                                <Border Style="{StaticResource Row}">
-                                                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="14">
-                                                        <VerticalStackLayout Spacing="2" VerticalOptions="Center">
-                                                            <Label Text="{Binding Username}" FontFamily="BarlowSemiBold" />
-                                                            <Label Text="{Binding PlanText}" Style="{StaticResource Caption}" />
-                                                            <Label Text="{Binding Phone}" Style="{StaticResource Caption}" IsVisible="{Binding Phone, Converter={StaticResource IsNotNull}}" />
-                                                        </VerticalStackLayout>
-                                                        <c:StatusChip Grid.Column="1" Status="{Binding PlanStatus}" VerticalOptions="Center" />
-                                                        <Button Grid.Column="2" Text="Choose" Style="{StaticResource SmallOutlineButton}" Clicked="OnPickMember" VerticalOptions="Center"
-                                                                SemanticProperties.Description="{Binding Username, StringFormat='Choose {0}'}" />
-                                                    </Grid>
-                                                </Border>
-                                            </DataTemplate>
-                                        </BindableLayout.ItemTemplate>
-                                    </VerticalStackLayout>
+                                    <Border Style="{StaticResource TablePanel}" IsVisible="{Binding HasHits}">
+                                        <VerticalStackLayout>
+                                            <VerticalStackLayout x:Name="HitHead" IsVisible="{OnIdiom Phone=False, Default=True}">
+                                                <Grid Style="{StaticResource TableHead}" ColumnDefinitions="1.2*,1.1*,1.6*,150,110" ColumnSpacing="12">
+                                                    <Label Text="Member" Style="{StaticResource Caption}" />
+                                                    <Label Grid.Column="1" Text="Plan" Style="{StaticResource Caption}" />
+                                                    <Label Grid.Column="2" Text="Phone and email" Style="{StaticResource Caption}" />
+                                                    <Label Grid.Column="3" Text="Status" Style="{StaticResource Caption}" />
+                                                </Grid>
+                                                <BoxView Style="{StaticResource Hairline}" />
+                                            </VerticalStackLayout>
+                                            <c:TableBody Items="{Binding Hits}" Header="{x:Reference HitHead}" WideFrom="760"
+                                                         RowTemplate="{StaticResource HitRow}" CardTemplate="{StaticResource HitCard}" />
+                                        </VerticalStackLayout>
+                                    </Border>
                                     <Label Text="{Binding Member.Username, StringFormat='Chosen: {0}'}" FontFamily="BarlowSemiBold" IsVisible="{Binding Member, Converter={StaticResource IsNotNull}}" />
 
                                     <Label Text="Choose one" Style="{StaticResource SectionTitle}" Margin="0" IsVisible="{Binding NeedsMember}" />

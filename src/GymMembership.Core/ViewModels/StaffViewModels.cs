@@ -242,7 +242,9 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
 
     /// <summary>Cashier plan Y1: Find ran and nobody matched; the page says so (it used to fill a closed dropdown in silence).</summary>
     [ObservableProperty] private bool noMatch;
-    [RelayCommand] private Task FindAsync() => RunAsync(() => members.FindMembersAsync(Search), rows => { Fill(Hits, rows); NoMatch = rows.Count == 0; });
+    [RelayCommand] private Task FindAsync() => RunAsync(() => members.FindMembersAsync(Search), rows => { Fill(Hits, rows); NoMatch = rows.Count == 0; OnPropertyChanged(nameof(HasHits)); });
+    /// <summary>The results table shows once a search found someone.</summary>
+    public bool HasHits => Hits.Count > 0;
     [RelayCommand] private void PickMember(MemberHit hit) => Member = hit;
 
     // ---- cashier plan Y2: nobody matched, so the desk registers the customer as a member (search first, so nobody is made twice) ----
@@ -264,7 +266,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         string? id = null;
         if (!await RunAsync(() => svc.RegisterMemberAsync(NewFirstName, NewLastName, NewEmail, NewPhone, password), v => id = v)) return;
         Search = NewEmail.Trim();
-        await RunAsync(() => members.FindMembersAsync(Search), rows => { Fill(Hits, rows); NoMatch = rows.Count == 0; Member = rows.FirstOrDefault(h => h.MemberId == id); });
+        await RunAsync(() => members.FindMembersAsync(Search), rows => { Fill(Hits, rows); NoMatch = rows.Count == 0; OnPropertyChanged(nameof(HasHits)); Member = rows.FirstOrDefault(h => h.MemberId == id); });
         IsRegistering = false;
         NewFirstName = NewLastName = NewEmail = NewPhone = "";
         Notice = $"{name} is a member now. Temporary password: {password}. Hand it over; they change it at first sign-in.";
