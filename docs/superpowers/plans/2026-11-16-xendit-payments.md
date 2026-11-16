@@ -3,8 +3,8 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 Created: 2026-11-16
-Last updated: 2026-11-16 (plan written, nothing built)
-Status: IN PROGRESS (Phases 1-4 done, review fixes 0077 live; Phase 5 waits on the owner's Xendit keys). Next migration `0078`.
+Last updated: 2026-11-16 (marked done by the owner)
+Status: DONE (owner, 2026-11-16). All five phases built, reviewed and live (`0075`-`0077`, `xendit-checkout`, `xendit-webhook`); branch pushed to GitHub at `2d8d5e6`, not merged. Follow-ups are listed under "Current work". The cashier/walk-in/logs plan continued on this branch from `0078` (see `2026-11-16-cashier-walkin-logs.md`).
 Branch: `xendit-payments-2026-11-16`, new from `main` at `b0166b9` (v0.6.0). Every phase stays on this branch; the owner merges to `main` when the plan is done.
 
 **Goal:** Members pay memberships, renewals, packages and amenity down payments online through Xendit's hosted checkout, and a paid checkout verifies and activates the purchase by itself, replacing the GCash-proof upload.
@@ -31,6 +31,8 @@ Status vocabulary: `PLANNED`, `WAITING`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`
 
 ### Current work / restart here
 
+- **2026-11-16: DONE (owner).** Real Test-mode payments ran on the live project: payment 14 (member, online) and payment 15 (desk, GCash, Xendit "Successful") are verified with receipts and their memberships active. Owner set the Xendit keys, the webhook URL and the methods (Task 2 Step 5). Whole-branch review done; its Critical and Important findings are fixed (`0077`, later `0082`).
+- **Follow-ups (not blocking "done"):** (1) **Xendit's paid notice did not confirm payment 15 on its own**: it was confirmed by the member's My membership check (X10). Cause not found yet; needs the Xendit webhook delivery log or the Supabase `xendit-webhook` log around 8:56 PM. Until then the desk taps Check payment and members' My membership confirms. (2) Pixel 7 phone check of the Pay online card (light/dark/1.3) not done. (3) Deferred minors in the ledger (unknown-session webhook only logs; cancelled/rejected payments leave the Xendit page open; Book an amenity doesn't re-check on return; check error banner on every 20 s tick; return page wording now neutral; seconds-left session reused). (4) Switching to Xendit live keys after account activation (owner, go-live list Task 6 Step 5).
 - **2026-11-16: Phases 3 and 4 IMPLEMENTED (app only, no database change); Phase 5 partly done.** Core + demo + member screens (`a0be36f`, `81214bb`), staff Payments page + terms text (`7e1b7ae`), break attempts (`5b2486c`), dead `QrUrlAsync` removed (`4a425b2`). xUnit 1075/1075; DB 629 checks exit 0; Windows and Android builds succeed. Windows demo look at My membership's Pay online card done. UI scripts: Admin navigation PASS, Session requests PASS, **Archive FAILS at `ConfirmAccountDeletion` on `origin/main` too** (not this branch). Final whole-branch review running. **Waiting on the owner:** Xendit secrets + webhook URL + methods (Task 2 Step 5), then the Test-mode run (Task 6 Steps 1-2), Pixel 7 phone check (light/dark/1.3), and a decision on removing Gym settings' payment QR upload (now unused; its line "Members can't pay until you add one" is untrue).
 - **2026-11-16: Phase 2 DEPLOYED, owner steps open.** `0076` live (replace an expired session only by naming it); `xendit-checkout` (JWT) and `xendit-webhook` (`--no-verify-jwt`) deployed. Live: webhook GET 200 with the return text, bad token 401, checkout without a member login 401, anon 42501 on `save_online_checkout`. `xendit.mjs` 14/14, `edge-rules.mjs` 8/8 (token check, mutation-tested). **Waiting on the owner:** secrets, webhook URL, payment methods (Task 2 Step 5); the live Test-mode payment (Step 6) moves to Phase 5. Next migration `0077`.
 - Phase 2 rulings: (d) Xendit Payment Sessions are short-lived (30 min default, Xendit recommends short), so X8 becomes: one session per payment at a time, 30 minutes (never past the payment's own `expires_at`); on Pay online the server asks Xendit: ACTIVE → same link, COMPLETED → confirm, EXPIRED/CANCELED → new session swapped in only by naming the old one (0076). (e) Session `reference_id` = `payment_code-<ms>` (unique per session); no `customer` object sent (optional in the docs); description "Gym payment <code>". (f) Someone else's payment answers `not_found`, not `forbidden`, so ids can't be probed. (g) The webhook acts only on `payment_session.completed`; Invoices v2 not built (Sessions exist in the docs; confirm on the owner's account in Phase 5).
@@ -40,10 +42,10 @@ Status vocabulary: `PLANNED`, `WAITING`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`
 | Phase | What | Needs | Status |
 |---|---|---|---|
 | 1 | Database: 0075, `confirm_online_payment` | X1, X2, X7, X9, X11 | DEPLOYED |
-| 2 | Edge Functions, secrets, webhook URL | X5, X8, X10, X14 | DEPLOYED (owner steps open) |
-| 3 | Core service, demo, member screens | X12 | IMPLEMENTED (phone check open) |
-| 4 | Staff Payments page, wording, terms | X13, X15 | IMPLEMENTED |
-| 5 | End-to-end Test-mode run, review, go-live list | X14 | IN PROGRESS (waits on owner's keys) |
+| 2 | Edge Functions, secrets, webhook URL | X5, X8, X10, X14 | DEPLOYED |
+| 3 | Core service, demo, member screens | X12 | DONE (phone check open) |
+| 4 | Staff Payments page, wording, terms | X13, X15 | DONE (Payments to verify later removed, cashier plan Y7) |
+| 5 | End-to-end Test-mode run, review, go-live list | X14 | DONE (live keys after activation) |
 
 ## 1. Repository findings (2026-11-16)
 
