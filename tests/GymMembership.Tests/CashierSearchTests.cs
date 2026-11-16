@@ -52,6 +52,21 @@ public class CashierSearchTests
         Assert.Equal("carlo@demo.io", Assert.Single((await Find("carlo")).Hits).ContactText);   // no phone: just the email
     }
 
+    [Fact]   // owner, 2026-11-16: the Cashier lists only active accounts, with or without a membership
+    public async Task Deactivated_accounts_are_left_out_of_the_cashiers_table()
+    {
+        var gw = new DemoGateway();
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        Assert.True((await new AdminService(gw).SetActiveAsync("u-carlo", false)).Ok);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();
+        var vm = new CashierViewModel(new PaymentStaffService(gw), new AttendanceService(gw));
+        await vm.OnAppearingAsync();
+        vm.Search = "demo"; await vm.FindCommand.ExecuteAsync(null);   // every demo account's email
+        Assert.DoesNotContain(vm.Hits, h => h.Username == "Carlo Diaz");                 // deactivated
+        Assert.Contains(vm.Hits, h => h.Username == "Joy");                              // active, no membership
+        Assert.Contains(vm.Hits, h => h.Username == "Alex Tan");                         // active, with one
+    }
+
     [Fact]
     public async Task Find_with_no_match_says_so()
     {

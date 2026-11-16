@@ -242,7 +242,9 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
 
     /// <summary>Cashier plan Y1: Find ran and nobody matched; the page says so (it used to fill a closed dropdown in silence).</summary>
     [ObservableProperty] private bool noMatch;
-    [RelayCommand] private Task FindAsync() => RunAsync(() => members.FindMembersAsync(Search), rows => { IsRegistering = false; Fill(Hits, rows); NoMatch = rows.Count == 0; OnPropertyChanged(nameof(HasHits)); OnPropertyChanged(nameof(ShowHits)); });
+    // owner, 2026-11-16: the Cashier lists only active accounts (with or without a membership); Membership checking still shows a
+    // deactivated one with its reason (G10), so the filter is here, not in the shared search
+    [RelayCommand] private Task FindAsync() => RunAsync(() => members.FindMembersAsync(Search), all => { var rows = all.Where(h => h.Status != "inactive").ToList(); IsRegistering = false; Fill(Hits, rows); NoMatch = rows.Count == 0; OnPropertyChanged(nameof(HasHits)); OnPropertyChanged(nameof(ShowHits)); });
     /// <summary>The results table shows once a search found someone.</summary>
     public bool HasHits => Hits.Count > 0;
     // owner, 2026-11-16: one at a time: Find shows the table, Register new member shows its form
