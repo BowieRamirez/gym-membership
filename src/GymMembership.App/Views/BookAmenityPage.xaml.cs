@@ -20,7 +20,7 @@ public partial class BookAmenityPage : BasePage
 	void OnLength(object? sender, EventArgs e) => Row<BookAmenityViewModel>(sender, v => v.PickLengthCommand);
 	void OnCoach(object? sender, EventArgs e) => Row<BookAmenityViewModel>(sender, v => v.PickCoachCommand);   // G14
 	void OnCode(object? sender, EventArgs e) => Row<BookAmenityViewModel>(sender, v => v.UseCodeCommand);     // G4
-	void OnSendProof(object? sender, EventArgs e) => Row<BookAmenityViewModel>(sender, v => v.SendProofCommand);
+	void OnPayOnline(object? sender, EventArgs e) => Row<BookAmenityViewModel>(sender, v => v.PayOnlineCommand);
 	void OnCancel(object? sender, EventArgs e) => Row<BookAmenityViewModel>(sender, v => v.CancelCommand);
 	void OnEnd(object? sender, EventArgs e) => Row<BookAmenityViewModel>(sender, v => v.EndCommand);
 	// the reason box sits under the list; bring it into view (on a phone the row tapped can be far below the top)

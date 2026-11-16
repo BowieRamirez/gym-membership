@@ -153,7 +153,7 @@ public class AmenitySessionTests
         var admin = new AdminService(gw);
         var settings = (await admin.GymSettingsAsync()).Value!;
         settings.WalkInPrice = 0;
-        Assert.Equal("bad_walk_in_price", (await admin.SaveGymSettingsAsync(settings, null)).Message);
+        Assert.Equal("bad_walk_in_price", (await admin.SaveGymSettingsAsync(settings)).Message);
     }
 
     [Fact]

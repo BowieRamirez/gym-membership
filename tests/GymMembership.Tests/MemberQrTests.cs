@@ -37,7 +37,7 @@ public class MemberQrTests
     public async Task F6_the_member_QR_says_when_it_changes_and_renews_itself_before_it_runs_out()
     {
         var (gw, _) = await As("member@demo.io");
-        var vm = new MyMembershipViewModel(new MembershipService(gw), new DeskPinTests.NoPicker(), new SubscriptionService(gw), new AttendanceService(gw));
+        var vm = new MyMembershipViewModel(new MembershipService(gw), new SubscriptionService(gw), new AttendanceService(gw));
         await vm.LoadCommand.ExecuteAsync(null);
         var first = vm.MyCode;
         Assert.StartsWith("GYM2-", first);
@@ -59,7 +59,7 @@ public class MemberQrTests
     {
         var gw = new DemoGateway(clock: new AheadClock());   // the server's clock an hour ahead of the phone's
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
-        var vm = new MyMembershipViewModel(new MembershipService(gw), new DeskPinTests.NoPicker(), new SubscriptionService(gw), new AttendanceService(gw));
+        var vm = new MyMembershipViewModel(new MembershipService(gw), new SubscriptionService(gw), new AttendanceService(gw));
         var now = DateTime.UtcNow;
         await vm.TickPassAsync(now);
         Assert.Equal("New code in 5 minutes", vm.PassLeftText);

@@ -29,5 +29,97 @@ test('both staff functions use the shared rules, so neither falls back to a leng
   }
 });
 
+// Xendit plan (2026-11-16): xendit-webhook believes only the verification token; an unset secret must refuse everything
+const { sameToken } = await import('../../functions/_shared/xendit.ts');
+for (const [name, given, expected, want] of [
+  ['the right token is accepted', 'tok-123', 'tok-123', true],
+  ['a wrong token is refused', 'tok-124', 'tok-123', false],
+  ['a prefix of the token is refused', 'tok-12', 'tok-123', false],
+  ['no token is refused', '', 'tok-123', false],
+  ['an unset secret refuses even an empty token', '', '', false],
+]) {
+  try { assert.equal(await sameToken(given, expected), want); passed++; console.log('  ok  ', `webhook token: ${name}`); }
+  catch (e) { failed++; console.log('  FAIL', `webhook token: ${name}`, e.message); }
+}
+
+// final review: replace a stored session only once Xendit says it can't be paid; end sessions 5 minutes before the payment's deadline
+const { nextStep, sessionExpiry } = await import('../../functions/_shared/xendit.ts');
+const min = 60_000, now = Date.parse('2026-11-16T08:00:00Z');
+for (const [name, actual, want] of [
+  ['no session yet: make one', nextStep(null), 'create'],
+  ['an open session is reused', nextStep('ACTIVE'), 'reuse'],
+  ['a paid session is confirmed', nextStep('COMPLETED'), 'confirm'],
+  ['an expired session is replaced', nextStep('EXPIRED'), 'create'],
+  ['a cancelled session is replaced', nextStep('CANCELED'), 'create'],
+  ['any other state is left alone', nextStep('PENDING'), 'wait'],
+  ['a far deadline: 30 minutes', sessionExpiry(now + 48 * 60 * min, now), now + 30 * min],
+  ['a near deadline: 5 minutes before it', sessionExpiry(now + 20 * min, now), now + 15 * min],
+  ['under 5 minutes plus 1 left: too late to start', sessionExpiry(now + 5 * min + 30_000, now), null],
+]) {
+  try { assert.deepEqual(actual, want); passed++; console.log('  ok  ', `xendit session: ${name}`); }
+  catch (e) { failed++; console.log('  FAIL', `xendit session: ${name}`, e.message); }
+}
+
+// cashier plan Y2: the front desk may create MEMBER accounts at the Cashier; reset-password and every other role stay admin-only
+{
+  const name = 'create-user: the front desk creates members only; reset-password stays admin-only';
+  try {
+    const create = fs.readFileSync(new URL('../../functions/create-user/index.ts', import.meta.url), 'utf8');
+    const reset = fs.readFileSync(new URL('../../functions/reset-password/index.ts', import.meta.url), 'utf8');
+    const shared = fs.readFileSync(new URL('../../functions/_shared/admin.ts', import.meta.url), 'utf8');
+    assert.match(create, /await requireDeskOrAdmin\(req, admin\)/);
+    assert.match(create, /if \(caller\.deskOnly && role !== 'member'\) return reply\(\{ error: 'forbidden' \}, 403\);/);
+    assert.match(create, /\.from\('profiles'\)\.update\(\{ phone \}\)/);
+    assert.doesNotMatch(reset, /requireDeskOrAdmin/);
+    assert.match(shared, /'employee'/);
+    assert.match(shared, /role: caller\.deskOnly \? 'employee'/);
+    passed++; console.log('  ok  ', name);
+  } catch (e) { failed++; console.log('  FAIL', name, e.message); }
+}
+
+// owner, 2026-11-16 (0083): the log keeps no IP address for anyone, so the Edge Functions' own log rows carry none either
+{
+  const name = 'Edge Function log rows carry no IP address';
+  try {
+    const shared = fs.readFileSync(new URL('../../functions/_shared/admin.ts', import.meta.url), 'utf8');
+    assert.match(shared, /ip_address: null/);
+    assert.doesNotMatch(shared, /cf-connecting-ip/);
+    passed++; console.log('  ok  ', name);
+  } catch (e) { failed++; console.log('  FAIL', name, e.message); }
+}
+
+// cashier plan Y6: the desk that recorded a desk online payment may open and check its checkout; nobody else's payment is reachable
+{
+  const src = fs.readFileSync(new URL('../../functions/xendit-checkout/index.ts', import.meta.url), 'utf8');
+  try {
+    assert.match(src, /\.select\('[^']*recorded_by[^']*'\)/);
+    assert.match(src, /p\.member_id !== caller\.user\.id && p\.recorded_by !== caller\.user\.id/);
+    passed++; console.log('  ok  ', 'xendit checkout: the member or the desk that recorded it, nobody else');
+  } catch (e) { failed++; console.log('  FAIL', 'xendit checkout: the member or the desk that recorded it, nobody else', e.message); }
+}
+
+// cashier plan Y5: the method comes from the session's payment request; a failed lookup never blocks the payment (null)
+const { paymentChannel } = await import('../../functions/_shared/xendit.ts');
+const realFetch = globalThis.fetch;
+globalThis.Deno = { env: { get: k => (k === 'XENDIT_SECRET_KEY' ? 'test-key' : undefined) } };
+let asked = null;
+globalThis.fetch = async (url, init) => { asked = { url, version: init?.headers?.['api-version'] };
+  return new Response(JSON.stringify({ channel_code: 'GCASH' }), { status: 200 }); };
+for (const [name, run] of [
+  ['the method comes from the payment request', async () => {
+    assert.equal(await paymentChannel('pr-123'), 'GCASH');
+    assert.deepEqual(asked, { url: 'https://api.xendit.co/v3/payment_requests/pr-123', version: '2024-11-11' });
+  }],
+  ['no payment request id: no method, no call', async () => { asked = null; assert.equal(await paymentChannel(undefined), null); assert.equal(asked, null); }],
+  ['Xendit refuses: no method, no error', async () => {
+    globalThis.fetch = async () => new Response('{"error_code":"NOT_FOUND"}', { status: 404 });
+    assert.equal(await paymentChannel('pr-404'), null);
+  }],
+]) {
+  try { await run(); passed++; console.log('  ok  ', `xendit channel: ${name}`); }
+  catch (e) { failed++; console.log('  FAIL', `xendit channel: ${name}`, e.message); }
+}
+globalThis.fetch = realFetch; delete globalThis.Deno;
+
 console.log(`Edge rules: ${passed} passed, ${failed} failed`);
 if (failed) process.exitCode = 1;

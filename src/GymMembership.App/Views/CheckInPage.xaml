@@ -229,7 +229,7 @@
                             </VerticalStackLayout>
                             <c:StatusChip Grid.Column="1" Status="{Binding PlanStatus}" VerticalOptions="Center" />
                             <!-- 9.7: outline (Scan member QR is the page's one yellow action). Someone who can't check in gets no Check in;
-                                 their line says why (G10) and the button is the desk's next step (G11): Cashier, or Payments to verify -->
+                                 their line says why (G10) and the button is the desk's next step (G11): the Cashier -->
                             <Button Grid.Column="2" Text="Check in" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanCheckIn}"
                                     Clicked="OnCheckIn" />
                             <Button Grid.Column="2" Text="{Binding NextStepText}" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding HasNextStep}"

@@ -19,7 +19,7 @@ public class ExtraNumbersTests
     static async Task<MyMembershipViewModel> Membership(string role)
     {
         var gw = await As(role);
-        var vm = new MyMembershipViewModel(new MembershipService(gw), new NoPicker(), new SubscriptionService(gw));
+        var vm = new MyMembershipViewModel(new MembershipService(gw), new SubscriptionService(gw));
         await vm.OnAppearingAsync();
         return vm;
     }

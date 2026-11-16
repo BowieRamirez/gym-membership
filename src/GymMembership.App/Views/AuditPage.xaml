@@ -11,16 +11,15 @@
         <!-- wide: one row per entry, the columns of the owner's table (items 5 and 14) -->
         <DataTemplate x:Key="AuditRowTemplate" x:DataType="m:AuditRecord">
             <VerticalStackLayout>
-                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="170,*,100,112,96,*,104,*,1.4*">
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="170,*,100,96,*,104,*,1.4*">
                     <Label Text="{Binding ShownWhen}" Style="{StaticResource Muted}" VerticalOptions="Center" />
                     <Label Grid.Column="1" Text="{Binding ActorName}" VerticalOptions="Center" />
                     <Label Grid.Column="2" Text="{Binding RoleText}" Style="{StaticResource Muted}" VerticalOptions="Center" />
-                    <Label Grid.Column="3" Text="{Binding IpAddress}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
-                    <Label Grid.Column="4" Text="{Binding AreaText}" Style="{StaticResource Muted}" VerticalOptions="Center" />
-                    <Label Grid.Column="5" Text="{Binding ActionText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
-                    <Label Grid.Column="6" Text="{Binding ObjectTypeText}" Style="{StaticResource Muted}" VerticalOptions="Center" />
-                    <Label Grid.Column="7" Text="{Binding ObjectText}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
-                    <Label Grid.Column="8" Text="{Binding DetailsText}" Style="{StaticResource Muted}" VerticalOptions="Center" MaxLines="2" LineBreakMode="TailTruncation"
+                    <Label Grid.Column="3" Text="{Binding AreaText}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                    <Label Grid.Column="4" Text="{Binding ActionText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                    <Label Grid.Column="5" Text="{Binding ObjectTypeText}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                    <Label Grid.Column="6" Text="{Binding ObjectText}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="7" Text="{Binding DetailsText}" Style="{StaticResource Muted}" VerticalOptions="Center" MaxLines="2" LineBreakMode="TailTruncation"
                            ToolTipProperties.Text="{Binding DetailsText}" />
                 </Grid>
                 <BoxView Style="{StaticResource Hairline}" />
@@ -36,8 +35,8 @@
                     </Grid>
                     <Label Style="{StaticResource Muted}">
                         <Label.Text>
-                            <MultiBinding StringFormat="{}{0}, {1}  {2}">
-                                <Binding Path="ActorName" /><Binding Path="RoleText" /><Binding Path="IpAddress" />
+                            <MultiBinding StringFormat="{}{0}, {1}">
+                                <Binding Path="ActorName" /><Binding Path="RoleText" />
                             </MultiBinding>
                         </Label.Text>
                     </Label>
@@ -87,7 +86,7 @@
         <ScrollView Grid.Row="1" IsVisible="{Binding ShowLogs}">
             <!-- full width, left edge in line with the Audit log and Archive buttons: nine columns need the room -->
             <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='20,12,20,20'}" Spacing="12">
-                <Label Text="Sensitive actions, newest first, 10 to a page. Entries can't be edited. IP addresses are kept for 90 days." Style="{StaticResource Muted}" />
+                <Label Text="Sensitive actions, newest first, 10 to a page. Entries can't be edited. No IP addresses are kept." Style="{StaticResource Muted}" />
                 <c:Banner Message="{Binding ErrorMessage}" />
                 <c:Banner Kind="notice" Message="{Binding Notice}" />
 
@@ -127,16 +126,15 @@
                 <Border Style="{StaticResource TablePanel}">
                     <VerticalStackLayout>
                         <VerticalStackLayout x:Name="AuditHead" IsVisible="{OnIdiom Phone=False, Default=True}">
-                            <Grid Style="{StaticResource TableHead}" ColumnDefinitions="170,*,100,112,96,*,104,*,1.4*">
+                            <Grid Style="{StaticResource TableHead}" ColumnDefinitions="170,*,100,96,*,104,*,1.4*">
                                 <Label Text="Date and time" Style="{StaticResource Caption}" />
                                 <Label Grid.Column="1" Text="User" Style="{StaticResource Caption}" />
                                 <Label Grid.Column="2" Text="Role" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="3" Text="IP address" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="4" Text="Action type" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="5" Text="Action" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="6" Text="Object type" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="7" Text="Object" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="8" Text="Change details" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="3" Text="Action type" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="4" Text="Action" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="5" Text="Object type" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="6" Text="Object" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="7" Text="Change details" Style="{StaticResource Caption}" />
                             </Grid>
                             <BoxView Style="{StaticResource Hairline}" />
                         </VerticalStackLayout>

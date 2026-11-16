@@ -47,20 +47,9 @@
 
             <!-- a member's or coach's two kinds of conversation, as chips (the yellow one is open) -->
             <HorizontalStackLayout Grid.Row="2" Spacing="8" IsVisible="{Binding HasTabs}">
-                <Button Text="{Binding CoachTabText}" Style="{StaticResource FilterChip}" Command="{Binding ShowTabCommand}" CommandParameter="coach">
-                    <Button.Triggers>
-                        <DataTrigger TargetType="Button" Binding="{Binding Tab}" Value="coach">
-                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
-                        </DataTrigger>
-                    </Button.Triggers>
-                </Button>
-                <Button Text="{Binding StaffTabText}" Style="{StaticResource FilterChip}" Command="{Binding ShowTabCommand}" CommandParameter="support">
-                    <Button.Triggers>
-                        <DataTrigger TargetType="Button" Binding="{Binding Tab}" Value="support">
-                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
-                        </DataTrigger>
-                    </Button.Triggers>
-                </Button>
+                <!-- ChoiceChip: the colour is behind a clear button, so Windows can't leave the other chip yellow (owner, 2026-11-16) -->
+                <c:ChoiceChip Text="{Binding CoachTabText}" IsChosen="{Binding IsCoachTab}" Command="{Binding ShowTabCommand}" CommandParameter="coach" />
+                <c:ChoiceChip Text="{Binding StaffTabText}" IsChosen="{Binding IsSupportTab}" Command="{Binding ShowTabCommand}" CommandParameter="support" />
             </HorizontalStackLayout>
 
             <!-- staff: which conversations -->

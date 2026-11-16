@@ -125,7 +125,6 @@
                         <c:LaneView IsVisible="{Binding HasActiveTerm}" Fraction="{Binding LaneFraction}" HeightRequest="26" DashColor="{AppThemeBinding Light={StaticResource LaneDashLight}, Dark={StaticResource Black}}" TrackColor="{AppThemeBinding Light={StaticResource LaneTrackLight}, Dark=#D6C700}" />
                         <!-- phones: the one action sits on the highlight card, so a yellow card and a yellow button never stack -->
                         <ContentView IsVisible="{OnIdiom Phone=True, Default=False}">
-                            <ContentView.Triggers><DataTrigger TargetType="ContentView" Binding="{Binding PayNow, Converter={StaticResource IsNotNull}}" Value="True"><Setter Property="IsVisible" Value="False" /></DataTrigger></ContentView.Triggers>
                             <Button Text="Choose a package / extend" Style="{StaticResource HeroSmallButton}" Clicked="OnChoosePackage" Margin="0,10,0,0" />
                         </ContentView>
                         <!-- Windows: with nothing running and nothing to pay, the card offers the way in (it was an empty yellow block) -->
@@ -158,9 +157,8 @@
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                         <Label Text="Your paid terms" Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
                         <Button Grid.Column="1" Text="Choose a package / extend" Style="{StaticResource SmallButton}" VerticalOptions="Center" Clicked="OnChoosePackage" IsVisible="{OnIdiom Phone=False, Default=True}">
-                            <!-- while a payment waits, paying it is the next step: this one goes quiet -->
+                            <!-- a waiting payment is paid on Packages, so this stays the way there -->
                             <Button.Triggers>
-                                <DataTrigger TargetType="Button" Binding="{Binding PayNow, Converter={StaticResource IsNotNull}}" Value="True"><Setter Property="Style" Value="{StaticResource SmallOutlineButton}" /></DataTrigger>
                                 <DataTrigger TargetType="Button" Binding="{Binding CanStart}" Value="True"><Setter Property="Style" Value="{StaticResource SmallOutlineButton}" /></DataTrigger>
                             </Button.Triggers>
                         </Button>
@@ -227,33 +225,8 @@
                     </Border>
                 </VerticalStackLayout>
 
-                <!-- side: what to pay now (if anything), then the member QR -->
+                <!-- side: the member QR (the Pay online card moved to Packages, owner 2026-11-16) -->
                 <VerticalStackLayout Spacing="12">
-                    <!-- Pay by QR: the code is what the front desk matches your transfer against, so it is the biggest thing here -->
-                    <Border Style="{StaticResource SidePanel}" IsVisible="{Binding PayNow, Converter={StaticResource IsNotNull}}">
-                        <VerticalStackLayout Spacing="12">
-                            <c:CardTitle Text="{Binding PayNow.Amount, StringFormat='Pay ₱{0:N2} by QR'}" />
-                            <Image Source="{Binding QrUrl}" IsVisible="{Binding HasQr}" WidthRequest="168" HeightRequest="168" HorizontalOptions="Center"
-                                   SemanticProperties.Description="The gym's payment QR code" />
-                            <Label Text="{Binding AccountName, StringFormat='Pay to {0}'}" IsVisible="{Binding AccountName, Converter={StaticResource IsNotNull}}" />
-                            <Label Text="Ask the gym for its QR if none shows here." Style="{StaticResource Caption}" IsVisible="{Binding HasQr, Converter={StaticResource Not}}" />
-                            <VerticalStackLayout Spacing="2">
-                                <Label Text="Type this code in the payment message" Style="{StaticResource Caption}" />
-                                <Label Text="{Binding PayNow.PaymentCode}" Style="{StaticResource Numeral}" SemanticProperties.Description="Payment code" />
-                            </VerticalStackLayout>
-                            <Label Text="{Binding PayNow.ExpiresAt, Converter={StaticResource LocalDate}, ConverterParameter='ddd d MMM, h:mm tt', StringFormat='Pay before {0}, or this payment expires.'}"
-                                   Style="{StaticResource Caption}" IsVisible="{Binding PayNow.ExpiresAt, Converter={StaticResource IsNotNull}}" />
-                            <Label Text="After you pay, enter the reference number from your receipt and send a screenshot of it." Style="{StaticResource Muted}" />
-                            <VerticalStackLayout Spacing="4">
-                                <Label Text="Reference number" Style="{StaticResource Caption}" />
-                                <Border Style="{StaticResource Field}"><Entry Text="{Binding ReferenceNo}" SemanticProperties.Description="Reference number from your receipt" /></Border>
-                            </VerticalStackLayout>
-                            <Button Text="Choose screenshot and send" Style="{StaticResource SmallButton}" Command="{Binding SendProofCommand}" />
-                            <!-- membership payments only: a booking is cancelled on Book an amenity (F12), which also releases its time -->
-                            <Button Text="Cancel this payment" Style="{StaticResource SmallOutlineButton}" Clicked="OnCancelPayment" IsVisible="{Binding PayNow.CanCancel}" />
-                        </VerticalStackLayout>
-                    </Border>
-
                     <!-- F6 (0049): a one-use pass for the front desk, good for 5 minutes and renewed by the 20-second refresh before it runs out;
                          kept apart from the gym's pay-by-QR panel. Always dark on white so any scanner reads it. -->
                     <!-- A one-line row whose Show button opens the code in place, so the code never fills the first screen

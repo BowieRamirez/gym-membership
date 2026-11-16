@@ -116,7 +116,11 @@ try {
     await assert.rejects(idCheckIn(desk, uid), /no_active_membership/);
   });
   await test('a queued offline ID check-in is sent with its type and time', async () => {
-    const uid = await member(), when = new Date().toISOString();   // the term began moments ago
+    const uid = await member();
+    // the term began moments ago, at the database's microsecond now(); JavaScript's time is whole milliseconds, so in the same
+    // millisecond it read as just before the term started (no_active_membership, 1 run in a few). Let a few milliseconds pass.
+    await new Promise(r => setTimeout(r, 5));
+    const when = new Date().toISOString();
     const id = (await as(desk, `select record_check_in(p_member_id=>$1, p_method=>'offline', p_at=>$2, p_client_ref=>gen_random_uuid(), p_id_type=>'other') id`, [uid, when]))[0].id;
     const row = (await db.query('select method, id_type from gym_check_ins where check_in_id=$1', [id])).rows[0];
     assert.deepEqual(row, { method: 'offline', id_type: 'other' });

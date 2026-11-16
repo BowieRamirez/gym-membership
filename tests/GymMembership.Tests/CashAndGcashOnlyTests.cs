@@ -16,10 +16,10 @@ public class CashAndGcashOnlyTests
     }
 
     [Fact]
-    public void The_cashier_offers_cash_and_gcash_only()
+    public void The_cashier_offers_cash_and_gcash_or_qr_ph_through_xendit()   // cashier plan Y6
     {
         var vm = new CashierViewModel(null!, null!);
-        Assert.Equal(["Cash", "GCash"], vm.Methods);
+        Assert.Equal(["Cash", "GCash / QR Ph"], vm.Methods);
     }
 
     [Fact]

@@ -16,6 +16,8 @@ public partial class AmenityStatusPage : BasePage
 	void OnChange(object? sender, EventArgs e) => Row<AmenityStatusViewModel>(sender, v => v.SelectCommand);
 	void OnTakeCash(object? sender, EventArgs e) => Row<AmenityStatusViewModel>(sender, v => v.TakeBalanceCommand);         // G13
 	void OnTakeGcash(object? sender, EventArgs e) => Row<AmenityStatusViewModel>(sender, v => v.TakeBalanceGcashCommand);
+	void OnApproveClaim(object? sender, EventArgs e) => Row<AmenityStatusViewModel>(sender, v => v.ApproveClaimCommand);   // F13, cashier plan Y7
+	void OnDeclineClaim(object? sender, EventArgs e) => Row<AmenityStatusViewModel>(sender, v => v.DeclineClaimCommand);
 	void OnMaintenance(object? sender, EventArgs e) => ((AmenityStatusViewModel)BindingContext).QuickReasonCommand.Execute("Maintenance");
 	void OnCleaning(object? sender, EventArgs e) => ((AmenityStatusViewModel)BindingContext).QuickReasonCommand.Execute("Cleaning");
 	void OnClosed(object? sender, EventArgs e) => ((AmenityStatusViewModel)BindingContext).QuickReasonCommand.Execute("Closed");

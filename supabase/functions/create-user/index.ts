@@ -1,7 +1,7 @@
 // POST { first_name, last_name, email, role: 'member' | 'coach' | 'employee' | 'subadmin', password } (or { name, ... } from an older app)
 // The owner creates an account with a temporary password (plan 4.3). The handle_new_user trigger
 // builds the profile, settings, role and member/coach row from the metadata set here.
-import { adminClient, auditBy, cors, reply, requireAdmin } from '../_shared/admin.ts';
+import { adminClient, auditBy, cors, reply, requireDeskOrAdmin } from '../_shared/admin.ts';
 import { isEmail, isPassword } from '../_shared/rules.ts';
 
 const ROLES = ['member', 'coach', 'employee', 'subadmin'];
@@ -11,7 +11,7 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return reply({ error: 'bad_input' }, 405);
 
   const admin = adminClient();
-  const caller = await requireAdmin(req, admin);
+  const caller = await requireDeskOrAdmin(req, admin);   // cashier plan Y2: the front desk registers members
   if (caller instanceof Response) return caller;
 
   const body = await req.json().catch(() => ({}));
@@ -21,8 +21,10 @@ Deno.serve(async (req) => {
   const email = String(body.email ?? '').trim().toLowerCase();
   const role = String(body.role ?? '');
   const password = String(body.password ?? '');
+  const phone = String(body.phone ?? '').trim().slice(0, 30);   // cashier plan Y2: from the Cashier's form; searchable there
   if (!name || !isEmail(email) || !ROLES.includes(role)) return reply({ error: 'bad_input' }, 400);
   if (!isPassword(password)) return reply({ error: 'bad_password' }, 400);   // D5, as the app checks
+  if (caller.deskOnly && role !== 'member') return reply({ error: 'forbidden' }, 403);   // the front desk adds members only
   if (!caller.superAdmin && !['member', 'coach'].includes(role)) return reply({ error: 'forbidden' }, 403);   // sub-admins add members and coaches only
 
   const { data, error } = await admin.auth.admin.createUser({
@@ -36,6 +38,8 @@ Deno.serve(async (req) => {
     const taken = /already|registered|exists/i.test(error?.message ?? '');
     return reply({ error: taken ? 'email_taken' : 'bad_input', detail: error?.message }, taken ? 409 : 400);
   }
+
+  if (phone) await admin.from('profiles').update({ phone }).eq('id', data.user.id);
 
   await admin.from('audit_log').insert({
     ...auditBy(req, caller), action: 'user.create', entity: 'profiles', entity_id: data.user.id, details: { role },

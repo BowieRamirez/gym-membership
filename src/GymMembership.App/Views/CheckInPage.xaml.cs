@@ -47,7 +47,7 @@ public partial class CheckInPage : BasePage
 	void OnCheckIn(object? sender, EventArgs e) => Row<CheckInViewModel>(sender, v => v.CheckInCommand);
 	void OnToggleCoach(object? sender, EventArgs e) => Row<CheckInViewModel>(sender, v => v.ToggleCoachCommand);
 
-	// G11: the desk's next step for someone who can't check in: Cashier to renew, or Payments to verify
+	// G11: the desk's next step for someone who can't check in: the Cashier (to renew, or to pay what is waiting)
 	async void OnHitNextStep(object? sender, EventArgs e)
 	{ if ((sender as BindableObject)?.BindingContext is GymMembership.Core.Services.MemberHit { NextStepRoute: { } route }) await Controls.PhoneNavigation.GoToAsync(Shell.Current, "//" + route); }
 	async void OnScanNextStep(object? sender, EventArgs e)

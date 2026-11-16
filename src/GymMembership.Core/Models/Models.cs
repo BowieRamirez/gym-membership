@@ -19,13 +19,13 @@ public static class PayKind
 {
     public const string Membership = "membership", Renewal = "renewal", Amenity = "amenity", WalkIn = "walk_in";
     /// <summary>What a kind is called on screen (9.8: Revenue showed the codes). Extension, as the payment lists say for a renewal.</summary>
-    public static string Name(string k) => k switch { Membership => "Membership", Renewal => "Extension", Amenity => "Amenity", WalkIn => "Walk-in", _ => k };
+    public static string Name(string k) => k switch { Membership => "Membership", Renewal => "Extension", Amenity => "Amenity", WalkIn => "Day pass", _ => k };   // cashier plan Y3
 }
 public static class PayMethod
 {
     public const string Qr = "qr", Cash = "cash", Gcash = "gcash";   // 0055: no bank transfer
     /// <summary>What a method is called on screen and in the PDF.</summary>
-    public static string Name(string m) => m switch { Cash => "Cash", Gcash => "GCash", Qr => "QR", _ => m };
+    public static string Name(string m) => m switch { Cash => "Cash", Gcash => "GCash", Qr => "Online", _ => m };   // Xendit plan X7: qr is paid online
 }
 
 [Table("profiles")] public class Profile : BaseModel
@@ -123,6 +123,9 @@ public static class PackageChanges
   [Column("receipt_no")] public string? ReceiptNo { get; set; } [Column("rejected_reason")] public string? RejectedReason { get; set; }
   [Column("voided_by")] public string? VoidedBy { get; set; } [Column("voided_at")] public DateTime? VoidedAt { get; set; } [Column("void_reason")] public string? VoidReason { get; set; }
   [Column("membership_package_snapshot_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? PackageSnapshotId { get; set; }
+  // 0075: the Xendit checkout; written only by the xendit-checkout and xendit-webhook functions
+  [Column("xendit_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? XenditId { get; set; }
+  [Column("online_channel", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? OnlineChannel { get; set; }
   [Column("membership_package_name", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? PackageSnapshotName { get; set; }
   [Column("membership_duration_days", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? PackageSnapshotDays { get; set; }
   [Column("cash_shift_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? CashShiftId { get; set; }   // F2 (0050): the drawer that took this cash

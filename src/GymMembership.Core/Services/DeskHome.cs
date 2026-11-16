@@ -3,7 +3,7 @@ using GymMembership.Core.Models;
 namespace GymMembership.Core.Services;
 
 /// <summary>What the front desk home shows: today's numbers. Each one is a shortcut to the screen that handles it.</summary>
-public sealed record DeskSummary(int CheckInsToday, int PaymentsToVerify, int AmenitiesAvailable, int AmenitiesInUse, int AmenitiesUnavailable,
+public sealed record DeskSummary(int CheckInsToday, int CashToTake, int AmenitiesAvailable, int AmenitiesInUse, int AmenitiesUnavailable,
                                  int UnreadMessages, int UnclaimedChats)
 {
     public int AmenitiesTotal => AmenitiesAvailable + AmenitiesInUse + AmenitiesUnavailable;
@@ -22,7 +22,7 @@ public sealed class DeskHomeService(ISupabaseGateway gw, IChatService chat) : ID
         {
             var startOfToday = DateTime.Today.ToUniversalTime();   // midnight where the desk is
             var checkIns = await gw.ListAsync<GymCheckIn>(c => c.CheckedInAt >= startOfToday);
-            var pending = await gw.ListAsync<Payment>(p => p.Status == "pending");
+            var pending = await gw.ListAsync<Payment>(p => p.Status == "pending" && p.Method == PayMethod.Cash);   // cashier plan Y7: online ones are Xendit's
             var amenities = await gw.ListAsync<Amenity>(a => a.IsActive == true);
             var inbox = threads.Value!.Where(t => t.IsSupport && t.WithId is not null).ToList();   // a member's own "Front desk" thread has no WithId
             return new DeskSummary(

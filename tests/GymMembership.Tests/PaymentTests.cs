@@ -32,22 +32,12 @@ public class PaymentTests
         Assert.Equal((PayMethod.Qr, Status.Pending, 4000m), (pay.Method, pay.Status, pay.Amount));
         Assert.InRange((pay.ExpiresAt!.Value - DateTime.UtcNow).TotalHours, 47, 48);
         var item = (await member.MyPaymentsAsync()).Value!.Single();
-        Assert.True(item.NeedsProof);
+        Assert.True(item.NeedsPayment);
 
-        // 2. the member pays, then sends the reference number and a screenshot
-        Assert.Equal(AppErrorKind.Validation, (await member.SubmitProofAsync(pay.Id, "  ", "slip.png", [1])).Error);
-        Assert.True((await member.SubmitProofAsync(pay.Id, "GC-8841", "slip.png", [1, 2, 3])).Ok);
-        item = (await member.MyPaymentsAsync()).Value!.Single();
-        Assert.True(item.AwaitingReview);
-        Assert.False(item.NeedsProof);
-
-        // 3. the front desk sees it with its reference number, approves, and the plan switches on
+        // 2. the member pays online through Xendit (demo mode: paid at once), and the plan switches on with no staff step
+        Assert.True((await member.PayOnlineAsync(pay.Id)).Value!.Paid);
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
-        var staff = new PaymentStaffService(gw);
-        var row = (await staff.PendingAsync()).Value!.First(r => r.Payment.Id == pay.Id);
-        Assert.Equal(("Ana Reyes", "Quarterly", "GC-8841", true), (row.Payer, row.Item, row.Payment.ReferenceNo, row.HasProof));
-        Assert.True((await staff.VerifyAsync(pay.Id, true)).Ok);
-        Assert.Equal(AppErrorKind.Conflict, (await staff.VerifyAsync(pay.Id, true)).Error);
+        Assert.Equal(AppErrorKind.Conflict, (await new PaymentStaffService(gw).VerifyAsync(pay.Id, true)).Error);
 
         await gw.SignInAsync("ana@demo.io", "secret12");
         item = (await member.MyPaymentsAsync()).Value!.Single();
@@ -59,23 +49,14 @@ public class PaymentTests
     }
 
     [Fact]
-    public async Task A_reference_number_cannot_be_used_on_two_payments()
-    {
-        var gw = await As("carlo@demo.io");
-        var member = new MembershipService(gw);
-        var pay = (await member.AvailAsync((await Package(gw, "Monthly")).Id)).Value!;
-        Assert.Equal(AppErrorKind.Conflict, (await member.SubmitProofAsync(pay.Id, "GC-20260412-889", "x.png", [1])).Error);   // Bea's seeded reference
-    }
-
-    [Fact]
     public async Task A_rejection_needs_a_reason_is_final_and_the_member_can_pay_again()
     {
         var gw = await As("employee@demo.io");
         var staff = new PaymentStaffService(gw);
-        var beas = (await staff.PendingAsync()).Value!.Single(r => r.Payer == "Bea Lim");
-        Assert.Equal(AppErrorKind.Validation, (await staff.VerifyAsync(beas.Payment.Id, false, "  ")).Error);
-        Assert.True((await staff.VerifyAsync(beas.Payment.Id, false, "Amount does not match")).Ok);
-        Assert.Equal(AppErrorKind.Conflict, (await staff.VerifyAsync(beas.Payment.Id, true)).Error);   // final
+        var beas = (await gw.ListAsync<Payment>(p => p.Status == Status.Pending)).Single(p => p.MemberId == "u-bea");   // online: not on the desk list (cashier plan Y7)
+        Assert.Equal(AppErrorKind.Validation, (await staff.VerifyAsync(beas.Id, false, "  ")).Error);
+        Assert.True((await staff.VerifyAsync(beas.Id, false, "Amount does not match")).Ok);
+        Assert.Equal(AppErrorKind.Conflict, (await staff.VerifyAsync(beas.Id, true)).Error);   // final
 
         await gw.SignInAsync("bea@demo.io", DemoGateway.DemoPassword);
         var member = new MembershipService(gw);
@@ -84,8 +65,8 @@ public class PaymentTests
         Assert.Empty((await member.MyMembershipsAsync()).Value!);   // nothing was switched on
 
         var again = (await member.PayAgainAsync(item)).Value!;       // a fresh payment for the same package
-        Assert.NotEqual(beas.Payment.Id, again.Id);
-        Assert.Equal(beas.Payment.Amount, again.Amount);
+        Assert.NotEqual(beas.Id, again.Id);
+        Assert.Equal(beas.Amount, again.Amount);
         Assert.Equal(AppErrorKind.Conflict, (await member.PayAgainAsync(item)).Error);   // one pending membership at a time
     }
 
@@ -126,13 +107,13 @@ public class PaymentTests
     {
         var gw = await As("employee@demo.io");
         var staff = new PaymentStaffService(gw);
-        Assert.Equal(AppErrorKind.Validation, (await staff.RecordCounterAsync(PayKind.WalkIn, PayMethod.Cash, null, null, "  ", null, null)).Error);
+        Assert.Equal("Day pass", (await staff.RecordCounterAsync(PayKind.WalkIn, PayMethod.Cash, null, null, "  ", null, null)).Value!.WalkInName);   // cashier plan Y3: anonymous
 
         var paid = (await staff.RecordCounterAsync(PayKind.WalkIn, PayMethod.Cash, null, null, "Pedro Ramos", null, null)).Value!;
         Assert.Equal((150m, "Pedro Ramos", null), (paid.Amount, paid.WalkInName, paid.MemberId));
         Assert.Single(await gw.ListAsync<GymCheckIn>(c => c.PaymentId == paid.Id));
 
-        Assert.Equal(150m, (await staff.ShiftAsync()).Value.Open!.CashIn);   // into the cashier's drawer
+        Assert.Equal(300m, (await staff.ShiftAsync()).Value.Open!.CashIn);   // both into the cashier's drawer
     }
 
     [Fact]
@@ -267,16 +248,15 @@ public class PaymentTests
         var admin = new AdminService(gw);
         var settings = (await admin.GymSettingsAsync()).Value!;
         settings.WalkInPrice = 200;
-        Assert.Equal(AppErrorKind.Unauthorized, (await admin.SaveGymSettingsAsync(settings, null)).Error);
+        Assert.Equal(AppErrorKind.Unauthorized, (await admin.SaveGymSettingsAsync(settings)).Error);
 
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
         settings.GymName = " ";
-        Assert.Equal(AppErrorKind.Validation, (await admin.SaveGymSettingsAsync(settings, null)).Error);
+        Assert.Equal(AppErrorKind.Validation, (await admin.SaveGymSettingsAsync(settings)).Error);
         settings.GymName = "Iron House";
-        Assert.True((await admin.SaveGymSettingsAsync(settings, ("qr.png", [1, 2]))).Ok);
+        Assert.True((await admin.SaveGymSettingsAsync(settings)).Ok);
 
         var saved = (await admin.GymSettingsAsync()).Value!;
         Assert.Equal(("Iron House", 200m), (saved.GymName, saved.WalkInPrice));
-        Assert.EndsWith("qr.png", saved.QrImagePath);
     }
 }

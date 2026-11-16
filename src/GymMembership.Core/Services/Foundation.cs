@@ -184,6 +184,7 @@ public static class ErrorText
         "refund_reason_required" => "Choose why you are asking for a refund.",
         "no_coach_present" => "Amenities can only be used while a coach is in the gym, and no coach is here right now.",
         "payment_expired" => "That unpaid payment has expired. Create a fresh payment.",
+        "pay_online" => "This payment is being paid online through Xendit. It verifies itself once the member pays.",
         "already_requested" => "A cancellation and refund request already exists for this term.",
         "active_coaching_session" => "You already have an active session together. Open Sessions to reschedule or cancel it. Finish, cancel or mark that session no-show before requesting another.",
         "pending_session_request" => "You already have a pending request to this coach. Wait for a reply or cancel it below before sending another.",
@@ -276,6 +277,9 @@ public static class StoragePath
 }
 
 public interface IProofPicker { Task<(string FileName, byte[] Data)?> PickAsync(); }
+
+/// <summary>Opens a web page in the phone's browser: Xendit's checkout (Xendit plan, 2026-11-16).</summary>
+public interface IUrlOpener { Task OpenAsync(string url); }
 
 /// <summary>The only seam to the backend. DemoGateway implements it in memory; SupabaseGateway talks to the real project.</summary>
 public interface ISupabaseGateway

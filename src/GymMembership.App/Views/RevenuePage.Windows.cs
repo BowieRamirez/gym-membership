@@ -74,9 +74,10 @@ public partial class RevenuePage
         var row = new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap, AlignItems = Microsoft.Maui.Layouts.FlexAlignItems.Center };
         foreach (var (days, label) in new[] { ("7", "7 days"), ("30", "30 days"), ("90", "3 months") })
         {
+            // ChoiceChip: the colour is behind a clear button, so Windows can't leave the last one yellow (owner, 2026-11-16)
             var chip = Chip(label, vm.ShowRangeCommand, days, "RevenueRange-" + days);
             chip.Margin = new Thickness(0, 0, 8, 8);
-            void Mark() => Pressed(chip, vm.RangeDays.ToString() == days);
+            void Mark() => chip.IsChosen = vm.RangeDays.ToString() == days;
             vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(vm.RangeDays)) Mark(); };
             Mark();
             row.Children.Add(chip);
@@ -111,7 +112,7 @@ public partial class RevenuePage
         var revenue = Chip("Revenue", vm.ShowMetricCommand, "revenue", "RevenueMetric-revenue");
         var visits = Chip("Check-ins", vm.ShowMetricCommand, "visits", "RevenueMetric-visits");
         var chart = new RevenueChart { AutomationId = "RevenueChart" };
-        void Refresh() { Pressed(revenue, vm.Metric == "revenue"); Pressed(visits, vm.Metric == "visits"); chart.Show(vm.Chart, vm.Metric == "visits"); }
+        void Refresh() { revenue.IsChosen = vm.Metric == "revenue"; visits.IsChosen = vm.Metric == "visits"; chart.Show(vm.Chart, vm.Metric == "visits"); }
         vm.PropertyChanged += (_, e) => { if (e.PropertyName is nameof(vm.Chart) or nameof(vm.Metric)) Refresh(); };
         Refresh();
 
@@ -257,16 +258,9 @@ public partial class RevenuePage
         return l;
     }
 
-    static Button Chip(string text, System.Windows.Input.ICommand command, string parameter, string id) =>
-        new() { Text = text, Style = Resource<Style>("FilterChip"), Command = command, CommandParameter = parameter, AutomationId = id };
-
-    // the chosen chip is yellow with black text, as the chips elsewhere in the app
-    static void Pressed(Button chip, bool on)
-    {
-        if (on) { chip.BackgroundColor = Theme("Signal"); chip.TextColor = Theme("Black"); chip.BorderColor = Theme("Signal"); }
-        else { chip.ClearValue(Button.BackgroundColorProperty); chip.ClearValue(Button.TextColorProperty); chip.ClearValue(Button.BorderColorProperty); }
-        SemanticProperties.SetDescription(chip, on ? chip.Text + ", chosen" : chip.Text);
-    }
+    // the chosen chip is yellow with black text (ChoiceChip: the colour is behind a clear button, so Windows can't leave it stuck)
+    static ChoiceChip Chip(string text, System.Windows.Input.ICommand command, string parameter, string id) =>
+        new() { Text = text, Command = command, CommandParameter = parameter, AutomationId = id };
 
     static View Section(string title, View content) => new VerticalStackLayout { Spacing = 10, Children = { Text(title, "SectionTitle"), content } };
     static Color Theme(string key) => (Color)Application.Current!.Resources[key];

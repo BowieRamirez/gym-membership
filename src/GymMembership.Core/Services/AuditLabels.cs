@@ -17,6 +17,7 @@ public static class AuditLabels
         ["user.correct_name"] = "Name corrected", ["user.add_last_name"] = "Last name added", ["user.reset_password"] = "Password reset",
         ["role.assign"] = "Role given", ["role.revoke"] = "Role removed",
         ["payment.record"] = "Payment recorded", ["payment.verify"] = "Payment verified", ["payment.reject"] = "Payment rejected",
+        ["payment.online"] = "Paid online (Xendit)", ["payment.desk_online"] = "Desk payment sent to Xendit", ["payment.online_refund"] = "Online payment to refund",
         ["payment.void"] = "Payment voided", ["payment.cancel"] = "Payment cancelled",
         ["check_in.id"] = "Checked in by ID",
         ["refund.request"] = "Refund requested", ["refund.decide"] = "Refund decided", ["refund.paid"] = "Refund repaid",
@@ -52,19 +53,25 @@ public static class AuditLabels
 
     /// <summary>Change details as "key: value; key: value", keys made readable.</summary>
     public static string Details(IReadOnlyDictionary<string, object>? details) => details is null or { Count: 0 } ? "" :
-        string.Join("; ", details.Select(d => $"{char.ToUpperInvariant(d.Key[0])}{d.Key[1..].Replace('_', ' ')}: {Convert.ToString(d.Value, CultureInfo.InvariantCulture)}"));
+        string.Join("; ", details.Select(d => d.Key == "channel"
+            ? $"Paid with: {Channel(Convert.ToString(d.Value, CultureInfo.InvariantCulture) ?? "")}"
+            : $"{char.ToUpperInvariant(d.Key[0])}{d.Key[1..].Replace('_', ' ')}: {Convert.ToString(d.Value, CultureInfo.InvariantCulture)}"));
+
+    /// <summary>Cashier plan Y5: Xendit's channel codes in words; an unknown one is shown as Xendit sent it.</summary>
+    public static string Channel(string code) => (code.StartsWith("PH_") ? code[3..] : code) switch   // the dashboard says PH_GCASH, the API GCASH
+        { "GCASH" => "GCash", "PAYMAYA" => "Maya", "QRPH" => "QR Ph", "CARDS" => "Card", "" => "unknown", _ => code };
 }
 
 /// <summary>Builds the audit export. Every cell is quoted, and one starting with = + - @ or a tab or return gets a leading ' so a spreadsheet shows it instead of running it.</summary>
 public static class AuditCsv
 {
-    public static readonly string[] Header = ["Date and time (Manila)", "User", "Role", "IP address", "Action type", "Action", "Object type", "Object", "Change details"];
+    public static readonly string[] Header = ["Date and time (Manila)", "User", "Role", "Action type", "Action", "Object type", "Object", "Change details"];   // no IP address (0083)
 
     public static string Build(IEnumerable<AuditRecord> rows)
     {
         var csv = new StringBuilder();
         Line(csv, Header);
-        foreach (var r in rows) Line(csv, [r.WhenText, r.ActorName, r.RoleText, r.IpAddress ?? "", r.AreaText, r.ActionText, r.ObjectTypeText, r.ObjectText, r.DetailsText]);
+        foreach (var r in rows) Line(csv, [r.WhenText, r.ActorName, r.RoleText, r.AreaText, r.ActionText, r.ObjectTypeText, r.ObjectText, r.DetailsText]);
         return csv.ToString();
     }
 

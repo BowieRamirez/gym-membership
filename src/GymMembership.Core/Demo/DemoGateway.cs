@@ -221,8 +221,12 @@ public sealed partial class DemoGateway : ISupabaseGateway
             if (FailWith is not null) throw FailWith;
             string S(string k) => Convert.ToString(body.GetValueOrDefault(k)) ?? "";
             if (name == "verify-member-password") return Task.FromResult(VerifyMemberPassword(S("member_id"), S("password")));
-            if (!RolesOf(Uid).Any(r => r is "admin" or "subadmin") || !IsActiveUser) throw Err("forbidden");
+            if (name == "xendit-checkout") return Task.FromResult(XenditCheckout(Convert.ToInt32(body.GetValueOrDefault("payment_id")), body.GetValueOrDefault("check") is true));
+            // cashier plan Y2: the front desk may create MEMBER accounts (create-user's requireDeskOrAdmin); everything else is admin-only
+            var deskOnly = name == "create-user" && RolesOf(Uid).Contains("employee") && !RolesOf(Uid).Any(r => r is "admin" or "subadmin");
+            if ((!deskOnly && !RolesOf(Uid).Any(r => r is "admin" or "subadmin")) || !IsActiveUser) throw Err("forbidden");
             var super = RolesOf(Uid).Contains("admin");   // a sub-admin acts on members and coaches only
+            string? created = null;
             switch (name)
             {
                 case "create-user":
@@ -231,12 +235,15 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     if (role is not ("member" or "coach" or "employee" or "subadmin") || string.IsNullOrWhiteSpace(S("name")) || !AccountRules.IsEmail(email)) throw Err("bad_input");
                     if (!AccountRules.IsPassword(S("password"))) throw Err("bad_password");   // as _shared/rules.ts
                     if (_accounts.ContainsKey(email)) throw Err("email_taken");
+                    if (deskOnly && role != "member") throw Err("forbidden");
                     if (!super && role is not ("member" or "coach")) throw Err("forbidden");
                     var (first, last) = S("first_name") is { Length: > 0 } f && S("last_name") is { Length: > 0 } l ? (f.Trim(), l.Trim()) : NameParts.Split(S("name"));
                     var id = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], NameParts.Join(first, last), email, role, first, last);
                     _passwords[id] = S("password");
                     All<Profile>().First(p => p.Id == id).MustChangePassword = true;
+                    if (S("phone") is { Length: > 0 } phone) All<Profile>().First(p => p.Id == id).Phone = phone.Trim();
                     Audit("user.create", "profiles", id);
+                    created = id;
                     break;
                 }
                 case "reset-password":
@@ -252,9 +259,28 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 }
                 default: throw Err("not_found");
             }
-            return Task.FromResult("{\"ok\":true}");
+            return Task.FromResult(created is null ? "{\"ok\":true}" : $"{{\"id\":\"{created}\"}}");
         }
         catch (Exception ex) { return Task.FromException<string>(ex); }
+    }
+
+    // Xendit plan (xendit-checkout, 0075): the same checks as the server; demo mode has no Xendit, so its checkout is paid at once
+    // and confirmed the way confirm_online_payment does it (no staff member, the checkout id as the reference).
+    string XenditCheckout(int paymentId, bool check)
+    {
+        var now = SubscriptionNow;
+        var pay = All<Payment>().FirstOrDefault(p => p.Id == paymentId && (p.MemberId == Uid || p.RecordedBy == Uid)) ?? throw Err("not_found");   // cashier plan Y6: or the desk that recorded it
+        if (pay.Status == Status.Verified) return "{\"paid\":true}";
+        if (pay.Status != Status.Pending || pay.Method != PayMethod.Qr) throw Err("already_processed");
+        if (check) return "{\"paid\":false}";
+        if (pay.ExpiresAt <= now) throw Err("payment_expired");
+        pay.XenditId ??= $"ps-demo-{pay.Id}";
+        pay.Status = Status.Verified; pay.VerifiedAt = now; pay.ReceiptNo = ReceiptNo();
+        pay.ReferenceNo = pay.XenditId; pay.OnlineChannel = "GCASH";
+        if (pay.Kind == PayKind.WalkIn) Add(new GymCheckIn { PaymentId = pay.Id, CheckedInAt = now });
+        else { ActivateTarget(pay); Notify(pay.MemberId, "payment", "Payment received", pay.PaymentCode); }
+        Audit("payment.online", "payments", pay.Id.ToString());
+        return "{\"paid\":true}";
     }
 
     // G12 (0062): desk_password_target, the Auth check, then desk_password_result. Wrong tries count with the desk PIN's.
@@ -801,19 +827,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (ump.Status is not (Status.Active or Status.Expired)) throw Err("not_renewable");
                 return Clone(CreateExtension(uid, NewestVersion(ump.MembershipPackageId), a));   // G9
             }
-            case "submit_payment_proof":
-            {
-                RequireActive();
-                var pay = All<Payment>().FirstOrDefault(p => p.Id == I("p_payment_id") && p.MemberId == uid) ?? throw Err("not_found");
-                var reference = Opt("p_reference_no"); var proof = Opt("p_proof_path");
-                if (reference is null || proof is null) throw Err("bad_input");
-                if (pay.Status != Status.Pending || pay.Method != PayMethod.Qr || pay.ExpiresAt <= now) throw Err("already_processed");
-                if (All<Payment>().Any(p => p.Id != pay.Id && p.ReferenceNo == reference && p.Status is Status.Pending or Status.Verified))
-                    throw Err("duplicate key value violates unique constraint \"payments_reference_no_key\"");
-                pay.ReferenceNo = reference; pay.ProofPath = proof;
-                NotifyStaff("payment", "Payment waiting for review");
-                return null;
-            }
+            case "submit_payment_proof": throw Err("permission denied for function submit_payment_proof");   // 0075: members pay online now
             case "verify_payment":
             {
                 Require("payments:verify");
@@ -840,10 +854,12 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 return null;
             }
             case "record_counter_payment":
+            case "start_desk_online_payment":   // cashier plan Y6 (0080): the same order, pending online until Xendit confirms
             {
                 Require("payments:record");
-                var kind = S("p_kind"); var method = S("p_method"); var memberId = Opt("p_member_id");
-                if (method is not (PayMethod.Cash or PayMethod.Gcash)) throw Err("bad_input");   // 0055: cash or GCash at the desk
+                var online = fn == "start_desk_online_payment";
+                var kind = S("p_kind"); var method = online ? PayMethod.Qr : S("p_method"); var memberId = Opt("p_member_id");
+                if (!online && method is not (PayMethod.Cash or PayMethod.Gcash)) throw Err("bad_input");   // 0055: cash or GCash at the desk
                 if (memberId == uid) throw Err("self_verify");
                 var reference = Opt("p_reference_no");
                 if (method == PayMethod.Gcash && reference is null) throw Err("bad_input");
@@ -855,7 +871,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
 
                 if (kind == PayKind.WalkIn)
                 {
-                    walkIn = Opt("p_walk_in_name") ?? throw Err("bad_input");
+                    walkIn = Opt("p_walk_in_name") ?? "Day pass";   // 0081: a Day pass may be anonymous
                     memberId = null;
                     d = NotFree((null, 0, All<GymSettings>().First().WalkInPrice));
                 }
@@ -893,10 +909,12 @@ public sealed partial class DemoGateway : ISupabaseGateway
 
                 var pay = Add(new Payment
                 {
-                    PaymentCode = PaymentCode(), Kind = kind, Method = method, Status = Status.Verified, Amount = d.Amount, DiscountId = d.Id, DiscountAmount = d.Cut,
+                    PaymentCode = PaymentCode(), Kind = kind, Method = method, Status = online ? Status.Pending : Status.Verified, Amount = d.Amount, DiscountId = d.Id, DiscountAmount = d.Cut,
                     MemberId = memberId, WalkInName = walkIn, UserMembershipPackageId = ump, RenewalId = ren, UserAmenityId = ua, ReferenceNo = reference,
-                    RecordedBy = uid, VerifiedBy = uid, VerifiedAt = now, ReceiptNo = ReceiptNo(), CreatedAt = now, CashShiftId = shift
+                    RecordedBy = uid, VerifiedBy = online ? null : uid, VerifiedAt = online ? null : now, ReceiptNo = online ? null : ReceiptNo(), CreatedAt = now, CashShiftId = shift,
+                    ExpiresAt = online ? now.AddMinutes(30) : null
                 });
+                if (online) { Audit("payment.desk_online", "payments", pay.Id.ToString()); return Clone(pay); }   // activated when Xendit confirms
                 if (kind == PayKind.WalkIn) Add(new GymCheckIn { PaymentId = pay.Id, CheckedInAt = now });
                 else { ActivateTarget(pay); Notify(memberId, "payment", "Payment received", pay.PaymentCode); }
                 Audit("payment.record", "payments", pay.Id.ToString());
@@ -1395,6 +1413,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         AddUser("u-coach2", "Kai Mendoza", "kai@demo.io", "coach");
         AddUser("u-alex", "Alex Tan", "member@demo.io", "member");
         AddUser("u-bea", "Bea Lim", "bea@demo.io", "member");
+        All<Profile>().First(p => p.Id == "u-bea").Phone = "0917 555 0142";   // cashier plan Y1: search by phone
         AddUser("u-carlo", "Carlo Diaz", "carlo@demo.io", "member");
         AddUser("u-joy", "Joy", "joy@demo.io", "member", "Joy", "");   // item 3: an old one-word account, no last name to guess
 

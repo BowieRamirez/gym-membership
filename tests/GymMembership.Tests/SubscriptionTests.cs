@@ -338,7 +338,7 @@ public class SubscriptionTests
         var (gw, clock, svc, monthly, _) = await Setup();
         clock.Now = DateTimeOffset.UtcNow;   // the page judges a payment's expiry by the real clock, so a fixed date here expires it
         var p=(await svc.ExtendAsync(monthly.Id)).Value!;
-        var vm=new GymMembership.Core.ViewModels.MyMembershipViewModel(new MembershipService(gw),new NoPicker(),svc);
+        var vm=new GymMembership.Core.ViewModels.MyMembershipViewModel(new MembershipService(gw),svc);
         await vm.OnAppearingAsync();
         var item=Assert.IsType<PaymentItem>(vm.PayNow);
         await vm.CancelPaymentAsync(item);

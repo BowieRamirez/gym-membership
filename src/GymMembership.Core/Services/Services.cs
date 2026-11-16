@@ -55,6 +55,18 @@ public interface IAuthService
 }
 
 /// <summary>What a new account may use. The entry caps on the register page read the same numbers.</summary>
+/// <summary>Cashier plan Y2: the temporary password the desk hands a member it registers; they change it at first sign-in.
+/// 10 characters from letters and digits a person can read aloud (no 0/O, 1/l/I), always with a letter and a digit.</summary>
+public static class TempPassword
+{
+    const string Letters = "abcdefghjkmnpqrstuvwxyz", Digits = "23456789";
+    public static string New()
+    {
+        string Pick(string from, int n) => new(Enumerable.Range(0, n).Select(_ => from[System.Security.Cryptography.RandomNumberGenerator.GetInt32(from.Length)]).ToArray());
+        return Pick(Letters, 6) + Pick(Digits, 4);
+    }
+}
+
 public static partial class AccountRules
 {
     public const int MinName = 2, MaxName = 60, MaxEmailLocal = 64, MaxEmail = 100, MinPassword = 8, MaxPassword = 64;
@@ -253,7 +265,7 @@ sealed class PaymentLookup
         PayKind.Membership => p.PackageSnapshotName ?? (p.UserMembershipPackageId is { } u ? PackageName(u) : "Membership"),
         PayKind.Renewal => "Extension: " + (p.PackageSnapshotName ?? (_renewals.FirstOrDefault(r => r.Id == p.RenewalId) is { } r ? PackageName(r.UserMembershipPackageId) : "Membership")),
         PayKind.Amenity => _catalog.FirstOrDefault(a => a.Id == _amenities.FirstOrDefault(x => x.Id == p.UserAmenityId)?.AmenityId)?.Name ?? "Amenity",
-        _ => "Walk-in"
+        _ => "Day pass"   // cashier plan Y3
     };
 
     /// <summary>The id to pass to avail/renew when paying this again: a package id, a membership id or an amenity id.</summary>
@@ -269,12 +281,13 @@ sealed class PaymentLookup
 // ===================== Membership (member) =====================
 public sealed record MembershipRow(int Id, string PackageName, string Status, DateTime? EndsAt, int? DaysLeft, int DurationDays, bool CanRenew, decimal Price);
 
-/// <summary>One of the member's payments. QR payments show the code to type into the e-wallet and wait for a reference number and screenshot.</summary>
+/// <summary>One of the member's payments. Online (qr) payments are paid through Xendit's checkout (Xendit plan, 2026-11-16).</summary>
 public sealed record PaymentItem(int Id, string What, string PaymentCode, string Kind, string Method, decimal Amount, decimal DiscountAmount, string Status,
-    DateTime CreatedAt, DateTime? ExpiresAt, string? ReferenceNo, bool HasProof, string? ReceiptNo, string? RejectedReason, int? ItemId, int? PackageSnapshotId = null)
+    DateTime CreatedAt, DateTime? ExpiresAt, string? ReferenceNo, bool HasProof, string? ReceiptNo, string? RejectedReason, int? ItemId, int? PackageSnapshotId = null,
+    bool HasCheckout = false)
 {
-    /// <summary>A QR payment that still needs the member to pay, then send the reference number and screenshot.</summary>
-    public bool NeedsProof => Status == Models.Status.Pending && Method == PayMethod.Qr && !HasProof && (ExpiresAt is null || ExpiresAt > DateTime.UtcNow);
+    /// <summary>An online payment the member still has to pay (a proof sent before the switch is with the desk instead).</summary>
+    public bool NeedsPayment => Status == Models.Status.Pending && Method == PayMethod.Qr && !HasProof && (ExpiresAt is null || ExpiresAt > DateTime.UtcNow);
     public bool AwaitingReview => Status == Models.Status.Pending && HasProof;
     /// <summary>A membership or extension payment nobody has verified yet: the member can still withdraw it.</summary>
     public bool CanCancel => Status == Models.Status.Pending && Kind is PayKind.Membership or PayKind.Renewal;
@@ -301,15 +314,33 @@ public interface IMembershipService
     /// <summary>Starts a membership: a pending QR payment with a code to pay. The membership turns on when staff verify it.</summary>
     Task<AppResult<Payment>> AvailAsync(int packageId, string? discountCode = null);
     Task<AppResult<Payment>> RenewAsync(int membershipId, string? discountCode = null);
-    /// <summary>After paying by QR: the e-wallet reference number and a screenshot of the payment.</summary>
-    Task<AppResult<bool>> SubmitProofAsync(int paymentId, string referenceNo, string fileName, byte[] data);
+    /// <summary>Xendit's checkout for an online payment: a link to open, or Paid when it is already paid (demo mode pays at once).</summary>
+    Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId);
+    /// <summary>Asks the server whether the checkout was paid, and confirms it if Xendit's notice hasn't arrived (X10).</summary>
+    Task<AppResult<bool>> CheckOnlineAsync(int paymentId);
     /// <summary>Starts a fresh payment for the same item after a rejection or expiry.</summary>
     Task<AppResult<Payment>> PayAgainAsync(PaymentItem item);
     Task<AppResult<GymSettings>> GymAsync();
     /// <summary>G16: closed days from today on, with their reasons.</summary>
     Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync();
-    /// <summary>A link to the gym's payment QR image, or null if the owner has not uploaded one.</summary>
-    Task<AppResult<string?>> QrUrlAsync();
+}
+
+/// <summary>xendit-checkout's answer: the checkout link to open, or Paid.</summary>
+public sealed record OnlineCheckout(string? Url, bool Paid);
+
+/// <summary>xendit-checkout, for the member's own payment or one the desk recorded (cashier plan Y6).</summary>
+public static class OnlinePay
+{
+    public static Task<AppResult<OnlineCheckout>> OpenAsync(ISupabaseGateway gw, int paymentId) => Safe.RunAsync(async () =>
+    {
+        var answer = System.Text.Json.JsonDocument.Parse(await gw.InvokeFunctionAsync("xendit-checkout", new() { ["payment_id"] = paymentId })).RootElement;
+        return new OnlineCheckout(answer.TryGetProperty("url", out var url) ? url.GetString() : null,
+            answer.TryGetProperty("paid", out var paid) && paid.GetBoolean());
+    });
+
+    public static Task<AppResult<bool>> CheckAsync(ISupabaseGateway gw, int paymentId) => Safe.RunAsync(async () =>
+        System.Text.Json.JsonDocument.Parse(await gw.InvokeFunctionAsync("xendit-checkout", new() { ["payment_id"] = paymentId, ["check"] = true }))
+            .RootElement.TryGetProperty("paid", out var paid) && paid.GetBoolean());
 }
 
 /// <summary>What a member may open: full pages need an active plan; a pending payment only changes the wording.</summary>
@@ -363,7 +394,7 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
         var look = await PaymentLookup.LoadAsync(gw);
         return pays.OrderByDescending(p => p.CreatedAt).Select(p => new PaymentItem(p.Id,
             p.DiscountAmount > 0 ? look.Item(p) + " (discount)" : look.Item(p), p.PaymentCode, p.Kind, p.Method, p.Amount, p.DiscountAmount, p.Status,
-            p.CreatedAt, p.ExpiresAt, p.ReferenceNo, p.ProofPath is not null, p.ReceiptNo, p.RejectedReason, look.ItemId(p), p.PackageSnapshotId)).ToList();
+            p.CreatedAt, p.ExpiresAt, p.ReferenceNo, p.ProofPath is not null, p.ReceiptNo, p.RejectedReason, look.ItemId(p), p.PackageSnapshotId, p.XenditId is not null)).ToList();
     });
 
     static Dictionary<string, object> WithCode(Dictionary<string, object> args, string? code)
@@ -375,17 +406,8 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
     public Task<AppResult<Payment>> RenewAsync(int membershipId, string? discountCode = null) =>
         Safe.RunAsync(() => gw.RpcAsync<Payment>("renew_membership", WithCode(new() { ["p_ump_id"] = membershipId }, discountCode)));
 
-    public async Task<AppResult<bool>> SubmitProofAsync(int paymentId, string referenceNo, string fileName, byte[] data)
-    {
-        if (string.IsNullOrWhiteSpace(referenceNo)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
-        return await Safe.RunAsync(async () =>
-        {
-            var uid = gw.CurrentUserId ?? throw new Exception("not authenticated");
-            var path = await gw.UploadAsync("payment-proofs", $"{uid}/{paymentId}-{fileName}", data);
-            await gw.RpcAsync("submit_payment_proof", new() { ["p_payment_id"] = paymentId, ["p_reference_no"] = referenceNo.Trim(), ["p_proof_path"] = path });
-            return true;
-        });
-    }
+    public Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId) => OnlinePay.OpenAsync(gw, paymentId);
+    public Task<AppResult<bool>> CheckOnlineAsync(int paymentId) => OnlinePay.CheckAsync(gw, paymentId);
 
     public async Task<AppResult<Payment>> PayAgainAsync(PaymentItem item) => item.PackageSnapshotId is { } package && item.Kind is PayKind.Membership or PayKind.Renewal
         ? await new SubscriptionService(gw).ExtendAsync(package)
@@ -400,12 +422,6 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
 
     public Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync() => Safe.RunAsync(() => GymClosures.ByDayAsync(gw));
     public Task<AppResult<GymSettings>> GymAsync() => Safe.RunAsync(async () => (await gw.ListAsync<GymSettings>()).First());
-
-    public Task<AppResult<string?>> QrUrlAsync() => Safe.RunAsync(async () =>
-    {
-        var path = (await gw.ListAsync<GymSettings>()).FirstOrDefault()?.QrImagePath;
-        return string.IsNullOrWhiteSpace(path) ? null : await gw.SignedUrlAsync("gym-assets", path);
-    });
 }
 
 // ===================== Payment verification and the counter (staff) =====================
@@ -416,9 +432,11 @@ public sealed record PaymentRow(Payment Payment, string Payer, string Item, bool
     /// <summary>F12: a "pay at the desk" booking is approved by taking the cash (into the cashier's drawer, 0050).</summary>
     public string ApproveText => PaysAtDesk ? "Take cash" : "Verify";
     bool PaysAtDesk => Booking is not null && Payment.Method == PayMethod.Cash;
-    /// <summary>The reference column: the e-wallet reference, or what is still missing.</summary>
-    public string ProofText => HasProof ? Payment.ReferenceNo ?? "" : PaysAtDesk ? "Pays at the desk" : "No proof yet";
-    public string WaitText => PaysAtDesk ? "Pays at the desk in cash" : "Waiting for the member to pay and send proof";
+    /// <summary>The reference column: a proof sent before the Xendit switch, the desk, or online (Xendit verifies those itself).</summary>
+    public string ProofText => HasProof ? Payment.ReferenceNo ?? "" : PaysAtDesk ? "Pays at the desk" : "Paying online";
+    public string WaitText => PaysAtDesk ? "Pays at the desk in cash" : "Waiting for the member to pay online";
+    /// <summary>X11: the desk approves only a proof sent before the switch, or cash it takes; an online payment verifies itself.</summary>
+    public bool CanApprove => HasProof || PaysAtDesk;
 }
 
 /// <summary>F13: a member's "I didn't use it", next to what the desk checks: their check-ins that day and the amenity's status now.</summary>
@@ -442,7 +460,16 @@ public interface IPaymentStaffService
     /// <summary>Cash or GCash at the counter, verified at once. itemId is a package id, a membership id or an amenity id depending on kind.</summary>
     Task<AppResult<Payment>> RecordCounterAsync(string kind, string method, string? memberId, int? itemId, string? walkInName, string? referenceNo, string? discountCode);
     Task<AppResult<bool>> VoidAsync(int paymentId, string reason);
-    Task<AppResult<string?>> ProofUrlAsync(string proofPath);
+    /// <summary>Cashier plan Y6 (0080): GCash or QR Ph at the desk, through Xendit: a pending online payment that Xendit's confirmation verifies.</summary>
+    Task<AppResult<Payment>> StartDeskOnlineAsync(string kind, string? memberId, int? itemId, string? walkInName, string? discountCode);
+    Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId);
+    Task<AppResult<bool>> CheckOnlineAsync(int paymentId);
+    /// <summary>One payment, fresh: the desk reads the receipt number once Xendit has confirmed it.</summary>
+    Task<AppResult<Payment>> PaymentAsync(int paymentId);
+    /// <summary>The newest desk online payment this cashier started that is still waiting for Xendit, so reopening the Cashier can check it.</summary>
+    Task<AppResult<Payment?>> MyWaitingOnlineAsync();
+    /// <summary>Cashier plan Y2: the desk registers a walk-in customer as a MEMBER (create-user lets the desk make members only). Returns their id.</summary>
+    Task<AppResult<string>> RegisterMemberAsync(string firstName, string lastName, string email, string? phone, string password);
     /// <summary>What can be sold for a kind of payment. Renewals are the member's own memberships, so they need a memberId.</summary>
     Task<AppResult<IReadOnlyList<CounterItem>>> ItemsAsync(string kind, string? memberId);
     /// <summary>F2 (0050): the caller's open drawer shift (null when none) and the gym's opening float to start one with.</summary>
@@ -453,6 +480,43 @@ public interface IPaymentStaffService
 
 public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffService
 {
+    public Task<AppResult<Payment>> StartDeskOnlineAsync(string kind, string? memberId, int? itemId, string? walkInName, string? discountCode) =>
+        Safe.RunAsync(() =>
+        {
+            var args = new Dictionary<string, object> { ["p_kind"] = kind };
+            if (memberId is not null) args["p_member_id"] = memberId;
+            if (itemId is not null) args["p_item_id"] = itemId;
+            if (!string.IsNullOrWhiteSpace(walkInName)) args["p_walk_in_name"] = walkInName.Trim();
+            if (!string.IsNullOrWhiteSpace(discountCode)) args["p_discount_code"] = discountCode.Trim();
+            return gw.RpcAsync<Payment>("start_desk_online_payment", args);
+        });
+    public Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId) => OnlinePay.OpenAsync(gw, paymentId);
+    public Task<AppResult<bool>> CheckOnlineAsync(int paymentId) => OnlinePay.CheckAsync(gw, paymentId);
+    public Task<AppResult<Payment>> PaymentAsync(int paymentId) => Safe.RunAsync(async () => (await gw.ListAsync<Payment>(p => p.Id == paymentId)).Single());
+
+    public Task<AppResult<Payment?>> MyWaitingOnlineAsync() => Safe.RunAsync(async () =>
+    {
+        var me = gw.CurrentUserId;
+        var now = DateTime.UtcNow;
+        return (await gw.ListAsync<Payment>(p => p.Status == "pending" && p.Method == PayMethod.Qr && p.RecordedBy == me))
+            .Where(p => p.ExpiresAt > now).OrderByDescending(p => p.CreatedAt).FirstOrDefault();
+    });
+
+    public async Task<AppResult<string>> RegisterMemberAsync(string firstName, string lastName, string email, string? phone, string password)
+    {
+        firstName = firstName.Trim().Normalize(); lastName = lastName.Trim().Normalize(); email = email.Trim();
+        if (!AccountRules.IsName(firstName, lastName)) return AppResult<string>.Fail(AppErrorKind.Validation, "bad_name");
+        if (!AccountRules.IsEmail(email)) return AppResult<string>.Fail(AppErrorKind.Validation, "bad_email");
+        if (!AccountRules.IsPassword(password)) return AppResult<string>.Fail(AppErrorKind.Validation, "bad_password");
+        return await Safe.RunAsync(async () =>
+        {
+            var body = new Dictionary<string, object> { ["first_name"] = firstName, ["last_name"] = lastName, ["name"] = NameParts.Join(firstName, lastName),
+                ["email"] = email, ["role"] = "member", ["password"] = password };
+            if (!string.IsNullOrWhiteSpace(phone)) body["phone"] = phone.Trim();
+            return System.Text.Json.JsonDocument.Parse(await gw.InvokeFunctionAsync("create-user", body)).RootElement.GetProperty("id").GetString()!;
+        });
+    }
+
     async Task<IReadOnlyList<PaymentRow>> RowsAsync(IEnumerable<Payment> payments)
     {
         var names = await Directory_.UserNamesAsync(gw);
@@ -503,8 +567,9 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
         { await gw.RpcAsync("decide_amenity_refund", new() { ["p_request_id"] = requestId, ["p_approve"] = approve, ["p_reason"] = reason.Trim() }); return true; });
     }
 
+    // cashier plan Y7: what waits for the desk is cash for a booking paid at the desk; online payments verify themselves (Xendit)
     public Task<AppResult<IReadOnlyList<PaymentRow>>> PendingAsync() => Safe.RunAsync(async () =>
-        await RowsAsync((await gw.ListAsync<Payment>(p => p.Status == "pending")).OrderBy(p => p.CreatedAt)));
+        await RowsAsync((await gw.ListAsync<Payment>(p => p.Status == "pending" && p.Method == PayMethod.Cash)).OrderBy(p => p.CreatedAt)));
 
     public Task<AppResult<IReadOnlyList<PaymentRow>>> RecentAsync() => Safe.RunAsync(async () =>
         await RowsAsync((await gw.ListAsync<Payment>(p => p.Status == "verified")).OrderByDescending(p => p.VerifiedAt).Take(30)));
@@ -539,8 +604,6 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
         return await Safe.RunAsync(async () => { await gw.RpcAsync("void_payment", new() { ["p_payment_id"] = paymentId, ["p_reason"] = reason.Trim() }); return true; });
     }
 
-
-    public Task<AppResult<string?>> ProofUrlAsync(string proofPath) => Safe.RunAsync(() => gw.SignedUrlAsync("payment-proofs", proofPath));
 
     public Task<AppResult<(CashShift? Open, decimal DefaultFloat)>> ShiftAsync() => Safe.RunAsync(async () =>
         ((await gw.RpcAsync<List<CashShift>>("my_cash_shift", new()) ?? []).FirstOrDefault(), (await gw.ListAsync<GymSettings>()).First().OpeningFloat));
@@ -787,8 +850,9 @@ public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId
     public bool Requested => RequestId is not null;
     public bool ShowHire => !Hired && !Requested;
     public string WaitingText => $"Waiting for {Name.Split(' ')[0]} to accept.";
-    /// <summary>G28 (0071): Taken = another member has an active hire with this coach. Any hire shows the "Hired" tag; hiring is unchanged.</summary>
-    public string? HireBadge => Requested ? "requested" : Hired || Taken ? "hired" : null;
+    /// <summary>G28 (0071): Taken = another member has an active hire with this coach. The "Hired" tag shows only to the member who hired
+    /// (owner, 2026-11-16: it showed to members with no coach); hiring is unchanged.</summary>
+    public string? HireBadge => Requested ? "requested" : Hired ? "hired" : null;
     public string Letters => Initials.From(Name);
     /// <summary>The coach paused hiring and this member has no hire to keep: shown grayed out, Hire disabled.</summary>
     public bool Closed => !Coach.IsAvailable && !Hired;
@@ -1241,7 +1305,7 @@ public static class MemberCheck
     /// <summary>The page staff open next, as (button text, Shell route); null when there is nothing the desk can do.</summary>
     public static (string Text, string Route)? NextStep(string status) => status switch
     {
-        "pending" => ("Open Payments to verify", "verify"),
+        "pending" => ("Open Cashier", "cashier"),   // cashier plan Y7
         "expired" => ("Open Cashier", "cashier"),
         _ => null,
     };
@@ -1249,8 +1313,10 @@ public static class MemberCheck
 
 /// <param name="Status">Online only: active, pending, expired or inactive (G10). Null on the saved list, which knows paid or not.</param>
 public sealed record MemberHit(string MemberId, string Username, bool HasActiveMembership, DateTime? PaidUntil = null, string? AvatarPath = null,
-    string? Status = null, DateTime? EndedAt = null)
+    string? Status = null, DateTime? EndedAt = null, string? Phone = null, string? Email = null)
 {
+    /// <summary>The Cashier's contact column: phone and email, so two people with the same name can be told apart.</summary>
+    public string ContactText => string.Join(" · ", new[] { Phone, Email }.Where(s => !string.IsNullOrWhiteSpace(s)));
     public string PlanStatus => HasActiveMembership ? "active" : Status == "expired" && EndedAt is null ? "no_membership" : Status ?? "inactive";
     /// <summary>Forgot phone: what staff check before letting someone in without a QR; the reason when they can't (G10).</summary>
     public string PlanText => HasActiveMembership ? PaidUntil is { } until ? $"Paid until {until.AddHours(8):d MMM yyyy}" : "Paid"
@@ -1400,9 +1466,14 @@ public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = 
         var waiting = (await gw.ListAsync<Payment>(p => p.Status == Status.Pending)).Where(p => p.Kind is PayKind.Membership or PayKind.Renewal).Select(p => p.MemberId).ToHashSet();
         // G10: the same order scan_member uses: deactivated, active, waiting for a payment, otherwise expired (or never had one)
         string StatusOf(Profile p) => !p.IsActive ? "inactive" : active.ContainsKey(p.Id) ? "active" : waiting.Contains(p.Id) ? "pending" : "expired";
-        return members.Join(profiles, m => m.UserId, p => p.Id, (m, p) => new MemberHit(m.UserId, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName,
-                p.IsActive && active.ContainsKey(m.UserId), active.GetValueOrDefault(m.UserId), p.AvatarPath, StatusOf(p), ended.GetValueOrDefault(m.UserId)))
-            .Where(h => h.Username.Contains(fragment, StringComparison.OrdinalIgnoreCase)).Take(20).ToList();
+        // cashier plan Y1: name, sign-in email (the username) or phone; a phone matches on its digits, so "0917-555" finds "0917 555 0142"
+        static string Digits(string? s) => new((s ?? "").Where(char.IsDigit).ToArray());
+        var text = fragment.Trim(); var digits = Digits(text);
+        bool Matches(Profile p, string name) => name.Contains(text, StringComparison.OrdinalIgnoreCase) || p.Username.Contains(text, StringComparison.OrdinalIgnoreCase)
+            || (digits.Length >= 3 && Digits(p.Phone).Contains(digits));
+        return members.Join(profiles, m => m.UserId, p => p.Id, (m, p) => (p, Hit: new MemberHit(m.UserId, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName,
+                p.IsActive && active.ContainsKey(m.UserId), active.GetValueOrDefault(m.UserId), p.AvatarPath, StatusOf(p), ended.GetValueOrDefault(m.UserId), p.Phone, p.Username)))
+            .Where(x => Matches(x.p, x.Hit.Username)).Select(x => x.Hit).ToList();   // every match: the Cashier's table pages by 10
     });
 
     public Task<AppResult<MemberPass>> MyPassAsync() =>
@@ -1422,7 +1493,7 @@ public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = 
         var rows = await gw.ListAsync<GymCheckIn>(c => c.CheckedInAt >= from && c.CheckedInAt < to);
         var names = await Directory_.UserNamesAsync(gw);
         return rows.OrderBy(c => c.CheckedInAt)
-            .Select(c => new CheckInRow(c.MemberId is { } m ? names.GetValueOrDefault(m, "Member") : "Walk-in", c.CheckedInAt, c.Method,
+            .Select(c => new CheckInRow(c.MemberId is { } m ? names.GetValueOrDefault(m, "Member") : "Day pass", c.CheckedInAt, c.Method,
                 c.RecordedBy is { } by ? names.GetValueOrDefault(by) : null, c.Reason, c.IdType)).ToList();
     });
 }
@@ -1589,7 +1660,7 @@ public interface IAdminService
     Task<AppResult<IReadOnlyList<AuditRecord>>> AuditExportAsync(AuditFilter filter);
     Task<AppResult<GymSettings>> GymSettingsAsync();
     /// <summary>Saves the gym name, QR account name and walk-in price, and uploads a new payment QR image when one is given.</summary>
-    Task<AppResult<bool>> SaveGymSettingsAsync(GymSettings settings, (string FileName, byte[] Data)? qrImage);
+    Task<AppResult<bool>> SaveGymSettingsAsync(GymSettings settings);
     /// <summary>G16: every closed day, the latest first (past ones stay as history).</summary>
     Task<AppResult<IReadOnlyList<GymClosure>>> ClosuresAsync();
     /// <summary>G18: what closing the day would cancel.</summary>
@@ -1799,7 +1870,7 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
 
     public Task<AppResult<GymSettings>> GymSettingsAsync() => Safe.RunAsync(async () => (await gw.ListAsync<GymSettings>()).First());
 
-    public async Task<AppResult<bool>> SaveGymSettingsAsync(GymSettings s, (string FileName, byte[] Data)? qrImage)
+    public async Task<AppResult<bool>> SaveGymSettingsAsync(GymSettings s)
     {
         if (string.IsNullOrWhiteSpace(s.GymName)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
         if (s.WalkInPrice <= 0) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_walk_in_price");   // D4: ₱0 could never be paid
@@ -1808,7 +1879,6 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         if (!OnGrid(s.OpensAt) || !OnGrid(s.ClosesAt) || s.ClosesAt <= s.OpensAt) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_hours");
         return await Safe.RunAsync(async () =>
         {
-            if (qrImage is { } img) s.QrImagePath = await gw.UploadAsync("gym-assets", $"qr-{DateTime.UtcNow:yyyyMMddHHmmss}-{img.FileName}", img.Data);
             await gw.UpdateAsync(s);
             return true;
         });

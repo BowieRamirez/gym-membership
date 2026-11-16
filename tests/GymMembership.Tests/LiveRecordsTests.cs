@@ -83,7 +83,6 @@ public class LiveRecordsTests
     [Theory]
     [InlineData("Views/MyMembershipPage", true)]
     [InlineData("Views/HomePage", true)]
-    [InlineData("Views/VerifyPaymentsPage", true)]
     [InlineData("Views/CheckInPage", true)]
     [InlineData("Views/AdminOverviewPage.Windows", false)]
     public void The_decided_pages_listen_live(string page, bool hasBar)

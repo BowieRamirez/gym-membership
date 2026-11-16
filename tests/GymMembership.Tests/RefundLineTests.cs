@@ -37,7 +37,7 @@ public class RefundLineTests
     [Theory]
     [InlineData("Membership", true)]
     [InlineData("Renewal", true)]
-    [InlineData("Walk-in", false)]
+    [InlineData("Day pass", false)]
     public async Task The_desk_is_told_to_say_it_for_a_membership_but_not_a_day_pass(string kind, bool said)
     {
         var asked = Answer();
@@ -45,7 +45,7 @@ public class RefundLineTests
         var vm = new CashierViewModel(new PaymentStaffService(gw), new AttendanceService(gw));
         await vm.OnAppearingAsync();
         vm.Kind = kind;
-        if (kind == "Walk-in") vm.WalkInName = "Pedro Ramos";
+        if (kind == "Day pass") vm.WalkInName = "Pedro Ramos";
         else
         {
             vm.Search = "Alex"; await vm.FindCommand.ExecuteAsync(null); vm.Member = vm.Hits.First();

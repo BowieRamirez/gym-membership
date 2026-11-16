@@ -21,7 +21,7 @@ public sealed record HomeTile(string Route, string Icon, string Title, string Co
 public partial class HomeViewModel(IDeskHomeService svc, IPaymentStaffService? payments = null, ICoachService? coaches = null) : LoadableViewModel
 {
     public ObservableCollection<HomeTile> Tiles { get; } = new();
-    /// <summary>Verifying needs the proof screenshot, so a row only opens Payments to verify.</summary>
+    /// <summary>Desk bookings waiting for their cash (cashier plan Y7); a row opens the Cashier, where it is taken.</summary>
     public ObservableCollection<PaymentRow> ToVerify { get; } = new();
     public ObservableCollection<CoachPresenceRow> InGym { get; } = new();
     public bool HasLists => payments is not null && coaches is not null;
@@ -68,13 +68,14 @@ public partial class HomeViewModel(IDeskHomeService svc, IPaymentStaffService? p
         var amenityDetail = string.Join(", ", new[] { s.AmenitiesInUse > 0 ? $"{s.AmenitiesInUse} in use" : null, s.AmenitiesUnavailable > 0 ? $"{s.AmenitiesUnavailable} unavailable" : null }.OfType<string>());
         // 9.7: one highlighted figure (the page standard). Payments waiting first, then unanswered chats; an unavailable amenity is news,
         // not a desk task, so it is said in words only. Every tile still says what it needs in its caption.
-        bool pay = s.PaymentsToVerify > 0, chats = !pay && (s.UnreadMessages > 0 || s.UnclaimedChats > 0);
+        bool pay = s.CashToTake > 0, chats = !pay && (s.UnreadMessages > 0 || s.UnclaimedChats > 0);
         return
         [
             new("checkin", "log-in", "Check-ins today", s.CheckInsToday.ToString(),
                 s.CheckInsToday == 0 ? "No one has checked in yet" : "Tap to check someone in", false),
-            new("verify", "receipt", "Payments to verify", s.PaymentsToVerify.ToString(),
-                s.PaymentsToVerify == 0 ? "All caught up" : s.PaymentsToVerify == 1 ? "1 payment is waiting" : $"{s.PaymentsToVerify} payments are waiting", pay),
+            // cashier plan Y7: Payments to verify is gone (Xendit verifies online payments); the desk's task is cash for desk bookings
+            new("cashier", "receipt", "Cash to take", s.CashToTake.ToString(),
+                s.CashToTake == 0 ? "All caught up" : s.CashToTake == 1 ? "1 booking to take cash for" : $"{s.CashToTake} bookings to take cash for", pay),
             new("amenities", "waves", "Amenities available", $"{s.AmenitiesAvailable} of {s.AmenitiesTotal}",
                 amenityDetail.Length == 0 ? "All open" : amenityDetail, false),
             new("messages", "message-square", "Unread messages", s.UnreadMessages.ToString(),
@@ -84,79 +85,7 @@ public partial class HomeViewModel(IDeskHomeService svc, IPaymentStaffService? p
     }
 }
 
-public partial class VerifyPaymentsViewModel(IPaymentStaffService svc) : LoadableViewModel
-{
-    public ObservableCollection<PaymentRow> Pending { get; } = new();
-    /// <summary>F13: booking refund claims ("I didn't use it") the front desk decides, each with a reason.</summary>
-    public ObservableCollection<ClaimRow> Claims { get; } = new();
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsDeciding), nameof(DecideTitle), nameof(DecideText))] private ClaimRow? deciding;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(DecideTitle), nameof(DecideText))] private bool decideApprove;
-    [ObservableProperty] private string decideReason = "";
-    public bool IsDeciding => Deciding is not null;
-    public bool HasClaims => Claims.Count > 0;
-    public string DecideTitle => Deciding is null ? "" : $"{(DecideApprove ? "Approve" : "Decline")} {Deciding.Member}'s refund of {Deciding.Price}?";
-    public string DecideText => DecideApprove ? "Approve refund" : "Decline";
-    [ObservableProperty] private PaymentRow? rejecting;
-    [ObservableProperty] private string rejectReason = "";
-    [ObservableProperty] private PaymentRow? viewing;
-    [ObservableProperty] private string? proofUrl;
-
-    public override Task OnAppearingAsync() => LoadAsync();
-
-    [RelayCommand]
-    private async Task LoadAsync()
-    {
-        if (!await RunAsync(svc.PendingAsync, rows => Fill(Pending, rows))) return;
-        await RunAsync(svc.ClaimsAsync, rows => Fill(Claims, rows));
-        OnPropertyChanged(nameof(HasClaims));
-    }
-
-    [RelayCommand] private void ApproveClaim(ClaimRow row) { Notice = null; Deciding = row; DecideApprove = true; DecideReason = ""; }
-    [RelayCommand] private void DeclineClaim(ClaimRow row) { Notice = null; Deciding = row; DecideApprove = false; DecideReason = ""; }
-    [RelayCommand] private void KeepClaim() => Deciding = null;
-
-    [RelayCommand]
-    private async Task ConfirmDecisionAsync()
-    {
-        if (Deciding is not { } row) return;
-        if (!await RunAsync(() => svc.DecideClaimAsync(row.Claim.Id, DecideApprove, DecideReason))) return;
-        Claims.Remove(row); OnPropertyChanged(nameof(HasClaims)); Deciding = null;
-        Notice = DecideApprove ? $"Refund approved. Admin repays {row.Member} from Refunds & voids." : $"Declined. {row.Member} is told why.";
-    }
-
-    [RelayCommand]
-    private async Task ApproveAsync(PaymentRow row)
-    {
-        Notice = null;
-        if (!await Confirm.AskAsync($"Approve {row.Payer}'s payment?", $"{row.Item}\n₱{row.Payment.Amount:N2}", "Approve")) return;
-        if (await RunAsync(() => svc.VerifyAsync(row.Payment.Id, true)))
-        { Pending.Remove(row); Notice = $"Verified {row.Payer}'s payment. Receipt number assigned."; if (Viewing == row) Viewing = null; }
-    }
-
-    // a rejection needs a reason, and it is final: the member pays again with a new payment
-    [RelayCommand] private void Reject(PaymentRow row) { Rejecting = row; RejectReason = ""; Notice = null; }
-    [RelayCommand] private void KeepPending() => Rejecting = null;
-
-    [RelayCommand]
-    private async Task ConfirmRejectAsync()
-    {
-        if (Rejecting is not { } row) return;
-        if (!await RunAsync(() => svc.VerifyAsync(row.Payment.Id, false, RejectReason))) return;
-        Pending.Remove(row); Rejecting = null;
-        Notice = $"Rejected {row.Payer}'s payment. They can pay again.";
-    }
-
-    // the screenshot the member sent, to check against the gym's e-wallet
-    [RelayCommand]
-    private async Task ViewProofAsync(PaymentRow row)
-    {
-        Viewing = row; ProofUrl = null;
-        if (row.Payment.ProofPath is { } path) await RunAsync(() => svc.ProofUrlAsync(path), url => ProofUrl = url);
-    }
-
-    [RelayCommand] private void CloseProof() { Viewing = null; ProofUrl = null; }
-}
-
+// front desk: cash and GCash at the counter, and walk-ins. Verified straight away with a receipt number
 /// <summary>One thing for sale on the cashier's grid, and whether it is the one picked.</summary>
 public partial class ItemOption(CounterItem item) : ObservableObject
 {
@@ -166,23 +95,26 @@ public partial class ItemOption(CounterItem item) : ObservableObject
     [ObservableProperty] private bool isPicked;
 }
 
-// front desk: cash and GCash at the counter, and walk-ins. Verified straight away with a receipt number
-public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceService members) : LoadableViewModel
+public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceService members, IUrlOpener? opener = null) : LoadableViewModel
 {
-    public string[] Kinds { get; } = ["Membership", "Renewal", "Amenity", "Walk-in"];
-    public string[] Methods { get; } = ["Cash", "GCash"];   // owner, 2026-11-11: no bank transfer (0054)
+    public string[] Kinds { get; } = ["Membership", "Renewal", "Amenity", "Day pass"];   // cashier plan Y3: a walk-in buys a Day pass
+    /// <summary>Cashier plan Y6: e-wallets at the desk go through Xendit's checkout (GCash, Maya or any bank app by QR Ph).</summary>
+    public const string Online = "GCash / QR Ph";
+    public string[] Methods { get; } = ["Cash", Online];   // owner, 2026-11-11: no bank transfer (0054)
+    /// <summary>A desk online payment whose Xendit checkout is open on this PC, until it is paid.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWaiting))] private Payment? waiting;
+    public bool IsWaiting => Waiting is not null;
     public ObservableCollection<MemberHit> Hits { get; } = new();
     public ObservableCollection<ItemOption> Options { get; } = new();
     int itemsTicket;
 
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWalkIn), nameof(NeedsMember), nameof(NeedsReference), nameof(OrderWho), nameof(OrderWhat), nameof(OrderHow), nameof(TotalText), nameof(TotalNote), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))]
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWalkIn), nameof(NeedsMember), nameof(OrderWho), nameof(OrderWhat), nameof(OrderHow), nameof(TotalText), nameof(TotalNote), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))]
     private string kind = "Membership";
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(NeedsReference), nameof(OrderHow), nameof(CashNeedsShift)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string method = "Cash";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderHow), nameof(CashNeedsShift)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string method = "Cash";
     [ObservableProperty] private string search = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private MemberHit? member;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWhat), nameof(TotalText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private CounterItem? item;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string walkInName = "";
-    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string referenceNo = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(TotalNote))] private string discountCode = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ItemsEmptyText))] private bool loadingItems;
 
@@ -209,12 +141,14 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     /// <summary>Cash is chosen but no shift is open: Complete payment waits, and the order says why.</summary>
     public bool CashNeedsShift => Method == "Cash" && Shift is null;
 
-    public bool IsWalkIn => Kind == "Walk-in";
+    public bool IsWalkIn => Kind == "Day pass";
     public bool NeedsMember => !IsWalkIn;
-    public bool NeedsReference => Method != "Cash";
+    // cashier plan Y6: no reference to type; Xendit confirms an e-wallet payment
 
     // the order panel, in the words the cashier uses
-    public string OrderWho => IsWalkIn ? (string.IsNullOrWhiteSpace(WalkInName) ? "Walk-in: type a name" : WalkInName.Trim()) : Member?.Username ?? "Find and choose a member";
+    // cashier plan Y3: a Day pass may carry a member found by search, a typed name, or nothing (anonymous)
+    public string OrderWho => IsWalkIn ? Member?.Username ?? (string.IsNullOrWhiteSpace(WalkInName) ? "Day pass, no name" : WalkInName.Trim()) : Member?.Username ?? "Find and choose a member";
+    string? DayPassName => Member?.Username ?? (string.IsNullOrWhiteSpace(WalkInName) ? null : WalkInName.Trim());
     public string OrderWhat => Item?.Label ?? (IsWalkIn ? "Day pass" : "Choose what they are paying for");
     public string TotalText => IsWalkIn ? "Day pass" : Item?.Price is { } p ? $"₱{p:N2}" : "₱0.00";
     public string TotalNote => IsWalkIn ? "The day pass price is set in Gym settings."
@@ -224,10 +158,34 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     /// <summary>The kind and the way of paying in words, so the order reads the same to someone who cannot see which button is filled.</summary>
     public string OrderHow => $"{Kind}, paid with {Method}";
 
-    static string KindKey(string k) => k switch { "Renewal" => PayKind.Renewal, "Amenity" => PayKind.Amenity, "Walk-in" => PayKind.WalkIn, _ => PayKind.Membership };
-    static string MethodKey(string m) => m == "GCash" ? PayMethod.Gcash : PayMethod.Cash;
+    static string KindKey(string k) => k switch { "Renewal" => PayKind.Renewal, "Amenity" => PayKind.Amenity, "Day pass" => PayKind.WalkIn, _ => PayKind.Membership };
 
-    public override async Task OnAppearingAsync() { await RefreshItemsAsync(); await LoadShiftAsync(); }
+    public override async Task OnAppearingAsync()
+    {
+        await RefreshItemsAsync(); await LoadShiftAsync(); await LoadDeskBookingsAsync();
+        // a desk payment still waiting for Xendit comes back with its Check payment button (leaving the page used to lose it)
+        if (Waiting is null) await RunAsync(svc.MyWaitingOnlineAsync, p => { Waiting = p; RecordCommand.NotifyCanExecuteChanged(); });
+    }
+
+    // ---- cashier plan Y7: bookings paid in cash at the desk are taken here (Payments to verify is gone) ----
+    public ObservableCollection<PaymentRow> DeskBookings { get; } = new();
+    public bool HasDeskBookings => DeskBookings.Count > 0;
+    async Task LoadDeskBookingsAsync()
+    {
+        await RunAsync(svc.PendingAsync, rows => Fill(DeskBookings, rows.Where(r => r.HasBooking)));
+        OnPropertyChanged(nameof(HasDeskBookings));
+    }
+
+    [RelayCommand]
+    private async Task TakeBookingCashAsync(PaymentRow row)
+    {
+        Notice = null;
+        if (!await Confirm.AskAsync($"Take {row.Payer}'s cash?", $"{row.Item}\n{row.Booking}\n₱{row.Payment.Amount:N2} into your drawer.", "Take cash")) return;
+        if (!await RunAsync(() => svc.VerifyAsync(row.Payment.Id, true))) return;
+        Notice = $"Took ₱{row.Payment.Amount:N2} from {row.Payer}. The booking is confirmed and a receipt number assigned.";
+        await LoadDeskBookingsAsync();
+        await LoadShiftAsync();   // the drawer's cash taken goes up
+    }
 
     Task<bool> LoadShiftAsync() => RunAsync(svc.ShiftAsync, state =>
     {
@@ -282,14 +240,51 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         Fill(Options, result.Value!.Select(r => new ItemOption(r)));
     }
 
-    [RelayCommand] private Task FindAsync() => RunAsync(() => members.FindMembersAsync(Search), rows => Fill(Hits, rows));
+    /// <summary>Cashier plan Y1: Find ran and nobody matched; the page says so (it used to fill a closed dropdown in silence).</summary>
+    [ObservableProperty] private bool noMatch;
+    // owner, 2026-11-16: the Cashier lists only active accounts (with or without a membership); Membership checking still shows a
+    // deactivated one with its reason (G10), so the filter is here, not in the shared search
+    [RelayCommand] private Task FindAsync() => RunAsync(() => members.FindMembersAsync(Search), all => { var rows = all.Where(h => h.Status != "inactive").ToList(); IsRegistering = false; Fill(Hits, rows); NoMatch = rows.Count == 0; OnPropertyChanged(nameof(HasHits)); OnPropertyChanged(nameof(ShowHits)); });
+    /// <summary>The results table shows once a search found someone.</summary>
+    public bool HasHits => Hits.Count > 0;
+    // owner, 2026-11-16: one at a time: Find shows the table, Register new member shows its form
+    public bool ShowHits => HasHits && !IsRegistering;
+    public bool ShowNoMatch => NoMatch && !IsRegistering;
+    partial void OnIsRegisteringChanged(bool value) { OnPropertyChanged(nameof(ShowHits)); OnPropertyChanged(nameof(ShowNoMatch)); }
+    partial void OnNoMatchChanged(bool value) => OnPropertyChanged(nameof(ShowNoMatch));
+    [RelayCommand] private void PickMember(MemberHit hit) => Member = hit;
+
+    // ---- cashier plan Y2: nobody matched, so the desk registers the customer as a member (search first, so nobody is made twice) ----
+    [ObservableProperty] private bool isRegistering;
+    [ObservableProperty] private string newFirstName = "";
+    [ObservableProperty] private string newLastName = "";
+    [ObservableProperty] private string newEmail = "";
+    [ObservableProperty] private string newPhone = "";
+    [RelayCommand] private void StartRegister() { Notice = null; ErrorMessage = null; IsRegistering = true; }
+    [RelayCommand] private void CancelRegister() => IsRegistering = false;
+
+    [RelayCommand]
+    private async Task RegisterAsync()
+    {
+        Notice = null;
+        var name = NameParts.Join(NewFirstName.Trim(), NewLastName.Trim());
+        if (!await Confirm.AskAsync($"Register {name} as a member?", $"{NewEmail.Trim()}\nThey get a temporary password to change at first sign-in.", "Register member")) return;
+        var password = TempPassword.New();
+        string? id = null;
+        if (!await RunAsync(() => svc.RegisterMemberAsync(NewFirstName, NewLastName, NewEmail, NewPhone, password), v => id = v)) return;
+        Search = NewEmail.Trim();
+        await RunAsync(() => members.FindMembersAsync(Search), rows => { Fill(Hits, rows); NoMatch = rows.Count == 0; OnPropertyChanged(nameof(HasHits)); OnPropertyChanged(nameof(ShowHits)); Member = rows.FirstOrDefault(h => h.MemberId == id); });
+        IsRegistering = false;
+        NewFirstName = NewLastName = NewEmail = NewPhone = "";
+        Notice = $"{name} is a member now. Temporary password: {password}. Hand it over; they change it at first sign-in.";
+    }
     [RelayCommand] private void PickKind(string value) => Kind = value;
     [RelayCommand] private void PickMethod(string value) => Method = value;
     [RelayCommand] private void PickItem(ItemOption option) => Item = option.Item;   // OnItemChanged marks the card
 
     bool CanComplete() =>
-        (IsWalkIn ? !string.IsNullOrWhiteSpace(WalkInName) : Member is not null && Item is not null)
-        && (!NeedsReference || !string.IsNullOrWhiteSpace(ReferenceNo)) && !CashNeedsShift;
+        (IsWalkIn || Member is not null && Item is not null)
+        && !CashNeedsShift && Waiting is null;
 
     // The command is off while it runs, so a double tap records one payment.
     [RelayCommand(CanExecute = nameof(CanComplete))]
@@ -299,12 +294,66 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         if (!IsWalkIn && (Member is null || Item is null)) { ErrorMessage = "Choose the member and what they are paying for."; return; }
         if (!await Confirm.AskAsync("Record this payment?", $"{OrderWho}\n{OrderWhat}\n{TotalText}\n{OrderHow}"
                 + (Kind is "Membership" or "Renewal" ? $"\n\nTell them: {RefundRules.Line}" : ""), "Record payment")) return;   // G23
+        if (Method == Online) { await StartOnlineAsync(); return; }
         Payment? paid = null;
-        if (!await RunAsync(() => svc.RecordCounterAsync(KindKey(Kind), MethodKey(Method), IsWalkIn ? null : Member!.MemberId, Item?.Id,
-                IsWalkIn ? WalkInName : null, NeedsReference ? ReferenceNo : null, IsWalkIn ? null : DiscountCode), p => paid = p)) return;
-        Notice = $"Payment complete: ₱{paid!.Amount:N2}. Receipt {paid.ReceiptNo}.";
-        Item = null; ReferenceNo = ""; DiscountCode = ""; WalkInName = "";
+        if (!await RunAsync(() => svc.RecordCounterAsync(KindKey(Kind), PayMethod.Cash, IsWalkIn ? null : Member!.MemberId, Item?.Id,
+                IsWalkIn ? DayPassName : null, null, IsWalkIn ? null : DiscountCode), p => paid = p)) return;
+        await DoneAsync(paid!);
+    }
+
+    async Task DoneAsync(Payment paid)
+    {
+        Notice = $"Payment complete: ₱{paid.Amount:N2}. Receipt {paid.ReceiptNo}.";
+        Item = null; Member = null; DiscountCode = ""; WalkInName = ""; Waiting = null;   // the next customer starts clean (final review)
         var notice = Notice; await LoadShiftAsync(); Notice = notice;
+        RecordCommand.NotifyCanExecuteChanged();
+    }
+
+    // cashier plan Y6: a pending online payment, Xendit's checkout on this PC (the customer scans its QR Ph), then Check payment
+    async Task StartOnlineAsync()
+    {
+        Payment? started = null;
+        if (!await RunAsync(() => svc.StartDeskOnlineAsync(KindKey(Kind), IsWalkIn ? null : Member!.MemberId, Item?.Id,
+                IsWalkIn ? DayPassName : null, IsWalkIn ? null : DiscountCode), p => started = p)) return;
+        Waiting = started; RecordCommand.NotifyCanExecuteChanged();
+        await OpenCheckoutAsync();
+    }
+
+    [RelayCommand]
+    private async Task OpenCheckoutAsync()
+    {
+        if (Waiting is not { } pay) return;
+        OnlineCheckout? checkout = null;
+        if (!await RunAsync(() => svc.PayOnlineAsync(pay.Id), c => checkout = c)) return;
+        if (checkout!.Paid) { await PaidAsync(pay.Id); return; }
+        if (checkout.Url is { } url && opener is not null) await opener.OpenAsync(url);
+        Notice = "Xendit's checkout is open on this PC. Let the customer scan the QR Ph code with GCash, Maya or their bank app, then tap Check payment.";
+    }
+
+    [RelayCommand]
+    private async Task CheckPaymentAsync()
+    {
+        if (Waiting is not { } pay) return;
+        var paid = false;
+        if (!await RunAsync(() => svc.CheckOnlineAsync(pay.Id), p => paid = p)) return;
+        if (paid) await PaidAsync(pay.Id);
+        else Notice = "Not paid yet. Wait for the customer to finish on Xendit's page, then check again.";
+    }
+
+    async Task PaidAsync(int paymentId)
+    {
+        Payment? fresh = null;
+        if (await RunAsync(() => svc.PaymentAsync(paymentId), p => fresh = p)) await DoneAsync(fresh!);
+    }
+
+    /// <summary>The customer walked away: the pending payment is cancelled, so the member can pay another way at once (final review).
+    /// A late scan on Xendit's still-open page goes to staff as "Online payment to refund".</summary>
+    [RelayCommand]
+    private async Task StopWaitingAsync()
+    {
+        if (Waiting is not { } pay) return;
+        if (!await RunAsync(() => svc.VerifyAsync(pay.Id, false, "Customer left at the desk"))) return;
+        Waiting = null; Notice = "Cancelled. Nothing was charged."; RecordCommand.NotifyCanExecuteChanged();
     }
 }
 
@@ -1914,48 +1963,35 @@ public partial class RevenueViewModel(IAdminService svc, IReportFiles? files = n
     }
 }
 
-// admin: the gym's name, the payment QR members scan, and the walk-in price
-public partial class GymSettingsViewModel(IAdminService svc, IProofPicker picker) : LoadableViewModel
+// admin: the gym's name, hours, the walk-in price, the drawer float and the booking down payment.
+// Cashier plan Y8: no payment QR any more; members and the desk pay e-wallets through Xendit.
+public partial class GymSettingsViewModel(IAdminService svc) : LoadableViewModel
 {
     [ObservableProperty] private string gymName = "";
-    [ObservableProperty] private string? qrAccountName;
     [ObservableProperty] private decimal walkInPrice;
     [ObservableProperty] private TimeSpan opensAt = TimeSpan.FromHours(6);
     [ObservableProperty] private TimeSpan closesAt = TimeSpan.FromHours(22);
     [ObservableProperty] private decimal openingFloat = 5000;   // F2: what each cashier's drawer starts with
     [ObservableProperty] private int downPaymentPercent = 50;   // G13 (0064): of an amenity booking, paid to reserve it
-    [ObservableProperty] private string qrStatus = "No QR uploaded yet. Members can't pay until you add one.";
     GymSettings? _loaded;
-    (string FileName, byte[] Data)? _newQr;
 
     public override async Task OnAppearingAsync() { await LoadAsync(); await LoadClosuresAsync(); }
 
     [RelayCommand]
     private Task LoadAsync() => RunAsync(svc.GymSettingsAsync, g =>
     {
-        _loaded = g; GymName = g.GymName; QrAccountName = g.QrAccountName; WalkInPrice = g.WalkInPrice; OpensAt = g.OpensAt; ClosesAt = g.ClosesAt; OpeningFloat = g.OpeningFloat; DownPaymentPercent = g.DownPaymentPercent;
-        QrStatus = string.IsNullOrWhiteSpace(g.QrImagePath) ? "No QR uploaded yet. Members can't pay until you add one." : "A payment QR is set. Choose a new image to replace it.";
+        _loaded = g; GymName = g.GymName; WalkInPrice = g.WalkInPrice; OpensAt = g.OpensAt; ClosesAt = g.ClosesAt; OpeningFloat = g.OpeningFloat; DownPaymentPercent = g.DownPaymentPercent;
     });
-
-    [RelayCommand]
-    private async Task ChooseQrAsync()
-    {
-        if (await picker.PickAsync() is not { } file) return;
-        _newQr = file;
-        QrStatus = $"Ready to upload {file.FileName}. Save to apply it.";
-    }
 
     [RelayCommand]
     private async Task SaveAsync()
     {
         Notice = null;
         if (_loaded is null) return;
-        var qr = _newQr is null ? "" : "\nThe payment QR members scan will change.";
-        if (!await Confirm.AskAsync("Save gym settings?", $"Open {DateTime.Today.Add(OpensAt):h:mm tt} to {DateTime.Today.Add(ClosesAt):h:mm tt} every day.{qr}", "Save settings")) return;
-        _loaded.GymName = GymName.Trim(); _loaded.QrAccountName = string.IsNullOrWhiteSpace(QrAccountName) ? null : QrAccountName.Trim(); _loaded.WalkInPrice = WalkInPrice;
+        if (!await Confirm.AskAsync("Save gym settings?", $"Open {DateTime.Today.Add(OpensAt):h:mm tt} to {DateTime.Today.Add(ClosesAt):h:mm tt} every day.", "Save settings")) return;
+        _loaded.GymName = GymName.Trim(); _loaded.WalkInPrice = WalkInPrice;
         _loaded.OpensAt = OpensAt; _loaded.ClosesAt = ClosesAt; _loaded.OpeningFloat = OpeningFloat; _loaded.DownPaymentPercent = DownPaymentPercent;
-        if (!await RunAsync(() => svc.SaveGymSettingsAsync(_loaded, _newQr))) return;
-        _newQr = null;
+        if (!await RunAsync(() => svc.SaveGymSettingsAsync(_loaded))) return;
         Notice = "Saved.";
         await LoadAsync();
     }
@@ -2093,8 +2129,38 @@ public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive
 public sealed record StatusChoice(string Value, string Label);
 
 /// <summary>Front desk and admin: mark an amenity available, in use or unavailable, and see who was alerted.</summary>
-public partial class AmenityStatusViewModel(IAmenityService svc, IReservationService? reservations = null) : LoadableViewModel
+public partial class AmenityStatusViewModel(IAmenityService svc, IReservationService? reservations = null, IPaymentStaffService? payments = null) : LoadableViewModel
 {
+    // ---- F13 booking refund claims ("I didn't use it"), decided by the desk with a reason; moved here from Payments to verify (cashier plan Y7) ----
+    public ObservableCollection<ClaimRow> Claims { get; } = new();
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsDeciding), nameof(DecideTitle), nameof(DecideText))] private ClaimRow? deciding;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(DecideTitle), nameof(DecideText))] private bool decideApprove;
+    [ObservableProperty] private string decideReason = "";
+    public bool IsDeciding => Deciding is not null;
+    public bool HasClaims => Claims.Count > 0;
+    public string DecideTitle => Deciding is null ? "" : $"{(DecideApprove ? "Approve" : "Decline")} {Deciding.Member}'s refund of {Deciding.Price}?";
+    public string DecideText => DecideApprove ? "Approve refund" : "Decline";
+
+    public async Task LoadClaimsAsync()
+    {
+        if (payments is null) return;
+        await RunAsync(payments.ClaimsAsync, rows => Fill(Claims, rows));
+        OnPropertyChanged(nameof(HasClaims));
+    }
+
+    [RelayCommand] private void ApproveClaim(ClaimRow row) { Notice = null; Deciding = row; DecideApprove = true; DecideReason = ""; }
+    [RelayCommand] private void DeclineClaim(ClaimRow row) { Notice = null; Deciding = row; DecideApprove = false; DecideReason = ""; }
+    [RelayCommand] private void KeepClaim() => Deciding = null;
+
+    [RelayCommand]
+    private async Task ConfirmDecisionAsync()
+    {
+        if (payments is null || Deciding is not { } row) return;
+        if (!await RunAsync(() => payments.DecideClaimAsync(row.Claim.Id, DecideApprove, DecideReason))) return;
+        Claims.Remove(row); OnPropertyChanged(nameof(HasClaims)); Deciding = null;
+        Notice = DecideApprove ? $"Refund approved. Admin repays {row.Member} from Refunds & voids." : $"Declined. {row.Member} is told why.";
+    }
+
     // ---- G13 (0064): today's confirmed bookings with a balance; the desk takes it once, cash into the drawer or GCash with a reference ----
     public ObservableCollection<BalanceRow> Balances { get; } = new();
     public bool HasBalances => Balances.Count > 0;
@@ -2143,6 +2209,7 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
     {
         await RunAsync(svc.BoardAsync, board => Fill(Cards, board.Cards));
         await LoadBalancesAsync(ManilaToday);
+        await LoadClaimsAsync();
     }
 
     // Quiet and in place: the error line, the notice and the open form stay as they are, and only cards that changed are swapped.

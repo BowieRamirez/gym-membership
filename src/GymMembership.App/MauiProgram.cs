@@ -82,6 +82,7 @@ public static class MauiProgram
 		s.AddSingleton<IAppNavigator, AppNavigator>();
 		// the real photo library on a device; in demo mode a generated picture, so the screens can be tried without choosing a file
 		s.AddSingleton<IProofPicker>(sp => sp.GetRequiredService<ISupabaseGateway>() is DemoGateway ? new DemoPhotoPicker() : new MauiProofPicker());
+		s.AddSingleton<IUrlOpener, MauiUrlOpener>();   // Xendit's checkout; demo mode never opens it (paid at once)
 		s.AddSingleton<IReportFiles, MauiReportFiles>();
 		s.AddSingleton<IAuthService, AuthService>();
 		s.AddSingleton<IMembershipService, MembershipService>();

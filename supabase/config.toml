@@ -417,3 +417,8 @@ enabled = true
 # Public on purpose: the register page calls it before an account exists. The limits are in check_email_in_use (0039).
 [functions.check-email]
 verify_jwt = false
+
+# Public on purpose: Xendit calls it with no Supabase login, and its GET is the checkout's return page. Only a request with the
+# webhook verification token (XENDIT_WEBHOOK_TOKEN) is believed (Xendit plan, 2026-11-16).
+[functions.xendit-webhook]
+verify_jwt = false
