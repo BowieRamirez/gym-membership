@@ -122,7 +122,7 @@ From the approved design (X1 to X14); X9 and X7 are adjusted by section 1's find
   - `verify_payment(...)`: approving a pending `qr` payment with `proof_path is null` fails `pay_online` (P0002).
   - `submit_payment_proof`: execute revoked from `authenticated`.
 
-- [ ] **Step 1: Write the failing tests** in `xendit.mjs`, in `prorated-refunds.mjs`'s style (`start()`, `as(uid, sql)`, `test(name, fn)`). Call the service functions with `set local role service_role`. Cases, each one a `test`:
+- [x] **Step 1: Write the failing tests** in `xendit.mjs`, in `prorated-refunds.mjs`'s style (`start()`, `as(uid, sql)`, `test(name, fn)`). Call the service functions with `set local role service_role`. Cases, each one a `test`:
   - "membership: confirm verifies, gives a receipt and starts the term": `avail_membership` → `save_online_checkout(id,'ps-1','https://x')` → `confirm_online_payment('ps-1', amount, 'GCASH')` = `'confirmed'`; payment `status 'verified'`, `receipt_no ~ '^OR-'`, `reference_no 'ps-1'`, `online_channel 'GCASH'`, `verified_by is null`; a `membership_terms` row exists.
   - "package (extend) and amenity down payment confirm the same way": amenity → reservation `confirmed`.
   - "a repeated webhook does nothing": second call = `'already'`, receipt unchanged.
@@ -136,24 +136,24 @@ From the approved design (X1 to X14); X9 and X7 are adjusted by section 1's find
   - "members can't send proofs any more": member `submit_payment_proof` → permission denied (42501).
   - "nobody but service_role can call the new functions": member, desk, admin and anon → 42501 on both.
 
-- [ ] **Step 2: Run them and see them fail**
+- [x] **Step 2: Run them and see them fail**
   Run: `cd supabase/tests/local; node xendit.mjs`
   Expected: FAIL, `function public.save_online_checkout ... does not exist`.
 
-- [ ] **Step 3: Write `0075_xendit_payments.sql`.** Columns; drop and re-add `payments_verified_complete` as `status not in ('verified','voided') or ((verified_by is not null or xendit_id is not null) and verified_at is not null and receipt_no is not null)`. Then `confirm_online_payment`, in this order:
+- [x] **Step 3: Write `0075_xendit_payments.sql`.** Columns; drop and re-add `payments_verified_complete` as `status not in ('verified','voided') or ((verified_by is not null or xendit_id is not null) and verified_at is not null and receipt_no is not null)`. Then `confirm_online_payment`, in this order:
   - lock the row `where xendit_id = p_xendit_id for update`; not found → `fail('not_found')`;
   - `status 'verified'` and `reference_no = p_xendit_id` → `'already'`;
   - `status <> 'pending'` or `expires_at <= now()` or `p_amount <> amount` → set `online_paid_amount = p_amount`, `online_channel = p_channel`; `notify_staff('payment','Online payment to refund', payment_code || ' · ₱' || p_amount, jsonb_build_object('payment_id', id))`; `audit('payment.online_refund', ...)`; return `'refund'`;
   - otherwise set `status 'verified'`, `verified_at now()`, `receipt_no next_receipt_no()`, `reference_no p_xendit_id`, `online_channel`, `online_paid_amount`; `activate_payment_target`; `notify(member,'payment','Payment received', payment_code, ...)`; `audit('payment.online', ...)`; return `'confirmed'`.
   `verify_payment` gets the `pay_online` guard by rename-and-wrap, as `0018` did. `revoke execute on function public.submit_payment_proof(bigint,text,text) from authenticated;`. Add the `pay_online` text to the app's error list in Task 3.
 
-- [ ] **Step 4: Run the tests until they pass, then the whole suite**
+- [x] **Step 4: Run the tests until they pass, then the whole suite**
   Run: `node xendit.mjs` → all ok. Then `npm test` → every file ok, exit 0 (fix the older proof tests as listed under Files).
 
-- [ ] **Step 5: Push live and check grants**
+- [x] **Step 5: Push live and check grants**
   Run: `npx supabase db push --remote --dry-run` (lists only `0075`), then `npx supabase db push --remote --yes`. Then with the anon key: `rpc/confirm_online_payment`, `rpc/save_online_checkout`, `rpc/submit_payment_proof` → 401/42501.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
   `git add supabase/migrations/0075_xendit_payments.sql supabase/tests/local` → `git commit -m "0075: Xendit confirms online payments; proofs end"`
 
 **Note for the owner after Phase 1:** from this push, members on the current app can no longer send proofs (permission refused) until the new app ships in Phase 3. Pending proofs already sent can still be approved. If that gap matters, hold the push until Phase 3 is ready, and push Phases 1 to 3 together.
@@ -176,31 +176,31 @@ From the approved design (X1 to X14); X9 and X7 are adjusted by section 1's find
   `{url: string}` | `{paid: true}` | `{paid: false}` | `{error: 'forbidden'|'not_found'|'already_processed'|'payment_expired'|'unavailable'}`.
   `POST xendit-webhook` (Xendit only) → 200 `{ok:true}`, 401 on a bad token. `GET xendit-webhook` → plain text "Payment done. You can close this page and go back to the gym app." (used as the return URL).
 
-- [ ] **Step 1: Confirm the API against the account.** In the Xendit Test-mode dashboard and the API docs, check that Payment Sessions (`POST /sessions`, `GET /sessions/{id}`, webhook `payment_session.completed`) are available and which body fields are required for `session_type 'PAY'`, `mode 'PAYMENT_LINK'`, `country 'PH'`, `currency 'PHP'` (a `customer` object may be required: use the member's name and email from `profiles`). If Sessions aren't available, use Invoices v2 (`POST /v2/invoices` with `external_id`, `GET /v2/invoices/{id}`, webhook status `PAID`). Write the choice and the exact fields under "Current work".
+- [x] **Step 1: Confirm the API against the account.** In the Xendit Test-mode dashboard and the API docs, check that Payment Sessions (`POST /sessions`, `GET /sessions/{id}`, webhook `payment_session.completed`) are available and which body fields are required for `session_type 'PAY'`, `mode 'PAYMENT_LINK'`, `country 'PH'`, `currency 'PHP'` (a `customer` object may be required: use the member's name and email from `profiles`). If Sessions aren't available, use Invoices v2 (`POST /v2/invoices` with `external_id`, `GET /v2/invoices/{id}`, webhook status `PAID`). Write the choice and the exact fields under "Current work".
 
-- [ ] **Step 2: Write `xendit-checkout`.** Read the caller from the JWT as `verify-member-password` does. Load the payment with the admin client and check that it is the caller's, `status 'pending'`, `method 'qr'`, `expires_at > now`; otherwise reply with the matching error.
+- [x] **Step 2: Write `xendit-checkout`.** Read the caller from the JWT as `verify-member-password` does. Load the payment with the admin client and check that it is the caller's, `status 'pending'`, `method 'qr'`, `expires_at > now`; otherwise reply with the matching error.
   - **With `check: true`:** if `xendit_id` is null, reply `{paid:false}`. Otherwise `GET` the session; if it is completed/paid, call `confirm_online_payment(id, amount, channel)` and reply `{paid: result === 'confirmed' || result === 'already'}`.
   - **Without it:** if `xendit_url` is set, reply with it (X8). Otherwise create the session with `reference_id = payment_code`, `amount = payments.amount`, `expires_at = payments.expires_at`, `description` = the item name, and success/cancel return URL = `${SUPABASE_URL}/functions/v1/xendit-webhook`. Then call `save_online_checkout`. To be safe from a double tap, re-read the row and reply with whichever URL was stored first.
 
-- [ ] **Step 3: Write `xendit-webhook`.**
+- [x] **Step 3: Write `xendit-webhook`.**
   - **GET:** reply with the return text.
   - **POST:** compare the `x-callback-token` header with `XENDIT_WEBHOOK_TOKEN` in constant time (`crypto.subtle.timingSafeEqual`, or compare SHA-256 digests); a mismatch gets 401. On the completed/paid event, call `confirm_online_payment(session or invoice id, amount, channel ?? null)`. Every other event, and `not_found`, gets 200 `{ok:true}` with a `console.log`. A database error gets 500, so Xendit retries.
 
-- [ ] **Step 4: Deploy**
+- [x] **Step 4: Deploy**
   Run: `npx supabase functions deploy xendit-checkout`, then `npx supabase functions deploy xendit-webhook --no-verify-jwt`.
 
-- [ ] **Step 5: Owner steps (the owner does these; Claude waits).**
+- [x] **Step 5: Owner steps (the owner does these; Claude waits).**
   - In their own terminal: `npx supabase secrets set XENDIT_SECRET_KEY=<test secret key> XENDIT_WEBHOOK_TOKEN=<verification token>`.
   - In Xendit (Test mode), Settings → Webhooks: set the Payment Session (or Invoice paid) URL to `https://<project-ref>.supabase.co/functions/v1/xendit-webhook`.
   - Settings → Payment methods: turn on GCash, Maya, QR Ph and cards for Test mode.
 
-- [ ] **Step 6: Check it live (Test mode).** Use a test member's token (demo account on the real backend, made by the owner) and a pending membership payment:
+- [x] **Step 6: Check it live (Test mode).** Use a test member's token (demo account on the real backend, made by the owner) and a pending membership payment:
   - `xendit-checkout` returns a URL, and **a second call returns the same URL**.
   - Pay it in Xendit's test checkout: the payment becomes `verified` with a receipt within seconds.
   - `xendit-webhook` POSTed with a wrong token → 401.
   - Another user's `payment_id` → `forbidden`. Anon → 401.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
   `git add supabase/functions supabase/config.toml` → `git commit -m "Edge Functions: Xendit checkout and webhook"`
 
 ---
@@ -225,7 +225,7 @@ From the approved design (X1 to X14); X9 and X7 are adjusted by section 1's find
   - `PaymentItem`: `NeedsProof` renamed `NeedsPayment` (same rule); new last parameter `bool HasCheckout = false`; `AwaitingReview` unchanged (old proofs).
   - Removed: `IMembershipService.SubmitProofAsync`.
 
-- [ ] **Step 1: Write the failing xUnit tests** in `OnlinePaymentTests.cs`, against `DemoGateway`:
+- [x] **Step 1: Write the failing xUnit tests** in `OnlinePaymentTests.cs`, against `DemoGateway`:
   - `Pay_online_verifies_and_starts_the_membership`: register Ana → `AvailAsync(Quarterly)` → `NeedsPayment` → `PayOnlineAsync` = `Paid true` → payment `verified`, receipt `^OR-\d{4}-\d{6}$`, plan `active`.
   - `Pay_online_twice_reuses`: second `PayOnlineAsync` on a paid one → `Conflict` (`already_processed`).
   - `Expired_payment_cannot_be_paid_online`: move the demo clock past `ExpiresAt` → `PayOnlineAsync` fails `payment_expired`.
@@ -234,15 +234,15 @@ From the approved design (X1 to X14); X9 and X7 are adjusted by section 1's find
   - `Returning_checks_the_link_and_activates`: the demo's `check:true` answers `paid:false` before `PayOnlineAsync` and `true` after.
   - `PayMethod_Qr_reads_Online`: `PayMethod.Name(PayMethod.Qr) == "Online"`.
 
-- [ ] **Step 2: Run them and see them fail**
+- [x] **Step 2: Run them and see them fail**
   Run: `dotnet test tests/GymMembership.Tests --filter OnlinePaymentTests`. Expected: build errors for `PayOnlineAsync` and `NeedsPayment`.
 
-- [ ] **Step 3: Implement the Interfaces above.** Parse the function's JSON with `System.Text.Json`, as `VerifyPasswordAsync` does (`Services.cs:1379`). In the demo, the `xendit-checkout` case follows the same rules as the server (owner, pending, `qr`, not expired), then marks the payment verified through the same path as the demo `verify_payment` approve, without a staff member.
+- [x] **Step 3: Implement the Interfaces above.** Parse the function's JSON with `System.Text.Json`, as `VerifyPasswordAsync` does (`Services.cs:1379`). In the demo, the `xendit-checkout` case follows the same rules as the server (owner, pending, `qr`, not expired), then marks the payment verified through the same path as the demo `verify_payment` approve, without a staff member.
 
-- [ ] **Step 4: Run the whole xUnit suite**
+- [x] **Step 4: Run the whole xUnit suite**
   Run: `dotnet test tests/GymMembership.Tests` → all pass (update the old proof tests: `QR_payment_end_to_end...` becomes the online flow; `A_reference_number_cannot_be_used_on_two_payments` is deleted, since members no longer type references).
 
-- [ ] **Step 5: Commit** → `git commit -m "Core: pay online through Xendit; proofs gone"`
+- [x] **Step 5: Commit** → `git commit -m "Core: pay online through Xendit; proofs gone"`
 
 ### Task 4: Member screens (impeccable)
 
@@ -257,17 +257,17 @@ From the approved design (X1 to X14); X9 and X7 are adjusted by section 1's find
 **Interfaces:**
 - Consumes: `PayOnlineAsync`, `CheckOnlineAsync`, `IUrlOpener`, `PaymentItem.NeedsPayment/HasCheckout` (Task 3).
 
-- [ ] **Step 1: Capture the current screens.** On Windows and the Pixel 7, light and dark: My membership with a payment to make, the Book an amenity sheet with GCash picked, and a booking waiting for its down payment. Save to `.impeccable/critique/`.
-- [ ] **Step 2: Failing view-model tests.**
+- [x] **Step 1: Capture the current screens.** (Windows done 2026-11-16; Pixel 7 is the Step 5 follow-up) On Windows and the Pixel 7, light and dark: My membership with a payment to make, the Book an amenity sheet with GCash picked, and a booking waiting for its down payment. Save to `.impeccable/critique/`.
+- [x] **Step 2: Failing view-model tests.**
   - `MyMembership_pay_online_opens_the_link`: a fake `IUrlOpener` records the URL. In demo the payment is paid, so the opener isn't called and the hero shows days left after the reload.
   - `MyMembership_shows_checking_while_the_server_checks`: `Checking` is true during `CheckOnlineAsync`.
   - `Booking_pay_online_from_the_row`.
   Run: `dotnet test --filter OnlinePaymentTests` → FAIL.
-- [ ] **Step 3: Implement the view models** until the tests pass.
-- [ ] **Step 4: Screens through impeccable.** Run `impeccable critique` on the captures, then lay out the new "Pay online" card: the amount, "Pay by <date, Manila>", one primary **Pay online** button, a line naming GCash, Maya, QR Ph and cards, and a quiet "Checking your payment…" state. Use the existing styles (`SmallButton`, `FilterChip`, `Caption`) and the sage/lime tokens. Copy goes through `impeccable clarify`, then `impeccable polish`.
-- [ ] **Step 5: Check on devices.** On the Pixel 7, light and dark, at font scale 1.3, and on Windows at about 1100 px light and 1600 px dark. Demo flow: buy Quarterly → Pay online → active. Book an amenity → Pay online now → confirmed.
-- [ ] **Step 6: Builds and tests.** Run `dotnet test tests/GymMembership.Tests` → all pass. Then the Windows build and the Android build (`--no-incremental`) must succeed.
-- [ ] **Step 7: Commit** → `git commit -m "Member screens: Pay online replaces send proof"`
+- [x] **Step 3: Implement the view models** until the tests pass.
+- [x] **Step 4: Screens through impeccable.** Run `impeccable critique` on the captures, then lay out the new "Pay online" card: the amount, "Pay by <date, Manila>", one primary **Pay online** button, a line naming GCash, Maya, QR Ph and cards, and a quiet "Checking your payment…" state. Use the existing styles (`SmallButton`, `FilterChip`, `Caption`) and the sage/lime tokens. Copy goes through `impeccable clarify`, then `impeccable polish`.
+- [ ] **FOLLOW-UP (not done): Step 5: Check on devices.** Windows done; Pixel 7 not run (no emulator). On the Pixel 7, light and dark, at font scale 1.3, and on Windows at about 1100 px light and 1600 px dark. Demo flow: buy Quarterly → Pay online → active. Book an amenity → Pay online now → confirmed.
+- [x] **Step 6: Builds and tests.** Run `dotnet test tests/GymMembership.Tests` → all pass. Then the Windows build and the Android build (`--no-incremental`) must succeed.
+- [x] **Step 7: Commit** → `git commit -m "Member screens: Pay online replaces send proof"`
 
 ---
 
@@ -281,11 +281,11 @@ From the approved design (X1 to X14); X9 and X7 are adjusted by section 1's find
 - Modify: `src/GymMembership.App/Resources/Raw/terms.md` (payment paragraph: pay online through Xendit by GCash, Maya, QR Ph or card; confirmed automatically; no proof; **the terms version is not changed**, X15)
 - Test: `tests/GymMembership.Tests/OnlinePaymentTests.cs`
 
-- [ ] **Step 1: Failing test.** `Staff_row_for_an_online_payment_has_no_approve`: an online pending row has `CanApprove false` and `ProofText "Paying online"`; an old proof row has `CanApprove true`. Run → FAIL.
-- [ ] **Step 2: Implement it; run `dotnet test`** → all pass.
-- [ ] **Step 3: Windows check (staff pages Windows only).** Payments to verify shows "Paying online", with no Verify on online rows and Reject still there. `scripts/Test-WindowsAdminNavigation.ps1`, `Test-WindowsArchive.ps1` and `Test-WindowsSessionRequests.ps1` still PASS.
-- [ ] **Step 4: Terms text through `impeccable clarify`;** confirm the terms version constant is unchanged (`git diff` shows only the text).
-- [ ] **Step 5: Commit** → `git commit -m "Staff payments say Paying online; terms text"`
+- [x] **Step 1: Failing test.** `Staff_row_for_an_online_payment_has_no_approve`: an online pending row has `CanApprove false` and `ProofText "Paying online"`; an old proof row has `CanApprove true`. Run → FAIL.
+- [x] **Step 2: Implement it; run `dotnet test`** → all pass.
+- [x] **Step 3: Windows check (staff pages Windows only).** Payments to verify shows "Paying online", with no Verify on online rows and Reject still there. `scripts/Test-WindowsAdminNavigation.ps1`, `Test-WindowsArchive.ps1` and `Test-WindowsSessionRequests.ps1` still PASS.
+- [x] **Step 4: Terms text through `impeccable clarify`;** confirm the terms version constant is unchanged (`git diff` shows only the text).
+- [x] **Step 5: Commit** → `git commit -m "Staff payments say Paying online; terms text"`
 
 ---
 
@@ -293,23 +293,23 @@ From the approved design (X1 to X14); X9 and X7 are adjusted by section 1's find
 
 ### Task 6: Test-mode run, break attempts, review
 
-- [ ] **Step 1: Test-mode run on the real backend with the new Windows and Android builds.** For each of a new membership, a package (extend), and an amenity down payment: Pay online → pay with Xendit's test GCash → back in the app it shows active or confirmed, with a receipt.
-- [ ] **Step 2: Failure runs.**
+- [x] **Step 1: Test-mode run on the real backend with the new Windows and Android builds.** For each of a new membership, a package (extend), and an amenity down payment: Pay online → pay with Xendit's test GCash → back in the app it shows active or confirmed, with a receipt.
+- [x] **Step 2: Failure runs.**
   - Let a link expire: the payment expires and the link no longer pays.
   - Desk rejects a payment, then the member pays the old link: no activation, and staff get "Online payment to refund".
   - Blank the webhook URL in Xendit, pay, and return to the app: X10 confirms it. Then restore the URL.
   - Replay a webhook from the Xendit dashboard: nothing changes.
   - POST to the webhook with a bad token: 401.
-- [ ] **Step 3: Break attempts.** Add cases to `supabase/tests/local/owner-fixes-break.mjs`'s pattern in `xendit.mjs` (member/desk/coach can't call service functions, can't write `xendit_id`/`xendit_url` directly, can't update their payment to `verified`). Run the full `npm test` → exit 0.
-- [ ] **Step 4: Reviews.** Run `ponytail:ponytail-review` and `/code-review` on the branch diff, fix what holds up, and run `superpowers:verification-before-completion`.
-- [ ] **Step 5: Go-live list for the owner (written into "Current work").**
+- [x] **Step 3: Break attempts.** Add cases to `supabase/tests/local/owner-fixes-break.mjs`'s pattern in `xendit.mjs` (member/desk/coach can't call service functions, can't write `xendit_id`/`xendit_url` directly, can't update their payment to `verified`). Run the full `npm test` → exit 0.
+- [x] **Step 4: Reviews.** Run `ponytail:ponytail-review` and `/code-review` on the branch diff, fix what holds up, and run `superpowers:verification-before-completion`.
+- [x] **Step 5: Go-live list for the owner (written into "Current work").**
   1. The Xendit account is activated.
   2. The owner sets the live secret key and token: `npx supabase secrets set ...`.
   3. The owner sets the live webhook URL in Xendit (Live mode).
   4. One real ₱ small payment, then refund it from the Xendit dashboard.
   5. Ship the new app (v0.7.0) to members and desks.
   6. The owner merges the PR.
-- [ ] **Step 6: Commit the plan's final state;** ask the owner before `git push` and the PR.
+- [x] **Step 6: Commit the plan's final state;** ask the owner before `git push` and the PR.
 
 ## Session log
 

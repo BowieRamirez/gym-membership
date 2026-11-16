@@ -3,7 +3,8 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans (owner chose native execution for the Xendit plan) to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
 
 Created: 2026-11-16
-Status: PLANNED, waiting for the owner's OK. Next migration `0078`.
+Last updated: 2026-11-16 (marked done by the owner)
+Status: DONE (owner, 2026-11-16). Phases 1-6 built, reviewed and live (`0078`-`0083`, `create-user`/`reset-password`, `xendit-checkout`, `xendit-webhook`); later owner requests on the same branch: Cashier members table (10 a page), Find / Register one at a time, active accounts only, ChoiceChip fix for chips stuck yellow on Windows, no IP addresses in the log for anyone (`0083`). Pushed to GitHub at `2d8d5e6`, not merged. Next migration `0084`. Open: the owner's remaining hand checks; the Xendit webhook follow-up in the Xendit plan.
 Branch: `xendit-payments-2026-11-16` (this list builds on the Xendit work; same branch, owner merges to `main` when done).
 
 **Goal:** The owner's 6-item list of 2026-11-16: the Cashier finds members, walk-ins follow the owner's process document, logs don't show members' IP addresses, Xendit payments log the method and who paid, desk e-wallet payments go through Xendit (GCash / QR Ph), and Payments to verify is removed.
@@ -20,12 +21,12 @@ Same rules as `2026-11-16-xendit-payments.md`: decisions first; one phase at a t
 
 | Phase | What | Needs | Status |
 |---|---|---|---|
-| 1 | Cashier member search that shows its results | Y1 | PLANNED |
-| 2 | Logs: no member IPs; Xendit rows say who paid and how | Y4, Y5 | PLANNED |
-| 3 | Payments to verify removed; cash bookings taken in the Cashier | Y7 | PLANNED |
-| 4 | Desk e-wallet payments through Xendit (GCash / QR Ph) | Y6, Y8 | PLANNED |
-| 5 | Walk-in process: Day pass, register a new member at the desk | Y2, Y3 | PLANNED |
-| 6 | Whole-branch checks, review, owner hand checks | | PLANNED |
+| 1 | Cashier member search that shows its results | Y1 | DONE (`fe21bb8`; table `71c92fd`) |
+| 2 | Logs: no member IPs; Xendit rows say who paid and how | Y4, Y5 | DEPLOYED (`0078`, `0079`; no IPs for anyone `0083`) |
+| 3 | Payments to verify removed; cash bookings taken in the Cashier | Y7 | DONE (`a797e89`) |
+| 4 | Desk e-wallet payments through Xendit (GCash / QR Ph) | Y6, Y8 | DEPLOYED (`0080`; payment 15 paid live) |
+| 5 | Walk-in process: Day pass, register a new member at the desk | Y2, Y3 | DEPLOYED (`0081`, `create-user`) |
+| 6 | Whole-branch checks, review, owner hand checks | | DONE (review fixes `0082`, `7f02fc1`; owner checks partly done) |
 
 ## 1. Findings (2026-11-16)
 
@@ -74,10 +75,10 @@ Same rules as `2026-11-16-xendit-payments.md`: decisions first; one phase at a t
 
 **Files:** `src/GymMembership.Core/Services/Services.cs` (`FindMembersAsync` matches name, phone, email; `MemberHit` gains `Phone`), `src/GymMembership.Core/ViewModels/StaffViewModels.cs` (`CashierViewModel`: `HasSearched`, `NoMatch`, `PickMember(MemberHit)`), `src/GymMembership.App/Views/CashierPage.xaml` (+ `.cs`), test `tests/GymMembership.Tests/CashierSearchTests.cs`. Demo mirror of `profiles.phone` if missing.
 
-- [ ] Failing tests: `Find_by_part_of_a_name_lists_matches`, `Find_by_phone_lists_the_member`, `Find_by_email_lists_the_member`, `Find_with_no_match_says_so` (`NoMatch` true), `Picking_a_result_sets_the_member` (Order panel shows the name).
-- [ ] Implement; Find also runs on Enter.
-- [ ] Screen (impeccable): the Picker goes; results are a short list of rows (name, status chip, phone) under the search box, the picked row marked; "No member found" text. Windows check in demo.
-- [ ] xUnit all green; Windows build; commit.
+- [x] Failing tests: `Find_by_part_of_a_name_lists_matches`, `Find_by_phone_lists_the_member`, `Find_by_email_lists_the_member`, `Find_with_no_match_says_so` (`NoMatch` true), `Picking_a_result_sets_the_member` (Order panel shows the name).
+- [x] Implement; Find also runs on Enter.
+- [x] Screen (impeccable): the Picker goes; results are a short list of rows (name, status chip, phone) under the search box, the picked row marked; "No member found" text. Windows check in demo.
+- [x] xUnit all green; Windows build; commit.
 
 ## Phase 2: Logs (Y4, Y5)
 
@@ -85,16 +86,16 @@ Same rules as `2026-11-16-xendit-payments.md`: decisions first; one phase at a t
 
 **Files:** `supabase/migrations/0078_audit_privacy_and_online_actor.sql`, `supabase/tests/local/audit-log.mjs` (extend).
 
-- [ ] Failing tests: an action by a member stores `ip_address` null; by the desk stores it; after the migration no row whose role is member has an IP.
-- [ ] `audit()` stores `request_ip()` only when `main_role(auth.uid())` is not `member`; one-off `update audit_log set ip_address = null where role = 'member'`.
-- [ ] Suite green; push 0078 with Task 3.
+- [x] Failing tests: an action by a member stores `ip_address` null; by the desk stores it; after the migration no row whose role is member has an IP.
+- [x] `audit()` stores `request_ip()` only when `main_role(auth.uid())` is not `member`; one-off `update audit_log set ip_address = null where role = 'member'`.
+- [x] Suite green; push 0078 with Task 3.
 
 ### Task 3: Xendit rows say who paid and how
 
 **Files:** same migration (`audit_as(p_actor uuid, ...)` used by `confirm_online_payment`, recreated), `supabase/functions/_shared/xendit.ts` (`paymentChannel(session)`: GET the session's `payment_request_id` and read its `channel_code`; null on any error), `xendit-webhook`, `xendit-checkout`, `src/GymMembership.Core/Services/AuditLabels.cs` (channel names: GCASH → GCash, PAYMAYA → Maya, QRPH → QR Ph, CARDS → Card), tests in `xendit.mjs` and `edge-rules.mjs`.
 
-- [ ] Failing tests: the `payment.online` row's actor is the paying member, role `member`, no IP; details carry the channel; a failed channel lookup still confirms (`channel` null).
-- [ ] Implement; push 0078, redeploy both functions, check grants; commit.
+- [x] Failing tests: the `payment.online` row's actor is the paying member, role `member`, no IP; details carry the channel; a failed channel lookup still confirms (`channel` null).
+- [x] Implement; push 0078, redeploy both functions, check grants; commit.
 
 ## Phase 3: Payments to verify removed (Y7)
 
@@ -102,9 +103,9 @@ Same rules as `2026-11-16-xendit-payments.md`: decisions first; one phase at a t
 
 **Files:** `CashierViewModel` + `CashierPage.xaml` ("Bookings waiting for a down payment" with Take cash, from `PaymentStaffService.PendingAsync` filtered to desk bookings), remove `VerifyPaymentsPage`, its view model, menu entry (`StaffShell`), Home tile links (`HomePage.xaml:11`), and `ProofUrlAsync`/`ViewProof`; tests.
 
-- [ ] Before removing: count live pending payments with a proof (read-only); if any, tell the owner to approve or reject them first.
-- [ ] Failing tests: the Cashier lists a pay-at-desk booking and Take cash verifies it into the open drawer; the staff menu has no Payments to verify.
-- [ ] Implement; `Test-WindowsAdminNavigation.ps1` updated for the missing page (say so); Windows check; commit.
+- [x] Before removing: count live pending payments with a proof (read-only); if any, tell the owner to approve or reject them first.
+- [x] Failing tests: the Cashier lists a pay-at-desk booking and Take cash verifies it into the open drawer; the staff menu has no Payments to verify.
+- [x] Implement; `Test-WindowsAdminNavigation.ps1` updated for the missing page (say so); Windows check; commit.
 
 ## Phase 4: Desk e-wallet through Xendit (Y6, Y8)
 
@@ -112,27 +113,27 @@ Same rules as `2026-11-16-xendit-payments.md`: decisions first; one phase at a t
 
 **Files:** `supabase/migrations/0079_desk_online_payments.sql` (`start_desk_online_payment(p_kind, p_member_id, p_item_id, p_walk_in_name, p_discount_code)`: same checks as `record_counter_payment`, inserts a pending `qr` payment with `recorded_by` = desk and a short expiry (30 minutes)), `xendit-checkout` (the desk may open the checkout for a payment it recorded), Cashier "GCash / QR Ph" replaces "GCash" + reference box, waits and shows the receipt when paid; Gym settings QR fields removed (Y8); tests.
 
-- [ ] Failing tests (DB): the desk's pending payment is confirmed by the webhook path and activates; never touches the cash drawer; expires unpaid; a member can't call it. (xUnit): Cashier e-wallet flow in demo pays at once and shows the receipt.
-- [ ] Implement; push, deploy, grants; impeccable on the Cashier; commit.
+- [x] Failing tests (DB): the desk's pending payment is confirmed by the webhook path and activates; never touches the cash drawer; expires unpaid; a member can't call it. (xUnit): Cashier e-wallet flow in demo pays at once and shows the receipt.
+- [x] Implement; push, deploy, grants; impeccable on the Cashier; commit.
 
 ## Phase 5: Walk-in process (Y2, Y3)
 
 ### Task 6: Day pass
 
-- [ ] Failing tests: a Day pass with no name records and checks in ("Day pass" in reports); with a picked member it is recorded against them.
-- [ ] `record_counter_payment` (new migration) accepts an empty walk-in name; the Cashier's "Walk-in" becomes "Day pass" with optional name or picked member; commit.
+- [x] Failing tests: a Day pass with no name records and checks in ("Day pass" in reports); with a picked member it is recorded against them.
+- [x] `record_counter_payment` (new migration) accepts an empty walk-in name; the Cashier's "Walk-in" becomes "Day pass" with optional name or picked member; commit.
 
 ### Task 7: Register a new member at the desk
 
 **Files:** `supabase/functions/create-user/index.ts` (+ `_shared/admin.ts`: the front desk may create role `member` only), Cashier "Register new member" (name, email, phone; shows the temporary password once), tests (`edge-rules.mjs` source check, xUnit demo, live check that the desk can't create a coach).
 
-- [ ] Failing tests, implement, deploy, check live that a front desk token creating role `coach` is refused; impeccable; commit.
+- [x] Failing tests, implement, deploy, check live that a front desk token creating role `coach` is refused; impeccable; commit.
 
 ## Phase 6: Checks
 
-- [ ] Full xUnit, full DB suite, Windows and Android builds, the three UI scripts (Archive already fails on `main`).
-- [ ] Fresh whole-branch review; fix Critical/Important with tests.
-- [ ] Owner hand checks on Windows: search, Day pass, register a member, desk GCash/QR Ph payment, cash booking, the log rows.
+- [x] Full xUnit, full DB suite, Windows and Android builds, the three UI scripts (Archive already fails on `main`).
+- [x] Fresh whole-branch review; fix Critical/Important with tests.
+- [ ] FOLLOW-UP (owner): hand checks on Windows, partly done by the owner 2026-11-16 (search table, register, desk GCash payment 15): search, Day pass, register a member, desk GCash/QR Ph payment, cash booking, the log rows.
 
 ## Session log
 
