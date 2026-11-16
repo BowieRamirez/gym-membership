@@ -108,14 +108,14 @@ public class CoachPresenceTests
 public class CoachOneMemberTests
 {
     [Fact]
-    public async Task A_coach_hired_by_someone_else_is_tagged_hired_and_can_still_be_hired()
+    public async Task A_coach_hired_by_someone_else_is_not_tagged_and_can_still_be_hired()
     {
         var (gw, _, subs, monthly, _) = await SubscriptionTests.Setup();   // a new member, not Alex who hired Lena
         var p = (await subs.ExtendAsync(monthly.Id)).Value!; await SubscriptionTests.Verify(gw, p);
         var svc = new CoachService(gw);
         var cards = (await svc.ListCoachesAsync()).Value!;
         var lena = cards.Single(c => c.Name == "Lena Cruz");
-        Assert.True(lena.Taken); Assert.False(lena.Hired); Assert.Equal("hired", lena.HireBadge);
+        Assert.True(lena.Taken); Assert.False(lena.Hired); Assert.Null(lena.HireBadge);   // someone else's hire: no tag for this member
         var kai = cards.Single(c => c.Name == "Kai Mendoza");
         Assert.False(kai.Taken); Assert.Null(kai.HireBadge); Assert.True(kai.CanHire);
 

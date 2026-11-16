@@ -850,8 +850,9 @@ public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId
     public bool Requested => RequestId is not null;
     public bool ShowHire => !Hired && !Requested;
     public string WaitingText => $"Waiting for {Name.Split(' ')[0]} to accept.";
-    /// <summary>G28 (0071): Taken = another member has an active hire with this coach. Any hire shows the "Hired" tag; hiring is unchanged.</summary>
-    public string? HireBadge => Requested ? "requested" : Hired || Taken ? "hired" : null;
+    /// <summary>G28 (0071): Taken = another member has an active hire with this coach. The "Hired" tag shows only to the member who hired
+    /// (owner, 2026-11-16: it showed to members with no coach); hiring is unchanged.</summary>
+    public string? HireBadge => Requested ? "requested" : Hired ? "hired" : null;
     public string Letters => Initials.From(Name);
     /// <summary>The coach paused hiring and this member has no hire to keep: shown grayed out, Hire disabled.</summary>
     public bool Closed => !Coach.IsAvailable && !Hired;
