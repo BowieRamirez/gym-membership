@@ -114,6 +114,12 @@ public sealed class MauiReportFiles : IReportFiles
     }
 }
 
+/// <summary>Xendit's checkout in the system browser (Chrome Custom Tab on Android); the member comes back to the app when done.</summary>
+public sealed class MauiUrlOpener : IUrlOpener
+{
+    public Task OpenAsync(string url) => Browser.Default.OpenAsync(url, BrowserLaunchMode.SystemPreferred);
+}
+
 public sealed class MauiProofPicker : IProofPicker
 {
     public async Task<(string FileName, byte[] Data)?> PickAsync()

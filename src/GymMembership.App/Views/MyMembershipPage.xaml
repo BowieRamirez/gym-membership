@@ -229,26 +229,26 @@
 
                 <!-- side: what to pay now (if anything), then the member QR -->
                 <VerticalStackLayout Spacing="12">
-                    <!-- Pay by QR: the code is what the front desk matches your transfer against, so it is the biggest thing here -->
+                    <!-- Pay online (Xendit plan, 2026-11-16): one action. The amount is the title; the deadline sits right under what is bought;
+                         the methods are named under the button so nobody wonders whether GCash works. Coming back re-checks it (Checking). -->
                     <Border Style="{StaticResource SidePanel}" IsVisible="{Binding PayNow, Converter={StaticResource IsNotNull}}">
                         <VerticalStackLayout Spacing="12">
-                            <c:CardTitle Text="{Binding PayNow.Amount, StringFormat='Pay ₱{0:N2} by QR'}" />
-                            <Image Source="{Binding QrUrl}" IsVisible="{Binding HasQr}" WidthRequest="168" HeightRequest="168" HorizontalOptions="Center"
-                                   SemanticProperties.Description="The gym's payment QR code" />
-                            <Label Text="{Binding AccountName, StringFormat='Pay to {0}'}" IsVisible="{Binding AccountName, Converter={StaticResource IsNotNull}}" />
-                            <Label Text="Ask the gym for its QR if none shows here." Style="{StaticResource Caption}" IsVisible="{Binding HasQr, Converter={StaticResource Not}}" />
-                            <VerticalStackLayout Spacing="2">
-                                <Label Text="Type this code in the payment message" Style="{StaticResource Caption}" />
-                                <Label Text="{Binding PayNow.PaymentCode}" Style="{StaticResource Numeral}" SemanticProperties.Description="Payment code" />
-                            </VerticalStackLayout>
-                            <Label Text="{Binding PayNow.ExpiresAt, Converter={StaticResource LocalDate}, ConverterParameter='ddd d MMM, h:mm tt', StringFormat='Pay before {0}, or this payment expires.'}"
-                                   Style="{StaticResource Caption}" IsVisible="{Binding PayNow.ExpiresAt, Converter={StaticResource IsNotNull}}" />
-                            <Label Text="After you pay, enter the reference number from your receipt and send a screenshot of it." Style="{StaticResource Muted}" />
                             <VerticalStackLayout Spacing="4">
-                                <Label Text="Reference number" Style="{StaticResource Caption}" />
-                                <Border Style="{StaticResource Field}"><Entry Text="{Binding ReferenceNo}" SemanticProperties.Description="Reference number from your receipt" /></Border>
+                                <c:CardTitle Text="{Binding PayNow.Amount, StringFormat='Pay ₱{0:N2} online'}" />
+                                <Label Text="{Binding PayNow.What}" />
+                                <Label Text="{Binding PayNow.ExpiresAt, Converter={StaticResource LocalDate}, ConverterParameter='ddd d MMM, h:mm tt', StringFormat='Pay by {0}, or this payment expires.'}"
+                                       Style="{StaticResource Caption}" IsVisible="{Binding PayNow.ExpiresAt, Converter={StaticResource IsNotNull}}" />
                             </VerticalStackLayout>
-                            <Button Text="Choose screenshot and send" Style="{StaticResource SmallButton}" Command="{Binding SendProofCommand}" />
+                            <HorizontalStackLayout Spacing="8" IsVisible="{Binding Checking}">
+                                <ActivityIndicator IsRunning="{Binding Checking}" WidthRequest="18" HeightRequest="18" Color="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
+                                <Label Text="Checking your payment with Xendit" Style="{StaticResource Caption}" VerticalOptions="Center" />
+                            </HorizontalStackLayout>
+                            <VerticalStackLayout Spacing="6">
+                                <Button Text="Pay online" Style="{StaticResource SmallButton}" Command="{Binding PayOnlineCommand}" AutomationId="PayOnline"
+                                        IsEnabled="{Binding Checking, Converter={StaticResource Not}}" />
+                                <Label Text="GCash, Maya, QR Ph or card, on Xendit's checkout page. Come back here when you're done." Style="{StaticResource Caption}" />
+                            </VerticalStackLayout>
+                            <Label Text="{Binding PayNow.PaymentCode, StringFormat='Payment code {0}'}" Style="{StaticResource Caption}" SemanticProperties.Description="Payment code, for the front desk if you need help" />
                             <!-- membership payments only: a booking is cancelled on Book an amenity (F12), which also releases its time -->
                             <Button Text="Cancel this payment" Style="{StaticResource SmallOutlineButton}" Clicked="OnCancelPayment" IsVisible="{Binding PayNow.CanCancel}" />
                         </VerticalStackLayout>
