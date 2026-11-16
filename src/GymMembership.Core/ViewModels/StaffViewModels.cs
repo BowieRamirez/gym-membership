@@ -282,7 +282,10 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         Fill(Options, result.Value!.Select(r => new ItemOption(r)));
     }
 
-    [RelayCommand] private Task FindAsync() => RunAsync(() => members.FindMembersAsync(Search), rows => Fill(Hits, rows));
+    /// <summary>Cashier plan Y1: Find ran and nobody matched; the page says so (it used to fill a closed dropdown in silence).</summary>
+    [ObservableProperty] private bool noMatch;
+    [RelayCommand] private Task FindAsync() => RunAsync(() => members.FindMembersAsync(Search), rows => { Fill(Hits, rows); NoMatch = rows.Count == 0; });
+    [RelayCommand] private void PickMember(MemberHit hit) => Member = hit;
     [RelayCommand] private void PickKind(string value) => Kind = value;
     [RelayCommand] private void PickMethod(string value) => Method = value;
     [RelayCommand] private void PickItem(ItemOption option) => Item = option.Item;   // OnItemChanged marks the card

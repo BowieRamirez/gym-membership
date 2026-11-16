@@ -1248,7 +1248,7 @@ public static class MemberCheck
 
 /// <param name="Status">Online only: active, pending, expired or inactive (G10). Null on the saved list, which knows paid or not.</param>
 public sealed record MemberHit(string MemberId, string Username, bool HasActiveMembership, DateTime? PaidUntil = null, string? AvatarPath = null,
-    string? Status = null, DateTime? EndedAt = null)
+    string? Status = null, DateTime? EndedAt = null, string? Phone = null)
 {
     public string PlanStatus => HasActiveMembership ? "active" : Status == "expired" && EndedAt is null ? "no_membership" : Status ?? "inactive";
     /// <summary>Forgot phone: what staff check before letting someone in without a QR; the reason when they can't (G10).</summary>
@@ -1399,9 +1399,14 @@ public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = 
         var waiting = (await gw.ListAsync<Payment>(p => p.Status == Status.Pending)).Where(p => p.Kind is PayKind.Membership or PayKind.Renewal).Select(p => p.MemberId).ToHashSet();
         // G10: the same order scan_member uses: deactivated, active, waiting for a payment, otherwise expired (or never had one)
         string StatusOf(Profile p) => !p.IsActive ? "inactive" : active.ContainsKey(p.Id) ? "active" : waiting.Contains(p.Id) ? "pending" : "expired";
-        return members.Join(profiles, m => m.UserId, p => p.Id, (m, p) => new MemberHit(m.UserId, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName,
-                p.IsActive && active.ContainsKey(m.UserId), active.GetValueOrDefault(m.UserId), p.AvatarPath, StatusOf(p), ended.GetValueOrDefault(m.UserId)))
-            .Where(h => h.Username.Contains(fragment, StringComparison.OrdinalIgnoreCase)).Take(20).ToList();
+        // cashier plan Y1: name, sign-in email (the username) or phone; a phone matches on its digits, so "0917-555" finds "0917 555 0142"
+        static string Digits(string? s) => new((s ?? "").Where(char.IsDigit).ToArray());
+        var text = fragment.Trim(); var digits = Digits(text);
+        bool Matches(Profile p, string name) => name.Contains(text, StringComparison.OrdinalIgnoreCase) || p.Username.Contains(text, StringComparison.OrdinalIgnoreCase)
+            || (digits.Length >= 3 && Digits(p.Phone).Contains(digits));
+        return members.Join(profiles, m => m.UserId, p => p.Id, (m, p) => (p, Hit: new MemberHit(m.UserId, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName,
+                p.IsActive && active.ContainsKey(m.UserId), active.GetValueOrDefault(m.UserId), p.AvatarPath, StatusOf(p), ended.GetValueOrDefault(m.UserId), p.Phone)))
+            .Where(x => Matches(x.p, x.Hit.Username)).Select(x => x.Hit).Take(20).ToList();
     });
 
     public Task<AppResult<MemberPass>> MyPassAsync() =>

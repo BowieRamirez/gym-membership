@@ -4,6 +4,7 @@
             xmlns:v="clr-namespace:GymMembership.App.Views"
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.CashierPage" x:DataType="vm:CashierViewModel" Title="Cashier">
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
@@ -116,17 +117,34 @@
                                 </VerticalStackLayout>
 
                                 <VerticalStackLayout Spacing="12" IsVisible="{Binding NeedsMember}">
+                                    <!-- cashier plan Y1: the matches are rows you can see and choose (they used to sit in a closed dropdown) -->
                                     <FlexLayout Wrap="Wrap" AlignItems="End">
-                                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="240">
+                                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="300">
                                             <Label Text="Find the member" Style="{StaticResource Caption}" />
-                                            <Border Style="{StaticResource Field}"><Entry Text="{Binding Search}" Placeholder="Start of their name" ReturnCommand="{Binding FindCommand}" SemanticProperties.Description="Search members" /></Border>
+                                            <Border Style="{StaticResource Field}"><Entry Text="{Binding Search}" Placeholder="Name, email or phone" ReturnCommand="{Binding FindCommand}" SemanticProperties.Description="Search members by name, email or phone" AutomationId="CashierSearch" /></Border>
                                         </VerticalStackLayout>
-                                        <Button Text="Find" Style="{StaticResource SmallOutlineButton}" Margin="0,0,12,8" Command="{Binding FindCommand}" />
-                                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="260">
-                                            <Label Text="Member" Style="{StaticResource Caption}" />
-                                            <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Hits}" ItemDisplayBinding="{Binding Username}" SelectedItem="{Binding Member}" Title="Choose after Find" SemanticProperties.Description="Member" /></Border>
-                                        </VerticalStackLayout>
+                                        <Button Text="Find" Style="{StaticResource SmallOutlineButton}" Margin="0,0,12,8" Command="{Binding FindCommand}" AutomationId="CashierFind" />
                                     </FlexLayout>
+                                    <Label Text="No member found. Check the spelling, or try their email or phone." Style="{StaticResource Muted}" IsVisible="{Binding NoMatch}" />
+                                    <VerticalStackLayout Spacing="8" MaximumWidthRequest="640" HorizontalOptions="Start" BindableLayout.ItemsSource="{Binding Hits}">
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="svc:MemberHit">
+                                                <Border Style="{StaticResource Row}">
+                                                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="14">
+                                                        <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                                                            <Label Text="{Binding Username}" FontFamily="BarlowSemiBold" />
+                                                            <Label Text="{Binding PlanText}" Style="{StaticResource Caption}" />
+                                                            <Label Text="{Binding Phone}" Style="{StaticResource Caption}" IsVisible="{Binding Phone, Converter={StaticResource IsNotNull}}" />
+                                                        </VerticalStackLayout>
+                                                        <c:StatusChip Grid.Column="1" Status="{Binding PlanStatus}" VerticalOptions="Center" />
+                                                        <Button Grid.Column="2" Text="Choose" Style="{StaticResource SmallOutlineButton}" Clicked="OnPickMember" VerticalOptions="Center"
+                                                                SemanticProperties.Description="{Binding Username, StringFormat='Choose {0}'}" />
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
+                                    </VerticalStackLayout>
+                                    <Label Text="{Binding Member.Username, StringFormat='Chosen: {0}'}" FontFamily="BarlowSemiBold" IsVisible="{Binding Member, Converter={StaticResource IsNotNull}}" />
 
                                     <Label Text="Choose one" Style="{StaticResource SectionTitle}" Margin="0" />
                                     <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Options}">

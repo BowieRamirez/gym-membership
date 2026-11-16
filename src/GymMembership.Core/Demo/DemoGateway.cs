@@ -1403,6 +1403,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         AddUser("u-coach2", "Kai Mendoza", "kai@demo.io", "coach");
         AddUser("u-alex", "Alex Tan", "member@demo.io", "member");
         AddUser("u-bea", "Bea Lim", "bea@demo.io", "member");
+        All<Profile>().First(p => p.Id == "u-bea").Phone = "0917 555 0142";   // cashier plan Y1: search by phone
         AddUser("u-carlo", "Carlo Diaz", "carlo@demo.io", "member");
         AddUser("u-joy", "Joy", "joy@demo.io", "member", "Joy", "");   // item 3: an old one-word account, no last name to guess
 
