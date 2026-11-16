@@ -21,7 +21,7 @@ public sealed record HomeTile(string Route, string Icon, string Title, string Co
 public partial class HomeViewModel(IDeskHomeService svc, IPaymentStaffService? payments = null, ICoachService? coaches = null) : LoadableViewModel
 {
     public ObservableCollection<HomeTile> Tiles { get; } = new();
-    /// <summary>Verifying needs the proof screenshot, so a row only opens Payments to verify.</summary>
+    /// <summary>Desk bookings waiting for their cash (cashier plan Y7); a row opens the Cashier, where it is taken.</summary>
     public ObservableCollection<PaymentRow> ToVerify { get; } = new();
     public ObservableCollection<CoachPresenceRow> InGym { get; } = new();
     public bool HasLists => payments is not null && coaches is not null;
@@ -68,13 +68,14 @@ public partial class HomeViewModel(IDeskHomeService svc, IPaymentStaffService? p
         var amenityDetail = string.Join(", ", new[] { s.AmenitiesInUse > 0 ? $"{s.AmenitiesInUse} in use" : null, s.AmenitiesUnavailable > 0 ? $"{s.AmenitiesUnavailable} unavailable" : null }.OfType<string>());
         // 9.7: one highlighted figure (the page standard). Payments waiting first, then unanswered chats; an unavailable amenity is news,
         // not a desk task, so it is said in words only. Every tile still says what it needs in its caption.
-        bool pay = s.PaymentsToVerify > 0, chats = !pay && (s.UnreadMessages > 0 || s.UnclaimedChats > 0);
+        bool pay = s.CashToTake > 0, chats = !pay && (s.UnreadMessages > 0 || s.UnclaimedChats > 0);
         return
         [
             new("checkin", "log-in", "Check-ins today", s.CheckInsToday.ToString(),
                 s.CheckInsToday == 0 ? "No one has checked in yet" : "Tap to check someone in", false),
-            new("verify", "receipt", "Payments to verify", s.PaymentsToVerify.ToString(),
-                s.PaymentsToVerify == 0 ? "All caught up" : s.PaymentsToVerify == 1 ? "1 payment is waiting" : $"{s.PaymentsToVerify} payments are waiting", pay),
+            // cashier plan Y7: Payments to verify is gone (Xendit verifies online payments); the desk's task is cash for desk bookings
+            new("cashier", "receipt", "Cash to take", s.CashToTake.ToString(),
+                s.CashToTake == 0 ? "All caught up" : s.CashToTake == 1 ? "1 booking to take cash for" : $"{s.CashToTake} bookings to take cash for", pay),
             new("amenities", "waves", "Amenities available", $"{s.AmenitiesAvailable} of {s.AmenitiesTotal}",
                 amenityDetail.Length == 0 ? "All open" : amenityDetail, false),
             new("messages", "message-square", "Unread messages", s.UnreadMessages.ToString(),
@@ -84,79 +85,7 @@ public partial class HomeViewModel(IDeskHomeService svc, IPaymentStaffService? p
     }
 }
 
-public partial class VerifyPaymentsViewModel(IPaymentStaffService svc) : LoadableViewModel
-{
-    public ObservableCollection<PaymentRow> Pending { get; } = new();
-    /// <summary>F13: booking refund claims ("I didn't use it") the front desk decides, each with a reason.</summary>
-    public ObservableCollection<ClaimRow> Claims { get; } = new();
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsDeciding), nameof(DecideTitle), nameof(DecideText))] private ClaimRow? deciding;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(DecideTitle), nameof(DecideText))] private bool decideApprove;
-    [ObservableProperty] private string decideReason = "";
-    public bool IsDeciding => Deciding is not null;
-    public bool HasClaims => Claims.Count > 0;
-    public string DecideTitle => Deciding is null ? "" : $"{(DecideApprove ? "Approve" : "Decline")} {Deciding.Member}'s refund of {Deciding.Price}?";
-    public string DecideText => DecideApprove ? "Approve refund" : "Decline";
-    [ObservableProperty] private PaymentRow? rejecting;
-    [ObservableProperty] private string rejectReason = "";
-    [ObservableProperty] private PaymentRow? viewing;
-    [ObservableProperty] private string? proofUrl;
-
-    public override Task OnAppearingAsync() => LoadAsync();
-
-    [RelayCommand]
-    private async Task LoadAsync()
-    {
-        if (!await RunAsync(svc.PendingAsync, rows => Fill(Pending, rows))) return;
-        await RunAsync(svc.ClaimsAsync, rows => Fill(Claims, rows));
-        OnPropertyChanged(nameof(HasClaims));
-    }
-
-    [RelayCommand] private void ApproveClaim(ClaimRow row) { Notice = null; Deciding = row; DecideApprove = true; DecideReason = ""; }
-    [RelayCommand] private void DeclineClaim(ClaimRow row) { Notice = null; Deciding = row; DecideApprove = false; DecideReason = ""; }
-    [RelayCommand] private void KeepClaim() => Deciding = null;
-
-    [RelayCommand]
-    private async Task ConfirmDecisionAsync()
-    {
-        if (Deciding is not { } row) return;
-        if (!await RunAsync(() => svc.DecideClaimAsync(row.Claim.Id, DecideApprove, DecideReason))) return;
-        Claims.Remove(row); OnPropertyChanged(nameof(HasClaims)); Deciding = null;
-        Notice = DecideApprove ? $"Refund approved. Admin repays {row.Member} from Refunds & voids." : $"Declined. {row.Member} is told why.";
-    }
-
-    [RelayCommand]
-    private async Task ApproveAsync(PaymentRow row)
-    {
-        Notice = null;
-        if (!await Confirm.AskAsync($"Approve {row.Payer}'s payment?", $"{row.Item}\n₱{row.Payment.Amount:N2}", "Approve")) return;
-        if (await RunAsync(() => svc.VerifyAsync(row.Payment.Id, true)))
-        { Pending.Remove(row); Notice = $"Verified {row.Payer}'s payment. Receipt number assigned."; if (Viewing == row) Viewing = null; }
-    }
-
-    // a rejection needs a reason, and it is final: the member pays again with a new payment
-    [RelayCommand] private void Reject(PaymentRow row) { Rejecting = row; RejectReason = ""; Notice = null; }
-    [RelayCommand] private void KeepPending() => Rejecting = null;
-
-    [RelayCommand]
-    private async Task ConfirmRejectAsync()
-    {
-        if (Rejecting is not { } row) return;
-        if (!await RunAsync(() => svc.VerifyAsync(row.Payment.Id, false, RejectReason))) return;
-        Pending.Remove(row); Rejecting = null;
-        Notice = $"Rejected {row.Payer}'s payment. They can pay again.";
-    }
-
-    // the screenshot the member sent, to check against the gym's e-wallet
-    [RelayCommand]
-    private async Task ViewProofAsync(PaymentRow row)
-    {
-        Viewing = row; ProofUrl = null;
-        if (row.Payment.ProofPath is { } path) await RunAsync(() => svc.ProofUrlAsync(path), url => ProofUrl = url);
-    }
-
-    [RelayCommand] private void CloseProof() { Viewing = null; ProofUrl = null; }
-}
-
+// front desk: cash and GCash at the counter, and walk-ins. Verified straight away with a receipt number
 /// <summary>One thing for sale on the cashier's grid, and whether it is the one picked.</summary>
 public partial class ItemOption(CounterItem item) : ObservableObject
 {
@@ -166,7 +95,6 @@ public partial class ItemOption(CounterItem item) : ObservableObject
     [ObservableProperty] private bool isPicked;
 }
 
-// front desk: cash and GCash at the counter, and walk-ins. Verified straight away with a receipt number
 public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceService members) : LoadableViewModel
 {
     public string[] Kinds { get; } = ["Membership", "Renewal", "Amenity", "Walk-in"];
@@ -227,7 +155,27 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     static string KindKey(string k) => k switch { "Renewal" => PayKind.Renewal, "Amenity" => PayKind.Amenity, "Walk-in" => PayKind.WalkIn, _ => PayKind.Membership };
     static string MethodKey(string m) => m == "GCash" ? PayMethod.Gcash : PayMethod.Cash;
 
-    public override async Task OnAppearingAsync() { await RefreshItemsAsync(); await LoadShiftAsync(); }
+    public override async Task OnAppearingAsync() { await RefreshItemsAsync(); await LoadShiftAsync(); await LoadDeskBookingsAsync(); }
+
+    // ---- cashier plan Y7: bookings paid in cash at the desk are taken here (Payments to verify is gone) ----
+    public ObservableCollection<PaymentRow> DeskBookings { get; } = new();
+    public bool HasDeskBookings => DeskBookings.Count > 0;
+    async Task LoadDeskBookingsAsync()
+    {
+        await RunAsync(svc.PendingAsync, rows => Fill(DeskBookings, rows.Where(r => r.HasBooking)));
+        OnPropertyChanged(nameof(HasDeskBookings));
+    }
+
+    [RelayCommand]
+    private async Task TakeBookingCashAsync(PaymentRow row)
+    {
+        Notice = null;
+        if (!await Confirm.AskAsync($"Take {row.Payer}'s cash?", $"{row.Item}\n{row.Booking}\n₱{row.Payment.Amount:N2} into your drawer.", "Take cash")) return;
+        if (!await RunAsync(() => svc.VerifyAsync(row.Payment.Id, true))) return;
+        Notice = $"Took ₱{row.Payment.Amount:N2} from {row.Payer}. The booking is confirmed and a receipt number assigned.";
+        await LoadDeskBookingsAsync();
+        await LoadShiftAsync();   // the drawer's cash taken goes up
+    }
 
     Task<bool> LoadShiftAsync() => RunAsync(svc.ShiftAsync, state =>
     {
@@ -2096,8 +2044,38 @@ public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive
 public sealed record StatusChoice(string Value, string Label);
 
 /// <summary>Front desk and admin: mark an amenity available, in use or unavailable, and see who was alerted.</summary>
-public partial class AmenityStatusViewModel(IAmenityService svc, IReservationService? reservations = null) : LoadableViewModel
+public partial class AmenityStatusViewModel(IAmenityService svc, IReservationService? reservations = null, IPaymentStaffService? payments = null) : LoadableViewModel
 {
+    // ---- F13 booking refund claims ("I didn't use it"), decided by the desk with a reason; moved here from Payments to verify (cashier plan Y7) ----
+    public ObservableCollection<ClaimRow> Claims { get; } = new();
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsDeciding), nameof(DecideTitle), nameof(DecideText))] private ClaimRow? deciding;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(DecideTitle), nameof(DecideText))] private bool decideApprove;
+    [ObservableProperty] private string decideReason = "";
+    public bool IsDeciding => Deciding is not null;
+    public bool HasClaims => Claims.Count > 0;
+    public string DecideTitle => Deciding is null ? "" : $"{(DecideApprove ? "Approve" : "Decline")} {Deciding.Member}'s refund of {Deciding.Price}?";
+    public string DecideText => DecideApprove ? "Approve refund" : "Decline";
+
+    public async Task LoadClaimsAsync()
+    {
+        if (payments is null) return;
+        await RunAsync(payments.ClaimsAsync, rows => Fill(Claims, rows));
+        OnPropertyChanged(nameof(HasClaims));
+    }
+
+    [RelayCommand] private void ApproveClaim(ClaimRow row) { Notice = null; Deciding = row; DecideApprove = true; DecideReason = ""; }
+    [RelayCommand] private void DeclineClaim(ClaimRow row) { Notice = null; Deciding = row; DecideApprove = false; DecideReason = ""; }
+    [RelayCommand] private void KeepClaim() => Deciding = null;
+
+    [RelayCommand]
+    private async Task ConfirmDecisionAsync()
+    {
+        if (payments is null || Deciding is not { } row) return;
+        if (!await RunAsync(() => payments.DecideClaimAsync(row.Claim.Id, DecideApprove, DecideReason))) return;
+        Claims.Remove(row); OnPropertyChanged(nameof(HasClaims)); Deciding = null;
+        Notice = DecideApprove ? $"Refund approved. Admin repays {row.Member} from Refunds & voids." : $"Declined. {row.Member} is told why.";
+    }
+
     // ---- G13 (0064): today's confirmed bookings with a balance; the desk takes it once, cash into the drawer or GCash with a reference ----
     public ObservableCollection<BalanceRow> Balances { get; } = new();
     public bool HasBalances => Balances.Count > 0;
@@ -2146,6 +2124,7 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
     {
         await RunAsync(svc.BoardAsync, board => Fill(Cards, board.Cards));
         await LoadBalancesAsync(ManilaToday);
+        await LoadClaimsAsync();
     }
 
     // Quiet and in place: the error line, the notice and the open form stay as they are, and only cards that changed are swapped.

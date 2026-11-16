@@ -74,17 +74,20 @@ public class ConfirmationTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Approving_a_payment_asks_with_the_payer_and_amount(bool yes)
+    public async Task Taking_a_bookings_cash_asks_with_the_payer_and_amount(bool yes)   // cashier plan Y7: was Payments to verify's Approve
     {
-        var gw = await As("carlo@demo.io");
-        var membership = new MembershipService(gw);
-        await membership.AvailAsync((await membership.ListPackagesAsync()).Value![0].Id);
+        var gw = await As("member@demo.io");
+        var group = (await gw.ListAsync<Amenity>()).Single(a => a.Name == "Group classes");
+        var day = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8)).AddDays(1);
+        var start = DateTime.SpecifyKind(day.ToDateTime(new TimeOnly(14, 0)).AddHours(-8), DateTimeKind.Utc);
+        Assert.True((await new ReservationService(gw).BookAsync(group.Id, start, 30, PayMethod.Cash, null, null)).Ok);
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
-        var vm = new VerifyPaymentsViewModel(new PaymentStaffService(gw));
-        await vm.LoadCommand.ExecuteAsync(null);
-        var row = vm.Pending.First();
+        await gw.OpenDrawerAsync();
+        var vm = new CashierViewModel(new PaymentStaffService(gw), new AttendanceService(gw));
+        await vm.OnAppearingAsync();
+        var row = vm.DeskBookings.Single();
         var asked = Answer(yes);
-        await vm.ApproveCommand.ExecuteAsync(row);
+        await vm.TakeBookingCashCommand.ExecuteAsync(row);
         var question = Assert.Single(asked);
         Assert.Contains(row.Payer, question);
         Assert.Contains($"₱{row.Payment.Amount:N2}", question);
@@ -147,7 +150,7 @@ public class ConfirmationTests
         { "StaffViewModels.cs", "TraineesViewModel", "Remove" },
         { "StaffViewModels.cs", "CoachProfileViewModel", "ToggleVisit" },
         { "StaffViewModels.cs", "CashierViewModel", "Record" },
-        { "StaffViewModels.cs", "VerifyPaymentsViewModel", "Approve" },
+        { "StaffViewModels.cs", "CashierViewModel", "TakeBookingCash" },
         { "StaffViewModels.cs", "CheckInViewModel", "ToggleCoach" },
         { "StaffViewModels.cs", "UsersViewModel", "ToggleActive" },
         { "StaffViewModels.cs", "UsersViewModel", "ToggleRole" },

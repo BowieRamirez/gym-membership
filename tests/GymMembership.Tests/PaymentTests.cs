@@ -53,10 +53,10 @@ public class PaymentTests
     {
         var gw = await As("employee@demo.io");
         var staff = new PaymentStaffService(gw);
-        var beas = (await staff.PendingAsync()).Value!.Single(r => r.Payer == "Bea Lim");
-        Assert.Equal(AppErrorKind.Validation, (await staff.VerifyAsync(beas.Payment.Id, false, "  ")).Error);
-        Assert.True((await staff.VerifyAsync(beas.Payment.Id, false, "Amount does not match")).Ok);
-        Assert.Equal(AppErrorKind.Conflict, (await staff.VerifyAsync(beas.Payment.Id, true)).Error);   // final
+        var beas = (await gw.ListAsync<Payment>(p => p.Status == Status.Pending)).Single(p => p.MemberId == "u-bea");   // online: not on the desk list (cashier plan Y7)
+        Assert.Equal(AppErrorKind.Validation, (await staff.VerifyAsync(beas.Id, false, "  ")).Error);
+        Assert.True((await staff.VerifyAsync(beas.Id, false, "Amount does not match")).Ok);
+        Assert.Equal(AppErrorKind.Conflict, (await staff.VerifyAsync(beas.Id, true)).Error);   // final
 
         await gw.SignInAsync("bea@demo.io", DemoGateway.DemoPassword);
         var member = new MembershipService(gw);
@@ -65,8 +65,8 @@ public class PaymentTests
         Assert.Empty((await member.MyMembershipsAsync()).Value!);   // nothing was switched on
 
         var again = (await member.PayAgainAsync(item)).Value!;       // a fresh payment for the same package
-        Assert.NotEqual(beas.Payment.Id, again.Id);
-        Assert.Equal(beas.Payment.Amount, again.Amount);
+        Assert.NotEqual(beas.Id, again.Id);
+        Assert.Equal(beas.Amount, again.Amount);
         Assert.Equal(AppErrorKind.Conflict, (await member.PayAgainAsync(item)).Error);   // one pending membership at a time
     }
 

@@ -53,6 +53,53 @@
                 </Border>
             </VerticalStackLayout>
 
+            <!-- F13 booking refund claims ("I didn't use it"), moved here from Payments to verify (cashier plan Y7): what the member said
+                 beside what the desk checks; decided with a reason the member reads -->
+            <VerticalStackLayout Spacing="8" IsVisible="{Binding HasClaims}">
+                <Label Text="Booking refund claims" Style="{StaticResource SectionTitle}" />
+                <Border Style="{StaticResource Panel}" IsVisible="{Binding IsDeciding}">
+                    <VerticalStackLayout Spacing="10">
+                        <c:CardTitle Text="{Binding DecideTitle}" />
+                        <Label Text="Say what you checked, for example the check-ins that day or the amenity's log. The member reads this." Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}" WidthRequest="420" HorizontalOptions="Start">
+                            <Entry Text="{Binding DecideReason}" Placeholder="No check-in that day; pool closed for cleaning" SemanticProperties.Description="Reason for the decision" />
+                        </Border>
+                        <HorizontalStackLayout Spacing="8">
+                            <Button Text="{Binding DecideText}" Style="{StaticResource SmallButton}" Command="{Binding ConfirmDecisionCommand}" />
+                            <Button Text="Back" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepClaimCommand}" />
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+                <Border Style="{StaticResource Panel}">
+                    <VerticalStackLayout Spacing="0" BindableLayout.ItemsSource="{Binding Claims}">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="svc:ClaimRow">
+                                <VerticalStackLayout>
+                                    <Grid ColumnDefinitions="*,1.4*,1.2*,Auto" ColumnSpacing="12" Padding="0,8">
+                                        <VerticalStackLayout VerticalOptions="Center">
+                                            <Label Text="{Binding Member}" FontFamily="BarlowSemiBold" />
+                                            <Label Text="{Binding Amenity, StringFormat='{0} booking'}" Style="{StaticResource Caption}" />
+                                            <Label Text="{Binding When}" Style="{StaticResource Caption}" />
+                                        </VerticalStackLayout>
+                                        <Label Grid.Column="1" Text="{Binding Claim.Reason, StringFormat='“{0}”'}" LineBreakMode="WordWrap" VerticalOptions="Center" />
+                                        <VerticalStackLayout Grid.Column="2" VerticalOptions="Center">
+                                            <Label Text="{Binding CheckIns, StringFormat='Check-ins that day: {0}'}" Style="{StaticResource Caption}" />
+                                            <Label Text="{Binding AmenityNow, StringFormat='Amenity now: {0}'}" Style="{StaticResource Caption}" />
+                                        </VerticalStackLayout>
+                                        <HorizontalStackLayout Grid.Column="3" Spacing="8" VerticalOptions="Center">
+                                            <Label Text="{Binding Price}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                                            <Button Text="Approve" Style="{StaticResource SmallOutlineButton}" Clicked="OnApproveClaim" />
+                                            <Button Text="Decline" Style="{StaticResource SmallOutlineButton}" Clicked="OnDeclineClaim" />
+                                        </HorizontalStackLayout>
+                                    </Grid>
+                                    <BoxView Style="{StaticResource Hairline}" />
+                                </VerticalStackLayout>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+
             <!-- the editor for the amenity you chose -->
             <Border Style="{StaticResource Panel}" IsVisible="{Binding IsEditing}" MaximumWidthRequest="{OnIdiom Phone=10000, Default=640}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}">
                 <VerticalStackLayout Spacing="10">

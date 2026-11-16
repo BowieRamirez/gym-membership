@@ -8,7 +8,7 @@
             x:Class="GymMembership.App.Views.HomePage" x:DataType="vm:HomeViewModel" Title="Home">
 
     <v:BasePage.Resources>
-        <!-- payments waiting: Verify opens Payments to verify, where the proof screenshot is -->
+        <!-- cashier plan Y7: bookings paid in cash at the desk; Open takes the desk to the Cashier, where the cash is taken -->
         <DataTemplate x:Key="PayRow" x:DataType="svc:PaymentRow">
             <VerticalStackLayout>
                 <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,*,110,100,90">
@@ -16,8 +16,8 @@
                     <Label Grid.Column="1" Text="{Binding Item}" VerticalOptions="Center" />
                     <Label Grid.Column="2" Text="{Binding Payment.PaymentCode}" Style="{StaticResource Muted}" VerticalOptions="Center" />
                     <Label Grid.Column="3" Text="{Binding Payment.Amount, StringFormat='₱{0:N2}'}" HorizontalOptions="End" VerticalOptions="Center" />
-                    <Button Grid.Column="4" Text="Verify" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="End" Clicked="OnVerify"
-                            SemanticProperties.Hint="Opens Payments to verify" />
+                    <Button Grid.Column="4" Text="Take cash" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="End" Clicked="OnVerify"
+                            SemanticProperties.Hint="Opens the Cashier" />
                 </Grid>
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
@@ -37,8 +37,8 @@
                             </Label.Text>
                         </Label>
                     </VerticalStackLayout>
-                    <Button Grid.Column="1" Text="Verify" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" Clicked="OnVerify"
-                            SemanticProperties.Hint="Opens Payments to verify" />
+                    <Button Grid.Column="1" Text="Take cash" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" Clicked="OnVerify"
+                            SemanticProperties.Hint="Opens the Cashier" />
                 </Grid>
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
@@ -111,7 +111,7 @@
             <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" MinColumnWidth="420" IsVisible="{Binding HasLists}">
                 <Border Style="{StaticResource TablePanel}">
                     <VerticalStackLayout>
-                        <c:CardTitle Text="Payments to verify" Margin="14,12,14,4" />
+                        <c:CardTitle Text="Cash to take" Margin="14,12,14,4" />
                         <VerticalStackLayout x:Name="PayHead" IsVisible="{OnIdiom Phone=False, Default=True}">
                             <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,*,110,100,90">
                                 <Label Text="Payer" Style="{StaticResource Caption}" />
@@ -123,7 +123,7 @@
                         </VerticalStackLayout>
                         <c:TableBody Items="{Binding ToVerify}" Header="{x:Reference PayHead}" WideFrom="560"
                                      RowTemplate="{StaticResource PayRow}" CardTemplate="{StaticResource PayCard}">
-                            <c:TableBody.Empty><Label Text="No payments waiting. New QR payments show up here." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
+                            <c:TableBody.Empty><Label Text="No bookings waiting for cash. Online payments verify themselves." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                         </c:TableBody>
                     </VerticalStackLayout>
                 </Border>

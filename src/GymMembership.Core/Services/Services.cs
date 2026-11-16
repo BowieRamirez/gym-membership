@@ -441,7 +441,6 @@ public interface IPaymentStaffService
     /// <summary>Cash or GCash at the counter, verified at once. itemId is a package id, a membership id or an amenity id depending on kind.</summary>
     Task<AppResult<Payment>> RecordCounterAsync(string kind, string method, string? memberId, int? itemId, string? walkInName, string? referenceNo, string? discountCode);
     Task<AppResult<bool>> VoidAsync(int paymentId, string reason);
-    Task<AppResult<string?>> ProofUrlAsync(string proofPath);
     /// <summary>What can be sold for a kind of payment. Renewals are the member's own memberships, so they need a memberId.</summary>
     Task<AppResult<IReadOnlyList<CounterItem>>> ItemsAsync(string kind, string? memberId);
     /// <summary>F2 (0050): the caller's open drawer shift (null when none) and the gym's opening float to start one with.</summary>
@@ -502,8 +501,9 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
         { await gw.RpcAsync("decide_amenity_refund", new() { ["p_request_id"] = requestId, ["p_approve"] = approve, ["p_reason"] = reason.Trim() }); return true; });
     }
 
+    // cashier plan Y7: what waits for the desk is cash for a booking paid at the desk; online payments verify themselves (Xendit)
     public Task<AppResult<IReadOnlyList<PaymentRow>>> PendingAsync() => Safe.RunAsync(async () =>
-        await RowsAsync((await gw.ListAsync<Payment>(p => p.Status == "pending")).OrderBy(p => p.CreatedAt)));
+        await RowsAsync((await gw.ListAsync<Payment>(p => p.Status == "pending" && p.Method == PayMethod.Cash)).OrderBy(p => p.CreatedAt)));
 
     public Task<AppResult<IReadOnlyList<PaymentRow>>> RecentAsync() => Safe.RunAsync(async () =>
         await RowsAsync((await gw.ListAsync<Payment>(p => p.Status == "verified")).OrderByDescending(p => p.VerifiedAt).Take(30)));
@@ -538,8 +538,6 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
         return await Safe.RunAsync(async () => { await gw.RpcAsync("void_payment", new() { ["p_payment_id"] = paymentId, ["p_reason"] = reason.Trim() }); return true; });
     }
 
-
-    public Task<AppResult<string?>> ProofUrlAsync(string proofPath) => Safe.RunAsync(() => gw.SignedUrlAsync("payment-proofs", proofPath));
 
     public Task<AppResult<(CashShift? Open, decimal DefaultFloat)>> ShiftAsync() => Safe.RunAsync(async () =>
         ((await gw.RpcAsync<List<CashShift>>("my_cash_shift", new()) ?? []).FirstOrDefault(), (await gw.ListAsync<GymSettings>()).First().OpeningFloat));
@@ -1240,7 +1238,7 @@ public static class MemberCheck
     /// <summary>The page staff open next, as (button text, Shell route); null when there is nothing the desk can do.</summary>
     public static (string Text, string Route)? NextStep(string status) => status switch
     {
-        "pending" => ("Open Payments to verify", "verify"),
+        "pending" => ("Open Cashier", "cashier"),   // cashier plan Y7
         "expired" => ("Open Cashier", "cashier"),
         _ => null,
     };

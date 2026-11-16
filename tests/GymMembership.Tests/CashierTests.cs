@@ -189,15 +189,13 @@ public class CashierTests
         public readonly Queue<(string Kind, TaskCompletionSource<AppResult<IReadOnlyList<CounterItem>>> Reply)> Waiting = new();
         public Task<AppResult<IReadOnlyList<CounterItem>>> ItemsAsync(string kind, string? memberId)
         { var tcs = new TaskCompletionSource<AppResult<IReadOnlyList<CounterItem>>>(); Waiting.Enqueue((kind, tcs)); return tcs.Task; }
-        public Task<AppResult<IReadOnlyList<PaymentRow>>> PendingAsync() => throw new NotSupportedException();
+        public Task<AppResult<IReadOnlyList<PaymentRow>>> PendingAsync() => Task.FromResult(AppResult<IReadOnlyList<PaymentRow>>.Success([]));   // no desk bookings
         public Task<AppResult<IReadOnlyList<PaymentRow>>> RecentAsync() => throw new NotSupportedException();
         public Task<AppResult<bool>> VerifyAsync(int paymentId, bool approve, string? reason = null) => throw new NotSupportedException();
         public Task<AppResult<IReadOnlyList<ClaimRow>>> ClaimsAsync() => throw new NotSupportedException();
         public Task<AppResult<bool>> DecideClaimAsync(int requestId, bool approve, string reason) => throw new NotSupportedException();
         public Task<AppResult<Payment>> RecordCounterAsync(string kind, string method, string? memberId, int? itemId, string? walkInName, string? referenceNo, string? discountCode) => throw new NotSupportedException();
-        public Task<AppResult<bool>> VoidAsync(int paymentId, string reason) => throw new NotSupportedException();
-        public Task<AppResult<string?>> ProofUrlAsync(string proofPath) => throw new NotSupportedException();
-        public Task<AppResult<(CashShift? Open, decimal DefaultFloat)>> ShiftAsync() => Task.FromResult(AppResult<(CashShift?, decimal)>.Success((null, 5000m)));
+        public Task<AppResult<bool>> VoidAsync(int paymentId, string reason) => throw new NotSupportedException();        public Task<AppResult<(CashShift? Open, decimal DefaultFloat)>> ShiftAsync() => Task.FromResult(AppResult<(CashShift?, decimal)>.Success((null, 5000m)));
         public Task<AppResult<CashShift>> OpenShiftAsync(decimal openingFloat, string? note) => throw new NotSupportedException();
         public Task<AppResult<CashShift>> CloseShiftAsync(decimal counted, string? note) => throw new NotSupportedException();
     }

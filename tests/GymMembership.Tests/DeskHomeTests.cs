@@ -27,11 +27,12 @@ public class DeskHomeTests
     }
 
     [Fact]
-    public async Task Payments_to_verify_match_the_pending_list()
+    public async Task Cash_to_take_matches_the_desk_list()   // cashier plan Y7: only bookings paid in cash at the desk wait for the desk
     {
         var (gw, _, svc) = await As("employee@demo.io");
         var pending = (await new PaymentStaffService(gw).PendingAsync()).Value!;
-        Assert.Equal(pending.Count, (await svc.SummaryAsync()).Value!.PaymentsToVerify);
+        Assert.All(pending, p => Assert.Equal(PayMethod.Cash, p.Payment.Method));
+        Assert.Equal(pending.Count, (await svc.SummaryAsync()).Value!.CashToTake);
     }
 
     [Fact]
@@ -78,10 +79,10 @@ public class DeskHomeTests
     public void Tiles_say_what_needs_doing_in_words_as_well_as_by_outline()
     {
         var tiles = HomeViewModel.Build(new DeskSummary(12, 3, 2, 1, 1, 4, 2));
-        Assert.Equal(new[] { "checkin", "verify", "amenities", "messages" }, tiles.Select(t => t.Route));
+        Assert.Equal(new[] { "checkin", "cashier", "amenities", "messages" }, tiles.Select(t => t.Route));
 
-        var verify = tiles.Single(t => t.Route == "verify");
-        Assert.Equal("3", verify.Count); Assert.Equal("3 payments are waiting", verify.Detail); Assert.True(verify.NeedsAttention);
+        var cash = tiles.Single(t => t.Route == "cashier");
+        Assert.Equal("3", cash.Count); Assert.Equal("3 bookings to take cash for", cash.Detail); Assert.True(cash.NeedsAttention);
 
         var amenities = tiles.Single(t => t.Route == "amenities");
         Assert.Equal("2 of 4", amenities.Count); Assert.Equal("1 in use, 1 unavailable", amenities.Detail);
@@ -107,7 +108,7 @@ public class DeskHomeTests
     {
         var tiles = HomeViewModel.Build(new DeskSummary(0, 0, 3, 0, 0, 0, 0));
         Assert.All(tiles, t => Assert.False(t.NeedsAttention));
-        Assert.Equal("All caught up", tiles.Single(t => t.Route == "verify").Detail);
+        Assert.Equal("All caught up", tiles.Single(t => t.Route == "cashier").Detail);
         Assert.Equal("All open", tiles.Single(t => t.Route == "amenities").Detail);
         Assert.Equal("No new messages", tiles.Single(t => t.Route == "messages").Detail);
         Assert.Equal("No one has checked in yet", tiles.Single(t => t.Route == "checkin").Detail);
@@ -117,7 +118,7 @@ public class DeskHomeTests
     public void Singular_counts_read_as_singular()
     {
         var tiles = HomeViewModel.Build(new DeskSummary(1, 1, 1, 0, 0, 1, 1));
-        Assert.Equal("1 payment is waiting", tiles.Single(t => t.Route == "verify").Detail);
+        Assert.Equal("1 booking to take cash for", tiles.Single(t => t.Route == "cashier").Detail);
         Assert.Equal("1 chat nobody has taken", tiles.Single(t => t.Route == "messages").Detail);
     }
 
@@ -163,7 +164,7 @@ public class DeskHomeTests
     public void A_tile_reads_its_count_aloud_with_its_title()
     {
         var tiles = HomeViewModel.Build(new DeskSummary(12, 3, 2, 1, 1, 4, 2));
-        Assert.Equal("Payments to verify: 3", tiles.Single(t => t.Route == "verify").Description);
+        Assert.Equal("Cash to take: 3", tiles.Single(t => t.Route == "cashier").Description);
         Assert.Equal("Amenities available: 2 of 4", tiles.Single(t => t.Route == "amenities").Description);
     }
 
@@ -199,7 +200,7 @@ public class DeskHomeTests
         var vm = new HomeViewModel(svc, new PaymentStaffService(gw), coaches);
         await vm.OnAppearingAsync();
         Assert.Equal((await new PaymentStaffService(gw).PendingAsync()).Value!.Select(p => p.Payment.Id), vm.ToVerify.Select(p => p.Payment.Id));
-        Assert.Contains(vm.ToVerify, p => p.Payment.PaymentCode == "GYM-7F3K2");
+        Assert.DoesNotContain(vm.ToVerify, p => p.Payment.PaymentCode == "GYM-7F3K2");   // Bea pays online now (cashier plan Y7)
         var presence = (await coaches.PresenceAsync()).Value!;
         Assert.Equal(presence.Where(c => c.InGym).Select(c => c.CoachId), vm.InGym.Select(c => c.CoachId));   // only those checked in
         var lena = vm.InGym.Single(c => c.CoachId == "u-coach1");   // the demo starts with both coaches in

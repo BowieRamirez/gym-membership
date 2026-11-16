@@ -61,7 +61,7 @@ try {
     Wait-Name 'AdminOverviewUpdated' 'Checked.*Manila'
     Write-Output 'PASS admin-only landing, summaries, shortcuts and refresh'
     Invoke-Id 'AdminFrontDeskGroup'
-    foreach ($route in @('verify', 'cashier', 'checkin', 'amenities', 'messages', 'home')) {
+    foreach ($route in @('cashier', 'checkin', 'amenities', 'messages', 'home')) {
         $id = 'AdminNavigation-' + $route
         Invoke-Id $id
         Wait-Name $id ', current page$'

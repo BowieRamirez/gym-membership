@@ -93,6 +93,29 @@
                 </VerticalStackLayout>
             </Border>
 
+                    <!-- cashier plan Y7 (was on Payments to verify): bookings the member chose to pay at the desk; the cash goes into this drawer -->
+                    <VerticalStackLayout Spacing="8" IsVisible="{Binding HasDeskBookings}">
+                        <Label Text="Bookings waiting for a down payment" Style="{StaticResource SectionTitle}" Margin="0" />
+                        <VerticalStackLayout Spacing="8" BindableLayout.ItemsSource="{Binding DeskBookings}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="svc:PaymentRow">
+                                    <Border Style="{StaticResource Row}">
+                                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="14">
+                                            <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                                                <Label Text="{Binding Payer}" FontFamily="BarlowSemiBold" />
+                                                <Label Text="{Binding Item}" Style="{StaticResource Caption}" />
+                                                <Label Text="{Binding Booking}" Style="{StaticResource Caption}" />
+                                            </VerticalStackLayout>
+                                            <Label Grid.Column="1" Text="{Binding Payment.Amount, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                                            <Button Grid.Column="2" Text="{Binding ApproveText}" Style="{StaticResource SmallButton}" Clicked="OnTakeBookingCash" VerticalOptions="Center"
+                                                    SemanticProperties.Description="{Binding Payer, StringFormat='Take the down payment of {0} in cash'}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+
                     <Label Text="What are they paying for?" Style="{StaticResource SectionTitle}" Margin="0" />
                                 <!-- 9.7: the app's chips (were icon pills); the chosen one is yellow and says "selected" to a screen reader -->
                                 <FlexLayout Wrap="Wrap">

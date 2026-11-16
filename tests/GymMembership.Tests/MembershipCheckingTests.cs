@@ -35,7 +35,7 @@ public class MembershipCheckingTests
         Assert.Equal("Payment not verified yet", MemberCheck.Reason("pending", null));
         Assert.Equal("Account deactivated", MemberCheck.Reason("inactive", null));
         Assert.Equal(("Open Cashier", "cashier"), MemberCheck.NextStep("expired"));
-        Assert.Equal(("Open Payments to verify", "verify"), MemberCheck.NextStep("pending"));
+        Assert.Equal(("Open Cashier", "cashier"), MemberCheck.NextStep("pending"));   // cashier plan Y7
         Assert.Null(MemberCheck.NextStep("inactive"));
         Assert.Null(MemberCheck.NextStep("active"));
     }
@@ -45,7 +45,7 @@ public class MembershipCheckingTests
     {
         var (_, vm) = await Desk();
         var bea = await Find(vm, "bea");
-        Assert.Equal(("Payment not verified yet", "Open Payments to verify", "verify", false), (bea.PlanText, bea.NextStepText, bea.NextStepRoute, bea.CanCheckIn));
+        Assert.Equal(("Payment not verified yet", "Open Cashier", "cashier", false), (bea.PlanText, bea.NextStepText, bea.NextStepRoute, bea.CanCheckIn));
         var carlo = await Find(vm, "carlo");
         Assert.StartsWith("Expired on ", carlo.PlanText);
         Assert.Equal("cashier", carlo.NextStepRoute);
