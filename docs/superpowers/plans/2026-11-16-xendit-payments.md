@@ -31,13 +31,15 @@ Status vocabulary: `PLANNED`, `WAITING`, `IN PROGRESS`, `BLOCKED`, `IMPLEMENTED`
 
 ### Current work / restart here
 
+- **2026-11-16: Phase 2 DEPLOYED, owner steps open.** `0076` live (replace an expired session only by naming it); `xendit-checkout` (JWT) and `xendit-webhook` (`--no-verify-jwt`) deployed. Live: webhook GET 200 with the return text, bad token 401, checkout without a member login 401, anon 42501 on `save_online_checkout`. `xendit.mjs` 14/14, `edge-rules.mjs` 8/8 (token check, mutation-tested). **Waiting on the owner:** secrets, webhook URL, payment methods (Task 2 Step 5); the live Test-mode payment (Step 6) moves to Phase 5. Next migration `0077`.
+- Phase 2 rulings: (d) Xendit Payment Sessions are short-lived (30 min default, Xendit recommends short), so X8 becomes: one session per payment at a time, 30 minutes (never past the payment's own `expires_at`); on Pay online the server asks Xendit: ACTIVE → same link, COMPLETED → confirm, EXPIRED/CANCELED → new session swapped in only by naming the old one (0076). (e) Session `reference_id` = `payment_code-<ms>` (unique per session); no `customer` object sent (optional in the docs); description "Gym payment <code>". (f) Someone else's payment answers `not_found`, not `forbidden`, so ids can't be probed. (g) The webhook acts only on `payment_session.completed`; Invoices v2 not built (Sessions exist in the docs; confirm on the owner's account in Phase 5).
 - **2026-11-16: Phase 1 DEPLOYED.** `0075` live (dry run listed only it); anon gets 42501 on `confirm_online_payment`, `save_online_checkout`, `submit_payment_proof`, `verify_payment_before_xendit`, `verify_payment`. `xendit.mjs` 13/13; full `npm test` exit 0 (621 checks). **Members on the current app can no longer send proofs** until Phase 3's app ships. Next migration `0076`. Next: Phase 2, Task 2.
 - Rulings in Phase 1: (a) the desk's approve is blocked only once a Xendit checkout exists (`xendit_id` set, no proof), not for every proofless `qr` payment: 34 test files and today's database approve proofless payments, and the UI hides Verify anyway (Task 5); (b) `refund_requests_check` now allows a decided refund with no `decided_by` (system decision): a slot lost to an earlier payment, paid online, has no signed-in staff member, and the refund insert failed; the Refunds pages must show a blank decider as "Automatic" (Task 5); (c) the staff note says "PHP 1500.00", not "₱", because the local test database can't store ₱.
 
 | Phase | What | Needs | Status |
 |---|---|---|---|
 | 1 | Database: 0075, `confirm_online_payment` | X1, X2, X7, X9, X11 | DEPLOYED |
-| 2 | Edge Functions, secrets, webhook URL | X5, X8, X10, X14 | PLANNED |
+| 2 | Edge Functions, secrets, webhook URL | X5, X8, X10, X14 | DEPLOYED (owner steps open) |
 | 3 | Core service, demo, member screens | X12 | PLANNED |
 | 4 | Staff Payments page, wording, terms | X13, X15 | PLANNED |
 | 5 | End-to-end Test-mode run, review, go-live list | X14 | PLANNED |

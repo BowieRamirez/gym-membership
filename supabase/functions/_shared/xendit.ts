@@ -1,0 +1,33 @@
+// Shared by xendit-checkout and xendit-webhook (Xendit plan, 2026-11-16). The secret key and webhook token live only in the Supabase
+// secrets XENDIT_SECRET_KEY and XENDIT_WEBHOOK_TOKEN; they never ship in the app or in git.
+import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
+
+/** Calls the Xendit API with the secret key (HTTP Basic, empty password). Throws on any non-2xx answer. */
+export async function xendit(path: string, init: RequestInit = {}): Promise<any> {
+  const key = Deno.env.get('XENDIT_SECRET_KEY');
+  if (!key) throw new Error('XENDIT_SECRET_KEY is not set');
+  const res = await fetch(`https://api.xendit.co${path}`, {
+    ...init,
+    headers: { Authorization: `Basic ${btoa(`${key}:`)}`, 'Content-Type': 'application/json', ...(init.headers ?? {}) },
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`xendit ${res.status} ${body.error_code ?? ''} ${body.message ?? ''}`);
+  return body;
+}
+
+/** confirm_online_payment (0075): 'confirmed', 'already' or 'refund'. A database error is thrown, so the caller can answer 500. */
+export async function confirmPaid(admin: SupabaseClient, sessionId: string, amount: number, channel: string | null): Promise<string> {
+  const { data, error } = await admin.rpc('confirm_online_payment', { p_xendit_id: sessionId, p_amount: amount, p_channel: channel });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+/** Constant-time comparison of the webhook token: both sides are hashed first, so length and content leak nothing. */
+export async function sameToken(given: string, expected: string): Promise<boolean> {
+  if (!expected) return false;
+  const hash = async (s: string) => new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)));
+  const [a, b] = await Promise.all([hash(given), hash(expected)]);
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}

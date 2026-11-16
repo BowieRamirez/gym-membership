@@ -29,5 +29,18 @@ test('both staff functions use the shared rules, so neither falls back to a leng
   }
 });
 
+// Xendit plan (2026-11-16): xendit-webhook believes only the verification token; an unset secret must refuse everything
+const { sameToken } = await import('../../functions/_shared/xendit.ts');
+for (const [name, given, expected, want] of [
+  ['the right token is accepted', 'tok-123', 'tok-123', true],
+  ['a wrong token is refused', 'tok-124', 'tok-123', false],
+  ['a prefix of the token is refused', 'tok-12', 'tok-123', false],
+  ['no token is refused', '', 'tok-123', false],
+  ['an unset secret refuses even an empty token', '', '', false],
+]) {
+  try { assert.equal(await sameToken(given, expected), want); passed++; console.log('  ok  ', `webhook token: ${name}`); }
+  catch (e) { failed++; console.log('  FAIL', `webhook token: ${name}`, e.message); }
+}
+
 console.log(`Edge rules: ${passed} passed, ${failed} failed`);
 if (failed) process.exitCode = 1;

@@ -70,6 +70,18 @@ try {
     assert.equal((await payment(p.payment_id)).xendit_id, one);
   });
 
+  // 0076: Xendit sessions are short-lived; an expired one is replaced only by naming it (a double tap can't swap a paid one out)
+  await test('an expired checkout is replaced only by naming the one it replaces', async () => {
+    const p = await buy(await user()), one = xid(), two = xid(), three = xid();
+    await checkout(p, one);
+    await service('select save_online_checkout($1,$2,$3,$4)', [p.payment_id, two, 'https://checkout.test/2', 'ps-wrong']);
+    assert.equal((await payment(p.payment_id)).xendit_id, one);
+    await service('select save_online_checkout($1,$2,$3,$4)', [p.payment_id, two, 'https://checkout.test/2', one]);
+    await service('select save_online_checkout($1,$2,$3,$4)', [p.payment_id, three, 'https://checkout.test/3', one]);
+    const after = await payment(p.payment_id);
+    assert.deepEqual([after.xendit_id, after.xendit_url], [two, 'https://checkout.test/2']);
+  });
+
   await test('amenity down payment paid online confirms the booking', async () => {
     const uid = await member(), r = await book(uid, '09:00'), id = xid();
     await checkout(await payment(r.payment_id), id);
