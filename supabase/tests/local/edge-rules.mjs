@@ -60,6 +60,16 @@ for (const [name, actual, want] of [
   catch (e) { failed++; console.log('  FAIL', `xendit session: ${name}`, e.message); }
 }
 
+// cashier plan Y6: the desk that recorded a desk online payment may open and check its checkout; nobody else's payment is reachable
+{
+  const src = fs.readFileSync(new URL('../../functions/xendit-checkout/index.ts', import.meta.url), 'utf8');
+  try {
+    assert.match(src, /\.select\('[^']*recorded_by[^']*'\)/);
+    assert.match(src, /p\.member_id !== caller\.user\.id && p\.recorded_by !== caller\.user\.id/);
+    passed++; console.log('  ok  ', 'xendit checkout: the member or the desk that recorded it, nobody else');
+  } catch (e) { failed++; console.log('  FAIL', 'xendit checkout: the member or the desk that recorded it, nobody else', e.message); }
+}
+
 // cashier plan Y5: the method comes from the session's payment request; a failed lookup never blocks the payment (null)
 const { paymentChannel } = await import('../../functions/_shared/xendit.ts');
 const realFetch = globalThis.fetch;

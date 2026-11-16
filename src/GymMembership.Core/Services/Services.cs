@@ -316,6 +316,21 @@ public interface IMembershipService
 /// <summary>xendit-checkout's answer: the checkout link to open, or Paid.</summary>
 public sealed record OnlineCheckout(string? Url, bool Paid);
 
+/// <summary>xendit-checkout, for the member's own payment or one the desk recorded (cashier plan Y6).</summary>
+public static class OnlinePay
+{
+    public static Task<AppResult<OnlineCheckout>> OpenAsync(ISupabaseGateway gw, int paymentId) => Safe.RunAsync(async () =>
+    {
+        var answer = System.Text.Json.JsonDocument.Parse(await gw.InvokeFunctionAsync("xendit-checkout", new() { ["payment_id"] = paymentId })).RootElement;
+        return new OnlineCheckout(answer.TryGetProperty("url", out var url) ? url.GetString() : null,
+            answer.TryGetProperty("paid", out var paid) && paid.GetBoolean());
+    });
+
+    public static Task<AppResult<bool>> CheckAsync(ISupabaseGateway gw, int paymentId) => Safe.RunAsync(async () =>
+        System.Text.Json.JsonDocument.Parse(await gw.InvokeFunctionAsync("xendit-checkout", new() { ["payment_id"] = paymentId, ["check"] = true }))
+            .RootElement.TryGetProperty("paid", out var paid) && paid.GetBoolean());
+}
+
 /// <summary>What a member may open: full pages need an active plan; a pending payment only changes the wording.</summary>
 public sealed record Access(bool Active, bool PaymentPending);
 
@@ -379,16 +394,8 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
     public Task<AppResult<Payment>> RenewAsync(int membershipId, string? discountCode = null) =>
         Safe.RunAsync(() => gw.RpcAsync<Payment>("renew_membership", WithCode(new() { ["p_ump_id"] = membershipId }, discountCode)));
 
-    public Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId) => Safe.RunAsync(async () =>
-    {
-        var answer = System.Text.Json.JsonDocument.Parse(await gw.InvokeFunctionAsync("xendit-checkout", new() { ["payment_id"] = paymentId })).RootElement;
-        return new OnlineCheckout(answer.TryGetProperty("url", out var url) ? url.GetString() : null,
-            answer.TryGetProperty("paid", out var paid) && paid.GetBoolean());
-    });
-
-    public Task<AppResult<bool>> CheckOnlineAsync(int paymentId) => Safe.RunAsync(async () =>
-        System.Text.Json.JsonDocument.Parse(await gw.InvokeFunctionAsync("xendit-checkout", new() { ["payment_id"] = paymentId, ["check"] = true }))
-            .RootElement.TryGetProperty("paid", out var paid) && paid.GetBoolean());
+    public Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId) => OnlinePay.OpenAsync(gw, paymentId);
+    public Task<AppResult<bool>> CheckOnlineAsync(int paymentId) => OnlinePay.CheckAsync(gw, paymentId);
 
     public async Task<AppResult<Payment>> PayAgainAsync(PaymentItem item) => item.PackageSnapshotId is { } package && item.Kind is PayKind.Membership or PayKind.Renewal
         ? await new SubscriptionService(gw).ExtendAsync(package)
@@ -441,6 +448,12 @@ public interface IPaymentStaffService
     /// <summary>Cash or GCash at the counter, verified at once. itemId is a package id, a membership id or an amenity id depending on kind.</summary>
     Task<AppResult<Payment>> RecordCounterAsync(string kind, string method, string? memberId, int? itemId, string? walkInName, string? referenceNo, string? discountCode);
     Task<AppResult<bool>> VoidAsync(int paymentId, string reason);
+    /// <summary>Cashier plan Y6 (0080): GCash or QR Ph at the desk, through Xendit: a pending online payment that Xendit's confirmation verifies.</summary>
+    Task<AppResult<Payment>> StartDeskOnlineAsync(string kind, string? memberId, int? itemId, string? walkInName, string? discountCode);
+    Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId);
+    Task<AppResult<bool>> CheckOnlineAsync(int paymentId);
+    /// <summary>One payment, fresh: the desk reads the receipt number once Xendit has confirmed it.</summary>
+    Task<AppResult<Payment>> PaymentAsync(int paymentId);
     /// <summary>What can be sold for a kind of payment. Renewals are the member's own memberships, so they need a memberId.</summary>
     Task<AppResult<IReadOnlyList<CounterItem>>> ItemsAsync(string kind, string? memberId);
     /// <summary>F2 (0050): the caller's open drawer shift (null when none) and the gym's opening float to start one with.</summary>
@@ -451,6 +464,20 @@ public interface IPaymentStaffService
 
 public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffService
 {
+    public Task<AppResult<Payment>> StartDeskOnlineAsync(string kind, string? memberId, int? itemId, string? walkInName, string? discountCode) =>
+        Safe.RunAsync(() =>
+        {
+            var args = new Dictionary<string, object> { ["p_kind"] = kind };
+            if (memberId is not null) args["p_member_id"] = memberId;
+            if (itemId is not null) args["p_item_id"] = itemId;
+            if (!string.IsNullOrWhiteSpace(walkInName)) args["p_walk_in_name"] = walkInName.Trim();
+            if (!string.IsNullOrWhiteSpace(discountCode)) args["p_discount_code"] = discountCode.Trim();
+            return gw.RpcAsync<Payment>("start_desk_online_payment", args);
+        });
+    public Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId) => OnlinePay.OpenAsync(gw, paymentId);
+    public Task<AppResult<bool>> CheckOnlineAsync(int paymentId) => OnlinePay.CheckAsync(gw, paymentId);
+    public Task<AppResult<Payment>> PaymentAsync(int paymentId) => Safe.RunAsync(async () => (await gw.ListAsync<Payment>(p => p.Id == paymentId)).Single());
+
     async Task<IReadOnlyList<PaymentRow>> RowsAsync(IEnumerable<Payment> payments)
     {
         var names = await Directory_.UserNamesAsync(gw);
@@ -1591,7 +1618,7 @@ public interface IAdminService
     Task<AppResult<IReadOnlyList<AuditRecord>>> AuditExportAsync(AuditFilter filter);
     Task<AppResult<GymSettings>> GymSettingsAsync();
     /// <summary>Saves the gym name, QR account name and walk-in price, and uploads a new payment QR image when one is given.</summary>
-    Task<AppResult<bool>> SaveGymSettingsAsync(GymSettings settings, (string FileName, byte[] Data)? qrImage);
+    Task<AppResult<bool>> SaveGymSettingsAsync(GymSettings settings);
     /// <summary>G16: every closed day, the latest first (past ones stay as history).</summary>
     Task<AppResult<IReadOnlyList<GymClosure>>> ClosuresAsync();
     /// <summary>G18: what closing the day would cancel.</summary>
@@ -1801,7 +1828,7 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
 
     public Task<AppResult<GymSettings>> GymSettingsAsync() => Safe.RunAsync(async () => (await gw.ListAsync<GymSettings>()).First());
 
-    public async Task<AppResult<bool>> SaveGymSettingsAsync(GymSettings s, (string FileName, byte[] Data)? qrImage)
+    public async Task<AppResult<bool>> SaveGymSettingsAsync(GymSettings s)
     {
         if (string.IsNullOrWhiteSpace(s.GymName)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
         if (s.WalkInPrice <= 0) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_walk_in_price");   // D4: ₱0 could never be paid
@@ -1810,7 +1837,6 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         if (!OnGrid(s.OpensAt) || !OnGrid(s.ClosesAt) || s.ClosesAt <= s.OpensAt) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_hours");
         return await Safe.RunAsync(async () =>
         {
-            if (qrImage is { } img) s.QrImagePath = await gw.UploadAsync("gym-assets", $"qr-{DateTime.UtcNow:yyyyMMddHHmmss}-{img.FileName}", img.Data);
             await gw.UpdateAsync(s);
             return true;
         });

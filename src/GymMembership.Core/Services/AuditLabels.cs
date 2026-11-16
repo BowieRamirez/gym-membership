@@ -17,7 +17,7 @@ public static class AuditLabels
         ["user.correct_name"] = "Name corrected", ["user.add_last_name"] = "Last name added", ["user.reset_password"] = "Password reset",
         ["role.assign"] = "Role given", ["role.revoke"] = "Role removed",
         ["payment.record"] = "Payment recorded", ["payment.verify"] = "Payment verified", ["payment.reject"] = "Payment rejected",
-        ["payment.online"] = "Paid online (Xendit)", ["payment.online_refund"] = "Online payment to refund",
+        ["payment.online"] = "Paid online (Xendit)", ["payment.desk_online"] = "Desk payment sent to Xendit", ["payment.online_refund"] = "Online payment to refund",
         ["payment.void"] = "Payment voided", ["payment.cancel"] = "Payment cancelled",
         ["check_in.id"] = "Checked in by ID",
         ["refund.request"] = "Refund requested", ["refund.decide"] = "Refund decided", ["refund.paid"] = "Refund repaid",

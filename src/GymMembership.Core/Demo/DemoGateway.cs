@@ -263,7 +263,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     string XenditCheckout(int paymentId, bool check)
     {
         var now = SubscriptionNow;
-        var pay = All<Payment>().FirstOrDefault(p => p.Id == paymentId && p.MemberId == Uid) ?? throw Err("not_found");
+        var pay = All<Payment>().FirstOrDefault(p => p.Id == paymentId && (p.MemberId == Uid || p.RecordedBy == Uid)) ?? throw Err("not_found");   // cashier plan Y6: or the desk that recorded it
         if (pay.Status == Status.Verified) return "{\"paid\":true}";
         if (pay.Status != Status.Pending || pay.Method != PayMethod.Qr) throw Err("already_processed");
         if (check) return "{\"paid\":false}";
@@ -271,8 +271,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
         pay.XenditId ??= $"ps-demo-{pay.Id}";
         pay.Status = Status.Verified; pay.VerifiedAt = now; pay.ReceiptNo = ReceiptNo();
         pay.ReferenceNo = pay.XenditId; pay.OnlineChannel = "GCASH";
-        ActivateTarget(pay);
-        Notify(pay.MemberId, "payment", "Payment received", pay.PaymentCode);
+        if (pay.Kind == PayKind.WalkIn) Add(new GymCheckIn { PaymentId = pay.Id, CheckedInAt = now });
+        else { ActivateTarget(pay); Notify(pay.MemberId, "payment", "Payment received", pay.PaymentCode); }
         Audit("payment.online", "payments", pay.Id.ToString());
         return "{\"paid\":true}";
     }
@@ -848,10 +848,12 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 return null;
             }
             case "record_counter_payment":
+            case "start_desk_online_payment":   // cashier plan Y6 (0080): the same order, pending online until Xendit confirms
             {
                 Require("payments:record");
-                var kind = S("p_kind"); var method = S("p_method"); var memberId = Opt("p_member_id");
-                if (method is not (PayMethod.Cash or PayMethod.Gcash)) throw Err("bad_input");   // 0055: cash or GCash at the desk
+                var online = fn == "start_desk_online_payment";
+                var kind = S("p_kind"); var method = online ? PayMethod.Qr : S("p_method"); var memberId = Opt("p_member_id");
+                if (!online && method is not (PayMethod.Cash or PayMethod.Gcash)) throw Err("bad_input");   // 0055: cash or GCash at the desk
                 if (memberId == uid) throw Err("self_verify");
                 var reference = Opt("p_reference_no");
                 if (method == PayMethod.Gcash && reference is null) throw Err("bad_input");
@@ -901,10 +903,12 @@ public sealed partial class DemoGateway : ISupabaseGateway
 
                 var pay = Add(new Payment
                 {
-                    PaymentCode = PaymentCode(), Kind = kind, Method = method, Status = Status.Verified, Amount = d.Amount, DiscountId = d.Id, DiscountAmount = d.Cut,
+                    PaymentCode = PaymentCode(), Kind = kind, Method = method, Status = online ? Status.Pending : Status.Verified, Amount = d.Amount, DiscountId = d.Id, DiscountAmount = d.Cut,
                     MemberId = memberId, WalkInName = walkIn, UserMembershipPackageId = ump, RenewalId = ren, UserAmenityId = ua, ReferenceNo = reference,
-                    RecordedBy = uid, VerifiedBy = uid, VerifiedAt = now, ReceiptNo = ReceiptNo(), CreatedAt = now, CashShiftId = shift
+                    RecordedBy = uid, VerifiedBy = online ? null : uid, VerifiedAt = online ? null : now, ReceiptNo = online ? null : ReceiptNo(), CreatedAt = now, CashShiftId = shift,
+                    ExpiresAt = online ? now.AddMinutes(30) : null
                 });
+                if (online) { Audit("payment.desk_online", "payments", pay.Id.ToString()); return Clone(pay); }   // activated when Xendit confirms
                 if (kind == PayKind.WalkIn) Add(new GymCheckIn { PaymentId = pay.Id, CheckedInAt = now });
                 else { ActivateTarget(pay); Notify(memberId, "payment", "Payment received", pay.PaymentCode); }
                 Audit("payment.record", "payments", pay.Id.ToString());

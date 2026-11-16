@@ -216,6 +216,43 @@ try {
     await assert.rejects(asRole('anon', `select save_online_checkout(1,'ps-evil','https://evil')`), /permission denied/);
   });
 
+  // cashier plan Y6 (0080): e-wallet at the desk goes through Xendit. The desk records a pending online payment (30 minutes);
+  // Xendit's confirmation activates it like any online payment; the cash drawer is never involved.
+  const deskOnline = (kind, member, item, name = null) => as(desk, `select * from start_desk_online_payment($1::payment_kind,$2,$3,$4,null)`,
+    [kind, member, item, name]).then(r => r[0]);
+  await test('the desk starts a pending online payment; nothing is active until Xendit confirms', async () => {
+    const uid = await user();
+    const p = await deskOnline('membership', uid, pack);
+    assert.deepEqual([p.status, p.method, p.recorded_by, p.verified_by, p.receipt_no, p.cash_shift_id], ['pending', 'qr', desk, null, null, null]);
+    const minutes = (new Date(p.expires_at) - Date.now()) / 60000;
+    assert.ok(minutes > 28 && minutes <= 30, `expires in ${minutes} minutes`);
+    assert.equal((await db.query(`select count(*) n from user_membership_packages where member_id=$1 and status='active'`, [uid])).rows[0].n, '0');
+    const id = xid(); await checkout(p, id);
+    assert.equal(await confirm(id, p.amount, 'QRPH'), 'confirmed');
+    const after = await payment(p.payment_id);
+    assert.equal(after.status, 'verified'); assert.match(after.receipt_no, /^OR-/); assert.equal(after.cash_shift_id, null);
+    assert.equal((await db.query('select count(*) n from membership_terms where member_id=$1', [uid])).rows[0].n, '1');
+  });
+  await test('a day pass paid online at the desk checks the person in once Xendit confirms', async () => {
+    const p = await deskOnline('walk_in', null, null, 'Walk-in Wendy');
+    assert.equal((await db.query('select count(*) n from gym_check_ins where payment_id=$1', [p.payment_id])).rows[0].n, '0');
+    const id = xid(); await checkout(p, id); await confirm(id, p.amount, 'GCASH');
+    assert.equal((await db.query('select count(*) n from gym_check_ins where payment_id=$1', [p.payment_id])).rows[0].n, '1');
+  });
+  await test('an unpaid desk online payment expires and releases what it held', async () => {
+    const uid = await user();
+    const p = await deskOnline('membership', uid, pack);
+    await db.query(`update payments set expires_at=now()-interval '1 minute' where payment_id=$1`, [p.payment_id]);
+    await db.query('select expire_payments()');
+    assert.equal((await payment(p.payment_id)).status, 'expired');
+    assert.equal((await db.query(`select count(*) n from user_membership_packages where member_id=$1 and status in ('pending','active')`, [uid])).rows[0].n, '0');
+  });
+  await test('only the desk may start one', async () => {
+    const uid = await user();
+    await assert.rejects(as(uid, `select * from start_desk_online_payment('membership'::payment_kind,$1,$2,null,null)`, [uid, pack]), /forbidden|permission/);
+    await assert.rejects(asRole('anon', `select * from start_desk_online_payment('membership'::payment_kind,null,1,null,null)`), /permission denied/);
+  });
+
   // Phase 5 break attempts: the only ways in are the two service functions; a direct write can't plant a checkout or mark it paid
   await test('a member, the desk or an admin can\'t write the Xendit columns or mark a payment verified directly', async () => {
     const uid = await user(), p = await buy(uid);

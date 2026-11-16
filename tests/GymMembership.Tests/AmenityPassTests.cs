@@ -88,7 +88,7 @@ public class AmenityPassTests
     public async Task Gym_hours_are_saved_and_must_be_on_the_half_hour_with_closing_after_opening()
     {
         var gw = await As("admin@demo.io");
-        var vm = new GymSettingsViewModel(new AdminService(gw), new NoPicker());
+        var vm = new GymSettingsViewModel(new AdminService(gw));
         await vm.LoadCommand.ExecuteAsync(null);
         Assert.Equal((TimeSpan.FromHours(6), TimeSpan.FromHours(22)), (vm.OpensAt, vm.ClosesAt));
 

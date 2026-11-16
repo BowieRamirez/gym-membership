@@ -24,11 +24,12 @@ Deno.serve(async (req) => {
   const check = body.check === true;
 
   const load = () => admin.from('payments')
-    .select('payment_id, member_id, status, method, amount, expires_at, payment_code, xendit_id, xendit_url')
+    .select('payment_id, member_id, recorded_by, status, method, amount, expires_at, payment_code, xendit_id, xendit_url')
     .eq('payment_id', paymentId).maybeSingle();
   const { data: p } = await load();
   // someone else's payment looks the same as no payment
-  if (!p || p.member_id !== caller.user.id) return reply({ error: 'not_found' }, 404);
+  // the member's own payment, or one the desk recorded for a customer at the counter (cashier plan Y6)
+  if (!p || (p.member_id !== caller.user.id && p.recorded_by !== caller.user.id)) return reply({ error: 'not_found' }, 404);
   if (p.status === 'verified') return reply({ paid: true });
   if (p.status !== 'pending' || p.method !== 'qr') return reply({ error: 'already_processed' }, 409);
 

@@ -248,16 +248,15 @@ public class PaymentTests
         var admin = new AdminService(gw);
         var settings = (await admin.GymSettingsAsync()).Value!;
         settings.WalkInPrice = 200;
-        Assert.Equal(AppErrorKind.Unauthorized, (await admin.SaveGymSettingsAsync(settings, null)).Error);
+        Assert.Equal(AppErrorKind.Unauthorized, (await admin.SaveGymSettingsAsync(settings)).Error);
 
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
         settings.GymName = " ";
-        Assert.Equal(AppErrorKind.Validation, (await admin.SaveGymSettingsAsync(settings, null)).Error);
+        Assert.Equal(AppErrorKind.Validation, (await admin.SaveGymSettingsAsync(settings)).Error);
         settings.GymName = "Iron House";
-        Assert.True((await admin.SaveGymSettingsAsync(settings, ("qr.png", [1, 2]))).Ok);
+        Assert.True((await admin.SaveGymSettingsAsync(settings)).Ok);
 
         var saved = (await admin.GymSettingsAsync()).Value!;
         Assert.Equal(("Iron House", 200m), (saved.GymName, saved.WalkInPrice));
-        Assert.EndsWith("qr.png", saved.QrImagePath);
     }
 }

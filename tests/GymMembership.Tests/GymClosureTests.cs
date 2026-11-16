@@ -97,7 +97,7 @@ public class GymClosureTests
         Confirm.Answer = (title, message, action) => { asked.Add($"{title}|{message}"); return Task.FromResult(true); };
         try
         {
-            var vm = new GymSettingsViewModel(new AdminService(gw), new DemoPhotoPicker());
+            var vm = new GymSettingsViewModel(new AdminService(gw));
             await vm.OnAppearingAsync();
             vm.ClosedDay = Closed.ToDateTime(TimeOnly.MinValue);
             vm.ClosedReason = " ";

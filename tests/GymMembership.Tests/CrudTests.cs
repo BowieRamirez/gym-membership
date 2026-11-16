@@ -167,7 +167,7 @@ public class CrudTests
         var admin = new AdminService(gw);
         var settings = (await admin.GymSettingsAsync()).Value!;
         settings.GymName = "Crud Gym";
-        Assert.True((await admin.SaveGymSettingsAsync(settings, null)).Ok);
+        Assert.True((await admin.SaveGymSettingsAsync(settings)).Ok);
         Assert.Equal("Crud Gym", (await admin.GymSettingsAsync()).Value!.GymName);
     }
 

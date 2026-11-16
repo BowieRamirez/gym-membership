@@ -119,12 +119,8 @@ public class CashierTests
         vm.PickItemCommand.Execute(vm.Options[0]);
         Assert.True(vm.RecordCommand.CanExecute(null));           // cash needs no reference
 
-        vm.PickMethodCommand.Execute("GCash");
-        Assert.False(vm.RecordCommand.CanExecute(null));          // GCash needs a reference
-        vm.ReferenceNo = "GC-1001";
-        Assert.True(vm.RecordCommand.CanExecute(null));
-        vm.ReferenceNo = "  ";
-        Assert.False(vm.RecordCommand.CanExecute(null));
+        vm.PickMethodCommand.Execute("GCash / QR Ph");
+        Assert.True(vm.RecordCommand.CanExecute(null));           // cashier plan Y6: Xendit confirms it, nothing to type
     }
 
     [Fact]
@@ -191,6 +187,10 @@ public class CashierTests
         { var tcs = new TaskCompletionSource<AppResult<IReadOnlyList<CounterItem>>>(); Waiting.Enqueue((kind, tcs)); return tcs.Task; }
         public Task<AppResult<IReadOnlyList<PaymentRow>>> PendingAsync() => Task.FromResult(AppResult<IReadOnlyList<PaymentRow>>.Success([]));   // no desk bookings
         public Task<AppResult<IReadOnlyList<PaymentRow>>> RecentAsync() => throw new NotSupportedException();
+        public Task<AppResult<Payment>> StartDeskOnlineAsync(string kind, string? memberId, int? itemId, string? walkInName, string? discountCode) => throw new NotSupportedException();
+        public Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId) => throw new NotSupportedException();
+        public Task<AppResult<bool>> CheckOnlineAsync(int paymentId) => throw new NotSupportedException();
+        public Task<AppResult<Payment>> PaymentAsync(int paymentId) => throw new NotSupportedException();
         public Task<AppResult<bool>> VerifyAsync(int paymentId, bool approve, string? reason = null) => throw new NotSupportedException();
         public Task<AppResult<IReadOnlyList<ClaimRow>>> ClaimsAsync() => throw new NotSupportedException();
         public Task<AppResult<bool>> DecideClaimAsync(int requestId, bool approve, string reason) => throw new NotSupportedException();
@@ -272,12 +272,31 @@ public class CashierTests
     }
 
     [Fact]
+    public async Task GCash_or_QR_Ph_goes_through_Xendit_and_shows_the_receipt_when_paid()   // cashier plan Y6; demo: Xendit pays at once
+    {
+        Confirm.Answer = (_, _, _) => Task.FromResult(true);
+        var (gw, vm) = await Open();
+        var before = vm.Shift!.CashIn;
+        await ChooseMember(vm, "Carlo");
+        vm.PickItemCommand.Execute(vm.Options[0]);
+        vm.PickMethodCommand.Execute("GCash / QR Ph");
+        await vm.RecordCommand.ExecuteAsync(null);
+        Assert.Null(vm.ErrorMessage);
+        Assert.Matches(@"Receipt OR-\d{4}-\d{6}", vm.Notice);
+        Assert.Null(vm.Waiting);
+        var pay = (await gw.ListAsync<Payment>(p => p.MemberId == "u-carlo")).OrderByDescending(p => p.Id).First();
+        Assert.Equal((PayMethod.Qr, Status.Verified, "u-emp"), (pay.Method, pay.Status, pay.RecordedBy));
+        await vm.OnAppearingAsync();
+        Assert.Equal(before, vm.Shift!.CashIn);                   // never in the drawer
+    }
+
+    [Fact]
     public async Task The_order_panel_names_the_kind_and_how_it_is_paid_in_words()
     {
         var (_, vm) = await Open();
         Assert.Equal("Membership, paid with Cash", vm.OrderHow);
         vm.PickKindCommand.Execute("Walk-in");
-        vm.PickMethodCommand.Execute("GCash");
-        Assert.Equal("Walk-in, paid with GCash", vm.OrderHow);
+        vm.PickMethodCommand.Execute("GCash / QR Ph");
+        Assert.Equal("Walk-in, paid with GCash / QR Ph", vm.OrderHow);
     }
 }

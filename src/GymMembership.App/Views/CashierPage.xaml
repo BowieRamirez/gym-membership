@@ -213,15 +213,12 @@
                                         <Button Text="Cash" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="Cash">
                                             <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Method}" Value="Cash"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="SemanticProperties.Description" Value="Cash, selected" /></DataTrigger></Button.Triggers>
                                         </Button>
-                                        <Button Text="GCash" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="GCash">
-                                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Method}" Value="GCash"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="SemanticProperties.Description" Value="GCash, selected" /></DataTrigger></Button.Triggers>
+                                        <Button Text="GCash / QR Ph" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickMethodCommand}" CommandParameter="GCash / QR Ph"
+                                                SemanticProperties.Hint="Paid on Xendit's checkout: GCash, Maya or any bank app by QR Ph">
+                                            <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Method}" Value="GCash / QR Ph"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="SemanticProperties.Description" Value="GCash / QR Ph, selected" /></DataTrigger></Button.Triggers>
                                         </Button>
                                     </FlexLayout>
 
-                                    <VerticalStackLayout Spacing="4" WidthRequest="260" HorizontalOptions="Start" IsVisible="{Binding NeedsReference}">
-                                        <Label Text="Reference number" Style="{StaticResource Caption}" />
-                                        <Border Style="{StaticResource Field}"><Entry Text="{Binding ReferenceNo}" SemanticProperties.Description="Reference number" /></Border>
-                                    </VerticalStackLayout>
                                     <VerticalStackLayout Spacing="4" WidthRequest="260" HorizontalOptions="Start" IsVisible="{Binding NeedsMember}">
                                         <Label Text="Discount code (optional)" Style="{StaticResource Caption}" />
                                         <Border Style="{StaticResource Field}"><Entry Text="{Binding DiscountCode}" SemanticProperties.Description="Discount code" /></Border>
@@ -233,8 +230,18 @@
                                         <Label Text="{Binding TotalNote}" Style="{StaticResource Caption}" IsVisible="{Binding TotalNote, Converter={StaticResource HasText}}" />
                                     </VerticalStackLayout>
 
-                                    <Button Text="Complete payment" Command="{Binding RecordCommand}" MinimumHeightRequest="56" FontSize="18" />
-                                    <Label Text="Start your shift to take cash. GCash doesn't need one." FontFamily="BarlowMedium" FontSize="13" IsVisible="{Binding CashNeedsShift}" />
+                                    <Button Text="Complete payment" Command="{Binding RecordCommand}" MinimumHeightRequest="56" FontSize="18" IsVisible="{Binding IsWaiting, Converter={StaticResource Not}}" />
+                                    <Label Text="Start your shift to take cash. GCash / QR Ph doesn't need one." FontFamily="BarlowMedium" FontSize="13" IsVisible="{Binding CashNeedsShift}" />
+                                    <!-- cashier plan Y6: Xendit's checkout is open on this PC; the receipt comes when Xendit confirms -->
+                                    <VerticalStackLayout Spacing="8" IsVisible="{Binding IsWaiting}">
+                                        <Label Text="{Binding Waiting.Amount, StringFormat='Waiting for ₱{0:N2} on Xendit'}" FontFamily="BarlowSemiBold" />
+                                        <Label Text="The customer scans the QR Ph code on Xendit's page with GCash, Maya or their bank app." Style="{StaticResource Caption}" />
+                                        <Button Text="Check payment" Command="{Binding CheckPaymentCommand}" MinimumHeightRequest="56" FontSize="18" AutomationId="CashierCheckPayment" />
+                                        <FlexLayout Wrap="Wrap">
+                                            <Button Text="Open checkout again" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding OpenCheckoutCommand}" />
+                                            <Button Text="Customer left" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding StopWaitingCommand}" />
+                                        </FlexLayout>
+                                    </VerticalStackLayout>
                                 </VerticalStackLayout>
                             </Border>
             </c:SideLayout>

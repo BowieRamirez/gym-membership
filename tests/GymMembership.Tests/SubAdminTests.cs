@@ -60,7 +60,7 @@ public class SubAdminTests
         var admin = new AdminService(gw);
         Assert.True((await admin.RevenueAsync(DateOnly.FromDateTime(DateTime.Today), DateOnly.FromDateTime(DateTime.Today))).Ok);
         var settings = (await admin.GymSettingsAsync()).Value!;
-        Assert.Equal(AppErrorKind.Unauthorized, (await admin.SaveGymSettingsAsync(settings, null)).Error);
+        Assert.Equal(AppErrorKind.Unauthorized, (await admin.SaveGymSettingsAsync(settings)).Error);
         Assert.False((await admin.IsSuperAdminAsync()).Value);
     }
 

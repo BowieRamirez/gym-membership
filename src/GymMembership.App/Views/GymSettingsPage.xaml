@@ -55,18 +55,6 @@
             </VerticalStackLayout>
             </Border>
 
-            <Border Style="{StaticResource Panel}">
-                <VerticalStackLayout Spacing="10">
-                    <c:CardTitle Text="Payment QR" />
-                    <Label Text="The GCash, Maya or QR Ph code members scan. Upload a clear image of it." Style="{StaticResource Caption}" />
-                    <VerticalStackLayout Spacing="6">
-                        <Label Text="Name shown on the QR" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}"><Entry Text="{Binding QrAccountName}" SemanticProperties.Description="Account name on the QR" /></Border>
-                    </VerticalStackLayout>
-                    <Label Text="{Binding QrStatus}" />
-                    <Button Text="Choose QR image" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" Command="{Binding ChooseQrCommand}" />
-                </VerticalStackLayout>
-            </Border>
             </c:CardGrid>
 
             <Button Text="Save settings" HorizontalOptions="Start" Command="{Binding SaveCommand}" />
