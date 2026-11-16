@@ -4,7 +4,7 @@
 // ignored: expiry is handled by expire_payments. A database error answers 500 so Xendit retries.
 // GET is the checkout's return page: plain text telling the member to go back to the app (X12).
 import { adminClient, reply } from '../_shared/admin.ts';
-import { confirmPaid, sameToken } from '../_shared/xendit.ts';
+import { confirmPaid, paymentChannel, sameToken } from '../_shared/xendit.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'GET')
@@ -21,7 +21,8 @@ Deno.serve(async (req) => {
   const amount = typeof d.amount === 'number' ? d.amount : null;   // missing: recorded for staff to refund (0077), never confirmed
 
   try {
-    const result = await confirmPaid(adminClient(), d.payment_session_id, amount, d.channel_code ?? null);
+    const channel = d.channel_code ?? await paymentChannel(d.payment_request_id ?? d.latest_payment_request_id);   // Y5: for the log
+    const result = await confirmPaid(adminClient(), d.payment_session_id, amount, channel);
     console.log('xendit-webhook', d.payment_session_id, result);
     return reply({ ok: true });
   } catch (e) {

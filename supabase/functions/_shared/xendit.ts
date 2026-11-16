@@ -31,6 +31,16 @@ export function sessionExpiry(paymentExpiresMs: number, nowMs: number): number |
   return end - nowMs < 60_000 ? null : end;
 }
 
+/** How the customer paid (GCASH, PAYMAYA, QRPH, CARDS...), from the session's payment request: the session webhook doesn't say.
+ *  Null when there is no id or the lookup fails; the method is only for the log and must never hold up a payment. */
+export async function paymentChannel(paymentRequestId: unknown): Promise<string | null> {
+  if (typeof paymentRequestId !== 'string' || !paymentRequestId) return null;
+  try {
+    const pr = await xendit(`/v3/payment_requests/${encodeURIComponent(paymentRequestId)}`, { headers: { 'api-version': '2024-11-11' } });
+    return typeof pr.channel_code === 'string' ? pr.channel_code : null;
+  } catch { return null; }
+}
+
 /** confirm_online_payment (0075): 'confirmed', 'already' or 'refund'. A database error is thrown, so the caller can answer 500. */
 export async function confirmPaid(admin: SupabaseClient, sessionId: string, amount: number | null, channel: string | null): Promise<string> {
   const { data, error } = await admin.rpc('confirm_online_payment', { p_xendit_id: sessionId, p_amount: amount, p_channel: channel });

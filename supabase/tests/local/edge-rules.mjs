@@ -60,5 +60,28 @@ for (const [name, actual, want] of [
   catch (e) { failed++; console.log('  FAIL', `xendit session: ${name}`, e.message); }
 }
 
+// cashier plan Y5: the method comes from the session's payment request; a failed lookup never blocks the payment (null)
+const { paymentChannel } = await import('../../functions/_shared/xendit.ts');
+const realFetch = globalThis.fetch;
+globalThis.Deno = { env: { get: k => (k === 'XENDIT_SECRET_KEY' ? 'test-key' : undefined) } };
+let asked = null;
+globalThis.fetch = async (url, init) => { asked = { url, version: init?.headers?.['api-version'] };
+  return new Response(JSON.stringify({ channel_code: 'GCASH' }), { status: 200 }); };
+for (const [name, run] of [
+  ['the method comes from the payment request', async () => {
+    assert.equal(await paymentChannel('pr-123'), 'GCASH');
+    assert.deepEqual(asked, { url: 'https://api.xendit.co/v3/payment_requests/pr-123', version: '2024-11-11' });
+  }],
+  ['no payment request id: no method, no call', async () => { asked = null; assert.equal(await paymentChannel(undefined), null); assert.equal(asked, null); }],
+  ['Xendit refuses: no method, no error', async () => {
+    globalThis.fetch = async () => new Response('{"error_code":"NOT_FOUND"}', { status: 404 });
+    assert.equal(await paymentChannel('pr-404'), null);
+  }],
+]) {
+  try { await run(); passed++; console.log('  ok  ', `xendit channel: ${name}`); }
+  catch (e) { failed++; console.log('  FAIL', `xendit channel: ${name}`, e.message); }
+}
+globalThis.fetch = realFetch; delete globalThis.Deno;
+
 console.log(`Edge rules: ${passed} passed, ${failed} failed`);
 if (failed) process.exitCode = 1;

@@ -53,7 +53,12 @@ public static class AuditLabels
 
     /// <summary>Change details as "key: value; key: value", keys made readable.</summary>
     public static string Details(IReadOnlyDictionary<string, object>? details) => details is null or { Count: 0 } ? "" :
-        string.Join("; ", details.Select(d => $"{char.ToUpperInvariant(d.Key[0])}{d.Key[1..].Replace('_', ' ')}: {Convert.ToString(d.Value, CultureInfo.InvariantCulture)}"));
+        string.Join("; ", details.Select(d => d.Key == "channel"
+            ? $"Paid with: {Channel(Convert.ToString(d.Value, CultureInfo.InvariantCulture) ?? "")}"
+            : $"{char.ToUpperInvariant(d.Key[0])}{d.Key[1..].Replace('_', ' ')}: {Convert.ToString(d.Value, CultureInfo.InvariantCulture)}"));
+
+    /// <summary>Cashier plan Y5: Xendit's channel codes in words; an unknown one is shown as Xendit sent it.</summary>
+    public static string Channel(string code) => code switch { "GCASH" => "GCash", "PAYMAYA" => "Maya", "QRPH" => "QR Ph", "CARDS" => "Card", "" => "unknown", _ => code };
 }
 
 /// <summary>Builds the audit export. Every cell is quoted, and one starting with = + - @ or a tab or return gets a leading ' so a spreadsheet shows it instead of running it.</summary>

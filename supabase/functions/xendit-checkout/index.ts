@@ -4,7 +4,7 @@
 // confirmed here (in case the webhook was lost); EXPIRED or CANCELED, a new session replaces it (0076), never past the payment's
 // own deadline. With check: true nothing is created; the answer is only whether it is paid.
 import { adminClient, cors, reply } from '../_shared/admin.ts';
-import { confirmPaid, nextStep, sessionExpiry, xendit } from '../_shared/xendit.ts';
+import { confirmPaid, nextStep, paymentChannel, sessionExpiry, xendit } from '../_shared/xendit.ts';
 
 const RETURN_URL = `${Deno.env.get('SUPABASE_URL')}/functions/v1/xendit-webhook`;   // its GET says "go back to the app"
 
@@ -38,7 +38,8 @@ Deno.serve(async (req) => {
     if (step === 'confirm') {
       // a missing amount is a mismatch in confirm_online_payment (0077), never a pass
       const amount = typeof session.amount === 'number' ? session.amount : null;
-      const result = await confirmPaid(admin, p.xendit_id, amount, session.channel_code ?? null);
+      const channel = session.channel_code ?? await paymentChannel(session.payment_request_id ?? session.latest_payment_request_id);
+      const result = await confirmPaid(admin, p.xendit_id, amount, channel);
       return reply({ paid: result === 'confirmed' || result === 'already' });
     }
     if (check) return reply({ paid: false });

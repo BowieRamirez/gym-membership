@@ -3,7 +3,11 @@
 import assert from 'node:assert/strict';
 import { start } from './harness.mjs';
 
-const { server, client: db } = await start();
+// cashier plan Y4 (0078): two entries written before 0078, one by a member and one by the desk, to see which address 0078 clears
+const { server, client: db } = await start({ beforeMigration: async (c, f) => {
+  if (f.startsWith('0078')) await c.query(`insert into audit_log(action, entity, ip_address, role) values
+    ('test.old_member', 'x', '192.0.2.9', 'member'), ('test.old_desk', 'x', '192.0.2.10', 'employee')`);
+} });
 let passed = 0, failed = 0, serial = 0;
 async function test(name, fn) {
   try { await fn(); passed++; console.log('  ok  ', name); }
@@ -96,6 +100,24 @@ try {
     const rows = (await db.query(`select entity_id, ip_address, action from audit_log where action = 'test.paging' and entity_id in ('0','1') order by entity_id`)).rows;
     assert.deepEqual(rows, [{ entity_id: '0', ip_address: null, action: 'test.paging' }, { entity_id: '1', ip_address: '192.0.2.2', action: 'test.paging' }]);
     for (const uid of [sysAdmin, desk]) await assert.rejects(as(uid, 'select clear_old_audit_ips()'), /permission denied/);
+  });
+  // cashier plan Y4 (0078): members' addresses are not kept; staff addresses still are (D7)
+  await test("a member's action stores no address; the desk's still does", async () => {
+    const pack = (await db.query(`insert into membership_packages(name,price,duration_days) values('Audit Monthly',1000,30) returning membership_package_id id`)).rows[0].id;
+    const headers = JSON.stringify({ 'cf-connecting-ip': '203.0.113.50' });
+    const buyer = await person(null, 'Bea Lim');   // "member" was made a coach by an earlier test
+    const pay = (await as(buyer, 'select * from extend_membership($1,null)', [pack]))[0];
+    await as(buyer, 'select cancel_pending_payment($1)', [pay.payment_id], headers);
+    const mine = (await db.query(`select role, ip_address from audit_log where action='payment.cancel' and entity_id=$1`, [String(pay.payment_id)])).rows[0];
+    assert.deepEqual(mine, { role: 'member', ip_address: null });
+    await as(desk, `select correct_name($1, 'Alex', 'Tan', 'Desk check')`, [member], headers).catch(() => {});
+    await as(sysAdmin, `select correct_name($1, 'Alex', 'Tan', 'Admin check')`, [member], headers);
+    const staff = (await db.query(`select ip_address from audit_log where action='user.correct_name' order by audit_id desc limit 1`)).rows[0];
+    assert.equal(staff.ip_address, '203.0.113.50');
+  });
+  await test('0078 cleared the addresses members left before it, not staff ones', async () => {
+    const rows = (await db.query(`select action, ip_address from audit_log where action in ('test.old_member','test.old_desk') order by action`)).rows;
+    assert.deepEqual(rows, [{ action: 'test.old_desk', ip_address: '192.0.2.10' }, { action: 'test.old_member', ip_address: null }]);
   });
   await test('the app still cannot write or change the log directly', async () => {
     await assert.rejects(as(sysAdmin, `insert into audit_log(action, entity) values('fake', 'x')`), /permission denied|row-level/);

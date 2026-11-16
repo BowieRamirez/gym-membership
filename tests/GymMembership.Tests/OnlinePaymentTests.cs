@@ -81,6 +81,15 @@ public class OnlinePaymentTests
     [Fact]
     public void PayMethod_Qr_reads_Online() => Assert.Equal("Online", PayMethod.Name(PayMethod.Qr));
 
+    [Theory]   // cashier plan Y5: the log says how a member paid online, in words
+    [InlineData("GCASH", "GCash")]
+    [InlineData("PAYMAYA", "Maya")]
+    [InlineData("QRPH", "QR Ph")]
+    [InlineData("CARDS", "Card")]
+    [InlineData("SHOPEEPAY", "SHOPEEPAY")]
+    public void The_log_names_the_online_method(string channel, string words) =>
+        Assert.Equal($"Paid with: {words}; Xendit id: ps-1", AuditLabels.Details(new Dictionary<string, object> { ["channel"] = channel, ["xendit_id"] = "ps-1" }));
+
     [Fact]
     public void Staff_row_for_an_online_payment_has_no_approve()
     {

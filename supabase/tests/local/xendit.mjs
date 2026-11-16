@@ -5,7 +5,17 @@
 import { start, openCashShifts } from './harness.mjs';
 import assert from 'node:assert/strict';
 
-const { server, client: db } = await start();
+// 0079: an online payment logged before 0078 (as System, no role) gets its member named
+let oldPay = null;
+const { server, client: db } = await start({ beforeMigration: async (c, f) => {
+  if (!f.startsWith('0079')) return;
+  const u = (await c.query(`insert into auth.users(email,raw_user_meta_data,raw_app_meta_data) values('x-old@test.io','{"full_name":"Old Payer"}','{"role":"member"}') returning id`)).rows[0].id;
+  const pk = (await c.query(`insert into membership_packages(name,price,duration_days) values('X Old',500,30) returning membership_package_id id`)).rows[0].id;
+  await c.query(`select set_config('request.jwt.claim.sub', $1, false)`, [u]);
+  oldPay = { member: u, id: (await c.query('select payment_id from extend_membership($1,null)', [pk])).rows[0].payment_id };
+  await c.query(`select set_config('request.jwt.claim.sub', '', false)`);
+  await c.query(`insert into audit_log(action, entity, entity_id, details) values('payment.online','payments',$1,'{"channel":null}')`, [String(oldPay.id)]);
+} });
 let passed = 0, failed = 0, serial = 0;
 async function as(uid, sql, args = []) {
   await db.query('begin');
@@ -62,6 +72,24 @@ try {
     assert.equal(Number(after.online_paid_amount), Number(p.amount));
     assert.equal((await db.query('select count(*) n from membership_terms where member_id=$1', [uid])).rows[0].n, '1');
     assert.equal((await db.query(`select count(*) n from user_notifications where user_id=$1 and title='Payment received'`, [uid])).rows[0].n, '1');
+  });
+
+  // cashier plan Y5 (0078): the log row of an online payment names the member who paid, their role, and how they paid
+  await test('an online payment is logged as the member who paid, with the method', async () => {
+    const uid = await user(), p = await buy(uid), id = xid();
+    await checkout(p, id); await confirm(id, p.amount, 'GCASH');
+    const row = (await db.query(`select actor_id, role, ip_address, details from audit_log where action='payment.online' and entity_id=$1`, [String(p.payment_id)])).rows[0];
+    assert.deepEqual([row.actor_id, row.role, row.ip_address, row.details.channel], [uid, 'member', null, 'GCASH']);
+  });
+  await test('0079 named the member on an online payment logged before 0078', async () => {
+    const row = (await db.query(`select actor_id, role from audit_log where action='payment.online' and entity_id=$1`, [String(oldPay.id)])).rows[0];
+    assert.deepEqual([row.actor_id, row.role], [oldPay.member, 'member']);
+  });
+  await test('a refund row is logged as the member too', async () => {
+    const uid = await user(), p = await buy(uid), id = xid();
+    await checkout(p, id); await confirm(id, Number(p.amount) + 1, 'QRPH');
+    const row = (await db.query(`select actor_id, role, details from audit_log where action='payment.online_refund' and entity_id=$1`, [String(p.payment_id)])).rows[0];
+    assert.deepEqual([row.actor_id, row.role, row.details.channel], [uid, 'member', 'QRPH']);
   });
 
   await test('the first saved checkout stays: a second save does not replace it', async () => {
