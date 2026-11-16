@@ -1,6 +1,9 @@
 # Xendit online payments — design
 
-Date: 2026-11-16 · Branch: `xendit-payments-2026-11-16` · Status: waiting for owner approval
+Date: 2026-11-16 · Branch: `xendit-payments-2026-11-16` · Status: approved by the owner 2026-11-16 (no new terms version, X15).
+Plan: `docs/superpowers/plans/2026-11-16-xendit-payments.md`. The plan adjusts X7 (Xendit id in `reference_no`, channel in
+`online_channel`, because references are unique) and X9 (staff notification instead of a badge; Admin refunds from the
+Xendit dashboard), after reading `0002_tables.sql`.
 
 ## Why
 
