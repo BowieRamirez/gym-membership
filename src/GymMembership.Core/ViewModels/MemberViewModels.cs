@@ -207,39 +207,95 @@ public partial class RegisterViewModel(IAuthService auth, IAppNavigator nav) : L
     [RelayCommand] private void BackToSignIn() => nav.GoToLogin();
 }
 
-public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav, ISubscriptionService subscription) : LoadableViewModel
+public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav, ISubscriptionService subscription, IUrlOpener? opener = null) : LoadableViewModel
 {
     public ObservableCollection<MembershipPackage> Packages { get; } = new();
     /// <summary>G4 (0060): shown codes this member can still use that fit a package, newest first. The section hides when there are none.</summary>
     public ObservableCollection<AvailableCode> Codes { get; } = new();
     [ObservableProperty] private bool hasCodes;
     [ObservableProperty] private string? discountCode;
+    /// <summary>The membership or renewal payment still to pay through Xendit, if any (owner, 2026-11-16: paid here, not on My membership).
+    /// Booking down payments are paid on Book an amenity.</summary>
+    [ObservableProperty] private PaymentItem? payNow;
+    /// <summary>Back from Xendit's page: the server is asking Xendit whether it was paid (X10).</summary>
+    [ObservableProperty] private bool checking;
+    public bool DialogOpen { get; set; }
+    bool _loading;
 
     public override Task OnAppearingAsync() => LoadAsync();
+    // the page ticks every 20 s so coming back from Xendit's page confirms the payment; only the payment reloads, not the packages
+    public override Task AutoRefreshAsync() => IsBusy || DialogOpen || _loading ? Task.CompletedTask : LoadPayAsync();
 
     [RelayCommand]
     private async Task LoadAsync()
     {
         if (!await RunAsync(svc.ListPackagesAsync, rows => Fill(Packages, rows))) return;
         await RunAsync(svc.AvailableCodesAsync, rows => { Fill(Codes, rows.Where(c => c.FitsAnyPackage)); HasCodes = Codes.Count > 0; });
+        await LoadPayAsync();
+    }
+
+    async Task LoadPayAsync()
+    {
+        if (_loading) return;
+        _loading = true;
+        try
+        {
+            if (!await RunAsync(svc.MyPaymentsAsync, rows => PayNow = rows.FirstOrDefault(p => p.NeedsPayment && p.CanCancel))) return;
+            if (PayNow is not { HasCheckout: true } open) return;
+            // back from Xendit's page: if its notice hasn't arrived yet, the server asks Xendit and confirms it
+            var paid = false;
+            Checking = true;
+            try { await RunAsync(() => svc.CheckOnlineAsync(open.Id), v => paid = v); }
+            finally { Checking = false; }
+            if (paid) { PayNow = null; nav.GoToMembership(); }   // paid: the started term is on My membership
+        }
+        finally { _loading = false; }
     }
 
     [RelayCommand] private void UseCode(AvailableCode code) => DiscountCode = code.Code;
 
-    // avail creates a pending online payment; paying it through Xendit happens on My membership
+    // avail creates a pending online payment; the Pay online card on this page pays it through Xendit
     [RelayCommand]
     private async Task AvailAsync(MembershipPackage package)
     {
         Notice = null;
         var code = string.IsNullOrWhiteSpace(DiscountCode) ? "" : $"\nDiscount code {DiscountCode.Trim()} is applied when you pay.";
-        if (!await Confirm.AskAsync($"Buy {package.Name}?", $"₱{package.Price:N2} for {package.DurationDays} days.{code}\nYou pay online on My membership.\n\n{RefundRules.Line}", "Buy membership")) return;
+        if (!await Confirm.AskAsync($"Buy {package.Name}?", $"₱{package.Price:N2} for {package.DurationDays} days.{code}\nYou pay online right after, on this page.\n\n{RefundRules.Line}", "Buy membership")) return;
         if (!await RunAsync(() => subscription.ExtendAsync(package.Id, DiscountCode), _ => { })) return;
         DiscountCode = null;
-        nav.GoToMembership();
+        Notice = "Payment created. Pay online above to start it.";
+        await LoadPayAsync();
     }
+
+    // Xendit's checkout opens in the browser; the 20 s tick checks it on return. Demo mode is paid at once.
+    [RelayCommand]
+    private async Task PayOnlineAsync()
+    {
+        Notice = null;
+        if (PayNow is not { } pay) return;
+        if (!await Confirm.AskAsync($"Pay ₱{pay.Amount:N2} online?", $"{pay.What}\nYou pay on Xendit's page by GCash, Maya, QR Ph or card, then come back here.", "Pay online")) return;
+        OnlineCheckout? checkout = null;
+        if (!await RunAsync(() => svc.PayOnlineAsync(pay.Id), c => checkout = c)) return;
+        if (checkout!.Paid) { PayNow = null; nav.GoToMembership(); return; }
+        if (checkout.Url is { } url && opener is not null)
+        {
+            await opener.OpenAsync(url);
+            Notice = "Finish paying on Xendit's page, then come back here.";
+        }
+    }
+
+    public async Task CancelPaymentAsync(PaymentItem item)
+    {
+        if (IsBusy) return;
+        Notice = null;
+        if (!await RunAsync(() => subscription.CancelPendingPaymentAsync(item.Id))) return;
+        Notice = "Payment cancelled. Nothing was charged; you can choose a package again.";
+        await LoadPayAsync();
+    }
+
 }
 
-public partial class MyMembershipViewModel(IMembershipService svc, ISubscriptionService subscription, IAttendanceService? codes = null, IUrlOpener? opener = null) : LoadableViewModel
+public partial class MyMembershipViewModel(IMembershipService svc, ISubscriptionService subscription, IAttendanceService? codes = null) : LoadableViewModel
 {
     public ObservableCollection<MembershipRow> Memberships { get; } = new();
     /// <summary>The payments the status filter lets through; the full list stays in <c>allPayments</c>.</summary>
@@ -258,7 +314,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
     /// <summary>Nothing running and no payment in progress (to pay or being checked): the highlight card itself offers the way in.</summary>
     [ObservableProperty] private bool canStart;
 
-    /// <summary>The online payment the member still has to pay through Xendit, if any.</summary>
+    /// <summary>The online payment the member still has to pay through Xendit, if any. Paid on Packages (owner, 2026-11-16); kept here for the hero line and the return check.</summary>
     [ObservableProperty] private PaymentItem? payNow;
     /// <summary>Back from Xendit's page: the server is asking Xendit whether it was paid (X10).</summary>
     [ObservableProperty] private bool checking;
@@ -347,7 +403,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
             LaneFraction = Math.Clamp((double)left / Math.Max(1, active.DurationDays), 0, 1);
         }
         else if (waitingOnPayment)
-        { HeroNumber = "–"; HeroCaption = PayNow is not null ? "Pay online to start your membership." : "Waiting for staff to verify your payment."; LaneFraction = 0; }
+        { HeroNumber = "–"; HeroCaption = PayNow is not null ? "Pay online on Packages to start your membership." : "Waiting for staff to verify your payment."; LaneFraction = 0; }
         else if (Terms.FirstOrDefault(t => t.State == Status.Scheduled) is { } next)
         { HeroNumber = "0"; HeroCaption = $"No active access. Your next paid term starts {next.Term.StartsAt.AddHours(8):d MMM yyyy, h:mm tt} (Manila)."; LaneFraction = 0; }
         else if (expired is not null)
@@ -356,30 +412,13 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
         { HeroNumber = "–"; HeroCaption = "Pick a package to get started."; LaneFraction = 0; }
     }
 
-    // Xendit's checkout opens in the browser; coming back to this page checks it (LoadAsync). Demo mode is paid at once.
-    [RelayCommand]
-    private async Task PayOnlineAsync()
-    {
-        Notice = null;
-        if (PayNow is not { } pay) return;
-        if (!await Confirm.AskAsync($"Pay ₱{pay.Amount:N2} online?", $"{pay.What}\nYou pay on Xendit's page by GCash, Maya, QR Ph or card, then come back here.", "Pay online")) return;
-        OnlineCheckout? checkout = null;
-        if (!await RunAsync(() => svc.PayOnlineAsync(pay.Id), c => checkout = c)) return;
-        if (checkout!.Paid) { Notice = "Paid. Your receipt is in your payments below."; await LoadAsync(); return; }
-        if (checkout.Url is { } url && opener is not null)
-        {
-            await opener.OpenAsync(url);
-            Notice = "Finish paying on Xendit's page, then come back here.";
-        }
-    }
-
     [RelayCommand]
     private async Task PayAgainAsync(PaymentItem item)
     {
         Notice = null;
         if (!await Confirm.AskAsync("Create a new payment?", $"{item.What}\n₱{item.Amount:N2}\nThe expired one stays in your history.", "Create payment")) return;
         if (!await RunAsync(() => svc.PayAgainAsync(item), _ => { })) return;
-        Notice = "New payment created. Pay online below.";
+        Notice = "New payment created. Pay it online on Packages.";
         await LoadAsync();
     }
 }

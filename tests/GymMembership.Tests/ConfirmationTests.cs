@@ -129,7 +129,7 @@ public class ConfirmationTests
         { "MemberViewModels.cs", "SettingsViewModel", "ChangePassword" },
         { "MemberViewModels.cs", "PackagesViewModel", "Avail" },
         { "MemberViewModels.cs", "MyMembershipViewModel", "PayAgain" },
-        { "MemberViewModels.cs", "MyMembershipViewModel", "PayOnline" },   // Xendit plan: replaced Send proof
+        { "MemberViewModels.cs", "PackagesViewModel", "PayOnline" },   // Xendit plan: replaced Send proof; on Packages since 2026-11-16
         { "MemberViewModels.cs", "CoachesViewModel", "Hire" },
         { "MemberViewModels.cs", "CoachesViewModel", "EndHire" },
         { "BookingViewModels.cs", "BookAmenityViewModel", "Book" },

@@ -51,7 +51,7 @@
             <Button Text="How buying a package works" Style="{StaticResource LinkButton}" HorizontalOptions="Start" Margin="-4,-8,0,-8" Clicked="OnToggleRules"
                     IsVisible="{OnIdiom Phone=True, Default=False}" />
             <!-- G23 (2026-11-15): the refund rule is said before anyone pays; the last sentence is RefundRules.Line (RefundLineTests checks it) -->
-            <Label x:Name="Rules" Text="Choose your next package. Pay online on My membership by GCash, Maya, QR Ph or card. Once paid, it starts right away, or when your current term ends. No upgrades or automatic charges.&#10;Refunds: only in a term's first 7 days, for the days not used."
+            <Label x:Name="Rules" Text="Choose your next package. Pay online on this page by GCash, Maya, QR Ph or card. Once paid, it starts right away, or when your current term ends. No upgrades or automatic charges.&#10;Refunds: only in a term's first 7 days, for the days not used."
                    Style="{OnIdiom Phone={StaticResource Caption}, Default={StaticResource Muted}}" MaximumWidthRequest="760" HorizontalOptions="Start" IsVisible="{OnIdiom Phone=False, Default=True}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
@@ -61,7 +61,8 @@
             </VerticalStackLayout>
         </VerticalStackLayout>
 
-        <ScrollView Grid.Row="1"><VerticalStackLayout Spacing="10">
+        <!-- the pay card is the side panel: on the right on wide windows, above the packages on phones and narrow windows; hidden, the packages take the width -->
+        <ScrollView Grid.Row="1"><c:SideLayout StackedSideWidth="600"><VerticalStackLayout Spacing="10">
             <!-- G4 (approved mockup docs/mockups/discount-codes.html): shown codes this member can still use that fit a package, each with what
                  it's for, its last day and a "New" mark for a week; "Use code" fills the box above. Hidden when there are none -->
             <VerticalStackLayout Spacing="6" IsVisible="{Binding HasCodes}">
@@ -100,6 +101,30 @@
                 <Label Text="No packages are on sale right now. Check back soon." Style="{StaticResource Muted}" />
             </BindableLayout.EmptyView>
 
-        </c:CardGrid></VerticalStackLayout></ScrollView>
+        </c:CardGrid></VerticalStackLayout>
+                <!-- Pay online (Xendit plan; moved here from My membership, owner 2026-11-16): one action. The amount is the title; the deadline sits
+                     right under what is bought; the methods are named under the button so nobody wonders whether GCash works. Coming back re-checks it (Checking). -->
+                <Border Style="{StaticResource SidePanel}" IsVisible="{Binding PayNow, Converter={StaticResource IsNotNull}}" VerticalOptions="Start">
+                    <VerticalStackLayout Spacing="12">
+                        <VerticalStackLayout Spacing="4">
+                            <c:CardTitle Text="{Binding PayNow.Amount, StringFormat='Pay ₱{0:N2} online'}" />
+                            <Label Text="{Binding PayNow.What}" />
+                            <Label Text="{Binding PayNow.ExpiresAt, Converter={StaticResource LocalDate}, ConverterParameter='ddd d MMM, h:mm tt', StringFormat='Pay by {0}, or this payment expires.'}"
+                                   Style="{StaticResource Caption}" IsVisible="{Binding PayNow.ExpiresAt, Converter={StaticResource IsNotNull}}" />
+                        </VerticalStackLayout>
+                        <HorizontalStackLayout Spacing="8" IsVisible="{Binding Checking}">
+                            <ActivityIndicator IsRunning="{Binding Checking}" WidthRequest="18" HeightRequest="18" Color="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
+                            <Label Text="Checking your payment with Xendit" Style="{StaticResource Caption}" VerticalOptions="Center" />
+                        </HorizontalStackLayout>
+                        <VerticalStackLayout Spacing="6">
+                            <Button Text="Pay online" Style="{StaticResource SmallButton}" Command="{Binding PayOnlineCommand}" AutomationId="PayOnline"
+                                    IsEnabled="{Binding Checking, Converter={StaticResource Not}}" />
+                            <Label Text="GCash, Maya, QR Ph or card, on Xendit's checkout page. Come back here when you're done." Style="{StaticResource Caption}" />
+                        </VerticalStackLayout>
+                        <Label Text="{Binding PayNow.PaymentCode, StringFormat='Payment code {0}'}" Style="{StaticResource Caption}" SemanticProperties.Description="Payment code, for the front desk if you need help" />
+                        <Button Text="Cancel this payment" Style="{StaticResource SmallOutlineButton}" Clicked="OnCancelPayment" />
+                    </VerticalStackLayout>
+                </Border>
+        </c:SideLayout></ScrollView>
     </Grid>
 </v:BasePage>

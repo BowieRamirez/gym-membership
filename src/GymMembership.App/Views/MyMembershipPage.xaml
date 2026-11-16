@@ -125,7 +125,6 @@
                         <c:LaneView IsVisible="{Binding HasActiveTerm}" Fraction="{Binding LaneFraction}" HeightRequest="26" DashColor="{AppThemeBinding Light={StaticResource LaneDashLight}, Dark={StaticResource Black}}" TrackColor="{AppThemeBinding Light={StaticResource LaneTrackLight}, Dark=#D6C700}" />
                         <!-- phones: the one action sits on the highlight card, so a yellow card and a yellow button never stack -->
                         <ContentView IsVisible="{OnIdiom Phone=True, Default=False}">
-                            <ContentView.Triggers><DataTrigger TargetType="ContentView" Binding="{Binding PayNow, Converter={StaticResource IsNotNull}}" Value="True"><Setter Property="IsVisible" Value="False" /></DataTrigger></ContentView.Triggers>
                             <Button Text="Choose a package / extend" Style="{StaticResource HeroSmallButton}" Clicked="OnChoosePackage" Margin="0,10,0,0" />
                         </ContentView>
                         <!-- Windows: with nothing running and nothing to pay, the card offers the way in (it was an empty yellow block) -->
@@ -158,9 +157,8 @@
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                         <Label Text="Your paid terms" Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
                         <Button Grid.Column="1" Text="Choose a package / extend" Style="{StaticResource SmallButton}" VerticalOptions="Center" Clicked="OnChoosePackage" IsVisible="{OnIdiom Phone=False, Default=True}">
-                            <!-- while a payment waits, paying it is the next step: this one goes quiet -->
+                            <!-- a waiting payment is paid on Packages, so this stays the way there -->
                             <Button.Triggers>
-                                <DataTrigger TargetType="Button" Binding="{Binding PayNow, Converter={StaticResource IsNotNull}}" Value="True"><Setter Property="Style" Value="{StaticResource SmallOutlineButton}" /></DataTrigger>
                                 <DataTrigger TargetType="Button" Binding="{Binding CanStart}" Value="True"><Setter Property="Style" Value="{StaticResource SmallOutlineButton}" /></DataTrigger>
                             </Button.Triggers>
                         </Button>
@@ -227,33 +225,8 @@
                     </Border>
                 </VerticalStackLayout>
 
-                <!-- side: what to pay now (if anything), then the member QR -->
+                <!-- side: the member QR (the Pay online card moved to Packages, owner 2026-11-16) -->
                 <VerticalStackLayout Spacing="12">
-                    <!-- Pay online (Xendit plan, 2026-11-16): one action. The amount is the title; the deadline sits right under what is bought;
-                         the methods are named under the button so nobody wonders whether GCash works. Coming back re-checks it (Checking). -->
-                    <Border Style="{StaticResource SidePanel}" IsVisible="{Binding PayNow, Converter={StaticResource IsNotNull}}">
-                        <VerticalStackLayout Spacing="12">
-                            <VerticalStackLayout Spacing="4">
-                                <c:CardTitle Text="{Binding PayNow.Amount, StringFormat='Pay ₱{0:N2} online'}" />
-                                <Label Text="{Binding PayNow.What}" />
-                                <Label Text="{Binding PayNow.ExpiresAt, Converter={StaticResource LocalDate}, ConverterParameter='ddd d MMM, h:mm tt', StringFormat='Pay by {0}, or this payment expires.'}"
-                                       Style="{StaticResource Caption}" IsVisible="{Binding PayNow.ExpiresAt, Converter={StaticResource IsNotNull}}" />
-                            </VerticalStackLayout>
-                            <HorizontalStackLayout Spacing="8" IsVisible="{Binding Checking}">
-                                <ActivityIndicator IsRunning="{Binding Checking}" WidthRequest="18" HeightRequest="18" Color="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
-                                <Label Text="Checking your payment with Xendit" Style="{StaticResource Caption}" VerticalOptions="Center" />
-                            </HorizontalStackLayout>
-                            <VerticalStackLayout Spacing="6">
-                                <Button Text="Pay online" Style="{StaticResource SmallButton}" Command="{Binding PayOnlineCommand}" AutomationId="PayOnline"
-                                        IsEnabled="{Binding Checking, Converter={StaticResource Not}}" />
-                                <Label Text="GCash, Maya, QR Ph or card, on Xendit's checkout page. Come back here when you're done." Style="{StaticResource Caption}" />
-                            </VerticalStackLayout>
-                            <Label Text="{Binding PayNow.PaymentCode, StringFormat='Payment code {0}'}" Style="{StaticResource Caption}" SemanticProperties.Description="Payment code, for the front desk if you need help" />
-                            <!-- membership payments only: a booking is cancelled on Book an amenity (F12), which also releases its time -->
-                            <Button Text="Cancel this payment" Style="{StaticResource SmallOutlineButton}" Clicked="OnCancelPayment" IsVisible="{Binding PayNow.CanCancel}" />
-                        </VerticalStackLayout>
-                    </Border>
-
                     <!-- F6 (0049): a one-use pass for the front desk, good for 5 minutes and renewed by the 20-second refresh before it runs out;
                          kept apart from the gym's pay-by-QR panel. Always dark on white so any scanner reads it. -->
                     <!-- A one-line row whose Show button opens the code in place, so the code never fills the first screen

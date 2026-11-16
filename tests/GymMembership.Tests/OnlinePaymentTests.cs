@@ -129,30 +129,44 @@ public class OnlinePaymentTests
     }
 
     [Fact]
-    public async Task My_membership_pay_online_in_demo_starts_the_membership()
+    public async Task Packages_pay_online_in_demo_starts_the_membership()
     {
         Confirm.Answer = (_, _, _) => Task.FromResult(true);
         var (gw, member, _) = await NewMember();
         var opener = new Opener();
-        var vm = new MyMembershipViewModel(member, new SubscriptionService(gw), opener: opener);
+        var vm = new PackagesViewModel(member, new ConfirmationTests.Nav(), new SubscriptionService(gw), opener);
         await vm.LoadCommand.ExecuteAsync(null);
         Assert.NotNull(vm.PayNow);
         await vm.PayOnlineCommand.ExecuteAsync(null);
         Assert.Null(opener.Opened);           // demo pays at once: no browser
         Assert.Null(vm.PayNow);
-        Assert.True(vm.HasActiveTerm);
+        var mine = new MyMembershipViewModel(member, new SubscriptionService(gw));
+        await mine.LoadCommand.ExecuteAsync(null);
+        Assert.True(mine.HasActiveTerm);
     }
 
     [Fact]
-    public async Task My_membership_pay_online_opens_the_xendit_link()
+    public async Task Packages_pay_online_opens_the_xendit_link()
     {
         Confirm.Answer = (_, _, _) => Task.FromResult(true);
         var (gw, member, _) = await NewMember();
         var opener = new Opener();
-        var vm = new MyMembershipViewModel(new ScriptedXendit(member), new SubscriptionService(gw), opener: opener);
+        var vm = new PackagesViewModel(new ScriptedXendit(member), new ConfirmationTests.Nav(), new SubscriptionService(gw), opener);
         await vm.LoadCommand.ExecuteAsync(null);
         await vm.PayOnlineCommand.ExecuteAsync(null);
         Assert.Equal("https://checkout.test/ps-1", opener.Opened);
+    }
+
+    [Fact]
+    public async Task Packages_coming_back_checks_the_checkout_and_drops_the_card_when_paid()
+    {
+        var (gw, member, _) = await NewMember();
+        var xendit = new ScriptedXendit(member, paidOnCheck: true);
+        var vm = new PackagesViewModel(xendit, new ConfirmationTests.Nav(), new SubscriptionService(gw), new Opener());
+        await vm.LoadCommand.ExecuteAsync(null);
+        Assert.Equal(1, xendit.Checks);
+        Assert.False(vm.Checking);
+        Assert.Null(vm.PayNow);
     }
 
     [Fact]
@@ -160,7 +174,7 @@ public class OnlinePaymentTests
     {
         var (gw, member, _) = await NewMember();
         var xendit = new ScriptedXendit(member, paidOnCheck: true);
-        var vm = new MyMembershipViewModel(xendit, new SubscriptionService(gw), opener: new Opener());
+        var vm = new MyMembershipViewModel(xendit, new SubscriptionService(gw));
         await vm.LoadCommand.ExecuteAsync(null);
         Assert.Equal(1, xendit.Checks);
         Assert.False(vm.Checking);
@@ -172,7 +186,7 @@ public class OnlinePaymentTests
     {
         var (gw, member, _) = await NewMember();
         var xendit = new ScriptedXendit(member);
-        var vm = new MyMembershipViewModel(xendit, new SubscriptionService(gw), opener: new Opener());
+        var vm = new MyMembershipViewModel(xendit, new SubscriptionService(gw));
         await vm.LoadCommand.ExecuteAsync(null);
         Assert.Equal(1, xendit.Checks);
         Assert.NotNull(vm.PayNow);
