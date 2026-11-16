@@ -124,13 +124,14 @@ public class CashierTests
     }
 
     [Fact]
-    public async Task A_walk_in_needs_a_name_and_no_member_or_item()
+    public async Task A_day_pass_needs_no_member_or_item_and_the_name_is_optional()   // cashier plan Y3
     {
         var (_, vm) = await Open();
-        vm.PickKindCommand.Execute("Walk-in");
+        vm.PickKindCommand.Execute("Day pass");
         Assert.Empty(vm.Options);
         Assert.Equal("Day pass", vm.TotalText);
-        Assert.False(vm.RecordCommand.CanExecute(null));
+        Assert.True(vm.RecordCommand.CanExecute(null));
+        Assert.Equal("Day pass, no name", vm.OrderWho);
         vm.WalkInName = "Pedro Ramos";
         Assert.True(vm.RecordCommand.CanExecute(null));
         Assert.Equal("Pedro Ramos", vm.OrderWho);
@@ -191,6 +192,7 @@ public class CashierTests
         public Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId) => throw new NotSupportedException();
         public Task<AppResult<bool>> CheckOnlineAsync(int paymentId) => throw new NotSupportedException();
         public Task<AppResult<Payment>> PaymentAsync(int paymentId) => throw new NotSupportedException();
+        public Task<AppResult<string>> RegisterMemberAsync(string firstName, string lastName, string email, string? phone, string password) => throw new NotSupportedException();
         public Task<AppResult<bool>> VerifyAsync(int paymentId, bool approve, string? reason = null) => throw new NotSupportedException();
         public Task<AppResult<IReadOnlyList<ClaimRow>>> ClaimsAsync() => throw new NotSupportedException();
         public Task<AppResult<bool>> DecideClaimAsync(int requestId, bool approve, string reason) => throw new NotSupportedException();
@@ -295,8 +297,8 @@ public class CashierTests
     {
         var (_, vm) = await Open();
         Assert.Equal("Membership, paid with Cash", vm.OrderHow);
-        vm.PickKindCommand.Execute("Walk-in");
+        vm.PickKindCommand.Execute("Day pass");
         vm.PickMethodCommand.Execute("GCash / QR Ph");
-        Assert.Equal("Walk-in, paid with GCash / QR Ph", vm.OrderHow);
+        Assert.Equal("Day pass, paid with GCash / QR Ph", vm.OrderHow);
     }
 }

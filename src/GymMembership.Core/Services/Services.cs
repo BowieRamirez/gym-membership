@@ -55,6 +55,18 @@ public interface IAuthService
 }
 
 /// <summary>What a new account may use. The entry caps on the register page read the same numbers.</summary>
+/// <summary>Cashier plan Y2: the temporary password the desk hands a member it registers; they change it at first sign-in.
+/// 10 characters from letters and digits a person can read aloud (no 0/O, 1/l/I), always with a letter and a digit.</summary>
+public static class TempPassword
+{
+    const string Letters = "abcdefghjkmnpqrstuvwxyz", Digits = "23456789";
+    public static string New()
+    {
+        string Pick(string from, int n) => new(Enumerable.Range(0, n).Select(_ => from[System.Security.Cryptography.RandomNumberGenerator.GetInt32(from.Length)]).ToArray());
+        return Pick(Letters, 6) + Pick(Digits, 4);
+    }
+}
+
 public static partial class AccountRules
 {
     public const int MinName = 2, MaxName = 60, MaxEmailLocal = 64, MaxEmail = 100, MinPassword = 8, MaxPassword = 64;
@@ -253,7 +265,7 @@ sealed class PaymentLookup
         PayKind.Membership => p.PackageSnapshotName ?? (p.UserMembershipPackageId is { } u ? PackageName(u) : "Membership"),
         PayKind.Renewal => "Extension: " + (p.PackageSnapshotName ?? (_renewals.FirstOrDefault(r => r.Id == p.RenewalId) is { } r ? PackageName(r.UserMembershipPackageId) : "Membership")),
         PayKind.Amenity => _catalog.FirstOrDefault(a => a.Id == _amenities.FirstOrDefault(x => x.Id == p.UserAmenityId)?.AmenityId)?.Name ?? "Amenity",
-        _ => "Walk-in"
+        _ => "Day pass"   // cashier plan Y3
     };
 
     /// <summary>The id to pass to avail/renew when paying this again: a package id, a membership id or an amenity id.</summary>
@@ -454,6 +466,8 @@ public interface IPaymentStaffService
     Task<AppResult<bool>> CheckOnlineAsync(int paymentId);
     /// <summary>One payment, fresh: the desk reads the receipt number once Xendit has confirmed it.</summary>
     Task<AppResult<Payment>> PaymentAsync(int paymentId);
+    /// <summary>Cashier plan Y2: the desk registers a walk-in customer as a MEMBER (create-user lets the desk make members only). Returns their id.</summary>
+    Task<AppResult<string>> RegisterMemberAsync(string firstName, string lastName, string email, string? phone, string password);
     /// <summary>What can be sold for a kind of payment. Renewals are the member's own memberships, so they need a memberId.</summary>
     Task<AppResult<IReadOnlyList<CounterItem>>> ItemsAsync(string kind, string? memberId);
     /// <summary>F2 (0050): the caller's open drawer shift (null when none) and the gym's opening float to start one with.</summary>
@@ -477,6 +491,21 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
     public Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId) => OnlinePay.OpenAsync(gw, paymentId);
     public Task<AppResult<bool>> CheckOnlineAsync(int paymentId) => OnlinePay.CheckAsync(gw, paymentId);
     public Task<AppResult<Payment>> PaymentAsync(int paymentId) => Safe.RunAsync(async () => (await gw.ListAsync<Payment>(p => p.Id == paymentId)).Single());
+
+    public async Task<AppResult<string>> RegisterMemberAsync(string firstName, string lastName, string email, string? phone, string password)
+    {
+        firstName = firstName.Trim().Normalize(); lastName = lastName.Trim().Normalize(); email = email.Trim();
+        if (!AccountRules.IsName(firstName, lastName)) return AppResult<string>.Fail(AppErrorKind.Validation, "bad_name");
+        if (!AccountRules.IsEmail(email)) return AppResult<string>.Fail(AppErrorKind.Validation, "bad_email");
+        if (!AccountRules.IsPassword(password)) return AppResult<string>.Fail(AppErrorKind.Validation, "bad_password");
+        return await Safe.RunAsync(async () =>
+        {
+            var body = new Dictionary<string, object> { ["first_name"] = firstName, ["last_name"] = lastName, ["name"] = NameParts.Join(firstName, lastName),
+                ["email"] = email, ["role"] = "member", ["password"] = password };
+            if (!string.IsNullOrWhiteSpace(phone)) body["phone"] = phone.Trim();
+            return System.Text.Json.JsonDocument.Parse(await gw.InvokeFunctionAsync("create-user", body)).RootElement.GetProperty("id").GetString()!;
+        });
+    }
 
     async Task<IReadOnlyList<PaymentRow>> RowsAsync(IEnumerable<Payment> payments)
     {
@@ -1451,7 +1480,7 @@ public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = 
         var rows = await gw.ListAsync<GymCheckIn>(c => c.CheckedInAt >= from && c.CheckedInAt < to);
         var names = await Directory_.UserNamesAsync(gw);
         return rows.OrderBy(c => c.CheckedInAt)
-            .Select(c => new CheckInRow(c.MemberId is { } m ? names.GetValueOrDefault(m, "Member") : "Walk-in", c.CheckedInAt, c.Method,
+            .Select(c => new CheckInRow(c.MemberId is { } m ? names.GetValueOrDefault(m, "Member") : "Day pass", c.CheckedInAt, c.Method,
                 c.RecordedBy is { } by ? names.GetValueOrDefault(by) : null, c.Reason, c.IdType)).ToList();
     });
 }

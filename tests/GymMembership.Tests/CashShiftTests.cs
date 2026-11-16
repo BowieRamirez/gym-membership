@@ -107,7 +107,7 @@ public class CashShiftTests
     public async Task Without_a_shift_Complete_payment_waits_for_cash_but_not_for_GCash()
     {
         var (_, vm) = await Cashier();
-        vm.Kind = "Walk-in"; vm.WalkInName = "Pedro Ramos";
+        vm.Kind = "Day pass"; vm.WalkInName = "Pedro Ramos";
         Assert.True(vm.CashNeedsShift); Assert.False(vm.RecordCommand.CanExecute(null));
         vm.Method = "GCash / QR Ph";   // cashier plan Y6: through Xendit, no drawer
         Assert.False(vm.CashNeedsShift); Assert.True(vm.RecordCommand.CanExecute(null));
@@ -121,7 +121,7 @@ public class CashShiftTests
     {
         var (_, vm) = await Cashier();
         await vm.StartShiftCommand.ExecuteAsync(null);
-        vm.Kind = "Walk-in"; vm.WalkInName = "Pedro Ramos";
+        vm.Kind = "Day pass"; vm.WalkInName = "Pedro Ramos";
         await vm.RecordCommand.ExecuteAsync(null);
         Assert.Equal(150m, vm.Shift!.CashIn); Assert.Equal(5150m, vm.Shift.Expected);
 

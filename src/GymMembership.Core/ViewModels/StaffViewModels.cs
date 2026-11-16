@@ -97,7 +97,7 @@ public partial class ItemOption(CounterItem item) : ObservableObject
 
 public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceService members, IUrlOpener? opener = null) : LoadableViewModel
 {
-    public string[] Kinds { get; } = ["Membership", "Renewal", "Amenity", "Walk-in"];
+    public string[] Kinds { get; } = ["Membership", "Renewal", "Amenity", "Day pass"];   // cashier plan Y3: a walk-in buys a Day pass
     /// <summary>Cashier plan Y6: e-wallets at the desk go through Xendit's checkout (GCash, Maya or any bank app by QR Ph).</summary>
     public const string Online = "GCash / QR Ph";
     public string[] Methods { get; } = ["Cash", Online];   // owner, 2026-11-11: no bank transfer (0054)
@@ -141,12 +141,14 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     /// <summary>Cash is chosen but no shift is open: Complete payment waits, and the order says why.</summary>
     public bool CashNeedsShift => Method == "Cash" && Shift is null;
 
-    public bool IsWalkIn => Kind == "Walk-in";
+    public bool IsWalkIn => Kind == "Day pass";
     public bool NeedsMember => !IsWalkIn;
     // cashier plan Y6: no reference to type; Xendit confirms an e-wallet payment
 
     // the order panel, in the words the cashier uses
-    public string OrderWho => IsWalkIn ? (string.IsNullOrWhiteSpace(WalkInName) ? "Walk-in: type a name" : WalkInName.Trim()) : Member?.Username ?? "Find and choose a member";
+    // cashier plan Y3: a Day pass may carry a member found by search, a typed name, or nothing (anonymous)
+    public string OrderWho => IsWalkIn ? Member?.Username ?? (string.IsNullOrWhiteSpace(WalkInName) ? "Day pass, no name" : WalkInName.Trim()) : Member?.Username ?? "Find and choose a member";
+    string? DayPassName => Member?.Username ?? (string.IsNullOrWhiteSpace(WalkInName) ? null : WalkInName.Trim());
     public string OrderWhat => Item?.Label ?? (IsWalkIn ? "Day pass" : "Choose what they are paying for");
     public string TotalText => IsWalkIn ? "Day pass" : Item?.Price is { } p ? $"₱{p:N2}" : "₱0.00";
     public string TotalNote => IsWalkIn ? "The day pass price is set in Gym settings."
@@ -156,7 +158,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     /// <summary>The kind and the way of paying in words, so the order reads the same to someone who cannot see which button is filled.</summary>
     public string OrderHow => $"{Kind}, paid with {Method}";
 
-    static string KindKey(string k) => k switch { "Renewal" => PayKind.Renewal, "Amenity" => PayKind.Amenity, "Walk-in" => PayKind.WalkIn, _ => PayKind.Membership };
+    static string KindKey(string k) => k switch { "Renewal" => PayKind.Renewal, "Amenity" => PayKind.Amenity, "Day pass" => PayKind.WalkIn, _ => PayKind.Membership };
 
     public override async Task OnAppearingAsync() { await RefreshItemsAsync(); await LoadShiftAsync(); await LoadDeskBookingsAsync(); }
 
@@ -237,12 +239,37 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     [ObservableProperty] private bool noMatch;
     [RelayCommand] private Task FindAsync() => RunAsync(() => members.FindMembersAsync(Search), rows => { Fill(Hits, rows); NoMatch = rows.Count == 0; });
     [RelayCommand] private void PickMember(MemberHit hit) => Member = hit;
+
+    // ---- cashier plan Y2: nobody matched, so the desk registers the customer as a member (search first, so nobody is made twice) ----
+    [ObservableProperty] private bool isRegistering;
+    [ObservableProperty] private string newFirstName = "";
+    [ObservableProperty] private string newLastName = "";
+    [ObservableProperty] private string newEmail = "";
+    [ObservableProperty] private string newPhone = "";
+    [RelayCommand] private void StartRegister() { Notice = null; ErrorMessage = null; IsRegistering = true; }
+    [RelayCommand] private void CancelRegister() => IsRegistering = false;
+
+    [RelayCommand]
+    private async Task RegisterAsync()
+    {
+        Notice = null;
+        var name = NameParts.Join(NewFirstName.Trim(), NewLastName.Trim());
+        if (!await Confirm.AskAsync($"Register {name} as a member?", $"{NewEmail.Trim()}\nThey get a temporary password to change at first sign-in.", "Register member")) return;
+        var password = TempPassword.New();
+        string? id = null;
+        if (!await RunAsync(() => svc.RegisterMemberAsync(NewFirstName, NewLastName, NewEmail, NewPhone, password), v => id = v)) return;
+        Search = NewEmail.Trim();
+        await RunAsync(() => members.FindMembersAsync(Search), rows => { Fill(Hits, rows); NoMatch = rows.Count == 0; Member = rows.FirstOrDefault(h => h.MemberId == id); });
+        IsRegistering = false;
+        NewFirstName = NewLastName = NewEmail = NewPhone = "";
+        Notice = $"{name} is a member now. Temporary password: {password}. Hand it over; they change it at first sign-in.";
+    }
     [RelayCommand] private void PickKind(string value) => Kind = value;
     [RelayCommand] private void PickMethod(string value) => Method = value;
     [RelayCommand] private void PickItem(ItemOption option) => Item = option.Item;   // OnItemChanged marks the card
 
     bool CanComplete() =>
-        (IsWalkIn ? !string.IsNullOrWhiteSpace(WalkInName) : Member is not null && Item is not null)
+        (IsWalkIn || Member is not null && Item is not null)
         && !CashNeedsShift && Waiting is null;
 
     // The command is off while it runs, so a double tap records one payment.
@@ -256,7 +283,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         if (Method == Online) { await StartOnlineAsync(); return; }
         Payment? paid = null;
         if (!await RunAsync(() => svc.RecordCounterAsync(KindKey(Kind), PayMethod.Cash, IsWalkIn ? null : Member!.MemberId, Item?.Id,
-                IsWalkIn ? WalkInName : null, null, IsWalkIn ? null : DiscountCode), p => paid = p)) return;
+                IsWalkIn ? DayPassName : null, null, IsWalkIn ? null : DiscountCode), p => paid = p)) return;
         await DoneAsync(paid!);
     }
 
@@ -273,7 +300,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     {
         Payment? started = null;
         if (!await RunAsync(() => svc.StartDeskOnlineAsync(KindKey(Kind), IsWalkIn ? null : Member!.MemberId, Item?.Id,
-                IsWalkIn ? WalkInName : null, IsWalkIn ? null : DiscountCode), p => started = p)) return;
+                IsWalkIn ? DayPassName : null, IsWalkIn ? null : DiscountCode), p => started = p)) return;
         Waiting = started; RecordCommand.NotifyCanExecuteChanged();
         await OpenCheckoutAsync();
     }

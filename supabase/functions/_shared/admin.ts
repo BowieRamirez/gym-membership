@@ -8,9 +8,9 @@ export const cors = {
 };
 
 /** What the audit log records about who acted (0045, D7): the caller's address, as public.request_ip reads it, and main role. */
-export function auditBy(req: Request, caller: { id: string; superAdmin: boolean }) {
+export function auditBy(req: Request, caller: { id: string; superAdmin: boolean; deskOnly?: boolean }) {
   const ip = req.headers.get('cf-connecting-ip') ?? req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
-  return { actor_id: caller.id, ip_address: ip?.slice(0, 64) || null, role: caller.superAdmin ? 'admin' : 'subadmin' };
+  return { actor_id: caller.id, ip_address: ip?.slice(0, 64) || null, role: caller.deskOnly ? 'employee' : caller.superAdmin ? 'admin' : 'subadmin' };
 }
 
 export function reply(body: unknown, status = 200): Response {
@@ -21,6 +21,24 @@ export function adminClient(): SupabaseClient {
   return createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+}
+
+/**
+ * Cashier plan Y2 (owner, 2026-11-16): like requireAdmin, but the front desk (role employee) also passes, marked deskOnly, so
+ * create-user can register a walk-in customer as a MEMBER at the Cashier. Every other function keeps requireAdmin.
+ */
+export async function requireDeskOrAdmin(req: Request, admin: SupabaseClient): Promise<{ id: string; superAdmin: boolean; deskOnly: boolean } | Response> {
+  const token = req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
+  if (!token) return reply({ error: 'forbidden' }, 401);
+  const { data, error } = await admin.auth.getUser(token);
+  if (error || !data.user) return reply({ error: 'forbidden' }, 401);
+  const [{ data: profile }, { data: roles }] = await Promise.all([
+    admin.from('profiles').select('is_active').eq('id', data.user.id).maybeSingle(),
+    admin.from('user_roles').select('roles!inner(name)').eq('user_id', data.user.id).in('roles.name', ['admin', 'subadmin', 'employee']),
+  ]);
+  if (!profile?.is_active || !roles?.length) return reply({ error: 'forbidden' }, 403);
+  const names = roles.map((r: { roles: { name: string } }) => r.roles.name);
+  return { id: data.user.id, superAdmin: names.includes('admin'), deskOnly: !names.includes('admin') && !names.includes('subadmin') };
 }
 
 /** Staff roles a sub-admin may not act on (0036): only the super admin manages these accounts. */

@@ -60,6 +60,23 @@ for (const [name, actual, want] of [
   catch (e) { failed++; console.log('  FAIL', `xendit session: ${name}`, e.message); }
 }
 
+// cashier plan Y2: the front desk may create MEMBER accounts at the Cashier; reset-password and every other role stay admin-only
+{
+  const name = 'create-user: the front desk creates members only; reset-password stays admin-only';
+  try {
+    const create = fs.readFileSync(new URL('../../functions/create-user/index.ts', import.meta.url), 'utf8');
+    const reset = fs.readFileSync(new URL('../../functions/reset-password/index.ts', import.meta.url), 'utf8');
+    const shared = fs.readFileSync(new URL('../../functions/_shared/admin.ts', import.meta.url), 'utf8');
+    assert.match(create, /await requireDeskOrAdmin\(req, admin\)/);
+    assert.match(create, /if \(caller\.deskOnly && role !== 'member'\) return reply\(\{ error: 'forbidden' \}, 403\);/);
+    assert.match(create, /\.from\('profiles'\)\.update\(\{ phone \}\)/);
+    assert.doesNotMatch(reset, /requireDeskOrAdmin/);
+    assert.match(shared, /'employee'/);
+    assert.match(shared, /role: caller\.deskOnly \? 'employee'/);
+    passed++; console.log('  ok  ', name);
+  } catch (e) { failed++; console.log('  FAIL', name, e.message); }
+}
+
 // cashier plan Y6: the desk that recorded a desk online payment may open and check its checkout; nobody else's payment is reachable
 {
   const src = fs.readFileSync(new URL('../../functions/xendit-checkout/index.ts', import.meta.url), 'utf8');

@@ -107,13 +107,13 @@ public class PaymentTests
     {
         var gw = await As("employee@demo.io");
         var staff = new PaymentStaffService(gw);
-        Assert.Equal(AppErrorKind.Validation, (await staff.RecordCounterAsync(PayKind.WalkIn, PayMethod.Cash, null, null, "  ", null, null)).Error);
+        Assert.Equal("Day pass", (await staff.RecordCounterAsync(PayKind.WalkIn, PayMethod.Cash, null, null, "  ", null, null)).Value!.WalkInName);   // cashier plan Y3: anonymous
 
         var paid = (await staff.RecordCounterAsync(PayKind.WalkIn, PayMethod.Cash, null, null, "Pedro Ramos", null, null)).Value!;
         Assert.Equal((150m, "Pedro Ramos", null), (paid.Amount, paid.WalkInName, paid.MemberId));
         Assert.Single(await gw.ListAsync<GymCheckIn>(c => c.PaymentId == paid.Id));
 
-        Assert.Equal(150m, (await staff.ShiftAsync()).Value.Open!.CashIn);   // into the cashier's drawer
+        Assert.Equal(300m, (await staff.ShiftAsync()).Value.Open!.CashIn);   // both into the cashier's drawer
     }
 
     [Fact]

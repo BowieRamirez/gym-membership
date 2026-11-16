@@ -19,7 +19,7 @@ public static class PayKind
 {
     public const string Membership = "membership", Renewal = "renewal", Amenity = "amenity", WalkIn = "walk_in";
     /// <summary>What a kind is called on screen (9.8: Revenue showed the codes). Extension, as the payment lists say for a renewal.</summary>
-    public static string Name(string k) => k switch { Membership => "Membership", Renewal => "Extension", Amenity => "Amenity", WalkIn => "Walk-in", _ => k };
+    public static string Name(string k) => k switch { Membership => "Membership", Renewal => "Extension", Amenity => "Amenity", WalkIn => "Day pass", _ => k };   // cashier plan Y3
 }
 public static class PayMethod
 {

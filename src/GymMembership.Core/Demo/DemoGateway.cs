@@ -222,8 +222,11 @@ public sealed partial class DemoGateway : ISupabaseGateway
             string S(string k) => Convert.ToString(body.GetValueOrDefault(k)) ?? "";
             if (name == "verify-member-password") return Task.FromResult(VerifyMemberPassword(S("member_id"), S("password")));
             if (name == "xendit-checkout") return Task.FromResult(XenditCheckout(Convert.ToInt32(body.GetValueOrDefault("payment_id")), body.GetValueOrDefault("check") is true));
-            if (!RolesOf(Uid).Any(r => r is "admin" or "subadmin") || !IsActiveUser) throw Err("forbidden");
+            // cashier plan Y2: the front desk may create MEMBER accounts (create-user's requireDeskOrAdmin); everything else is admin-only
+            var deskOnly = name == "create-user" && RolesOf(Uid).Contains("employee") && !RolesOf(Uid).Any(r => r is "admin" or "subadmin");
+            if ((!deskOnly && !RolesOf(Uid).Any(r => r is "admin" or "subadmin")) || !IsActiveUser) throw Err("forbidden");
             var super = RolesOf(Uid).Contains("admin");   // a sub-admin acts on members and coaches only
+            string? created = null;
             switch (name)
             {
                 case "create-user":
@@ -232,12 +235,15 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     if (role is not ("member" or "coach" or "employee" or "subadmin") || string.IsNullOrWhiteSpace(S("name")) || !AccountRules.IsEmail(email)) throw Err("bad_input");
                     if (!AccountRules.IsPassword(S("password"))) throw Err("bad_password");   // as _shared/rules.ts
                     if (_accounts.ContainsKey(email)) throw Err("email_taken");
+                    if (deskOnly && role != "member") throw Err("forbidden");
                     if (!super && role is not ("member" or "coach")) throw Err("forbidden");
                     var (first, last) = S("first_name") is { Length: > 0 } f && S("last_name") is { Length: > 0 } l ? (f.Trim(), l.Trim()) : NameParts.Split(S("name"));
                     var id = AddUser("u-" + Guid.NewGuid().ToString("N")[..8], NameParts.Join(first, last), email, role, first, last);
                     _passwords[id] = S("password");
                     All<Profile>().First(p => p.Id == id).MustChangePassword = true;
+                    if (S("phone") is { Length: > 0 } phone) All<Profile>().First(p => p.Id == id).Phone = phone.Trim();
                     Audit("user.create", "profiles", id);
+                    created = id;
                     break;
                 }
                 case "reset-password":
@@ -253,7 +259,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 }
                 default: throw Err("not_found");
             }
-            return Task.FromResult("{\"ok\":true}");
+            return Task.FromResult(created is null ? "{\"ok\":true}" : $"{{\"id\":\"{created}\"}}");
         }
         catch (Exception ex) { return Task.FromException<string>(ex); }
     }
@@ -865,7 +871,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
 
                 if (kind == PayKind.WalkIn)
                 {
-                    walkIn = Opt("p_walk_in_name") ?? throw Err("bad_input");
+                    walkIn = Opt("p_walk_in_name") ?? "Day pass";   // 0081: a Day pass may be anonymous
                     memberId = null;
                     d = NotFree((null, 0, All<GymSettings>().First().WalkInPrice));
                 }

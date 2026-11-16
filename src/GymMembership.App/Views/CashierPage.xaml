@@ -128,18 +128,18 @@
                                     <Button Text="Amenity" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Amenity">
                                         <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="Amenity"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="SemanticProperties.Description" Value="Amenity, selected" /></DataTrigger></Button.Triggers>
                                     </Button>
-                                    <Button Text="Walk-in" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Walk-in">
-                                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="Walk-in"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="SemanticProperties.Description" Value="Walk-in, selected" /></DataTrigger></Button.Triggers>
+                                    <Button Text="Day pass" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Day pass">
+                                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="Day pass"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="SemanticProperties.Description" Value="Day pass, selected" /></DataTrigger></Button.Triggers>
                                     </Button>
                                 </FlexLayout>
 
-                                <!-- walk-ins have no member: just a name -->
+                                <!-- cashier plan Y3: a Day pass needs no account; a name is optional, or find the member below -->
                                 <VerticalStackLayout Spacing="4" WidthRequest="300" HorizontalOptions="Start" IsVisible="{Binding IsWalkIn}">
-                                    <Label Text="Name" Style="{StaticResource Caption}" />
-                                    <Border Style="{StaticResource Field}"><Entry Text="{Binding WalkInName}" SemanticProperties.Description="Walk-in name" /></Border>
+                                    <Label Text="Name (optional)" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><Entry Text="{Binding WalkInName}" Placeholder="Leave blank to keep it anonymous" SemanticProperties.Description="Day pass name, optional" /></Border>
                                 </VerticalStackLayout>
 
-                                <VerticalStackLayout Spacing="12" IsVisible="{Binding NeedsMember}">
+                                <VerticalStackLayout Spacing="12">
                                     <!-- cashier plan Y1: the matches are rows you can see and choose (they used to sit in a closed dropdown) -->
                                     <FlexLayout Wrap="Wrap" AlignItems="End">
                                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="300">
@@ -148,7 +148,27 @@
                                         </VerticalStackLayout>
                                         <Button Text="Find" Style="{StaticResource SmallOutlineButton}" Margin="0,0,12,8" Command="{Binding FindCommand}" AutomationId="CashierFind" />
                                     </FlexLayout>
-                                    <Label Text="No member found. Check the spelling, or try their email or phone." Style="{StaticResource Muted}" IsVisible="{Binding NoMatch}" />
+                                    <!-- cashier plan Y2: search first, so nobody gets a second account; then register them here -->
+                                    <FlexLayout Wrap="Wrap" AlignItems="Center" IsVisible="{Binding NoMatch}">
+                                        <Label Text="No member found. Check the spelling, or try their email or phone." Style="{StaticResource Muted}" Margin="0,0,12,8" VerticalOptions="Center" />
+                                        <Button Text="Register new member" Style="{StaticResource SmallOutlineButton}" Margin="0,0,0,8" Command="{Binding StartRegisterCommand}" AutomationId="CashierRegister" />
+                                    </FlexLayout>
+                                    <Border Style="{StaticResource Panel}" IsVisible="{Binding IsRegistering}" MaximumWidthRequest="640" HorizontalOptions="Start">
+                                        <VerticalStackLayout Spacing="10">
+                                            <c:CardTitle Text="Register a new member" />
+                                            <Label Text="They get a temporary password to change the first time they sign in." Style="{StaticResource Caption}" />
+                                            <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto" RowSpacing="10">
+                                                <VerticalStackLayout Spacing="4"><Label Text="First name" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><Entry Text="{Binding NewFirstName}" SemanticProperties.Description="First name" /></Border></VerticalStackLayout>
+                                                <VerticalStackLayout Grid.Column="1" Spacing="4"><Label Text="Last name" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><Entry Text="{Binding NewLastName}" SemanticProperties.Description="Last name" /></Border></VerticalStackLayout>
+                                                <VerticalStackLayout Grid.Row="1" Spacing="4"><Label Text="Email" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><Entry Text="{Binding NewEmail}" Keyboard="Email" SemanticProperties.Description="Email" /></Border></VerticalStackLayout>
+                                                <VerticalStackLayout Grid.Row="1" Grid.Column="1" Spacing="4"><Label Text="Phone (optional)" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><Entry Text="{Binding NewPhone}" Keyboard="Telephone" SemanticProperties.Description="Phone" /></Border></VerticalStackLayout>
+                                            </Grid>
+                                            <HorizontalStackLayout Spacing="8">
+                                                <Button Text="Register member" Style="{StaticResource SmallButton}" Command="{Binding RegisterCommand}" />
+                                                <Button Text="Back" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelRegisterCommand}" />
+                                            </HorizontalStackLayout>
+                                        </VerticalStackLayout>
+                                    </Border>
                                     <VerticalStackLayout Spacing="8" MaximumWidthRequest="640" HorizontalOptions="Start" BindableLayout.ItemsSource="{Binding Hits}">
                                         <BindableLayout.ItemTemplate>
                                             <DataTemplate x:DataType="svc:MemberHit">
@@ -169,8 +189,8 @@
                                     </VerticalStackLayout>
                                     <Label Text="{Binding Member.Username, StringFormat='Chosen: {0}'}" FontFamily="BarlowSemiBold" IsVisible="{Binding Member, Converter={StaticResource IsNotNull}}" />
 
-                                    <Label Text="Choose one" Style="{StaticResource SectionTitle}" Margin="0" />
-                                    <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Options}">
+                                    <Label Text="Choose one" Style="{StaticResource SectionTitle}" Margin="0" IsVisible="{Binding NeedsMember}" />
+                                    <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Options}" IsVisible="{Binding NeedsMember}">
                                         <BindableLayout.EmptyView>
                                             <Label Text="{Binding ItemsEmptyText}" Style="{StaticResource Muted}" />
                                         </BindableLayout.EmptyView>
