@@ -17,8 +17,9 @@
                  Find them, or register them (Z1: no account yet), then amenity, day, time and length -->
             <Button Text="Book for a customer" Style="{StaticResource SmallButton}" HorizontalOptions="Start" Command="{Binding ToggleBookingCommand}"
                     IsVisible="{Binding HasBooking}" AutomationId="DeskBookOpen" />
-            <Border Style="{StaticResource Panel}" IsVisible="{Binding IsBooking}" BindingContext="{Binding Booking}" x:DataType="vm:DeskBookingViewModel">
-                <VerticalStackLayout Spacing="14">
+            <ContentView IsVisible="{Binding IsBooking}">
+            <Border Style="{StaticResource Panel}" BindingContext="{Binding Booking}">
+                <VerticalStackLayout Spacing="14" x:DataType="vm:DeskBookingViewModel">
                     <Grid ColumnDefinitions="*,Auto">
                         <VerticalStackLayout Spacing="2">
                             <c:CardTitle Text="Book for a customer" />
@@ -93,6 +94,7 @@
                     </FlexLayout>
                 </VerticalStackLayout>
             </Border>
+            </ContentView>
 
             <!-- G13 (approved mockup docs/mockups/amenity-down-payment.html): today's bookings with a balance still to pay at the desk -->
             <VerticalStackLayout Spacing="8" IsVisible="{Binding HasBalances}">
