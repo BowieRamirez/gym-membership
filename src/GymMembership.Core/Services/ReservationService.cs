@@ -101,6 +101,35 @@ public static class BookingPrice
 /// <summary>0091: a desk booking and the receipt number the customer keeps (a walk-in photographs it; a member gets it in chat).</summary>
 public sealed record DeskReceipt(Reservation Booking, string ReceiptNo);
 
+/// <summary>Owner, 2026-11-17: a confirmed booking on Amenity status's Booked card: who, what, when, and what was paid on which receipts.</summary>
+public sealed record BookedRow(Reservation Booking, string Customer, string Amenity, string? Coach, IReadOnlyList<Payment> Paid)
+{
+    public bool IsWalkIn => Booking.WalkInName is not null;
+    public string Who => IsWalkIn ? $"{Customer} (walk-in)" : Customer;
+    public string When => $"{Booking.StartsAt.ToUniversalTime().AddHours(8):ddd d MMM, h:mm tt} – {Booking.EndsAt.ToUniversalTime().AddHours(8):h:mm tt}";
+    public decimal PaidAmount => Paid.Sum(p => p.Amount);
+    public string PaidText => Paid.Count == 0 ? "Booked with a pass" : $"Paid ₱{PaidAmount:N2} of ₱{Booking.TotalPrice:N2}";
+    public string ReceiptText => Paid.Count == 0 ? "No receipt (pass)" : string.Join(", ", Paid.Select(p => p.ReceiptNo));
+    public string MethodText => string.Join(", ", Paid.Select(p => PayMethod.Name(p.Method)).Distinct());
+}
+
+/// <summary>A booking's receipt as a one-page A4 PDF the desk prints (Amenity status, Booked card).</summary>
+public static class BookingReceiptPdf
+{
+    public static byte[] Build(BookedRow row, DateTime printedUtc, byte[] font)
+    {
+        var intro = new List<(string, RevenuePdf.Kind)> { ($"Receipt {row.ReceiptText}", RevenuePdf.Kind.Strong), ("", RevenuePdf.Kind.Gap),
+            ($"Customer: {row.Who}", RevenuePdf.Kind.Text), ($"Amenity: {row.Amenity}", RevenuePdf.Kind.Text), ($"When: {row.When} (Asia/Manila)", RevenuePdf.Kind.Text) };
+        if (row.Coach is { } c) intro.Add(($"Coach: {c}", RevenuePdf.Kind.Text));
+        intro.AddRange([($"Booking no. {row.Booking.Id}", RevenuePdf.Kind.Text), ("", RevenuePdf.Kind.Gap), ($"Printed {RevenuePdf.Manila(printedUtc)} (Asia/Manila)", RevenuePdf.Kind.Body)]);
+        return RevenuePdf.Document("Booking receipt", $"Receipt {row.ReceiptText}", font, intro,
+        [("Receipt", 120, false), ("Paid on", 140, false), ("Method", 100, false), ("Amount", 100, true)],
+        row.Paid.Select(p => new[] { p.ReceiptNo ?? "", p.VerifiedAt is { } v ? RevenuePdf.Manila(v) : "", PayMethod.Name(p.Method), $"₱{p.Amount:N2}" }).ToList(),
+        row.Paid.Count == 0 ? null : ["Total paid", "", "", $"₱{row.PaidAmount:N2}"], "Booked with a pass: nothing paid.",
+        ["Show this receipt at the front desk. Keep it until the booking has ended."]);
+    }
+}
+
 /// <summary>G13 (0064): a confirmed booking with a balance still to pay at the desk.</summary>
 public sealed record BalanceRow(Reservation Booking, string Member, string Amenity, string? Coach)
 {
@@ -186,6 +215,8 @@ public interface IReservationService
     /// <summary>Plan 2026-11-17 Z1, Z2 (0087): the desk books for a member, or (0091) a walk-in by name when memberId is null; the full price
     /// is taken in cash at once into the open drawer. Comes back with the receipt number the customer keeps.</summary>
     Task<AppResult<DeskReceipt>> DeskBookAsync(string? memberId, string? walkInName, int amenityId, DateTime startUtc, int minutes);
+    /// <summary>Owner, 2026-11-17: confirmed bookings not yet ended, today's first, for the desk's Booked card.</summary>
+    Task<AppResult<IReadOnlyList<BookedRow>>> BookedAsync();
     /// <summary>G13: the Gym settings percent paid to reserve.</summary>
     Task<AppResult<int>> DownPaymentPercentAsync();
     /// <summary>G16: closed days from today on, with their reasons.</summary>
@@ -223,6 +254,20 @@ public sealed class ReservationService(ISupabaseGateway gw) : IReservationServic
         var id = r.PaymentId ?? 0;
         var receipt = (await gw.ListAsync<Payment>(p => p.Id == id)).FirstOrDefault()?.ReceiptNo ?? "";
         return new DeskReceipt(r, receipt);
+    });
+
+    public Task<AppResult<IReadOnlyList<BookedRow>>> BookedAsync() => Safe.RunAsync<IReadOnlyList<BookedRow>>(async () =>
+    {
+        var now = DateTime.UtcNow;
+        var rows = (await gw.ListAsync<Reservation>(r => r.Status == "confirmed" && r.EndsAt > now)).OrderBy(r => r.StartsAt).ToList();
+        if (rows.Count == 0) return [];
+        var ids = rows.SelectMany(r => new[] { r.PaymentId, r.BalancePaymentId }).OfType<int>().ToList();
+        var pays = (await gw.ListAsync<Payment>(p => ids.Contains(p.Id))).Where(p => p.Status == Status.Verified).ToDictionary(p => p.Id);
+        var names = await Directory_.UserNamesAsync(gw);
+        var amenities = (await gw.ListAsync<Amenity>()).ToDictionary(a => a.Id, a => a.Name);
+        return rows.Select(r => new BookedRow(r, r.WalkInName ?? names.GetValueOrDefault(r.MemberId ?? "", "Member"), amenities.GetValueOrDefault(r.AmenityId, "Amenity"),
+            r.CoachId is { } c ? names.GetValueOrDefault(c) : null,
+            new[] { r.PaymentId, r.BalancePaymentId }.OfType<int>().Select(pays.GetValueOrDefault).OfType<Payment>().ToList())).ToList();
     });
 
     public Task<AppResult<Reservation>> BookAsync(int amenityId, DateTime startUtc, int minutes, string method, string? coachId = null, string? code = null) => Safe.RunAsync(() =>

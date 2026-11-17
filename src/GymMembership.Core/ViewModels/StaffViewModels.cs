@@ -2159,8 +2159,34 @@ public sealed record StatusChoice(string Value, string Label);
 
 /// <summary>Front desk and admin: mark an amenity available, in use or unavailable, and see who was alerted.</summary>
 public partial class AmenityStatusViewModel(IAmenityService svc, IReservationService? reservations = null, IPaymentStaffService? payments = null,
-    DeskBookingViewModel? booking = null) : LoadableViewModel
+    DeskBookingViewModel? booking = null, IReportFiles? files = null) : LoadableViewModel
 {
+    // ---- owner, 2026-11-17: the Booked card on the right: confirmed bookings not yet ended; View shows the details, Print opens the receipt PDF ----
+    public ObservableCollection<BookedRow> Booked { get; } = new();
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsViewing))] private BookedRow? viewing;
+    public bool IsViewing => Viewing is not null;
+    public bool HasBooked => Booked.Count > 0;
+
+    public async Task LoadBookedAsync()
+    {
+        if (reservations is null) return;
+        if (await reservations.BookedAsync() is { Ok: true, Value: { } rows }) Fill(Booked, rows);
+        OnPropertyChanged(nameof(HasBooked));
+        if (Viewing is { } v) Viewing = Booked.FirstOrDefault(b => b.Booking.Id == v.Booking.Id);
+    }
+    void OnDeskBooked() => _ = LoadBookedAsync();
+    [RelayCommand] private void View(BookedRow row) => Viewing = row;
+    [RelayCommand] private void CloseView() => Viewing = null;
+
+    [RelayCommand]
+    private async Task PrintReceiptAsync()
+    {
+        if (files is null || Viewing is not { } row) return;
+        Notice = null;
+        if (await RunAsync(() => Safe.RunAsync(async () => { await files.OpenAsync($"receipt-booking-{row.Booking.Id}.pdf", BookingReceiptPdf.Build(row, DateTime.UtcNow, await files.FontAsync())); return true; })))
+            Notice = "Receipt opened. Print it from the PDF viewer (Ctrl+P).";
+    }
+
     // ---- plan 2026-11-17 Z1, Z2: book a slot for a customer at the desk (its own view model, shown on demand) ----
     public DeskBookingViewModel? Booking { get; } = booking;
     public bool HasBooking => Booking is not null;
@@ -2169,7 +2195,9 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
     private async Task ToggleBookingAsync()
     {
         IsBooking = !IsBooking && Booking is not null;
-        if (IsBooking) await Booking!.OnAppearingAsync();
+        if (!IsBooking) return;
+        Booking!.Booked -= OnDeskBooked; Booking.Booked += OnDeskBooked;   // a new booking shows on the Booked card
+        await Booking.OnAppearingAsync();
     }
 
     // ---- F13 booking refund claims ("I didn't use it"), decided by the desk with a reason; moved here from Payments to verify (cashier plan Y7) ----
@@ -2251,6 +2279,7 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
         await RunAsync(svc.BoardAsync, board => Fill(Cards, board.Cards));
         await LoadBalancesAsync(ManilaToday);
         await LoadClaimsAsync();
+        await LoadBookedAsync();
     }
 
     // Quiet and in place: the error line, the notice and the open form stay as they are, and only cards that changed are swapped.
@@ -2386,6 +2415,8 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
     [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand))] private PickChip? length;   // 0090: whole hours up to closing
     /// <summary>The last booking made here (the notice names it).</summary>
     public Reservation? LastBooked { get; private set; }
+    /// <summary>Raised after a booking is made, so Amenity status refreshes its Booked card.</summary>
+    public event Action? Booked;
 
     public override Task OnAppearingAsync() => LoadGridAsync();
     partial void OnDayChanged(DateTime value) => _ = LoadGridAsync();
@@ -2436,6 +2467,7 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
             IsWalkIn ? "No account: ask them to take a photo of this receipt. It is their reference at the desk."
                      : "Also sent to their Front desk chat. That message is their reference.");
         if (IsWalkIn) WalkInName = "";
+        Booked?.Invoke();
         await LoadGridAsync();
     }
 }

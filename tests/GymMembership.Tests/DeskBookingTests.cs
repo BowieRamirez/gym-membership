@@ -133,4 +133,36 @@ public class DeskBookingTests
         Assert.Null(vm.Member);
         Assert.False(vm.BookCommand.CanExecute(null));
     }
+
+    sealed class Files : IReportFiles
+    {
+        public string? Name; public byte[]? Pdf;
+        public Task<byte[]> FontAsync() => Task.FromResult(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoSans-Regular.ttf")));
+        public Task ShareAsync(string fileName, byte[] pdf) => OpenAsync(fileName, pdf);
+        public Task OpenAsync(string fileName, byte[] pdf) { Name = fileName; Pdf = pdf; return Task.CompletedTask; }
+    }
+
+    [Fact]   // owner, 2026-11-17: the Booked card lists who booked; View shows the details; Print opens the receipt PDF
+    public async Task Booked_card_lists_bookings_and_prints_the_receipt()
+    {
+        var (gw, vm) = await Open();
+        var files = new Files();
+        var page = new AmenityStatusViewModel(new AmenityService(gw), new ReservationService(gw), new PaymentStaffService(gw), vm, files);
+        await page.ToggleBookingCommand.ExecuteAsync(null);
+        vm.StartWalkInCommand.Execute(null);
+        vm.WalkInName = "Ana Reyes";
+        vm.Amenity = vm.Amenities.First(a => a.Name == "Pool");
+        vm.Start = vm.Starts.First(); vm.Length = vm.Lengths.First();
+        await vm.BookCommand.ExecuteAsync(null);
+        await page.LoadBookedAsync();
+        var row = page.Booked.Single(b => b.Customer == "Ana Reyes");
+        Assert.Equal(("Ana Reyes (walk-in)", "Pool", vm.Receipt!.ReceiptNo), (row.Who, row.Amenity, row.ReceiptText));
+        Assert.Equal(row.Booking.TotalPrice, row.PaidAmount);
+        page.ViewCommand.Execute(row);
+        Assert.True(page.IsViewing);
+        await page.PrintReceiptCommand.ExecuteAsync(null);
+        Assert.Null(page.ErrorMessage);
+        Assert.Equal($"receipt-booking-{row.Booking.Id}.pdf", files.Name);
+        Assert.StartsWith("%PDF", System.Text.Encoding.ASCII.GetString(files.Pdf!, 0, 4));
+    }
 }

@@ -112,6 +112,13 @@ public sealed class MauiReportFiles : IReportFiles
         await File.WriteAllBytesAsync(path, pdf);
         await Share.Default.RequestAsync(new ShareFileRequest { Title = "Revenue report", File = new ShareFile(path, "application/pdf") });
     }
+
+    public async Task OpenAsync(string fileName, byte[] pdf)
+    {
+        var path = Path.Combine(FileSystem.Current.CacheDirectory, fileName);
+        await File.WriteAllBytesAsync(path, pdf);
+        await Launcher.Default.OpenAsync(new OpenFileRequest("Print receipt", new ReadOnlyFile(path, "application/pdf")));
+    }
 }
 
 /// <summary>Xendit's checkout in the system browser (Chrome Custom Tab on Android); the member comes back to the app when done.</summary>

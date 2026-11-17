@@ -14,6 +14,8 @@ public interface IReportFiles
 {
     Task<byte[]> FontAsync();
     Task ShareAsync(string fileName, byte[] pdf);
+    /// <summary>Opens the PDF in the system's PDF viewer, to print (a booking receipt at the desk). MAUI has no print dialog of its own.</summary>
+    Task OpenAsync(string fileName, byte[] pdf);
 }
 
 /// <summary>The revenue report as an A4 PDF: summary, then every line with the header repeated on each page.</summary>

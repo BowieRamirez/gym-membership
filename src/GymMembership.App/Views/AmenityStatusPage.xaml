@@ -8,7 +8,9 @@
             x:Class="GymMembership.App.Views.AmenityStatusPage" x:DataType="vm:AmenityStatusViewModel" Title="Amenity status">
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
-        <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="12">
+        <!-- owner, 2026-11-17: the desk's Booked card sits on the right (staff pages are Windows only) -->
+        <Grid ColumnDefinitions="*,380" ColumnSpacing="20" Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}">
+        <VerticalStackLayout Spacing="12">
             <Label Text="Members who follow an amenity are alerted when it becomes available or unavailable." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
@@ -223,7 +225,7 @@
                 </VerticalStackLayout>
             </Border>
 
-            <c:CardGrid Columns="{OnIdiom Phone=1, Default=4}" BindableLayout.ItemsSource="{Binding Cards}">
+            <c:CardGrid Columns="{OnIdiom Phone=1, Default=3}" BindableLayout.ItemsSource="{Binding Cards}">
                 <BindableLayout.EmptyView><Label Text="No amenities are listed yet." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="svc:AmenityCard">
@@ -232,5 +234,48 @@
                 </BindableLayout.ItemTemplate>
             </c:CardGrid>
         </VerticalStackLayout>
+
+        <!-- who booked: confirmed bookings not yet ended, soonest first; View shows the details and prints the receipt -->
+        <VerticalStackLayout Grid.Column="1" Spacing="8">
+            <Label Text="Booked" Style="{StaticResource SectionTitle}" />
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding IsViewing}" AutomationId="BookedDetails">
+                <VerticalStackLayout Spacing="6">
+                    <c:CardTitle Text="{Binding Viewing.Who}" />
+                    <Label Text="{Binding Viewing.Amenity}" FontFamily="BarlowSemiBold" />
+                    <Label Text="{Binding Viewing.When}" />
+                    <Label Text="{Binding Viewing.Coach, StringFormat='Coach: {0}'}" IsVisible="{Binding Viewing.Coach, Converter={StaticResource IsNotNull}}" />
+                    <Label Text="{Binding Viewing.PaidText}" />
+                    <Label Text="{Binding Viewing.MethodText}" Style="{StaticResource Caption}" />
+                    <Label Text="{Binding Viewing.ReceiptText, StringFormat='Receipt {0}'}" FontFamily="BarlowSemiBold" />
+                    <Label Text="{Binding Viewing.Booking.Id, StringFormat='Booking no. {0}'}" Style="{StaticResource Caption}" />
+                    <HorizontalStackLayout Spacing="8" Margin="0,6,0,0">
+                        <Button Text="Print receipt" Style="{StaticResource SmallButton}" Command="{Binding PrintReceiptCommand}" AutomationId="PrintBookingReceipt" />
+                        <Button Text="Close" Style="{StaticResource SmallOutlineButton}" Command="{Binding CloseViewCommand}" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+            <Border Style="{StaticResource Panel}">
+                <VerticalStackLayout Spacing="0" BindableLayout.ItemsSource="{Binding Booked}">
+                    <BindableLayout.EmptyView><Label Text="No upcoming bookings." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="svc:BookedRow">
+                            <VerticalStackLayout>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="0,8">
+                                    <VerticalStackLayout VerticalOptions="Center">
+                                        <Label Text="{Binding Who}" FontFamily="BarlowSemiBold" LineBreakMode="TailTruncation" />
+                                        <Label Text="{Binding Amenity}" Style="{StaticResource Caption}" />
+                                        <Label Text="{Binding When}" Style="{StaticResource Caption}" />
+                                    </VerticalStackLayout>
+                                    <Button Grid.Column="1" Text="View" Style="{StaticResource FilterChip}" VerticalOptions="Center" Clicked="OnViewBooked"
+                                            SemanticProperties.Description="{Binding Who, StringFormat='View the booking of {0}'}" />
+                                </Grid>
+                                <BoxView Style="{StaticResource Hairline}" />
+                            </VerticalStackLayout>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+            </Border>
+        </VerticalStackLayout>
+        </Grid>
     </ScrollView>
 </v:BasePage>
