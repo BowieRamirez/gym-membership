@@ -4,7 +4,7 @@
 
 Created: 2026-11-17
 Last updated: 2026-11-17
-Status: IN PROGRESS (owner approved 2026-11-17, Z1 = a, native execution).
+Status: BUILT 2026-11-17 (owner approved Z1 = a, native). Phases 1-6 done; `0086`-`0088` live; review fixes in `14d5350`. Next migration `0089`. Left: owner hand checks; push/PR waits on the owner.
 Branch: `xendit-payments-2026-11-16` (same branch as the cash-payments plan; ask before a new one). Owner merges to `main`.
 
 **Goal:** The owner's 6-item list of 2026-11-17: the front desk books amenities for members and for people with no account, the Day pass records the right name, the logs show the customer and how they paid, money moves get their own Transactions log apart from the audit log, and the discount code moves into a Buy popup that also asks Online or Cash at the desk.
@@ -37,7 +37,7 @@ Same rules as `2026-11-16-cashier-walkin-logs.md`:
 | 3 | Logs: Transactions apart from the audit log; Customer and Paid with columns | Z4, Z5, Z6 | DEPLOYED (`0086`, `2d478bb`) |
 | 4 | Amenity status: book an amenity for a member at the desk | Z2 | DEPLOYED (`0087`, `3229c54`; cash only) |
 | 5 | Amenity bookings for people with no account (register, then book) | Z1 | DONE (with Phase 4) |
-| 6 | Whole-branch checks, review, owner hand checks | | |
+| 6 | Whole-branch checks, review, owner hand checks | | DONE bar owner hand checks (`14d5350`, `0088`) |
 
 ## 1. Findings (2026-11-17)
 
@@ -160,3 +160,4 @@ Same rules as `2026-11-16-cashier-walkin-logs.md`:
 ## Session log
 
 - 2026-11-17: Owner's list and Buy popup sketch received; plan written. Z1 waits on the owner.
+- 2026-11-17: Owner: Z1 = (a), native. Built Phases 1-5; final review found a desk booking for a customer holding a pass booked for the desk user (fixed, `0088`); also fixed: new search drops the old pick, typed Day pass name kept. Desk bookings are cash only for now.
