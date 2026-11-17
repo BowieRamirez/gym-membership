@@ -168,11 +168,15 @@ public sealed partial class DemoGateway
                 return true;
             }
             case "book_amenity":   // F12 (0052)
+            case "desk_book_amenity":   // plan 2026-11-17 Z1, Z2 (0087): the desk books for a customer, full price in cash at once
             {
                 RequireActive();
-                if (!ActiveMember(Uid)) throw Err("no_active_membership");
+                var desk = fn == "desk_book_amenity";
+                var who = desk ? a.GetValueOrDefault("p_member") as string ?? throw Err("bad_input") : Uid!;
+                if (desk) { Require("payments:record"); if (who == Uid || All<Member>().All(x => x.UserId != who)) throw Err(who == Uid ? "bad_input" : "not_found"); }
+                else if (!ActiveMember(Uid)) throw Err("no_active_membership");
                 var amenityId = I("p_amenity"); var minutes = I("p_minutes");
-                var method = a.TryGetValue("p_method", out var m) ? m as string ?? PayMethod.Qr : PayMethod.Qr;
+                var method = desk ? PayMethod.Cash : a.TryGetValue("p_method", out var m) ? m as string ?? PayMethod.Qr : PayMethod.Qr;
                 if (minutes is not (30 or 60 or 90 or 120) || method is not (PayMethod.Qr or PayMethod.Cash)) throw Err("bad_input");
                 var start = DateTime.Parse((string)a["p_start"], null, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal);
                 var end = start.AddMinutes(minutes);
@@ -180,7 +184,7 @@ public sealed partial class DemoGateway
                 ExpireHolds();
                 var amenity = AmenityForSale(amenityId);
                 if (coach is not null && !CoachIsFree(coach, amenityId, start, end)) throw Err("coach_not_free");   // G14 (0064)
-                if (All<UserAmenity>().Where(p => p.MemberId == Uid && p.AmenityId == amenityId && p.Status == Status.Active && (p.ExpiresAt is null || p.ExpiresAt >= end))
+                if (!desk && All<UserAmenity>().Where(p => p.MemberId == Uid && p.AmenityId == amenityId && p.Status == Status.Active && (p.ExpiresAt is null || p.ExpiresAt >= end))
                         .OrderBy(p => p.IsSession).ThenBy(p => p.Id).FirstOrDefault() is { } heldPass)
                 {
                     var slots = Enumerable.Range(0, minutes / 30)
@@ -193,24 +197,27 @@ public sealed partial class DemoGateway
                 }
                 if ((start - DateTime.UnixEpoch).Ticks % Cooldown.Ticks != 0) throw Err("off_grid");
                 if (start <= now) throw Err("past_slot");
-                if (start.AddHours(-1) <= now) throw Err("too_soon");
+                if (!desk && start.AddHours(-1) <= now) throw Err("too_soon");
                 var day = (start + Manila).Date;
                 if (day > (now + Manila).Date.AddDays(14)) throw Err("too_far_ahead");
                 var g = All<GymSettings>().First();
                 if (start < day - Manila + g.OpensAt || end > day - Manila + g.ClosesAt) throw Err("outside_gym_hours");
                 var am = AmenityForSale(amenityId);
                 if (am.Availability == "unavailable" && (am.BackAt is null || am.BackAt > start)) throw Err("amenity_unavailable");
-                if (All<TrainingSession>().Any(t => t.MemberId == Uid && t.Status == Status.Scheduled && t.ScheduledStart < end && start < t.ScheduledEnd)) throw Err("member_busy");
+                if (All<TrainingSession>().Any(t => t.MemberId == who && t.Status == Status.Scheduled && t.ScheduledStart < end && start < t.ScheduledEnd)) throw Err("member_busy");
                 // G13 (0064): no slot is held; the down payment is the percent of price + coach fee - code (G4)
                 var total = am.Price + (coach is null ? 0 : am.CoachFee);
-                var d = Discounted(Uid!, new() { ["p_discount_code"] = a.GetValueOrDefault("p_code")! }, total, "amenity", amenityId);
-                var down = Math.Round(d.Amount * g.DownPaymentPercent / 100m, 2);
-                var ua = Add(new UserAmenity { MemberId = Uid!, AmenityId = amenityId, Status = Status.Pending, AvailedAt = now, IsSession = SessionOnly(am) });
+                var d = Discounted(who, new() { ["p_discount_code"] = a.GetValueOrDefault("p_code")! }, total, "amenity", amenityId);
+                var down = desk ? d.Amount : Math.Round(d.Amount * g.DownPaymentPercent / 100m, 2);
+                if (desk) OpenShiftOf(Uid);   // 0050: no open shift, nothing is booked
+                if (desk && All<Reservation>().Any(x => x.AmenityId == amenityId && x.Status == "confirmed" && x.StartsAt < end && start < x.EndsAt)) throw Err("slot_taken");
+                var ua = Add(new UserAmenity { MemberId = who, AmenityId = amenityId, Status = Status.Pending, AvailedAt = now, IsSession = SessionOnly(am) });
                 var pay = Add(new Payment { PaymentCode = PaymentCode(), Kind = PayKind.Amenity, Method = method, Status = Status.Pending, Amount = down, DiscountId = d.Id, DiscountAmount = d.Cut,
-                    MemberId = Uid, UserAmenityId = ua.Id, CreatedAt = now, ExpiresAt = new[] { now.AddHours(g.PaymentExpiryHours), start.AddHours(-1) }.Min() });
-                var r = Add(new Reservation { MemberId = Uid!, AmenityId = amenityId, CoachId = coach, StartsAt = start, EndsAt = end, UserAmenityId = ua.Id, PaymentId = pay.Id,
+                    MemberId = who, RecordedBy = desk ? Uid : null, UserAmenityId = ua.Id, CreatedAt = now, ExpiresAt = new[] { now.AddHours(g.PaymentExpiryHours), start.AddHours(-1) }.Min() });
+                var r = Add(new Reservation { MemberId = who, AmenityId = amenityId, CoachId = coach, StartsAt = start, EndsAt = end, UserAmenityId = ua.Id, PaymentId = pay.Id,
                     Status = AwaitingPayment, TotalPrice = d.Amount, DownPayment = down });
                 Audit("reservation.request", "reservations", r.Id.ToString());
+                if (desk) Call("verify_payment", new() { ["p_payment_id"] = pay.Id, ["p_approve"] = true });
                 result = Clone(r);
                 return true;
             }

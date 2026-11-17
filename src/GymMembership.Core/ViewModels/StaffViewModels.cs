@@ -2158,8 +2158,20 @@ public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive
 public sealed record StatusChoice(string Value, string Label);
 
 /// <summary>Front desk and admin: mark an amenity available, in use or unavailable, and see who was alerted.</summary>
-public partial class AmenityStatusViewModel(IAmenityService svc, IReservationService? reservations = null, IPaymentStaffService? payments = null) : LoadableViewModel
+public partial class AmenityStatusViewModel(IAmenityService svc, IReservationService? reservations = null, IPaymentStaffService? payments = null,
+    DeskBookingViewModel? booking = null) : LoadableViewModel
 {
+    // ---- plan 2026-11-17 Z1, Z2: book a slot for a customer at the desk (its own view model, shown on demand) ----
+    public DeskBookingViewModel? Booking { get; } = booking;
+    public bool HasBooking => Booking is not null;
+    [ObservableProperty] private bool isBooking;
+    [RelayCommand]
+    private async Task ToggleBookingAsync()
+    {
+        IsBooking = !IsBooking && Booking is not null;
+        if (IsBooking) await Booking!.OnAppearingAsync();
+    }
+
     // ---- F13 booking refund claims ("I didn't use it"), decided by the desk with a reason; moved here from Payments to verify (cashier plan Y7) ----
     public ObservableCollection<ClaimRow> Claims { get; } = new();
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsDeciding), nameof(DecideTitle), nameof(DecideText))] private ClaimRow? deciding;
@@ -2325,5 +2337,108 @@ public partial class AnnouncementsViewModel(IAnnouncementService svc) : Loadable
         Notice = $"Posted to all {Words(Audience)}.";
         Body = ""; Audience = "everyone";
         await LoadAsync();
+    }
+}
+
+/// <summary>Plan 2026-11-17 Z1, Z2 (0087): on Amenity status the desk books a slot for a customer: find them (or register them, Z1),
+/// pick the amenity, day, time and length, and take the full price in cash into the open drawer.</summary>
+public partial class DeskBookingViewModel(IAttendanceService members, IReservationService reservations, IPaymentStaffService desk) : LoadableViewModel
+{
+    public sealed record SlotOption(DateTime Utc, string Label);
+
+    // ---- the customer: the Cashier's search and Register new member (ponytail: the same ~20 lines as CashierViewModel; share them if a third page needs them) ----
+    public ObservableCollection<MemberHit> Hits { get; } = new();
+    [ObservableProperty] private string search = "";
+    [ObservableProperty] private bool noMatch;
+    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand))] private MemberHit? member;
+    [ObservableProperty] private bool isRegistering;
+    [ObservableProperty] private string newFirstName = "";
+    [ObservableProperty] private string newLastName = "";
+    [ObservableProperty] private string newEmail = "";
+    [ObservableProperty] private string newPhone = "";
+    public bool HasHits => Hits.Count > 0;
+
+    [RelayCommand]
+    private Task FindAsync() => RunAsync(() => members.FindMembersAsync(Search), all =>
+    {
+        var rows = all.Where(h => h.Status != "inactive").ToList();
+        IsRegistering = false; Fill(Hits, rows); NoMatch = rows.Count == 0; OnPropertyChanged(nameof(HasHits));
+    });
+    [RelayCommand] private void PickMember(MemberHit hit) => Member = hit;
+    [RelayCommand] private void StartRegister() { Notice = null; ErrorMessage = null; IsRegistering = true; }
+    [RelayCommand] private void CancelRegister() => IsRegistering = false;
+
+    [RelayCommand]
+    private async Task RegisterAsync()
+    {
+        Notice = null;
+        var name = NameParts.Join(NewFirstName.Trim(), NewLastName.Trim());
+        if (!await Confirm.AskAsync($"Register {name} as a member?", $"{NewEmail.Trim()}\nThey get a temporary password to change at first sign-in.", "Register member")) return;
+        var password = TempPassword.New();
+        string? id = null;
+        if (!await RunAsync(() => desk.RegisterMemberAsync(NewFirstName, NewLastName, NewEmail, NewPhone, password), v => id = v)) return;
+        Search = NewEmail.Trim();
+        await RunAsync(() => members.FindMembersAsync(Search), rows => { Fill(Hits, rows); NoMatch = rows.Count == 0; OnPropertyChanged(nameof(HasHits)); Member = rows.FirstOrDefault(h => h.MemberId == id); });
+        IsRegistering = false;
+        NewFirstName = NewLastName = NewEmail = NewPhone = "";
+        Notice = $"{name} is a member now. Temporary password: {password}. Hand it over; they change it at first sign-in.";
+    }
+
+    // ---- the slot: the same grid and rules as Book an amenity, without the hour-ahead rule (they are at the counter) ----
+    AmenityGrid? grid;
+    public ObservableCollection<GridAmenity> Amenities { get; } = new();
+    public ObservableCollection<SlotOption> Starts { get; } = new();
+    public ObservableCollection<int> Lengths { get; } = new();
+    [ObservableProperty] private DateTime day = DateTime.Today;
+    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand))] private GridAmenity? amenity;
+    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand))] private SlotOption? start;
+    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand))] private int minutes;
+    /// <summary>The last booking made here (the notice names it).</summary>
+    public Reservation? LastBooked { get; private set; }
+
+    public override Task OnAppearingAsync() => LoadGridAsync();
+    partial void OnDayChanged(DateTime value) => _ = LoadGridAsync();
+    partial void OnAmenityChanged(GridAmenity? value) => FillStarts();
+    partial void OnStartChanged(SlotOption? value)
+    {
+        Fill(Lengths, value is null || Amenity is null || grid is null ? [] : BookingSlots.Lengths(grid, Amenity.Id, value.Utc, payFirst: false));
+        Minutes = Lengths.FirstOrDefault();
+    }
+
+    async Task LoadGridAsync()
+    {
+        var keep = Amenity?.Id;
+        await RunAsync(() => reservations.GridAsync(DateOnly.FromDateTime(Day)), g =>
+        {
+            grid = g; Fill(Amenities, g.Amenities);
+            Amenity = Amenities.FirstOrDefault(a => a.Id == keep);
+            FillStarts();
+        });
+    }
+
+    void FillStarts()
+    {
+        var slots = new List<SlotOption>();
+        if (grid is { } g && Amenity is { } a)
+            for (var t = g.Opens; t < g.Closes; t = t.AddMinutes(30))
+                if (BookingSlots.Lengths(g, a.Id, t, payFirst: false).Count > 0) slots.Add(new(t, t.AddHours(8).ToString("h:mm tt", CultureInfo.InvariantCulture)));
+        Fill(Starts, slots);
+        Start = null;
+    }
+
+    bool CanBook() => Member is not null && Amenity is not null && Start is not null && Minutes > 0;
+
+    [RelayCommand(CanExecute = nameof(CanBook))]
+    private async Task BookAsync()
+    {
+        if (Member is not { } who || Amenity is not { } a || Start is not { } s) return;
+        Notice = null;
+        var when = $"{s.Utc.AddHours(8):ddd d MMM}, {s.Label}, {Minutes} min";
+        if (!await Confirm.AskAsync($"Book {a.Name} for {who.Username}?", $"{when}.\nTake the full price in cash into your drawer.", "Book and take cash")) return;
+        Reservation? made = null;
+        if (!await RunAsync(() => reservations.DeskBookAsync(who.MemberId, a.Id, s.Utc, Minutes), r => made = r)) return;
+        LastBooked = made;
+        Notice = $"Booked {a.Name} for {who.Username}, {when}. Took ₱{made!.TotalPrice:N2} in cash.";
+        await LoadGridAsync();
     }
 }

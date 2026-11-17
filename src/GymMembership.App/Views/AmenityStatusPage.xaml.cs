@@ -13,6 +13,11 @@ public partial class AmenityStatusPage : BasePage
 	// the reload only refills the list of cards; it never touches the editor fields, so typing is safe
 	protected override TimeSpan? AutoRefresh => TimeSpan.FromSeconds(30);
 
+	void OnPickCustomer(object? sender, EventArgs e)
+	{
+		if (BindingContext is AmenityStatusViewModel { Booking: { } b } && (sender as BindableObject)?.BindingContext is GymMembership.Core.Services.MemberHit hit) b.PickMemberCommand.Execute(hit);
+	}
+	void OnCloseBooking(object? sender, EventArgs e) => ((AmenityStatusViewModel)BindingContext).IsBooking = false;
 	void OnChange(object? sender, EventArgs e) => Row<AmenityStatusViewModel>(sender, v => v.SelectCommand);
 	void OnTakeCash(object? sender, EventArgs e) => Row<AmenityStatusViewModel>(sender, v => v.TakeBalanceCommand);         // G13
 	void OnTakeGcash(object? sender, EventArgs e) => Row<AmenityStatusViewModel>(sender, v => v.TakeBalanceGcashCommand);
