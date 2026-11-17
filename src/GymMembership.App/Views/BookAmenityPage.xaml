@@ -272,7 +272,7 @@
                                     </VerticalStackLayout>
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Spacing="6" IsVisible="{Binding PayFirst}">
-                                    <Label Text="Pay the down payment with" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding PayWithText}" Style="{StaticResource Caption}" />
                                     <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                                         <Border Style="{StaticResource PayOption}">
                                             <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding PayQr}" Value="True"><Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /><Setter Property="StrokeThickness" Value="2" /></DataTrigger></Border.Triggers>

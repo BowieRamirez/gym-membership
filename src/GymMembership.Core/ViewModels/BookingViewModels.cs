@@ -67,7 +67,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Split), nameof(BookText), nameof(SummaryDetail))] private string code = "";
     /// <summary>The member's codes that fit this amenity (G4), as on Packages.</summary>
     public ObservableCollection<AvailableCode> Codes { get; } = new();
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(Split), nameof(BookText), nameof(SummaryDetail))] private int percent = 50;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(Split), nameof(BookText), nameof(SummaryDetail), nameof(PayWithText), nameof(HoldText))] private int percent = 50;
     IReadOnlyList<AvailableCode> _myCodes = [];
     IReadOnlyDictionary<DateOnly, string> _closed = new Dictionary<DateOnly, string>();   // G16 (0065)
 
@@ -100,8 +100,12 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     public string DayText => Day.ToString("dddd d MMMM", En);
     public string BookText => PayFirst ? $"Book and pay ₱{Split.Down:N2}" : "Book";
     public bool CanBook => Time is not null && Length is not null && (!IsWithCoach || PickedCoach is not null);
-    public string HoldText => PayFirst && PayCash ? "Not yours until the desk takes the down payment. If someone else's is paid first, yours is refunded."
-        : PayFirst ? "Not yours until the down payment is paid online. If someone else's is paid first, yours is refunded."
+    /// <summary>Owner, 2026-11-18: at 100% (Gym settings) the whole price is paid when booking, so there is no "down payment" or balance.</summary>
+    bool PaysInFull => Percent >= 100;
+    string PayWord => PaysInFull ? "payment" : "down payment";
+    public string PayWithText => $"Pay the {PayWord} with";
+    public string HoldText => PayFirst && PayCash ? $"Not yours until the desk takes the {PayWord}. If someone else's is paid first, yours is refunded."
+        : PayFirst ? $"Not yours until the {PayWord} is paid online. If someone else's is paid first, yours is refunded."
         : Split.Balance > 0 ? $"Uses your pass. The ₱{Split.Balance:N2} coach fee is paid at the desk." : "Uses your pass, nothing to pay.";
     /// <summary>Why times are faded: none left that day, or (paying first, today) the hold needs the start more than 1 hour away.</summary>
     public bool IsDayClosed => _closed.ContainsKey(Day);
@@ -112,7 +116,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     public string Summary => Time is null || Length is null ? "Pick a start time"
         : $"{Manila(Time.StartUtc).ToString("ddd d MMM, h:mm", En)} to {Manila(Time.StartUtc.AddMinutes(Length.Minutes)).ToString("h:mm tt", En)}";
     public string SummaryDetail => Picked is null || Time is null ? "" : PayFirst
-        ? $"Total ₱{Split.Due:N2}{(Split.Cut > 0 ? $" after ₱{Split.Cut:N2} off" : "")}. Down payment now ({Percent}%) ₱{Split.Down:N2}, balance at the desk ₱{Split.Balance:N2}."
+        ? $"Total ₱{Split.Due:N2}{(Split.Cut > 0 ? $" after ₱{Split.Cut:N2} off" : "")}. {(PaysInFull ? "Paid in full now." : $"Down payment now ({Percent}%) ₱{Split.Down:N2}, balance at the desk ₱{Split.Balance:N2}.")}"
         : $"With your pass · {Picked.Amenity.Name} cools down for 30 minutes after.";
 
     static DateTime Manila(DateTime utc) => utc.ToUniversalTime().AddHours(8);
@@ -250,8 +254,8 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
         await LoadAsync();
         var row = Bookings.FirstOrDefault(b => b.Booking.Id == made!.Id);
         Notice = made!.Status != "awaiting_payment" ? "Booked." : PayCash
-            ? $"Requested. {row?.Detail ?? "Pay the down payment at the front desk."}"
-            : "Requested. Tap Pay online on the booking below. It's yours once the down payment is paid.";
+            ? $"Requested. {row?.Detail ?? $"Pay the {PayWord} at the front desk."}"
+            : $"Requested. Tap Pay online on the booking below. It's yours once the {PayWord} is paid.";
     }
 
     // ---------- my bookings ----------

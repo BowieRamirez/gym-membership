@@ -185,8 +185,11 @@ public sealed record BookingRow(Reservation Booking, string Amenity, DateTime No
         { Status: "approved", Kind: "cancel" } when LostToOther => $"{Booking.CancelReason} · refund approved",
         { Status: "approved", Kind: "cancel" } => "Cancelled · refund approved",
         { Status: "approved" } => "Refund approved",
-        _ => IsWaiting ? "Waiting for down payment" : InUse ? "In use" : Ended ? "Ended" : "Confirmed"
+        _ => IsWaiting ? $"Waiting for {PayWord}" : InUse ? "In use" : Ended ? "Ended" : "Confirmed"
     };
+    /// <summary>Owner, 2026-11-18: a booking paid in full when made (Gym settings at 100%) has no "down payment".</summary>
+    string PayWord => Booking.Balance > 0 ? "down payment" : "payment";
+    string PayWordCap => Booking.Balance > 0 ? "Down payment" : "Payment";
     public string Detail => Refund switch
     {
         { Status: "pending" } => "The front desk is checking it. You'll get a notification.",
@@ -196,13 +199,15 @@ public sealed record BookingRow(Reservation Booking, string Amenity, DateTime No
         { Status: "approved", Kind: "cancel" } when LostToOther => $"Another booking's down payment was verified first. {Price} to be repaid at the front desk.",
         { Status: "approved" } => $"{Price} to be repaid at the front desk.",
         _ when IsWaiting && Payment is { } p => (p.Method == PayMethod.Cash
-            ? $"Down payment {Price} at the front desk by {At(p.ExpiresAt ?? Start)}."
-            : p.ProofPath is null ? $"Down payment {Price} online. Pay by {At(p.ExpiresAt ?? Start)}."
-            : $"Down payment {Price} by GCash. Proof sent; the front desk is checking it.") + " Not yours until it's paid.",
+            ? $"{PayWordCap} {Price} at the front desk by {At(p.ExpiresAt ?? Start)}."
+            : p.ProofPath is null ? $"{PayWordCap} {Price} online. Pay by {At(p.ExpiresAt ?? Start)}."
+            : $"{PayWordCap} {Price} by GCash. Proof sent; the front desk is checking it.") + " Not yours until it's paid.",
         _ when InUse => $"Ends at {Manila(End).ToString("h:mm tt", En)}.",
         _ when CanClaim => $"Didn't go? Tell the front desk by {At(End.AddHours(24))} and they'll check for a refund.",
         _ when Ended => "",
         _ when Paid && Booking.BalancePaymentId is not null => "Paid in full.",
+        _ when Paid && Booking.Balance == 0 => "Paid in full. "
+            + (Refundable ? $"Cancel by {At(Start.AddHours(-24))} to get the {Down} back." : $"Cancelling now keeps the {Down}."),
         _ when Paid => $"Down payment {Down} paid. Balance ₱{Booking.Balance:N2} at the desk. "
             + (Refundable ? $"Cancel by {At(Start.AddHours(-24))} to get the {Down} down payment back." : $"Cancelling now keeps the {Down} down payment."),
         _ when Booking.Balance > 0 && Booking.BalancePaymentId is null => $"Booked with your pass. Coach fee ₱{Booking.Balance:N2} at the desk.",

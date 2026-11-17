@@ -332,4 +332,19 @@ public class ReservationTests
         Assert.Equal("Any coach in the gym", vm.Cards.Single(c => c.Amenity.Name == "Sauna").RunText);   // Group classes is Lena's (G14 demo)
         Assert.Equal("forbidden", (await new AmenityService(gw).SetRunsAsync(pool.Amenity.Id, true)).Message);
     }
+
+    [Fact]   // owner, 2026-11-18: Gym settings at 100%: the whole price is paid when booking; no "down payment", no ₱0.00 balance
+    public async Task At_100_percent_the_member_pays_in_full_when_booking()
+    {
+        var (_, vm) = await Member();
+        await Pick(vm, "Group classes", "10:00");
+        vm.Percent = 100;
+        Assert.True(vm.Split.Due > 0);
+        Assert.Equal(vm.Split.Due, vm.Split.Down);
+        Assert.Equal($"Book and pay ₱{vm.Split.Due:N2}", vm.BookText);
+        Assert.EndsWith("Paid in full now.", vm.SummaryDetail);
+        Assert.DoesNotContain("down payment", vm.SummaryDetail + vm.HoldText + vm.PayWithText, StringComparison.OrdinalIgnoreCase);
+        vm.Percent = 50;
+        Assert.Contains("Down payment now (50%)", vm.SummaryDetail);
+    }
 }
