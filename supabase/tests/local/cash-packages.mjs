@@ -59,6 +59,14 @@ try {
     assert.equal((await db.query('select status from payments where payment_id=$1', [p.payment_id])).rows[0].status, 'rejected');
   });
 
+  await test('a cash package past its deadline cannot be approved and the expiry job expires it (0085)', async () => {
+    const p = (await as(await user(), `select * from extend_membership($1,null,'cash')`, [pack]))[0];
+    await db.query(`update payments set expires_at = now() - interval '1 minute' where payment_id = $1`, [p.payment_id]);
+    await assert.rejects(as(desk, 'select verify_payment($1,true)', [p.payment_id]), /payment_expired/);
+    await db.query('select public.expire_payments()');
+    assert.equal((await db.query('select status from payments where payment_id=$1', [p.payment_id])).rows[0].status, 'expired');
+  });
+
   await test('anon cannot call the new functions', async () => {
     const r = (await db.query(`select has_function_privilege('anon','public.extend_membership(bigint,text,payment_method)','execute') a,
       has_function_privilege('authenticated','public.with_package_method(payments,payment_method)','execute') b`)).rows[0];

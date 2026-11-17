@@ -836,7 +836,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (pay.MemberId == uid) throw Err("self_verify");
                 if (B("p_approve"))
                 {
-                    if ((pay.Method == PayMethod.Qr || HoldOf(pay) is not null) && pay.ExpiresAt <= now) throw Err("payment_expired");   // 0052: a cash hold runs out too
+                    if (pay.Method is PayMethod.Qr or PayMethod.Cash && pay.ExpiresAt <= now) throw Err("payment_expired");   // 0052, 0085: cash (holds and packages) runs out too
                     if (pay.Method == PayMethod.Cash) pay.CashShiftId = OpenShiftOf(uid);   // 0050
                     pay.Status = Status.Verified; pay.VerifiedBy = uid; pay.VerifiedAt = now; pay.ReceiptNo = ReceiptNo();
                     ActivateTarget(pay);

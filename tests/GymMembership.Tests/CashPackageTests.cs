@@ -41,6 +41,37 @@ public class CashPackageTests
         Assert.Equal(AppErrorKind.Validation, (await subs.ExtendAsync(pkg.Id, null, PayMethod.Gcash)).Error);
     }
 
+    sealed class Clock(DateTimeOffset now) : TimeProvider { public DateTimeOffset Now = now; public override DateTimeOffset GetUtcNow() => Now; }
+
+    [Fact]
+    public async Task A_cash_payment_past_its_deadline_cannot_be_approved_and_stops_showing_as_due()
+    {
+        var clock = new Clock(DateTimeOffset.UtcNow);
+        var gw = new DemoGateway(clock: clock);
+        Assert.True((await new AuthService(gw).RegisterAsync("Ana", "Reyes", "ana@demo.io", "secret12", true)).Ok);
+        var member = new MembershipService(gw);
+        var pkg = (await member.ListPackagesAsync()).Value!.First(p => p.Name == "Quarterly");
+        var pay = (await new SubscriptionService(gw).ExtendAsync(pkg.Id, null, PayMethod.Cash)).Value!;
+        var item = (await member.MyPaymentsAsync()).Value!.Single();
+        Assert.True(item.PaysAtDesk);
+        Assert.False((item with { ExpiresAt = DateTime.UtcNow.AddMinutes(-1) }).PaysAtDesk);   // PaymentItem reads the real clock, like NeedsPayment
+        clock.Now = pay.ExpiresAt!.Value.AddMinutes(1);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        await gw.OpenDrawerAsync();
+        Assert.False((await new PaymentStaffService(gw).VerifyAsync(pay.Id, true)).Ok);
+    }
+
+    [Fact]
+    public async Task My_membership_counts_a_cash_payment_as_waiting_for_the_desk()
+    {
+        var (_, member, subs, pkg) = await NewMember();
+        await subs.ExtendAsync(pkg.Id, null, PayMethod.Cash);
+        var vm = new MyMembershipViewModel(member, subs);
+        await vm.OnAppearingAsync();
+        Assert.False(vm.CanStart);
+        Assert.Equal($"Pay ₱{pkg.Price:N2} in cash at the front desk; your membership starts once the desk verifies it.", vm.HeroCaption);
+    }
+
     // ---- Packages page: Online / Cash at the desk ----
     [Fact]
     public async Task Buying_with_cash_says_pay_at_the_desk_and_shows_the_desk_card()

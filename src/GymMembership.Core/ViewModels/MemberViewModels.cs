@@ -379,6 +379,8 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
         finally { _loading = false; }
     }
 
+    PaymentItem? payAtDesk;
+
     async Task<bool> LoadPaymentsAsync()
     {
         var waiting = false;
@@ -387,7 +389,8 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
             allPayments = rows; ApplyFilter();
             PaymentsWaitingText = rows.Count(p => p.Status == Status.Pending).ToString();
             PayNow = rows.FirstOrDefault(p => p.NeedsPayment);
-            waiting = PayNow is not null || rows.Any(p => p.AwaitingReview);
+            payAtDesk = rows.FirstOrDefault(p => p.PaysAtDesk);   // cash plan 2026-11-17: chosen cash, waiting for the desk
+            waiting = PayNow is not null || payAtDesk is not null || rows.Any(p => p.AwaitingReview);
         })) return false;
         return await RunAsync(svc.MyMembershipsAsync, rows => { Fill(Memberships, rows); UpdateHero(rows, waiting); });
     }
@@ -415,7 +418,9 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
             LaneFraction = Math.Clamp((double)left / Math.Max(1, active.DurationDays), 0, 1);
         }
         else if (waitingOnPayment)
-        { HeroNumber = "–"; HeroCaption = PayNow is not null ? "Pay online on Packages to start your membership." : "Waiting for staff to verify your payment."; LaneFraction = 0; }
+        { HeroNumber = "–"; HeroCaption = PayNow is not null ? "Pay online on Packages to start your membership."
+            : payAtDesk is { } cash ? $"Pay ₱{cash.Amount:N2} in cash at the front desk; your membership starts once the desk verifies it."
+            : "Waiting for staff to verify your payment."; LaneFraction = 0; }
         else if (Terms.FirstOrDefault(t => t.State == Status.Scheduled) is { } next)
         { HeroNumber = "0"; HeroCaption = $"No active access. Your next paid term starts {next.Term.StartsAt.AddHours(8):d MMM yyyy, h:mm tt} (Manila)."; LaneFraction = 0; }
         else if (expired is not null)
@@ -430,7 +435,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
         Notice = null;
         if (!await Confirm.AskAsync("Create a new payment?", $"{item.What}\n₱{item.Amount:N2}\nThe expired one stays in your history.", "Create payment")) return;
         if (!await RunAsync(() => svc.PayAgainAsync(item), _ => { })) return;
-        Notice = "New payment created. Pay it online on Packages.";
+        Notice = item.Method == PayMethod.Cash ? "New payment created. Pay it in cash at the front desk." : "New payment created. Pay it online on Packages.";
         await LoadAsync();
     }
 }

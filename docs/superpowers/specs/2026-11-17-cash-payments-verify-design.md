@@ -19,7 +19,7 @@ Reverses part of cashier plan Y7 (`a797e89`), which removed that page.
   Cash: "Pay ₱X in cash at the front desk; your membership starts once the desk verifies it." The Pay online card shows only for online payments;
   a pending cash payment shows "Waiting for the front desk" instead.
 - **Front desk (Windows only):** `VerifyPaymentsPage` restored from `a797e89^`, trimmed to cash: pending cash payments (packages and
-  amenity down payments), newest first, each with Approve (cash into the open drawer) and Reject (reason required).
+  amenity down payments), oldest first (a queue), each with Approve (cash into the open drawer) and Reject (reason required).
   Back in the staff menu and icon rail; Home's tile links to it. Cashier's "Bookings waiting for a down payment" moves here (removed from Cashier).
 - **Unchanged:** booking balances on the day (Amenity Status), counter payments and walk-ins (Cashier), Xendit online flow.
 
