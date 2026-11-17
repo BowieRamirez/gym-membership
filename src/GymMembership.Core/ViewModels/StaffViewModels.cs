@@ -2443,7 +2443,7 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
     {
         var slots = new List<SlotOption>();
         if (grid is { } g && Amenity is { } a)
-            for (var t = g.Opens; t < g.Closes; t = t.AddMinutes(30))
+            foreach (var t in BookingSlots.HourStarts(g))
                 if (BookingSlots.Lengths(g, a.Id, t, payFirst: false).Count > 0) slots.Add(new(t, t.AddHours(8).ToString("h:mm tt", CultureInfo.InvariantCulture)));
         Fill(Starts, slots);
         Start = null;

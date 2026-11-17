@@ -42,6 +42,12 @@ public sealed class FreeCoach : BaseModel
 /// <summary>The booking rules the server applies, so the sheet only offers what will go through (it rechecks everything anyway).</summary>
 public static class BookingSlots
 {
+    /// <summary>Owner, 2026-11-17: start times are on the hour only (bookings are whole hours since 0090). Manila is UTC+8, so a UTC hour is a Manila hour.</summary>
+    public static IEnumerable<DateTime> HourStarts(AmenityGrid g)
+    {
+        var t = new DateTime(g.Opens.Ticks - g.Opens.Ticks % TimeSpan.TicksPerHour, g.Opens.Kind);
+        for (t = t < g.Opens ? t.AddHours(1) : t; t < g.Closes; t = t.AddHours(1)) yield return t;
+    }
 
     // one 30-minute cell: open, yours, booked, cooldown, blocked (its cooldown would run into the next booking), closed, past or outside gym hours
     public static string StateOf(AmenityGrid g, GridAmenity a, DateTime t)

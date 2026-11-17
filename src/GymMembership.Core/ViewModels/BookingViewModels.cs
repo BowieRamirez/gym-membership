@@ -203,7 +203,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     {
         Times.Clear(); Lengths.Clear();
         if (_grid is null || Picked is null) return;
-        for (var t = _grid.Opens; t < _grid.Closes; t = t.AddMinutes(30))
+        foreach (var t in BookingSlots.HourStarts(_grid))
             Times.Add(new PickChip(Manila(t).ToString("h:mm tt", En), BookingSlots.Lengths(_grid, Picked.Amenity.Id, t, PayFirst).Count > 0, t));
         OnPropertyChanged(nameof(TimesNote));
     }
