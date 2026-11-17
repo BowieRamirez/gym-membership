@@ -36,24 +36,6 @@ public class ConfirmationTests
         Assert.Equal(yes, gw.CurrentUserId is null);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Buying_a_membership_names_the_package_and_price(bool yes)
-    {
-        var asked = Answer(yes);
-        var gw = await As("carlo@demo.io");
-        var membership = new MembershipService(gw);
-        var package = (await membership.ListPackagesAsync()).Value![0];
-        var before = (await membership.MyPaymentsAsync()).Value!.Count;
-        var vm = new PackagesViewModel(membership, new Nav(), new SubscriptionService(gw));
-        await vm.AvailCommand.ExecuteAsync(package);
-        var question = Assert.Single(asked);
-        Assert.Contains(package.Name, question);
-        Assert.Contains($"₱{package.Price:N2}", question);
-        Assert.Equal(before + (yes ? 1 : 0), (await membership.MyPaymentsAsync()).Value!.Count);
-    }
-
     [Fact]
     public async Task Going_back_on_a_booking_books_and_charges_nothing()
     {
@@ -127,7 +109,7 @@ public class ConfirmationTests
     {
         { "MemberViewModels.cs", "HeaderViewModel", "SignOut" },
         { "MemberViewModels.cs", "SettingsViewModel", "ChangePassword" },
-        { "MemberViewModels.cs", "PackagesViewModel", "Avail" },
+        // PackagesViewModel.Avail left this list 2026-11-17 (Z7): the Buy popup is the confirmation (BuyPopupTests)
         { "MemberViewModels.cs", "MyMembershipViewModel", "PayAgain" },
         { "MemberViewModels.cs", "PackagesViewModel", "PayOnline" },   // Xendit plan: replaced Send proof; on Packages since 2026-11-16
         { "MemberViewModels.cs", "CoachesViewModel", "Hire" },

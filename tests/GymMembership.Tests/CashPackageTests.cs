@@ -72,40 +72,6 @@ public class CashPackageTests
         Assert.Equal($"Pay ₱{pkg.Price:N2} in cash at the front desk; your membership starts once the desk verifies it.", vm.HeroCaption);
     }
 
-    // ---- Packages page: Online / Cash at the desk ----
-    [Fact]
-    public async Task Buying_with_cash_says_pay_at_the_desk_and_shows_the_desk_card()
-    {
-        var asked = new List<string>();
-        Confirm.Answer = (t, m, b) => { asked.Add($"{t}|{m}|{b}"); return Task.FromResult(true); };
-        var (gw, member, subs, pkg) = await NewMember();
-        var vm = new PackagesViewModel(member, new ConfirmationTests.Nav(), subs);
-        await vm.LoadCommand.ExecuteAsync(null);
-        vm.PickMethodCommand.Execute(PayMethod.Cash);
-        Assert.True(vm.PayCash);
-        await vm.AvailCommand.ExecuteAsync(pkg);
-        var q = Assert.Single(asked);
-        Assert.Contains("in cash at the front desk", q);
-        Assert.EndsWith("|Buy membership", q);
-        Assert.Null(vm.PayNow);
-        Assert.Equal(PayMethod.Cash, vm.PayAtDesk!.Method);
-        Assert.Equal("Pay at the front desk", vm.PayAtDesk.Detail);
-        Assert.Equal($"Payment created. Pay ₱{pkg.Price:N2} in cash at the front desk; your membership starts once the desk verifies it.", vm.Notice);
-    }
-
-    [Fact]
-    public async Task Packages_page_defaults_to_online()
-    {
-        Confirm.Answer = (_, _, _) => Task.FromResult(true);
-        var (_, member, subs, pkg) = await NewMember();
-        var vm = new PackagesViewModel(member, new ConfirmationTests.Nav(), subs);
-        await vm.LoadCommand.ExecuteAsync(null);
-        Assert.False(vm.PayCash);
-        await vm.AvailCommand.ExecuteAsync(pkg);
-        Assert.NotNull(vm.PayNow);
-        Assert.Null(vm.PayAtDesk);
-    }
-
     [Fact]
     public async Task Pay_again_keeps_cash()
     {

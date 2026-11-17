@@ -10,7 +10,7 @@ public partial class PackagesPage : BasePage
 		BindingContext = vm;
 	}
 
-	void OnAvail(object? sender, EventArgs e) => Row<PackagesViewModel>(sender, v => v.AvailCommand);
+	void OnAvail(object? sender, EventArgs e) => Row<PackagesViewModel>(sender, v => v.OpenBuyCommand);
 	void OnUseCode(object? sender, EventArgs e) => Row<PackagesViewModel>(sender, v => v.UseCodeCommand);
 	protected override TimeSpan? AutoRefresh => TimeSpan.FromSeconds(20);   // back from Xendit's page, the next tick confirms the payment
 	async void OnCancelPayment(object? sender, EventArgs e)

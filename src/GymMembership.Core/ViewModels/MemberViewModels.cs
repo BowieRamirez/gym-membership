@@ -263,19 +263,39 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
 
     [RelayCommand] private void UseCode(AvailableCode code) => DiscountCode = code.Code;
 
-    // avail creates a pending online payment; the Pay online card on this page pays it through Xendit
+    // plan 2026-11-17 Z7 (owner's sketch): Buy opens a popup; step 1 the code and the package, step 2 Online or Cash, then Pay.
+    // The popup is the confirmation, so Pay asks nothing more.
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsBuying), nameof(BuyTerms))] private MembershipPackage? buying;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OnCodeStep), nameof(OnPayStep))] private bool payStep;
+    public bool IsBuying => Buying is not null;
+    public bool OnCodeStep => !PayStep;
+    public bool OnPayStep => PayStep;
+    /// <summary>The codes that fit the package in the popup.</summary>
+    public ObservableCollection<AvailableCode> BuyCodes { get; } = new();
+    public string BuyTerms => Buying is { } p ? $"₱{p.Price:N2} for {p.DurationDays} days. Once paid, it starts right away, or when your current term ends.\n{RefundRules.Line}" : "";
+
     [RelayCommand]
-    private async Task AvailAsync(MembershipPackage package)
+    private void OpenBuy(MembershipPackage package)
     {
+        Notice = null; ErrorMessage = null; DiscountCode = null; Method = PayMethod.Qr; PayStep = false;
+        Fill(BuyCodes, Codes.Where(c => c.AllPackages || c.PackageIds.Contains(package.Id)));
+        Buying = package;
+    }
+    [RelayCommand] private void Next() { ErrorMessage = null; PayStep = true; }
+    [RelayCommand] private void Back() => PayStep = false;
+    [RelayCommand] private void CloseBuy() { Buying = null; DiscountCode = null; ErrorMessage = null; }
+
+    // creates a pending payment: online is paid on this page's Pay online card through Xendit, cash at the front desk
+    [RelayCommand]
+    private async Task PayAsync()
+    {
+        if (Buying is not { } package) return;
         Notice = null;
-        var code = string.IsNullOrWhiteSpace(DiscountCode) ? "" : $"\nDiscount code {DiscountCode.Trim()} is applied when you pay.";
-        var how = PayCash ? "You pay in cash at the front desk; it starts once the desk verifies it." : "You pay online right after, on this page.";
-        if (!await Confirm.AskAsync($"Buy {package.Name}?", $"₱{package.Price:N2} for {package.DurationDays} days.{code}\n{how}\n\n{RefundRules.Line}", "Buy membership")) return;
         Payment? made = null;
         if (!await RunAsync(() => subscription.ExtendAsync(package.Id, DiscountCode, Method), p => made = p)) return;
-        DiscountCode = null;
         Notice = PayCash ? $"Payment created. Pay ₱{made!.Amount:N2} in cash at the front desk; your membership starts once the desk verifies it."
-                         : "Payment created. Pay online above to start it.";
+                         : "Payment created. Pay online on this page to start it.";
+        CloseBuy();
         await LoadPayAsync();
     }
 
