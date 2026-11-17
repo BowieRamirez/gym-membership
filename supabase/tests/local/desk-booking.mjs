@@ -162,10 +162,10 @@ try {
   });
 
   await test('0092: the customer leaves (desk cancels) or the time runs out: the booking is cancelled too', async () => {
-    const a = (await online(desk, 'Hal', '04:30'))[0];
+    const a = (await online(desk, 'Hal', '12:00'))[0];
     await as(desk, 'select verify_payment($1, false, $2)', [a.payment_id, 'Customer left at the desk']);
     assert.equal(await status(a.reservation_id), 'cancelled');
-    const b = (await online(desk, 'Ivy', '04:30'))[0];   // the slot is free again
+    const b = (await online(desk, 'Ivy', '12:00'))[0];   // the slot is free again
     await db.query(`update payments set expires_at = now() - interval '1 minute' where payment_id=$1`, [b.payment_id]);
     await db.query('select expire_payments()');
     assert.equal(await status(b.reservation_id), 'cancelled');
@@ -176,6 +176,15 @@ try {
     const r = (await db.query(`select has_function_privilege('anon','public.desk_book_walk_in(text,bigint,timestamptz,integer,boolean)','execute') a,
       has_function_privilege('authenticated','public.confirm_walk_in_booking(bigint)','execute') b`)).rows[0];
     assert.deepEqual([r.a, r.b], [false, false]);
+  });
+
+  await test('0093: every booking starts on the hour: member, desk for a member, walk-in (cash and online)', async () => {
+    const m = await user(null);
+    await db.query(`insert into cash_shifts(cashier_id, opening_float) values($1, 0) on conflict do nothing`, [desk]);
+    await assert.rejects(deskBook(desk, m, '21:30'), /not_on_the_hour/);
+    await assert.rejects(as(desk, 'select * from desk_book_walk_in(p_name=>$1, p_amenity=>$2, p_start=>$3, p_minutes=>60)', ['Kai', court, at('21:30')]), /not_on_the_hour/);
+    await assert.rejects(online(desk, 'Kai', '21:30'), /not_on_the_hour/);
+    assert.equal((await deskBook(desk, m, '22:00'))[0].status, 'confirmed');
   });
 } finally {
   await db.end(); await server.stop();

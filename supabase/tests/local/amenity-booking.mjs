@@ -76,7 +76,8 @@ try {
     assert.equal((await book(two, a, '10:00')).status, 'awaiting_payment');   // a request may still be made...
     const cool = await book(two, a, '11:00'); await approve(cool);              // ...but 11:00-11:30 is the cooldown
     assert.equal((await res(cool.reservation_id)).cancel_reason, 'Slot taken');
-    const after = await book(two, a, '11:30'); await approve(after);
+    const after = await book(two, a, '12:00');   // 0093: next start on the hour after the cooldown
+    await approve(after);
     assert.equal((await res(after.reservation_id)).status, 'confirmed');
   });
   await test('length is whole hours (0090: no half hours; the gym hours are the only cap)', async () => {

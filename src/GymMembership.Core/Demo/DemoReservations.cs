@@ -198,6 +198,7 @@ public sealed partial class DemoGateway
                 var start = DateTime.Parse((string)a["p_start"], null, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal);
                 var end = start.AddMinutes(minutes);
                 var coach = a.GetValueOrDefault("p_coach") as string;
+                if ((start - DateTime.UnixEpoch).Ticks % TimeSpan.TicksPerHour != 0) throw Err("not_on_the_hour");   // 0093: pass bookings too
                 ExpireHolds();
                 var amenity = AmenityForSale(amenityId);
                 if (coach is not null && !CoachIsFree(coach, amenityId, start, end)) throw Err("coach_not_free");   // G14 (0064)
@@ -212,7 +213,7 @@ public sealed partial class DemoGateway
                     result = Clone(booked);
                     return true;
                 }
-                if ((start - DateTime.UnixEpoch).Ticks % Cooldown.Ticks != 0) throw Err("off_grid");
+                if ((start - DateTime.UnixEpoch).Ticks % TimeSpan.TicksPerHour != 0) throw Err("not_on_the_hour");   // 0093
                 if (start <= now) throw Err("past_slot");
                 if (!desk && start.AddHours(-1) <= now) throw Err("too_soon");
                 var day = (start + Manila).Date;
@@ -256,7 +257,7 @@ public sealed partial class DemoGateway
                 var start = DateTime.Parse((string)a["p_start"], null, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal);
                 var end = start.AddMinutes(minutes);
                 var am = AmenityForSale(amenityId);
-                if ((start - DateTime.UnixEpoch).Ticks % Cooldown.Ticks != 0) throw Err("off_grid");
+                if ((start - DateTime.UnixEpoch).Ticks % TimeSpan.TicksPerHour != 0) throw Err("not_on_the_hour");   // 0093
                 if (start <= now) throw Err("past_slot");
                 var day = (start + Manila).Date;
                 if (day > (now + Manila).Date.AddDays(14)) throw Err("too_far_ahead");

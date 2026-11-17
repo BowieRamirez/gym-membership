@@ -185,7 +185,7 @@ public class ReservationTests
     {
         var (gw, vm) = await Member();
         await Pick(vm, "Pool", "14:00");
-        Assert.True((await new ReservationService(gw).BookAsync(vm.Picked!.Amenity.Id, At("14:30"), 60, PayMethod.Qr)).Ok);   // meanwhile, from another device
+        Assert.True((await new ReservationService(gw).BookAsync(vm.Picked!.Amenity.Id, At("14:00"), 60, PayMethod.Qr)).Ok);   // meanwhile, from another device (0093: on the hour)
         await vm.BookCommand.ExecuteAsync(null);
         Assert.NotNull(vm.ErrorMessage);
         Assert.True(vm.IsPicking);

@@ -76,7 +76,7 @@ try {
   });
   await test('G13: of two paid requests for one slot the first verified wins; the other\'s down payment goes to Refunds', async () => {
     const one = await member(), two = await member(), a = await amenity('D Race');
-    const r1 = await book(one, a, '10:00'), r2 = await book(two, a, '10:30');   // overlapping
+    const r1 = await book(one, a, '10:00'), r2 = await book(two, a, '10:00');   // the same slot (0093: starts on the hour)
     await approve(r2);
     assert.equal((await res(r2.reservation_id)).status, 'confirmed');
     await approve(r1);                                                             // paid, but the slot went to the other
