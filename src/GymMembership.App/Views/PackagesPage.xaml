@@ -9,6 +9,11 @@
 
     <v:BasePage.Resources>
         <toolkit:IntToBoolConverter x:Key="Any" />
+        <!-- the same pay options as the booking sheet (BookAmenityPage) -->
+        <Style x:Key="PayOption" TargetType="Border" BasedOn="{StaticResource Row}">
+            <Setter Property="Padding" Value="12,10" />
+            <Setter Property="StrokeShape" Value="RoundRectangle 12" />
+        </Style>
         <!-- phone: name and length on the left, the price on the right, one line about it, then the button at its own width -->
         <DataTemplate x:Key="PackagePhone" x:DataType="m:MembershipPackage">
             <Border Style="{StaticResource Panel}" Padding="16,14">
@@ -51,13 +56,35 @@
             <Button Text="How buying a package works" Style="{StaticResource LinkButton}" HorizontalOptions="Start" Margin="-4,-8,0,-8" Clicked="OnToggleRules"
                     IsVisible="{OnIdiom Phone=True, Default=False}" />
             <!-- G23 (2026-11-15): the refund rule is said before anyone pays; the last sentence is RefundRules.Line (RefundLineTests checks it) -->
-            <Label x:Name="Rules" Text="Choose your next package. Pay online on this page by GCash or QR Ph (scan it with Maya or any bank app). Once paid, it starts right away, or when your current term ends. No upgrades or automatic charges.&#10;Refunds: only in a term's first 7 days, for the days not used."
+            <Label x:Name="Rules" Text="Choose your next package. Pay online on this page by GCash or QR Ph (scan it with Maya or any bank app), or in cash at the front desk. Once paid, it starts right away, or when your current term ends. No upgrades or automatic charges.&#10;Refunds: only in a term's first 7 days, for the days not used."
                    Style="{OnIdiom Phone={StaticResource Caption}, Default={StaticResource Muted}}" MaximumWidthRequest="760" HorizontalOptions="Start" IsVisible="{OnIdiom Phone=False, Default=True}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
             <VerticalStackLayout Spacing="4" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" WidthRequest="{OnIdiom Phone=-1, Default=260}">
                 <Label Text="Discount code (optional)" Style="{StaticResource Caption}" />
                 <Border Style="{StaticResource Field}"><Entry Text="{Binding DiscountCode}" Placeholder="Enter a code from the gym" SemanticProperties.Description="Discount code" /></Border>
+            </VerticalStackLayout>
+            <!-- cash plan 2026-11-17: how the next package is paid; at the desk waits for the front desk to verify it -->
+            <VerticalStackLayout Spacing="4" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" WidthRequest="{OnIdiom Phone=-1, Default=380}">
+                <Label Text="How you'll pay" Style="{StaticResource Caption}" />
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                    <Border Style="{StaticResource PayOption}">
+                        <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding PayCash}" Value="False"><Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /><Setter Property="StrokeThickness" Value="2" /></DataTrigger></Border.Triggers>
+                        <Grid>
+                            <VerticalStackLayout Spacing="2"><Label Text="Online" FontFamily="BarlowSemiBold" /><Label Text="GCash or QR Ph, here" Style="{StaticResource Caption}" /></VerticalStackLayout>
+                            <Button Margin="-12,-10" BackgroundColor="Transparent" BorderWidth="0" Text="" Command="{Binding PickMethodCommand}" CommandParameter="qr"
+                                    SemanticProperties.Description="Pay online on this page" AutomationId="PayMethodOnline" />
+                        </Grid>
+                    </Border>
+                    <Border Grid.Column="1" Style="{StaticResource PayOption}">
+                        <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding PayCash}" Value="True"><Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /><Setter Property="StrokeThickness" Value="2" /></DataTrigger></Border.Triggers>
+                        <Grid>
+                            <VerticalStackLayout Spacing="2"><Label Text="At the desk" FontFamily="BarlowSemiBold" /><Label Text="Cash" Style="{StaticResource Caption}" /></VerticalStackLayout>
+                            <Button Margin="-12,-10" BackgroundColor="Transparent" BorderWidth="0" Text="" Command="{Binding PickMethodCommand}" CommandParameter="cash"
+                                    SemanticProperties.Description="Pay in cash at the front desk" AutomationId="PayMethodCash" />
+                        </Grid>
+                    </Border>
+                </Grid>
             </VerticalStackLayout>
         </VerticalStackLayout>
 
@@ -104,6 +131,8 @@
         </c:CardGrid></VerticalStackLayout>
                 <!-- Pay online (Xendit plan; moved here from My membership, owner 2026-11-16): one action. The amount is the title; the deadline sits
                      right under what is bought; the methods are named under the button so nobody wonders whether GCash works. Coming back re-checks it (Checking). -->
+                <!-- SideLayout takes one side child: both cards sit in it; only one shows (one pending package payment at a time) -->
+                <VerticalStackLayout IsVisible="{Binding HasPayCard}" VerticalOptions="Start">
                 <Border Style="{StaticResource SidePanel}" IsVisible="{Binding PayNow, Converter={StaticResource IsNotNull}}" VerticalOptions="Start">
                     <VerticalStackLayout Spacing="12">
                         <VerticalStackLayout Spacing="4">
@@ -125,6 +154,23 @@
                         <Button Text="Cancel this payment" Style="{StaticResource SmallOutlineButton}" Clicked="OnCancelPayment" />
                     </VerticalStackLayout>
                 </Border>
+                <!-- cash plan 2026-11-17: chosen cash; the code is what the desk looks for, the deadline is the same as online -->
+                <Border Style="{StaticResource SidePanel}" IsVisible="{Binding PayAtDesk, Converter={StaticResource IsNotNull}}" VerticalOptions="Start">
+                    <VerticalStackLayout Spacing="12">
+                        <VerticalStackLayout Spacing="4">
+                            <c:CardTitle Text="{Binding PayAtDesk.Amount, StringFormat='Pay ₱{0:N2} at the front desk'}" />
+                            <Label Text="{Binding PayAtDesk.What}" />
+                            <Label Text="{Binding PayAtDesk.ExpiresAt, Converter={StaticResource LocalDate}, ConverterParameter='ddd d MMM, h:mm tt', StringFormat='Pay by {0}, or this payment expires.'}"
+                                   Style="{StaticResource Caption}" IsVisible="{Binding PayAtDesk.ExpiresAt, Converter={StaticResource IsNotNull}}" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="2">
+                            <Label Text="{Binding PayAtDesk.PaymentCode}" Style="{StaticResource Numeral}" FontSize="26" SemanticProperties.Description="Payment code to show at the front desk" />
+                            <Label Text="Show this code and pay in cash. Your membership starts once the desk verifies it." Style="{StaticResource Caption}" />
+                        </VerticalStackLayout>
+                        <Button Text="Cancel this payment" Style="{StaticResource SmallOutlineButton}" Clicked="OnCancelPayment" />
+                    </VerticalStackLayout>
+                </Border>
+                </VerticalStackLayout>
         </c:SideLayout></ScrollView>
     </Grid>
 </v:BasePage>

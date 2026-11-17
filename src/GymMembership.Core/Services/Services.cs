@@ -289,6 +289,8 @@ public sealed record PaymentItem(int Id, string What, string PaymentCode, string
     /// <summary>An online payment the member still has to pay (a proof sent before the switch is with the desk instead).</summary>
     public bool NeedsPayment => Status == Models.Status.Pending && Method == PayMethod.Qr && !HasProof && (ExpiresAt is null || ExpiresAt > DateTime.UtcNow);
     public bool AwaitingReview => Status == Models.Status.Pending && HasProof;
+    /// <summary>Cash plan 2026-11-17: the member chose cash; it waits on the desk's Payments to verify.</summary>
+    public bool PaysAtDesk => Status == Models.Status.Pending && Method == PayMethod.Cash;
     /// <summary>A membership or extension payment nobody has verified yet: the member can still withdraw it.</summary>
     public bool CanCancel => Status == Models.Status.Pending && Kind is PayKind.Membership or PayKind.Renewal;
     /// <summary>Rejected and expired payments are final; the member pays again with a fresh one.</summary>
@@ -299,6 +301,7 @@ public sealed record PaymentItem(int Id, string What, string PaymentCode, string
         Models.Status.Expired => "Not paid in time",
         Models.Status.Verified => ReceiptNo ?? "",
         _ when AwaitingReview => "Waiting for the front desk to check it",
+        _ when PaysAtDesk => "Pay at the front desk",
         _ => ""
     };
 }
