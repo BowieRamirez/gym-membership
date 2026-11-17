@@ -83,11 +83,11 @@ public class ConfirmationTests
         Assert.True((await new ReservationService(gw).BookAsync(group.Id, start, 30, PayMethod.Cash, null, null)).Ok);
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         await gw.OpenDrawerAsync();
-        var vm = new CashierViewModel(new PaymentStaffService(gw), new AttendanceService(gw));
+        var vm = new VerifyPaymentsViewModel(new PaymentStaffService(gw));
         await vm.OnAppearingAsync();
-        var row = vm.DeskBookings.Single();
+        var row = vm.Pending.Single();
         var asked = Answer(yes);
-        await vm.TakeBookingCashCommand.ExecuteAsync(row);
+        await vm.ApproveCommand.ExecuteAsync(row);
         var question = Assert.Single(asked);
         Assert.Contains(row.Payer, question);
         Assert.Contains($"₱{row.Payment.Amount:N2}", question);
@@ -150,7 +150,7 @@ public class ConfirmationTests
         { "StaffViewModels.cs", "TraineesViewModel", "Remove" },
         { "StaffViewModels.cs", "CoachProfileViewModel", "ToggleVisit" },
         { "StaffViewModels.cs", "CashierViewModel", "Record" },
-        { "StaffViewModels.cs", "CashierViewModel", "TakeBookingCash" },
+        { "StaffViewModels.cs", "VerifyPaymentsViewModel", "Approve" },
         { "StaffViewModels.cs", "CheckInViewModel", "ToggleCoach" },
         { "StaffViewModels.cs", "UsersViewModel", "ToggleActive" },
         { "StaffViewModels.cs", "UsersViewModel", "ToggleRole" },

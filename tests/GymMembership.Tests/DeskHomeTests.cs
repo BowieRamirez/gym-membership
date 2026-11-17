@@ -79,10 +79,10 @@ public class DeskHomeTests
     public void Tiles_say_what_needs_doing_in_words_as_well_as_by_outline()
     {
         var tiles = HomeViewModel.Build(new DeskSummary(12, 3, 2, 1, 1, 4, 2));
-        Assert.Equal(new[] { "checkin", "cashier", "amenities", "messages" }, tiles.Select(t => t.Route));
+        Assert.Equal(new[] { "checkin", "verify", "amenities", "messages" }, tiles.Select(t => t.Route));
 
-        var cash = tiles.Single(t => t.Route == "cashier");
-        Assert.Equal("3", cash.Count); Assert.Equal("3 bookings to take cash for", cash.Detail); Assert.True(cash.NeedsAttention);
+        var cash = tiles.Single(t => t.Route == "verify");
+        Assert.Equal("3", cash.Count); Assert.Equal("3 payments are waiting", cash.Detail); Assert.True(cash.NeedsAttention);
 
         var amenities = tiles.Single(t => t.Route == "amenities");
         Assert.Equal("2 of 4", amenities.Count); Assert.Equal("1 in use, 1 unavailable", amenities.Detail);
@@ -108,7 +108,7 @@ public class DeskHomeTests
     {
         var tiles = HomeViewModel.Build(new DeskSummary(0, 0, 3, 0, 0, 0, 0));
         Assert.All(tiles, t => Assert.False(t.NeedsAttention));
-        Assert.Equal("All caught up", tiles.Single(t => t.Route == "cashier").Detail);
+        Assert.Equal("All caught up", tiles.Single(t => t.Route == "verify").Detail);
         Assert.Equal("All open", tiles.Single(t => t.Route == "amenities").Detail);
         Assert.Equal("No new messages", tiles.Single(t => t.Route == "messages").Detail);
         Assert.Equal("No one has checked in yet", tiles.Single(t => t.Route == "checkin").Detail);
@@ -118,7 +118,7 @@ public class DeskHomeTests
     public void Singular_counts_read_as_singular()
     {
         var tiles = HomeViewModel.Build(new DeskSummary(1, 1, 1, 0, 0, 1, 1));
-        Assert.Equal("1 booking to take cash for", tiles.Single(t => t.Route == "cashier").Detail);
+        Assert.Equal("1 payment is waiting", tiles.Single(t => t.Route == "verify").Detail);
         Assert.Equal("1 chat nobody has taken", tiles.Single(t => t.Route == "messages").Detail);
     }
 
@@ -164,7 +164,7 @@ public class DeskHomeTests
     public void A_tile_reads_its_count_aloud_with_its_title()
     {
         var tiles = HomeViewModel.Build(new DeskSummary(12, 3, 2, 1, 1, 4, 2));
-        Assert.Equal("Cash to take: 3", tiles.Single(t => t.Route == "cashier").Description);
+        Assert.Equal("Payments to verify: 3", tiles.Single(t => t.Route == "verify").Description);
         Assert.Equal("Amenities available: 2 of 4", tiles.Single(t => t.Route == "amenities").Description);
     }
 

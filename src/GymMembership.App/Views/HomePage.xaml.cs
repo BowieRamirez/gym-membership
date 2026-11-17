@@ -20,7 +20,7 @@ public partial class HomePage : BasePage
 		if ((sender as BindableObject)?.BindingContext is HomeTile tile) (Shell.Current as StaffShell)?.ShowDeskPage(tile.Route);
 	}
 
-	// cashier plan Y7: the cash for a desk booking is taken in the Cashier
-	void OnVerify(object? sender, EventArgs e) => (Shell.Current as StaffShell)?.ShowDeskPage("cashier");
+	// cash plan 2026-11-17: cash members chose in the app is approved on Payments to verify
+	void OnVerify(object? sender, EventArgs e) => (Shell.Current as StaffShell)?.ShowDeskPage("verify");
 	void OnCheckOutCoach(object? sender, EventArgs e) => Row<HomeViewModel>(sender, v => v.CheckOutCoachCommand);
 }

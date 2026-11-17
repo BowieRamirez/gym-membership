@@ -49,8 +49,8 @@ public class WindowsAdminNavigationTests
     {
         var root = XDocument.Load(Path.Combine(TestPaths.AppFolder(), "StaffShell.xaml")).Root!;
         var items = root.Elements().Where(e => e.Name.LocalName == "FlyoutItem").ToList();
-        Assert.Equal(14, items.Count);   // D30: Refunds & voids is one page; F10 added Announcements; cashier plan Y7 removed Payments to verify
-        Assert.Equal(new[] { "home", "cashier", "checkin", "amenities" },
+        Assert.Equal(15, items.Count);   // D30: Refunds & voids is one page; F10 added Announcements; cash plan 2026-11-17 brought Payments to verify back
+        Assert.Equal(new[] { "home", "verify", "cashier", "checkin", "amenities" },
             items.Where(e => (string?)e.Attribute("ClassId") == "desk").Select(e => (string?)e.Attribute("Route")));
         Assert.Equal(5, items.Count(e => (string?)e.Attribute("ClassId") == "admin"));   // D15: shared with the sub-admin (F10: Announcements)
         Assert.Equal(3, items.Count(e => (string?)e.Attribute("ClassId") == "super"));   // super admin only

@@ -16,6 +16,7 @@ public static class IconRail
     {
         ["Overview"] = "layout-dashboard",
         ["Home"] = "house",
+        ["Payments to verify"] = "badge-check",
         ["Cashier"] = "banknote",
         ["Membership checking"] = "scan-line",
         ["Amenity status"] = "waves",

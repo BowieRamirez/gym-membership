@@ -39,11 +39,11 @@ public class ReservationTests
     }
 
     // cashier plan Y7: Payments to verify is gone. Cash at the desk is taken in the Cashier; booking claims are decided on Amenity status.
-    static async Task AsCashier(DemoGateway gw, Func<CashierViewModel, Task> act)
+    static async Task AsCashier(DemoGateway gw, Func<VerifyPaymentsViewModel, Task> act)
     {
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         await gw.OpenDrawerAsync();
-        var desk = new CashierViewModel(new PaymentStaffService(gw), new AttendanceService(gw));
+        var desk = new VerifyPaymentsViewModel(new PaymentStaffService(gw));
         await desk.OnAppearingAsync();
         await act(desk);
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
@@ -131,7 +131,7 @@ public class ReservationTests
         Assert.StartsWith("Down payment ₱250.00 online. Pay by ", row.Detail);
         Assert.StartsWith("Requested.", vm.Notice);
 
-        await AsCashier(gw, desk => { Assert.Empty(desk.DeskBookings); return Task.CompletedTask; });   // an online down payment is not the desk's
+        await AsCashier(gw, desk => { Assert.Empty(desk.Pending); return Task.CompletedTask; });   // an online down payment is not the desk's
         await PayOnline(gw, row);
         await vm.LoadCommand.ExecuteAsync(null);
         row = vm.Bookings.Single(b => b.Amenity == "Group classes");
@@ -149,12 +149,12 @@ public class ReservationTests
         Assert.False(row.CanPayOnline);
         await AsCashier(gw, async desk =>
         {
-            var pay = desk.DeskBookings.Single();
+            var pay = desk.Pending.Single();
             Assert.Equal(("Take cash", "At the desk"), (pay.ApproveText, pay.MethodText));
             Assert.EndsWith("2:00 PM to 2:30 PM · solo · balance ₱250.00 at the desk", pay.Booking);
-            await desk.TakeBookingCashCommand.ExecuteAsync(pay);
+            await desk.ApproveCommand.ExecuteAsync(pay);
             Assert.Null(desk.ErrorMessage);
-            Assert.Empty(desk.DeskBookings);
+            Assert.Empty(desk.Pending);
         });
         var cash = (await gw.ListAsync<Payment>(p => p.Id == row.Payment!.Id)).Single();
         Assert.Equal(Status.Verified, cash.Status);
