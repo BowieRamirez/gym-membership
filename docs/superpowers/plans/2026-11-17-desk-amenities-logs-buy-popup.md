@@ -88,9 +88,9 @@ Same rules as `2026-11-16-cashier-walkin-logs.md`:
 
 **Files:** `src/GymMembership.Core/ViewModels/StaffViewModels.cs` (`CashierViewModel`: `OrderWho`, `DayPassName`, `RecordAsync`, `StartDeskOnlineAsync` path, `OnMemberChanged`, `OnWalkInNameChanged`), test `tests/GymMembership.Tests/DayPassNameTests.cs`. If a picked member must be recorded against them: `record_counter_payment` / `start_desk_online_payment` already take `p_member_id`; check the `walk_in` branch keeps it (database test in `supabase/tests/local/`, migration only if it drops it).
 
-- [ ] Reproduce (systematic-debugging): in demo, pick a member, switch to Day pass, type "Juan Cruz", Record. Write down what the receipt and the log say.
-- [ ] Failing tests: `Typed_name_wins_over_an_old_pick`, `Picking_a_member_fills_the_name_box`, `A_picked_member_day_pass_is_recorded_against_them`, `Clearing_the_name_box_drops_the_pick`.
-- [ ] Implement; xUnit green; Windows check of the Cashier in demo; ponytail-review; commit.
+- [x] Reproduce (systematic-debugging): in demo, pick a member, switch to Day pass, type "Juan Cruz", Record. Write down what the receipt and the log say.
+- [x] Failing tests: `Typed_name_wins_over_an_old_pick`, `Picking_a_member_fills_the_name_box`, `A_picked_member_day_pass_is_recorded_against_them`, `Clearing_the_name_box_drops_the_pick`. Ruling: `A_picked_member_day_pass_is_recorded_against_them` dropped: a Day pass stays account-free (SQL nulls the member since 0005); a later run added `A_typed_name_survives_switching_kind` (final review).
+- [x] Implement; xUnit green; Windows check of the Cashier in demo; ponytail-review; commit.
 
 ## Phase 2: Buy popup (Z7, Z8)
 
@@ -98,15 +98,15 @@ Same rules as `2026-11-16-cashier-walkin-logs.md`:
 
 **Files:** `src/GymMembership.Core/ViewModels/MemberViewModels.cs` (`PackagesViewModel`: `Buying` (the package or null), `BuyStep` (1 = code and description, 2 = Online / Cash), `OpenBuyCommand(package)`, `NextCommand`, `CloseBuyCommand`, `PayCommand` replacing `AvailCommand`'s confirm; `DiscountCode` and `Method` reset on open and close), `MyMembershipViewModel` Renew / Extend open the same popup, test `tests/GymMembership.Tests/BuyPopupTests.cs` (and update `CashPackageTests`, `ConfirmationTests`).
 
-- [ ] Failing tests: `Buy_opens_the_popup_on_step_1_with_no_code`, `Next_shows_online_and_cash_online_first`, `Pay_with_cash_creates_a_desk_payment_and_closes`, `Pay_online_shows_the_pay_card`, `Closing_buys_nothing_and_clears_the_code`, `A_bad_code_keeps_the_popup_open_with_the_error`, `Tapping_a_code_chip_fills_the_box`.
-- [ ] Implement; xUnit green.
+- [x] Failing tests: `Buy_opens_the_popup_on_step_1_with_no_code`, `Next_shows_online_and_cash_online_first`, `Pay_with_cash_creates_a_desk_payment_and_closes`, `Pay_online_shows_the_pay_card`, `Closing_buys_nothing_and_clears_the_code`, `A_bad_code_keeps_the_popup_open_with_the_error`, `Tapping_a_code_chip_fills_the_box`.
+- [x] Implement; xUnit green.
 
 ### Task 3: The popup on screen
 
 **Files:** `src/GymMembership.App/Views/PackagesPage.xaml` (+ `.cs`), `MyMembershipPage.xaml` if Renew lives there.
 
-- [ ] impeccable on the popup, from the sketch and the booking sheet: X top-right, code box top-left with chips, description, price, Buy; step 2 the two `PayOption`s and Pay; Back on step 2. Remove the page's code box, codes grid and "How you'll pay".
-- [ ] Android emulator (`-p:EmbedAssembliesIntoApk=true`) and Windows, light and dark, 1.3 font scale; ponytail-review; commit.
+- [x] impeccable on the popup, from the sketch and the booking sheet: X top-right, code box top-left with chips, description, price, Buy; step 2 the two `PayOption`s and Pay; Back on step 2. Remove the page's code box, codes grid and "How you'll pay".
+- [x] Android emulator (`-p:EmbedAssembliesIntoApk=true`) and Windows, light and dark, 1.3 font scale; ponytail-review; commit.
 
 ## Phase 3: Logs (Z4, Z5, Z6)
 
@@ -114,15 +114,15 @@ Same rules as `2026-11-16-cashier-walkin-logs.md`:
 
 **Files:** `supabase/migrations/0086_transactions_log.sql` (drop and recreate `audit_log_page` and the export function with `p_money boolean default false`: true lists only `payment.*`, `refund.*`, `cash_shift.*`, false only the rest; each row also returns `customer`, `amount`, `paid_with` from the row's payment, or the reservation's member), `supabase/tests/local/audit-log.mjs` (extend).
 
-- [ ] Failing tests: a cash payment row has the member's name, amount and `cash`; a Day pass row has its typed name; a Xendit row has `paid_with` = its channel; `p_money` true lists no role change, false lists no payment; a member or anon can't call it.
-- [ ] Implement; DB suite green; push 0086 (dry run first); check live grants.
+- [x] Failing tests: a cash payment row has the member's name, amount and `cash`; a Day pass row has its typed name; a Xendit row has `paid_with` = its channel; `p_money` true lists no role change, false lists no payment; a member or anon can't call it.
+- [x] Implement; DB suite green; push 0086 (dry run first); check live grants.
 
 ### Task 5: Transactions tab
 
 **Files:** `src/GymMembership.Core/Services/Services.cs` (`AuditRecord` gains `Customer`, `Amount`, `PaidWith`; `AuditPageAsync(filter, page, money)` and export), `AuditLabels.cs` (method names), `AuditViewModel` (`ShowMoney`, `OpenMoneyCommand`; filters per tab; CSV file `transactions-<date>.csv` with the new columns), `AuditPage.xaml`, demo gateway mirror, test `tests/GymMembership.Tests/TransactionsLogTests.cs`.
 
-- [ ] Failing tests: `Transactions_lists_only_money_rows`, `Audit_log_no_longer_lists_payments`, `A_payment_row_shows_customer_and_paid_with`, `Export_has_the_customer_and_paid_with_columns`.
-- [ ] Implement; impeccable on the Transactions table (Windows only); `Test-WindowsAdminNavigation.ps1` visits the new tab; ponytail-review; commit.
+- [x] Failing tests: `Transactions_lists_only_money_rows`, `Audit_log_no_longer_lists_payments`, `A_payment_row_shows_customer_and_paid_with`, `Export_has_the_customer_and_paid_with_columns`.
+- [x] Implement; impeccable on the Transactions table (Windows only); `Test-WindowsAdminNavigation.ps1` visits the new tab; ponytail-review; commit.
 
 ## Phase 4: Desk books amenities for members (Z2)
 
@@ -130,31 +130,31 @@ Same rules as `2026-11-16-cashier-walkin-logs.md`:
 
 **Files:** `supabase/migrations/0087_desk_book_amenity.sql` (`desk_book_amenity(p_member uuid, p_amenity bigint, p_start timestamptz, p_minutes integer, p_method payment_method, p_coach uuid default null, p_code text default null)`: front desk and admins only; the same slot, hours, clash, coach and code checks as `book_amenity`, done by sharing its body rather than copying it; full price; `cash` verified at once into the open drawer with a receipt, `qr` a pending desk Xendit payment like `start_desk_online_payment`), `supabase/tests/local/desk-booking.mjs`.
 
-- [ ] Failing tests: the desk books for a member and the drawer grows by the price; a clash is refused; no shift + cash gives `no_open_shift` and books nothing; a member calling it gets `not_allowed`; anon has no access.
-- [ ] Implement; DB suite green; push 0087; check live grants.
+- [x] Failing tests: the desk books for a member and the drawer grows by the price; a clash is refused; no shift + cash gives `no_open_shift` and books nothing; a member calling it gets `not_allowed`; anon has no access.
+- [x] Implement; DB suite green; push 0087; check live grants.
 
 ### Task 7: Book for a customer on Amenity status
 
 **Files:** `ReservationService` (`DeskBookAsync(...)`), demo gateway mirror, `AmenityStatusViewModel` (search reusing `FindMembersAsync` and the Cashier's paging; picked member; amenity, day, time from `GridAsync`; method; `BookCommand`), `AmenityStatusPage.xaml`, test `tests/GymMembership.Tests/DeskBookingTests.cs`.
 
-- [ ] Failing tests: `Desk_finds_a_member_and_books_a_slot`, `Booked_slot_shows_as_taken_on_the_grid`, `Cash_without_a_shift_says_start_one`, `GCash_opens_the_desk_checkout`.
-- [ ] Implement; impeccable (Windows only); ponytail-review; commit.
+- [x] Failing tests: `Desk_finds_a_member_and_books_a_slot`, `Booked_slot_shows_as_taken_on_the_grid`, `Cash_without_a_shift_says_start_one`, `GCash_opens_the_desk_checkout`. Ruling: the GCash test dropped: desk bookings are cash only for now; `A_new_search_drops_the_old_pick` added (final review).
+- [x] Implement; impeccable (Windows only); ponytail-review; commit.
 
 ## Phase 5: No account (Z1, waits on the owner)
 
 ### Task 8 (if Z1 = a): Register, then book
 
-- [ ] Failing test: `Register_new_member_from_amenity_status_then_book` (the new member is picked after registering; the temporary password is shown once).
-- [ ] Reuse the Cashier's Register new member panel on Amenity status (move it to a shared control if both pages use it); impeccable; commit.
+- [x] Failing test: `Register_new_member_from_amenity_status_then_book` (the new member is picked after registering; the temporary password is shown once).
+- [x] Reuse the Cashier's Register new member panel on Amenity status (move it to a shared control if both pages use it); impeccable; commit. Ruling: the register form is repeated on the panel (DeskBookingViewModel), not moved to a shared control.
 
 ### Task 8 (if Z1 = b): Guest booking
 
-- [ ] New migration: `reservations.member_id` optional, `guest_name text`, check that exactly one is set; `desk_book_amenity` takes `p_guest_name`; every reader of `reservations.member_id` (grid "yours", refunds, reminders, reports) checked for null. Plan this task in detail once the owner picks it.
+- [-] NOT TAKEN (owner chose Z1 = a): New migration: `reservations.member_id` optional, `guest_name text`, check that exactly one is set; `desk_book_amenity` takes `p_guest_name`; every reader of `reservations.member_id` (grid "yours", refunds, reminders, reports) checked for null. Plan this task in detail once the owner picks it.
 
 ## Phase 6: Checks
 
-- [ ] Full xUnit, full DB suite, Windows and Android builds, `Test-WindowsAdminNavigation.ps1`.
-- [ ] Fresh whole-branch review; fix Critical / Important with a failing test first; minors to the owner.
+- [x] Full xUnit, full DB suite, Windows and Android builds, `Test-WindowsAdminNavigation.ps1`.
+- [x] Fresh whole-branch review; fix Critical / Important with a failing test first; minors to the owner. Done: one Important (a customer holding a pass was booked for the desk user) fixed in `0088`; two minors re-graded and fixed (`14d5350`); the rest listed in the session log.
 - [ ] FOLLOW-UP (owner): hand checks: a Day pass with a typed name; buy a package through the popup with a code and cash; the Transactions tab; book an amenity for a member at the desk; a no-account booking.
 
 ## Session log
