@@ -312,8 +312,8 @@ public interface IMembershipService
     Task<AppResult<IReadOnlyList<PaymentItem>>> MyPaymentsAsync();
     Task<AppResult<Access>> AccessAsync();
     /// <summary>Starts a membership: a pending QR payment with a code to pay. The membership turns on when staff verify it.</summary>
-    Task<AppResult<Payment>> AvailAsync(int packageId, string? discountCode = null);
-    Task<AppResult<Payment>> RenewAsync(int membershipId, string? discountCode = null);
+    Task<AppResult<Payment>> AvailAsync(int packageId, string? discountCode = null, string method = PayMethod.Qr);
+    Task<AppResult<Payment>> RenewAsync(int membershipId, string? discountCode = null, string method = PayMethod.Qr);
     /// <summary>Xendit's checkout for an online payment: a link to open, or Paid when it is already paid (demo mode pays at once).</summary>
     Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId);
     /// <summary>Asks the server whether the checkout was paid, and confirms it if Xendit's notice hasn't arrived (X10).</summary>
@@ -400,23 +400,27 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
     static Dictionary<string, object> WithCode(Dictionary<string, object> args, string? code)
     { if (!string.IsNullOrWhiteSpace(code)) args["p_discount_code"] = code.Trim(); return args; }
 
-    public Task<AppResult<Payment>> AvailAsync(int packageId, string? discountCode = null) =>
-        Safe.RunAsync(() => gw.RpcAsync<Payment>("avail_membership", WithCode(new() { ["p_package_id"] = packageId }, discountCode)));
+    // 0084: cash at the desk is sent; online (qr) is the server's default, so older servers see no new argument
+    static Dictionary<string, object> WithMethod(Dictionary<string, object> args, string method)
+    { if (method != PayMethod.Qr) args["p_method"] = method; return args; }
 
-    public Task<AppResult<Payment>> RenewAsync(int membershipId, string? discountCode = null) =>
-        Safe.RunAsync(() => gw.RpcAsync<Payment>("renew_membership", WithCode(new() { ["p_ump_id"] = membershipId }, discountCode)));
+    public Task<AppResult<Payment>> AvailAsync(int packageId, string? discountCode = null, string method = PayMethod.Qr) =>
+        Safe.RunAsync(() => gw.RpcAsync<Payment>("avail_membership", WithMethod(WithCode(new() { ["p_package_id"] = packageId }, discountCode), method)));
+
+    public Task<AppResult<Payment>> RenewAsync(int membershipId, string? discountCode = null, string method = PayMethod.Qr) =>
+        Safe.RunAsync(() => gw.RpcAsync<Payment>("renew_membership", WithMethod(WithCode(new() { ["p_ump_id"] = membershipId }, discountCode), method)));
 
     public Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId) => OnlinePay.OpenAsync(gw, paymentId);
     public Task<AppResult<bool>> CheckOnlineAsync(int paymentId) => OnlinePay.CheckAsync(gw, paymentId);
 
     public async Task<AppResult<Payment>> PayAgainAsync(PaymentItem item) => item.PackageSnapshotId is { } package && item.Kind is PayKind.Membership or PayKind.Renewal
-        ? await new SubscriptionService(gw).ExtendAsync(package)
+        ? await new SubscriptionService(gw).ExtendAsync(package, null, item.Method)   // paid again the same way: cash stays cash
         : item.ItemId is not { } id
         ? AppResult<Payment>.Fail(AppErrorKind.Validation, "not_found")
         : item.Kind switch
         {
-            PayKind.Membership => await AvailAsync(id),
-            PayKind.Renewal => await RenewAsync(id),
+            PayKind.Membership => await AvailAsync(id, null, item.Method),
+            PayKind.Renewal => await RenewAsync(id, null, item.Method),
             _ => AppResult<Payment>.Fail(AppErrorKind.Validation, "not_found")
         };
 

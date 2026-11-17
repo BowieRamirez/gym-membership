@@ -64,6 +64,8 @@ public sealed partial class DemoGateway
     Payment CreateExtension(string member,int packageId,Dictionary<string,object> args)
     {
         RequireActive();
+        var method=args.TryGetValue("p_method",out var m0)?Convert.ToString(m0):PayMethod.Qr;   // 0084: online (qr) or cash at the desk
+        if(method is not (PayMethod.Qr or PayMethod.Cash)) throw Err("bad_input");
         if(!All<Member>().Any(m=>m.UserId==member) || !All<Profile>().Any(p=>p.Id==member && p.IsActive)) throw Err("not_found");
         if(All<Payment>().Any(p=>p.MemberId==member && p.Status==Status.Pending && p.Kind is PayKind.Membership or PayKind.Renewal)) throw Err("renewal_pending");
         var pkg=PackageForSale(packageId);
@@ -82,6 +84,7 @@ public sealed partial class DemoGateway
             pay=NewQrPayment(PayKind.Renewal,member,discount,renewal:ren.Id);
         }
         SnapshotMembershipPayment(pay,pkg);
+        pay.Method=method;
         return pay;
     }
 

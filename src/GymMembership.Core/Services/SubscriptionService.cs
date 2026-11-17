@@ -107,7 +107,7 @@ public sealed record RefundCard(RefundRequest Request, string Member, string Pac
 public interface ISubscriptionService
 {
     Task<AppResult<IReadOnlyList<TermCard>>> TermsAsync();
-    Task<AppResult<Payment>> ExtendAsync(int packageId, string? discountCode = null);
+    Task<AppResult<Payment>> ExtendAsync(int packageId, string? discountCode = null, string method = PayMethod.Qr);
     Task<AppResult<IReadOnlyList<RefundCard>>> RefundsAsync();
     Task<AppResult<bool>> RequestRefundAsync(int termId, string reason, string? category = null);
     Task<AppResult<bool>> CancelPendingPaymentAsync(int paymentId);
@@ -148,10 +148,11 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
         }).ToList();
     });
 
-    public Task<AppResult<Payment>> ExtendAsync(int packageId, string? discountCode = null) => Safe.RunAsync(() =>
+    public Task<AppResult<Payment>> ExtendAsync(int packageId, string? discountCode = null, string method = PayMethod.Qr) => Safe.RunAsync(() =>
     {
         Dictionary<string, object> args = new() { ["p_package_id"] = packageId };
         if (!string.IsNullOrWhiteSpace(discountCode)) args["p_discount_code"] = discountCode.Trim();
+        if (method != PayMethod.Qr) args["p_method"] = method;   // 0084; online is the server's default
         return gw.RpcAsync<Payment>("extend_membership",args);
     });
 
