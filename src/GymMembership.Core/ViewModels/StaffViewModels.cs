@@ -2372,7 +2372,7 @@ public partial class AnnouncementsViewModel(IAnnouncementService svc) : Loadable
 /// <summary>Plan 2026-11-17 Z1, Z2 (0087): on Amenity status the desk books a slot for a customer: find a member, or (0091, owner) book a
 /// walk-in by name with no account; pick the amenity, day, time and length, and take the full price in cash into the open drawer.
 /// The receipt shows on screen for a walk-in to photograph; a member also gets it in their Front desk chat.</summary>
-public partial class DeskBookingViewModel(IAttendanceService members, IReservationService reservations) : LoadableViewModel
+public partial class DeskBookingViewModel(IAttendanceService members, IReservationService reservations, IPaymentStaffService? payments = null, IUrlOpener? opener = null) : LoadableViewModel
 {
     public sealed record SlotOption(DateTime Utc, string Label);
     /// <summary>What the desk shows after booking: the customer photographs it (walk-in) or has it in chat (member).</summary>
@@ -2450,24 +2450,98 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
     }
 
     string? Customer => IsWalkIn ? (string.IsNullOrWhiteSpace(WalkInName) ? null : WalkInName.Trim()) : Member?.Username;
-    bool CanBook() => Customer is not null && Amenity is not null && Start is not null && Length is not null;
+    bool CanBook() => Customer is not null && Amenity is not null && Start is not null && Length is not null && Waiting is null;
+    bool CanPayOnline() => CanBook() && IsWalkIn && payments is not null;
+
+    /// <summary>0092: a walk-in's online booking waiting for Xendit (shows Open checkout, Check payment and Cancel).</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWaiting)), NotifyCanExecuteChangedFor(nameof(BookCommand), nameof(PayOnlineCommand))]
+    private Reservation? waiting;
+    public bool IsWaiting => Waiting is not null;
+    string waitingWhen = "";
+
+    string WhenText(SlotOption s, PickChip len) => $"{s.Utc.AddHours(8):ddd d MMM}, {s.Label}, {len.Text}";
 
     [RelayCommand(CanExecute = nameof(CanBook))]
     private async Task BookAsync()
     {
         if (Customer is not { } who || Amenity is not { } a || Start is not { } s || Length is not { } len) return;
         Notice = null; Receipt = null;
-        var when = $"{s.Utc.AddHours(8):ddd d MMM}, {s.Label}, {len.Text}";
+        var when = WhenText(s, len);
         if (!await Confirm.AskAsync($"Book {a.Name} for {who}?", $"{when}.\nTake the full price in cash into your drawer.", "Book and take cash")) return;
         DeskReceipt? made = null;
         var memberId = IsWalkIn ? null : Member!.MemberId;
         if (!await RunAsync(() => reservations.DeskBookAsync(memberId, IsWalkIn ? who : null, a.Id, s.Utc, len.Minutes), r => made = r)) return;
-        LastBooked = made!.Booking;
-        Receipt = new(made.ReceiptNo, who, a.Name, when, $"₱{made.Booking.TotalPrice:N2} in cash",
-            IsWalkIn ? "No account: ask them to take a photo of this receipt. It is their reference at the desk."
-                     : "Also sent to their Front desk chat. That message is their reference.");
+        await DoneAsync(made!, who, a.Name, when, "in cash");
+    }
+
+    async Task DoneAsync(DeskReceipt made, string who, string amenity, string when, string how)
+    {
+        LastBooked = made.Booking;
+        Receipt = new(made.ReceiptNo, who, amenity, when, $"₱{made.Booking.TotalPrice:N2} {how}",
+            made.Booking.WalkInName is not null ? "No account: ask them to take a photo of this receipt. It is their reference at the desk."
+                                                : "Also sent to their Front desk chat. That message is their reference.");
         if (IsWalkIn) WalkInName = "";
         Booked?.Invoke();
         await LoadGridAsync();
+    }
+
+    // 0092 (owner, 2026-11-17): a walk-in pays online. As on the Cashier (plan Y6): Xendit's checkout opens on this PC, the customer
+    // scans its QR Ph (GCash, Maya or a bank app), then Check payment. The slot is only theirs once Xendit confirms.
+    [RelayCommand(CanExecute = nameof(CanPayOnline))]
+    private async Task PayOnlineAsync()
+    {
+        if (Customer is not { } who || Amenity is not { } a || Start is not { } s || Length is not { } len) return;
+        Notice = null; Receipt = null;
+        var when = WhenText(s, len);
+        if (!await Confirm.AskAsync($"Book {a.Name} for {who}, paid online?", $"{when}.\nXendit's checkout opens on this PC for the customer to pay within 30 minutes.", "Pay online")) return;
+        Reservation? started = null;
+        if (!await RunAsync(() => reservations.DeskWalkInOnlineAsync(who, a.Id, s.Utc, len.Minutes), r => started = r)) return;
+        waitingWhen = when; Waiting = started;
+        await OpenCheckoutAsync();
+    }
+
+    [RelayCommand]
+    private async Task OpenCheckoutAsync()
+    {
+        if (payments is null || Waiting is not { PaymentId: { } pay }) return;
+        OnlineCheckout? checkout = null;
+        if (!await RunAsync(() => payments.PayOnlineAsync(pay), c => checkout = c)) return;
+        if (checkout!.Paid) { await PaidAsync(); return; }
+        if (checkout.Url is { } url && opener is not null) await opener.OpenAsync(url);
+        Notice = "Xendit's checkout is open on this PC. Let the customer scan the QR Ph code with GCash, Maya or their bank app, then tap Check payment.";
+    }
+
+    [RelayCommand]
+    private async Task CheckPaymentAsync()
+    {
+        if (payments is null || Waiting is not { PaymentId: { } pay }) return;
+        var paid = false;
+        if (!await RunAsync(() => payments.CheckOnlineAsync(pay), p => paid = p)) return;
+        if (paid) await PaidAsync();
+        else Notice = "Not paid yet. Wait for the customer to finish on Xendit's page, then check again.";
+    }
+
+    async Task PaidAsync()
+    {
+        if (Waiting is not { } w) return;
+        DeskReceipt? now = null;
+        if (!await RunAsync(() => reservations.DeskReceiptAsync(w.Id), r => now = r)) return;
+        Waiting = null;
+        if (now!.Booking.Status != "confirmed")
+        {
+            ErrorMessage = "Paid, but the slot was booked by someone else first. The refund is listed under Refunds for the desk to repay.";
+            Booked?.Invoke(); await LoadGridAsync(); return;
+        }
+        var name = Amenities.FirstOrDefault(x => x.Id == w.AmenityId)?.Name ?? "Amenity";
+        await DoneAsync(now, w.WalkInName ?? "", name, waitingWhen, "online (Xendit)");
+    }
+
+    /// <summary>The customer walked away: the pending payment and its booking are cancelled. A late scan goes to staff as a refund.</summary>
+    [RelayCommand]
+    private async Task StopWaitingAsync()
+    {
+        if (payments is null || Waiting is not { PaymentId: { } pay }) return;
+        if (!await RunAsync(() => payments.VerifyAsync(pay, false, "Customer left at the desk"))) return;
+        Waiting = null; Notice = "Cancelled. Nothing was charged.";
     }
 }

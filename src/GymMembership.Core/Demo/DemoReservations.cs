@@ -15,6 +15,23 @@ public sealed partial class DemoGateway
     Reservation? HoldOf(Payment pay) => All<Reservation>().FirstOrDefault(r => r.PaymentId == pay.Id && r.Status == AwaitingPayment);
 
     // settle_amenity_hold (0052): a hold follows its payment, whichever way it goes
+    /// <summary>0092: a walk-in's online booking once its payment is verified (confirmed, or cancelled into a refund if the slot went first) or cancelled.</summary>
+    void SettleWalkIn(Payment pay)
+    {
+        var r = All<Reservation>().FirstOrDefault(x => x.PaymentId == pay.Id && x.WalkInName is not null && x.Status == AwaitingPayment);
+        if (r is null) return;
+        if (pay.Status != Status.Verified) { r.Status = "cancelled"; r.CancelledAt = SubscriptionNow; r.CancelReason = "Not paid"; return; }
+        if (Confirmed.Any(o => o.AmenityId == r.AmenityId && o.StartsAt < r.EndsAt + Cooldown && r.StartsAt < o.EndsAt + Cooldown))
+        {
+            r.Status = "cancelled"; r.CancelledAt = SubscriptionNow; r.CancelReason = "Slot taken";
+            Add(new RefundRequest { Kind = "cancel", ReservationId = r.Id, PaymentId = pay.Id, MemberId = null!, Amount = pay.Amount, Reason = "Slot taken", RequestedAt = SubscriptionNow,
+                Status = "approved", DecidedBy = pay.RecordedBy, DecidedAt = SubscriptionNow, DecisionReason = $"Slot taken: another booking was paid first. Refund the walk-in {r.WalkInName}." });
+            NotifyStaff("payment", "Booking refund to repay");
+            return;
+        }
+        r.Status = "confirmed";
+    }
+
     void SettleHold(UserAmenity ua)
     {
         var r = All<Reservation>().FirstOrDefault(x => x.UserAmenityId == ua.Id && x.Status == AwaitingPayment);
@@ -246,14 +263,18 @@ public sealed partial class DemoGateway
                 var g = All<GymSettings>().First();
                 if (start < day - Manila + g.OpensAt || end > day - Manila + g.ClosesAt) throw Err("outside_gym_hours");
                 if (am.Availability == "unavailable" && (am.BackAt is null || am.BackAt > start)) throw Err("amenity_unavailable");
-                var shift = OpenShiftOf(Uid!);   // 0050: no open shift, nothing is booked
+                var online = a.GetValueOrDefault("p_online") is true;   // 0092: paid online through Xendit, confirmed when it is paid
+                int? shift = online ? null : OpenShiftOf(Uid!);   // 0050: no open shift, nothing is booked
                 if (Confirmed.Any(x => x.AmenityId == amenityId && x.StartsAt < end + Cooldown && start < x.EndsAt + Cooldown)) throw Err("slot_taken");
                 var total = am.Price * (minutes / 60);
-                var pay = Add(new Payment { PaymentCode = PaymentCode(), Kind = PayKind.Amenity, Method = PayMethod.Cash, Status = Status.Verified, Amount = total, WalkInName = name,
-                    RecordedBy = Uid, VerifiedBy = Uid, VerifiedAt = now, ReceiptNo = ReceiptNo(), CashShiftId = shift, CreatedAt = now });
+                var pay = Add(online
+                    ? new Payment { PaymentCode = PaymentCode(), Kind = PayKind.Amenity, Method = PayMethod.Qr, Status = Status.Pending, Amount = total, WalkInName = name,
+                        RecordedBy = Uid, CreatedAt = now, ExpiresAt = new[] { now.AddMinutes(30), start }.Min() }
+                    : new Payment { PaymentCode = PaymentCode(), Kind = PayKind.Amenity, Method = PayMethod.Cash, Status = Status.Verified, Amount = total, WalkInName = name,
+                        RecordedBy = Uid, VerifiedBy = Uid, VerifiedAt = now, ReceiptNo = ReceiptNo(), CashShiftId = shift, CreatedAt = now });
                 var r = Add(new Reservation { MemberId = null!, WalkInName = name, AmenityId = amenityId, StartsAt = start, EndsAt = end, PaymentId = pay.Id,
-                    Status = "confirmed", TotalPrice = total, DownPayment = total });
-                Audit("reservation.desk_walk_in", "reservations", r.Id.ToString());
+                    Status = online ? AwaitingPayment : "confirmed", TotalPrice = total, DownPayment = total });
+                Audit(online ? "reservation.desk_walk_in_online" : "reservation.desk_walk_in", "reservations", r.Id.ToString());
                 result = Clone(r);
                 return true;
             }

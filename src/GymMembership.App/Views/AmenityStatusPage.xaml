@@ -25,7 +25,7 @@
                     <Grid ColumnDefinitions="*,Auto">
                         <VerticalStackLayout Spacing="2">
                             <c:CardTitle Text="Book for a customer" />
-                            <Label Text="Same slots and rules as the app. The full price is paid now, in cash, into your drawer." Style="{StaticResource Caption}" />
+                            <Label Text="Same slots and rules as the app. The full price is paid now: in cash into your drawer, or online through Xendit for a walk-in." Style="{StaticResource Caption}" />
                         </VerticalStackLayout>
                         <Button Grid.Column="1" Text="Close" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Start" Clicked="OnCloseBooking" />
                     </Grid>
@@ -83,8 +83,24 @@
                             <Label Text="How long" Style="{StaticResource Caption}" />
                             <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Lengths}" ItemDisplayBinding="{Binding Text, x:DataType=vm:PickChip}" SelectedItem="{Binding Length}" SemanticProperties.Description="How long" AutomationId="DeskBookMinutes" /></Border>
                         </VerticalStackLayout>
-                        <Button Text="Book and take cash" Style="{StaticResource SmallButton}" Margin="0,0,0,8" Command="{Binding BookCommand}" AutomationId="DeskBook" />
+                        <Button Text="Book and take cash" Style="{StaticResource SmallButton}" Margin="0,0,12,8" Command="{Binding BookCommand}" AutomationId="DeskBook" />
+                        <!-- 0092 (owner): a walk-in may pay online through Xendit instead -->
+                        <Button Text="Pay online (Xendit)" Style="{StaticResource SmallOutlineButton}" Margin="0,0,0,8" Command="{Binding PayOnlineCommand}"
+                                IsVisible="{Binding IsWalkIn}" AutomationId="DeskBookOnline" />
                     </FlexLayout>
+
+                    <!-- waiting for Xendit: the checkout is open on this PC; the slot is theirs once Check payment says paid -->
+                    <Border Style="{StaticResource Panel}" IsVisible="{Binding IsWaiting}" MaximumWidthRequest="640" HorizontalOptions="Start" AutomationId="DeskBookWaiting">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="{Binding Waiting.WalkInName, StringFormat='Waiting for {0} to pay online'}" FontFamily="BarlowSemiBold" />
+                            <Label Text="{Binding Waiting.TotalPrice, StringFormat='₱{0:N2} through Xendit (GCash, Maya or a bank app via QR Ph). The checkout closes in 30 minutes.'}" Style="{StaticResource Caption}" />
+                            <HorizontalStackLayout Spacing="8">
+                                <Button Text="Check payment" Style="{StaticResource SmallButton}" Command="{Binding CheckPaymentCommand}" AutomationId="DeskBookCheck" />
+                                <Button Text="Open checkout again" Style="{StaticResource SmallOutlineButton}" Command="{Binding OpenCheckoutCommand}" />
+                                <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding StopWaitingCommand}" />
+                            </HorizontalStackLayout>
+                        </VerticalStackLayout>
+                    </Border>
 
                     <!-- 3. the receipt: a walk-in photographs it; a member also has it in their Front desk chat -->
                     <Border Style="{StaticResource Panel}" IsVisible="{Binding Receipt, Converter={StaticResource IsNotNull}}" MaximumWidthRequest="480" HorizontalOptions="Start" AutomationId="DeskBookReceipt">

@@ -689,6 +689,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             ua.Status = Status.Active; ua.ExpiresAt = days is null ? null : now.AddDays(days.Value);
             SettleHold(ua);
         }
+        else if (pay.Kind == PayKind.Amenity && pay.MemberId is null) SettleWalkIn(pay);   // 0092
     }
 
     // rejected or unpaid: the pending thing the payment was for is cancelled
@@ -697,6 +698,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         foreach (var m in All<UserMembershipPackage>().Where(m => m.Id == pay.UserMembershipPackageId && m.Status == Status.Pending)) m.Status = Status.Cancelled;
         foreach (var r in All<MembershipRenewal>().Where(r => r.Id == pay.RenewalId && r.Status == Status.Pending)) r.Status = Status.Cancelled;
         foreach (var a in All<UserAmenity>().Where(a => a.Id == pay.UserAmenityId && a.Status == Status.Pending)) { a.Status = Status.Cancelled; SettleHold(a); }
+        SettleWalkIn(pay);   // 0092
     }
 
     bool Overlap(string who, bool coach, DateTime start, DateTime end, int ignore = 0) =>

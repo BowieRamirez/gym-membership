@@ -215,6 +215,10 @@ public interface IReservationService
     /// <summary>Plan 2026-11-17 Z1, Z2 (0087): the desk books for a member, or (0091) a walk-in by name when memberId is null; the full price
     /// is taken in cash at once into the open drawer. Comes back with the receipt number the customer keeps.</summary>
     Task<AppResult<DeskReceipt>> DeskBookAsync(string? memberId, string? walkInName, int amenityId, DateTime startUtc, int minutes);
+    /// <summary>0092: a walk-in's booking paid online through Xendit: a pending online payment and a booking awaiting it.</summary>
+    Task<AppResult<Reservation>> DeskWalkInOnlineAsync(string walkInName, int amenityId, DateTime startUtc, int minutes);
+    /// <summary>A desk booking as it is now (confirmed, or cancelled if the slot went first) with its receipt number.</summary>
+    Task<AppResult<DeskReceipt>> DeskReceiptAsync(int reservationId);
     /// <summary>Owner, 2026-11-17: confirmed bookings not yet ended, today's first, for the desk's Booked card.</summary>
     Task<AppResult<IReadOnlyList<BookedRow>>> BookedAsync();
     /// <summary>G13: the Gym settings percent paid to reserve.</summary>
@@ -250,11 +254,20 @@ public sealed class ReservationService(ISupabaseGateway gw) : IReservationServic
     {
         Dictionary<string, object> args = new() { ["p_amenity"] = amenityId, ["p_start"] = Utc(startUtc), ["p_minutes"] = minutes };
         if (memberId is null) args["p_name"] = walkInName?.Trim() ?? ""; else args["p_member"] = memberId;
-        var r = await gw.RpcAsync<Reservation>(memberId is null ? "desk_book_walk_in" : "desk_book_amenity", args);
-        var id = r.PaymentId ?? 0;
-        var receipt = (await gw.ListAsync<Payment>(p => p.Id == id)).FirstOrDefault()?.ReceiptNo ?? "";
-        return new DeskReceipt(r, receipt);
+        return await ReceiptOf(await gw.RpcAsync<Reservation>(memberId is null ? "desk_book_walk_in" : "desk_book_amenity", args));
     });
+
+    async Task<DeskReceipt> ReceiptOf(Reservation r)
+    {
+        var id = r.PaymentId ?? 0;
+        return new DeskReceipt(r, (await gw.ListAsync<Payment>(p => p.Id == id)).FirstOrDefault()?.ReceiptNo ?? "");
+    }
+
+    public Task<AppResult<Reservation>> DeskWalkInOnlineAsync(string walkInName, int amenityId, DateTime startUtc, int minutes) => Safe.RunAsync(() =>
+        gw.RpcAsync<Reservation>("desk_book_walk_in", new() { ["p_name"] = walkInName.Trim(), ["p_amenity"] = amenityId, ["p_start"] = Utc(startUtc), ["p_minutes"] = minutes, ["p_online"] = true }));
+
+    public Task<AppResult<DeskReceipt>> DeskReceiptAsync(int reservationId) => Safe.RunAsync(async () =>
+        await ReceiptOf((await gw.ListAsync<Reservation>(r => r.Id == reservationId)).Single()));
 
     public Task<AppResult<IReadOnlyList<BookedRow>>> BookedAsync() => Safe.RunAsync<IReadOnlyList<BookedRow>>(async () =>
     {

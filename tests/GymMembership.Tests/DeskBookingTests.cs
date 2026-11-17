@@ -12,7 +12,7 @@ public class DeskBookingTests
         Confirm.Answer = (_, _, _) => Task.FromResult(true);
         var gw = new DemoGateway(); await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         if (shift) await gw.OpenDrawerAsync();
-        var vm = new DeskBookingViewModel(new AttendanceService(gw), new ReservationService(gw));
+        var vm = new DeskBookingViewModel(new AttendanceService(gw), new ReservationService(gw), new PaymentStaffService(gw));
         vm.Day = DateTime.Today.AddDays(2);
         await vm.OnAppearingAsync();
         return (gw, vm);
@@ -164,5 +164,39 @@ public class DeskBookingTests
         Assert.Null(page.ErrorMessage);
         Assert.Equal($"receipt-booking-{row.Booking.Id}.pdf", files.Name);
         Assert.StartsWith("%PDF", System.Text.Encoding.ASCII.GetString(files.Pdf!, 0, 4));
+    }
+
+    [Fact]   // 0092 (owner, 2026-11-17): a walk-in pays online through Xendit (demo: paid at once); the booking is confirmed with its receipt
+    public async Task Walk_in_pays_online_through_xendit()
+    {
+        var (gw, vm) = await Open(shift: false);   // online money never touches the drawer
+        vm.StartWalkInCommand.Execute(null);
+        vm.WalkInName = "Ana Reyes";
+        vm.Amenity = vm.Amenities.First(a => a.Name == "Pool");
+        vm.Start = vm.Starts.First(); vm.Length = vm.Lengths.First();
+        Assert.True(vm.PayOnlineCommand.CanExecute(null));
+        await vm.PayOnlineCommand.ExecuteAsync(null);
+        Assert.Null(vm.ErrorMessage);
+        Assert.False(vm.IsWaiting);
+        var r = (await gw.ListAsync<Reservation>(x => x.WalkInName == "Ana Reyes")).Single();
+        var pay = (await gw.ListAsync<Payment>(p => p.Id == r.PaymentId)).Single();
+        Assert.Equal(("confirmed", Status.Verified, PayMethod.Qr, (int?)null), (r.Status, pay.Status, pay.Method, pay.CashShiftId));
+        Assert.Equal(pay.ReceiptNo, vm.Receipt!.ReceiptNo);
+        Assert.Contains("online", vm.Receipt.Paid);
+    }
+
+    [Fact]   // 0092: Pay online is for walk-ins only; the customer leaving cancels the payment and the booking
+    public async Task Online_walk_in_cancelled_at_the_desk_frees_the_slot()
+    {
+        var (gw, vm) = await Open();
+        await Pick(vm, "carlo");
+        Assert.False(vm.PayOnlineCommand.CanExecute(null));
+        var start = vm.Start!.Utc;
+        var r = (await new ReservationService(gw).DeskWalkInOnlineAsync("Ben", vm.Amenity!.Id, start, 60)).Value!;
+        Assert.Equal("awaiting_payment", r.Status);
+        Assert.True((await new PaymentStaffService(gw).VerifyAsync(r.PaymentId!.Value, false, "Customer left at the desk")).Ok);
+        Assert.Equal("cancelled", (await gw.ListAsync<Reservation>(x => x.Id == r.Id)).Single().Status);
+        await vm.BookCommand.ExecuteAsync(null);   // the slot is free again for someone else
+        Assert.Null(vm.ErrorMessage);
     }
 }

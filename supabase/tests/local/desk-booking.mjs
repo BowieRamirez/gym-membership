@@ -106,7 +106,7 @@ try {
     await assert.rejects(walkIn(desk2, 'Ben', '12:00'), /no_open_shift/);
     await assert.rejects(walkIn(await user(null), 'Ben', '12:00'), /forbidden|permission|not_allowed/);
     assert.equal((await db.query('select count(*)::int n from payments')).rows[0].n, before);
-    const a = (await db.query(`select has_function_privilege('anon','public.desk_book_walk_in(text,bigint,timestamptz,integer)','execute') a`)).rows[0].a;
+    const a = (await db.query(`select has_function_privilege('anon','public.desk_book_walk_in(text,bigint,timestamptz,integer,boolean)','execute') a`)).rows[0].a;
     assert.equal(a, false);
   });
 
@@ -124,6 +124,58 @@ try {
     const msg = (await db.query(`select sender_id, body from support_messages where member_id = $1 and queue = 'front_desk'`, [m])).rows;
     assert.equal(msg.length, 1); assert.equal(msg[0].sender_id, desk);
     assert.match(msg[0].body, new RegExp(`Receipt ${receipt}`)); assert.match(msg[0].body, /Court/);
+  });
+
+  // 0092 (owner, 2026-11-17): a walk-in's booking paid online through Xendit
+  const service = async (sql, args = []) => {
+    await db.query('begin');
+    try { await db.query('set local role service_role'); const r = await db.query(sql, args); await db.query('commit'); return r.rows; }
+    catch (e) { await db.query('rollback'); throw e; }
+  };
+  const online = (by, name, hm) => as(by, 'select * from desk_book_walk_in(p_name=>$1, p_amenity=>$2, p_start=>$3, p_minutes=>60, p_online=>true)', [name, court, at(hm)]);
+  const xenditPays = async (r, xid) => {
+    await service('select save_online_checkout($1,$2,$3)', [r.payment_id, xid, `https://checkout.test/${xid}`]);
+    const amount = Number((await db.query('select amount from payments where payment_id=$1', [r.payment_id])).rows[0].amount);
+    return (await service('select confirm_online_payment($1,$2,$3) r', [xid, amount, 'GCASH']))[0].r;
+  };
+  const status = async id => (await db.query('select status from reservations where reservation_id=$1', [id])).rows[0].status;
+
+  await test('0092: an online walk-in waits for Xendit, then is confirmed with a receipt; the drawer is not touched', async () => {
+    const before = await shiftTotal(desk2);   // desk2 has no open shift: online needs none
+    const r = (await online(desk2, 'Dina', '01:00'))[0];
+    assert.equal(r.status, 'awaiting_payment');
+    const p0 = (await db.query('select status, method, cash_shift_id, expires_at from payments where payment_id=$1', [r.payment_id])).rows[0];
+    assert.deepEqual([p0.status, p0.method, p0.cash_shift_id], ['pending', 'qr', null]); assert.ok(p0.expires_at);
+    assert.equal(await xenditPays(r, 'ps-walk-1'), 'confirmed');
+    assert.equal(await status(r.reservation_id), 'confirmed');
+    assert.ok((await db.query('select receipt_no from payments where payment_id=$1', [r.payment_id])).rows[0].receipt_no);
+    assert.equal(await shiftTotal(desk2), before);
+  });
+
+  await test('0092: the slot taken while the walk-in pays: cancelled, with an approved refund for the desk', async () => {
+    const r = (await online(desk, 'Eli', '03:00'))[0];
+    await as(desk, 'select * from desk_book_walk_in(p_name=>$1, p_amenity=>$2, p_start=>$3, p_minutes=>60)', ['Gus', court, at('03:00')]);
+    assert.equal(await xenditPays(r, 'ps-walk-2'), 'confirmed');
+    assert.equal(await status(r.reservation_id), 'cancelled');
+    const f = (await db.query('select status, member_id, decided_by from refund_requests where reservation_id=$1', [r.reservation_id])).rows[0];
+    assert.deepEqual([f.status, f.member_id, f.decided_by], ['approved', null, desk]);
+  });
+
+  await test('0092: the customer leaves (desk cancels) or the time runs out: the booking is cancelled too', async () => {
+    const a = (await online(desk, 'Hal', '04:30'))[0];
+    await as(desk, 'select verify_payment($1, false, $2)', [a.payment_id, 'Customer left at the desk']);
+    assert.equal(await status(a.reservation_id), 'cancelled');
+    const b = (await online(desk, 'Ivy', '04:30'))[0];   // the slot is free again
+    await db.query(`update payments set expires_at = now() - interval '1 minute' where payment_id=$1`, [b.payment_id]);
+    await db.query('select expire_payments()');
+    assert.equal(await status(b.reservation_id), 'cancelled');
+  });
+
+  await test('0092: online is refused for a slot already booked, and anon cannot call it', async () => {
+    await assert.rejects(online(desk, 'Jo', '06:00'), /slot_taken/);   // Ana Reyes has 06:00-08:00
+    const r = (await db.query(`select has_function_privilege('anon','public.desk_book_walk_in(text,bigint,timestamptz,integer,boolean)','execute') a,
+      has_function_privilege('authenticated','public.confirm_walk_in_booking(bigint)','execute') b`)).rows[0];
+    assert.deepEqual([r.a, r.b], [false, false]);
   });
 } finally {
   await db.end(); await server.stop();
