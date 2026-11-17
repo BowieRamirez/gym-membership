@@ -91,4 +91,14 @@ public class DeskBookingTests
         Assert.Null(vm.ErrorMessage);
         Assert.Single(await gw.ListAsync<Reservation>(r => r.MemberId == vm.LastBooked!.MemberId && r.Status == "confirmed"));
     }
+
+    [Fact]   // final review: a new search drops the customer picked before, so Book can't go to the wrong person
+    public async Task A_new_search_drops_the_old_pick()
+    {
+        var (_, vm) = await Open();
+        await Pick(vm, "carlo");
+        vm.Search = "alex"; await vm.FindCommand.ExecuteAsync(null);
+        Assert.Null(vm.Member);
+        Assert.False(vm.BookCommand.CanExecute(null));
+    }
 }

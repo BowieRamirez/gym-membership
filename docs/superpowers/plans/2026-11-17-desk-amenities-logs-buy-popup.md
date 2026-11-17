@@ -32,11 +32,11 @@ Same rules as `2026-11-16-cashier-walkin-logs.md`:
 
 | Phase | What | Needs | Status |
 |---|---|---|---|
-| 1 | Day pass records the name typed, not a member picked earlier | Z3 | |
-| 2 | Packages: Buy popup with the code, the description, then Online / Cash | Z7, Z8 | |
-| 3 | Logs: Transactions apart from the audit log; Customer and Paid with columns | Z4, Z5, Z6 | |
-| 4 | Amenity status: book an amenity for a member at the desk | Z2 | |
-| 5 | Amenity bookings for people with no account (register, then book) | Z1 | |
+| 1 | Day pass records the name typed, not a member picked earlier | Z3 | DONE (`0971fd2`) |
+| 2 | Packages: Buy popup with the code, the description, then Online / Cash | Z7, Z8 | DONE (`fccad21`) |
+| 3 | Logs: Transactions apart from the audit log; Customer and Paid with columns | Z4, Z5, Z6 | DEPLOYED (`0086`, `2d478bb`) |
+| 4 | Amenity status: book an amenity for a member at the desk | Z2 | DEPLOYED (`0087`, `3229c54`; cash only) |
+| 5 | Amenity bookings for people with no account (register, then book) | Z1 | DONE (with Phase 4) |
 | 6 | Whole-branch checks, review, owner hand checks | | |
 
 ## 1. Findings (2026-11-17)

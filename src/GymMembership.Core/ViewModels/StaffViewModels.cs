@@ -245,7 +245,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     }
 
     // an item belongs to the kind (and member) it was listed for: change either and the pick goes
-    partial void OnKindChanged(string value) { Item = null; if (IsWalkIn && Member is { } m) WalkInName = m.Username; _ = RefreshItemsAsync(); }
+    partial void OnKindChanged(string value) { Item = null; if (IsWalkIn && Member is { } m && string.IsNullOrWhiteSpace(WalkInName)) WalkInName = m.Username; _ = RefreshItemsAsync(); }   // a typed name is kept (final review)
     partial void OnMemberChanged(MemberHit? value) { Item = null; if (IsWalkIn && value is not null) WalkInName = value.Username; if (Kind == "Renewal") _ = RefreshItemsAsync(); }
     partial void OnItemChanged(CounterItem? value) { foreach (var o in Options) o.IsPicked = value is not null && o.Item.Id == value.Id; }
 
@@ -2362,7 +2362,7 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
     private Task FindAsync() => RunAsync(() => members.FindMembersAsync(Search), all =>
     {
         var rows = all.Where(h => h.Status != "inactive").ToList();
-        IsRegistering = false; Fill(Hits, rows); NoMatch = rows.Count == 0; OnPropertyChanged(nameof(HasHits));
+        IsRegistering = false; Member = null; Fill(Hits, rows); NoMatch = rows.Count == 0; OnPropertyChanged(nameof(HasHits));   // a new search drops the old pick (final review)
     });
     [RelayCommand] private void PickMember(MemberHit hit) => Member = hit;
     [RelayCommand] private void StartRegister() { Notice = null; ErrorMessage = null; IsRegistering = true; }

@@ -49,4 +49,15 @@ public class DayPassNameTests
         await vm.RecordCommand.ExecuteAsync(null);
         Assert.Equal("Day pass", (await Last(gw)).WalkInName);
     }
+
+    [Fact]   // final review: a name typed for a Day pass survives switching to another kind and back
+    public async Task A_typed_name_survives_switching_kind()
+    {
+        var (_, vm) = await Open();
+        vm.PickKindCommand.Execute("Day pass");
+        vm.WalkInName = "Juan Cruz";
+        vm.PickKindCommand.Execute("Membership");
+        vm.PickKindCommand.Execute("Day pass");
+        Assert.Equal("Juan Cruz", vm.OrderWho);
+    }
 }

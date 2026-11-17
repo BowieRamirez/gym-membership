@@ -1,6 +1,6 @@
 // Plan 2026-11-17 Z1, Z2 (0087): the front desk books an amenity for a customer and takes the full price in cash at once.
 // Same rules as a member's booking (shared body), minus an active membership and the hour-ahead rule.
-import { start, openCashShifts } from './harness.mjs';
+import { start, openCashShifts, oldPass } from './harness.mjs';
 import assert from 'node:assert/strict';
 
 const { server, client: db } = await start();
@@ -62,9 +62,23 @@ try {
     assert.equal(r.status, 'confirmed');
   });
 
+  await test('final review: a customer holding a pass is still booked for them, paid, not for the desk (0088)', async () => {
+    const m = await user(null);
+    await oldPass(db, m, court);
+    const r = (await deskBook(desk, m, '18:00'))[0];
+    assert.equal(r.member_id, m); assert.equal(r.status, 'confirmed'); assert.ok(r.payment_id);
+  });
+
+  await test('final review: no booking for a deactivated account or a staff account (0088)', async () => {
+    const off = await user(null), coach = await user('coach');
+    await db.query('update profiles set is_active = false where id = $1', [off]);
+    await assert.rejects(as(desk, 'select * from desk_book_amenity(p_member=>$1, p_amenity=>$2, p_start=>$3, p_minutes=>60)', [off, court, at('19:00')]), /not_found|account_inactive/);
+    await assert.rejects(as(desk, 'select * from desk_book_amenity(p_member=>$1, p_amenity=>$2, p_start=>$3, p_minutes=>60)', [coach, court, at('19:00')]), /not_found/);
+  });
+
   await test('members cannot use it; anon cannot call it or the shared body', async () => {
     const m = await user(null), other = await user(null);
-    await assert.rejects(deskBook(m, other, '16:00'), /forbidden|permission|not_allowed/);
+    await assert.rejects(as(m, 'select * from desk_book_amenity(p_member=>$1, p_amenity=>$2, p_start=>$3, p_minutes=>60)', [other, court, at('16:00')]), /forbidden|permission|not_allowed/);
     const r = (await db.query(`select has_function_privilege('anon','public.desk_book_amenity(uuid,bigint,timestamptz,integer,uuid,text)','execute') a,
       has_function_privilege('authenticated','public.book_amenity_for(uuid,boolean,bigint,timestamptz,integer,payment_method,uuid,text)','execute') b`)).rows[0];
     assert.equal(r.a, false); assert.equal(r.b, false);
