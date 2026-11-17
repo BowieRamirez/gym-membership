@@ -189,8 +189,9 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
 
     // the order panel, in the words the cashier uses
     // cashier plan Y3: a Day pass may carry a member found by search, a typed name, or nothing (anonymous)
-    public string OrderWho => IsWalkIn ? Member?.Username ?? (string.IsNullOrWhiteSpace(WalkInName) ? "Day pass, no name" : WalkInName.Trim()) : Member?.Username ?? "Find and choose a member";
-    string? DayPassName => Member?.Username ?? (string.IsNullOrWhiteSpace(WalkInName) ? null : WalkInName.Trim());
+    // plan 2026-11-17 Z3: the name box is the one source; picking a member only fills it, so what the desk typed wins
+    public string OrderWho => IsWalkIn ? DayPassName ?? "Day pass, no name" : Member?.Username ?? "Find and choose a member";
+    string? DayPassName => string.IsNullOrWhiteSpace(WalkInName) ? null : WalkInName.Trim();
     public string OrderWhat => Item?.Label ?? (IsWalkIn ? "Day pass" : "Choose what they are paying for");
     public string TotalText => IsWalkIn ? "Day pass" : Item?.Price is { } p ? $"₱{p:N2}" : "₱0.00";
     public string TotalNote => IsWalkIn ? "The day pass price is set in Gym settings."
@@ -244,8 +245,8 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     }
 
     // an item belongs to the kind (and member) it was listed for: change either and the pick goes
-    partial void OnKindChanged(string value) { Item = null; _ = RefreshItemsAsync(); }
-    partial void OnMemberChanged(MemberHit? value) { Item = null; if (Kind == "Renewal") _ = RefreshItemsAsync(); }
+    partial void OnKindChanged(string value) { Item = null; if (IsWalkIn && Member is { } m) WalkInName = m.Username; _ = RefreshItemsAsync(); }
+    partial void OnMemberChanged(MemberHit? value) { Item = null; if (IsWalkIn && value is not null) WalkInName = value.Username; if (Kind == "Renewal") _ = RefreshItemsAsync(); }
     partial void OnItemChanged(CounterItem? value) { foreach (var o in Options) o.IsPicked = value is not null && o.Item.Id == value.Id; }
 
     async Task RefreshItemsAsync()
