@@ -347,4 +347,18 @@ public class ReservationTests
         vm.Percent = 50;
         Assert.Contains("Down payment now (50%)", vm.SummaryDetail);
     }
+
+    [Fact]   // 0094 (owner, 2026-11-18): a member's own booking, once paid, gets its receipt in the Front desk chat; nothing before that
+    public async Task A_members_own_booking_gets_its_receipt_in_front_desk_chat_once_paid()
+    {
+        var (gw, vm) = await Member();
+        var row = await Booked(vm, "Group classes", "10:00");
+        Assert.Empty(await gw.ListAsync<SupportMessage>(m => m.MemberId == "u-alex" && m.Body.StartsWith("Receipt")));
+        await PayOnline(gw, row);
+        var receipt = (await gw.ListAsync<Payment>(p => p.Id == row.Payment!.Id)).Single().ReceiptNo;
+        var msg = (await gw.ListAsync<SupportMessage>(m => m.MemberId == "u-alex" && m.Queue == ChatQueue.FrontDesk)).Last();
+        Assert.StartsWith("Receipt (automatic).", msg.Body);
+        Assert.Contains($"online. Receipt {receipt}", msg.Body);
+        Assert.NotEqual("u-alex", msg.SenderId);
+    }
 }

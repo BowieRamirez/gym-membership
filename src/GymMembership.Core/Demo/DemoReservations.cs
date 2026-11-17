@@ -32,6 +32,25 @@ public sealed partial class DemoGateway
         r.Status = "confirmed";
     }
 
+    /// <summary>0094: a confirmed paid member booking's receipt in their Front desk chat, from whoever confirmed it, or the oldest admin.</summary>
+    void SendBookingReceipt(Reservation r)
+    {
+        var pay = All<Payment>().FirstOrDefault(p => p.Id == r.PaymentId);
+        if (r.WalkInName is not null || pay?.ReceiptNo is null) return;
+        var from = Uid is { } u && u != r.MemberId ? u
+            : All<UserRole>().Where(x => RolesOf(x.UserId).Contains("admin")).Select(x => x.UserId).FirstOrDefault(id => All<Profile>().Any(p => p.Id == id && p.IsActive));
+        if (from is null) return;
+        var now = SubscriptionNow;
+        var how = pay.Method switch { PayMethod.Cash => "in cash", PayMethod.Gcash => "by GCash", _ => "online" };
+        var name = All<Amenity>().FirstOrDefault(a => a.Id == r.AmenityId)?.Name ?? "Amenity";
+        var body = $"Receipt (automatic). Your booking is confirmed: {r.StartsAt + Manila:ddd d MMM, h:mm tt} to {r.EndsAt + Manila:h:mm tt}, at {name}. Paid PHP {pay.Amount:N2} {how}. Receipt {pay.ReceiptNo}"
+            + (r.TotalPrice > pay.Amount ? $". Balance PHP {r.TotalPrice - pay.Amount:N2} at the front desk" : "") + ". Show this message at the front desk.";
+        var thread = All<SupportThread>().FirstOrDefault(t => t.MemberId == r.MemberId && t.Queue == ChatQueue.FrontDesk) ?? Add(new SupportThread { MemberId = r.MemberId, Queue = ChatQueue.FrontDesk });
+        Add(new SupportMessage { MemberId = r.MemberId, Queue = ChatQueue.FrontDesk, SenderId = from, Body = body, SentAt = now });
+        thread.LastMessageAt = now;
+        NotifyChat(r.MemberId, "Message from the front desk", body[..80], $"s|{r.MemberId}|{ChatQueue.FrontDesk}");
+    }
+
     void SettleHold(UserAmenity ua)
     {
         var r = All<Reservation>().FirstOrDefault(x => x.UserAmenityId == ua.Id && x.Status == AwaitingPayment);
@@ -55,6 +74,7 @@ public sealed partial class DemoGateway
             }
             r.Status = "confirmed";
             if (ua.IsSession) ua.Status = Status.Expired;   // the session is this booking
+            SendBookingReceipt(r);   // 0094
             Notify(r.MemberId, "amenity", "Booking confirmed", (r.StartsAt + Manila).ToString("ddd dd MMM, hh:mm tt"));
         }
         else if (ua.Status == Status.Cancelled) { r.Status = "cancelled"; r.CancelledAt = SubscriptionNow; r.CancelReason = "Not paid"; }
@@ -235,16 +255,7 @@ public sealed partial class DemoGateway
                 var r = Add(new Reservation { MemberId = who, AmenityId = amenityId, CoachId = coach, StartsAt = start, EndsAt = end, UserAmenityId = ua.Id, PaymentId = pay.Id,
                     Status = AwaitingPayment, TotalPrice = d.Amount, DownPayment = down });
                 Audit("reservation.request", "reservations", r.Id.ToString());
-                if (desk)
-                {
-                    Call("verify_payment", new() { ["p_payment_id"] = pay.Id, ["p_approve"] = true });
-                    // 0091: the receipt goes to the member's Front desk chat, from the desk employee
-                    var body = $"Your booking is confirmed: {start + Manila:ddd d MMM, h:mm tt} to {end + Manila:h:mm tt}, at {am.Name}. Paid PHP {d.Amount:N2} in cash. Receipt {pay.ReceiptNo}. Show this message at the front desk.";
-                    var thread = All<SupportThread>().FirstOrDefault(t => t.MemberId == who && t.Queue == ChatQueue.FrontDesk) ?? Add(new SupportThread { MemberId = who, Queue = ChatQueue.FrontDesk });
-                    Add(new SupportMessage { MemberId = who, Queue = ChatQueue.FrontDesk, SenderId = Uid!, Body = body, SentAt = now });
-                    thread.LastMessageAt = now;
-                    NotifyChat(who, "Message from the front desk", body[..80], $"s|{who}|{ChatQueue.FrontDesk}");
-                }
+                if (desk) Call("verify_payment", new() { ["p_payment_id"] = pay.Id, ["p_approve"] = true });   // confirms it and sends the receipt (0094)
                 result = Clone(r);
                 return true;
             }
