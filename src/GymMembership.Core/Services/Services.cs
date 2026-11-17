@@ -675,7 +675,7 @@ public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow,
         Models.Status.Pending => "Waiting for your payment to be verified",
         Models.Status.Active when PassIsSession => "1 session ready to book",
         Models.Status.Active => PassUntil is { } until ? $"Pass active until {until.ToLocalTime():d MMM yyyy}" : "Pass active",
-        _ => Amenity.DurationDays is not null ? "Not on sale right now" : $"₱{Amenity.Price:N2} per session, up to 2 hours"   // G19 (0066): passes aren't sold
+        _ => Amenity.DurationDays is not null ? "Not on sale right now" : $"₱{Amenity.Price:N2} per hour"   // G19 (0066): passes aren't sold
     };
     /// <summary>F12: a pass or a session already paid books without paying again.</summary>
     public bool HasPass => PassStatus == Models.Status.Active;

@@ -45,13 +45,13 @@ const refundOf = async id => (await db.query('select * from refund_requests wher
 
 try {
   // ---------- F12: book, then pay ----------
-  await test('booking with no pass makes a request and a down payment for one session (G13: half of 150)', async () => {
+  await test('booking with no pass makes a request and a down payment (G13: half; 0090: 2 hours at 150 an hour)', async () => {
     const uid = await member(), a = await amenity('B Hold');
-    const r = await book(uid, a, '10:00', 90);
+    const r = await book(uid, a, '10:00', 120);
     assert.equal(r.status, 'awaiting_payment');
     const p = await payOf(r);
-    assert.deepEqual([p.status, p.kind, p.method, Number(p.amount), p.member_id], ['pending', 'amenity', 'qr', 75, uid]);
-    assert.equal(new Date(r.ends_at) - new Date(r.starts_at), 90 * 60000);
+    assert.deepEqual([p.status, p.kind, p.method, Number(p.amount), p.member_id], ['pending', 'amenity', 'qr', 150, uid]);
+    assert.equal(new Date(r.ends_at) - new Date(r.starts_at), 120 * 60000);
   });
   await test('the hold ends after the payment expiry hours or 1 hour before the start, whichever comes first', async () => {
     const uid = await member(), a = await amenity('B Hold Until');
@@ -68,7 +68,7 @@ try {
   await test('a slot that starts within the hour cannot be held', async () => {
     const uid = await member(), a = await amenity('B Too Soon');
     const next = new Date(Math.ceil((Date.now() + 1000) / 1800000) * 1800000).toISOString();
-    await assert.rejects(as(uid, 'select * from book_amenity($1,$2,30,$3::payment_method)', [a, next, 'qr']), /too_soon/);
+    await assert.rejects(as(uid, 'select * from book_amenity($1,$2,60,$3::payment_method)', [a, next, 'qr']), /too_soon/);
   });
   await test('G13: a confirmed booking keeps its slot and cooldown; requests no longer hold one', async () => {
     const one = await member(), two = await member(), a = await amenity('B Clash');
@@ -79,9 +79,9 @@ try {
     const after = await book(two, a, '11:30'); await approve(after);
     assert.equal((await res(after.reservation_id)).status, 'confirmed');
   });
-  await test('length is 30 minutes to 2 hours in 30-minute steps', async () => {
+  await test('length is whole hours (0090: no half hours; the gym hours are the only cap)', async () => {
     const uid = await member(), a = await amenity('B Length');
-    for (const m of [0, 20, 150]) await assert.rejects(book(uid, a, '10:00', m), /bad_input|too_long/);
+    for (const m of [0, 20, 30, 90, 150]) await assert.rejects(book(uid, a, '10:00', m), /bad_input|too_long/);
     await assert.rejects(book(uid, a, '10:00', 60, 'gcash'), /bad_input/);
   });
   await test('a guest without a membership cannot book', async () => {
@@ -100,7 +100,7 @@ try {
   });
   await test('a pay-at-the-desk booking is approved in cash into the cashier\'s shift', async () => {
     const uid = await member(), a = await amenity('B Cash');
-    const r = await book(uid, a, '10:00', 30, 'cash');
+    const r = await book(uid, a, '10:00', 60, 'cash');
     await approve(r);
     assert.ok((await payOf(r)).cash_shift_id);
     assert.equal((await res(r.reservation_id)).status, 'confirmed');

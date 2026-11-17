@@ -53,7 +53,7 @@ public class AmenitySessionTests
     {
         var (gw, id) = await WithAmenity();
         var card = await Card(gw);
-        Assert.Equal("₱150.00 per session, up to 2 hours", card.PassText);
+        Assert.Equal("₱150.00 per hour", card.PassText);
 
         await Buy(gw, id);
         card = await Card(gw);
@@ -61,7 +61,7 @@ public class AmenitySessionTests
 
         var booked = await Book(gw, id, Tomorrow10, Tomorrow10.AddMinutes(30));   // touching slots are one session
         Assert.True(booked.Ok, booked.Message);
-        Assert.Equal("₱150.00 per session, up to 2 hours", (await Card(gw)).PassText);
+        Assert.Equal("₱150.00 per hour", (await Card(gw)).PassText);
         Assert.Equal("no_pass", (await Book(gw, id, Tomorrow10.AddHours(4))).Message);
     }
 
@@ -142,7 +142,7 @@ public class AmenitySessionTests
         Assert.Equal(30, (await gw.ListAsync<Amenity>(a => a.Id == id)).Single().DurationDays);
 
         vm.AddAmenityCommand.Execute(null);
-        Assert.Equal("Price per session", vm.PriceLabel);
+        Assert.Equal("Price per hour", vm.PriceLabel);
         (vm.FormName, vm.FormDescription, vm.FormPrice) = ("Ice bath", "Cold plunge.", 0);   // D4: ₱0 could never be paid
         await vm.MainCommand.ExecuteAsync(null);
         Assert.True(vm.PriceMissing);

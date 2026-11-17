@@ -42,7 +42,6 @@ public sealed class FreeCoach : BaseModel
 /// <summary>The booking rules the server applies, so the sheet only offers what will go through (it rechecks everything anyway).</summary>
 public static class BookingSlots
 {
-    public static readonly int[] Minutes = [30, 60, 90, 120];
 
     // one 30-minute cell: open, yours, booked, cooldown, blocked (its cooldown would run into the next booking), closed, past or outside gym hours
     public static string StateOf(AmenityGrid g, GridAmenity a, DateTime t)
@@ -59,22 +58,26 @@ public static class BookingSlots
     }
 
     /// <summary>
-    /// The lengths a booking starting at t can have. Every cell it covers must be free, and its last cell open (not "blocked"), so the
-    /// 30-minute cooldown after it never runs into the next booking. Paying first (F12) also needs the start more than 1 hour away.
+    /// The lengths a booking starting at t can have, in whole hours up to closing time (owner, 2026-11-17, 0090). Every 30-minute cell
+    /// it covers must be free, and its last cell open (not "blocked"), so the 30-minute cooldown after it never runs into the next
+    /// booking. Paying first (F12) also needs the start more than 1 hour away.
     /// </summary>
     public static IReadOnlyList<int> Lengths(AmenityGrid g, int amenityId, DateTime t, bool payFirst)
     {
         var a = g.Amenities.FirstOrDefault(x => x.Id == amenityId);
         if (a is null || (payFirst && t.AddHours(-1) <= g.Now)) return [];
         var fits = new List<int>();
-        for (var n = 1; n <= 4; n++)
+        for (var n = 1; ; n++)
         {
             var last = StateOf(g, a, t.AddMinutes(30 * (n - 1)));
-            if (last == "open") fits.Add(30 * n);
+            if (last == "open") { if (n % 2 == 0) fits.Add(30 * n); }
             else if (last != "blocked") break;
         }
         return fits;
     }
+
+    /// <summary>"1 hour", "2 hours": a length as the dropdowns show it.</summary>
+    public static string LengthText(int minutes) => minutes == 60 ? "1 hour" : $"{minutes / 60} hours";
 }
 
 /// <summary>G13, G14, G4 (0064): what a booking costs, as book_amenity works it out.</summary>
@@ -84,9 +87,10 @@ public static class BookingPrice
 {
     /// <summary>Price plus the coach fee (with a coach), less the code's percent; the down payment is the Gym settings percent of that,
     /// rounded to the centavo as the database rounds (half away from zero); the balance is the rest.</summary>
-    public static PriceSplit Split(decimal price, decimal coachFee, bool withCoach, int percent, int codePercent = 0)
+    /// <summary>0090: the price and the coach fee are per hour, times the booking's hours.</summary>
+    public static PriceSplit Split(decimal price, decimal coachFee, bool withCoach, int percent, int codePercent = 0, int hours = 1)
     {
-        var total = price + (withCoach ? coachFee : 0);
+        var total = (price + (withCoach ? coachFee : 0)) * hours;
         var cut = Math.Round(total * codePercent / 100m, 2, MidpointRounding.AwayFromZero);
         var due = total - cut;
         var down = Math.Round(due * percent / 100m, 2, MidpointRounding.AwayFromZero);

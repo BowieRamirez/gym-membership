@@ -17,7 +17,6 @@ public partial class BookAmenityPage : BasePage
 	void OnOpen(object? sender, EventArgs e) => Row<BookAmenityViewModel>(sender, v => v.OpenCommand);
 	void OnDay(object? sender, EventArgs e) => Row<BookAmenityViewModel>(sender, v => v.PickDayCommand);
 	void OnTime(object? sender, EventArgs e) => Row<BookAmenityViewModel>(sender, v => v.PickTimeCommand);
-	void OnLength(object? sender, EventArgs e) => Row<BookAmenityViewModel>(sender, v => v.PickLengthCommand);
 	void OnCoach(object? sender, EventArgs e) => Row<BookAmenityViewModel>(sender, v => v.PickCoachCommand);   // G14
 	void OnCode(object? sender, EventArgs e) => Row<BookAmenityViewModel>(sender, v => v.UseCodeCommand);     // G4
 	void OnPayOnline(object? sender, EventArgs e) => Row<BookAmenityViewModel>(sender, v => v.PayOnlineCommand);

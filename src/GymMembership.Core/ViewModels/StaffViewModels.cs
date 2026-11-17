@@ -1410,7 +1410,7 @@ public sealed record CatalogPackageRow(MembershipPackage Package, string? PhotoU
 public sealed record CatalogAmenityRow(Amenity Amenity, string? PhotoUrl)
 {
     public string StateText => Amenity.State == CatalogState.Draft ? "Draft" : "On sale";
-    public string SoldAsText => Amenity.Price <= 0 ? "Price not set" : Amenity.DurationDays is { } d ? $"₱{Amenity.Price:N2} for {d} days" : $"₱{Amenity.Price:N2} per session";
+    public string SoldAsText => Amenity.Price <= 0 ? "Price not set" : Amenity.DurationDays is { } d ? $"₱{Amenity.Price:N2} for {d} days" : $"₱{Amenity.Price:N2} per hour";   // 0090
     public string Subtitle => string.IsNullOrWhiteSpace(Amenity.Description) ? "No description yet" : Amenity.Description!;
 }
 
@@ -1518,7 +1518,7 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     [ObservableProperty] private decimal formCoachFee;   // G14 (0064): amenities only, added when a member books With a coach
     /// <summary>G19 (0066): a new amenity is sold per session; one still set up as a pass keeps its days until Sell per session.</summary>
     [ObservableProperty, NotifyPropertyChangedFor(nameof(PriceLabel))] private bool isOldPass;
-    public string PriceLabel => IsPackagePanel ? "Price" : IsOldPass ? "Price for the pass" : "Price per session";
+    public string PriceLabel => IsPackagePanel ? "Price" : IsOldPass ? "Price for the pass" : "Price per hour";
     public ObservableCollection<BenefitLine> Benefits { get; } = new();
     [ObservableProperty] private string newBenefit = "";
 
@@ -1659,7 +1659,7 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     private async Task MainAsync()
     {
         if (!Complete()) return;
-        var terms = IsPackagePanel ? $"₱{FormPrice:N2} for {FormDays} days." : IsOldPass ? $"Pass: ₱{FormPrice:N2} for {_amenity!.DurationDays} days." : $"₱{FormPrice:N2} per session.";
+        var terms = IsPackagePanel ? $"₱{FormPrice:N2} for {FormDays} days." : IsOldPass ? $"Pass: ₱{FormPrice:N2} for {_amenity!.DurationDays} days." : $"₱{FormPrice:N2} per hour.";
         var ask = (_package, _amenity) switch
         {
             ({ ReplacesId: not null }, _) => ((string, string, string)?)null,   // the comparison is the check
@@ -2388,11 +2388,11 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
     AmenityGrid? grid;
     public ObservableCollection<GridAmenity> Amenities { get; } = new();
     public ObservableCollection<SlotOption> Starts { get; } = new();
-    public ObservableCollection<int> Lengths { get; } = new();
+    public ObservableCollection<PickChip> Lengths { get; } = new();
     [ObservableProperty] private DateTime day = DateTime.Today;
     [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand))] private GridAmenity? amenity;
     [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand))] private SlotOption? start;
-    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand))] private int minutes;
+    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand))] private PickChip? length;   // 0090: whole hours up to closing
     /// <summary>The last booking made here (the notice names it).</summary>
     public Reservation? LastBooked { get; private set; }
 
@@ -2401,8 +2401,9 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
     partial void OnAmenityChanged(GridAmenity? value) => FillStarts();
     partial void OnStartChanged(SlotOption? value)
     {
-        Fill(Lengths, value is null || Amenity is null || grid is null ? [] : BookingSlots.Lengths(grid, Amenity.Id, value.Utc, payFirst: false));
-        Minutes = Lengths.FirstOrDefault();
+        Fill(Lengths, value is null || Amenity is null || grid is null ? []
+            : BookingSlots.Lengths(grid, Amenity.Id, value.Utc, payFirst: false).Select(m => new PickChip(BookingSlots.LengthText(m), true, minutes: m)));
+        Length = Lengths.FirstOrDefault();
     }
 
     async Task LoadGridAsync()
@@ -2426,17 +2427,17 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
         Start = null;
     }
 
-    bool CanBook() => Member is not null && Amenity is not null && Start is not null && Minutes > 0;
+    bool CanBook() => Member is not null && Amenity is not null && Start is not null && Length is not null;
 
     [RelayCommand(CanExecute = nameof(CanBook))]
     private async Task BookAsync()
     {
-        if (Member is not { } who || Amenity is not { } a || Start is not { } s) return;
+        if (Member is not { } who || Amenity is not { } a || Start is not { } s || Length is not { } len) return;
         Notice = null;
-        var when = $"{s.Utc.AddHours(8):ddd d MMM}, {s.Label}, {Minutes} min";
+        var when = $"{s.Utc.AddHours(8):ddd d MMM}, {s.Label}, {len.Text}";
         if (!await Confirm.AskAsync($"Book {a.Name} for {who.Username}?", $"{when}.\nTake the full price in cash into your drawer.", "Book and take cash")) return;
         Reservation? made = null;
-        if (!await RunAsync(() => reservations.DeskBookAsync(who.MemberId, a.Id, s.Utc, Minutes), r => made = r)) return;
+        if (!await RunAsync(() => reservations.DeskBookAsync(who.MemberId, a.Id, s.Utc, len.Minutes), r => made = r)) return;
         LastBooked = made;
         Notice = $"Booked {a.Name} for {who.Username}, {when}. Took ₱{made!.TotalPrice:N2} in cash.";
         await LoadGridAsync();

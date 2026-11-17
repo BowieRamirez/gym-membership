@@ -43,6 +43,22 @@ public class DownPaymentTests
         Assert.Equal(new PriceSplit(150, 0, 150, 75, 75), BookingPrice.Split(150, 100, false, 50));
         Assert.Equal(new PriceSplit(200, 0, 200, 60, 140), BookingPrice.Split(200, 0, true, 30));
         Assert.Equal(0.01m, BookingPrice.Split(0.01m, 0, false, 50).Down + BookingPrice.Split(0.01m, 0, false, 50).Balance);
+        Assert.Equal(new PriceSplit(500, 0, 500, 250, 250), BookingPrice.Split(150, 100, true, 50, hours: 2));   // 0090: price and coach fee per hour
+    }
+
+    [Fact]   // owner, 2026-11-17 (0090): the price is per hour
+    public async Task Two_hours_cost_twice_the_hourly_price_on_the_sheet_and_in_the_booking()
+    {
+        var (gw, vm) = await Member();
+        await Pick(vm, "Group classes", "10:00", 120);
+        Assert.Equal((1000m, 500m), (vm.Split.Due, vm.Split.Down));
+        Assert.Equal("1 hour", vm.Lengths[0].Text);
+        Assert.Equal("2 hours", vm.Length!.Text);
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+        vm.PickLengthCommand.Execute(vm.Lengths[0]);              // the button's amount follows the length (seen on a phone, 2026-11-17)
+        Assert.Contains(nameof(vm.BookText), changed);
+        Assert.Equal("Book and pay ₱250.00", vm.BookText);
     }
 
     [Fact]

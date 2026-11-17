@@ -46,7 +46,7 @@ public class PerSessionAndIdCheckInTests
         var vm = new CatalogAdminViewModel(admin);
         await vm.OnAppearingAsync();
         vm.AddAmenityCommand.Execute(null);
-        Assert.Equal(("Price per session", false), (vm.PriceLabel, vm.IsPackagePanel));
+        Assert.Equal(("Price per hour", false), (vm.PriceLabel, vm.IsPackagePanel));
         (vm.FormName, vm.FormDescription, vm.FormPrice) = ("Ice bath", "Cold plunge.", 120);
         await vm.MainCommand.ExecuteAsync(null);
         Assert.Null(vm.ErrorMessage);
@@ -85,7 +85,7 @@ public class PerSessionAndIdCheckInTests
         var gw = await As("member@demo.io");
         var cards = (await new AmenityService(gw).BoardAsync()).Value!.Cards.Where(c => !c.HasPass && c.PassStatus is null).ToList();
         Assert.NotEmpty(cards);
-        Assert.All(cards, c => Assert.EndsWith(" per session, up to 2 hours", c.PassText));
+        Assert.All(cards, c => Assert.EndsWith(" per hour", c.PassText));
     }
 
     // ---------- G20 / G21 ----------

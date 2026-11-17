@@ -87,8 +87,8 @@
                             <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Starts}" ItemDisplayBinding="{Binding Label, x:DataType=vm:DeskBookingViewModel+SlotOption}" SelectedItem="{Binding Start}" SemanticProperties.Description="Start time" AutomationId="DeskBookStart" /></Border>
                         </VerticalStackLayout>
                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="130">
-                            <Label Text="Minutes" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Lengths}" SelectedItem="{Binding Minutes}" SemanticProperties.Description="Length in minutes" AutomationId="DeskBookMinutes" /></Border>
+                            <Label Text="How long" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Lengths}" ItemDisplayBinding="{Binding Text, x:DataType=vm:PickChip}" SelectedItem="{Binding Length}" SemanticProperties.Description="How long" AutomationId="DeskBookMinutes" /></Border>
                         </VerticalStackLayout>
                         <Button Text="Book and take cash" Style="{StaticResource SmallButton}" Margin="0,0,0,8" Command="{Binding BookCommand}" AutomationId="DeskBook" />
                     </FlexLayout>

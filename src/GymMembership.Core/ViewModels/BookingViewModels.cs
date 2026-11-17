@@ -57,7 +57,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     [ObservableProperty, NotifyPropertyChangedFor(nameof(MonthText))] private DateOnly month = new(Today.Year, Today.Month, 1);
     [ObservableProperty, NotifyPropertyChangedFor(nameof(DayText), nameof(IsDayClosed))] private DateOnly day = Today;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Summary), nameof(SummaryDetail), nameof(CanBook), nameof(CoachesTitle))] private PickChip? time;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(Summary), nameof(SummaryDetail), nameof(CanBook), nameof(CoachesTitle))] private PickChip? length;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(Summary), nameof(SummaryDetail), nameof(CanBook), nameof(CoachesTitle), nameof(Split), nameof(BookText))] private PickChip? length;
 
     // ---- G14, G13, G4 (0064, approved mockup docs/mockups/amenity-down-payment.html): who, the coach, a code, and the split ----
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsSolo), nameof(CanBook), nameof(Split), nameof(BookText), nameof(HoldText), nameof(SummaryDetail))] private bool isWithCoach;
@@ -73,14 +73,15 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
 
     public bool HasCoaches => Coaches.Count > 0;
     public bool HasCodes => Codes.Count > 0;
-    public string CoachFeeText => Picked is { } p && p.Amenity.CoachFee > 0 ? $"+ ₱{p.Amenity.CoachFee:N2} coach fee" : "No coach fee";
+    public string CoachFeeText => Picked is { } p && p.Amenity.CoachFee > 0 ? $"+ ₱{p.Amenity.CoachFee:N2} an hour coach fee" : "No coach fee";
     public string CoachesTitle => Time is null || Length is null ? "Pick a time to see who's free"
         : $"Coaches free {Manila(Time.StartUtc).ToString("h:mm", En)} to {Manila(Time.StartUtc.AddMinutes(Length.Minutes)).ToString("h:mm tt", En)}";
     int CodePercent => Codes.FirstOrDefault(c => string.Equals(c.Code, Code.Trim(), StringComparison.OrdinalIgnoreCase))?.Percent ?? 0;
     /// <summary>What booking now costs: with a pass only the coach fee, paid at the desk; otherwise the down payment now and the balance at the desk.</summary>
     public PriceSplit Split => Picked is not { } p ? new(0, 0, 0, 0, 0)
-        : PayFirst ? BookingPrice.Split(p.Amenity.Price, p.Amenity.CoachFee, IsWithCoach && PickedCoach is not null, Percent, CodePercent)
-        : BookingPrice.Split(0, p.Amenity.CoachFee, IsWithCoach && PickedCoach is not null, 0);
+        : PayFirst ? BookingPrice.Split(p.Amenity.Price, p.Amenity.CoachFee, IsWithCoach && PickedCoach is not null, Percent, CodePercent, Hours)
+        : BookingPrice.Split(0, p.Amenity.CoachFee, IsWithCoach && PickedCoach is not null, 0, 0, Hours);
+    int Hours => Math.Max(1, (Length?.Minutes ?? 60) / 60);   // 0090: per hour
     [ObservableProperty, NotifyPropertyChangedFor(nameof(PayQr), nameof(PayCash), nameof(HoldText))] private string method = PayMethod.Qr;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsClaiming))] private BookingRow? claiming;
     [ObservableProperty] private string claimReason = "";
@@ -214,19 +215,17 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
         foreach (var c in Times) c.IsPicked = c == chip;
         var fits = BookingSlots.Lengths(_grid, Picked.Amenity.Id, chip.StartUtc, PayFirst);
         var keep = Length?.Minutes ?? 60;
-        Lengths.Clear();
-        foreach (var m in BookingSlots.Minutes) Lengths.Add(new PickChip(m switch { 30 => "30 min", 60 => "1 hour", 90 => "1½ hours", _ => "2 hours" }, fits.Contains(m), minutes: m));
+        Lengths.Clear();   // 0090: a dropdown of whole hours that fit, up to closing time
+        foreach (var m in fits) Lengths.Add(new PickChip(BookingSlots.LengthText(m), true, minutes: m));
         Time = chip;
-        PickLength(Lengths.Where(l => l.CanPick).OrderBy(l => Math.Abs(l.Minutes - keep)).First());
+        Length = Lengths.OrderBy(l => Math.Abs(l.Minutes - keep)).First();
     }
 
-    [RelayCommand]
-    private void PickLength(PickChip chip)
+    [RelayCommand] private void PickLength(PickChip chip) => Length = chip;
+    partial void OnLengthChanged(PickChip? value)
     {
-        if (!chip.CanPick) return;
-        foreach (var c in Lengths) c.IsPicked = c == chip;
-        Length = chip;
-        if (IsWithCoach) _ = LoadCoachesAsync();
+        foreach (var c in Lengths) c.IsPicked = c == value;
+        if (value is not null && IsWithCoach) _ = LoadCoachesAsync();
     }
 
     [RelayCommand] private void PickMethod(string value) => Method = value;

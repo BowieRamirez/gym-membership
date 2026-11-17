@@ -177,7 +177,7 @@ public sealed partial class DemoGateway
                 else if (!ActiveMember(Uid)) throw Err("no_active_membership");
                 var amenityId = I("p_amenity"); var minutes = I("p_minutes");
                 var method = desk ? PayMethod.Cash : a.TryGetValue("p_method", out var m) ? m as string ?? PayMethod.Qr : PayMethod.Qr;
-                if (minutes is not (30 or 60 or 90 or 120) || method is not (PayMethod.Qr or PayMethod.Cash)) throw Err("bad_input");
+                if (minutes < 60 || minutes % 60 != 0 || method is not (PayMethod.Qr or PayMethod.Cash)) throw Err("bad_input");   // 0090: whole hours
                 var start = DateTime.Parse((string)a["p_start"], null, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal);
                 var end = start.AddMinutes(minutes);
                 var coach = a.GetValueOrDefault("p_coach") as string;
@@ -191,7 +191,7 @@ public sealed partial class DemoGateway
                         .Select(i => new Dictionary<string, object> { ["amenity"] = amenityId, ["start"] = start.AddMinutes(30 * i).ToString("yyyy-MM-ddTHH:mm:ssZ") }).ToList();
                     ReservationCall("book_slots", new() { ["p_slots"] = slots }, out var made);
                     var booked = All<Reservation>().First(x => x.Id == ((IEnumerable<Reservation>)made!).First().Id);
-                    if (coach is not null) { booked.CoachId = coach; booked.TotalPrice = amenity.CoachFee; booked.DownPayment = 0; booked.UserAmenityId ??= heldPass.Id; }   // the fee at the desk
+                    if (coach is not null) { booked.CoachId = coach; booked.TotalPrice = amenity.CoachFee * (minutes / 60); booked.DownPayment = 0; booked.UserAmenityId ??= heldPass.Id; }   // the fee at the desk
                     result = Clone(booked);
                     return true;
                 }
@@ -206,7 +206,7 @@ public sealed partial class DemoGateway
                 if (am.Availability == "unavailable" && (am.BackAt is null || am.BackAt > start)) throw Err("amenity_unavailable");
                 if (All<TrainingSession>().Any(t => t.MemberId == who && t.Status == Status.Scheduled && t.ScheduledStart < end && start < t.ScheduledEnd)) throw Err("member_busy");
                 // G13 (0064): no slot is held; the down payment is the percent of price + coach fee - code (G4)
-                var total = am.Price + (coach is null ? 0 : am.CoachFee);
+                var total = (am.Price + (coach is null ? 0 : am.CoachFee)) * (minutes / 60);   // 0090: per hour
                 var d = Discounted(who, new() { ["p_discount_code"] = a.GetValueOrDefault("p_code")! }, total, "amenity", amenityId);
                 var down = desk ? d.Amount : Math.Round(d.Amount * g.DownPaymentPercent / 100m, 2);
                 if (desk) OpenShiftOf(Uid);   // 0050: no open shift, nothing is booked

@@ -24,7 +24,7 @@ public class DeskBookingTests
         vm.PickMemberCommand.Execute(vm.Hits.First());
         vm.Amenity = vm.Amenities.First(a => a.Name == "Pool");
         vm.Start = vm.Starts.First();
-        vm.Minutes = vm.Lengths.First();
+        vm.Length = vm.Lengths.First();
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public class DeskBookingTests
         Assert.Equal("Lia Santos", vm.Member!.Username);
         Assert.Contains("Temporary password", vm.Notice);
         vm.Amenity = vm.Amenities.First(a => a.Name == "Pool");
-        vm.Start = vm.Starts.First(); vm.Minutes = vm.Lengths.First();
+        vm.Start = vm.Starts.First(); vm.Length = vm.Lengths.First();
         await vm.BookCommand.ExecuteAsync(null);
         Assert.Null(vm.ErrorMessage);
         Assert.Single(await gw.ListAsync<Reservation>(r => r.MemberId == vm.LastBooked!.MemberId && r.Status == "confirmed"));

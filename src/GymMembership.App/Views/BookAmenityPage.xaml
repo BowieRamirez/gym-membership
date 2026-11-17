@@ -208,13 +208,11 @@
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Spacing="6" IsVisible="{Binding Time, Converter={StaticResource IsNotNull}}">
                                     <Label Text="How long" Style="{StaticResource Caption}" />
-                                    <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Lengths}">
-                                        <BindableLayout.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:PickChip">
-                                                <Button Text="{Binding Text}" Style="{StaticResource PickChip}" Clicked="OnLength" />
-                                            </DataTemplate>
-                                        </BindableLayout.ItemTemplate>
-                                    </FlexLayout>
+                                    <!-- owner, 2026-11-17 (0090): whole hours up to closing time, as a dropdown; the price is per hour -->
+                                    <Border Style="{StaticResource Field}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" WidthRequest="{OnIdiom Phone=-1, Default=200}">
+                                        <Picker ItemsSource="{Binding Lengths}" ItemDisplayBinding="{Binding Text, x:DataType=vm:PickChip}" SelectedItem="{Binding Length}"
+                                                SemanticProperties.Description="How long" AutomationId="BookLength" />
+                                    </Border>
                                 </VerticalStackLayout>
                                 <!-- G14 (approved mockup docs/mockups/amenity-down-payment.html): Solo, or With a coach who is free the whole time -->
                                 <VerticalStackLayout Spacing="6" IsVisible="{Binding Time, Converter={StaticResource IsNotNull}}">
