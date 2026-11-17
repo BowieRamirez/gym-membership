@@ -1868,12 +1868,16 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         }
     });
 
-    async Task<List<AuditRecord>> AuditRowsAsync(AuditFilter f, int offset, int limit) =>
-        await gw.RpcAsync<List<AuditRecord>>("audit_records", new()
+    async Task<List<AuditRecord>> AuditRowsAsync(AuditFilter f, int offset, int limit)
+    {
+        Dictionary<string, object> args = new()
         {
             ["p_from"] = f.From?.ToString("yyyy-MM-dd")!, ["p_to"] = f.To?.ToString("yyyy-MM-dd")!, ["p_user"] = f.User?.Trim() ?? "",
             ["p_area"] = f.Area ?? "", ["p_entity"] = f.Entity ?? "", ["p_offset"] = offset, ["p_limit"] = limit
-        }) ?? [];
+        };
+        if (f.Money is { } money) args["p_money"] = money;   // 0086
+        return await gw.RpcAsync<List<AuditRecord>>("audit_records", args) ?? [];
+    }
 
     public Task<AppResult<GymSettings>> GymSettingsAsync() => Safe.RunAsync(async () => (await gw.ListAsync<GymSettings>()).First());
 

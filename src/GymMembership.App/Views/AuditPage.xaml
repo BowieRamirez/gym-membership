@@ -52,6 +52,47 @@
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
         </DataTemplate>
+        <!-- plan 2026-11-17 Z6: Transactions, money only: who paid, what, how much and how, and who took it -->
+        <DataTemplate x:Key="MoneyRowTemplate" x:DataType="m:AuditRecord">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="170,*,*,110,96,*,*">
+                    <Label Text="{Binding ShownWhen}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                    <Label Grid.Column="1" Text="{Binding Customer}" FontFamily="BarlowSemiBold" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="2" Text="{Binding ActionText}" VerticalOptions="Center" />
+                    <Label Grid.Column="3" Text="{Binding AmountText}" Style="{StaticResource Numeral}" FontSize="16" HorizontalOptions="End" VerticalOptions="Center" Margin="0,0,16,0" />
+                    <Label Grid.Column="4" Text="{Binding PaidWithText}" VerticalOptions="Center" />
+                    <Label Grid.Column="5" Text="{Binding ActorName}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                    <Label Grid.Column="6" Text="{Binding DetailsText}" Style="{StaticResource Muted}" VerticalOptions="Center" MaxLines="2" LineBreakMode="TailTruncation"
+                           ToolTipProperties.Text="{Binding DetailsText}" />
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+        <DataTemplate x:Key="MoneyCardTemplate" x:DataType="m:AuditRecord">
+            <VerticalStackLayout>
+                <VerticalStackLayout Padding="14,10" Spacing="2">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <Label Text="{Binding ActionText}" FontFamily="BarlowSemiBold" />
+                        <Label Grid.Column="1" Text="{Binding AmountText}" FontFamily="BarlowSemiBold" />
+                    </Grid>
+                    <Label Style="{StaticResource Muted}">
+                        <Label.Text>
+                            <MultiBinding StringFormat="{}{0} · {1}">
+                                <Binding Path="Customer" /><Binding Path="PaidWithText" />
+                            </MultiBinding>
+                        </Label.Text>
+                    </Label>
+                    <Label Style="{StaticResource Caption}">
+                        <Label.Text>
+                            <MultiBinding StringFormat="{}{0}, by {1}">
+                                <Binding Path="ShownWhen" /><Binding Path="ActorName" />
+                            </MultiBinding>
+                        </Label.Text>
+                    </Label>
+                </VerticalStackLayout>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
     </v:BasePage.Resources>
 
     <Grid RowDefinitions="Auto,*">
@@ -61,7 +102,16 @@
             <HorizontalStackLayout Spacing="2">
                 <Button Text="Audit log" Command="{Binding OpenLogsCommand}" Style="{StaticResource Segment}" AutomationId="OpenLogs">
                     <Button.Triggers>
-                        <DataTrigger TargetType="Button" Binding="{Binding ShowLogs}" Value="True">
+                        <DataTrigger TargetType="Button" Binding="{Binding IsAuditTab}" Value="True">
+                            <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                        </DataTrigger>
+                    </Button.Triggers>
+                </Button>
+                <Button Text="Transactions" Command="{Binding OpenMoneyCommand}" Style="{StaticResource Segment}" AutomationId="OpenMoney">
+                    <Button.Triggers>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsMoneyTab}" Value="True">
                             <Setter Property="FontFamily" Value="BarlowSemiBold" />
                             <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
                             <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
@@ -86,7 +136,8 @@
         <ScrollView Grid.Row="1" IsVisible="{Binding ShowLogs}">
             <!-- full width, left edge in line with the Audit log and Archive buttons: nine columns need the room -->
             <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='20,12,20,20'}" Spacing="12">
-                <Label Text="Sensitive actions, newest first, 10 to a page. Entries can't be edited. No IP addresses are kept." Style="{StaticResource Muted}" />
+                <Label Text="Sensitive actions, newest first, 10 to a page. Payments are under Transactions. Entries can't be edited. No IP addresses are kept." Style="{StaticResource Muted}" IsVisible="{Binding IsAuditTab}" />
+                <Label Text="Payments, refunds and cash shifts, newest first, 10 to a page: who paid, how much and how. Entries can't be edited." Style="{StaticResource Muted}" IsVisible="{Binding IsMoneyTab}" />
                 <c:Banner Message="{Binding ErrorMessage}" />
                 <c:Banner Kind="notice" Message="{Binding Notice}" />
 
@@ -123,7 +174,7 @@
                 </Border>
 
                 <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
-                <Border Style="{StaticResource TablePanel}">
+                <Border Style="{StaticResource TablePanel}" IsVisible="{Binding IsAuditTab}">
                     <VerticalStackLayout>
                         <VerticalStackLayout x:Name="AuditHead" IsVisible="{OnIdiom Phone=False, Default=True}">
                             <Grid Style="{StaticResource TableHead}" ColumnDefinitions="170,*,100,96,*,104,*,1.4*">
@@ -141,6 +192,25 @@
                         <c:TableBody Items="{Binding Entries}" Header="{x:Reference AuditHead}" WideFrom="1150"
                                      RowTemplate="{StaticResource AuditRowTemplate}" CardTemplate="{StaticResource AuditCardTemplate}" />
                         <Label Text="No entries match these filters." Style="{StaticResource Muted}" Margin="14" IsVisible="{Binding IsEmpty}" AutomationId="AuditEmpty" />
+                    </VerticalStackLayout>
+                </Border>
+                <Border Style="{StaticResource TablePanel}" IsVisible="{Binding IsMoneyTab}">
+                    <VerticalStackLayout>
+                        <VerticalStackLayout x:Name="MoneyHead" IsVisible="{OnIdiom Phone=False, Default=True}">
+                            <Grid Style="{StaticResource TableHead}" ColumnDefinitions="170,*,*,110,96,*,*">
+                                <Label Text="Date and time" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="1" Text="Customer" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="2" Text="What" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="3" Text="Amount" Style="{StaticResource Caption}" HorizontalOptions="End" Margin="0,0,16,0" />
+                                <Label Grid.Column="4" Text="Paid with" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="5" Text="Recorded by" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="6" Text="Details" Style="{StaticResource Caption}" />
+                            </Grid>
+                            <BoxView Style="{StaticResource Hairline}" />
+                        </VerticalStackLayout>
+                        <c:TableBody Items="{Binding Entries}" Header="{x:Reference MoneyHead}" WideFrom="1050"
+                                     RowTemplate="{StaticResource MoneyRowTemplate}" CardTemplate="{StaticResource MoneyCardTemplate}" />
+                        <Label Text="No payments match these filters." Style="{StaticResource Muted}" Margin="14" IsVisible="{Binding IsEmpty}" AutomationId="MoneyEmpty" />
                     </VerticalStackLayout>
                 </Border>
 

@@ -2069,8 +2069,12 @@ public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive
 {
     public ArchiveViewModel? Archive { get; } = archive;
     public bool HasArchive => Archive is not null;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowLogs))] private bool showArchive;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowLogs), nameof(IsAuditTab), nameof(IsMoneyTab))] private bool showArchive;
+    /// <summary>Plan 2026-11-17 Z6: the Transactions tab (payments, refunds, cash shifts); the audit log shows the rest.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsAuditTab), nameof(IsMoneyTab))] private bool showMoney;
     public bool ShowLogs => !ShowArchive;
+    public bool IsAuditTab => !ShowArchive && !ShowMoney;
+    public bool IsMoneyTab => !ShowArchive && ShowMoney;
     public ObservableCollection<AuditRecord> Entries { get; } = new();
 
     // filters (D7): Manila dates, part of the user's name, action type, object type. Index 0 of each list is "All".
@@ -2119,7 +2123,7 @@ public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive
     async Task LoadPageAsync(int target)
     {
         IsEmpty = false;
-        if (!await RunAsync(() => svc.AuditPageAsync(_applied, target), result =>
+        if (!await RunAsync(() => svc.AuditPageAsync(_applied with { Money = ShowMoney }, target), result =>
             { Fill(Entries, result.Rows); Page = target; HasMore = result.HasMore; IsEmpty = Entries.Count == 0; }))
         { Entries.Clear(); HasMore = false; }
     }
@@ -2134,8 +2138,9 @@ public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive
         if (IsBusy || SaveFile is null) return;
         Notice = null;
         IReadOnlyList<AuditRecord>? rows = null;
-        if (!await RunAsync(() => svc.AuditExportAsync(_applied), r => rows = r)) return;
-        var where = await SaveFile($"audit-log-{DateTime.Today:yyyy-MM-dd}.csv", AuditCsv.Build(rows!));
+        if (!await RunAsync(() => svc.AuditExportAsync(_applied with { Money = ShowMoney }), r => rows = r)) return;
+        var where = ShowMoney ? await SaveFile($"transactions-{DateTime.Today:yyyy-MM-dd}.csv", TransactionsCsv.Build(rows!))
+                              : await SaveFile($"audit-log-{DateTime.Today:yyyy-MM-dd}.csv", AuditCsv.Build(rows!));
         if (where is not null) Notice = $"Saved {rows!.Count} entr{(rows.Count == 1 ? "y" : "ies")} to {where}.";
     }
 
@@ -2146,7 +2151,8 @@ public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive
         await Archive.OnAppearingAsync();
     }
 
-    [RelayCommand] private async Task OpenLogsAsync() { ShowArchive = false; await LoadPageAsync(Page); }
+    [RelayCommand] private async Task OpenLogsAsync() { var was = ShowMoney; ShowArchive = false; ShowMoney = false; await LoadPageAsync(was ? 0 : Page); }
+    [RelayCommand] private async Task OpenMoneyAsync() { var was = ShowMoney; ShowArchive = false; ShowMoney = true; await LoadPageAsync(was ? Page : 0); }
 }
 
 public sealed record StatusChoice(string Value, string Label);

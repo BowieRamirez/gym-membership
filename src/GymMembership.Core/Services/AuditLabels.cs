@@ -62,6 +62,21 @@ public static class AuditLabels
         { "GCASH" => "GCash", "PAYMAYA" => "Maya", "QRPH" => "QR Ph", "CARDS" => "Card", "" => "unknown", _ => code };
 }
 
+/// <summary>Plan 2026-11-17 Z6: the Transactions export, the same cells the Transactions table shows.</summary>
+public static class TransactionsCsv
+{
+    public static readonly string[] Header = ["Date and time (Manila)", "Customer", "What", "Amount", "Paid with", "Recorded by", "Object"];
+
+    public static string Build(IEnumerable<AuditRecord> rows)
+    {
+        var csv = new StringBuilder();
+        csv.AppendJoin(',', Header.Select(AuditCsv.Cell)).Append("\r\n");
+        foreach (var r in rows)
+            csv.AppendJoin(',', new[] { r.WhenText, r.Customer, r.ActionText, r.AmountText, r.PaidWithText, r.ActorName, r.ObjectText }.Select(AuditCsv.Cell)).Append("\r\n");
+        return csv.ToString();
+    }
+}
+
 /// <summary>Builds the audit export. Every cell is quoted, and one starting with = + - @ or a tab or return gets a leading ' so a spreadsheet shows it instead of running it.</summary>
 public static class AuditCsv
 {

@@ -57,6 +57,13 @@ try {
         Wait-Name 'AdminOverviewUpdated' 'Checked.*Manila'
         Write-Output "PASS admin overview shortcut: $key"
     }
+    # plan 2026-11-17 Z6: the logs page's Transactions tab opens and goes back to the audit log
+    Invoke-Id 'AdminOverviewOpen-audit'
+    Invoke-Id 'OpenMoney'
+    Invoke-Id 'OpenLogs'
+    Invoke-Id 'AdminNavigation-overview'
+    Wait-Name 'AdminOverviewUpdated' 'Checked.*Manila'
+    Write-Output 'PASS logs: Transactions tab'
     Invoke-Id 'AdminOverviewRefresh'
     Wait-Name 'AdminOverviewUpdated' 'Checked.*Manila'
     Write-Output 'PASS admin-only landing, summaries, shortcuts and refresh'

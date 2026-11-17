@@ -221,9 +221,15 @@ public sealed partial class DemoGateway
         if (offset < 0 || limit is < 1 or > 1001 || to < from || user.Length > 100 || area.Length > 40 || entity.Length > 40) throw Err("bad_audit_filter");
         string? Name(string? id) => All<Profile>().FirstOrDefault(p => p.Id == id)?.FullName;
         DateOnly Day(DateTime at) => DateOnly.FromDateTime(at.ToUniversalTime().AddHours(8));
+        bool? money = args.TryGetValue("p_money", out var m) && m is bool b ? b : null;   // 0086
+        Payment? Pay(AuditEntry e) => e.Entity == "payments" ? All<Payment>().FirstOrDefault(p => p.Id.ToString(CultureInfo.InvariantCulture) == e.EntityId) : null;
         return All<AuditEntry>()
-            .Select(e => new AuditRecord { Id = e.Id, CreatedAt = e.CreatedAt, ActorName = Name(e.ActorId) ?? "System", Role = e.Role, IpAddress = e.IpAddress,
-                Action = e.Action, Entity = e.Entity, EntityId = e.EntityId, ObjectName = e.Entity is "profiles" or "user_roles" ? Name(e.EntityId) : null, Details = e.Details })
+            .Select(e => (e, p: Pay(e)))
+            .Select(x => new AuditRecord { Id = x.e.Id, CreatedAt = x.e.CreatedAt, ActorName = Name(x.e.ActorId) ?? "System", Role = x.e.Role, IpAddress = x.e.IpAddress,
+                Action = x.e.Action, Entity = x.e.Entity, EntityId = x.e.EntityId, ObjectName = x.e.Entity is "profiles" or "user_roles" ? Name(x.e.EntityId) : null, Details = x.e.Details,
+                Customer = Name(x.p?.MemberId) ?? x.p?.WalkInName, Amount = x.p?.Amount,
+                PaidWith = x.e.Details?.GetValueOrDefault("channel")?.ToString() ?? x.p?.Method })
+            .Where(r => money is null || (r.Action.Split('.')[0] is "payment" or "refund" or "cash_shift") == money)
             .Where(r => (from is null || Day(r.CreatedAt) >= from) && (to is null || Day(r.CreatedAt) <= to)
                 && r.ActorName.Contains(user, StringComparison.OrdinalIgnoreCase)
                 && (area == "" || r.Action.Split('.')[0] == area) && (entity == "" || r.Entity == entity))

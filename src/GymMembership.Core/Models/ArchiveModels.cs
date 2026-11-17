@@ -36,6 +36,16 @@ public sealed class AuditRecord : BaseModel
     [Column("entity_id")] public string? EntityId { get; set; }
     [Column("object_name")] public string? ObjectName { get; set; }
     [Column("details")] public Dictionary<string, object>? Details { get; set; }
+    // plan 2026-11-17 Z4-Z5 (0086): the payment's customer, amount and how they paid; blank on rows that are not about money
+    [Column("customer")] public string? Customer { get; set; }
+    [Column("amount")] public decimal? Amount { get; set; }
+    [Column("paid_with")] public string? PaidWith { get; set; }
+    [JsonIgnore] public string AmountText => Amount is { } a ? $"₱{a:N2}" : "";
+    [JsonIgnore] public string PaidWithText => PaidWith switch
+    {
+        null or "" => "", "cash" => "Cash", "gcash" => "GCash", "qr" => "Online",
+        var c => GymMembership.Core.Services.AuditLabels.Channel(c.ToUpperInvariant()),
+    };
 
     [JsonIgnore] public DateTime Manila => (CreatedAt.Kind == DateTimeKind.Local ? CreatedAt.ToUniversalTime() : CreatedAt).AddHours(8);   // no daylight saving
     [JsonIgnore] public string WhenText => Manila.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture);   // the CSV: sortable
@@ -50,5 +60,6 @@ public sealed class AuditRecord : BaseModel
     [JsonIgnore] public string DetailsText => GymMembership.Core.Services.AuditLabels.Details(Details);
 }
 
-public sealed record AuditFilter(DateOnly? From = null, DateOnly? To = null, string? User = null, string? Area = null, string? Entity = null);
+/// <summary>Money (0086): true = Transactions (payments, refunds, cash shifts), false = the audit log without them, null = every row.</summary>
+public sealed record AuditFilter(DateOnly? From = null, DateOnly? To = null, string? User = null, string? Area = null, string? Entity = null, bool? Money = null);
 public sealed record AuditPage(IReadOnlyList<AuditRecord> Rows, bool HasMore);
