@@ -410,6 +410,7 @@ public sealed class MemberPass : BaseModel
 { [Column("user_amenity_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? UserAmenityId { get; set; }
   [Column("payment_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? PaymentId { get; set; }   // F12 (0052): a booking paid for on its own; null for pass and coach bookings
   [PrimaryKey("reservation_id")] public int Id { get; set; } [Column("member_id")] public string MemberId { get; set; } = ""; [Column("amenity_id")] public int AmenityId { get; set; }
+  [Column("walk_in_name", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? WalkInName { get; set; }   // 0091: a desk booking for someone with no account (MemberId is then null)
   [Column("coach_id")] public string? CoachId { get; set; } [Column("training_session_id")] public int? TrainingSessionId { get; set; }
   [Column("starts_at")] public DateTime StartsAt { get; set; } [Column("ends_at")] public DateTime EndsAt { get; set; } [Column("status")] public string Status { get; set; } = "confirmed";
   [Column("cancelled_at")] public DateTime? CancelledAt { get; set; } [Column("cancelled_by")] public string? CancelledBy { get; set; } [Column("cancel_reason")] public string? CancelReason { get; set; }

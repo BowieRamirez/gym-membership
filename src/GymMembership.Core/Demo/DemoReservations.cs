@@ -217,7 +217,43 @@ public sealed partial class DemoGateway
                 var r = Add(new Reservation { MemberId = who, AmenityId = amenityId, CoachId = coach, StartsAt = start, EndsAt = end, UserAmenityId = ua.Id, PaymentId = pay.Id,
                     Status = AwaitingPayment, TotalPrice = d.Amount, DownPayment = down });
                 Audit("reservation.request", "reservations", r.Id.ToString());
-                if (desk) Call("verify_payment", new() { ["p_payment_id"] = pay.Id, ["p_approve"] = true });
+                if (desk)
+                {
+                    Call("verify_payment", new() { ["p_payment_id"] = pay.Id, ["p_approve"] = true });
+                    // 0091: the receipt goes to the member's Front desk chat, from the desk employee
+                    var body = $"Your booking is confirmed: {start + Manila:ddd d MMM, h:mm tt} to {end + Manila:h:mm tt}, at {am.Name}. Paid PHP {d.Amount:N2} in cash. Receipt {pay.ReceiptNo}. Show this message at the front desk.";
+                    var thread = All<SupportThread>().FirstOrDefault(t => t.MemberId == who && t.Queue == ChatQueue.FrontDesk) ?? Add(new SupportThread { MemberId = who, Queue = ChatQueue.FrontDesk });
+                    Add(new SupportMessage { MemberId = who, Queue = ChatQueue.FrontDesk, SenderId = Uid!, Body = body, SentAt = now });
+                    thread.LastMessageAt = now;
+                    NotifyChat(who, "Message from the front desk", body[..80], $"s|{who}|{ChatQueue.FrontDesk}");
+                }
+                result = Clone(r);
+                return true;
+            }
+            case "desk_book_walk_in":   // 0091: the desk books someone with no account, by name; full price in cash, confirmed at once
+            {
+                RequireActive(); Require("payments:record");
+                var name = (a.GetValueOrDefault("p_name") as string)?.Trim();
+                var amenityId = I("p_amenity"); var minutes = I("p_minutes");
+                if (string.IsNullOrEmpty(name) || name.Length > 100 || minutes < 60 || minutes % 60 != 0) throw Err("bad_input");
+                var start = DateTime.Parse((string)a["p_start"], null, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal);
+                var end = start.AddMinutes(minutes);
+                var am = AmenityForSale(amenityId);
+                if ((start - DateTime.UnixEpoch).Ticks % Cooldown.Ticks != 0) throw Err("off_grid");
+                if (start <= now) throw Err("past_slot");
+                var day = (start + Manila).Date;
+                if (day > (now + Manila).Date.AddDays(14)) throw Err("too_far_ahead");
+                var g = All<GymSettings>().First();
+                if (start < day - Manila + g.OpensAt || end > day - Manila + g.ClosesAt) throw Err("outside_gym_hours");
+                if (am.Availability == "unavailable" && (am.BackAt is null || am.BackAt > start)) throw Err("amenity_unavailable");
+                var shift = OpenShiftOf(Uid!);   // 0050: no open shift, nothing is booked
+                if (Confirmed.Any(x => x.AmenityId == amenityId && x.StartsAt < end + Cooldown && start < x.EndsAt + Cooldown)) throw Err("slot_taken");
+                var total = am.Price * (minutes / 60);
+                var pay = Add(new Payment { PaymentCode = PaymentCode(), Kind = PayKind.Amenity, Method = PayMethod.Cash, Status = Status.Verified, Amount = total, WalkInName = name,
+                    RecordedBy = Uid, VerifiedBy = Uid, VerifiedAt = now, ReceiptNo = ReceiptNo(), CashShiftId = shift, CreatedAt = now });
+                var r = Add(new Reservation { MemberId = null!, WalkInName = name, AmenityId = amenityId, StartsAt = start, EndsAt = end, PaymentId = pay.Id,
+                    Status = "confirmed", TotalPrice = total, DownPayment = total });
+                Audit("reservation.desk_walk_in", "reservations", r.Id.ToString());
                 result = Clone(r);
                 return true;
             }

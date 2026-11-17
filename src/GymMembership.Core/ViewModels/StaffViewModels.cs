@@ -2340,48 +2340,39 @@ public partial class AnnouncementsViewModel(IAnnouncementService svc) : Loadable
     }
 }
 
-/// <summary>Plan 2026-11-17 Z1, Z2 (0087): on Amenity status the desk books a slot for a customer: find them (or register them, Z1),
-/// pick the amenity, day, time and length, and take the full price in cash into the open drawer.</summary>
-public partial class DeskBookingViewModel(IAttendanceService members, IReservationService reservations, IPaymentStaffService desk) : LoadableViewModel
+/// <summary>Plan 2026-11-17 Z1, Z2 (0087): on Amenity status the desk books a slot for a customer: find a member, or (0091, owner) book a
+/// walk-in by name with no account; pick the amenity, day, time and length, and take the full price in cash into the open drawer.
+/// The receipt shows on screen for a walk-in to photograph; a member also gets it in their Front desk chat.</summary>
+public partial class DeskBookingViewModel(IAttendanceService members, IReservationService reservations) : LoadableViewModel
 {
     public sealed record SlotOption(DateTime Utc, string Label);
+    /// <summary>What the desk shows after booking: the customer photographs it (walk-in) or has it in chat (member).</summary>
+    public sealed record ReceiptView(string ReceiptNo, string Customer, string Amenity, string When, string Paid, string Note);
 
-    // ---- the customer: the Cashier's search and Register new member (ponytail: the same ~20 lines as CashierViewModel; share them if a third page needs them) ----
+    // ---- the customer: a member (the Cashier's search) or a walk-in; one at a time (owner, 2026-11-17) ----
     public ObservableCollection<MemberHit> Hits { get; } = new();
     [ObservableProperty] private string search = "";
     [ObservableProperty] private bool noMatch;
     [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand))] private MemberHit? member;
-    [ObservableProperty] private bool isRegistering;
-    [ObservableProperty] private string newFirstName = "";
-    [ObservableProperty] private string newLastName = "";
-    [ObservableProperty] private string newEmail = "";
-    [ObservableProperty] private string newPhone = "";
+    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand))] private bool isWalkIn;
+    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand))] private string walkInName = "";
+    [ObservableProperty] private ReceiptView? receipt;
     public bool HasHits => Hits.Count > 0;
 
     [RelayCommand]
     private Task FindAsync() => RunAsync(() => members.FindMembersAsync(Search), all =>
     {
         var rows = all.Where(h => h.Status != "inactive").ToList();
-        IsRegistering = false; Member = null; Fill(Hits, rows); NoMatch = rows.Count == 0; OnPropertyChanged(nameof(HasHits));   // a new search drops the old pick (final review)
+        IsWalkIn = false; Member = null; Fill(Hits, rows); NoMatch = rows.Count == 0; OnPropertyChanged(nameof(HasHits));   // a new search drops the old pick (final review)
     });
     [RelayCommand] private void PickMember(MemberHit hit) => Member = hit;
-    [RelayCommand] private void StartRegister() { Notice = null; ErrorMessage = null; IsRegistering = true; }
-    [RelayCommand] private void CancelRegister() => IsRegistering = false;
-
+    /// <summary>Book for a walk-in: hides the member table (and the pick), shows the name box.</summary>
     [RelayCommand]
-    private async Task RegisterAsync()
+    private void StartWalkIn()
     {
-        Notice = null;
-        var name = NameParts.Join(NewFirstName.Trim(), NewLastName.Trim());
-        if (!await Confirm.AskAsync($"Register {name} as a member?", $"{NewEmail.Trim()}\nThey get a temporary password to change at first sign-in.", "Register member")) return;
-        var password = TempPassword.New();
-        string? id = null;
-        if (!await RunAsync(() => desk.RegisterMemberAsync(NewFirstName, NewLastName, NewEmail, NewPhone, password), v => id = v)) return;
-        Search = NewEmail.Trim();
-        await RunAsync(() => members.FindMembersAsync(Search), rows => { Fill(Hits, rows); NoMatch = rows.Count == 0; OnPropertyChanged(nameof(HasHits)); Member = rows.FirstOrDefault(h => h.MemberId == id); });
-        IsRegistering = false;
-        NewFirstName = NewLastName = NewEmail = NewPhone = "";
-        Notice = $"{name} is a member now. Temporary password: {password}. Hand it over; they change it at first sign-in.";
+        Notice = null; ErrorMessage = null; Member = null; NoMatch = false;
+        Hits.Clear(); OnPropertyChanged(nameof(HasHits));
+        IsWalkIn = true;
     }
 
     // ---- the slot: the same grid and rules as Book an amenity, without the hour-ahead rule (they are at the counter) ----
@@ -2427,19 +2418,24 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
         Start = null;
     }
 
-    bool CanBook() => Member is not null && Amenity is not null && Start is not null && Length is not null;
+    string? Customer => IsWalkIn ? (string.IsNullOrWhiteSpace(WalkInName) ? null : WalkInName.Trim()) : Member?.Username;
+    bool CanBook() => Customer is not null && Amenity is not null && Start is not null && Length is not null;
 
     [RelayCommand(CanExecute = nameof(CanBook))]
     private async Task BookAsync()
     {
-        if (Member is not { } who || Amenity is not { } a || Start is not { } s || Length is not { } len) return;
-        Notice = null;
+        if (Customer is not { } who || Amenity is not { } a || Start is not { } s || Length is not { } len) return;
+        Notice = null; Receipt = null;
         var when = $"{s.Utc.AddHours(8):ddd d MMM}, {s.Label}, {len.Text}";
-        if (!await Confirm.AskAsync($"Book {a.Name} for {who.Username}?", $"{when}.\nTake the full price in cash into your drawer.", "Book and take cash")) return;
-        Reservation? made = null;
-        if (!await RunAsync(() => reservations.DeskBookAsync(who.MemberId, a.Id, s.Utc, len.Minutes), r => made = r)) return;
-        LastBooked = made;
-        Notice = $"Booked {a.Name} for {who.Username}, {when}. Took ₱{made!.TotalPrice:N2} in cash.";
+        if (!await Confirm.AskAsync($"Book {a.Name} for {who}?", $"{when}.\nTake the full price in cash into your drawer.", "Book and take cash")) return;
+        DeskReceipt? made = null;
+        var memberId = IsWalkIn ? null : Member!.MemberId;
+        if (!await RunAsync(() => reservations.DeskBookAsync(memberId, IsWalkIn ? who : null, a.Id, s.Utc, len.Minutes), r => made = r)) return;
+        LastBooked = made!.Booking;
+        Receipt = new(made.ReceiptNo, who, a.Name, when, $"₱{made.Booking.TotalPrice:N2} in cash",
+            IsWalkIn ? "No account: ask them to take a photo of this receipt. It is their reference at the desk."
+                     : "Also sent to their Front desk chat. That message is their reference.");
+        if (IsWalkIn) WalkInName = "";
         await LoadGridAsync();
     }
 }

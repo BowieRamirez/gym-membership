@@ -83,6 +83,48 @@ try {
       has_function_privilege('authenticated','public.book_amenity_for(uuid,boolean,bigint,timestamptz,integer,payment_method,uuid,text)','execute') b`)).rows[0];
     assert.equal(r.a, false); assert.equal(r.b, false);
   });
+
+  // 0091 (owner, 2026-11-17): walk-ins with no account, and the member's receipt in chat
+  const walkIn = (by, name, hm) => as(by, 'select * from desk_book_walk_in(p_name=>$1, p_amenity=>$2, p_start=>$3, p_minutes=>120)', [name, court, at(hm)]);
+
+  await test('0091: a walk-in is booked by name, paid in full in cash into the drawer, with a receipt', async () => {
+    const before = await shiftTotal(desk);
+    const r = (await walkIn(desk, '  Ana Reyes ', '06:00'))[0];
+    assert.equal(r.status, 'confirmed'); assert.equal(r.member_id, null); assert.equal(r.walk_in_name, 'Ana Reyes');
+    assert.equal(Number(r.total_price), 600); assert.equal(Number(r.down_payment), 600);
+    assert.equal(await shiftTotal(desk), before + 600);
+    const p = (await db.query('select status, kind, method, walk_in_name, receipt_no from payments where payment_id = $1', [r.payment_id])).rows[0];
+    assert.deepEqual([p.status, p.kind, p.method, p.walk_in_name], ['verified', 'amenity', 'cash', 'Ana Reyes']); assert.ok(p.receipt_no);
+    const g = (await as(desk, 'select amenity_grid($1::date) g', [day]))[0].g;
+    assert.ok(g.blocks.length > 0 && g.blocks.every(b => typeof b.mine === 'boolean'));   // the walk-in's block blocks the slot, 'mine' never null
+  });
+
+  await test('0091: a walk-in cannot take a booked slot; no name, no shift, or a member: refused, nothing kept', async () => {
+    const before = (await db.query('select count(*)::int n from payments')).rows[0].n;
+    await assert.rejects(walkIn(desk, 'Ben', '07:00'), /slot_taken/);
+    await assert.rejects(walkIn(desk, '  ', '12:00'), /bad_input/);
+    await assert.rejects(walkIn(desk2, 'Ben', '12:00'), /no_open_shift/);
+    await assert.rejects(walkIn(await user(null), 'Ben', '12:00'), /forbidden|permission|not_allowed/);
+    assert.equal((await db.query('select count(*)::int n from payments')).rows[0].n, before);
+    const a = (await db.query(`select has_function_privilege('anon','public.desk_book_walk_in(text,bigint,timestamptz,integer)','execute') a`)).rows[0].a;
+    assert.equal(a, false);
+  });
+
+  await test('0091: the gym cancelling a walk-in booking refunds it without a member', async () => {
+    const r = (await walkIn(desk, 'Cora', '20:00'))[0];
+    await as(desk, 'select cancel_reservation(p_id=>$1, p_reason=>$2)', [r.reservation_id, 'Pool closed']);
+    const f = (await db.query('select member_id, amount from refund_requests where reservation_id = $1', [r.reservation_id])).rows[0];
+    assert.equal(f.member_id, null); assert.equal(Number(f.amount), 600);
+  });
+
+  await test('0091: a member booked at the desk gets the receipt in their Front desk chat, from the desk', async () => {
+    const m = await user(null);
+    const r = (await deskBook(desk, m, '15:00'))[0];
+    const receipt = (await db.query('select receipt_no from payments where payment_id = $1', [r.payment_id])).rows[0].receipt_no;
+    const msg = (await db.query(`select sender_id, body from support_messages where member_id = $1 and queue = 'front_desk'`, [m])).rows;
+    assert.equal(msg.length, 1); assert.equal(msg[0].sender_id, desk);
+    assert.match(msg[0].body, new RegExp(`Receipt ${receipt}`)); assert.match(msg[0].body, /Court/);
+  });
 } finally {
   await db.end(); await server.stop();
 }

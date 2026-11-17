@@ -98,6 +98,9 @@ public static class BookingPrice
     }
 }
 
+/// <summary>0091: a desk booking and the receipt number the customer keeps (a walk-in photographs it; a member gets it in chat).</summary>
+public sealed record DeskReceipt(Reservation Booking, string ReceiptNo);
+
 /// <summary>G13 (0064): a confirmed booking with a balance still to pay at the desk.</summary>
 public sealed record BalanceRow(Reservation Booking, string Member, string Amenity, string? Coach)
 {
@@ -180,8 +183,9 @@ public interface IReservationService
     Task<AppResult<Reservation>> BookAsync(int amenityId, DateTime startUtc, int minutes, string method, string? coachId = null, string? code = null);
     /// <summary>G14: coaches who run the amenity and are free for the whole time.</summary>
     Task<AppResult<IReadOnlyList<FreeCoach>>> FreeCoachesAsync(int amenityId, DateTime startUtc, int minutes);
-    /// <summary>Plan 2026-11-17 Z1, Z2 (0087): the desk books for a customer; the full price is taken in cash at once into the open drawer.</summary>
-    Task<AppResult<Reservation>> DeskBookAsync(string memberId, int amenityId, DateTime startUtc, int minutes);
+    /// <summary>Plan 2026-11-17 Z1, Z2 (0087): the desk books for a member, or (0091) a walk-in by name when memberId is null; the full price
+    /// is taken in cash at once into the open drawer. Comes back with the receipt number the customer keeps.</summary>
+    Task<AppResult<DeskReceipt>> DeskBookAsync(string? memberId, string? walkInName, int amenityId, DateTime startUtc, int minutes);
     /// <summary>G13: the Gym settings percent paid to reserve.</summary>
     Task<AppResult<int>> DownPaymentPercentAsync();
     /// <summary>G16: closed days from today on, with their reasons.</summary>
@@ -211,8 +215,15 @@ public sealed class ReservationService(ISupabaseGateway gw) : IReservationServic
 
     static string Utc(DateTime t) => t.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
 
-    public Task<AppResult<Reservation>> DeskBookAsync(string memberId, int amenityId, DateTime startUtc, int minutes) => Safe.RunAsync(() =>
-        gw.RpcAsync<Reservation>("desk_book_amenity", new() { ["p_member"] = memberId, ["p_amenity"] = amenityId, ["p_start"] = Utc(startUtc), ["p_minutes"] = minutes }));
+    public Task<AppResult<DeskReceipt>> DeskBookAsync(string? memberId, string? walkInName, int amenityId, DateTime startUtc, int minutes) => Safe.RunAsync(async () =>
+    {
+        Dictionary<string, object> args = new() { ["p_amenity"] = amenityId, ["p_start"] = Utc(startUtc), ["p_minutes"] = minutes };
+        if (memberId is null) args["p_name"] = walkInName?.Trim() ?? ""; else args["p_member"] = memberId;
+        var r = await gw.RpcAsync<Reservation>(memberId is null ? "desk_book_walk_in" : "desk_book_amenity", args);
+        var id = r.PaymentId ?? 0;
+        var receipt = (await gw.ListAsync<Payment>(p => p.Id == id)).FirstOrDefault()?.ReceiptNo ?? "";
+        return new DeskReceipt(r, receipt);
+    });
 
     public Task<AppResult<Reservation>> BookAsync(int amenityId, DateTime startUtc, int minutes, string method, string? coachId = null, string? code = null) => Safe.RunAsync(() =>
     {

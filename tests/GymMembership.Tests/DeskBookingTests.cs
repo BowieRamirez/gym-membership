@@ -4,7 +4,7 @@ using GymMembership.Core.Services;
 using GymMembership.Core.ViewModels;
 using Xunit;
 
-/// <summary>Plan 2026-11-17 Z1, Z2 (0087): on Amenity status the desk finds or registers a customer, books a slot and takes the full price in cash.</summary>
+/// <summary>Plan 2026-11-17 Z1, Z2 (0087): on Amenity status the desk finds a member or books a walk-in (0091), books a slot and takes the full price in cash.</summary>
 public class DeskBookingTests
 {
     static async Task<(DemoGateway Gw, DeskBookingViewModel Vm)> Open(bool shift = true)
@@ -12,7 +12,7 @@ public class DeskBookingTests
         Confirm.Answer = (_, _, _) => Task.FromResult(true);
         var gw = new DemoGateway(); await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         if (shift) await gw.OpenDrawerAsync();
-        var vm = new DeskBookingViewModel(new AttendanceService(gw), new ReservationService(gw), new PaymentStaffService(gw));
+        var vm = new DeskBookingViewModel(new AttendanceService(gw), new ReservationService(gw));
         vm.Day = DateTime.Today.AddDays(2);
         await vm.OnAppearingAsync();
         return (gw, vm);
@@ -35,7 +35,7 @@ public class DeskBookingTests
         var start = vm.Start!.Utc;
         await vm.BookCommand.ExecuteAsync(null);
         Assert.Null(vm.ErrorMessage);
-        Assert.StartsWith("Booked Pool for Carlo Diaz", vm.Notice);
+        Assert.Equal(("Carlo Diaz", "Pool"), (vm.Receipt!.Customer, vm.Receipt.Amenity));
         var r = (await gw.ListAsync<Reservation>(x => x.MemberId == "u-carlo")).Single(x => x.StartsAt == start);
         Assert.Equal("confirmed", r.Status);
         Assert.Equal(r.TotalPrice, r.DownPayment);
@@ -74,22 +74,54 @@ public class DeskBookingTests
         Assert.True(vm.BookCommand.CanExecute(null));
     }
 
-    [Fact]   // Z1 (owner, 2026-11-17): someone with no account is registered here first, then booked
-    public async Task Register_new_member_from_amenity_status_then_book()
+    [Fact]   // 0091 (owner, 2026-11-17): no account, no registering; booked by name, paid in cash, with a receipt to photograph
+    public async Task Walk_in_is_booked_by_name_with_a_receipt()
     {
         var (gw, vm) = await Open();
-        vm.Search = "nobody-here"; await vm.FindCommand.ExecuteAsync(null);
-        Assert.True(vm.NoMatch);
-        vm.StartRegisterCommand.Execute(null);
-        (vm.NewFirstName, vm.NewLastName, vm.NewEmail, vm.NewPhone) = ("Lia", "Santos", "lia@demo.io", "0917 555 0199");
-        await vm.RegisterCommand.ExecuteAsync(null);
-        Assert.Equal("Lia Santos", vm.Member!.Username);
-        Assert.Contains("Temporary password", vm.Notice);
+        vm.StartWalkInCommand.Execute(null);
+        Assert.False(vm.BookCommand.CanExecute(null));
+        vm.WalkInName = "  Ana Reyes ";
         vm.Amenity = vm.Amenities.First(a => a.Name == "Pool");
         vm.Start = vm.Starts.First(); vm.Length = vm.Lengths.First();
+        var start = vm.Start.Utc;
         await vm.BookCommand.ExecuteAsync(null);
         Assert.Null(vm.ErrorMessage);
-        Assert.Single(await gw.ListAsync<Reservation>(r => r.MemberId == vm.LastBooked!.MemberId && r.Status == "confirmed"));
+        var r = (await gw.ListAsync<Reservation>(x => x.WalkInName == "Ana Reyes")).Single();
+        Assert.Equal(("confirmed", start, (string?)null), (r.Status, r.StartsAt, (string?)r.MemberId));
+        var pay = (await gw.ListAsync<Payment>(p => p.Id == r.PaymentId)).Single();
+        Assert.Equal((Status.Verified, PayMethod.Cash, "Ana Reyes", r.TotalPrice), (pay.Status, pay.Method, pay.WalkInName, pay.Amount));
+        Assert.Equal(pay.ReceiptNo, vm.Receipt!.ReceiptNo);
+        Assert.Equal("Ana Reyes", vm.Receipt.Customer);
+        Assert.Contains("photo", vm.Receipt.Note);
+        vm.Amenity = vm.Amenities.First(a => a.Name == "Pool");
+        Assert.DoesNotContain(vm.Starts, s => s.Utc == start);   // the walk-in's slot is taken for everyone
+    }
+
+    [Fact]   // 0091: a member booked at the desk gets the receipt in their Front desk chat
+    public async Task Member_gets_the_receipt_in_front_desk_chat()
+    {
+        var (gw, vm) = await Open();
+        await Pick(vm, "carlo");
+        await vm.BookCommand.ExecuteAsync(null);
+        Assert.Null(vm.ErrorMessage);
+        var msg = (await gw.ListAsync<SupportMessage>(m => m.MemberId == "u-carlo" && m.Queue == ChatQueue.FrontDesk)).Last();
+        Assert.Contains($"Receipt {vm.Receipt!.ReceiptNo}", msg.Body);
+        Assert.Contains("chat", vm.Receipt.Note);
+    }
+
+    [Fact]   // owner, 2026-11-17: Find and Book for a walk-in show one at a time
+    public async Task Find_and_walk_in_hide_each_other()
+    {
+        var (_, vm) = await Open();
+        vm.Search = "carlo"; await vm.FindCommand.ExecuteAsync(null);
+        vm.PickMemberCommand.Execute(vm.Hits.First());
+        vm.StartWalkInCommand.Execute(null);
+        Assert.True(vm.IsWalkIn);
+        Assert.False(vm.HasHits);
+        Assert.Null(vm.Member);
+        await vm.FindCommand.ExecuteAsync(null);
+        Assert.False(vm.IsWalkIn);
+        Assert.True(vm.HasHits);
     }
 
     [Fact]   // final review: a new search drops the customer picked before, so Book can't go to the wrong person

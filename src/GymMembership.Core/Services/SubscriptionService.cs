@@ -169,7 +169,7 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
         return requests.OrderBy(r => r.Status is "paid" or "rejected").ThenBy(r => r.RequestedAt).Select(r =>
         {
             if (r.IsBooking && bookings.GetValueOrDefault(r.ReservationId ?? 0) is { } b)   // F13: a booking refund names the amenity and the booked time
-                return new RefundCard(r, names.GetValueOrDefault(r.MemberId, "Member"), $"{amenities.GetValueOrDefault(b.AmenityId, "Amenity")} booking",
+                return new RefundCard(r, b.WalkInName ?? names.GetValueOrDefault(r.MemberId ?? "", "Member"), $"{amenities.GetValueOrDefault(b.AmenityId, "Amenity")} booking",
                     $"{b.StartsAt.ToUniversalTime().AddHours(8):d MMM yyyy, h:mm tt} – {b.EndsAt.ToUniversalTime().AddHours(8):h:mm tt} (Manila)",
                     Period: $"{b.StartsAt.ToUniversalTime().AddHours(8):d MMM, h:mm tt}");
             var term = terms.FirstOrDefault(t => t.Id == r.TermId);

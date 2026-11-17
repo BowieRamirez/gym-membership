@@ -14,7 +14,7 @@
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
             <!-- plan 2026-11-17 Z1, Z2: the desk books a slot for a customer standing at the counter and takes the full price in cash.
-                 Find them, or register them (Z1: no account yet), then amenity, day, time and length -->
+                 Find a member, or book a walk-in by name (0091: no account), then amenity, day, time and length; then the receipt -->
             <Button Text="Book for a customer" Style="{StaticResource SmallButton}" HorizontalOptions="Start" Command="{Binding ToggleBookingCommand}"
                     IsVisible="{Binding HasBooking}" AutomationId="DeskBookOpen" />
             <ContentView IsVisible="{Binding IsBooking}">
@@ -37,29 +37,20 @@
                             <Border Style="{StaticResource Field}"><Entry Text="{Binding Search}" Placeholder="Name, email or phone" ReturnCommand="{Binding FindCommand}" SemanticProperties.Description="Search members by name, email or phone" AutomationId="DeskBookSearch" /></Border>
                         </VerticalStackLayout>
                         <Button Text="Find" Style="{StaticResource SmallOutlineButton}" Margin="0,0,12,8" Command="{Binding FindCommand}" AutomationId="DeskBookFind" />
-                        <Button Text="Register new member" Style="{StaticResource SmallOutlineButton}" Margin="0,0,12,8" Command="{Binding StartRegisterCommand}" AutomationId="DeskBookRegister" />
+                        <Button Text="Book for a walk-in" Style="{StaticResource SmallOutlineButton}" Margin="0,0,12,8" Command="{Binding StartWalkInCommand}" AutomationId="DeskBookWalkIn" />
                     </FlexLayout>
-                    <Label Text="No member found. Check the spelling, or try their email or phone. No account yet? Register new member." Style="{StaticResource Muted}" IsVisible="{Binding NoMatch}" />
-                    <Border Style="{StaticResource Panel}" IsVisible="{Binding IsRegistering}" MaximumWidthRequest="640" HorizontalOptions="Start">
-                        <VerticalStackLayout Spacing="10">
-                            <Label Text="They get a temporary password to change the first time they sign in." Style="{StaticResource Caption}" />
-                            <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto" RowSpacing="10">
-                                <VerticalStackLayout Spacing="4"><Label Text="First name" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><Entry Text="{Binding NewFirstName}" SemanticProperties.Description="First name" /></Border></VerticalStackLayout>
-                                <VerticalStackLayout Grid.Column="1" Spacing="4"><Label Text="Last name" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><Entry Text="{Binding NewLastName}" SemanticProperties.Description="Last name" /></Border></VerticalStackLayout>
-                                <VerticalStackLayout Grid.Row="1" Spacing="4"><Label Text="Email" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><Entry Text="{Binding NewEmail}" Keyboard="Email" SemanticProperties.Description="Email" /></Border></VerticalStackLayout>
-                                <VerticalStackLayout Grid.Row="1" Grid.Column="1" Spacing="4"><Label Text="Phone (optional)" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><Entry Text="{Binding NewPhone}" Keyboard="Telephone" SemanticProperties.Description="Phone" /></Border></VerticalStackLayout>
-                            </Grid>
-                            <HorizontalStackLayout Spacing="8">
-                                <Button Text="Register member" Style="{StaticResource SmallButton}" Command="{Binding RegisterCommand}" />
-                                <Button Text="Back" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelRegisterCommand}" />
-                            </HorizontalStackLayout>
-                        </VerticalStackLayout>
-                    </Border>
-                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Hits}" IsVisible="{Binding HasHits}" MaximumWidthRequest="720" HorizontalOptions="Start">
+                    <Label Text="No member found. Check the spelling, or try their email or phone. No account? Book for a walk-in." Style="{StaticResource Muted}" IsVisible="{Binding NoMatch}" />
+                    <!-- 0091 (owner): someone with no account is booked by name; they photograph the receipt shown after booking -->
+                    <VerticalStackLayout Spacing="4" IsVisible="{Binding IsWalkIn}" WidthRequest="300" HorizontalOptions="Start">
+                        <Label Text="Walk-in's name" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><Entry Text="{Binding WalkInName}" MaxLength="100" Placeholder="Full name" SemanticProperties.Description="Walk-in's name" AutomationId="DeskBookWalkInName" /></Border>
+                        <Label Text="No account needed. They get a receipt number to photograph." Style="{StaticResource Caption}" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Hits}" IsVisible="{Binding HasHits}">
                         <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="svc:MemberHit">
                                 <VerticalStackLayout>
-                                    <Grid ColumnDefinitions="220,*,Auto" ColumnSpacing="12" Padding="0,6">
+                                    <Grid ColumnDefinitions="*,2*,Auto" ColumnSpacing="12" Padding="0,6">
                                         <Label Text="{Binding Username}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
                                         <Label Grid.Column="1" Text="{Binding ContactText}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
                                         <Button Grid.Column="2" Text="Choose" Style="{StaticResource FilterChip}" Clicked="OnPickCustomer"
@@ -92,6 +83,19 @@
                         </VerticalStackLayout>
                         <Button Text="Book and take cash" Style="{StaticResource SmallButton}" Margin="0,0,0,8" Command="{Binding BookCommand}" AutomationId="DeskBook" />
                     </FlexLayout>
+
+                    <!-- 3. the receipt: a walk-in photographs it; a member also has it in their Front desk chat -->
+                    <Border Style="{StaticResource Panel}" IsVisible="{Binding Receipt, Converter={StaticResource IsNotNull}}" MaximumWidthRequest="480" HorizontalOptions="Start" AutomationId="DeskBookReceipt">
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="Booked and paid" Style="{StaticResource Caption}" />
+                            <Label Text="{Binding Receipt.ReceiptNo, StringFormat='Receipt {0}'}" FontFamily="BarlowSemiBold" FontSize="24" />
+                            <Label Text="{Binding Receipt.Customer}" FontFamily="BarlowSemiBold" />
+                            <Label Text="{Binding Receipt.Amenity}" />
+                            <Label Text="{Binding Receipt.When}" />
+                            <Label Text="{Binding Receipt.Paid, StringFormat='Paid {0}'}" />
+                            <Label Text="{Binding Receipt.Note}" Style="{StaticResource Muted}" Margin="0,4,0,0" />
+                        </VerticalStackLayout>
+                    </Border>
                 </VerticalStackLayout>
             </Border>
             </ContentView>
