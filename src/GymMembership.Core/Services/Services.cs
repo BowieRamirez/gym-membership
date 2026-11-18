@@ -281,16 +281,26 @@ sealed class PaymentLookup
 // ===================== Membership (member) =====================
 public sealed record MembershipRow(int Id, string PackageName, string Status, DateTime? EndsAt, int? DaysLeft, int DurationDays, bool CanRenew, decimal Price);
 
+/// <summary>Owner, 2026-11-18: the live server's times arrive as local time, the demo's as UTC. Always go through here before comparing with UtcNow or adding Manila's 8 hours.</summary>
+public static class ManilaTime
+{
+    public static DateTime Utc(DateTime t) => t.Kind == DateTimeKind.Local ? t.ToUniversalTime() : t;
+    public static DateTime? Utc(DateTime? t) => t is { } v ? Utc(v) : null;
+    public static DateTime Of(DateTime t) => Utc(t).AddHours(8);   // Manila has no daylight saving
+    public static DateTime? Of(DateTime? t) => t is { } v ? Of(v) : null;
+}
+
 /// <summary>One of the member's payments. Online (qr) payments are paid through Xendit's checkout (Xendit plan, 2026-11-16).</summary>
 public sealed record PaymentItem(int Id, string What, string PaymentCode, string Kind, string Method, decimal Amount, decimal DiscountAmount, string Status,
     DateTime CreatedAt, DateTime? ExpiresAt, string? ReferenceNo, bool HasProof, string? ReceiptNo, string? RejectedReason, int? ItemId, int? PackageSnapshotId = null,
     bool HasCheckout = false)
 {
     /// <summary>An online payment the member still has to pay (a proof sent before the switch is with the desk instead).</summary>
-    public bool NeedsPayment => Status == Models.Status.Pending && Method == PayMethod.Qr && !HasProof && (ExpiresAt is null || ExpiresAt > DateTime.UtcNow);
+    bool NotExpired => ExpiresAt is not { } e || ManilaTime.Utc(e) > DateTime.UtcNow;
+    public bool NeedsPayment => Status == Models.Status.Pending && Method == PayMethod.Qr && !HasProof && NotExpired;
     public bool AwaitingReview => Status == Models.Status.Pending && HasProof;
     /// <summary>Cash plan 2026-11-17: the member chose cash; it waits on the desk's Payments to verify.</summary>
-    public bool PaysAtDesk => Status == Models.Status.Pending && Method == PayMethod.Cash && (ExpiresAt is null || ExpiresAt > DateTime.UtcNow);
+    public bool PaysAtDesk => Status == Models.Status.Pending && Method == PayMethod.Cash && NotExpired;
     /// <summary>A membership or extension payment nobody has verified yet: the member can still withdraw it.</summary>
     public bool CanCancel => Status == Models.Status.Pending && Kind is PayKind.Membership or PayKind.Renewal;
     /// <summary>Rejected and expired payments are final; the member pays again with a fresh one.</summary>
@@ -397,12 +407,14 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
     public Task<AppResult<IReadOnlyList<MembershipRow>>> MyMembershipsAsync() => Safe.RunAsync<IReadOnlyList<MembershipRow>>(async () =>
     {
         var uid = gw.CurrentUserId;
-        var terms = await gw.ListAsync<MembershipTerm>(t => t.MemberId == uid);
-        var now = DateTime.UtcNow;
-        return terms.Where(t => t.CancelledAt is null && t.StartsAt <= now).OrderByDescending(t => t.EndsAt)
-            .Select(t => new MembershipRow(t.MembershipId,t.PackageName,t.EndsAt > now ? Status.Active : Status.Expired,
-                t.EndsAt,Math.Max(0,(int)Math.Ceiling((t.EndsAt-now).TotalDays)),t.DurationDays,false,t.AmountPaid)).ToList();
+        return MembershipRows(await gw.ListAsync<MembershipTerm>(t => t.MemberId == uid), DateTime.UtcNow);
     });
+
+    /// <summary>The terms that have started, newest end first. A term bought just now counts at once (it was hidden for 8 hours on the live server).</summary>
+    public static IReadOnlyList<MembershipRow> MembershipRows(IEnumerable<MembershipTerm> terms, DateTime nowUtc) =>
+        terms.Select(SubscriptionService.InUtc).Where(t => t.CancelledAt is null && t.StartsAt <= nowUtc).OrderByDescending(t => t.EndsAt)
+            .Select(t => new MembershipRow(t.MembershipId,t.PackageName,t.EndsAt > nowUtc ? Status.Active : Status.Expired,
+                t.EndsAt,Math.Max(0,(int)Math.Ceiling((t.EndsAt-nowUtc).TotalDays)),t.DurationDays,false,t.AmountPaid)).ToList();
 
     public Task<AppResult<IReadOnlyList<PaymentItem>>> MyPaymentsAsync() => Safe.RunAsync<IReadOnlyList<PaymentItem>>(async () =>
     {
@@ -520,7 +532,7 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
         var me = gw.CurrentUserId;
         var now = DateTime.UtcNow;
         return (await gw.ListAsync<Payment>(p => p.Status == "pending" && p.Method == PayMethod.Qr && p.RecordedBy == me))
-            .Where(p => p.ExpiresAt > now).OrderByDescending(p => p.CreatedAt).FirstOrDefault();
+            .Where(p => p.ExpiresAt is { } e && ManilaTime.Utc(e) > now).OrderByDescending(p => p.CreatedAt).FirstOrDefault();
     });
 
     public async Task<AppResult<string>> RegisterMemberAsync(string firstName, string lastName, string email, string? phone, string password)
@@ -663,7 +675,7 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
                     .Select(m =>
                     {
                         var package = packages.FirstOrDefault(p => p.Id == m.MembershipPackageId);
-                        return new CounterItem(m.Id, $"{package?.Name ?? "Membership"}  ({m.Status}, ends {m.EndsAt:d MMM yyyy})", package?.Price);
+                        return new CounterItem(m.Id, $"{package?.Name ?? "Membership"}  ({m.Status}, ends {ManilaTime.Of(m.EndsAt):d MMM yyyy})", package?.Price);
                     }).ToList();
             default:
                 return [];
@@ -808,7 +820,7 @@ public sealed class AmenityService(ISupabaseGateway gw) : IAmenityService
         return catalog.Select(a =>
         {
             var e = mine.Where(m => m.AmenityId == a.Id).OrderByDescending(m => m.AvailedAt).ThenByDescending(m => m.Id).FirstOrDefault();
-            var status = e is null ? null : e.Status == Status.Active && e.ExpiresAt <= now ? Status.Expired : e.Status;
+            var status = e is null ? null : e.Status == Status.Active && e.ExpiresAt is { } ends && ManilaTime.Utc(ends) <= now ? Status.Expired : e.Status;
             return new AmenityRow(a, e?.Id, status, e?.ExpiresAt, e?.IsSession ?? false);
         }).ToList();
     });
@@ -1318,7 +1330,7 @@ public static class MemberCheck
     {
         "pending" => "Payment not verified yet",
         "inactive" => "Account deactivated",
-        "expired" when ended is { } e => $"Expired on {e.AddHours(8):d MMM}",   // Manila has no daylight saving
+        "expired" when ended is { } e => $"Expired on {ManilaTime.Of(e):d MMM}",
         "expired" => "No membership",
         _ => "",
     };
@@ -1340,7 +1352,7 @@ public sealed record MemberHit(string MemberId, string Username, bool HasActiveM
     public string ContactText => string.Join(" · ", new[] { Phone, Email }.Where(s => !string.IsNullOrWhiteSpace(s)));
     public string PlanStatus => HasActiveMembership ? "active" : Status == "expired" && EndedAt is null ? "no_membership" : Status ?? "inactive";
     /// <summary>Forgot phone: what staff check before letting someone in without a QR; the reason when they can't (G10).</summary>
-    public string PlanText => HasActiveMembership ? PaidUntil is { } until ? $"Paid until {until.AddHours(8):d MMM yyyy}" : "Paid"
+    public string PlanText => HasActiveMembership ? PaidUntil is { } until ? $"Paid until {ManilaTime.Of(until):d MMM yyyy}" : "Paid"
         : Status is { } s ? MemberCheck.Reason(s, EndedAt) : "No active membership";
     public bool CanCheckIn => HasActiveMembership;
     /// <summary>G11: the next step at the desk for someone who can't check in, e.g. Open Cashier.</summary>
@@ -1521,8 +1533,8 @@ public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = 
         var profiles = await gw.ListAsync<Profile>();
         var now = clock.GetUtcNow().UtcDateTime;
         var memberships = await gw.ListAsync<UserMembershipPackage>();
-        var active = memberships.Where(m => m.Status == "active" && m.EndsAt > now).GroupBy(m => m.MemberId).ToDictionary(g => g.Key, g => g.Max(m => m.EndsAt));
-        var ended = memberships.Where(m => m.EndsAt <= now).GroupBy(m => m.MemberId).ToDictionary(g => g.Key, g => g.Max(m => m.EndsAt));
+        var active = memberships.Where(m => m.Status == "active" && ManilaTime.Utc(m.EndsAt) > now).GroupBy(m => m.MemberId).ToDictionary(g => g.Key, g => g.Max(m => ManilaTime.Utc(m.EndsAt)));
+        var ended = memberships.Where(m => ManilaTime.Utc(m.EndsAt) <= now).GroupBy(m => m.MemberId).ToDictionary(g => g.Key, g => g.Max(m => ManilaTime.Utc(m.EndsAt)));
         var waiting = (await gw.ListAsync<Payment>(p => p.Status == Status.Pending)).Where(p => p.Kind is PayKind.Membership or PayKind.Renewal).Select(p => p.MemberId).ToHashSet();
         // G10: the same order scan_member uses: deactivated, active, waiting for a payment, otherwise expired (or never had one)
         string StatusOf(Profile p) => !p.IsActive ? "inactive" : active.ContainsKey(p.Id) ? "active" : waiting.Contains(p.Id) ? "pending" : "expired";
@@ -1809,7 +1821,7 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
             return DiscountFits.Text(All("package"), Ids("package"), All("amenity"), Ids("amenity"), packages, amenities);
         }
         return (await gw.ListAsync<Discount>()).OrderByDescending(d => d.ExpiresAt)
-            .Select(d => new DiscountRow(d, !d.IsActive ? "inactive" : d.ExpiresAt <= now ? "expired" : "active",
+            .Select(d => new DiscountRow(d, !d.IsActive ? "inactive" : ManilaTime.Utc(d.ExpiresAt) <= now ? "expired" : "active",
                 uses.GetValueOrDefault(d.Id)?.Used ?? 0, uses.GetValueOrDefault(d.Id)?.Pending ?? 0, Fits(d.Id))).ToList();
     });
 

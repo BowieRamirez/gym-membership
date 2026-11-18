@@ -195,6 +195,8 @@ public sealed record BookingRow(Reservation Booking, string Amenity, DateTime No
     };
     /// <summary>Owner, 2026-11-18: a booking paid in full when made (Gym settings at 100%) has no "down payment".</summary>
     string PayWord => Booking.Balance > 0 ? "down payment" : "payment";
+    /// <summary>"₱100.00 down payment", or just "₱100.00" when that was the whole price.</summary>
+    public string PaidWords => Booking.Balance > 0 ? $"{Price} down payment" : Price;
     string PayWordCap => Booking.Balance > 0 ? "Down payment" : "Payment";
     public string Detail => Refund switch
     {

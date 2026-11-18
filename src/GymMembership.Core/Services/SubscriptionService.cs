@@ -111,7 +111,7 @@ public sealed record RefundCard(RefundRequest Request, string Member, string Pac
         "pending" => "Pending admin review — access unchanged",
         "approved" => "Cancelled — awaiting manual repayment",
         "rejected" => "Rejected — term unchanged: " + r.DecisionReason,
-        "paid" => $"Repaid {r.PaidAt?.AddHours(8):d MMM yyyy, h:mm tt} (Manila) · {r.RepaymentMethod} · {r.RepaymentReference}",
+        "paid" => $"Repaid {(r.PaidAt is { } at ? ManilaTime.Of(at) : null):d MMM yyyy, h:mm tt} (Manila) · {PayMethod.Name(r.RepaymentMethod ?? "")}{(string.IsNullOrEmpty(r.RepaymentReference) ? "" : $" · {r.RepaymentReference}")}",
         _ => r.Status
     };
 }
@@ -177,7 +177,7 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
     public Task<AppResult<IReadOnlyList<RefundCard>>> RefundsAsync() => Safe.RunAsync<IReadOnlyList<RefundCard>>(async () =>
     {
         var requests = await gw.ListAsync<RefundRequest>();
-        var terms = await gw.ListAsync<MembershipTerm>();
+        var terms = (await gw.ListAsync<MembershipTerm>()).Select(InUtc).ToList();
         var names = await Directory_.UserNamesAsync(gw);
         var bookings = requests.Any(r => r.IsBooking) ? (await gw.ListAsync<Reservation>()).ToDictionary(r => r.Id) : [];
         var amenities = bookings.Count > 0 ? (await gw.ListAsync<Amenity>()).ToDictionary(a => a.Id, a => a.Name) : [];

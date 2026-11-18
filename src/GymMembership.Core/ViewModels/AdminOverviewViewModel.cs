@@ -97,7 +97,7 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
                 Load("discounts", async () =>
                 {
                     var rows = Require(await admin.DiscountsAsync());
-                    var usable = rows.Count(r => r.Discount.IsActive && r.Discount.StartsAt <= now.UtcDateTime && r.Discount.ExpiresAt > now.UtcDateTime);
+                    var usable = rows.Count(r => r.Discount.IsActive && ManilaTime.Utc(r.Discount.StartsAt) <= now.UtcDateTime && ManilaTime.Utc(r.Discount.ExpiresAt) > now.UtcDateTime);
                     return ($"{usable}", $"usable now, of {rows.Count}");
                 }),
                 Load("refunds", async () =>

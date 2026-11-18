@@ -67,7 +67,7 @@
         <VerticalStackLayout Padding="16,12,16,20" Spacing="12">
             <!-- 9.8: no heading repeating the page title. 2026-11-15 (owner): shortened; the booking rule was out of date (G13) and the
                  confirm dialogs already say approving cancels only that term -->
-            <Label Text="Unused terms get a full refund; used ones need your review. The app sends no money: pay the member back, then record it here. Cash comes out of your open cash shift." Style="{StaticResource Muted}" MaximumWidthRequest="760" HorizontalOptions="Start" />
+            <Label Text="A membership refund is the days left when you approve it. Walk-in refunds are requested by the front desk. The app sends no money: pay the customer back, then record it here. Cash comes out of your open cash shift." Style="{StaticResource Muted}" MaximumWidthRequest="760" HorizontalOptions="Start" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 

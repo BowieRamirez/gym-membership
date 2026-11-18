@@ -239,8 +239,10 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     {
         if (Picked is not { } card || Time is null || Length is null) return;
         Notice = null;
-        var how = !PayFirst ? HoldText : (PayCash ? $"Pay the ₱{Split.Down:N2} down payment at the front desk." : $"Pay the ₱{Split.Down:N2} down payment online now.")
-            + $" The ₱{Split.Balance:N2} balance is paid at the desk. It's yours once the desk verifies the down payment.";
+        var how = !PayFirst ? HoldText
+            : PaysInFull ? PayCash ? $"Pay ₱{Split.Down:N2} at the front desk. It's yours once the desk takes it." : $"Pay ₱{Split.Down:N2} online now. It's yours once it's paid."
+            : (PayCash ? $"Pay the ₱{Split.Down:N2} down payment at the front desk." : $"Pay the ₱{Split.Down:N2} down payment online now.")
+                + $" The ₱{Split.Balance:N2} balance is paid at the desk. It's yours once the down payment is paid.";
         if (!await Confirm.AskAsync($"Book {card.Amenity.Name}?", $"{Summary}\n{how}", BookText)) return;
         Reservation? made = null;
         if (!await RunAsync(() => svc.BookAsync(card.Amenity.Id, Time.StartUtc, Length.Minutes, Method, IsWithCoach ? PickedCoach?.CoachId : null, Code), r => made = r))
@@ -265,11 +267,11 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
         Notice = null;
         var refund = row.Refundable;
         var body = row.IsWaiting ? "The request and its payment are withdrawn." : row.Paid
-            ? refund ? $"The ₱{row.Payment!.Amount:N2} down payment will be repaid at the front desk." : $"It starts within 24 hours, so the gym keeps the ₱{row.Payment!.Amount:N2} down payment."
+            ? refund ? $"The {row.PaidWords} will be repaid at the front desk." : $"It starts within 24 hours, so the gym keeps the {row.PaidWords}."
             : row.When;
         if (!await Confirm.AskAsync($"Cancel your {row.Amenity} booking?", body, "Cancel booking")) return;
         if (!await RunAsync(() => svc.CancelAsync(row.Booking.Id))) return;
-        Notice = row.Paid && refund ? "Booking cancelled. Your down payment refund is approved; collect it at the front desk." : "Booking cancelled.";
+        Notice = row.Paid && refund ? $"Booking cancelled. Your {(row.Booking.Balance > 0 ? "down payment " : "")}refund is approved; collect it at the front desk." : "Booking cancelled.";
         await LoadBookingsAsync();
     }
 
@@ -283,7 +285,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     {
         Notice = null;
         if (membership is null || row.Payment is not { } pay) return;
-        if (!await Confirm.AskAsync($"Pay the ₱{pay.Amount:N2} down payment online?", $"{row.Amenity}, {row.When}\nYou pay on Xendit's page by GCash or QR Ph, then come back here.", "Pay online")) return;
+        if (!await Confirm.AskAsync(row.Booking.Balance > 0 ? $"Pay the ₱{pay.Amount:N2} down payment online?" : $"Pay ₱{pay.Amount:N2} online?", $"{row.Amenity}, {row.When}\nYou pay on Xendit's page by GCash or QR Ph, then come back here.", "Pay online")) return;
         OnlineCheckout? checkout = null;
         if (!await RunAsync(() => membership.PayOnlineAsync(pay.Id), c => checkout = c)) return;
         if (checkout!.Paid) { Notice = "Paid."; await LoadBookingsAsync(); return; }

@@ -137,7 +137,7 @@ public partial class ItemOption(CounterItem item) : ObservableObject
     [ObservableProperty] private bool isPicked;
 }
 
-public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceService members, IUrlOpener? opener = null) : LoadableViewModel
+public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceService members, IUrlOpener? opener = null, IMembershipService? gym = null) : LoadableViewModel
 {
     public string[] Kinds { get; } = ["Membership", "Renewal", "Amenity", "Day pass"];   // cashier plan Y3: a walk-in buys a Day pass
     /// <summary>Cashier plan Y6: e-wallets at the desk go through Xendit's checkout (GCash, Maya or any bank app by QR Ph).</summary>
@@ -193,7 +193,8 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     public string OrderWho => IsWalkIn ? DayPassName ?? "Day pass, no name" : Member?.Username ?? "Find and choose a member";
     string? DayPassName => string.IsNullOrWhiteSpace(WalkInName) ? null : WalkInName.Trim();
     public string OrderWhat => Item?.Label ?? (IsWalkIn ? "Day pass" : "Choose what they are paying for");
-    public string TotalText => IsWalkIn ? "Day pass" : Item?.Price is { } p ? $"₱{p:N2}" : "₱0.00";
+    decimal? dayPassPrice;   // Gym settings; the server charges it, this is what the desk reads out
+    public string TotalText => IsWalkIn ? dayPassPrice is { } d ? $"₱{d:N2}" : "Day pass" : Item?.Price is { } p ? $"₱{p:N2}" : "₱0.00";
     public string TotalNote => IsWalkIn ? "The day pass price is set in Gym settings."
         : string.IsNullOrWhiteSpace(DiscountCode) ? "" : "The discount code is checked when you complete the payment.";
     public string ItemsEmptyText => LoadingItems ? "Loading…"
@@ -206,6 +207,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     public override async Task OnAppearingAsync()
     {
         await RefreshItemsAsync(); await LoadShiftAsync();
+        if (gym is not null && await gym.GymAsync() is { Ok: true, Value: { } settings }) { dayPassPrice = settings.WalkInPrice; OnPropertyChanged(nameof(TotalText)); }
         // a desk payment still waiting for Xendit comes back with its Check payment button (leaving the page used to lose it)
         if (Waiting is null) await RunAsync(svc.MyWaitingOnlineAsync, p => { Waiting = p; RecordCommand.NotifyCanExecuteChanged(); });
     }
@@ -1830,7 +1832,7 @@ public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
     private async Task LoadAsync()
     {
         await RunAsync(svc.IsSuperAdminAsync, yes => CanArchive = yes);
-        await RunAsync(svc.DiscountsAsync, rows => Fill(Discounts, rows.Where(r => r.Discount.IsActive && r.Discount.ExpiresAt > DateTime.UtcNow)));
+        await RunAsync(svc.DiscountsAsync, rows => Fill(Discounts, rows.Where(r => r.Discount.IsActive && ManilaTime.Utc(r.Discount.ExpiresAt) > DateTime.UtcNow)));
         await RunAsync(svc.AllPackagesAsync, rows => Fill(PackageChoices, rows.Where(p => p.IsActive).Select(p => new ItemChoice("package", p.Id, p.Name))));
         await RunAsync(svc.AllAmenitiesAsync, rows => Fill(AmenityChoices, rows.Where(a => a.IsActive).Select(a => new ItemChoice("amenity", a.Id, a.Name))));
     }
