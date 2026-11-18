@@ -56,6 +56,7 @@ try {
   });
 
   await test('the desk may book a slot starting within the hour; a member may not', async () => {
+    if ((await db.query(`select extract(hour from now() at time zone 'Asia/Manila')::int h`)).rows[0].h >= 22) return;   // the next hour would run past closing
     const soon = (await db.query(`select to_timestamp(ceil(extract(epoch from now()) / 3600) * 3600) t`)).rows[0].t.toISOString();
     const m = await user(null);
     const r = (await as(desk, 'select * from desk_book_amenity(p_member=>$1, p_amenity=>$2, p_start=>$3, p_minutes=>60)', [m, court, soon]))[0];

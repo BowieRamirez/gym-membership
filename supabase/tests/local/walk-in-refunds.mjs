@@ -28,7 +28,6 @@ try {
   const dayAt = async n => (await db.query(`select ((now() at time zone 'Asia/Manila')::date + $1::int)::text d`, [n])).rows[0].d;
   const d3 = await dayAt(3), d5 = await dayAt(5);
   const at = (d, hm) => new Date(`${d}T${hm}:00+08:00`).toISOString();
-  const soon = (await db.query(`select to_timestamp((ceil(extract(epoch from now()) / 3600) + 3) * 3600) t`)).rows[0].t.toISOString();
   const walkIn = (name, start) => as(desk, 'select * from desk_book_walk_in(p_name=>$1, p_amenity=>$2, p_start=>$3, p_minutes=>60)', [name, court, start]).then(r => r[0]);
   const dayPass = async name => {
     const p = (await db.query(`insert into payments(payment_code,kind,method,status,amount,walk_in_name,recorded_by,verified_by,verified_at,receipt_no)
@@ -73,7 +72,8 @@ try {
     await assert.rejects(decide(f.refund_request_id, true), /already_processed/);
   });
   await test('under 24 hours: refused, unless the gym is the one cancelling', async () => {
-    const r = await walkIn('Soon', soon);
+    const r = await walkIn('Soon', at(d3, '15:00'));   // booked ahead, then moved close: booking it for "soon" fails in the evening, past closing time
+    await db.query(`update reservations set starts_at = date_trunc('hour', now()) + interval '3 hours', ends_at = date_trunc('hour', now()) + interval '4 hours' where reservation_id = $1`, [r.reservation_id]);
     await assert.rejects(ask(r.payment_id), /refund_too_late/);
     const f = await ask(r.payment_id, 'Court broken', true);
     assert.match(f.reason, /^Gym is cancelling: Court broken/);

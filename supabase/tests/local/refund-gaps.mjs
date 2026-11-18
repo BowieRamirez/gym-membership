@@ -34,7 +34,8 @@ try {
   const dayAt = async n => (await db.query(`select ((now() at time zone 'Asia/Manila')::date + $1::int)::text d`, [n])).rows[0].d;
   const today = await dayAt(0), d3 = await dayAt(3), d5 = await dayAt(5);
   const at = (d, hm) => new Date(`${d}T${hm}:00+08:00`).toISOString();
-  const hoursAhead = async n => (await db.query(`select to_timestamp((ceil(extract(epoch from now()) / 3600) + $1::int) * 3600) t`, [n])).rows[0].t.toISOString();
+  // booked days ahead, then moved close: booking "in a few hours" directly fails in the evening, past closing time
+  const startsIn = (id, hours) => db.query(`update reservations set starts_at = date_trunc('hour', now()) + make_interval(hours => $2::int), ends_at = date_trunc('hour', now()) + make_interval(hours => $2::int + 1) where reservation_id = $1`, [id, hours]);
   const buy = async uid => (await as(uid, 'select * from extend_membership($1,null)', [pack]))[0];
   const member = async () => { const uid = await user(); await as(desk, 'select verify_payment($1,true)', [(await buy(uid)).payment_id]); return uid; };
   const walkIn = (name, start, online = false) => as(desk, 'select * from desk_book_walk_in(p_name=>$1, p_amenity=>$2, p_start=>$3, p_minutes=>60, p_online=>$4)', [name, court, start, online]).then(r => r[0]);
@@ -53,7 +54,8 @@ try {
 
   // ---------- 1: a walk-in's booking, which has no member ----------
   await test('the gym cancelling a walk-in under 24 hours before refunds it in full', async () => {
-    const r = await walkIn('Soon', await hoursAhead(2));
+    const r = await walkIn('Soon', at(d3, '14:00'));
+    await startsIn(r.reservation_id, 3);
     await cancel(desk, r.reservation_id, 'Court broken');
     const [f] = await ofBooking(r.reservation_id);
     assert.deepEqual([f?.status, Number(f?.amount), f?.member_id], ['approved', 200, null]);
@@ -69,8 +71,9 @@ try {
   });
   await test('a member cancelling their own booking under 24 hours still gets nothing back', async () => {
     const m = await member();
-    const r = await book(m, await hoursAhead(4));
+    const r = await book(m, at(d3, '16:00'));
     await as(desk, 'select verify_payment($1,true)', [r.payment_id]);
+    await startsIn(r.reservation_id, 6);
     await cancel(m, r.reservation_id, null);
     assert.equal((await ofBooking(r.reservation_id)).length, 0);
   });
