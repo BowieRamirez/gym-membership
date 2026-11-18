@@ -28,10 +28,11 @@ public class RefundRequest : BaseModel
 {
     [PrimaryKey("refund_request_id")] public int Id { get; set; }
     [Column("term_id")] public int? TermId { get; set; }   // null for an amenity booking (0052)
-    /// <summary>membership, cancel (a booking cancelled 24 hours or more before, by the gym, or whose slot was taken: the down payment, 0064) no_show ("I didn't use it"), 0052, or online (money Xendit took that could not be applied, 0095).</summary>
+    /// <summary>membership, cancel (a booking cancelled 24 hours or more before, by the gym, or whose slot was taken: the down payment, 0064) no_show ("I didn't use it"), 0052, online (money Xendit took that could not be applied, 0095), day_pass or walk_in_booking (asked for by the desk, 0096).</summary>
     [Column("kind", ignoreOnInsert: true, ignoreOnUpdate: true)] public string Kind { get; set; } = "membership";
     [Column("reservation_id")] public int? ReservationId { get; set; }
     public bool IsBooking => Kind != "membership";
+    public bool IsWalkInRequest => Kind is "day_pass" or "walk_in_booking";
     [Column("payment_id")] public int PaymentId { get; set; }
     [Column("member_id")] public string MemberId { get; set; } = "";
     [Column("amount")] public decimal Amount { get; set; }

@@ -53,8 +53,10 @@ public partial class RefundsViewModel(ISubscriptionService subscription) : Loada
     {
         if (IsBusy) return;
         Notice=null;
-        if (!await RunAsync(() => subscription.DecideAsync(row.Request.Id,approve,reason))) return;
-        Notice=approve?"Selected term cancelled. Refund awaits manual repayment — no transfer was sent.":"Request rejected. The term is unchanged.";
+        var walkIn=row.Request.IsWalkInRequest;
+        if (!await RunAsync(() => walkIn?subscription.DecideWalkInAsync(row.Request.Id,approve,reason):subscription.DecideAsync(row.Request.Id,approve,reason))) return;
+        Notice=walkIn?(approve?"Refund approved. Pay the customer back, then record it here.":"Request rejected. Nothing changed for the customer.")
+            :approve?"Selected term cancelled. Refund awaits manual repayment — no transfer was sent.":"Request rejected. The term is unchanged.";
         await LoadAsync();
     }
     public async Task MarkPaidAsync(RefundCard row, string method, string? reference)

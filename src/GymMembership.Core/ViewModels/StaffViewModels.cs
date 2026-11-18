@@ -210,6 +210,25 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         if (Waiting is null) await RunAsync(svc.MyWaitingOnlineAsync, p => { Waiting = p; RecordCommand.NotifyCanExecuteChanged(); });
     }
 
+    // owner, 2026-11-18: only a payment waiting for Xendit is refreshed; the order being typed is left alone
+    bool polling;
+    public override async Task AutoRefreshAsync()
+    {
+        if (polling || IsBusy || Waiting is not { } pay) return;
+        polling = true;
+        try
+        {
+            var state = await DeskOnlineWait.PollAsync(svc, pay.Id);
+            if (Waiting?.Id != pay.Id) return;   // Customer left was pressed meanwhile
+            if (state == OnlineWait.Paid) await PaidAsync(pay.Id);
+            else if (state == OnlineWait.Over)
+            {
+                Waiting = null; Notice = "That online payment expired or was cancelled, so nothing was recorded."; RecordCommand.NotifyCanExecuteChanged();
+            }
+        }
+        finally { polling = false; }
+    }
+
     Task<bool> LoadShiftAsync() => RunAsync(svc.ShiftAsync, state =>
     {
         defaultFloat = state.DefaultFloat; Shift = state.Open; ShiftChecked = true;
@@ -350,7 +369,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         if (!await RunAsync(() => svc.PayOnlineAsync(pay.Id), c => checkout = c)) return;
         if (checkout!.Paid) { await PaidAsync(pay.Id); return; }
         if (checkout.Url is { } url && opener is not null) await opener.OpenAsync(url);
-        Notice = "Xendit's checkout is open on this PC. Let the customer scan the QR Ph code with GCash, Maya or their bank app, then tap Check payment.";
+        Notice = "Xendit's checkout is open on this PC. Let the customer scan the QR Ph code with GCash, Maya or their bank app. This screen updates by itself once they have paid.";
     }
 
     [RelayCommand]
@@ -404,8 +423,40 @@ public partial class VoidPaymentsViewModel(IPaymentStaffService svc) : LoadableV
     }
 }
 
-public partial class CheckInViewModel(IAttendanceService svc, ICoachService coaches, OfflineDesk? offline = null, IProfileService? profile = null, TimeProvider? clock = null) : LoadableViewModel
+public partial class CheckInViewModel(IAttendanceService svc, ICoachService coaches, OfflineDesk? offline = null, IProfileService? profile = null, TimeProvider? clock = null, IReportFiles? files = null, ISubscriptionService? refunds = null) : LoadableViewModel
 {
+    // ---- owner, 2026-11-18: View on a Day pass in Checked in today shows who and what was paid; Print opens the receipt PDF ----
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsViewingDayPass))] private CheckInRow? viewingDayPass;
+    public bool IsViewingDayPass => ViewingDayPass is not null;
+    [RelayCommand] private void ViewDayPass(CheckInRow row) { ViewingDayPass = row; IsAskingRefund = false; }
+    [RelayCommand] private void CloseDayPass() { ViewingDayPass = null; IsAskingRefund = false; }
+
+    // ---- 0096: the desk asks for the refund with a reason; the System admin decides on Refunds & voids ----
+    [ObservableProperty] private bool isAskingRefund;
+    [ObservableProperty] private string refundReason = "";
+    [RelayCommand] private void AskRefund() { RefundReason = ""; IsAskingRefund = true; Notice = null; }
+    [RelayCommand] private void KeepRefund() => IsAskingRefund = false;
+
+    [RelayCommand]
+    private async Task SendRefundAsync()
+    {
+        if (refunds is null || ViewingDayPass is not { DayPass: { CanRequestRefund: true } pass }) return;
+        if (string.IsNullOrWhiteSpace(RefundReason)) { ErrorMessage = "Say why the customer wants a refund."; return; }
+        Notice = null;
+        if (!await RunAsync(() => refunds.RequestWalkInRefundAsync(pass.PaymentId, RefundReason))) return;
+        IsAskingRefund = false; Notice = "Refund requested. The System admin decides it on Refunds & voids.";
+        await LoadTodayAsync();
+    }
+
+    [RelayCommand]
+    private async Task PrintDayPassAsync()
+    {
+        if (files is null || ViewingDayPass is not { DayPass: { CanPrint: true } pass } row) return;
+        Notice = null;
+        if (await RunAsync(() => Safe.RunAsync(async () => { await files.OpenAsync($"receipt-{pass.ReceiptNo}.pdf", DayPassReceiptPdf.Build(row, pass, DateTime.UtcNow, await files.FontAsync())); return true; })))
+            Notice = "Receipt opened. Print it from the PDF viewer (Ctrl+P).";
+    }
+
     public ObservableCollection<MemberHit> Hits { get; } = new();
     public ObservableCollection<CoachPresenceRow> Coaches { get; } = new();
     [ObservableProperty] private string search = "";
@@ -476,6 +527,7 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
         _today = rows.OrderByDescending(r => r.At).Select(r => r with { IsNew = now - r.At < TimeSpan.FromMinutes(1) }).ToList();
         TodayCount = _today.Count;
         ShowToday();
+        if (ViewingDayPass is { } open) ViewingDayPass = _today.FirstOrDefault(r => r.At == open.At && r.Name == open.Name) ?? open;   // the open panel shows the refund as it stands
     }
 
     /// <summary>Sends anything queued and keeps the saved list up to date. Quiet when offline: the next tick tries again.</summary>
@@ -2159,7 +2211,7 @@ public sealed record StatusChoice(string Value, string Label);
 
 /// <summary>Front desk and admin: mark an amenity available, in use or unavailable, and see who was alerted.</summary>
 public partial class AmenityStatusViewModel(IAmenityService svc, IReservationService? reservations = null, IPaymentStaffService? payments = null,
-    DeskBookingViewModel? booking = null, IReportFiles? files = null) : LoadableViewModel
+    DeskBookingViewModel? booking = null, IReportFiles? files = null, ISubscriptionService? refunds = null) : LoadableViewModel
 {
     // ---- owner, 2026-11-17: the Booked card on the right: confirmed bookings not yet ended; View shows the details, Print opens the receipt PDF ----
     public ObservableCollection<BookedRow> Booked { get; } = new();
@@ -2170,13 +2222,31 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
     public async Task LoadBookedAsync()
     {
         if (reservations is null) return;
-        if (await reservations.BookedAsync() is { Ok: true, Value: { } rows }) Fill(Booked, rows);
+        if (await reservations.BookedAsync() is { Ok: true, Value: { } rows })
+            Sync(Booked, rows, r => r.Booking.Id, (a, b) => a.When == b.When && a.PaidText == b.PaidText && a.ReceiptText == b.ReceiptText && a.RefundText == b.RefundText);   // refreshed on a timer: no flicker
         OnPropertyChanged(nameof(HasBooked));
         if (Viewing is { } v) Viewing = Booked.FirstOrDefault(b => b.Booking.Id == v.Booking.Id);
     }
     void OnDeskBooked() => _ = LoadBookedAsync();
-    [RelayCommand] private void View(BookedRow row) => Viewing = row;
-    [RelayCommand] private void CloseView() => Viewing = null;
+    [RelayCommand] private void View(BookedRow row) { Viewing = row; IsAskingRefund = false; }
+    [RelayCommand] private void CloseView() { Viewing = null; IsAskingRefund = false; }
+
+    // ---- 0096: the desk asks for a walk-in's refund with a reason; the System admin decides on Refunds & voids ----
+    [ObservableProperty] private bool isAskingRefund;
+    [ObservableProperty] private string refundReason = "";
+    [RelayCommand] private void AskRefund() { RefundReason = ""; IsAskingRefund = true; Notice = null; }
+    [RelayCommand] private void KeepRefund() => IsAskingRefund = false;
+
+    [RelayCommand]
+    private async Task SendRefundAsync()
+    {
+        if (refunds is null || Viewing is not { CanRequestRefund: true, Booking.PaymentId: { } pay } row) return;
+        if (string.IsNullOrWhiteSpace(RefundReason)) { ErrorMessage = "Say why the customer wants a refund."; return; }
+        Notice = null;
+        if (!await RunAsync(() => refunds.RequestWalkInRefundAsync(pay, RefundReason, row.IsUnder24Hours))) return;
+        IsAskingRefund = false; Notice = "Refund requested. The System admin decides it on Refunds & voids.";
+        await LoadBookedAsync();
+    }
 
     [RelayCommand]
     private async Task PrintReceiptAsync()
@@ -2194,8 +2264,12 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
     [RelayCommand]
     private async Task ToggleBookingAsync()
     {
-        IsBooking = !IsBooking && Booking is not null;
-        if (!IsBooking) return;
+        if (IsBooking || Booking is null) IsBooking = false;
+        else await OpenBookingAsync();
+    }
+    async Task OpenBookingAsync()
+    {
+        IsBooking = true;
         Booking!.Booked -= OnDeskBooked; Booking.Booked += OnDeskBooked;   // a new booking shows on the Booked card
         await Booking.OnAppearingAsync();
     }
@@ -2280,12 +2354,15 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
         await LoadBalancesAsync(ManilaToday);
         await LoadClaimsAsync();
         await LoadBookedAsync();
+        if (Booking is { } b && !IsBooking && await b.ResumeWaitingAsync()) await OpenBookingAsync();   // a walk-in still paying online comes back on screen
     }
 
     // Quiet and in place: the error line, the notice and the open form stay as they are, and only cards that changed are swapped.
     public override async Task AutoRefreshAsync()
     {
         if (IsBusy) return;
+        if (Booking is { } b) await b.PollWaitingAsync();
+        await LoadBookedAsync();
         var board = await svc.BoardAsync();
         if (!board.Ok) return;
         Sync(Cards, board.Value!.Cards, c => c.Amenity.Id, (a, b) => a.SameAs(b));
@@ -2382,9 +2459,9 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
     public ObservableCollection<MemberHit> Hits { get; } = new();
     [ObservableProperty] private string search = "";
     [ObservableProperty] private bool noMatch;
-    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand))] private MemberHit? member;
-    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand))] private bool isWalkIn;
-    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand))] private string walkInName = "";
+    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand), nameof(PayOnlineCommand))] private MemberHit? member;
+    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand), nameof(PayOnlineCommand))] private bool isWalkIn;
+    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand), nameof(PayOnlineCommand))] private string walkInName = "";
     [ObservableProperty] private ReceiptView? receipt;
     public bool HasHits => Hits.Count > 0;
 
@@ -2410,9 +2487,9 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
     public ObservableCollection<SlotOption> Starts { get; } = new();
     public ObservableCollection<PickChip> Lengths { get; } = new();
     [ObservableProperty] private DateTime day = DateTime.Today;
-    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand))] private GridAmenity? amenity;
-    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand))] private SlotOption? start;
-    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand))] private PickChip? length;   // 0090: whole hours up to closing
+    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand), nameof(PayOnlineCommand))] private GridAmenity? amenity;
+    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand), nameof(PayOnlineCommand))] private SlotOption? start;
+    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand), nameof(PayOnlineCommand))] private PickChip? length;   // 0090: whole hours up to closing
     /// <summary>The last booking made here (the notice names it).</summary>
     public Reservation? LastBooked { get; private set; }
     /// <summary>Raised after a booking is made, so Amenity status refreshes its Booked card.</summary>
@@ -2457,7 +2534,33 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWaiting)), NotifyCanExecuteChangedFor(nameof(BookCommand), nameof(PayOnlineCommand))]
     private Reservation? waiting;
     public bool IsWaiting => Waiting is not null;
-    string waitingWhen = "";
+
+    /// <summary>Owner, 2026-11-18: reopening the page keeps watching a walk-in who is still paying.</summary>
+    public async Task<bool> ResumeWaitingAsync()
+    {
+        if (Waiting is null && await reservations.MyWaitingWalkInAsync() is { Ok: true, Value: { } w }) Waiting = w;
+        return IsWaiting;
+    }
+
+    bool polling;
+    /// <summary>Owner, 2026-11-18: called on the page's timer, so nobody has to press Check payment.</summary>
+    public async Task PollWaitingAsync()
+    {
+        if (polling || IsBusy || payments is null || Waiting is not { PaymentId: { } pay } w) return;
+        polling = true;
+        try
+        {
+            var state = await DeskOnlineWait.PollAsync(payments, pay);
+            if (Waiting?.Id != w.Id) return;   // Cancel was pressed meanwhile
+            if (state == OnlineWait.Paid) await PaidAsync();
+            else if (state == OnlineWait.Over)
+            {
+                Waiting = null; Notice = $"{w.WalkInName}'s online payment expired or was cancelled, so the slot is not booked.";
+                await LoadGridAsync();
+            }
+        }
+        finally { polling = false; }
+    }
 
     string WhenText(SlotOption s, PickChip len) => $"{s.Utc.AddHours(8):ddd d MMM}, {s.Label}, {len.Text}";
 
@@ -2496,7 +2599,7 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
         if (!await Confirm.AskAsync($"Book {a.Name} for {who}, paid online?", $"{when}.\nXendit's checkout opens on this PC for the customer to pay within 30 minutes.", "Pay online")) return;
         Reservation? started = null;
         if (!await RunAsync(() => reservations.DeskWalkInOnlineAsync(who, a.Id, s.Utc, len.Minutes), r => started = r)) return;
-        waitingWhen = when; Waiting = started;
+        Waiting = started;
         await OpenCheckoutAsync();
     }
 
@@ -2508,7 +2611,7 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
         if (!await RunAsync(() => payments.PayOnlineAsync(pay), c => checkout = c)) return;
         if (checkout!.Paid) { await PaidAsync(); return; }
         if (checkout.Url is { } url && opener is not null) await opener.OpenAsync(url);
-        Notice = "Xendit's checkout is open on this PC. Let the customer scan the QR Ph code with GCash, Maya or their bank app, then tap Check payment.";
+        Notice = "Xendit's checkout is open on this PC. Let the customer scan the QR Ph code with GCash, Maya or their bank app. This screen updates by itself once they have paid.";
     }
 
     [RelayCommand]
@@ -2529,11 +2632,12 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
         Waiting = null;
         if (now!.Booking.Status != "confirmed")
         {
-            ErrorMessage = "Paid, but the slot was booked by someone else first. The refund is listed under Refunds for the desk to repay.";
+            ErrorMessage = "Paid, but the slot was booked by someone else first. The System admin repays it from Refunds & voids.";
             Booked?.Invoke(); await LoadGridAsync(); return;
         }
         var name = Amenities.FirstOrDefault(x => x.Id == w.AmenityId)?.Name ?? "Amenity";
-        await DoneAsync(now, w.WalkInName ?? "", name, waitingWhen, "online (Xendit)");
+        var when = $"{w.StartsAt.ToUniversalTime().AddHours(8):ddd d MMM, h:mm tt}, {BookingSlots.LengthText((int)(w.EndsAt - w.StartsAt).TotalMinutes)}";
+        await DoneAsync(now, w.WalkInName ?? "", name, when, "online (Xendit)");
     }
 
     /// <summary>The customer walked away: the pending payment and its booking are cancelled. A late scan goes to staff as a refund.</summary>

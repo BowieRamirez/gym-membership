@@ -323,6 +323,45 @@ public sealed partial class DemoGateway
                 Audit("refund.decide", "refund_requests", f.Id.ToString());
                 return true;
             }
+            case "request_walk_in_refund":   // 0096
+            {
+                Require("payments:record");
+                var reason = (a.GetValueOrDefault("p_reason") as string)?.Trim();
+                if (string.IsNullOrEmpty(reason) || reason.Length > 900) throw Err("bad_input");
+                var gym = a.GetValueOrDefault("p_gym_cancels") is true;
+                var pay = All<Payment>().FirstOrDefault(p => p.Id == I("p_payment_id")) ?? throw Err("not_found");
+                if (pay.Status != Status.Verified || pay.Amount <= 0 || pay.MemberId is not null) throw Err("not_refundable");
+                Reservation? booking = null;
+                if (pay.Kind == PayKind.WalkIn) { if ((pay.VerifiedAt!.Value + Manila).Date != (now + Manila).Date) throw Err("refund_day_passed"); }
+                else
+                {
+                    booking = All<Reservation>().FirstOrDefault(r => r.PaymentId == pay.Id && r.WalkInName is not null && r.Status == "confirmed") ?? throw Err("not_refundable");
+                    if (booking.StartsAt <= now) throw Err("already_started");
+                    if (!gym && booking.StartsAt.AddHours(-24) < now) throw Err("refund_too_late");
+                }
+                if (All<RefundRequest>().Any(f => f.PaymentId == pay.Id && f.Kind != "online")) throw Err("already_requested");
+                var asked = Add(new RefundRequest { Kind = booking is null ? "day_pass" : "walk_in_booking", ReservationId = booking?.Id, PaymentId = pay.Id, MemberId = null!, Amount = pay.Amount,
+                    Reason = (gym ? "Gym is cancelling: " : "") + reason, RequestedAt = now });
+                NotifyStaff("payment", "Walk-in refund to review");
+                Audit("refund.request", "refund_requests", asked.Id.ToString());
+                result = Clone(asked);
+                return true;
+            }
+            case "decide_walk_in_refund":   // 0096
+            {
+                Require("payments:void");
+                var reason = (a.GetValueOrDefault("p_reason") as string)?.Trim();
+                if (string.IsNullOrEmpty(reason) || reason.Length > 1000 || a.GetValueOrDefault("p_approve") is null) throw Err("bad_input");
+                var approve = Convert.ToBoolean(a["p_approve"]);
+                var f = All<RefundRequest>().FirstOrDefault(x => x.Id == I("p_request_id") && x.IsWalkInRequest) ?? throw Err("not_found");
+                if (f.Status != "pending") throw Err("already_processed");
+                if (All<Payment>().First(p => p.Id == f.PaymentId).Status != Status.Verified) throw Err("not_refundable");
+                if (approve && All<Reservation>().FirstOrDefault(r => r.Id == f.ReservationId && r.Status == "confirmed") is { } booking)
+                { booking.Status = "cancelled"; booking.CancelledAt = now; booking.CancelledBy = Uid; booking.CancelReason = "Refund approved"; }
+                f.Status = approve ? "approved" : "rejected"; f.DecidedBy = Uid; f.DecidedAt = now; f.DecisionReason = reason;
+                Audit("refund.decide", "refund_requests", f.Id.ToString());
+                return true;
+            }
             case "free_coaches":   // G14 (0064)
             {
                 RequireActive();

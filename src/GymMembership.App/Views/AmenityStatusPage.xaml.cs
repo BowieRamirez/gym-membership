@@ -11,7 +11,8 @@ public partial class AmenityStatusPage : BasePage
 	}
 
 	// the reload only refills the list of cards; it never touches the editor fields, so typing is safe
-	protected override TimeSpan? AutoRefresh => TimeSpan.FromSeconds(30);
+	// every 5 seconds while a walk-in is paying online, so the receipt and the Booked card follow by themselves
+	protected override TimeSpan? AutoRefresh => TimeSpan.FromSeconds((BindingContext as AmenityStatusViewModel)?.Booking?.IsWaiting == true ? 5 : 30);
 
 	void OnPickCustomer(object? sender, EventArgs e)
 	{

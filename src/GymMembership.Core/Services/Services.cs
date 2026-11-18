@@ -331,6 +331,20 @@ public interface IMembershipService
 /// <summary>xendit-checkout's answer: the checkout link to open, or Paid.</summary>
 public sealed record OnlineCheckout(string? Url, bool Paid);
 
+public enum OnlineWait { StillWaiting, Paid, Over }
+
+/// <summary>Owner, 2026-11-18: the desk's screens ask by themselves while a customer pays online. Quiet: a failed look just means "ask again".</summary>
+public static class DeskOnlineWait
+{
+    public static async Task<OnlineWait> PollAsync(IPaymentStaffService svc, int paymentId)
+    {
+        if (await svc.CheckOnlineAsync(paymentId) is { Ok: true, Value: true }) return OnlineWait.Paid;
+        if (await svc.PaymentAsync(paymentId) is not { Ok: true, Value: { } p }) return OnlineWait.StillWaiting;
+        if (p.Status == Status.Verified) return OnlineWait.Paid;
+        return p.Status != Status.Pending || p.ExpiresAt?.ToUniversalTime() <= DateTime.UtcNow ? OnlineWait.Over : OnlineWait.StillWaiting;
+    }
+}
+
 /// <summary>xendit-checkout, for the member's own payment or one the desk recorded (cashier plan Y6).</summary>
 public static class OnlinePay
 {
@@ -1405,8 +1419,47 @@ public static class IdTypes
     public static string? Code(string? label) => All.FirstOrDefault(t => t.Label == label).Code;
 }
 
-public sealed record CheckInRow(string Name, DateTime At, string? Method = null, string? By = null, string? Reason = null, string? IdType = null)
+/// <summary>Owner, 2026-11-18: the payment behind a Day pass check-in. An anonymous Day pass is stored under the name "Day pass" (0081).</summary>
+public sealed record DayPassDetails(string? Customer, string? ReceiptNo, decimal Amount, string Method, string Status, DateTime? PaidAt,
+    int PaymentId = 0, string? RefundStatus = null, string? RefundDecision = null)
 {
+    public bool CanRequestRefund => Status == Models.Status.Verified && RefundStatus is null;
+    public string RefundText => WalkInRefund.Text(RefundStatus, RefundDecision);
+    public string Who => Customer ?? "No name given";
+    public bool CanPrint => Status == Models.Status.Verified && ReceiptNo is not null;
+    public string PaidText => Status == Models.Status.Verified ? $"Paid ₱{Amount:N2}" : $"₱{Amount:N2}, payment voided";
+    public string MethodText => PayMethod.Name(Method);
+}
+
+/// <summary>0096: how a walk-in's refund request stands, in the desk's words.</summary>
+public static class WalkInRefund
+{
+    public static string Text(string? status, string? decision) => status switch
+    {
+        "pending" => "Refund requested. Waiting for the System admin.",
+        "approved" => "Refund approved. The System admin pays it back.",
+        "paid" => "Refund repaid.",
+        "rejected" => $"Refund rejected: {decision}",
+        _ => ""
+    };
+}
+
+/// <summary>A Day pass receipt as a one-page A4 PDF the desk prints (Check-in page).</summary>
+public static class DayPassReceiptPdf
+{
+    public static byte[] Build(CheckInRow row, DayPassDetails pass, DateTime printedUtc, byte[] font) =>
+        RevenuePdf.Document("Day pass receipt", $"Receipt {pass.ReceiptNo}", font,
+            [($"Receipt {pass.ReceiptNo}", RevenuePdf.Kind.Strong), ("", RevenuePdf.Kind.Gap),
+             ($"Customer: {pass.Who}", RevenuePdf.Kind.Text), ($"Checked in: {RevenuePdf.Manila(row.At)} (Asia/Manila)", RevenuePdf.Kind.Text),
+             ("", RevenuePdf.Kind.Gap), ($"Printed {RevenuePdf.Manila(printedUtc)} (Asia/Manila)", RevenuePdf.Kind.Body)],
+            [("Item", 120, false), ("Paid on", 140, false), ("Method", 100, false), ("Amount", 100, true)],
+            [["Day pass", pass.PaidAt is { } at ? RevenuePdf.Manila(at) : "", pass.MethodText, $"₱{pass.Amount:N2}"]],
+            ["Total paid", "", "", $"₱{pass.Amount:N2}"], "", []);
+}
+
+public sealed record CheckInRow(string Name, DateTime At, string? Method = null, string? By = null, string? Reason = null, string? IdType = null, DayPassDetails? DayPass = null)
+{
+    public bool HasDayPass => DayPass is not null;
     public string TimeText => At.AddHours(8).ToString("h:mm tt", CultureInfo.InvariantCulture);   // Manila has no daylight saving
     /// <summary>How it came in (0044); blank for check-ins recorded before that. A reason means an Admin skipped the PIN (F8).</summary>
     public string HowText => (Method, IdType) switch
@@ -1499,9 +1552,15 @@ public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = 
         var to = from.AddDays(1);
         var rows = await gw.ListAsync<GymCheckIn>(c => c.CheckedInAt >= from && c.CheckedInAt < to);
         var names = await Directory_.UserNamesAsync(gw);
+        var passIds = rows.Where(c => c.MemberId is null).Select(c => c.PaymentId).OfType<int>().ToList();
+        var passes = passIds.Count == 0 ? [] : (await gw.ListAsync<Payment>(p => passIds.Contains(p.Id))).ToDictionary(p => p.Id);
+        var asked = passes.Count == 0 ? [] : (await gw.ListAsync<RefundRequest>(r => r.Kind == "day_pass")).ToDictionary(r => r.PaymentId);
+        DayPassDetails? PassOf(GymCheckIn c) => c.MemberId is null && c.PaymentId is { } id && passes.GetValueOrDefault(id) is { } p
+            ? new(p.WalkInName is null or "Day pass" ? null : p.WalkInName, p.ReceiptNo, p.Amount, p.Method, p.Status, p.VerifiedAt?.ToUniversalTime(),
+                  p.Id, asked.GetValueOrDefault(id)?.Status, asked.GetValueOrDefault(id)?.DecisionReason) : null;
         return rows.OrderBy(c => c.CheckedInAt)
-            .Select(c => new CheckInRow(c.MemberId is { } m ? names.GetValueOrDefault(m, "Member") : "Day pass", c.CheckedInAt, c.Method,
-                c.RecordedBy is { } by ? names.GetValueOrDefault(by) : null, c.Reason, c.IdType)).ToList();
+            .Select(c => new CheckInRow(c.MemberId is { } m ? names.GetValueOrDefault(m, "Member") : "Day pass", c.CheckedInAt.ToUniversalTime(), c.Method,   // the server's time may arrive as local
+                c.RecordedBy is { } by ? names.GetValueOrDefault(by) : null, c.Reason, c.IdType, PassOf(c))).ToList();
     });
 }
 

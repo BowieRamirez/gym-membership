@@ -317,7 +317,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             Member m => m.UserId == uid || staff || All<CoachHire>().Any(h => h.CoachId == uid && h.MemberId == m.UserId),
             Payment p => p.MemberId == uid || staff,
             MembershipTerm t => t.MemberId == uid || staff,
-            RefundRequest r => r.MemberId == uid || RolesOf(uid).Contains("admin") || (r.Kind == "no_show" && Has("payments:verify")),   // 0052: the desk reads the claims it decides
+            RefundRequest r => r.MemberId == uid || RolesOf(uid).Contains("admin") || (r.Kind == "no_show" && Has("payments:verify")) || (r.IsWalkInRequest && Has("payments:record")),   // 0052: the desk reads the claims it decides; 0096: and follows the refunds it asked for
             UserMembershipPackage m => m.MemberId == uid || staff,
             MembershipRenewal r => staff || All<UserMembershipPackage>().Any(m => m.Id == r.UserMembershipPackageId && m.MemberId == uid),
             UserAmenity a => a.MemberId == uid || staff,

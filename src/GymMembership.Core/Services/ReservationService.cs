@@ -108,9 +108,15 @@ public static class BookingPrice
 public sealed record DeskReceipt(Reservation Booking, string ReceiptNo);
 
 /// <summary>Owner, 2026-11-17: a confirmed booking on Amenity status's Booked card: who, what, when, and what was paid on which receipts.</summary>
-public sealed record BookedRow(Reservation Booking, string Customer, string Amenity, string? Coach, IReadOnlyList<Payment> Paid)
+public sealed record BookedRow(Reservation Booking, string Customer, string Amenity, string? Coach, IReadOnlyList<Payment> Paid, string? RefundStatus = null, string? RefundDecision = null)
 {
     public bool IsWalkIn => Booking.WalkInName is not null;
+    // 0096: the desk asks for a walk-in's refund; under 24 hours before the start only if the gym is the one cancelling
+    public bool CanRequestRefund => IsWalkIn && Paid.Count > 0 && RefundStatus is null && Booking.StartsAt.ToUniversalTime() > DateTime.UtcNow;
+    public bool IsUnder24Hours => Booking.StartsAt.ToUniversalTime().AddHours(-24) < DateTime.UtcNow;
+    public string RefundButton => IsUnder24Hours ? "Gym is cancelling" : "Request refund";
+    public string RefundRule => IsUnder24Hours ? "It starts in under 24 hours, so a refund is only for a booking the gym cancels." : "The booking stays until the System admin approves the refund.";
+    public string RefundText => WalkInRefund.Text(RefundStatus, RefundDecision);
     public string Who => IsWalkIn ? $"{Customer} (walk-in)" : Customer;
     public string When => $"{Booking.StartsAt.ToUniversalTime().AddHours(8):ddd d MMM, h:mm tt} – {Booking.EndsAt.ToUniversalTime().AddHours(8):h:mm tt}";
     public decimal PaidAmount => Paid.Sum(p => p.Amount);
@@ -130,7 +136,7 @@ public static class BookingReceiptPdf
         intro.AddRange([($"Booking no. {row.Booking.Id}", RevenuePdf.Kind.Text), ("", RevenuePdf.Kind.Gap), ($"Printed {RevenuePdf.Manila(printedUtc)} (Asia/Manila)", RevenuePdf.Kind.Body)]);
         return RevenuePdf.Document("Booking receipt", $"Receipt {row.ReceiptText}", font, intro,
         [("Receipt", 120, false), ("Paid on", 140, false), ("Method", 100, false), ("Amount", 100, true)],
-        row.Paid.Select(p => new[] { p.ReceiptNo ?? "", p.VerifiedAt is { } v ? RevenuePdf.Manila(v) : "", PayMethod.Name(p.Method), $"₱{p.Amount:N2}" }).ToList(),
+        row.Paid.Select(p => new[] { p.ReceiptNo ?? "", p.VerifiedAt is { } v ? RevenuePdf.Manila(v.ToUniversalTime()) : "", PayMethod.Name(p.Method), $"₱{p.Amount:N2}" }).ToList(),
         row.Paid.Count == 0 ? null : ["Total paid", "", "", $"₱{row.PaidAmount:N2}"], "Booked with a pass: nothing paid.",
         ["Show this receipt at the front desk. Keep it until the booking has ended."]);
     }
@@ -230,6 +236,8 @@ public interface IReservationService
     Task<AppResult<Reservation>> DeskWalkInOnlineAsync(string walkInName, int amenityId, DateTime startUtc, int minutes);
     /// <summary>A desk booking as it is now (confirmed, or cancelled if the slot went first) with its receipt number.</summary>
     Task<AppResult<DeskReceipt>> DeskReceiptAsync(int reservationId);
+    /// <summary>The newest walk-in booking this desk user started that is still waiting for Xendit, so reopening the page keeps watching it.</summary>
+    Task<AppResult<Reservation?>> MyWaitingWalkInAsync();
     /// <summary>Owner, 2026-11-17: confirmed bookings not yet ended, today's first, for the desk's Booked card.</summary>
     Task<AppResult<IReadOnlyList<BookedRow>>> BookedAsync();
     /// <summary>G13: the Gym settings percent paid to reserve.</summary>
@@ -280,6 +288,17 @@ public sealed class ReservationService(ISupabaseGateway gw) : IReservationServic
     public Task<AppResult<DeskReceipt>> DeskReceiptAsync(int reservationId) => Safe.RunAsync(async () =>
         await ReceiptOf((await gw.ListAsync<Reservation>(r => r.Id == reservationId)).Single()));
 
+    public Task<AppResult<Reservation?>> MyWaitingWalkInAsync() => Safe.RunAsync<Reservation?>(async () =>
+    {
+        var me = gw.CurrentUserId;
+        var now = DateTime.UtcNow;
+        var open = (await gw.ListAsync<Payment>(p => p.Status == "pending" && p.Method == PayMethod.Qr && p.RecordedBy == me))
+            .Where(p => p.ExpiresAt?.ToUniversalTime() > now).Select(p => p.Id).ToHashSet();
+        if (open.Count == 0) return null;
+        return (await gw.ListAsync<Reservation>(r => r.Status == "awaiting_payment"))
+            .Where(r => r.WalkInName is not null && r.PaymentId is { } p && open.Contains(p)).OrderByDescending(r => r.Id).FirstOrDefault();
+    });
+
     public Task<AppResult<IReadOnlyList<BookedRow>>> BookedAsync() => Safe.RunAsync<IReadOnlyList<BookedRow>>(async () =>
     {
         var now = DateTime.UtcNow;
@@ -289,9 +308,10 @@ public sealed class ReservationService(ISupabaseGateway gw) : IReservationServic
         var pays = (await gw.ListAsync<Payment>(p => ids.Contains(p.Id))).Where(p => p.Status == Status.Verified).ToDictionary(p => p.Id);
         var names = await Directory_.UserNamesAsync(gw);
         var amenities = (await gw.ListAsync<Amenity>()).ToDictionary(a => a.Id, a => a.Name);
-        return rows.Select(r => new BookedRow(r, r.WalkInName ?? names.GetValueOrDefault(r.MemberId ?? "", "Member"), amenities.GetValueOrDefault(r.AmenityId, "Amenity"),
-            r.CoachId is { } c ? names.GetValueOrDefault(c) : null,
-            new[] { r.PaymentId, r.BalancePaymentId }.OfType<int>().Select(pays.GetValueOrDefault).OfType<Payment>().ToList())).ToList();
+        var asked = await gw.ListAsync<RefundRequest>(f => f.Kind == "walk_in_booking");
+        return rows.Select(r => (r, f: asked.FirstOrDefault(x => x.ReservationId == r.Id))).Select(x => new BookedRow(x.r, x.r.WalkInName ?? names.GetValueOrDefault(x.r.MemberId ?? "", "Member"), amenities.GetValueOrDefault(x.r.AmenityId, "Amenity"),
+            x.r.CoachId is { } c ? names.GetValueOrDefault(c) : null,
+            new[] { x.r.PaymentId, x.r.BalancePaymentId }.OfType<int>().Select(pays.GetValueOrDefault).OfType<Payment>().ToList(), x.f?.Status, x.f?.DecisionReason)).ToList();
     });
 
     public Task<AppResult<Reservation>> BookAsync(int amenityId, DateTime startUtc, int minutes, string method, string? coachId = null, string? code = null) => Safe.RunAsync(() =>

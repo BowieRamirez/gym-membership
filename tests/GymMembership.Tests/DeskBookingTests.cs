@@ -134,7 +134,7 @@ public class DeskBookingTests
         Assert.False(vm.BookCommand.CanExecute(null));
     }
 
-    sealed class Files : IReportFiles
+    internal sealed class Files : IReportFiles
     {
         public string? Name; public byte[]? Pdf;
         public Task<byte[]> FontAsync() => Task.FromResult(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoSans-Regular.ttf")));
@@ -183,6 +183,171 @@ public class DeskBookingTests
         Assert.Equal(("confirmed", Status.Verified, PayMethod.Qr, (int?)null), (r.Status, pay.Status, pay.Method, pay.CashShiftId));
         Assert.Equal(pay.ReceiptNo, vm.Receipt!.ReceiptNo);
         Assert.Contains("online", vm.Receipt.Paid);
+    }
+
+    [Fact]   // 0096: 24 hours or more ahead the desk asks; approving cancels the booking and frees it from the Booked card
+    public async Task A_walk_in_booking_refund_is_asked_at_the_desk_and_approving_cancels_it()
+    {
+        var (gw, vm) = await Open();
+        var page = new AmenityStatusViewModel(new AmenityService(gw), new ReservationService(gw), new PaymentStaffService(gw), vm, refunds: new SubscriptionService(gw));
+        vm.StartWalkInCommand.Execute(null); vm.WalkInName = "Ana Reyes";
+        vm.Amenity = vm.Amenities.First(a => a.Name == "Pool"); vm.Start = vm.Starts.First(); vm.Length = vm.Lengths.First();
+        await vm.BookCommand.ExecuteAsync(null);
+        await page.LoadBookedAsync();
+        var row = page.Booked.Single(b => b.Customer == "Ana Reyes");
+        Assert.Equal(("Request refund", true), (row.RefundButton, row.CanRequestRefund));
+        page.ViewCommand.Execute(row);
+        page.AskRefundCommand.Execute(null);
+        page.RefundReason = "Customer can't come";
+        await page.SendRefundCommand.ExecuteAsync(null);
+        Assert.Null(page.ErrorMessage);
+        Assert.Equal("Refund requested. Waiting for the System admin.", page.Viewing!.RefundText);
+        Assert.Equal("confirmed", (await gw.ListAsync<Reservation>(r => r.Id == row.Booking.Id)).Single().Status);
+
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var refunds = new RefundsViewModel(new SubscriptionService(gw));
+        await refunds.OnAppearingAsync();
+        var card = refunds.Requests.Single(r => r.Request.Kind == "walk_in_booking");
+        Assert.Equal(("Ana Reyes", "To review", true), (card.Member, card.Status, card.CanDecide));
+        await refunds.DecideAsync(card, true, "Fine");
+        Assert.Null(refunds.ErrorMessage);
+        Assert.Equal("cancelled", (await gw.ListAsync<Reservation>(r => r.Id == row.Booking.Id)).Single().Status);
+        await page.LoadBookedAsync();
+        Assert.DoesNotContain(page.Booked, b => b.Customer == "Ana Reyes");
+    }
+
+    [Fact]
+    public void Under_24_hours_only_the_gym_cancelling_can_ask_for_a_walk_ins_refund()
+    {
+        var soon = new BookedRow(new Reservation { WalkInName = "Ana", StartsAt = DateTime.UtcNow.AddHours(3), EndsAt = DateTime.UtcNow.AddHours(4) }, "Ana", "Pool", null, [new Payment { Amount = 200 }]);
+        Assert.Equal(("Gym is cancelling", true), (soon.RefundButton, soon.CanRequestRefund));
+        Assert.False((soon with { RefundStatus = "rejected" }).CanRequestRefund);
+        Assert.False((soon with { Paid = [] }).CanRequestRefund);
+    }
+
+    /// <summary>The real desk service, but Xendit's answers are scripted: a link that isn't paid, then a check that says paid when told.</summary>
+    public class ScriptedDesk : System.Reflection.DispatchProxy
+    {
+        IPaymentStaffService real = null!;
+        public bool Paid; public int Checks;
+        public static (IPaymentStaffService Svc, ScriptedDesk Script) Over(IPaymentStaffService real)
+        {
+            var svc = Create<IPaymentStaffService, ScriptedDesk>();
+            var script = (ScriptedDesk)(object)svc; script.real = real;
+            return (svc, script);
+        }
+        protected override object? Invoke(System.Reflection.MethodInfo? m, object?[]? a) => m!.Name switch
+        {
+            "PayOnlineAsync" => Task.FromResult(AppResult<OnlineCheckout>.Success(new("https://checkout.test/ps", false))),
+            "CheckOnlineAsync" => CheckAsync((int)a![0]!),
+            _ => m.Invoke(real, a)
+        };
+        async Task<AppResult<bool>> CheckAsync(int id)
+        {
+            Checks++;
+            if (Paid) await real.PayOnlineAsync(id);   // demo: this is the customer paying
+            return AppResult<bool>.Success(Paid);
+        }
+    }
+
+    static AmenityStatusViewModel Screen(DemoGateway gw, IPaymentStaffService svc)
+    {
+        var reservations = new ReservationService(gw);
+        var booking = new DeskBookingViewModel(new AttendanceService(gw), reservations, svc) { Day = DateTime.Today.AddDays(2) };
+        return new AmenityStatusViewModel(new AmenityService(gw), reservations, svc, booking);
+    }
+
+    static async Task<(DemoGateway Gw, AmenityStatusViewModel Vm, ScriptedDesk Xendit, IPaymentStaffService Svc)> WaitingForXendit()
+    {
+        Confirm.Answer = (_, _, _) => Task.FromResult(true);
+        var gw = new DemoGateway(); await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        var (svc, xendit) = ScriptedDesk.Over(new PaymentStaffService(gw));
+        var vm = Screen(gw, svc);
+        await vm.LoadCommand.ExecuteAsync(null);
+        await vm.ToggleBookingCommand.ExecuteAsync(null);
+        var b = vm.Booking!;
+        b.StartWalkInCommand.Execute(null); b.WalkInName = "Lin";
+        b.Amenity = b.Amenities.First(a => a.Name == "Pool"); b.Start = b.Starts.First(); b.Length = b.Lengths.First();
+        await b.PayOnlineCommand.ExecuteAsync(null);
+        Assert.True(b.IsWaiting);
+        return (gw, vm, xendit, svc);
+    }
+
+    [Fact]   // owner, 2026-11-18: nobody has to press Check payment; the receipt and the Booked card follow by themselves
+    public async Task The_desk_notices_the_online_payment_by_itself()
+    {
+        var (_, vm, xendit, _) = await WaitingForXendit();
+        await vm.AutoRefreshAsync();
+        Assert.Equal(1, xendit.Checks);
+        Assert.True(vm.Booking!.IsWaiting);
+        Assert.Empty(vm.Booked);
+
+        xendit.Paid = true;
+        await vm.AutoRefreshAsync();
+        Assert.False(vm.Booking.IsWaiting);
+        Assert.Equal("Lin", vm.Booking.Receipt!.Customer);
+        Assert.Equal("Lin (walk-in)", Assert.Single(vm.Booked).Who);
+    }
+
+    [Fact]
+    public async Task The_desk_stops_waiting_when_the_payment_is_over()
+    {
+        var (_, vm, _, svc) = await WaitingForXendit();
+        Assert.True((await svc.VerifyAsync(vm.Booking!.Waiting!.PaymentId!.Value, false, "Elsewhere")).Ok);
+        await vm.AutoRefreshAsync();
+        Assert.False(vm.Booking.IsWaiting);
+        Assert.Contains("not booked", vm.Booking.Notice);
+    }
+
+    [Fact]   // pages are rebuilt: leaving Amenity status or restarting the app must not lose a customer who is paying
+    public async Task Coming_back_to_the_page_picks_up_the_walk_in_still_paying()
+    {
+        var (gw, _, xendit, svc) = await WaitingForXendit();
+        var again = Screen(gw, svc);
+        await again.LoadCommand.ExecuteAsync(null);
+        Assert.True(again.IsBooking);
+        Assert.Equal("Lin", again.Booking!.Waiting!.WalkInName);
+        xendit.Paid = true;
+        await again.AutoRefreshAsync();
+        Assert.Equal("Lin", again.Booking.Receipt!.Customer);
+        Assert.Contains(",", again.Booking.Receipt.When);
+    }
+
+    [Fact]
+    public async Task The_cashier_notices_the_online_payment_by_itself()
+    {
+        var gw = new DemoGateway(); await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();
+        var real = new PaymentStaffService(gw);
+        var (svc, xendit) = ScriptedDesk.Over(real);
+        Assert.True((await real.StartDeskOnlineAsync(PayKind.WalkIn, null, null, "Ana", null)).Ok);
+        var vm = new CashierViewModel(svc, new AttendanceService(gw));
+        await vm.OnAppearingAsync();
+        Assert.NotNull(vm.Waiting);
+        await vm.AutoRefreshAsync();
+        Assert.Equal(1, xendit.Checks);
+        Assert.NotNull(vm.Waiting);
+        xendit.Paid = true;
+        await vm.AutoRefreshAsync();
+        Assert.Null(vm.Waiting);
+        Assert.Matches(@"Receipt OR-\d{4}-\d{6}", vm.Notice);
+    }
+
+    [Theory]   // owner, 2026-11-18: the button only re-reads CanExecute when told, so it stayed grey with the form complete
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Pay_online_button_lights_up_when_the_walk_in_form_is_complete(bool nameLast)
+    {
+        var (_, vm) = await Open();
+        var enabled = vm.PayOnlineCommand.CanExecute(null);
+        vm.PayOnlineCommand.CanExecuteChanged += (_, _) => enabled = vm.PayOnlineCommand.CanExecute(null);
+        vm.StartWalkInCommand.Execute(null);
+        if (!nameLast) vm.WalkInName = "Lin";
+        vm.Amenity = vm.Amenities.First(a => a.Name == "Pool");
+        vm.Start = vm.Starts.First(); vm.Length = vm.Lengths.First();
+        if (nameLast) vm.WalkInName = "Lin";
+        Assert.True(enabled);
+        vm.WalkInName = "";
+        Assert.False(enabled);
     }
 
     [Fact]   // 0092: Pay online is for walk-ins only; the customer leaving cancels the payment and the booking

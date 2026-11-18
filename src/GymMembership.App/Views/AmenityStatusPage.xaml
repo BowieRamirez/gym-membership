@@ -264,10 +264,21 @@
                     <Label Text="{Binding Viewing.MethodText}" Style="{StaticResource Caption}" />
                     <Label Text="{Binding Viewing.ReceiptText, StringFormat='Receipt {0}'}" FontFamily="BarlowSemiBold" />
                     <Label Text="{Binding Viewing.Booking.Id, StringFormat='Booking no. {0}'}" Style="{StaticResource Caption}" />
-                    <HorizontalStackLayout Spacing="8" Margin="0,6,0,0">
-                        <Button Text="Print receipt" Style="{StaticResource SmallButton}" Command="{Binding PrintReceiptCommand}" AutomationId="PrintBookingReceipt" />
-                        <Button Text="Close" Style="{StaticResource SmallOutlineButton}" Command="{Binding CloseViewCommand}" />
-                    </HorizontalStackLayout>
+                    <Label Text="{Binding Viewing.RefundText}" FontFamily="BarlowSemiBold" IsVisible="{Binding Viewing.RefundText, Converter={StaticResource HasText}}" AutomationId="BookingRefundState" />
+                    <Label Text="{Binding Viewing.RefundRule}" Style="{StaticResource Caption}" IsVisible="{Binding Viewing.CanRequestRefund}" />
+                    <VerticalStackLayout Spacing="8" Margin="0,6,0,0" IsVisible="{Binding IsAskingRefund}">
+                        <Label Text="Why is this being refunded? The System admin reads this." Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><Entry Text="{Binding RefundReason}" MaxLength="900" Placeholder="Customer can't come" SemanticProperties.Description="Reason for the refund" AutomationId="BookingRefundReason" /></Border>
+                        <HorizontalStackLayout Spacing="8">
+                            <Button Text="Send request" Style="{StaticResource SmallButton}" Command="{Binding SendRefundCommand}" AutomationId="SendBookingRefund" />
+                            <Button Text="Back" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepRefundCommand}" />
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
+                    <FlexLayout Wrap="Wrap" Margin="0,6,0,0" IsVisible="{Binding IsAskingRefund, Converter={StaticResource Not}}">
+                        <Button Text="Print receipt" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Command="{Binding PrintReceiptCommand}" AutomationId="PrintBookingReceipt" />
+                        <Button Text="{Binding Viewing.RefundButton}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding AskRefundCommand}" IsVisible="{Binding Viewing.CanRequestRefund}" AutomationId="RequestBookingRefund" />
+                        <Button Text="Close" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding CloseViewCommand}" />
+                    </FlexLayout>
                 </VerticalStackLayout>
             </Border>
             <Border Style="{StaticResource Panel}">
