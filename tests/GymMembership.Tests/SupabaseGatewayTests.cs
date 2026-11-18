@@ -22,7 +22,11 @@ public sealed class SupabaseGatewayTests : IDisposable
 
     public SupabaseGatewayTests()
     {
-        var port = new Random().Next(20000, 40000);
+        // a free port from the system: a random one sometimes collided on CI ("Address already in use")
+        var probe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+        probe.Start();
+        var port = ((IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
         _url = $"http://localhost:{port}";
         _http.Prefixes.Add(_url + "/");
         _http.Start();
