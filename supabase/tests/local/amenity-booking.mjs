@@ -45,13 +45,13 @@ const refundOf = async id => (await db.query('select * from refund_requests wher
 
 try {
   // ---------- F12: book, then pay ----------
-  await test('booking with no pass makes a request and a down payment for one session (G13: half of 150)', async () => {
+  await test('booking with no pass makes a request and a down payment (G13: half; 0090: 2 hours at 150 an hour)', async () => {
     const uid = await member(), a = await amenity('B Hold');
-    const r = await book(uid, a, '10:00', 90);
+    const r = await book(uid, a, '10:00', 120);
     assert.equal(r.status, 'awaiting_payment');
     const p = await payOf(r);
-    assert.deepEqual([p.status, p.kind, p.method, Number(p.amount), p.member_id], ['pending', 'amenity', 'qr', 75, uid]);
-    assert.equal(new Date(r.ends_at) - new Date(r.starts_at), 90 * 60000);
+    assert.deepEqual([p.status, p.kind, p.method, Number(p.amount), p.member_id], ['pending', 'amenity', 'qr', 150, uid]);
+    assert.equal(new Date(r.ends_at) - new Date(r.starts_at), 120 * 60000);
   });
   await test('the hold ends after the payment expiry hours or 1 hour before the start, whichever comes first', async () => {
     const uid = await member(), a = await amenity('B Hold Until');
@@ -67,8 +67,8 @@ try {
   });
   await test('a slot that starts within the hour cannot be held', async () => {
     const uid = await member(), a = await amenity('B Too Soon');
-    const next = new Date(Math.ceil((Date.now() + 1000) / 1800000) * 1800000).toISOString();
-    await assert.rejects(as(uid, 'select * from book_amenity($1,$2,30,$3::payment_method)', [a, next, 'qr']), /too_soon/);
+    const next = new Date(Math.ceil((Date.now() + 1000) / 3600000) * 3600000).toISOString();
+    await assert.rejects(as(uid, 'select * from book_amenity($1,$2,60,$3::payment_method)', [a, next, 'qr']), /too_soon/);
   });
   await test('G13: a confirmed booking keeps its slot and cooldown; requests no longer hold one', async () => {
     const one = await member(), two = await member(), a = await amenity('B Clash');
@@ -76,12 +76,13 @@ try {
     assert.equal((await book(two, a, '10:00')).status, 'awaiting_payment');   // a request may still be made...
     const cool = await book(two, a, '11:00'); await approve(cool);              // ...but 11:00-11:30 is the cooldown
     assert.equal((await res(cool.reservation_id)).cancel_reason, 'Slot taken');
-    const after = await book(two, a, '11:30'); await approve(after);
+    const after = await book(two, a, '12:00');   // 0093: next start on the hour after the cooldown
+    await approve(after);
     assert.equal((await res(after.reservation_id)).status, 'confirmed');
   });
-  await test('length is 30 minutes to 2 hours in 30-minute steps', async () => {
+  await test('length is whole hours (0090: no half hours; the gym hours are the only cap)', async () => {
     const uid = await member(), a = await amenity('B Length');
-    for (const m of [0, 20, 150]) await assert.rejects(book(uid, a, '10:00', m), /bad_input|too_long/);
+    for (const m of [0, 20, 30, 90, 150]) await assert.rejects(book(uid, a, '10:00', m), /bad_input|too_long/);
     await assert.rejects(book(uid, a, '10:00', 60, 'gcash'), /bad_input/);
   });
   await test('a guest without a membership cannot book', async () => {
@@ -100,7 +101,7 @@ try {
   });
   await test('a pay-at-the-desk booking is approved in cash into the cashier\'s shift', async () => {
     const uid = await member(), a = await amenity('B Cash');
-    const r = await book(uid, a, '10:00', 30, 'cash');
+    const r = await book(uid, a, '10:00', 60, 'cash');
     await approve(r);
     assert.ok((await payOf(r)).cash_shift_id);
     assert.equal((await res(r.reservation_id)).status, 'confirmed');
@@ -255,6 +256,51 @@ try {
     await db.query('insert into coach_visits(coach_id,checked_in_by) values($1,$1)', [coach]);
     assert.equal((await use(run))[0].status, 'pending');
     await db.query('update coach_visits set checked_out_at=now(),checked_out_by=coach_id where checked_out_at is null');
+  });
+
+  // 0094 (owner, 2026-11-18): a member's own booking gets its receipt in the Front desk chat once it is confirmed
+  const chat = async uid => (await db.query(`select sender_id, body from support_messages where member_id=$1 and queue='front_desk' order by message_id`, [uid])).rows;
+  const service = async (sql, args = []) => {
+    await db.query('begin');
+    try { await db.query('set local role service_role'); const r = await db.query(sql, args); await db.query('commit'); return r.rows; }
+    catch (e) { await db.query('rollback'); throw e; }
+  };
+
+  await test('0094: paid online through Xendit: one receipt in the chat, from the oldest admin (nobody signed in)', async () => {
+    const uid = await member(), a = await amenity('B Receipt Online');
+    const r = await book(uid, a, '10:00');
+    assert.equal((await chat(uid)).length, 0);   // nothing until it is paid
+    await service('select save_online_checkout($1,$2,$3)', [r.payment_id, 'ps-rcpt-1', 'https://checkout.test/1']);
+    const p = await payOf(r);
+    assert.equal((await service('select confirm_online_payment($1,$2,$3) r', ['ps-rcpt-1', Number(p.amount), 'GCASH']))[0].r, 'confirmed');
+    assert.equal((await res(r.reservation_id)).status, 'confirmed');
+    const m = await chat(uid), receipt = (await payOf(r)).receipt_no;
+    assert.equal(m.length, 1);
+    assert.ok(m[0].body.startsWith('Receipt (automatic). ') && m[0].body.includes('B Receipt Online') && m[0].body.includes(`online. Receipt ${receipt}`), m[0].body);
+    const oldest = (await db.query(`select ur.user_id from user_roles ur join roles r using(role_id) join profiles pr on pr.id=ur.user_id
+      where r.name='admin' and pr.is_active order by pr.created_at limit 1`)).rows[0].user_id;
+    assert.equal(m[0].sender_id, oldest);
+    // the member sees it as unread from the front desk
+    const unread = (await as(uid, `select coalesce(sum(unread),0)::int n from chat_threads()`))[0].n;
+    assert.ok(unread >= 1);
+  });
+
+  await test('0094: cash taken at the desk: the receipt comes from that desk member, with the balance if any', async () => {
+    const uid = await member(), a = await amenity('B Receipt Cash');
+    const r = await book(uid, a, '13:00', 60, 'cash');
+    await approve(r);
+    const m = await chat(uid);
+    assert.equal(m.length, 1); assert.equal(m[0].sender_id, desk);
+    assert.match(m[0].body, /in cash\. Receipt /);
+    const v = await res(r.reservation_id);
+    if (Number(v.total_price) > Number(v.down_payment)) assert.match(m[0].body, /Balance PHP .* at the front desk/);
+  });
+
+  await test('0094: an unpaid or rejected booking sends nothing', async () => {
+    const uid = await member(), a = await amenity('B Receipt None');
+    const r = await book(uid, a, '15:00', 60, 'cash');
+    await as(desk, `select verify_payment($1,false,'No cash')`, [r.payment_id]);
+    assert.equal((await chat(uid)).length, 0);
   });
 } finally {
   await db.end(); await server.stop();

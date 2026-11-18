@@ -134,7 +134,7 @@ public class CatalogScreenTests
 
         Assert.Null(vm.ErrorMessage);
         var row = Am(vm, "Ice bath");
-        Assert.Equal((CatalogState.Published, (int?)null, "₱250.00 per session"), (row.Amenity.State, row.Amenity.DurationDays, row.SoldAsText));
+        Assert.Equal((CatalogState.Published, (int?)null, "₱250.00 per hour"), (row.Amenity.State, row.Amenity.DurationDays, row.SoldAsText));
         Assert.NotNull(row.Amenity.ImagePath);
         Assert.NotNull(row.PhotoUrl);
         Assert.Equal(["Edit", "Archive"], vm.ActionsFor(row));   // already per session

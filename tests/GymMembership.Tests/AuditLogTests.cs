@@ -102,7 +102,7 @@ public class AuditLogTests
         Assert.True(vm.Entries.Zip(vm.Entries.Skip(1)).All(p => p.First.CreatedAt >= p.Second.CreatedAt));
         await vm.NextCommand.ExecuteAsync(null);
         Assert.Equal(("Page 2", false), (vm.PageText, vm.HasMore));
-        Assert.Equal(4, vm.Entries.Count);   // 12 + the two seeded entries
+        Assert.Equal(3, vm.Entries.Count);   // 12 + the seeded account entry; the seeded payment is in Transactions (0086)
         await vm.PreviousCommand.ExecuteAsync(null);
         Assert.Equal(10, vm.Entries.Count);
     }
@@ -113,10 +113,12 @@ public class AuditLogTests
         var (gw, vm) = await Signed();
         Assert.True((await new AdminService(gw).SetActiveAsync("u-alex", false)).Ok);
         await vm.OnAppearingAsync();
+        await vm.OpenMoneyCommand.ExecuteAsync(null);   // 0086: payments are in Transactions
         vm.AreaIndex = Array.IndexOf(vm.Areas, "Payment");
         await vm.ApplyCommand.ExecuteAsync(null);
         Assert.All(vm.Entries, e => Assert.Equal("Payment", e.AreaText));
         Assert.NotEmpty(vm.Entries);
+        await vm.OpenLogsCommand.ExecuteAsync(null);
         vm.AreaIndex = 0; vm.ObjectIndex = Array.IndexOf(vm.ObjectTypes, "Account"); vm.User = "dana";
         await vm.ApplyCommand.ExecuteAsync(null);
         Assert.Equal("Account deactivated", Assert.Single(vm.Entries).ActionText);
@@ -126,7 +128,7 @@ public class AuditLogTests
         await vm.ApplyCommand.ExecuteAsync(null);
         Assert.Equal("The end date must be on or after the start date.", vm.ErrorMessage);
         await vm.ClearFiltersCommand.ExecuteAsync(null);
-        Assert.Equal(3, vm.Entries.Count);
+        Assert.Equal(2, vm.Entries.Count);   // the audit tab: no payment rows (0086)
     }
 
     [Fact]

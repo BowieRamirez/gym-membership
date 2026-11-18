@@ -121,8 +121,8 @@ public class OnlinePaymentTests
         public Task<AppResult<IReadOnlyList<AvailableCode>>> AvailableCodesAsync() => real.AvailableCodesAsync();
         public Task<AppResult<IReadOnlyList<MembershipRow>>> MyMembershipsAsync() => real.MyMembershipsAsync();
         public Task<AppResult<Access>> AccessAsync() => real.AccessAsync();
-        public Task<AppResult<Payment>> AvailAsync(int packageId, string? discountCode = null) => real.AvailAsync(packageId, discountCode);
-        public Task<AppResult<Payment>> RenewAsync(int membershipId, string? discountCode = null) => real.RenewAsync(membershipId, discountCode);
+        public Task<AppResult<Payment>> AvailAsync(int packageId, string? discountCode = null, string method = PayMethod.Qr) => real.AvailAsync(packageId, discountCode, method);
+        public Task<AppResult<Payment>> RenewAsync(int membershipId, string? discountCode = null, string method = PayMethod.Qr) => real.RenewAsync(membershipId, discountCode, method);
         public Task<AppResult<Payment>> PayAgainAsync(PaymentItem item) => real.PayAgainAsync(item);
         public Task<AppResult<GymSettings>> GymAsync() => real.GymAsync();
         public Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync() => real.ClosedDaysAsync();

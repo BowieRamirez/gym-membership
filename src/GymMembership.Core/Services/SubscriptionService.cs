@@ -60,7 +60,7 @@ public sealed record RefundCard(RefundRequest Request, string Member, string Pac
     /// <summary>The table's Status column: what is left to do, in two words (State has the full sentence for the side panel).</summary>
     public string Status => Request.Status switch
     {
-        "pending" when Request.IsBooking => "Front desk",
+        "pending" when Request.IsBooking && !Request.IsWalkInRequest => "Front desk",
         "pending" => "To review",
         "approved" => "To repay",
         "rejected" => "Rejected",
@@ -76,8 +76,18 @@ public sealed record RefundCard(RefundRequest Request, string Member, string Pac
     {
         "cancel" => $"{Request.DecisionReason?.TrimEnd('.') ?? "Booking cancelled: down payment refunded"}.",   // G13 (0064): 24 hours or more before, the gym, or slot taken
         "no_show" => Request.Status == "pending" ? "The member says they didn't use the booking." : $"Didn't use it: {(Request.Status == "rejected" ? "declined" : "approved")} by the front desk.",
+        "online" => $"{Request.DecisionReason}.",   // 0095
+        "day_pass" => "The front desk asked for this on the day the Day pass was paid for.",   // 0096
+        "walk_in_booking" => Request.Status == "pending" ? "The front desk asked for this. Approving cancels the booking." : "The front desk asked for this.",
         _ => MembershipReview
     };
+    /// <summary>0096: what approving or rejecting a walk-in's refund does; null for a membership term, which has its own wording.</summary>
+    public string? DecisionNote(bool approve) => !Request.IsWalkInRequest ? null : !approve ? "Nothing changes for the customer."
+        : (Request.Kind == "day_pass" ? "The check-in stays on record." : "The booking is cancelled and its slot is freed.") + " The refund will await manual repayment — no money is sent by approving.";
+    /// <summary>0095, 0096: a refund tied only to a payment: online money that could not be applied, or a Day pass.</summary>
+    public static RefundCard ForOnline(RefundRequest r, Payment? p, string? memberName) =>
+        new(r, (p?.WalkInName is { } name && name != "Day pass" ? name : memberName) ?? (r.Kind == "day_pass" ? "No name given" : "Member"), r.Kind == "day_pass" ? "Day pass" : "Online payment",
+            p is null ? "" : $"{p.PaymentCode} · {p.OnlineChannel ?? PayMethod.Name(p.Method)}", Period: $"{r.RequestedAt.ToUniversalTime().AddHours(8):d MMM, h:mm tt}");
     string MembershipReview => Request.WasActivated switch
     {
         false => "No check-in during this term: the days left are owed.",   // G22
@@ -88,18 +98,20 @@ public sealed record RefundCard(RefundRequest Request, string Member, string Pac
     public string? LaterTermsWarning => !CanDecide || LaterTerms == 0 ? null : LaterTerms == 1
         ? "This member also has 1 later paid term. It stays and is not refunded."
         : $"This member also has {LaterTerms} later paid terms. They stay and are not refunded.";
-    public bool CanDecide => Request.Status == "pending" && !Request.IsBooking;   // F13: the front desk decides booking claims on Payments to verify
+    public bool CanDecide => Request.Status == "pending" && (!Request.IsBooking || Request.IsWalkInRequest);   // F13: the front desk decides booking claims on Payments to verify
     public bool CanRepay => Request.Status == "approved";
     public string State => StateText(Request);
     public static string StateText(RefundRequest r) => r.Status switch
     {
+        "pending" when r.IsWalkInRequest => "Waiting for your decision",
+        "rejected" when r.IsWalkInRequest => "Rejected: " + r.DecisionReason,
         "pending" when r.IsBooking => "Waiting for the front desk to check",
         "approved" when r.IsBooking => "Awaiting manual repayment: " + r.DecisionReason,
         "rejected" when r.IsBooking => "Declined by the front desk: " + r.DecisionReason,
         "pending" => "Pending admin review — access unchanged",
         "approved" => "Cancelled — awaiting manual repayment",
         "rejected" => "Rejected — term unchanged: " + r.DecisionReason,
-        "paid" => $"Repaid {r.PaidAt?.AddHours(8):d MMM yyyy, h:mm tt} (Manila) · {r.RepaymentMethod} · {r.RepaymentReference}",
+        "paid" => $"Repaid {(r.PaidAt is { } at ? ManilaTime.Of(at) : null):d MMM yyyy, h:mm tt} (Manila) · {PayMethod.Name(r.RepaymentMethod ?? "")}{(string.IsNullOrEmpty(r.RepaymentReference) ? "" : $" · {r.RepaymentReference}")}",
         _ => r.Status
     };
 }
@@ -107,11 +119,14 @@ public sealed record RefundCard(RefundRequest Request, string Member, string Pac
 public interface ISubscriptionService
 {
     Task<AppResult<IReadOnlyList<TermCard>>> TermsAsync();
-    Task<AppResult<Payment>> ExtendAsync(int packageId, string? discountCode = null);
+    Task<AppResult<Payment>> ExtendAsync(int packageId, string? discountCode = null, string method = PayMethod.Qr);
     Task<AppResult<IReadOnlyList<RefundCard>>> RefundsAsync();
     Task<AppResult<bool>> RequestRefundAsync(int termId, string reason, string? category = null);
     Task<AppResult<bool>> CancelPendingPaymentAsync(int paymentId);
     Task<AppResult<bool>> DecideAsync(int requestId, bool approve, string reason);
+    /// <summary>0096: the desk asks for a walk-in's refund: a Day pass the same day, a booking 24 hours or more ahead, or later if the gym is cancelling it.</summary>
+    Task<AppResult<bool>> RequestWalkInRefundAsync(int paymentId, string reason, bool gymCancels = false);
+    Task<AppResult<bool>> DecideWalkInAsync(int requestId, bool approve, string reason);
     Task<AppResult<bool>> MarkPaidAsync(int requestId, string method, string? reference);
 }
 
@@ -148,10 +163,11 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
         }).ToList();
     });
 
-    public Task<AppResult<Payment>> ExtendAsync(int packageId, string? discountCode = null) => Safe.RunAsync(() =>
+    public Task<AppResult<Payment>> ExtendAsync(int packageId, string? discountCode = null, string method = PayMethod.Qr) => Safe.RunAsync(() =>
     {
         Dictionary<string, object> args = new() { ["p_package_id"] = packageId };
         if (!string.IsNullOrWhiteSpace(discountCode)) args["p_discount_code"] = discountCode.Trim();
+        if (method != PayMethod.Qr) args["p_method"] = method;   // 0084; online is the server's default
         return gw.RpcAsync<Payment>("extend_membership",args);
     });
 
@@ -161,14 +177,16 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
     public Task<AppResult<IReadOnlyList<RefundCard>>> RefundsAsync() => Safe.RunAsync<IReadOnlyList<RefundCard>>(async () =>
     {
         var requests = await gw.ListAsync<RefundRequest>();
-        var terms = await gw.ListAsync<MembershipTerm>();
+        var terms = (await gw.ListAsync<MembershipTerm>()).Select(InUtc).ToList();
         var names = await Directory_.UserNamesAsync(gw);
         var bookings = requests.Any(r => r.IsBooking) ? (await gw.ListAsync<Reservation>()).ToDictionary(r => r.Id) : [];
         var amenities = bookings.Count > 0 ? (await gw.ListAsync<Amenity>()).ToDictionary(a => a.Id, a => a.Name) : [];
+        var payments = requests.Any(r => r.Kind is "online" or "day_pass") ? (await gw.ListAsync<Payment>()).ToDictionary(p => p.Id) : [];
         return requests.OrderBy(r => r.Status is "paid" or "rejected").ThenBy(r => r.RequestedAt).Select(r =>
         {
+            if (r.Kind is "online" or "day_pass") return RefundCard.ForOnline(r, payments.GetValueOrDefault(r.PaymentId), names.GetValueOrDefault(r.MemberId ?? ""));
             if (r.IsBooking && bookings.GetValueOrDefault(r.ReservationId ?? 0) is { } b)   // F13: a booking refund names the amenity and the booked time
-                return new RefundCard(r, names.GetValueOrDefault(r.MemberId, "Member"), $"{amenities.GetValueOrDefault(b.AmenityId, "Amenity")} booking",
+                return new RefundCard(r, b.WalkInName ?? names.GetValueOrDefault(r.MemberId ?? "", "Member"), $"{amenities.GetValueOrDefault(b.AmenityId, "Amenity")} booking",
                     $"{b.StartsAt.ToUniversalTime().AddHours(8):d MMM yyyy, h:mm tt} – {b.EndsAt.ToUniversalTime().AddHours(8):h:mm tt} (Manila)",
                     Period: $"{b.StartsAt.ToUniversalTime().AddHours(8):d MMM, h:mm tt}");
             var term = terms.FirstOrDefault(t => t.Id == r.TermId);
@@ -186,6 +204,10 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
     }
     public Task<AppResult<bool>> CancelPendingPaymentAsync(int paymentId) => Change("cancel_pending_payment",new() { ["p_payment_id"]=paymentId });
     public Task<AppResult<bool>> DecideAsync(int requestId, bool approve, string reason) => Change("decide_membership_refund",new() { ["p_request_id"]=requestId,["p_approve"]=approve,["p_reason"]=reason.Trim() });
+    public Task<AppResult<bool>> RequestWalkInRefundAsync(int paymentId, string reason, bool gymCancels = false) =>
+        Change("request_walk_in_refund", new() { ["p_payment_id"] = paymentId, ["p_reason"] = reason.Trim(), ["p_gym_cancels"] = gymCancels });
+    public Task<AppResult<bool>> DecideWalkInAsync(int requestId, bool approve, string reason) =>
+        Change("decide_walk_in_refund", new() { ["p_request_id"] = requestId, ["p_approve"] = approve, ["p_reason"] = reason.Trim() });
     public Task<AppResult<bool>> MarkPaidAsync(int requestId, string method, string? reference)
     {
         Dictionary<string,object> args=new() { ["p_request_id"]=requestId,["p_method"]=method };

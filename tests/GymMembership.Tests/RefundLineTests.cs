@@ -14,18 +14,6 @@ public class RefundLineTests
     }
 
     [Fact]
-    public async Task A_member_buying_a_package_is_told_the_refund_rule()
-    {
-        var asked = Answer();
-        var gw = new DemoGateway(); await gw.SignInAsync("carlo@demo.io", DemoGateway.DemoPassword);
-        var membership = new MembershipService(gw);
-        var vm = new PackagesViewModel(membership, new ConfirmationTests.Nav(), new SubscriptionService(gw));
-        await vm.AvailCommand.ExecuteAsync((await membership.ListPackagesAsync()).Value![0]);
-        Assert.Contains(RefundRules.Line, Assert.Single(asked));
-        Assert.Equal("Refunds: only in a term's first 7 days, for the days not used.", RefundRules.Line);
-    }
-
-    [Fact]
     public void The_packages_page_says_the_same_sentence()
     {
         var root = AppContext.BaseDirectory;

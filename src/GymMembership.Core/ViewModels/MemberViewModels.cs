@@ -216,7 +216,15 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
     [ObservableProperty] private string? discountCode;
     /// <summary>The membership or renewal payment still to pay through Xendit, if any (owner, 2026-11-16: paid here, not on My membership).
     /// Booking down payments are paid on Book an amenity.</summary>
-    [ObservableProperty] private PaymentItem? payNow;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPayCard))] private PaymentItem? payNow;
+    /// <summary>Cash plan 2026-11-17: a package payment the member chose to pay in cash, waiting for the front desk.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPayCard))] private PaymentItem? payAtDesk;
+    /// <summary>The side panel shows when there is one payment to pay, online or at the desk (one pending package payment at a time).</summary>
+    public bool HasPayCard => PayNow is not null || PayAtDesk is not null;
+    /// <summary>How the next package is paid: online (qr, the default) or cash at the front desk.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(PayCash))] private string method = PayMethod.Qr;
+    public bool PayCash => Method == PayMethod.Cash;
+    [RelayCommand] private void PickMethod(string value) => Method = value;
     /// <summary>Back from Xendit's page: the server is asking Xendit whether it was paid (X10).</summary>
     [ObservableProperty] private bool checking;
     public bool DialogOpen { get; set; }
@@ -240,7 +248,8 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
         _loading = true;
         try
         {
-            if (!await RunAsync(svc.MyPaymentsAsync, rows => PayNow = rows.FirstOrDefault(p => p.NeedsPayment && p.CanCancel))) return;
+            if (!await RunAsync(svc.MyPaymentsAsync, rows =>
+                { PayNow = rows.FirstOrDefault(p => p.NeedsPayment && p.CanCancel); PayAtDesk = rows.FirstOrDefault(p => p.PaysAtDesk && p.CanCancel); })) return;
             if (PayNow is not { HasCheckout: true } open) return;
             // back from Xendit's page: if its notice hasn't arrived yet, the server asks Xendit and confirms it
             var paid = false;
@@ -254,16 +263,39 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
 
     [RelayCommand] private void UseCode(AvailableCode code) => DiscountCode = code.Code;
 
-    // avail creates a pending online payment; the Pay online card on this page pays it through Xendit
+    // plan 2026-11-17 Z7 (owner's sketch): Buy opens a popup; step 1 the code and the package, step 2 Online or Cash, then Pay.
+    // The popup is the confirmation, so Pay asks nothing more.
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsBuying), nameof(BuyTerms))] private MembershipPackage? buying;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OnCodeStep), nameof(OnPayStep))] private bool payStep;
+    public bool IsBuying => Buying is not null;
+    public bool OnCodeStep => !PayStep;
+    public bool OnPayStep => PayStep;
+    /// <summary>The codes that fit the package in the popup.</summary>
+    public ObservableCollection<AvailableCode> BuyCodes { get; } = new();
+    public string BuyTerms => Buying is { } p ? $"₱{p.Price:N2} for {p.DurationDays} days. Once paid, it starts right away, or when your current term ends.\n{RefundRules.Line}" : "";
+
     [RelayCommand]
-    private async Task AvailAsync(MembershipPackage package)
+    private void OpenBuy(MembershipPackage package)
     {
+        Notice = null; ErrorMessage = null; DiscountCode = null; Method = PayMethod.Qr; PayStep = false;
+        Fill(BuyCodes, Codes.Where(c => c.AllPackages || c.PackageIds.Contains(package.Id)));
+        Buying = package;
+    }
+    [RelayCommand] private void Next() { ErrorMessage = null; PayStep = true; }
+    [RelayCommand] private void Back() => PayStep = false;
+    [RelayCommand] private void CloseBuy() { Buying = null; DiscountCode = null; ErrorMessage = null; }
+
+    // creates a pending payment: online is paid on this page's Pay online card through Xendit, cash at the front desk
+    [RelayCommand]
+    private async Task PayAsync()
+    {
+        if (Buying is not { } package) return;
         Notice = null;
-        var code = string.IsNullOrWhiteSpace(DiscountCode) ? "" : $"\nDiscount code {DiscountCode.Trim()} is applied when you pay.";
-        if (!await Confirm.AskAsync($"Buy {package.Name}?", $"₱{package.Price:N2} for {package.DurationDays} days.{code}\nYou pay online right after, on this page.\n\n{RefundRules.Line}", "Buy membership")) return;
-        if (!await RunAsync(() => subscription.ExtendAsync(package.Id, DiscountCode), _ => { })) return;
-        DiscountCode = null;
-        Notice = "Payment created. Pay online above to start it.";
+        Payment? made = null;
+        if (!await RunAsync(() => subscription.ExtendAsync(package.Id, DiscountCode, Method), p => made = p)) return;
+        Notice = PayCash ? $"Payment created. Pay ₱{made!.Amount:N2} in cash at the front desk; your membership starts once the desk verifies it."
+                         : "Payment created. Pay online on this page to start it.";
+        CloseBuy();
         await LoadPayAsync();
     }
 
@@ -367,6 +399,8 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
         finally { _loading = false; }
     }
 
+    PaymentItem? payAtDesk;
+
     async Task<bool> LoadPaymentsAsync()
     {
         var waiting = false;
@@ -375,7 +409,8 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
             allPayments = rows; ApplyFilter();
             PaymentsWaitingText = rows.Count(p => p.Status == Status.Pending).ToString();
             PayNow = rows.FirstOrDefault(p => p.NeedsPayment);
-            waiting = PayNow is not null || rows.Any(p => p.AwaitingReview);
+            payAtDesk = rows.FirstOrDefault(p => p.PaysAtDesk);   // cash plan 2026-11-17: chosen cash, waiting for the desk
+            waiting = PayNow is not null || payAtDesk is not null || rows.Any(p => p.AwaitingReview);
         })) return false;
         return await RunAsync(svc.MyMembershipsAsync, rows => { Fill(Memberships, rows); UpdateHero(rows, waiting); });
     }
@@ -403,7 +438,9 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
             LaneFraction = Math.Clamp((double)left / Math.Max(1, active.DurationDays), 0, 1);
         }
         else if (waitingOnPayment)
-        { HeroNumber = "–"; HeroCaption = PayNow is not null ? "Pay online on Packages to start your membership." : "Waiting for staff to verify your payment."; LaneFraction = 0; }
+        { HeroNumber = "–"; HeroCaption = PayNow is not null ? "Pay online on Packages to start your membership."
+            : payAtDesk is { } cash ? $"Pay ₱{cash.Amount:N2} in cash at the front desk; your membership starts once the desk verifies it."
+            : "Waiting for staff to verify your payment."; LaneFraction = 0; }
         else if (Terms.FirstOrDefault(t => t.State == Status.Scheduled) is { } next)
         { HeroNumber = "0"; HeroCaption = $"No active access. Your next paid term starts {next.Term.StartsAt.AddHours(8):d MMM yyyy, h:mm tt} (Manila)."; LaneFraction = 0; }
         else if (expired is not null)
@@ -418,7 +455,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
         Notice = null;
         if (!await Confirm.AskAsync("Create a new payment?", $"{item.What}\n₱{item.Amount:N2}\nThe expired one stays in your history.", "Create payment")) return;
         if (!await RunAsync(() => svc.PayAgainAsync(item), _ => { })) return;
-        Notice = "New payment created. Pay it online on Packages.";
+        Notice = item.Method == PayMethod.Cash ? "New payment created. Pay it in cash at the front desk." : "New payment created. Pay it online on Packages.";
         await LoadAsync();
     }
 }

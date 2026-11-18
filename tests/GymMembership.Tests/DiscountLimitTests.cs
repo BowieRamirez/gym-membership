@@ -139,7 +139,9 @@ public class DiscountLimitTests
         Assert.Equal("SHOWN15", code.Code);
         Assert.Equal(($"Last day {DateTime.Today.AddDays(30):d MMM yyyy}", "For all packages", 15, true), (code.LastDayText, code.ForText, code.Percent, code.IsNew));
         Assert.True(vm.HasCodes);
-        vm.UseCodeCommand.Execute(code);                         // fills the code box on the same page
+        vm.OpenBuyCommand.Execute(vm.Packages[0]);               // Z7: the codes sit in the Buy popup, as chips
+        Assert.Equal("SHOWN15", Assert.Single(vm.BuyCodes).Code);
+        vm.UseCodeCommand.Execute(code);                         // a chip fills the popup's code box
         Assert.Equal("SHOWN15", vm.DiscountCode);
 
         Assert.True((await Buy(gw, "carlo@demo.io", "SHOWN15")).Ok);   // once per member: gone from their list

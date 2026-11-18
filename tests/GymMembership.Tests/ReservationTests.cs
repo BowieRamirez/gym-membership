@@ -39,11 +39,11 @@ public class ReservationTests
     }
 
     // cashier plan Y7: Payments to verify is gone. Cash at the desk is taken in the Cashier; booking claims are decided on Amenity status.
-    static async Task AsCashier(DemoGateway gw, Func<CashierViewModel, Task> act)
+    static async Task AsCashier(DemoGateway gw, Func<VerifyPaymentsViewModel, Task> act)
     {
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         await gw.OpenDrawerAsync();
-        var desk = new CashierViewModel(new PaymentStaffService(gw), new AttendanceService(gw));
+        var desk = new VerifyPaymentsViewModel(new PaymentStaffService(gw));
         await desk.OnAppearingAsync();
         await act(desk);
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
@@ -86,13 +86,14 @@ public class ReservationTests
     public void A_start_offers_only_lengths_that_end_before_the_next_bookings_cooldown_would_clash()
     {
         var g = Grid(("10:00", "11:00"));
-        Assert.Equal([30, 60, 90, 120], BookingSlots.Lengths(g, 1, At("07:00"), payFirst: true));
-        Assert.Equal([30], BookingSlots.Lengths(g, 1, At("09:00"), true));            // 9:30-10:00 would leave no cooldown before 10:00
+        // owner, 2026-11-17 (0090): whole hours, up to closing time
+        Assert.Equal([60, 120], BookingSlots.Lengths(g, 1, At("07:00"), payFirst: true));   // 3 hours would run into 10:00's cooldown
+        Assert.Empty(BookingSlots.Lengths(g, 1, At("09:00"), true));                  // not even an hour before 10:00 with its cooldown
         Assert.Empty(BookingSlots.Lengths(g, 1, At("09:30"), true));
         Assert.Empty(BookingSlots.Lengths(g, 1, At("10:30"), true));                  // booked
         Assert.Empty(BookingSlots.Lengths(g, 1, At("11:00"), true));                  // its cooldown
-        Assert.Equal([30, 60, 90, 120], BookingSlots.Lengths(g, 1, At("11:30"), true));
-        Assert.Equal([30, 60], BookingSlots.Lengths(g, 1, At("21:00"), true));        // closing time
+        Assert.Equal(Enumerable.Range(1, 10).Select(h => h * 60), BookingSlots.Lengths(g, 1, At("11:30"), true));   // up to 9:30 PM
+        Assert.Equal([60], BookingSlots.Lengths(g, 1, At("21:00"), true));            // closing time
     }
 
     [Fact]
@@ -109,10 +110,10 @@ public class ReservationTests
     public async Task A_member_with_a_pass_books_straight_away()
     {
         var (_, vm) = await Member();
-        await Pick(vm, "Pool", "10:00", 90);
+        await Pick(vm, "Pool", "10:00", 120);
         Assert.Equal(("Book", false), (vm.BookText, vm.PayFirst));
-        Assert.EndsWith("10:00 to 11:30 AM", vm.Summary);
-        var row = await Booked(vm, "Pool", "10:00", 90);
+        Assert.EndsWith("10:00 to 12:00 PM", vm.Summary);
+        var row = await Booked(vm, "Pool", "10:00", 120);
         Assert.Equal("Booked.", vm.Notice);
         Assert.False(vm.IsPicking);
         Assert.Equal(("Confirmed", "Booked with your pass.", true), (row.StatusText, row.Detail, row.CanCancel));
@@ -126,12 +127,12 @@ public class ReservationTests
         Assert.Equal(("Book and pay ₱250.00", true), (vm.BookText, vm.PayFirst));   // G13: half of ₱500
         Assert.StartsWith("Not yours until the down payment is paid online", vm.HoldText);
         var row = await Booked(vm, "Group classes", "10:00");
-        Assert.Equal("₱500.00 per session, up to 2 hours", vm.Cards.Single(c => c.Amenity.Name == "Group classes").PassText);   // the hold is not a pass bought
+        Assert.Equal("₱500.00 per hour", vm.Cards.Single(c => c.Amenity.Name == "Group classes").PassText);   // the hold is not a pass bought
         Assert.Equal(("Waiting for down payment", "wait", true, true), (row.StatusText, row.Tone, row.CanPayOnline, row.CanCancel));
         Assert.StartsWith("Down payment ₱250.00 online. Pay by ", row.Detail);
         Assert.StartsWith("Requested.", vm.Notice);
 
-        await AsCashier(gw, desk => { Assert.Empty(desk.DeskBookings); return Task.CompletedTask; });   // an online down payment is not the desk's
+        await AsCashier(gw, desk => { Assert.Empty(desk.Pending); return Task.CompletedTask; });   // an online down payment is not the desk's
         await PayOnline(gw, row);
         await vm.LoadCommand.ExecuteAsync(null);
         row = vm.Bookings.Single(b => b.Amenity == "Group classes");
@@ -144,17 +145,17 @@ public class ReservationTests
     public async Task Pay_at_the_desk_is_approved_by_taking_the_cash()
     {
         var (gw, vm) = await Member();
-        var row = await Booked(vm, "Group classes", "14:00", 30, PayMethod.Cash);
+        var row = await Booked(vm, "Group classes", "14:00", 60, PayMethod.Cash);
         Assert.StartsWith("Down payment ₱250.00 at the front desk by ", row.Detail);
         Assert.False(row.CanPayOnline);
         await AsCashier(gw, async desk =>
         {
-            var pay = desk.DeskBookings.Single();
+            var pay = desk.Pending.Single();
             Assert.Equal(("Take cash", "At the desk"), (pay.ApproveText, pay.MethodText));
-            Assert.EndsWith("2:00 PM to 2:30 PM · solo · balance ₱250.00 at the desk", pay.Booking);
-            await desk.TakeBookingCashCommand.ExecuteAsync(pay);
+            Assert.EndsWith("2:00 PM to 3:00 PM · solo · balance ₱250.00 at the desk", pay.Booking);
+            await desk.ApproveCommand.ExecuteAsync(pay);
             Assert.Null(desk.ErrorMessage);
-            Assert.Empty(desk.DeskBookings);
+            Assert.Empty(desk.Pending);
         });
         var cash = (await gw.ListAsync<Payment>(p => p.Id == row.Payment!.Id)).Single();
         Assert.Equal(Status.Verified, cash.Status);
@@ -167,8 +168,9 @@ public class ReservationTests
         var row = await Booked(vm, "Group classes", "10:00");
         await vm.OpenCommand.ExecuteAsync(vm.Cards.Single(c => c.Amenity.Name == "Group classes"));
         await vm.PickDayCommand.ExecuteAsync(vm.Days.Single(d => d.Date == Tomorrow));
-        Assert.Equal((false, false, true), (vm.Times.Single(t => t.StartUtc == At("10:30")).CanPick, vm.Times.Single(t => t.StartUtc == At("11:00")).CanPick,
-            vm.Times.Single(t => t.StartUtc == At("11:30")).CanPick));   // held, then its cooldown
+        Assert.Equal((false, false, true), (vm.Times.Single(t => t.StartUtc == At("10:00")).CanPick, vm.Times.Single(t => t.StartUtc == At("11:00")).CanPick,
+            vm.Times.Single(t => t.StartUtc == At("12:00")).CanPick));   // held, then its cooldown
+        Assert.All(vm.Times, t => Assert.Equal(0, t.StartUtc.Minute));   // owner, 2026-11-17: start times on the hour only
         Assert.True(vm.Days.Single(d => d.Date == Tomorrow).HasBooking);
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         Assert.True((await new PaymentStaffService(gw).VerifyAsync(row.Payment!.Id, false, "No transfer found")).Ok);
@@ -183,7 +185,7 @@ public class ReservationTests
     {
         var (gw, vm) = await Member();
         await Pick(vm, "Pool", "14:00");
-        Assert.True((await new ReservationService(gw).BookAsync(vm.Picked!.Amenity.Id, At("14:30"), 30, PayMethod.Qr)).Ok);   // meanwhile, from another device
+        Assert.True((await new ReservationService(gw).BookAsync(vm.Picked!.Amenity.Id, At("14:00"), 60, PayMethod.Qr)).Ok);   // meanwhile, from another device (0093: on the hour)
         await vm.BookCommand.ExecuteAsync(null);
         Assert.NotNull(vm.ErrorMessage);
         Assert.True(vm.IsPicking);
@@ -329,5 +331,34 @@ public class ReservationTests
         Assert.StartsWith("Run by ", vm.Cards.Single(c => c.Amenity.Name == "Pool").RunText);
         Assert.Equal("Any coach in the gym", vm.Cards.Single(c => c.Amenity.Name == "Sauna").RunText);   // Group classes is Lena's (G14 demo)
         Assert.Equal("forbidden", (await new AmenityService(gw).SetRunsAsync(pool.Amenity.Id, true)).Message);
+    }
+
+    [Fact]   // owner, 2026-11-18: Gym settings at 100%: the whole price is paid when booking; no "down payment", no ₱0.00 balance
+    public async Task At_100_percent_the_member_pays_in_full_when_booking()
+    {
+        var (_, vm) = await Member();
+        await Pick(vm, "Group classes", "10:00");
+        vm.Percent = 100;
+        Assert.True(vm.Split.Due > 0);
+        Assert.Equal(vm.Split.Due, vm.Split.Down);
+        Assert.Equal($"Book and pay ₱{vm.Split.Due:N2}", vm.BookText);
+        Assert.EndsWith("Paid in full now.", vm.SummaryDetail);
+        Assert.DoesNotContain("down payment", vm.SummaryDetail + vm.HoldText + vm.PayWithText, StringComparison.OrdinalIgnoreCase);
+        vm.Percent = 50;
+        Assert.Contains("Down payment now (50%)", vm.SummaryDetail);
+    }
+
+    [Fact]   // 0094 (owner, 2026-11-18): a member's own booking, once paid, gets its receipt in the Front desk chat; nothing before that
+    public async Task A_members_own_booking_gets_its_receipt_in_front_desk_chat_once_paid()
+    {
+        var (gw, vm) = await Member();
+        var row = await Booked(vm, "Group classes", "10:00");
+        Assert.Empty(await gw.ListAsync<SupportMessage>(m => m.MemberId == "u-alex" && m.Body.StartsWith("Receipt")));
+        await PayOnline(gw, row);
+        var receipt = (await gw.ListAsync<Payment>(p => p.Id == row.Payment!.Id)).Single().ReceiptNo;
+        var msg = (await gw.ListAsync<SupportMessage>(m => m.MemberId == "u-alex" && m.Queue == ChatQueue.FrontDesk)).Last();
+        Assert.StartsWith("Receipt (automatic).", msg.Body);
+        Assert.Contains($"online. Receipt {receipt}", msg.Body);
+        Assert.NotEqual("u-alex", msg.SenderId);
     }
 }

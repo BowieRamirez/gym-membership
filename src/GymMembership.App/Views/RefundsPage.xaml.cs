@@ -25,9 +25,9 @@ public partial class RefundsPage : BasePage
             var reason=await DisplayPromptAsync(approve?"Approval note":"Rejection reason","Enter the decision reason (required).",maxLength:1000);
             if(string.IsNullOrWhiteSpace(reason)) return;
             if(!await DisplayAlertAsync(approve?"Approve cancellation?":"Reject request?",
-                $"{row.Member} · {row.PackageName}\n{row.Dates}\n₱{row.Request.Amount:N2}\n\n"+(approve
+                $"{row.Member} · {row.PackageName}\n{row.Dates}\n₱{row.Request.Amount:N2}\n\n"+(row.DecisionNote(approve) ?? (approve
                     ?"Only this term stops granting access immediately. Other paid terms keep their dates. The refund will await manual repayment — no money is sent by approving."
-                    :"The selected term and access will remain unchanged.")+(approve&&row.LaterTermsWarning is { } later?"\n\n"+later:""),approve?"Approve":"Reject","Go back")) return;
+                    :"The selected term and access will remain unchanged."))+(approve&&row.LaterTermsWarning is { } later?"\n\n"+later:""),approve?"Approve":"Reject","Go back")) return;
             await vm.DecideAsync(row,approve,reason);
         }
         finally {vm.DialogOpen=false;}

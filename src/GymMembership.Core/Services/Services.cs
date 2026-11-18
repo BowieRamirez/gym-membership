@@ -281,14 +281,26 @@ sealed class PaymentLookup
 // ===================== Membership (member) =====================
 public sealed record MembershipRow(int Id, string PackageName, string Status, DateTime? EndsAt, int? DaysLeft, int DurationDays, bool CanRenew, decimal Price);
 
+/// <summary>Owner, 2026-11-18: the live server's times arrive as local time, the demo's as UTC. Always go through here before comparing with UtcNow or adding Manila's 8 hours.</summary>
+public static class ManilaTime
+{
+    public static DateTime Utc(DateTime t) => t.Kind == DateTimeKind.Local ? t.ToUniversalTime() : t;
+    public static DateTime? Utc(DateTime? t) => t is { } v ? Utc(v) : null;
+    public static DateTime Of(DateTime t) => Utc(t).AddHours(8);   // Manila has no daylight saving
+    public static DateTime? Of(DateTime? t) => t is { } v ? Of(v) : null;
+}
+
 /// <summary>One of the member's payments. Online (qr) payments are paid through Xendit's checkout (Xendit plan, 2026-11-16).</summary>
 public sealed record PaymentItem(int Id, string What, string PaymentCode, string Kind, string Method, decimal Amount, decimal DiscountAmount, string Status,
     DateTime CreatedAt, DateTime? ExpiresAt, string? ReferenceNo, bool HasProof, string? ReceiptNo, string? RejectedReason, int? ItemId, int? PackageSnapshotId = null,
     bool HasCheckout = false)
 {
     /// <summary>An online payment the member still has to pay (a proof sent before the switch is with the desk instead).</summary>
-    public bool NeedsPayment => Status == Models.Status.Pending && Method == PayMethod.Qr && !HasProof && (ExpiresAt is null || ExpiresAt > DateTime.UtcNow);
+    bool NotExpired => ExpiresAt is not { } e || ManilaTime.Utc(e) > DateTime.UtcNow;
+    public bool NeedsPayment => Status == Models.Status.Pending && Method == PayMethod.Qr && !HasProof && NotExpired;
     public bool AwaitingReview => Status == Models.Status.Pending && HasProof;
+    /// <summary>Cash plan 2026-11-17: the member chose cash; it waits on the desk's Payments to verify.</summary>
+    public bool PaysAtDesk => Status == Models.Status.Pending && Method == PayMethod.Cash && NotExpired;
     /// <summary>A membership or extension payment nobody has verified yet: the member can still withdraw it.</summary>
     public bool CanCancel => Status == Models.Status.Pending && Kind is PayKind.Membership or PayKind.Renewal;
     /// <summary>Rejected and expired payments are final; the member pays again with a fresh one.</summary>
@@ -299,6 +311,7 @@ public sealed record PaymentItem(int Id, string What, string PaymentCode, string
         Models.Status.Expired => "Not paid in time",
         Models.Status.Verified => ReceiptNo ?? "",
         _ when AwaitingReview => "Waiting for the front desk to check it",
+        _ when PaysAtDesk => "Pay at the front desk",
         _ => ""
     };
 }
@@ -312,8 +325,8 @@ public interface IMembershipService
     Task<AppResult<IReadOnlyList<PaymentItem>>> MyPaymentsAsync();
     Task<AppResult<Access>> AccessAsync();
     /// <summary>Starts a membership: a pending QR payment with a code to pay. The membership turns on when staff verify it.</summary>
-    Task<AppResult<Payment>> AvailAsync(int packageId, string? discountCode = null);
-    Task<AppResult<Payment>> RenewAsync(int membershipId, string? discountCode = null);
+    Task<AppResult<Payment>> AvailAsync(int packageId, string? discountCode = null, string method = PayMethod.Qr);
+    Task<AppResult<Payment>> RenewAsync(int membershipId, string? discountCode = null, string method = PayMethod.Qr);
     /// <summary>Xendit's checkout for an online payment: a link to open, or Paid when it is already paid (demo mode pays at once).</summary>
     Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId);
     /// <summary>Asks the server whether the checkout was paid, and confirms it if Xendit's notice hasn't arrived (X10).</summary>
@@ -327,6 +340,20 @@ public interface IMembershipService
 
 /// <summary>xendit-checkout's answer: the checkout link to open, or Paid.</summary>
 public sealed record OnlineCheckout(string? Url, bool Paid);
+
+public enum OnlineWait { StillWaiting, Paid, Over }
+
+/// <summary>Owner, 2026-11-18: the desk's screens ask by themselves while a customer pays online. Quiet: a failed look just means "ask again".</summary>
+public static class DeskOnlineWait
+{
+    public static async Task<OnlineWait> PollAsync(IPaymentStaffService svc, int paymentId)
+    {
+        if (await svc.CheckOnlineAsync(paymentId) is { Ok: true, Value: true }) return OnlineWait.Paid;
+        if (await svc.PaymentAsync(paymentId) is not { Ok: true, Value: { } p }) return OnlineWait.StillWaiting;
+        if (p.Status == Status.Verified) return OnlineWait.Paid;
+        return p.Status != Status.Pending || p.ExpiresAt?.ToUniversalTime() <= DateTime.UtcNow ? OnlineWait.Over : OnlineWait.StillWaiting;
+    }
+}
 
 /// <summary>xendit-checkout, for the member's own payment or one the desk recorded (cashier plan Y6).</summary>
 public static class OnlinePay
@@ -380,12 +407,14 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
     public Task<AppResult<IReadOnlyList<MembershipRow>>> MyMembershipsAsync() => Safe.RunAsync<IReadOnlyList<MembershipRow>>(async () =>
     {
         var uid = gw.CurrentUserId;
-        var terms = await gw.ListAsync<MembershipTerm>(t => t.MemberId == uid);
-        var now = DateTime.UtcNow;
-        return terms.Where(t => t.CancelledAt is null && t.StartsAt <= now).OrderByDescending(t => t.EndsAt)
-            .Select(t => new MembershipRow(t.MembershipId,t.PackageName,t.EndsAt > now ? Status.Active : Status.Expired,
-                t.EndsAt,Math.Max(0,(int)Math.Ceiling((t.EndsAt-now).TotalDays)),t.DurationDays,false,t.AmountPaid)).ToList();
+        return MembershipRows(await gw.ListAsync<MembershipTerm>(t => t.MemberId == uid), DateTime.UtcNow);
     });
+
+    /// <summary>The terms that have started, newest end first. A term bought just now counts at once (it was hidden for 8 hours on the live server).</summary>
+    public static IReadOnlyList<MembershipRow> MembershipRows(IEnumerable<MembershipTerm> terms, DateTime nowUtc) =>
+        terms.Select(SubscriptionService.InUtc).Where(t => t.CancelledAt is null && t.StartsAt <= nowUtc).OrderByDescending(t => t.EndsAt)
+            .Select(t => new MembershipRow(t.MembershipId,t.PackageName,t.EndsAt > nowUtc ? Status.Active : Status.Expired,
+                t.EndsAt,Math.Max(0,(int)Math.Ceiling((t.EndsAt-nowUtc).TotalDays)),t.DurationDays,false,t.AmountPaid)).ToList();
 
     public Task<AppResult<IReadOnlyList<PaymentItem>>> MyPaymentsAsync() => Safe.RunAsync<IReadOnlyList<PaymentItem>>(async () =>
     {
@@ -400,23 +429,27 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
     static Dictionary<string, object> WithCode(Dictionary<string, object> args, string? code)
     { if (!string.IsNullOrWhiteSpace(code)) args["p_discount_code"] = code.Trim(); return args; }
 
-    public Task<AppResult<Payment>> AvailAsync(int packageId, string? discountCode = null) =>
-        Safe.RunAsync(() => gw.RpcAsync<Payment>("avail_membership", WithCode(new() { ["p_package_id"] = packageId }, discountCode)));
+    // 0084: cash at the desk is sent; online (qr) is the server's default, so older servers see no new argument
+    static Dictionary<string, object> WithMethod(Dictionary<string, object> args, string method)
+    { if (method != PayMethod.Qr) args["p_method"] = method; return args; }
 
-    public Task<AppResult<Payment>> RenewAsync(int membershipId, string? discountCode = null) =>
-        Safe.RunAsync(() => gw.RpcAsync<Payment>("renew_membership", WithCode(new() { ["p_ump_id"] = membershipId }, discountCode)));
+    public Task<AppResult<Payment>> AvailAsync(int packageId, string? discountCode = null, string method = PayMethod.Qr) =>
+        Safe.RunAsync(() => gw.RpcAsync<Payment>("avail_membership", WithMethod(WithCode(new() { ["p_package_id"] = packageId }, discountCode), method)));
+
+    public Task<AppResult<Payment>> RenewAsync(int membershipId, string? discountCode = null, string method = PayMethod.Qr) =>
+        Safe.RunAsync(() => gw.RpcAsync<Payment>("renew_membership", WithMethod(WithCode(new() { ["p_ump_id"] = membershipId }, discountCode), method)));
 
     public Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId) => OnlinePay.OpenAsync(gw, paymentId);
     public Task<AppResult<bool>> CheckOnlineAsync(int paymentId) => OnlinePay.CheckAsync(gw, paymentId);
 
     public async Task<AppResult<Payment>> PayAgainAsync(PaymentItem item) => item.PackageSnapshotId is { } package && item.Kind is PayKind.Membership or PayKind.Renewal
-        ? await new SubscriptionService(gw).ExtendAsync(package)
+        ? await new SubscriptionService(gw).ExtendAsync(package, null, item.Method)   // paid again the same way: cash stays cash
         : item.ItemId is not { } id
         ? AppResult<Payment>.Fail(AppErrorKind.Validation, "not_found")
         : item.Kind switch
         {
-            PayKind.Membership => await AvailAsync(id),
-            PayKind.Renewal => await RenewAsync(id),
+            PayKind.Membership => await AvailAsync(id, null, item.Method),
+            PayKind.Renewal => await RenewAsync(id, null, item.Method),
             _ => AppResult<Payment>.Fail(AppErrorKind.Validation, "not_found")
         };
 
@@ -499,7 +532,7 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
         var me = gw.CurrentUserId;
         var now = DateTime.UtcNow;
         return (await gw.ListAsync<Payment>(p => p.Status == "pending" && p.Method == PayMethod.Qr && p.RecordedBy == me))
-            .Where(p => p.ExpiresAt > now).OrderByDescending(p => p.CreatedAt).FirstOrDefault();
+            .Where(p => p.ExpiresAt is { } e && ManilaTime.Utc(e) > now).OrderByDescending(p => p.CreatedAt).FirstOrDefault();
     });
 
     public async Task<AppResult<string>> RegisterMemberAsync(string firstName, string lastName, string email, string? phone, string password)
@@ -642,7 +675,7 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
                     .Select(m =>
                     {
                         var package = packages.FirstOrDefault(p => p.Id == m.MembershipPackageId);
-                        return new CounterItem(m.Id, $"{package?.Name ?? "Membership"}  ({m.Status}, ends {m.EndsAt:d MMM yyyy})", package?.Price);
+                        return new CounterItem(m.Id, $"{package?.Name ?? "Membership"}  ({m.Status}, ends {ManilaTime.Of(m.EndsAt):d MMM yyyy})", package?.Price);
                     }).ToList();
             default:
                 return [];
@@ -668,7 +701,7 @@ public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow,
         Models.Status.Pending => "Waiting for your payment to be verified",
         Models.Status.Active when PassIsSession => "1 session ready to book",
         Models.Status.Active => PassUntil is { } until ? $"Pass active until {until.ToLocalTime():d MMM yyyy}" : "Pass active",
-        _ => Amenity.DurationDays is not null ? "Not on sale right now" : $"₱{Amenity.Price:N2} per session, up to 2 hours"   // G19 (0066): passes aren't sold
+        _ => Amenity.DurationDays is not null ? "Not on sale right now" : $"₱{Amenity.Price:N2} per hour"   // G19 (0066): passes aren't sold
     };
     /// <summary>F12: a pass or a session already paid books without paying again.</summary>
     public bool HasPass => PassStatus == Models.Status.Active;
@@ -787,7 +820,7 @@ public sealed class AmenityService(ISupabaseGateway gw) : IAmenityService
         return catalog.Select(a =>
         {
             var e = mine.Where(m => m.AmenityId == a.Id).OrderByDescending(m => m.AvailedAt).ThenByDescending(m => m.Id).FirstOrDefault();
-            var status = e is null ? null : e.Status == Status.Active && e.ExpiresAt <= now ? Status.Expired : e.Status;
+            var status = e is null ? null : e.Status == Status.Active && e.ExpiresAt is { } ends && ManilaTime.Utc(ends) <= now ? Status.Expired : e.Status;
             return new AmenityRow(a, e?.Id, status, e?.ExpiresAt, e?.IsSession ?? false);
         }).ToList();
     });
@@ -1297,7 +1330,7 @@ public static class MemberCheck
     {
         "pending" => "Payment not verified yet",
         "inactive" => "Account deactivated",
-        "expired" when ended is { } e => $"Expired on {e.AddHours(8):d MMM}",   // Manila has no daylight saving
+        "expired" when ended is { } e => $"Expired on {ManilaTime.Of(e):d MMM}",
         "expired" => "No membership",
         _ => "",
     };
@@ -1319,7 +1352,7 @@ public sealed record MemberHit(string MemberId, string Username, bool HasActiveM
     public string ContactText => string.Join(" · ", new[] { Phone, Email }.Where(s => !string.IsNullOrWhiteSpace(s)));
     public string PlanStatus => HasActiveMembership ? "active" : Status == "expired" && EndedAt is null ? "no_membership" : Status ?? "inactive";
     /// <summary>Forgot phone: what staff check before letting someone in without a QR; the reason when they can't (G10).</summary>
-    public string PlanText => HasActiveMembership ? PaidUntil is { } until ? $"Paid until {until.AddHours(8):d MMM yyyy}" : "Paid"
+    public string PlanText => HasActiveMembership ? PaidUntil is { } until ? $"Paid until {ManilaTime.Of(until):d MMM yyyy}" : "Paid"
         : Status is { } s ? MemberCheck.Reason(s, EndedAt) : "No active membership";
     public bool CanCheckIn => HasActiveMembership;
     /// <summary>G11: the next step at the desk for someone who can't check in, e.g. Open Cashier.</summary>
@@ -1398,8 +1431,47 @@ public static class IdTypes
     public static string? Code(string? label) => All.FirstOrDefault(t => t.Label == label).Code;
 }
 
-public sealed record CheckInRow(string Name, DateTime At, string? Method = null, string? By = null, string? Reason = null, string? IdType = null)
+/// <summary>Owner, 2026-11-18: the payment behind a Day pass check-in. An anonymous Day pass is stored under the name "Day pass" (0081).</summary>
+public sealed record DayPassDetails(string? Customer, string? ReceiptNo, decimal Amount, string Method, string Status, DateTime? PaidAt,
+    int PaymentId = 0, string? RefundStatus = null, string? RefundDecision = null)
 {
+    public bool CanRequestRefund => Status == Models.Status.Verified && RefundStatus is null;
+    public string RefundText => WalkInRefund.Text(RefundStatus, RefundDecision);
+    public string Who => Customer ?? "No name given";
+    public bool CanPrint => Status == Models.Status.Verified && ReceiptNo is not null;
+    public string PaidText => Status == Models.Status.Verified ? $"Paid ₱{Amount:N2}" : $"₱{Amount:N2}, payment voided";
+    public string MethodText => PayMethod.Name(Method);
+}
+
+/// <summary>0096: how a walk-in's refund request stands, in the desk's words.</summary>
+public static class WalkInRefund
+{
+    public static string Text(string? status, string? decision) => status switch
+    {
+        "pending" => "Refund requested. Waiting for the System admin.",
+        "approved" => "Refund approved. The System admin pays it back.",
+        "paid" => "Refund repaid.",
+        "rejected" => $"Refund rejected: {decision}",
+        _ => ""
+    };
+}
+
+/// <summary>A Day pass receipt as a one-page A4 PDF the desk prints (Check-in page).</summary>
+public static class DayPassReceiptPdf
+{
+    public static byte[] Build(CheckInRow row, DayPassDetails pass, DateTime printedUtc, byte[] font) =>
+        RevenuePdf.Document("Day pass receipt", $"Receipt {pass.ReceiptNo}", font,
+            [($"Receipt {pass.ReceiptNo}", RevenuePdf.Kind.Strong), ("", RevenuePdf.Kind.Gap),
+             ($"Customer: {pass.Who}", RevenuePdf.Kind.Text), ($"Checked in: {RevenuePdf.Manila(row.At)} (Asia/Manila)", RevenuePdf.Kind.Text),
+             ("", RevenuePdf.Kind.Gap), ($"Printed {RevenuePdf.Manila(printedUtc)} (Asia/Manila)", RevenuePdf.Kind.Body)],
+            [("Item", 120, false), ("Paid on", 140, false), ("Method", 100, false), ("Amount", 100, true)],
+            [["Day pass", pass.PaidAt is { } at ? RevenuePdf.Manila(at) : "", pass.MethodText, $"₱{pass.Amount:N2}"]],
+            ["Total paid", "", "", $"₱{pass.Amount:N2}"], "", []);
+}
+
+public sealed record CheckInRow(string Name, DateTime At, string? Method = null, string? By = null, string? Reason = null, string? IdType = null, DayPassDetails? DayPass = null)
+{
+    public bool HasDayPass => DayPass is not null;
     public string TimeText => At.AddHours(8).ToString("h:mm tt", CultureInfo.InvariantCulture);   // Manila has no daylight saving
     /// <summary>How it came in (0044); blank for check-ins recorded before that. A reason means an Admin skipped the PIN (F8).</summary>
     public string HowText => (Method, IdType) switch
@@ -1461,8 +1533,8 @@ public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = 
         var profiles = await gw.ListAsync<Profile>();
         var now = clock.GetUtcNow().UtcDateTime;
         var memberships = await gw.ListAsync<UserMembershipPackage>();
-        var active = memberships.Where(m => m.Status == "active" && m.EndsAt > now).GroupBy(m => m.MemberId).ToDictionary(g => g.Key, g => g.Max(m => m.EndsAt));
-        var ended = memberships.Where(m => m.EndsAt <= now).GroupBy(m => m.MemberId).ToDictionary(g => g.Key, g => g.Max(m => m.EndsAt));
+        var active = memberships.Where(m => m.Status == "active" && ManilaTime.Utc(m.EndsAt) > now).GroupBy(m => m.MemberId).ToDictionary(g => g.Key, g => g.Max(m => ManilaTime.Utc(m.EndsAt)));
+        var ended = memberships.Where(m => ManilaTime.Utc(m.EndsAt) <= now).GroupBy(m => m.MemberId).ToDictionary(g => g.Key, g => g.Max(m => ManilaTime.Utc(m.EndsAt)));
         var waiting = (await gw.ListAsync<Payment>(p => p.Status == Status.Pending)).Where(p => p.Kind is PayKind.Membership or PayKind.Renewal).Select(p => p.MemberId).ToHashSet();
         // G10: the same order scan_member uses: deactivated, active, waiting for a payment, otherwise expired (or never had one)
         string StatusOf(Profile p) => !p.IsActive ? "inactive" : active.ContainsKey(p.Id) ? "active" : waiting.Contains(p.Id) ? "pending" : "expired";
@@ -1492,9 +1564,15 @@ public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = 
         var to = from.AddDays(1);
         var rows = await gw.ListAsync<GymCheckIn>(c => c.CheckedInAt >= from && c.CheckedInAt < to);
         var names = await Directory_.UserNamesAsync(gw);
+        var passIds = rows.Where(c => c.MemberId is null).Select(c => c.PaymentId).OfType<int>().ToList();
+        var passes = passIds.Count == 0 ? [] : (await gw.ListAsync<Payment>(p => passIds.Contains(p.Id))).ToDictionary(p => p.Id);
+        var asked = passes.Count == 0 ? [] : (await gw.ListAsync<RefundRequest>(r => r.Kind == "day_pass")).ToDictionary(r => r.PaymentId);
+        DayPassDetails? PassOf(GymCheckIn c) => c.MemberId is null && c.PaymentId is { } id && passes.GetValueOrDefault(id) is { } p
+            ? new(p.WalkInName is null or "Day pass" ? null : p.WalkInName, p.ReceiptNo, p.Amount, p.Method, p.Status, p.VerifiedAt?.ToUniversalTime(),
+                  p.Id, asked.GetValueOrDefault(id)?.Status, asked.GetValueOrDefault(id)?.DecisionReason) : null;
         return rows.OrderBy(c => c.CheckedInAt)
-            .Select(c => new CheckInRow(c.MemberId is { } m ? names.GetValueOrDefault(m, "Member") : "Day pass", c.CheckedInAt, c.Method,
-                c.RecordedBy is { } by ? names.GetValueOrDefault(by) : null, c.Reason, c.IdType)).ToList();
+            .Select(c => new CheckInRow(c.MemberId is { } m ? names.GetValueOrDefault(m, "Member") : "Day pass", c.CheckedInAt.ToUniversalTime(), c.Method,   // the server's time may arrive as local
+                c.RecordedBy is { } by ? names.GetValueOrDefault(by) : null, c.Reason, c.IdType, PassOf(c))).ToList();
     });
 }
 
@@ -1743,7 +1821,7 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
             return DiscountFits.Text(All("package"), Ids("package"), All("amenity"), Ids("amenity"), packages, amenities);
         }
         return (await gw.ListAsync<Discount>()).OrderByDescending(d => d.ExpiresAt)
-            .Select(d => new DiscountRow(d, !d.IsActive ? "inactive" : d.ExpiresAt <= now ? "expired" : "active",
+            .Select(d => new DiscountRow(d, !d.IsActive ? "inactive" : ManilaTime.Utc(d.ExpiresAt) <= now ? "expired" : "active",
                 uses.GetValueOrDefault(d.Id)?.Used ?? 0, uses.GetValueOrDefault(d.Id)?.Pending ?? 0, Fits(d.Id))).ToList();
     });
 
@@ -1861,12 +1939,16 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         }
     });
 
-    async Task<List<AuditRecord>> AuditRowsAsync(AuditFilter f, int offset, int limit) =>
-        await gw.RpcAsync<List<AuditRecord>>("audit_records", new()
+    async Task<List<AuditRecord>> AuditRowsAsync(AuditFilter f, int offset, int limit)
+    {
+        Dictionary<string, object> args = new()
         {
             ["p_from"] = f.From?.ToString("yyyy-MM-dd")!, ["p_to"] = f.To?.ToString("yyyy-MM-dd")!, ["p_user"] = f.User?.Trim() ?? "",
             ["p_area"] = f.Area ?? "", ["p_entity"] = f.Entity ?? "", ["p_offset"] = offset, ["p_limit"] = limit
-        }) ?? [];
+        };
+        if (f.Money is { } money) args["p_money"] = money;   // 0086
+        return await gw.RpcAsync<List<AuditRecord>>("audit_records", args) ?? [];
+    }
 
     public Task<AppResult<GymSettings>> GymSettingsAsync() => Safe.RunAsync(async () => (await gw.ListAsync<GymSettings>()).First());
 

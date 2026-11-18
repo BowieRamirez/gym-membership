@@ -208,13 +208,11 @@
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Spacing="6" IsVisible="{Binding Time, Converter={StaticResource IsNotNull}}">
                                     <Label Text="How long" Style="{StaticResource Caption}" />
-                                    <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Lengths}">
-                                        <BindableLayout.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:PickChip">
-                                                <Button Text="{Binding Text}" Style="{StaticResource PickChip}" Clicked="OnLength" />
-                                            </DataTemplate>
-                                        </BindableLayout.ItemTemplate>
-                                    </FlexLayout>
+                                    <!-- owner, 2026-11-17 (0090): whole hours up to closing time, as a dropdown; the price is per hour -->
+                                    <Border Style="{StaticResource Field}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" WidthRequest="{OnIdiom Phone=-1, Default=200}">
+                                        <Picker ItemsSource="{Binding Lengths}" ItemDisplayBinding="{Binding Text, x:DataType=vm:PickChip}" SelectedItem="{Binding Length}"
+                                                SemanticProperties.Description="How long" AutomationId="BookLength" />
+                                    </Border>
                                 </VerticalStackLayout>
                                 <!-- G14 (approved mockup docs/mockups/amenity-down-payment.html): Solo, or With a coach who is free the whole time -->
                                 <VerticalStackLayout Spacing="6" IsVisible="{Binding Time, Converter={StaticResource IsNotNull}}">
@@ -274,7 +272,7 @@
                                     </VerticalStackLayout>
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Spacing="6" IsVisible="{Binding PayFirst}">
-                                    <Label Text="Pay the down payment with" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding PayWithText}" Style="{StaticResource Caption}" />
                                     <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                                         <Border Style="{StaticResource PayOption}">
                                             <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding PayQr}" Value="True"><Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /><Setter Property="StrokeThickness" Value="2" /></DataTrigger></Border.Triggers>
@@ -282,7 +280,7 @@
                                                 <VerticalStackLayout Spacing="2"><Label Text="Online now" FontFamily="BarlowSemiBold" /><Label Text="GCash or QR Ph" Style="{StaticResource Caption}" /></VerticalStackLayout>
                                                 <!-- a clear button over the option, so it works by keyboard and screen reader too -->
                                                 <Button Margin="-12,-10" BackgroundColor="Transparent" BorderWidth="0" Text="" Command="{Binding PickMethodCommand}" CommandParameter="qr"
-                                                        SemanticProperties.Description="Pay the down payment online now, through Xendit" />
+                                                        SemanticProperties.Description="Pay online now, through Xendit" />
                                             </Grid>
                                         </Border>
                                         <Border Grid.Column="1" Style="{StaticResource PayOption}">
@@ -291,7 +289,7 @@
                                                 <VerticalStackLayout Spacing="2"><Label Text="At the desk" FontFamily="BarlowSemiBold" /><Label Text="Cash" Style="{StaticResource Caption}" /></VerticalStackLayout>
                                                 <!-- a clear button over the option, so it works by keyboard and screen reader too -->
                                                 <Button Margin="-12,-10" BackgroundColor="Transparent" BorderWidth="0" Text="" Command="{Binding PickMethodCommand}" CommandParameter="cash"
-                                                        SemanticProperties.Description="Pay the down payment at the desk in cash" />
+                                                        SemanticProperties.Description="Pay at the desk in cash" />
                                             </Grid>
                                         </Border>
                                     </Grid>

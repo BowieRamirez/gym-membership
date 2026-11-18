@@ -317,7 +317,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             Member m => m.UserId == uid || staff || All<CoachHire>().Any(h => h.CoachId == uid && h.MemberId == m.UserId),
             Payment p => p.MemberId == uid || staff,
             MembershipTerm t => t.MemberId == uid || staff,
-            RefundRequest r => r.MemberId == uid || RolesOf(uid).Contains("admin") || (r.Kind == "no_show" && Has("payments:verify")),   // 0052: the desk reads the claims it decides
+            RefundRequest r => r.MemberId == uid || RolesOf(uid).Contains("admin") || (r.Kind == "no_show" && Has("payments:verify")) || (r.IsWalkInRequest && Has("payments:record")),   // 0052: the desk reads the claims it decides; 0096: and follows the refunds it asked for
             UserMembershipPackage m => m.MemberId == uid || staff,
             MembershipRenewal r => staff || All<UserMembershipPackage>().Any(m => m.Id == r.UserMembershipPackageId && m.MemberId == uid),
             UserAmenity a => a.MemberId == uid || staff,
@@ -689,6 +689,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             ua.Status = Status.Active; ua.ExpiresAt = days is null ? null : now.AddDays(days.Value);
             SettleHold(ua);
         }
+        else if (pay.Kind == PayKind.Amenity && pay.MemberId is null) SettleWalkIn(pay);   // 0092
     }
 
     // rejected or unpaid: the pending thing the payment was for is cancelled
@@ -697,6 +698,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         foreach (var m in All<UserMembershipPackage>().Where(m => m.Id == pay.UserMembershipPackageId && m.Status == Status.Pending)) m.Status = Status.Cancelled;
         foreach (var r in All<MembershipRenewal>().Where(r => r.Id == pay.RenewalId && r.Status == Status.Pending)) r.Status = Status.Cancelled;
         foreach (var a in All<UserAmenity>().Where(a => a.Id == pay.UserAmenityId && a.Status == Status.Pending)) { a.Status = Status.Cancelled; SettleHold(a); }
+        SettleWalkIn(pay);   // 0092
     }
 
     bool Overlap(string who, bool coach, DateTime start, DateTime end, int ignore = 0) =>
@@ -836,7 +838,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (pay.MemberId == uid) throw Err("self_verify");
                 if (B("p_approve"))
                 {
-                    if ((pay.Method == PayMethod.Qr || HoldOf(pay) is not null) && pay.ExpiresAt <= now) throw Err("payment_expired");   // 0052: a cash hold runs out too
+                    if (pay.Method is PayMethod.Qr or PayMethod.Cash && pay.ExpiresAt <= now) throw Err("payment_expired");   // 0052, 0085: cash (holds and packages) runs out too
                     if (pay.Method == PayMethod.Cash) pay.CashShiftId = OpenShiftOf(uid);   // 0050
                     pay.Status = Status.Verified; pay.VerifiedBy = uid; pay.VerifiedAt = now; pay.ReceiptNo = ReceiptNo();
                     ActivateTarget(pay);

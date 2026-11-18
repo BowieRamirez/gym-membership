@@ -21,7 +21,7 @@ public static class AuditLabels
         ["payment.void"] = "Payment voided", ["payment.cancel"] = "Payment cancelled",
         ["check_in.id"] = "Checked in by ID",
         ["refund.request"] = "Refund requested", ["refund.decide"] = "Refund decided", ["refund.paid"] = "Refund repaid",
-        ["reservation.book"] = "Booking made", ["reservation.hold"] = "Booking held for payment", ["reservation.request"] = "Booking requested", ["reservation.balance"] = "Booking balance taken", ["reservation.request"] = "Booking requested", ["reservation.balance"] = "Booking balance taken", ["reservation.cancel"] = "Booking cancelled", ["reservation.end"] = "Booking ended",
+        ["reservation.book"] = "Booking made", ["reservation.desk_walk_in"] = "Walk-in booked at the desk", ["reservation.desk_walk_in_online"] = "Walk-in booked at the desk, paying online", ["reservation.hold"] = "Booking held for payment", ["reservation.request"] = "Booking requested", ["reservation.balance"] = "Booking balance taken", ["reservation.request"] = "Booking requested", ["reservation.balance"] = "Booking balance taken", ["reservation.cancel"] = "Booking cancelled", ["reservation.end"] = "Booking ended",
         ["reservation.extend"] = "Booking extended",
         ["amenity.status"] = "Amenity status changed", ["amenity.runs"] = "Coach runs amenity changed",
         ["discount.create"] = "Code added", ["discount.turn_off"] = "Code turned off", ["discount.turn_on"] = "Code turned on", ["discount.delete"] = "Code deleted",
@@ -60,6 +60,21 @@ public static class AuditLabels
     /// <summary>Cashier plan Y5: Xendit's channel codes in words; an unknown one is shown as Xendit sent it.</summary>
     public static string Channel(string code) => (code.StartsWith("PH_") ? code[3..] : code) switch   // the dashboard says PH_GCASH, the API GCASH
         { "GCASH" => "GCash", "PAYMAYA" => "Maya", "QRPH" => "QR Ph", "CARDS" => "Card", "" => "unknown", _ => code };
+}
+
+/// <summary>Plan 2026-11-17 Z6: the Transactions export, the same cells the Transactions table shows.</summary>
+public static class TransactionsCsv
+{
+    public static readonly string[] Header = ["Date and time (Manila)", "Customer", "What", "Amount", "Paid with", "Recorded by", "Object"];
+
+    public static string Build(IEnumerable<AuditRecord> rows)
+    {
+        var csv = new StringBuilder();
+        csv.AppendJoin(',', Header.Select(AuditCsv.Cell)).Append("\r\n");
+        foreach (var r in rows)
+            csv.AppendJoin(',', new[] { r.WhenText, r.Customer, r.ActionText, r.AmountText, r.PaidWithText, r.ActorName, r.ObjectText }.Select(AuditCsv.Cell)).Append("\r\n");
+        return csv.ToString();
+    }
 }
 
 /// <summary>Builds the audit export. Every cell is quoted, and one starting with = + - @ or a tab or return gets a leading ' so a spreadsheet shows it instead of running it.</summary>

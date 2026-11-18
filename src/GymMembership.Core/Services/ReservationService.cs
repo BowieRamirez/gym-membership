@@ -42,7 +42,12 @@ public sealed class FreeCoach : BaseModel
 /// <summary>The booking rules the server applies, so the sheet only offers what will go through (it rechecks everything anyway).</summary>
 public static class BookingSlots
 {
-    public static readonly int[] Minutes = [30, 60, 90, 120];
+    /// <summary>Owner, 2026-11-17: start times are on the hour only (bookings are whole hours since 0090). Manila is UTC+8, so a UTC hour is a Manila hour.</summary>
+    public static IEnumerable<DateTime> HourStarts(AmenityGrid g)
+    {
+        var t = new DateTime(g.Opens.Ticks - g.Opens.Ticks % TimeSpan.TicksPerHour, g.Opens.Kind);
+        for (t = t < g.Opens ? t.AddHours(1) : t; t < g.Closes; t = t.AddHours(1)) yield return t;
+    }
 
     // one 30-minute cell: open, yours, booked, cooldown, blocked (its cooldown would run into the next booking), closed, past or outside gym hours
     public static string StateOf(AmenityGrid g, GridAmenity a, DateTime t)
@@ -59,22 +64,26 @@ public static class BookingSlots
     }
 
     /// <summary>
-    /// The lengths a booking starting at t can have. Every cell it covers must be free, and its last cell open (not "blocked"), so the
-    /// 30-minute cooldown after it never runs into the next booking. Paying first (F12) also needs the start more than 1 hour away.
+    /// The lengths a booking starting at t can have, in whole hours up to closing time (owner, 2026-11-17, 0090). Every 30-minute cell
+    /// it covers must be free, and its last cell open (not "blocked"), so the 30-minute cooldown after it never runs into the next
+    /// booking. Paying first (F12) also needs the start more than 1 hour away.
     /// </summary>
     public static IReadOnlyList<int> Lengths(AmenityGrid g, int amenityId, DateTime t, bool payFirst)
     {
         var a = g.Amenities.FirstOrDefault(x => x.Id == amenityId);
         if (a is null || (payFirst && t.AddHours(-1) <= g.Now)) return [];
         var fits = new List<int>();
-        for (var n = 1; n <= 4; n++)
+        for (var n = 1; ; n++)
         {
             var last = StateOf(g, a, t.AddMinutes(30 * (n - 1)));
-            if (last == "open") fits.Add(30 * n);
+            if (last == "open") { if (n % 2 == 0) fits.Add(30 * n); }
             else if (last != "blocked") break;
         }
         return fits;
     }
+
+    /// <summary>"1 hour", "2 hours": a length as the dropdowns show it.</summary>
+    public static string LengthText(int minutes) => minutes == 60 ? "1 hour" : $"{minutes / 60} hours";
 }
 
 /// <summary>G13, G14, G4 (0064): what a booking costs, as book_amenity works it out.</summary>
@@ -84,13 +93,52 @@ public static class BookingPrice
 {
     /// <summary>Price plus the coach fee (with a coach), less the code's percent; the down payment is the Gym settings percent of that,
     /// rounded to the centavo as the database rounds (half away from zero); the balance is the rest.</summary>
-    public static PriceSplit Split(decimal price, decimal coachFee, bool withCoach, int percent, int codePercent = 0)
+    /// <summary>0090: the price and the coach fee are per hour, times the booking's hours.</summary>
+    public static PriceSplit Split(decimal price, decimal coachFee, bool withCoach, int percent, int codePercent = 0, int hours = 1)
     {
-        var total = price + (withCoach ? coachFee : 0);
+        var total = (price + (withCoach ? coachFee : 0)) * hours;
         var cut = Math.Round(total * codePercent / 100m, 2, MidpointRounding.AwayFromZero);
         var due = total - cut;
         var down = Math.Round(due * percent / 100m, 2, MidpointRounding.AwayFromZero);
         return new(total, cut, due, down, due - down);
+    }
+}
+
+/// <summary>0091: a desk booking and the receipt number the customer keeps (a walk-in photographs it; a member gets it in chat).</summary>
+public sealed record DeskReceipt(Reservation Booking, string ReceiptNo);
+
+/// <summary>Owner, 2026-11-17: a confirmed booking on Amenity status's Booked card: who, what, when, and what was paid on which receipts.</summary>
+public sealed record BookedRow(Reservation Booking, string Customer, string Amenity, string? Coach, IReadOnlyList<Payment> Paid, string? RefundStatus = null, string? RefundDecision = null)
+{
+    public bool IsWalkIn => Booking.WalkInName is not null;
+    // 0096: the desk asks for a walk-in's refund; under 24 hours before the start only if the gym is the one cancelling
+    public bool CanRequestRefund => IsWalkIn && Paid.Count > 0 && RefundStatus is null && Booking.StartsAt.ToUniversalTime() > DateTime.UtcNow;
+    public bool IsUnder24Hours => Booking.StartsAt.ToUniversalTime().AddHours(-24) < DateTime.UtcNow;
+    public string RefundButton => IsUnder24Hours ? "Gym is cancelling" : "Request refund";
+    public string RefundRule => IsUnder24Hours ? "It starts in under 24 hours, so a refund is only for a booking the gym cancels." : "The booking stays until the System admin approves the refund.";
+    public string RefundText => WalkInRefund.Text(RefundStatus, RefundDecision);
+    public string Who => IsWalkIn ? $"{Customer} (walk-in)" : Customer;
+    public string When => $"{Booking.StartsAt.ToUniversalTime().AddHours(8):ddd d MMM, h:mm tt} – {Booking.EndsAt.ToUniversalTime().AddHours(8):h:mm tt}";
+    public decimal PaidAmount => Paid.Sum(p => p.Amount);
+    public string PaidText => Paid.Count == 0 ? "Booked with a pass" : $"Paid ₱{PaidAmount:N2} of ₱{Booking.TotalPrice:N2}";
+    public string ReceiptText => Paid.Count == 0 ? "No receipt (pass)" : string.Join(", ", Paid.Select(p => p.ReceiptNo));
+    public string MethodText => string.Join(", ", Paid.Select(p => PayMethod.Name(p.Method)).Distinct());
+}
+
+/// <summary>A booking's receipt as a one-page A4 PDF the desk prints (Amenity status, Booked card).</summary>
+public static class BookingReceiptPdf
+{
+    public static byte[] Build(BookedRow row, DateTime printedUtc, byte[] font)
+    {
+        var intro = new List<(string, RevenuePdf.Kind)> { ($"Receipt {row.ReceiptText}", RevenuePdf.Kind.Strong), ("", RevenuePdf.Kind.Gap),
+            ($"Customer: {row.Who}", RevenuePdf.Kind.Text), ($"Amenity: {row.Amenity}", RevenuePdf.Kind.Text), ($"When: {row.When} (Asia/Manila)", RevenuePdf.Kind.Text) };
+        if (row.Coach is { } c) intro.Add(($"Coach: {c}", RevenuePdf.Kind.Text));
+        intro.AddRange([($"Booking no. {row.Booking.Id}", RevenuePdf.Kind.Text), ("", RevenuePdf.Kind.Gap), ($"Printed {RevenuePdf.Manila(printedUtc)} (Asia/Manila)", RevenuePdf.Kind.Body)]);
+        return RevenuePdf.Document("Booking receipt", $"Receipt {row.ReceiptText}", font, intro,
+        [("Receipt", 120, false), ("Paid on", 140, false), ("Method", 100, false), ("Amount", 100, true)],
+        row.Paid.Select(p => new[] { p.ReceiptNo ?? "", p.VerifiedAt is { } v ? RevenuePdf.Manila(v.ToUniversalTime()) : "", PayMethod.Name(p.Method), $"₱{p.Amount:N2}" }).ToList(),
+        row.Paid.Count == 0 ? null : ["Total paid", "", "", $"₱{row.PaidAmount:N2}"], "Booked with a pass: nothing paid.",
+        ["Show this receipt at the front desk. Keep it until the booking has ended."]);
     }
 }
 
@@ -143,8 +191,13 @@ public sealed record BookingRow(Reservation Booking, string Amenity, DateTime No
         { Status: "approved", Kind: "cancel" } when LostToOther => $"{Booking.CancelReason} · refund approved",
         { Status: "approved", Kind: "cancel" } => "Cancelled · refund approved",
         { Status: "approved" } => "Refund approved",
-        _ => IsWaiting ? "Waiting for down payment" : InUse ? "In use" : Ended ? "Ended" : "Confirmed"
+        _ => IsWaiting ? $"Waiting for {PayWord}" : InUse ? "In use" : Ended ? "Ended" : "Confirmed"
     };
+    /// <summary>Owner, 2026-11-18: a booking paid in full when made (Gym settings at 100%) has no "down payment".</summary>
+    string PayWord => Booking.Balance > 0 ? "down payment" : "payment";
+    /// <summary>"₱100.00 down payment", or just "₱100.00" when that was the whole price.</summary>
+    public string PaidWords => Booking.Balance > 0 ? $"{Price} down payment" : Price;
+    string PayWordCap => Booking.Balance > 0 ? "Down payment" : "Payment";
     public string Detail => Refund switch
     {
         { Status: "pending" } => "The front desk is checking it. You'll get a notification.",
@@ -154,13 +207,15 @@ public sealed record BookingRow(Reservation Booking, string Amenity, DateTime No
         { Status: "approved", Kind: "cancel" } when LostToOther => $"Another booking's down payment was verified first. {Price} to be repaid at the front desk.",
         { Status: "approved" } => $"{Price} to be repaid at the front desk.",
         _ when IsWaiting && Payment is { } p => (p.Method == PayMethod.Cash
-            ? $"Down payment {Price} at the front desk by {At(p.ExpiresAt ?? Start)}."
-            : p.ProofPath is null ? $"Down payment {Price} online. Pay by {At(p.ExpiresAt ?? Start)}."
-            : $"Down payment {Price} by GCash. Proof sent; the front desk is checking it.") + " Not yours until it's paid.",
+            ? $"{PayWordCap} {Price} at the front desk by {At(p.ExpiresAt ?? Start)}."
+            : p.ProofPath is null ? $"{PayWordCap} {Price} online. Pay by {At(p.ExpiresAt ?? Start)}."
+            : $"{PayWordCap} {Price} by GCash. Proof sent; the front desk is checking it.") + " Not yours until it's paid.",
         _ when InUse => $"Ends at {Manila(End).ToString("h:mm tt", En)}.",
         _ when CanClaim => $"Didn't go? Tell the front desk by {At(End.AddHours(24))} and they'll check for a refund.",
         _ when Ended => "",
         _ when Paid && Booking.BalancePaymentId is not null => "Paid in full.",
+        _ when Paid && Booking.Balance == 0 => "Paid in full. "
+            + (Refundable ? $"Cancel by {At(Start.AddHours(-24))} to get the {Down} back." : $"Cancelling now keeps the {Down}."),
         _ when Paid => $"Down payment {Down} paid. Balance ₱{Booking.Balance:N2} at the desk. "
             + (Refundable ? $"Cancel by {At(Start.AddHours(-24))} to get the {Down} down payment back." : $"Cancelling now keeps the {Down} down payment."),
         _ when Booking.Balance > 0 && Booking.BalancePaymentId is null => $"Booked with your pass. Coach fee ₱{Booking.Balance:N2} at the desk.",
@@ -176,6 +231,17 @@ public interface IReservationService
     Task<AppResult<Reservation>> BookAsync(int amenityId, DateTime startUtc, int minutes, string method, string? coachId = null, string? code = null);
     /// <summary>G14: coaches who run the amenity and are free for the whole time.</summary>
     Task<AppResult<IReadOnlyList<FreeCoach>>> FreeCoachesAsync(int amenityId, DateTime startUtc, int minutes);
+    /// <summary>Plan 2026-11-17 Z1, Z2 (0087): the desk books for a member, or (0091) a walk-in by name when memberId is null; the full price
+    /// is taken in cash at once into the open drawer. Comes back with the receipt number the customer keeps.</summary>
+    Task<AppResult<DeskReceipt>> DeskBookAsync(string? memberId, string? walkInName, int amenityId, DateTime startUtc, int minutes);
+    /// <summary>0092: a walk-in's booking paid online through Xendit: a pending online payment and a booking awaiting it.</summary>
+    Task<AppResult<Reservation>> DeskWalkInOnlineAsync(string walkInName, int amenityId, DateTime startUtc, int minutes);
+    /// <summary>A desk booking as it is now (confirmed, or cancelled if the slot went first) with its receipt number.</summary>
+    Task<AppResult<DeskReceipt>> DeskReceiptAsync(int reservationId);
+    /// <summary>The newest walk-in booking this desk user started that is still waiting for Xendit, so reopening the page keeps watching it.</summary>
+    Task<AppResult<Reservation?>> MyWaitingWalkInAsync();
+    /// <summary>Owner, 2026-11-17: confirmed bookings not yet ended, today's first, for the desk's Booked card.</summary>
+    Task<AppResult<IReadOnlyList<BookedRow>>> BookedAsync();
     /// <summary>G13: the Gym settings percent paid to reserve.</summary>
     Task<AppResult<int>> DownPaymentPercentAsync();
     /// <summary>G16: closed days from today on, with their reasons.</summary>
@@ -204,6 +270,51 @@ public sealed class ReservationService(ISupabaseGateway gw) : IReservationServic
     });
 
     static string Utc(DateTime t) => t.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
+
+    public Task<AppResult<DeskReceipt>> DeskBookAsync(string? memberId, string? walkInName, int amenityId, DateTime startUtc, int minutes) => Safe.RunAsync(async () =>
+    {
+        Dictionary<string, object> args = new() { ["p_amenity"] = amenityId, ["p_start"] = Utc(startUtc), ["p_minutes"] = minutes };
+        if (memberId is null) args["p_name"] = walkInName?.Trim() ?? ""; else args["p_member"] = memberId;
+        return await ReceiptOf(await gw.RpcAsync<Reservation>(memberId is null ? "desk_book_walk_in" : "desk_book_amenity", args));
+    });
+
+    async Task<DeskReceipt> ReceiptOf(Reservation r)
+    {
+        var id = r.PaymentId ?? 0;
+        return new DeskReceipt(r, (await gw.ListAsync<Payment>(p => p.Id == id)).FirstOrDefault()?.ReceiptNo ?? "");
+    }
+
+    public Task<AppResult<Reservation>> DeskWalkInOnlineAsync(string walkInName, int amenityId, DateTime startUtc, int minutes) => Safe.RunAsync(() =>
+        gw.RpcAsync<Reservation>("desk_book_walk_in", new() { ["p_name"] = walkInName.Trim(), ["p_amenity"] = amenityId, ["p_start"] = Utc(startUtc), ["p_minutes"] = minutes, ["p_online"] = true }));
+
+    public Task<AppResult<DeskReceipt>> DeskReceiptAsync(int reservationId) => Safe.RunAsync(async () =>
+        await ReceiptOf((await gw.ListAsync<Reservation>(r => r.Id == reservationId)).Single()));
+
+    public Task<AppResult<Reservation?>> MyWaitingWalkInAsync() => Safe.RunAsync<Reservation?>(async () =>
+    {
+        var me = gw.CurrentUserId;
+        var now = DateTime.UtcNow;
+        var open = (await gw.ListAsync<Payment>(p => p.Status == "pending" && p.Method == PayMethod.Qr && p.RecordedBy == me))
+            .Where(p => p.ExpiresAt?.ToUniversalTime() > now).Select(p => p.Id).ToHashSet();
+        if (open.Count == 0) return null;
+        return (await gw.ListAsync<Reservation>(r => r.Status == "awaiting_payment"))
+            .Where(r => r.WalkInName is not null && r.PaymentId is { } p && open.Contains(p)).OrderByDescending(r => r.Id).FirstOrDefault();
+    });
+
+    public Task<AppResult<IReadOnlyList<BookedRow>>> BookedAsync() => Safe.RunAsync<IReadOnlyList<BookedRow>>(async () =>
+    {
+        var now = DateTime.UtcNow;
+        var rows = (await gw.ListAsync<Reservation>(r => r.Status == "confirmed" && r.EndsAt > now)).OrderBy(r => r.StartsAt).ToList();
+        if (rows.Count == 0) return [];
+        var ids = rows.SelectMany(r => new[] { r.PaymentId, r.BalancePaymentId }).OfType<int>().ToList();
+        var pays = (await gw.ListAsync<Payment>(p => ids.Contains(p.Id))).Where(p => p.Status == Status.Verified).ToDictionary(p => p.Id);
+        var names = await Directory_.UserNamesAsync(gw);
+        var amenities = (await gw.ListAsync<Amenity>()).ToDictionary(a => a.Id, a => a.Name);
+        var asked = await gw.ListAsync<RefundRequest>(f => f.Kind == "walk_in_booking");
+        return rows.Select(r => (r, f: asked.FirstOrDefault(x => x.ReservationId == r.Id))).Select(x => new BookedRow(x.r, x.r.WalkInName ?? names.GetValueOrDefault(x.r.MemberId ?? "", "Member"), amenities.GetValueOrDefault(x.r.AmenityId, "Amenity"),
+            x.r.CoachId is { } c ? names.GetValueOrDefault(c) : null,
+            new[] { x.r.PaymentId, x.r.BalancePaymentId }.OfType<int>().Select(pays.GetValueOrDefault).OfType<Payment>().ToList(), x.f?.Status, x.f?.DecisionReason)).ToList();
+    });
 
     public Task<AppResult<Reservation>> BookAsync(int amenityId, DateTime startUtc, int minutes, string method, string? coachId = null, string? code = null) => Safe.RunAsync(() =>
     {

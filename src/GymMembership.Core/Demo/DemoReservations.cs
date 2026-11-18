@@ -15,6 +15,42 @@ public sealed partial class DemoGateway
     Reservation? HoldOf(Payment pay) => All<Reservation>().FirstOrDefault(r => r.PaymentId == pay.Id && r.Status == AwaitingPayment);
 
     // settle_amenity_hold (0052): a hold follows its payment, whichever way it goes
+    /// <summary>0092: a walk-in's online booking once its payment is verified (confirmed, or cancelled into a refund if the slot went first) or cancelled.</summary>
+    void SettleWalkIn(Payment pay)
+    {
+        var r = All<Reservation>().FirstOrDefault(x => x.PaymentId == pay.Id && x.WalkInName is not null && x.Status == AwaitingPayment);
+        if (r is null) return;
+        if (pay.Status != Status.Verified) { r.Status = "cancelled"; r.CancelledAt = SubscriptionNow; r.CancelReason = "Not paid"; return; }
+        if (Confirmed.Any(o => o.AmenityId == r.AmenityId && o.StartsAt < r.EndsAt + Cooldown && r.StartsAt < o.EndsAt + Cooldown))
+        {
+            r.Status = "cancelled"; r.CancelledAt = SubscriptionNow; r.CancelReason = "Slot taken";
+            Add(new RefundRequest { Kind = "cancel", ReservationId = r.Id, PaymentId = pay.Id, MemberId = null!, Amount = pay.Amount, Reason = "Slot taken", RequestedAt = SubscriptionNow,
+                Status = "approved", DecidedBy = pay.RecordedBy, DecidedAt = SubscriptionNow, DecisionReason = $"Slot taken: another booking was paid first. Refund the walk-in {r.WalkInName}." });
+            NotifyStaff("payment", "Booking refund to repay");
+            return;
+        }
+        r.Status = "confirmed";
+    }
+
+    /// <summary>0094: a confirmed paid member booking's receipt in their Front desk chat, from whoever confirmed it, or the oldest admin.</summary>
+    void SendBookingReceipt(Reservation r)
+    {
+        var pay = All<Payment>().FirstOrDefault(p => p.Id == r.PaymentId);
+        if (r.WalkInName is not null || pay?.ReceiptNo is null) return;
+        var from = Uid is { } u && u != r.MemberId ? u
+            : All<UserRole>().Where(x => RolesOf(x.UserId).Contains("admin")).Select(x => x.UserId).FirstOrDefault(id => All<Profile>().Any(p => p.Id == id && p.IsActive));
+        if (from is null) return;
+        var now = SubscriptionNow;
+        var how = pay.Method switch { PayMethod.Cash => "in cash", PayMethod.Gcash => "by GCash", _ => "online" };
+        var name = All<Amenity>().FirstOrDefault(a => a.Id == r.AmenityId)?.Name ?? "Amenity";
+        var body = $"Receipt (automatic). Your booking is confirmed: {r.StartsAt + Manila:ddd d MMM, h:mm tt} to {r.EndsAt + Manila:h:mm tt}, at {name}. Paid PHP {pay.Amount:N2} {how}. Receipt {pay.ReceiptNo}"
+            + (r.TotalPrice > pay.Amount ? $". Balance PHP {r.TotalPrice - pay.Amount:N2} at the front desk" : "") + ". Show this message at the front desk.";
+        var thread = All<SupportThread>().FirstOrDefault(t => t.MemberId == r.MemberId && t.Queue == ChatQueue.FrontDesk) ?? Add(new SupportThread { MemberId = r.MemberId, Queue = ChatQueue.FrontDesk });
+        Add(new SupportMessage { MemberId = r.MemberId, Queue = ChatQueue.FrontDesk, SenderId = from, Body = body, SentAt = now });
+        thread.LastMessageAt = now;
+        NotifyChat(r.MemberId, "Message from the front desk", body[..80], $"s|{r.MemberId}|{ChatQueue.FrontDesk}");
+    }
+
     void SettleHold(UserAmenity ua)
     {
         var r = All<Reservation>().FirstOrDefault(x => x.UserAmenityId == ua.Id && x.Status == AwaitingPayment);
@@ -38,6 +74,7 @@ public sealed partial class DemoGateway
             }
             r.Status = "confirmed";
             if (ua.IsSession) ua.Status = Status.Expired;   // the session is this booking
+            SendBookingReceipt(r);   // 0094
             Notify(r.MemberId, "amenity", "Booking confirmed", (r.StartsAt + Manila).ToString("ddd dd MMM, hh:mm tt"));
         }
         else if (ua.Status == Status.Cancelled) { r.Status = "cancelled"; r.CancelledAt = SubscriptionNow; r.CancelReason = "Not paid"; }
@@ -168,49 +205,88 @@ public sealed partial class DemoGateway
                 return true;
             }
             case "book_amenity":   // F12 (0052)
+            case "desk_book_amenity":   // plan 2026-11-17 Z1, Z2 (0087): the desk books for a customer, full price in cash at once
             {
                 RequireActive();
-                if (!ActiveMember(Uid)) throw Err("no_active_membership");
+                var desk = fn == "desk_book_amenity";
+                var who = desk ? a.GetValueOrDefault("p_member") as string ?? throw Err("bad_input") : Uid!;
+                if (desk) { Require("payments:record"); if (who == Uid || All<Member>().All(x => x.UserId != who)) throw Err(who == Uid ? "bad_input" : "not_found"); }
+                else if (!ActiveMember(Uid)) throw Err("no_active_membership");
                 var amenityId = I("p_amenity"); var minutes = I("p_minutes");
-                var method = a.TryGetValue("p_method", out var m) ? m as string ?? PayMethod.Qr : PayMethod.Qr;
-                if (minutes is not (30 or 60 or 90 or 120) || method is not (PayMethod.Qr or PayMethod.Cash)) throw Err("bad_input");
+                var method = desk ? PayMethod.Cash : a.TryGetValue("p_method", out var m) ? m as string ?? PayMethod.Qr : PayMethod.Qr;
+                if (minutes < 60 || minutes % 60 != 0 || method is not (PayMethod.Qr or PayMethod.Cash)) throw Err("bad_input");   // 0090: whole hours
                 var start = DateTime.Parse((string)a["p_start"], null, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal);
                 var end = start.AddMinutes(minutes);
                 var coach = a.GetValueOrDefault("p_coach") as string;
+                if ((start - DateTime.UnixEpoch).Ticks % TimeSpan.TicksPerHour != 0) throw Err("not_on_the_hour");   // 0093: pass bookings too
                 ExpireHolds();
                 var amenity = AmenityForSale(amenityId);
                 if (coach is not null && !CoachIsFree(coach, amenityId, start, end)) throw Err("coach_not_free");   // G14 (0064)
-                if (All<UserAmenity>().Where(p => p.MemberId == Uid && p.AmenityId == amenityId && p.Status == Status.Active && (p.ExpiresAt is null || p.ExpiresAt >= end))
+                if (!desk && All<UserAmenity>().Where(p => p.MemberId == Uid && p.AmenityId == amenityId && p.Status == Status.Active && (p.ExpiresAt is null || p.ExpiresAt >= end))
                         .OrderBy(p => p.IsSession).ThenBy(p => p.Id).FirstOrDefault() is { } heldPass)
                 {
                     var slots = Enumerable.Range(0, minutes / 30)
                         .Select(i => new Dictionary<string, object> { ["amenity"] = amenityId, ["start"] = start.AddMinutes(30 * i).ToString("yyyy-MM-ddTHH:mm:ssZ") }).ToList();
                     ReservationCall("book_slots", new() { ["p_slots"] = slots }, out var made);
                     var booked = All<Reservation>().First(x => x.Id == ((IEnumerable<Reservation>)made!).First().Id);
-                    if (coach is not null) { booked.CoachId = coach; booked.TotalPrice = amenity.CoachFee; booked.DownPayment = 0; booked.UserAmenityId ??= heldPass.Id; }   // the fee at the desk
+                    if (coach is not null) { booked.CoachId = coach; booked.TotalPrice = amenity.CoachFee * (minutes / 60); booked.DownPayment = 0; booked.UserAmenityId ??= heldPass.Id; }   // the fee at the desk
                     result = Clone(booked);
                     return true;
                 }
-                if ((start - DateTime.UnixEpoch).Ticks % Cooldown.Ticks != 0) throw Err("off_grid");
+                if ((start - DateTime.UnixEpoch).Ticks % TimeSpan.TicksPerHour != 0) throw Err("not_on_the_hour");   // 0093
                 if (start <= now) throw Err("past_slot");
-                if (start.AddHours(-1) <= now) throw Err("too_soon");
+                if (!desk && start.AddHours(-1) <= now) throw Err("too_soon");
                 var day = (start + Manila).Date;
                 if (day > (now + Manila).Date.AddDays(14)) throw Err("too_far_ahead");
                 var g = All<GymSettings>().First();
                 if (start < day - Manila + g.OpensAt || end > day - Manila + g.ClosesAt) throw Err("outside_gym_hours");
                 var am = AmenityForSale(amenityId);
                 if (am.Availability == "unavailable" && (am.BackAt is null || am.BackAt > start)) throw Err("amenity_unavailable");
-                if (All<TrainingSession>().Any(t => t.MemberId == Uid && t.Status == Status.Scheduled && t.ScheduledStart < end && start < t.ScheduledEnd)) throw Err("member_busy");
+                if (All<TrainingSession>().Any(t => t.MemberId == who && t.Status == Status.Scheduled && t.ScheduledStart < end && start < t.ScheduledEnd)) throw Err("member_busy");
                 // G13 (0064): no slot is held; the down payment is the percent of price + coach fee - code (G4)
-                var total = am.Price + (coach is null ? 0 : am.CoachFee);
-                var d = Discounted(Uid!, new() { ["p_discount_code"] = a.GetValueOrDefault("p_code")! }, total, "amenity", amenityId);
-                var down = Math.Round(d.Amount * g.DownPaymentPercent / 100m, 2);
-                var ua = Add(new UserAmenity { MemberId = Uid!, AmenityId = amenityId, Status = Status.Pending, AvailedAt = now, IsSession = SessionOnly(am) });
+                var total = (am.Price + (coach is null ? 0 : am.CoachFee)) * (minutes / 60);   // 0090: per hour
+                var d = Discounted(who, new() { ["p_discount_code"] = a.GetValueOrDefault("p_code")! }, total, "amenity", amenityId);
+                var down = desk ? d.Amount : Math.Round(d.Amount * g.DownPaymentPercent / 100m, 2);
+                if (desk) OpenShiftOf(Uid);   // 0050: no open shift, nothing is booked
+                if (desk && All<Reservation>().Any(x => x.AmenityId == amenityId && x.Status == "confirmed" && x.StartsAt < end && start < x.EndsAt)) throw Err("slot_taken");
+                var ua = Add(new UserAmenity { MemberId = who, AmenityId = amenityId, Status = Status.Pending, AvailedAt = now, IsSession = SessionOnly(am) });
                 var pay = Add(new Payment { PaymentCode = PaymentCode(), Kind = PayKind.Amenity, Method = method, Status = Status.Pending, Amount = down, DiscountId = d.Id, DiscountAmount = d.Cut,
-                    MemberId = Uid, UserAmenityId = ua.Id, CreatedAt = now, ExpiresAt = new[] { now.AddHours(g.PaymentExpiryHours), start.AddHours(-1) }.Min() });
-                var r = Add(new Reservation { MemberId = Uid!, AmenityId = amenityId, CoachId = coach, StartsAt = start, EndsAt = end, UserAmenityId = ua.Id, PaymentId = pay.Id,
+                    MemberId = who, RecordedBy = desk ? Uid : null, UserAmenityId = ua.Id, CreatedAt = now, ExpiresAt = new[] { now.AddHours(g.PaymentExpiryHours), start.AddHours(-1) }.Min() });
+                var r = Add(new Reservation { MemberId = who, AmenityId = amenityId, CoachId = coach, StartsAt = start, EndsAt = end, UserAmenityId = ua.Id, PaymentId = pay.Id,
                     Status = AwaitingPayment, TotalPrice = d.Amount, DownPayment = down });
                 Audit("reservation.request", "reservations", r.Id.ToString());
+                if (desk) Call("verify_payment", new() { ["p_payment_id"] = pay.Id, ["p_approve"] = true });   // confirms it and sends the receipt (0094)
+                result = Clone(r);
+                return true;
+            }
+            case "desk_book_walk_in":   // 0091: the desk books someone with no account, by name; full price in cash, confirmed at once
+            {
+                RequireActive(); Require("payments:record");
+                var name = (a.GetValueOrDefault("p_name") as string)?.Trim();
+                var amenityId = I("p_amenity"); var minutes = I("p_minutes");
+                if (string.IsNullOrEmpty(name) || name.Length > 100 || minutes < 60 || minutes % 60 != 0) throw Err("bad_input");
+                var start = DateTime.Parse((string)a["p_start"], null, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal);
+                var end = start.AddMinutes(minutes);
+                var am = AmenityForSale(amenityId);
+                if ((start - DateTime.UnixEpoch).Ticks % TimeSpan.TicksPerHour != 0) throw Err("not_on_the_hour");   // 0093
+                if (start <= now) throw Err("past_slot");
+                var day = (start + Manila).Date;
+                if (day > (now + Manila).Date.AddDays(14)) throw Err("too_far_ahead");
+                var g = All<GymSettings>().First();
+                if (start < day - Manila + g.OpensAt || end > day - Manila + g.ClosesAt) throw Err("outside_gym_hours");
+                if (am.Availability == "unavailable" && (am.BackAt is null || am.BackAt > start)) throw Err("amenity_unavailable");
+                var online = a.GetValueOrDefault("p_online") is true;   // 0092: paid online through Xendit, confirmed when it is paid
+                int? shift = online ? null : OpenShiftOf(Uid!);   // 0050: no open shift, nothing is booked
+                if (Confirmed.Any(x => x.AmenityId == amenityId && x.StartsAt < end + Cooldown && start < x.EndsAt + Cooldown)) throw Err("slot_taken");
+                var total = am.Price * (minutes / 60);
+                var pay = Add(online
+                    ? new Payment { PaymentCode = PaymentCode(), Kind = PayKind.Amenity, Method = PayMethod.Qr, Status = Status.Pending, Amount = total, WalkInName = name,
+                        RecordedBy = Uid, CreatedAt = now, ExpiresAt = new[] { now.AddMinutes(30), start }.Min() }
+                    : new Payment { PaymentCode = PaymentCode(), Kind = PayKind.Amenity, Method = PayMethod.Cash, Status = Status.Verified, Amount = total, WalkInName = name,
+                        RecordedBy = Uid, VerifiedBy = Uid, VerifiedAt = now, ReceiptNo = ReceiptNo(), CashShiftId = shift, CreatedAt = now });
+                var r = Add(new Reservation { MemberId = null!, WalkInName = name, AmenityId = amenityId, StartsAt = start, EndsAt = end, PaymentId = pay.Id,
+                    Status = online ? AwaitingPayment : "confirmed", TotalPrice = total, DownPayment = total });
+                Audit(online ? "reservation.desk_walk_in_online" : "reservation.desk_walk_in", "reservations", r.Id.ToString());
                 result = Clone(r);
                 return true;
             }
@@ -244,6 +320,45 @@ public sealed partial class DemoGateway
                 if (pay.Status != Status.Verified || f.Amount != pay.Amount) throw Err("not_refundable");
                 f.Status = approve ? "approved" : "rejected"; f.DecidedBy = Uid; f.DecidedAt = now; f.DecisionReason = reason;
                 Notify(f.MemberId, "payment", approve ? "Refund approved" : "Refund claim declined", reason);
+                Audit("refund.decide", "refund_requests", f.Id.ToString());
+                return true;
+            }
+            case "request_walk_in_refund":   // 0096
+            {
+                Require("payments:record");
+                var reason = (a.GetValueOrDefault("p_reason") as string)?.Trim();
+                if (string.IsNullOrEmpty(reason) || reason.Length > 900) throw Err("bad_input");
+                var gym = a.GetValueOrDefault("p_gym_cancels") is true;
+                var pay = All<Payment>().FirstOrDefault(p => p.Id == I("p_payment_id")) ?? throw Err("not_found");
+                if (pay.Status != Status.Verified || pay.Amount <= 0 || pay.MemberId is not null) throw Err("not_refundable");
+                Reservation? booking = null;
+                if (pay.Kind == PayKind.WalkIn) { if ((pay.VerifiedAt!.Value + Manila).Date != (now + Manila).Date) throw Err("refund_day_passed"); }
+                else
+                {
+                    booking = All<Reservation>().FirstOrDefault(r => r.PaymentId == pay.Id && r.WalkInName is not null && r.Status == "confirmed") ?? throw Err("not_refundable");
+                    if (booking.StartsAt <= now) throw Err("already_started");
+                    if (!gym && booking.StartsAt.AddHours(-24) < now) throw Err("refund_too_late");
+                }
+                if (All<RefundRequest>().Any(f => f.PaymentId == pay.Id && f.Kind != "online")) throw Err("already_requested");
+                var asked = Add(new RefundRequest { Kind = booking is null ? "day_pass" : "walk_in_booking", ReservationId = booking?.Id, PaymentId = pay.Id, MemberId = null!, Amount = pay.Amount,
+                    Reason = (gym ? "Gym is cancelling: " : "") + reason, RequestedAt = now });
+                NotifyStaff("payment", "Walk-in refund to review");
+                Audit("refund.request", "refund_requests", asked.Id.ToString());
+                result = Clone(asked);
+                return true;
+            }
+            case "decide_walk_in_refund":   // 0096
+            {
+                Require("payments:void");
+                var reason = (a.GetValueOrDefault("p_reason") as string)?.Trim();
+                if (string.IsNullOrEmpty(reason) || reason.Length > 1000 || a.GetValueOrDefault("p_approve") is null) throw Err("bad_input");
+                var approve = Convert.ToBoolean(a["p_approve"]);
+                var f = All<RefundRequest>().FirstOrDefault(x => x.Id == I("p_request_id") && x.IsWalkInRequest) ?? throw Err("not_found");
+                if (f.Status != "pending") throw Err("already_processed");
+                if (All<Payment>().First(p => p.Id == f.PaymentId).Status != Status.Verified) throw Err("not_refundable");
+                if (approve && All<Reservation>().FirstOrDefault(r => r.Id == f.ReservationId && r.Status == "confirmed") is { } booking)
+                { booking.Status = "cancelled"; booking.CancelledAt = now; booking.CancelledBy = Uid; booking.CancelReason = "Refund approved"; }
+                f.Status = approve ? "approved" : "rejected"; f.DecidedBy = Uid; f.DecidedAt = now; f.DecisionReason = reason;
                 Audit("refund.decide", "refund_requests", f.Id.ToString());
                 return true;
             }

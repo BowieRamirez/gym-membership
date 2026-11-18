@@ -14,6 +14,8 @@ public interface IReportFiles
 {
     Task<byte[]> FontAsync();
     Task ShareAsync(string fileName, byte[] pdf);
+    /// <summary>Opens the PDF in the system's PDF viewer, to print (a booking receipt at the desk). MAUI has no print dialog of its own.</summary>
+    Task OpenAsync(string fileName, byte[] pdf);
 }
 
 /// <summary>The revenue report as an A4 PDF: summary, then every line with the header repeated on each page.</summary>
@@ -21,7 +23,7 @@ public static class RevenuePdf
 {
     static readonly CultureInfo En = CultureInfo.InvariantCulture;
     public static string Money(decimal v) => (v < 0 ? "-₱" : "₱") + Math.Abs(v).ToString("N2", En);
-    public static string Manila(DateTime utc) => utc.AddHours(8).ToString("d MMM yyyy, HH:mm", En);   // Manila has no daylight saving
+    public static string Manila(DateTime utc) => ManilaTime.Of(utc).ToString("d MMM yyyy, HH:mm", En);
     public static string Range(DateOnly from, DateOnly to) => $"{from.ToString("d MMM yyyy", En)} to {to.ToString("d MMM yyyy", En)} (Asia/Manila)";
 
     // PDFsharp needs font bytes on Android (no system fonts), and the resolver is process-wide, so it is set once
@@ -133,7 +135,7 @@ public static class CashShiftPdf
         [("Cashier", 80, false), ("Shift", 105, false), ("Float", 52, true), ("Cash taken", 52, true), ("Paid back", 52, true),
          ("Expected", 58, true), ("Counted", 58, true), ("Over / short", 58, true)];
 
-    static string Span(CashShift s) => RevenuePdf.Manila(s.OpenedAt) + (s.ClosedAt is { } c ? " to " + c.AddHours(8).ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture) : ", open");
+    static string Span(CashShift s) => RevenuePdf.Manila(s.OpenedAt) + (s.ClosedAt is { } c ? " to " + ManilaTime.Of(c).ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture) : ", open");
 
     public static byte[] Build(DateOnly from, DateOnly to, IReadOnlyList<CashShift> shifts, DateTime generatedUtc, byte[] font)
     {

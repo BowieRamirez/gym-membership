@@ -26,6 +26,7 @@ public class RevenuePdfTests
         public string? Name; public byte[]? Pdf; public Exception? Fail;
         public Task<byte[]> FontAsync() => Task.FromResult(Font);
         public Task ShareAsync(string fileName, byte[] pdf) { if (Fail is not null) throw Fail; Name = fileName; Pdf = pdf; return Task.CompletedTask; }
+        public Task OpenAsync(string fileName, byte[] pdf) => ShareAsync(fileName, pdf);
     }
 
     static async Task<DemoGateway> Admin()

@@ -64,6 +64,8 @@ public sealed partial class DemoGateway
     Payment CreateExtension(string member,int packageId,Dictionary<string,object> args)
     {
         RequireActive();
+        var method=args.TryGetValue("p_method",out var m0)?Convert.ToString(m0):PayMethod.Qr;   // 0084: online (qr) or cash at the desk
+        if(method is not (PayMethod.Qr or PayMethod.Cash)) throw Err("bad_input");
         if(!All<Member>().Any(m=>m.UserId==member) || !All<Profile>().Any(p=>p.Id==member && p.IsActive)) throw Err("not_found");
         if(All<Payment>().Any(p=>p.MemberId==member && p.Status==Status.Pending && p.Kind is PayKind.Membership or PayKind.Renewal)) throw Err("renewal_pending");
         var pkg=PackageForSale(packageId);
@@ -82,6 +84,7 @@ public sealed partial class DemoGateway
             pay=NewQrPayment(PayKind.Renewal,member,discount,renewal:ren.Id);
         }
         SnapshotMembershipPayment(pay,pkg);
+        pay.Method=method;
         return pay;
     }
 
@@ -145,7 +148,9 @@ public sealed partial class DemoGateway
                 if(r.MemberId==Uid) throw Err("self_decision");
                 if(r.Status!="approved") throw Err("already_processed");
                 var p=All<Payment>().First(p=>p.Id==r.PaymentId);
-                if(p.Status!=Status.Verified||r.Amount<=0||r.Amount>p.Amount) throw Err("not_refundable");
+                var balance=All<Reservation>().FirstOrDefault(b=>b.Id==r.ReservationId)?.BalancePaymentId;   // 0095: a closed day refunds the down payment and the balance
+                var received=All<Payment>().Where(x=>x.Status==Status.Verified&&(x.Id==r.PaymentId||x.Id==balance)).Sum(x=>x.Amount);
+                if(r.Kind!="online"&&(p.Status!=Status.Verified||r.Amount<=0||r.Amount>received)) throw Err("not_refundable");
                 if(method==PayMethod.Cash) r.CashShiftId=OpenShiftOf(Uid);   // 0050: cash paid back comes out of the payer's drawer
                 r.Status="paid";r.PaidAt=now;r.PaidBy=Uid;r.RepaymentMethod=method;r.RepaymentReference=reference;
                 Notify(r.MemberId,"payment","Refund repaid",method);Audit("refund.paid","refund_requests",r.Id.ToString());return true;

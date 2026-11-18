@@ -57,7 +57,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     [ObservableProperty, NotifyPropertyChangedFor(nameof(MonthText))] private DateOnly month = new(Today.Year, Today.Month, 1);
     [ObservableProperty, NotifyPropertyChangedFor(nameof(DayText), nameof(IsDayClosed))] private DateOnly day = Today;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Summary), nameof(SummaryDetail), nameof(CanBook), nameof(CoachesTitle))] private PickChip? time;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(Summary), nameof(SummaryDetail), nameof(CanBook), nameof(CoachesTitle))] private PickChip? length;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(Summary), nameof(SummaryDetail), nameof(CanBook), nameof(CoachesTitle), nameof(Split), nameof(BookText))] private PickChip? length;
 
     // ---- G14, G13, G4 (0064, approved mockup docs/mockups/amenity-down-payment.html): who, the coach, a code, and the split ----
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsSolo), nameof(CanBook), nameof(Split), nameof(BookText), nameof(HoldText), nameof(SummaryDetail))] private bool isWithCoach;
@@ -67,20 +67,21 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Split), nameof(BookText), nameof(SummaryDetail))] private string code = "";
     /// <summary>The member's codes that fit this amenity (G4), as on Packages.</summary>
     public ObservableCollection<AvailableCode> Codes { get; } = new();
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(Split), nameof(BookText), nameof(SummaryDetail))] private int percent = 50;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(Split), nameof(BookText), nameof(SummaryDetail), nameof(PayWithText), nameof(HoldText))] private int percent = 50;
     IReadOnlyList<AvailableCode> _myCodes = [];
     IReadOnlyDictionary<DateOnly, string> _closed = new Dictionary<DateOnly, string>();   // G16 (0065)
 
     public bool HasCoaches => Coaches.Count > 0;
     public bool HasCodes => Codes.Count > 0;
-    public string CoachFeeText => Picked is { } p && p.Amenity.CoachFee > 0 ? $"+ ₱{p.Amenity.CoachFee:N2} coach fee" : "No coach fee";
+    public string CoachFeeText => Picked is { } p && p.Amenity.CoachFee > 0 ? $"+ ₱{p.Amenity.CoachFee:N2} an hour coach fee" : "No coach fee";
     public string CoachesTitle => Time is null || Length is null ? "Pick a time to see who's free"
         : $"Coaches free {Manila(Time.StartUtc).ToString("h:mm", En)} to {Manila(Time.StartUtc.AddMinutes(Length.Minutes)).ToString("h:mm tt", En)}";
     int CodePercent => Codes.FirstOrDefault(c => string.Equals(c.Code, Code.Trim(), StringComparison.OrdinalIgnoreCase))?.Percent ?? 0;
     /// <summary>What booking now costs: with a pass only the coach fee, paid at the desk; otherwise the down payment now and the balance at the desk.</summary>
     public PriceSplit Split => Picked is not { } p ? new(0, 0, 0, 0, 0)
-        : PayFirst ? BookingPrice.Split(p.Amenity.Price, p.Amenity.CoachFee, IsWithCoach && PickedCoach is not null, Percent, CodePercent)
-        : BookingPrice.Split(0, p.Amenity.CoachFee, IsWithCoach && PickedCoach is not null, 0);
+        : PayFirst ? BookingPrice.Split(p.Amenity.Price, p.Amenity.CoachFee, IsWithCoach && PickedCoach is not null, Percent, CodePercent, Hours)
+        : BookingPrice.Split(0, p.Amenity.CoachFee, IsWithCoach && PickedCoach is not null, 0, 0, Hours);
+    int Hours => Math.Max(1, (Length?.Minutes ?? 60) / 60);   // 0090: per hour
     [ObservableProperty, NotifyPropertyChangedFor(nameof(PayQr), nameof(PayCash), nameof(HoldText))] private string method = PayMethod.Qr;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsClaiming))] private BookingRow? claiming;
     [ObservableProperty] private string claimReason = "";
@@ -99,8 +100,12 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     public string DayText => Day.ToString("dddd d MMMM", En);
     public string BookText => PayFirst ? $"Book and pay ₱{Split.Down:N2}" : "Book";
     public bool CanBook => Time is not null && Length is not null && (!IsWithCoach || PickedCoach is not null);
-    public string HoldText => PayFirst && PayCash ? "Not yours until the desk takes the down payment. If someone else's is paid first, yours is refunded."
-        : PayFirst ? "Not yours until the down payment is paid online. If someone else's is paid first, yours is refunded."
+    /// <summary>Owner, 2026-11-18: at 100% (Gym settings) the whole price is paid when booking, so there is no "down payment" or balance.</summary>
+    bool PaysInFull => Percent >= 100;
+    string PayWord => PaysInFull ? "payment" : "down payment";
+    public string PayWithText => $"Pay the {PayWord} with";
+    public string HoldText => PayFirst && PayCash ? $"Not yours until the desk takes the {PayWord}. If someone else's is paid first, yours is refunded."
+        : PayFirst ? $"Not yours until the {PayWord} is paid online. If someone else's is paid first, yours is refunded."
         : Split.Balance > 0 ? $"Uses your pass. The ₱{Split.Balance:N2} coach fee is paid at the desk." : "Uses your pass, nothing to pay.";
     /// <summary>Why times are faded: none left that day, or (paying first, today) the hold needs the start more than 1 hour away.</summary>
     public bool IsDayClosed => _closed.ContainsKey(Day);
@@ -111,7 +116,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     public string Summary => Time is null || Length is null ? "Pick a start time"
         : $"{Manila(Time.StartUtc).ToString("ddd d MMM, h:mm", En)} to {Manila(Time.StartUtc.AddMinutes(Length.Minutes)).ToString("h:mm tt", En)}";
     public string SummaryDetail => Picked is null || Time is null ? "" : PayFirst
-        ? $"Total ₱{Split.Due:N2}{(Split.Cut > 0 ? $" after ₱{Split.Cut:N2} off" : "")}. Down payment now ({Percent}%) ₱{Split.Down:N2}, balance at the desk ₱{Split.Balance:N2}."
+        ? $"Total ₱{Split.Due:N2}{(Split.Cut > 0 ? $" after ₱{Split.Cut:N2} off" : "")}. {(PaysInFull ? "Paid in full now." : $"Down payment now ({Percent}%) ₱{Split.Down:N2}, balance at the desk ₱{Split.Balance:N2}.")}"
         : $"With your pass · {Picked.Amenity.Name} cools down for 30 minutes after.";
 
     static DateTime Manila(DateTime utc) => utc.ToUniversalTime().AddHours(8);
@@ -202,7 +207,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     {
         Times.Clear(); Lengths.Clear();
         if (_grid is null || Picked is null) return;
-        for (var t = _grid.Opens; t < _grid.Closes; t = t.AddMinutes(30))
+        foreach (var t in BookingSlots.HourStarts(_grid))
             Times.Add(new PickChip(Manila(t).ToString("h:mm tt", En), BookingSlots.Lengths(_grid, Picked.Amenity.Id, t, PayFirst).Count > 0, t));
         OnPropertyChanged(nameof(TimesNote));
     }
@@ -214,19 +219,17 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
         foreach (var c in Times) c.IsPicked = c == chip;
         var fits = BookingSlots.Lengths(_grid, Picked.Amenity.Id, chip.StartUtc, PayFirst);
         var keep = Length?.Minutes ?? 60;
-        Lengths.Clear();
-        foreach (var m in BookingSlots.Minutes) Lengths.Add(new PickChip(m switch { 30 => "30 min", 60 => "1 hour", 90 => "1½ hours", _ => "2 hours" }, fits.Contains(m), minutes: m));
+        Lengths.Clear();   // 0090: a dropdown of whole hours that fit, up to closing time
+        foreach (var m in fits) Lengths.Add(new PickChip(BookingSlots.LengthText(m), true, minutes: m));
         Time = chip;
-        PickLength(Lengths.Where(l => l.CanPick).OrderBy(l => Math.Abs(l.Minutes - keep)).First());
+        Length = Lengths.OrderBy(l => Math.Abs(l.Minutes - keep)).First();
     }
 
-    [RelayCommand]
-    private void PickLength(PickChip chip)
+    [RelayCommand] private void PickLength(PickChip chip) => Length = chip;
+    partial void OnLengthChanged(PickChip? value)
     {
-        if (!chip.CanPick) return;
-        foreach (var c in Lengths) c.IsPicked = c == chip;
-        Length = chip;
-        if (IsWithCoach) _ = LoadCoachesAsync();
+        foreach (var c in Lengths) c.IsPicked = c == value;
+        if (value is not null && IsWithCoach) _ = LoadCoachesAsync();
     }
 
     [RelayCommand] private void PickMethod(string value) => Method = value;
@@ -236,8 +239,10 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     {
         if (Picked is not { } card || Time is null || Length is null) return;
         Notice = null;
-        var how = !PayFirst ? HoldText : (PayCash ? $"Pay the ₱{Split.Down:N2} down payment at the front desk." : $"Pay the ₱{Split.Down:N2} down payment online now.")
-            + $" The ₱{Split.Balance:N2} balance is paid at the desk. It's yours once the desk verifies the down payment.";
+        var how = !PayFirst ? HoldText
+            : PaysInFull ? PayCash ? $"Pay ₱{Split.Down:N2} at the front desk. It's yours once the desk takes it." : $"Pay ₱{Split.Down:N2} online now. It's yours once it's paid."
+            : (PayCash ? $"Pay the ₱{Split.Down:N2} down payment at the front desk." : $"Pay the ₱{Split.Down:N2} down payment online now.")
+                + $" The ₱{Split.Balance:N2} balance is paid at the desk. It's yours once the down payment is paid.";
         if (!await Confirm.AskAsync($"Book {card.Amenity.Name}?", $"{Summary}\n{how}", BookText)) return;
         Reservation? made = null;
         if (!await RunAsync(() => svc.BookAsync(card.Amenity.Id, Time.StartUtc, Length.Minutes, Method, IsWithCoach ? PickedCoach?.CoachId : null, Code), r => made = r))
@@ -251,8 +256,8 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
         await LoadAsync();
         var row = Bookings.FirstOrDefault(b => b.Booking.Id == made!.Id);
         Notice = made!.Status != "awaiting_payment" ? "Booked." : PayCash
-            ? $"Requested. {row?.Detail ?? "Pay the down payment at the front desk."}"
-            : "Requested. Tap Pay online on the booking below. It's yours once the down payment is paid.";
+            ? $"Requested. {row?.Detail ?? $"Pay the {PayWord} at the front desk."}"
+            : $"Requested. Tap Pay online on the booking below. It's yours once the {PayWord} is paid.";
     }
 
     // ---------- my bookings ----------
@@ -262,11 +267,11 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
         Notice = null;
         var refund = row.Refundable;
         var body = row.IsWaiting ? "The request and its payment are withdrawn." : row.Paid
-            ? refund ? $"The ₱{row.Payment!.Amount:N2} down payment will be repaid at the front desk." : $"It starts within 24 hours, so the gym keeps the ₱{row.Payment!.Amount:N2} down payment."
+            ? refund ? $"The {row.PaidWords} will be repaid at the front desk." : $"It starts within 24 hours, so the gym keeps the {row.PaidWords}."
             : row.When;
         if (!await Confirm.AskAsync($"Cancel your {row.Amenity} booking?", body, "Cancel booking")) return;
         if (!await RunAsync(() => svc.CancelAsync(row.Booking.Id))) return;
-        Notice = row.Paid && refund ? "Booking cancelled. Your down payment refund is approved; collect it at the front desk." : "Booking cancelled.";
+        Notice = row.Paid && refund ? $"Booking cancelled. Your {(row.Booking.Balance > 0 ? "down payment " : "")}refund is approved; collect it at the front desk." : "Booking cancelled.";
         await LoadBookingsAsync();
     }
 
@@ -280,7 +285,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     {
         Notice = null;
         if (membership is null || row.Payment is not { } pay) return;
-        if (!await Confirm.AskAsync($"Pay the ₱{pay.Amount:N2} down payment online?", $"{row.Amenity}, {row.When}\nYou pay on Xendit's page by GCash or QR Ph, then come back here.", "Pay online")) return;
+        if (!await Confirm.AskAsync(row.Booking.Balance > 0 ? $"Pay the ₱{pay.Amount:N2} down payment online?" : $"Pay ₱{pay.Amount:N2} online?", $"{row.Amenity}, {row.When}\nYou pay on Xendit's page by GCash or QR Ph, then come back here.", "Pay online")) return;
         OnlineCheckout? checkout = null;
         if (!await RunAsync(() => membership.PayOnlineAsync(pay.Id), c => checkout = c)) return;
         if (checkout!.Paid) { Notice = "Paid."; await LoadBookingsAsync(); return; }

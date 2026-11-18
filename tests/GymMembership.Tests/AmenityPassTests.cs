@@ -30,7 +30,7 @@ public class AmenityPassTests
         var gw = await As("member@demo.io", await WithSauna());
         var vm = new AmenityBoardViewModel(new AmenityService(gw));
         var card = await Card(vm, "Steam Room");
-        Assert.Equal("₱300.00 per session, up to 2 hours", card.PassText);
+        Assert.Equal("₱300.00 per hour", card.PassText);
         Assert.Equal("Dry sauna, 6 seats", card.Amenity.Description);
 
         Assert.True((await Safe.RunAsync(() => gw.RpcAsync<Payment>("avail_amenity", new() { ["p_amenity_id"] = card.Amenity.Id }))).Ok);   // a pass bought earlier, or at the counter

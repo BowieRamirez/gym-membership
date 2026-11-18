@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- cash plan 2026-11-17: restored from a797e89^ and trimmed to cash. Every cash payment a member chose in the app
+     (packages and booking down payments) waits here; Approve takes it into the drawer, Reject needs a reason. -->
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.VerifyPaymentsPage" x:DataType="vm:VerifyPaymentsViewModel" Title="Payments to verify">
+
+    <v:BasePage.Resources>
+        <!-- wide: one row per payment, its actions at the end -->
+        <DataTemplate x:Key="QueueRow" x:DataType="svc:PaymentRow">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,1.4*,120,150,110,200">
+                    <Label Text="{Binding Payer}" FontFamily="BarlowMedium" VerticalOptions="Center" />
+                    <!-- F12: a booking shows its time under the amenity -->
+                    <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                        <Label Text="{Binding Item}" />
+                        <Label Text="{Binding Booking}" Style="{StaticResource Caption}" IsVisible="{Binding HasBooking}" />
+                    </VerticalStackLayout>
+                    <Label Grid.Column="2" Text="{Binding Payment.PaymentCode}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                    <Label Grid.Column="3" Text="{Binding Payment.CreatedAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM, h:mm tt'}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                    <Label Grid.Column="4" Text="{Binding Payment.Amount, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center" />
+                    <HorizontalStackLayout Grid.Column="5" Spacing="6" HorizontalOptions="End" VerticalOptions="Center">
+                        <Button Text="Approve" Style="{StaticResource SmallOutlineButton}" Clicked="OnApprove"
+                                SemanticProperties.Description="{Binding Payer, StringFormat='Approve {0}’s cash'}" />
+                        <Button Text="Reject" Style="{StaticResource SmallOutlineButton}" Clicked="OnReject"
+                                SemanticProperties.Description="{Binding Payer, StringFormat='Reject {0}’s payment'}" />
+                    </HorizontalStackLayout>
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+        <!-- narrow windows: who and how much; what and code; the booking; the actions as chips -->
+        <DataTemplate x:Key="QueueCard" x:DataType="svc:PaymentRow">
+            <VerticalStackLayout>
+                <VerticalStackLayout Spacing="4" Padding="14,12">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <Label Text="{Binding Payer}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="{Binding Payment.Amount, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                    </Grid>
+                    <Label Style="{StaticResource Caption}">
+                        <Label.Text>
+                            <MultiBinding StringFormat="{}{0}  ·  {1}">
+                                <Binding Path="Item" />
+                                <Binding Path="Payment.PaymentCode" />
+                            </MultiBinding>
+                        </Label.Text>
+                    </Label>
+                    <Label Text="{Binding Booking}" Style="{StaticResource Caption}" IsVisible="{Binding HasBooking}" />
+                    <FlexLayout Wrap="Wrap" Margin="0,4,0,0">
+                        <Button Text="Approve" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnApprove" />
+                        <Button Text="Reject" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnReject" />
+                    </FlexLayout>
+                </VerticalStackLayout>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+    </v:BasePage.Resources>
+
+    <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='20,16,20,0', Default='16,12,16,0'}" MaximumWidthRequest="{StaticResource PageWidth}">
+        <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
+            <c:UpdatedBar x:Name="UpdatedLine" />   <!-- F4: when it last loaded, with Refresh; it also reloads by itself on a change -->
+            <Label Text="Cash members chose to pay at the desk, oldest first. Match the payment code they show you, then Approve: the cash goes into your drawer and they get a receipt number. Online payments don't come here; Xendit confirms them." Style="{StaticResource Muted}" MaximumWidthRequest="760" HorizontalOptions="Start" />
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+            <!-- a rejection is final, so it needs a reason the member will read -->
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding Rejecting, Converter={StaticResource IsNotNull}}">
+                <VerticalStackLayout Spacing="10">
+                    <c:CardTitle Text="{Binding Rejecting.Payer, StringFormat='Reject {0}’s payment'}" />
+                    <Label Text="Say why; the member reads it. They can pay again with a new payment." Style="{StaticResource Caption}" />
+                    <Border Style="{StaticResource Field}" WidthRequest="360" HorizontalOptions="Start">
+                        <Entry Text="{Binding RejectReason}" Placeholder="Didn't come in to pay" SemanticProperties.Description="Reason for rejecting" />
+                    </Border>
+                    <HorizontalStackLayout Spacing="8">
+                        <Button Text="Reject payment" Style="{StaticResource SmallButton}" Command="{Binding ConfirmRejectCommand}" />
+                        <Button Text="Keep it waiting" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepPendingCommand}" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+        </VerticalStackLayout>
+
+        <!-- 9.7: the queue is a table (as on Home), stacked rows on narrow windows; the actions are outline, one set per row -->
+        <ScrollView Grid.Row="1">
+            <Border Style="{StaticResource TablePanel}" Margin="0,0,0,16" VerticalOptions="Start">
+                <VerticalStackLayout>
+                    <VerticalStackLayout x:Name="QueueHead" IsVisible="{OnIdiom Phone=False, Default=True}">
+                        <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,1.4*,120,150,110,200">
+                            <Label Text="Payer" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="1" Text="For" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="2" Text="Code" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="3" Text="Chosen" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="4" Text="Amount" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                        </Grid>
+                        <BoxView Style="{StaticResource Hairline}" />
+                    </VerticalStackLayout>
+                    <c:TableBody Items="{Binding Pending}" Header="{x:Reference QueueHead}" WideFrom="900"
+                                 RowTemplate="{StaticResource QueueRow}" CardTemplate="{StaticResource QueueCard}">
+                        <c:TableBody.Empty><Label Text="No cash is waiting. When a member chooses to pay at the desk, it shows up here." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
+                    </c:TableBody>
+                </VerticalStackLayout>
+            </Border>
+        </ScrollView>
+    </Grid>
+</v:BasePage>

@@ -35,7 +35,7 @@ public static class ErrorMapper
         if (Has(m, "forbidden", "42501", "jwt", "row-level security", "invalid login", "invalid_credentials", "not authenticated")) return AppErrorKind.Unauthorized;
         if (Has(m, "item_not_for_sale", "already_published", "package_published", "package_archived", "name_taken", "draft_exists", "not_published", "published_archive_instead", "account_has_commitments", "account_archived", "record_archived", "record_not_restorable", "code_limit_reached", "code_taken", "discount_used", "name_complete", "shift_has_sessions", "slot_taken", "member_busy", "stale_proposal", "coach_unavailable", "coach_busy", "already_started", "not_in_use", "amenity_unavailable", "not_archived", "already_processed", "already_availed", "renewal_pending", "already_requested", "refund_in_progress", "not_refundable", "pending_session_request", "active_coaching_session", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
         if (Has(m, "account_inactive", "no_open_shift", "shift_open", "note_required", "bad_archive_reason", "bad_correction_reason", "discount_fixed", "discount_locked", "wrong_pin", "has_desk_pin", "bad_down_payment", "coach_not_free", "not_confirmed", "balance_paid", "wrong_member_password", "proof_invalid", "auth_unavailable", "pin_locked", "no_desk_pin", "pin_required", "scan_required", "bad_pin", "refund_reason_required", "no_coach_present", "self_archive", "last_active_admin", "no_active_membership", "self_verify", "self_decision", "not_renewable", "wrong_member", "not_found", "23514",
-                   "missing_fields", "refund_window_closed", "refund_week_passed", "nothing_to_refund", "terms_required", "too_soon", "too_late_to_cancel", "not_ended", "claim_window_closed", "payment_expired", "gym_closed", "day_closed", "day_past", "coach_not_in_gym", "hire_already_requested", "bad_rate", "invite_member_inactive", "invalid_code", "code_already_used", "code_not_for_item", "no_items", "item_not_found", "limit_required", "bad_hours", "off_grid", "outside_gym_hours", "too_long", "past_slot", "too_far_ahead", "no_pass", "limit_below_used", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "super_admin_protected", "bad_code", "code_not_verified", "resend_wait", "same_password", "end must be after start")) return AppErrorKind.Validation;
+                   "missing_fields", "not_on_the_hour", "refund_window_closed", "refund_week_passed", "nothing_to_refund", "terms_required", "too_soon", "too_late_to_cancel", "not_ended", "claim_window_closed", "payment_expired", "gym_closed", "day_closed", "day_past", "coach_not_in_gym", "hire_already_requested", "bad_rate", "invite_member_inactive", "invalid_code", "code_already_used", "code_not_for_item", "no_items", "item_not_found", "limit_required", "bad_hours", "off_grid", "outside_gym_hours", "too_long", "past_slot", "too_far_ahead", "no_pass", "limit_below_used", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "super_admin_protected", "bad_code", "code_not_verified", "resend_wait", "same_password", "end must be after start")) return AppErrorKind.Validation;
         return AppErrorKind.Unknown;
     }
 
@@ -116,6 +116,7 @@ public static class ErrorText
         "code_limit_reached" => "That discount code has been used up.",
         "bad_hours" => "Opening and closing times must be on the hour or half hour, and closing must be after opening.",
         "off_grid" => "Shifts start and end on the hour or half hour.",
+        "not_on_the_hour" => "Bookings start on the hour.",   // 0093
         "outside_gym_hours" => "Shifts must fit inside the gym's opening hours on one day.",
         "shift_has_sessions" => "A scheduled session falls in this shift. Move or cancel the session first.",
         "slot_taken" => "One of those slots was just taken, or would run into another booking's cooldown. Nothing was booked; the grid now shows what is free.",
@@ -185,12 +186,14 @@ public static class ErrorText
         "no_coach_present" => "Amenities can only be used while a coach is in the gym, and no coach is here right now.",
         "payment_expired" => "That unpaid payment has expired. Create a fresh payment.",
         "pay_online" => "This payment is being paid online through Xendit. It verifies itself once the member pays.",
-        "already_requested" => "A cancellation and refund request already exists for this term.",
+        "already_requested" => "A refund request already exists for this.",
+        "refund_day_passed" => "A Day pass can only be refunded on the day it was paid for.",   // 0096
+        "refund_too_late" => "This booking starts in under 24 hours, so it can only be refunded if the gym is cancelling it.",
         "active_coaching_session" => "You already have an active session together. Open Sessions to reschedule or cancel it. Finish, cancel or mark that session no-show before requesting another.",
         "pending_session_request" => "You already have a pending request to this coach. Wait for a reply or cancel it below before sending another.",
         "invite_member_inactive" => "This member needs an active membership before you can invite them to a session.",
         _ when raw?.Contains("time_requests_one_pending_member_per_coach", StringComparison.OrdinalIgnoreCase) == true => "You already have a pending request to this coach. Wait for a reply or cancel it below before sending another.",
-        "not_refundable" => "This term has no eligible verified payment to refund.",
+        "not_refundable" => "There is no eligible verified payment to refund.",
         "refund_in_progress" => "This payment has a pending or approved refund. It cannot also be voided.",
         "not_renewable" => "This membership can't be renewed right now.",
         "self_decision" => "You can't decide or repay your own refund request.",

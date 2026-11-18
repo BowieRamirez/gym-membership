@@ -83,6 +83,32 @@
                             <!-- F19 (approved mockup checked-in-today.html): who came in today, newest first; time and name, then how and who
                                  recorded it. A row that arrived since the last load is tinted until the next one. The count is the day's. -->
                             <Label Text="{Binding TodayTitle}" Style="{StaticResource SectionTitle}" Margin="0,6,0,0" AutomationId="CheckedInTodayTitle" />
+                            <!-- owner, 2026-11-18: the Day pass opened with View, as on Amenity status's Booked card -->
+                            <Border Style="{StaticResource Panel}" IsVisible="{Binding IsViewingDayPass}" AutomationId="DayPassDetails">
+                                <VerticalStackLayout Spacing="6">
+                                    <c:CardTitle Text="{Binding ViewingDayPass.DayPass.Who}" />
+                                    <Label Text="Day pass" FontFamily="BarlowSemiBold" />
+                                    <Label Text="{Binding ViewingDayPass.TimeText, StringFormat='Checked in {0}'}" />
+                                    <Label Text="{Binding ViewingDayPass.DayPass.PaidText}" />
+                                    <Label Text="{Binding ViewingDayPass.DayPass.MethodText}" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding ViewingDayPass.DayPass.ReceiptNo, StringFormat='Receipt {0}'}" FontFamily="BarlowSemiBold" IsVisible="{Binding ViewingDayPass.DayPass.ReceiptNo, Converter={StaticResource IsNotNull}}" />
+                                    <Label Text="{Binding ViewingDayPass.ByText}" Style="{StaticResource Caption}" IsVisible="{Binding ViewingDayPass.ByText, Converter={StaticResource HasText}}" />
+                                    <Label Text="{Binding ViewingDayPass.DayPass.RefundText}" FontFamily="BarlowSemiBold" IsVisible="{Binding ViewingDayPass.DayPass.RefundText, Converter={StaticResource HasText}}" AutomationId="DayPassRefundState" />
+                                    <VerticalStackLayout Spacing="8" Margin="0,6,0,0" IsVisible="{Binding IsAskingRefund}">
+                                        <Label Text="Why does the customer want a refund? The System admin reads this." Style="{StaticResource Caption}" />
+                                        <Border Style="{StaticResource Field}"><Entry Text="{Binding RefundReason}" MaxLength="900" Placeholder="Felt unwell and left" SemanticProperties.Description="Reason for the refund" AutomationId="DayPassRefundReason" /></Border>
+                                        <HorizontalStackLayout Spacing="8">
+                                            <Button Text="Send request" Style="{StaticResource SmallButton}" Command="{Binding SendRefundCommand}" AutomationId="SendDayPassRefund" />
+                                            <Button Text="Back" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepRefundCommand}" />
+                                        </HorizontalStackLayout>
+                                    </VerticalStackLayout>
+                                    <FlexLayout Wrap="Wrap" Margin="0,6,0,0" IsVisible="{Binding IsAskingRefund, Converter={StaticResource Not}}">
+                                        <Button Text="Print receipt" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Command="{Binding PrintDayPassCommand}" IsVisible="{Binding ViewingDayPass.DayPass.CanPrint}" AutomationId="PrintDayPassReceipt" />
+                                        <Button Text="Request refund" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding AskRefundCommand}" IsVisible="{Binding ViewingDayPass.DayPass.CanRequestRefund}" AutomationId="RequestDayPassRefund" />
+                                        <Button Text="Close" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding CloseDayPassCommand}" />
+                                    </FlexLayout>
+                                </VerticalStackLayout>
+                            </Border>
                             <Border Style="{StaticResource Panel}" Padding="12">
                             <VerticalStackLayout Spacing="0">
                                 <Border Style="{StaticResource Field}" Margin="0,0,0,6" IsVisible="{Binding IsTodayEmpty, Converter={StaticResource Not}}">
@@ -98,10 +124,12 @@
                                                     <Border.Triggers>
                                                         <DataTrigger TargetType="Border" Binding="{Binding IsNew}" Value="True"><Setter Property="BackgroundColor" Value="#24FFEC00" /></DataTrigger>
                                                     </Border.Triggers>
-                                                    <Grid ColumnDefinitions="64,*" RowDefinitions="Auto,Auto" ColumnSpacing="8">
+                                                    <Grid ColumnDefinitions="64,*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="8">
                                                         <Label Text="{Binding TimeText}" Style="{StaticResource Caption}" />
                                                         <Label Grid.Column="1" Text="{Binding Name}" FontFamily="BarlowSemiBold" />
                                                         <Label Grid.Column="1" Grid.Row="1" Text="{Binding HowByText}" Style="{StaticResource Caption}" />
+                                                        <Button Grid.Column="2" Grid.RowSpan="2" Text="View" Style="{StaticResource FilterChip}" VerticalOptions="Center" Clicked="OnViewDayPass"
+                                                                IsVisible="{Binding HasDayPass}" SemanticProperties.Description="{Binding TimeText, StringFormat='View the Day pass checked in at {0}'}" />
                                                     </Grid>
                                                 </Border>
                                             </VerticalStackLayout>
