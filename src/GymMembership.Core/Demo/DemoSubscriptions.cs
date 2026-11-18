@@ -148,7 +148,9 @@ public sealed partial class DemoGateway
                 if(r.MemberId==Uid) throw Err("self_decision");
                 if(r.Status!="approved") throw Err("already_processed");
                 var p=All<Payment>().First(p=>p.Id==r.PaymentId);
-                if(p.Status!=Status.Verified||r.Amount<=0||r.Amount>p.Amount) throw Err("not_refundable");
+                var balance=All<Reservation>().FirstOrDefault(b=>b.Id==r.ReservationId)?.BalancePaymentId;   // 0095: a closed day refunds the down payment and the balance
+                var received=All<Payment>().Where(x=>x.Status==Status.Verified&&(x.Id==r.PaymentId||x.Id==balance)).Sum(x=>x.Amount);
+                if(r.Kind!="online"&&(p.Status!=Status.Verified||r.Amount<=0||r.Amount>received)) throw Err("not_refundable");
                 if(method==PayMethod.Cash) r.CashShiftId=OpenShiftOf(Uid);   // 0050: cash paid back comes out of the payer's drawer
                 r.Status="paid";r.PaidAt=now;r.PaidBy=Uid;r.RepaymentMethod=method;r.RepaymentReference=reference;
                 Notify(r.MemberId,"payment","Refund repaid",method);Audit("refund.paid","refund_requests",r.Id.ToString());return true;

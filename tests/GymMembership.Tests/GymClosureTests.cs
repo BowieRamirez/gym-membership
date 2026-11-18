@@ -26,6 +26,37 @@ public class GymClosureTests
     }
 
     [Fact]
+    public async Task A_closed_days_refund_of_down_payment_and_balance_can_be_recorded_as_repaid()   // 0095
+    {
+        var gw = await As("member@demo.io");
+        var classes = (await gw.ListAsync<Amenity>()).Single(a => a.Name == "Group classes");
+        var made = (await new ReservationService(gw).BookAsync(classes.Id, At(Closed, 10), 60, PayMethod.Cash)).Value!;
+        await As("employee@demo.io", gw);
+        await gw.OpenDrawerAsync();
+        Assert.True((await new PaymentStaffService(gw).VerifyAsync(made.PaymentId!.Value, true)).Ok);
+        var balance = (await new ReservationService(gw).TakeBalanceAsync(made.Id, PayMethod.Cash, null)).Value!;
+
+        await CloseAsync(gw);
+        await gw.OpenDrawerAsync();
+        var subs = new SubscriptionService(gw);
+        var card = (await subs.RefundsAsync()).Value!.Single(c => c.Request.ReservationId == made.Id);
+        Assert.Equal(made.DownPayment + balance.Amount, card.Request.Amount);
+        Assert.True((await subs.MarkPaidAsync(card.Request.Id, PayMethod.Cash, null)).Ok);
+    }
+
+    [Fact]
+    public void Online_money_that_could_not_be_applied_reads_as_its_own_refund_to_repay()   // 0095
+    {
+        var request = new RefundRequest { Kind = "online", Status = "approved", Amount = 1000, MemberId = null!, RequestedAt = new DateTime(2026, 11, 18, 2, 0, 0, DateTimeKind.Utc),
+            DecisionReason = "Paid online after this payment was no longer open" };
+        var card = RefundCard.ForOnline(request, new Payment { PaymentCode = "GYM-1", OnlineChannel = "GCASH", WalkInName = "Ana" }, null);
+        Assert.Equal(("Ana", "Online payment", "GYM-1 · GCASH", "18 Nov, 10:00 AM"), (card.Member, card.PackageName, card.Dates, card.Period));
+        Assert.Equal(("To repay", "Repay", true, false), (card.Status, card.ActionText, card.CanRepay, card.CanDecide));
+        Assert.Equal("Paid online after this payment was no longer open.", card.ReviewText);
+        Assert.Equal("Member", RefundCard.ForOnline(request, null, null).Member);
+    }
+
+    [Fact]
     public async Task Nothing_can_be_set_up_on_a_closed_day_and_the_refusal_says_why()
     {
         var gw = new DemoGateway();

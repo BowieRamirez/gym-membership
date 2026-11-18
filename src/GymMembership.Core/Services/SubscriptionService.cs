@@ -76,8 +76,13 @@ public sealed record RefundCard(RefundRequest Request, string Member, string Pac
     {
         "cancel" => $"{Request.DecisionReason?.TrimEnd('.') ?? "Booking cancelled: down payment refunded"}.",   // G13 (0064): 24 hours or more before, the gym, or slot taken
         "no_show" => Request.Status == "pending" ? "The member says they didn't use the booking." : $"Didn't use it: {(Request.Status == "rejected" ? "declined" : "approved")} by the front desk.",
+        "online" => $"{Request.DecisionReason}.",   // 0095
         _ => MembershipReview
     };
+    /// <summary>0095: money Xendit took for a payment that could not be applied. It has no term or booking, only the payment.</summary>
+    public static RefundCard ForOnline(RefundRequest r, Payment? p, string? memberName) =>
+        new(r, p?.WalkInName ?? memberName ?? "Member", "Online payment", p is null ? "" : $"{p.PaymentCode} · {p.OnlineChannel ?? "Online"}",
+            Period: $"{r.RequestedAt.ToUniversalTime().AddHours(8):d MMM, h:mm tt}");
     string MembershipReview => Request.WasActivated switch
     {
         false => "No check-in during this term: the days left are owed.",   // G22
@@ -166,8 +171,10 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
         var names = await Directory_.UserNamesAsync(gw);
         var bookings = requests.Any(r => r.IsBooking) ? (await gw.ListAsync<Reservation>()).ToDictionary(r => r.Id) : [];
         var amenities = bookings.Count > 0 ? (await gw.ListAsync<Amenity>()).ToDictionary(a => a.Id, a => a.Name) : [];
+        var payments = requests.Any(r => r.Kind == "online") ? (await gw.ListAsync<Payment>()).ToDictionary(p => p.Id) : [];
         return requests.OrderBy(r => r.Status is "paid" or "rejected").ThenBy(r => r.RequestedAt).Select(r =>
         {
+            if (r.Kind == "online") return RefundCard.ForOnline(r, payments.GetValueOrDefault(r.PaymentId), names.GetValueOrDefault(r.MemberId ?? ""));
             if (r.IsBooking && bookings.GetValueOrDefault(r.ReservationId ?? 0) is { } b)   // F13: a booking refund names the amenity and the booked time
                 return new RefundCard(r, b.WalkInName ?? names.GetValueOrDefault(r.MemberId ?? "", "Member"), $"{amenities.GetValueOrDefault(b.AmenityId, "Amenity")} booking",
                     $"{b.StartsAt.ToUniversalTime().AddHours(8):d MMM yyyy, h:mm tt} – {b.EndsAt.ToUniversalTime().AddHours(8):h:mm tt} (Manila)",
