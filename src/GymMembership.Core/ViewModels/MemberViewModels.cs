@@ -366,7 +366,7 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
 
 }
 
-public partial class MyMembershipViewModel(IMembershipService svc, ISubscriptionService subscription, IAttendanceService? codes = null) : LoadableViewModel
+public partial class MyMembershipViewModel(IMembershipService svc, ISubscriptionService subscription, IAttendanceService? codes = null, ISessionService? sessions = null) : LoadableViewModel
 {
     public ObservableCollection<MembershipRow> Memberships { get; } = new();
     // owner fixes 2026-11-19 Q8: the payment list moved to Payments (MyPaymentsViewModel); this page keeps the count waiting
@@ -389,6 +389,10 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
     public bool HasCode => !string.IsNullOrEmpty(MyCode);
     DateTime? _passExpires;
     [ObservableProperty] private string passLeftText = "";
+    [ObservableProperty] private string hiredCoachName = "None yet";
+    [ObservableProperty] private string hiredCoachNote = "Hire a coach on Coaches";
+    [ObservableProperty] private string currentSessionText = "None scheduled";
+    [ObservableProperty] private string currentSessionNote = "Book a session on Time requests";
 
     /// <summary>The page reloads every 20 seconds and calls this: it renews the pass 30 seconds before it runs out, so it never lapses between ticks, and says when it changes.</summary>
     public async Task TickPassAsync(DateTime utcNow)
@@ -420,6 +424,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
                 TermEndsText = rows.FirstOrDefault(t => t.State == Status.Active) is { } t ? $"{t.Term.EndsAt.AddHours(8):d MMM yyyy}" : "No active term";   // Manila, as the terms table
             })) return;
             if (!await LoadPaymentsAsync()) return;
+            await LoadCoachingAsync();
             if (PayNow is { HasCheckout: true } open)
             {
                 // back from Xendit's page: if its notice hasn't arrived yet, the server asks Xendit and confirms it
@@ -434,6 +439,49 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
     }
 
     PaymentItem? payAtDesk;
+
+    async Task LoadCoachingAsync()
+    {
+        if (sessions is null) return;
+        var res = await sessions.RequestsAsync();
+        if (!res.Ok || res.Value is not { } view) return;
+
+        var hired = view.HiredCoaches;
+        if (hired.Count == 0)
+        {
+            HiredCoachName = "None yet";
+            HiredCoachNote = "Hire a coach on Coaches";
+        }
+        else if (hired.Count == 1)
+        {
+            HiredCoachName = hired[0].Name;
+            HiredCoachNote = string.IsNullOrWhiteSpace(hired[0].Coach.Specialty) ? "Active coaching" : hired[0].Coach.Specialty!;
+        }
+        else
+        {
+            HiredCoachName = string.Join(", ", hired.Select(c => c.Name));
+            HiredCoachNote = $"{hired.Count} active coaches";
+        }
+
+        var now = DateTime.UtcNow;
+        var active = view.ActiveSessions ?? [];
+        var current = active.FirstOrDefault(s => s.ScheduledStart.ToUniversalTime() <= now && s.ScheduledEnd.ToUniversalTime() > now)
+            ?? active.Where(s => s.ScheduledStart.ToUniversalTime() > now).OrderBy(s => s.ScheduledStart).FirstOrDefault();
+        if (current is null)
+        {
+            CurrentSessionText = "None scheduled";
+            CurrentSessionNote = "Book a session on Time requests";
+            return;
+        }
+
+        var start = ManilaTime.Of(current.ScheduledStart);
+        var end = ManilaTime.Of(current.ScheduledEnd);
+        CurrentSessionText = current.ScheduledStart.ToUniversalTime() <= now
+            ? $"Now until {end:h:mm tt}"
+            : $"{start:ddd d MMM, h:mm tt}";
+        var coach = hired.FirstOrDefault(c => c.Coach.UserId == current.CoachId)?.Name;
+        CurrentSessionNote = coach is not null ? $"with {coach}" : "Scheduled session";
+    }
 
     async Task<bool> LoadPaymentsAsync()
     {

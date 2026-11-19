@@ -170,6 +170,22 @@
                             </VerticalStackLayout>
                         </VerticalStackLayout>
                     </Border>
+
+                    <Border Style="{StaticResource SidePanel}">
+                        <VerticalStackLayout Spacing="6">
+                            <c:CardTitle Text="Hired coach" />
+                            <Label Text="{Binding HiredCoachName}" Style="{StaticResource Heading}" FontSize="22" LineBreakMode="WordWrap" />
+                            <Label Text="{Binding HiredCoachNote}" Style="{StaticResource Caption}" LineBreakMode="WordWrap" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border Style="{StaticResource SidePanel}">
+                        <VerticalStackLayout Spacing="6">
+                            <c:CardTitle Text="Current session" />
+                            <Label Text="{Binding CurrentSessionText}" Style="{StaticResource Heading}" FontSize="22" LineBreakMode="WordWrap" />
+                            <Label Text="{Binding CurrentSessionNote}" Style="{StaticResource Caption}" LineBreakMode="WordWrap" />
+                        </VerticalStackLayout>
+                    </Border>
                 </VerticalStackLayout>
             </c:SideLayout>
         </VerticalStackLayout>
