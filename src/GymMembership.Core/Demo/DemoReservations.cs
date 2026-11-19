@@ -211,7 +211,7 @@ public sealed partial class DemoGateway
                 var desk = fn == "desk_book_amenity";
                 var who = desk ? a.GetValueOrDefault("p_member") as string ?? throw Err("bad_input") : Uid!;
                 if (desk) { Require("payments:record"); if (who == Uid || All<Member>().All(x => x.UserId != who)) throw Err(who == Uid ? "bad_input" : "not_found"); }
-                else if (!ActiveMember(Uid)) throw Err("no_active_membership");
+                if (!ActiveMember(who)) throw Err("no_active_membership");   // 0097: the desk too
                 var amenityId = I("p_amenity"); var minutes = I("p_minutes");
                 var method = desk ? PayMethod.Cash : a.TryGetValue("p_method", out var m) ? m as string ?? PayMethod.Qr : PayMethod.Qr;
                 if (minutes < 60 || minutes % 60 != 0 || method is not (PayMethod.Qr or PayMethod.Cash)) throw Err("bad_input");   // 0090: whole hours

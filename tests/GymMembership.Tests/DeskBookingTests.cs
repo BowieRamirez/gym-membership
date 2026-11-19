@@ -10,7 +10,12 @@ public class DeskBookingTests
     static async Task<(DemoGateway Gw, DeskBookingViewModel Vm)> Open(bool shift = true)
     {
         Confirm.Answer = (_, _, _) => Task.FromResult(true);
-        var gw = new DemoGateway(); await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        var gw = new DemoGateway();
+        // 0097: the desk books members only, so Carlo buys a Monthly first (from the admin's drawer, leaving the employee's shift as asked)
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();
+        var monthly = (await new MembershipService(gw).ListPackagesAsync()).Value!.First(p => p.Name == "Monthly");
+        Assert.True((await new PaymentStaffService(gw).RecordCounterAsync("membership", "cash", "u-carlo", monthly.Id, null, null, null)).Ok);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         if (shift) await gw.OpenDrawerAsync();
         var vm = new DeskBookingViewModel(new AttendanceService(gw), new ReservationService(gw), new PaymentStaffService(gw));
         vm.Day = DateTime.Today.AddDays(2);
@@ -41,6 +46,17 @@ public class DeskBookingTests
         Assert.Equal(r.TotalPrice, r.DownPayment);
         var pay = (await gw.ListAsync<Payment>(p => p.Id == r.PaymentId)).Single();
         Assert.Equal((Status.Verified, PayMethod.Cash), (pay.Status, pay.Method));
+    }
+
+    [Fact]   // owner fixes 2026-11-19 Q1 (0097): an account with no active membership can't be booked at the desk either
+    public async Task Desk_cannot_book_for_an_account_with_no_membership()
+    {
+        var (gw, vm) = await Open();
+        var before = (await gw.ListAsync<Reservation>()).Count;
+        await Pick(vm, "bea");   // her membership is still waiting for its payment
+        await vm.BookCommand.ExecuteAsync(null);
+        Assert.Equal(ErrorText.For(AppErrorKind.Validation, "no_active_membership"), vm.ErrorMessage);
+        Assert.Equal(before, (await gw.ListAsync<Reservation>()).Count);
     }
 
     [Fact]
