@@ -144,7 +144,8 @@
                 <!-- filters (D7), then export of everything they match -->
                 <Border Style="{StaticResource Panel}">
                     <VerticalStackLayout Spacing="10">
-                        <FlexLayout Wrap="Wrap" AlignItems="End">
+                        <!-- the audit log's filters -->
+                        <FlexLayout Wrap="Wrap" AlignItems="End" IsVisible="{Binding IsAuditTab}">
                             <VerticalStackLayout WidthRequest="220" Margin="0,0,12,8" Spacing="4">
                                 <Label Text="User" Style="{StaticResource Caption}" />
                                 <Border Style="{StaticResource Field}"><Entry Text="{Binding User}" Placeholder="Part of a name" ReturnCommand="{Binding ApplyCommand}" AutomationId="AuditUser" /></Border>
@@ -163,6 +164,35 @@
                             </HorizontalStackLayout>
                             <VerticalStackLayout Margin="0,0,12,8" Spacing="4" IsVisible="{Binding UseDates}"><Label Text="From" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><DatePicker Date="{Binding From}" /></Border></VerticalStackLayout>
                             <VerticalStackLayout Margin="0,0,12,8" Spacing="4" IsVisible="{Binding UseDates}"><Label Text="Through" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><DatePicker Date="{Binding To}" /></Border></VerticalStackLayout>
+                        </FlexLayout>
+                        <!-- owner fixes 2026-11-19 Q4 (0101): Transactions' own filters, kept apart from the audit log's -->
+                        <FlexLayout Wrap="Wrap" AlignItems="End" IsVisible="{Binding IsMoneyTab}">
+                            <VerticalStackLayout WidthRequest="200" Margin="0,0,12,8" Spacing="4">
+                                <Label Text="Customer" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><Entry Text="{Binding Customer}" Placeholder="Part of a name" ReturnCommand="{Binding ApplyCommand}" AutomationId="MoneyCustomer" /></Border>
+                            </VerticalStackLayout>
+                            <VerticalStackLayout WidthRequest="160" Margin="0,0,12,8" Spacing="4">
+                                <Label Text="What" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><Picker SemanticProperties.Description="What was paid for" ItemsSource="{Binding Whats}" SelectedIndex="{Binding WhatIndex}" AutomationId="MoneyWhat" /></Border>
+                            </VerticalStackLayout>
+                            <VerticalStackLayout WidthRequest="140" Margin="0,0,12,8" Spacing="4">
+                                <Label Text="Paid with" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><Picker SemanticProperties.Description="Paid with" ItemsSource="{Binding PaidWiths}" SelectedIndex="{Binding PaidWithIndex}" AutomationId="MoneyPaidWith" /></Border>
+                            </VerticalStackLayout>
+                            <VerticalStackLayout WidthRequest="140" Margin="0,0,12,8" Spacing="4">
+                                <Label Text="Status" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><Picker SemanticProperties.Description="Payment status" ItemsSource="{Binding Statuses}" SelectedIndex="{Binding StatusIndex}" AutomationId="MoneyStatus" /></Border>
+                            </VerticalStackLayout>
+                            <VerticalStackLayout WidthRequest="180" Margin="0,0,12,8" Spacing="4">
+                                <Label Text="Recorded by" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><Entry Text="{Binding RecordedBy}" Placeholder="Part of a name" ReturnCommand="{Binding ApplyCommand}" AutomationId="MoneyRecordedBy" /></Border>
+                            </VerticalStackLayout>
+                            <HorizontalStackLayout Margin="0,0,12,14" Spacing="8">
+                                <Switch IsToggled="{Binding MoneyUseDates}" AutomationId="MoneyUseDates" />
+                                <Label Text="Dates (Manila)" VerticalOptions="Center" />
+                            </HorizontalStackLayout>
+                            <VerticalStackLayout Margin="0,0,12,8" Spacing="4" IsVisible="{Binding MoneyUseDates}"><Label Text="From" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><DatePicker Date="{Binding MoneyFrom}" /></Border></VerticalStackLayout>
+                            <VerticalStackLayout Margin="0,0,12,8" Spacing="4" IsVisible="{Binding MoneyUseDates}"><Label Text="Through" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><DatePicker Date="{Binding MoneyTo}" /></Border></VerticalStackLayout>
                         </FlexLayout>
                         <FlexLayout Wrap="Wrap">
                             <Button Text="Apply filters" Command="{Binding ApplyCommand}" Style="{StaticResource SmallButton}" Margin="0,0,8,0" AutomationId="AuditApply" />

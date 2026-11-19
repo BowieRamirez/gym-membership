@@ -210,6 +210,32 @@ public sealed partial class DemoGateway
     }
 
     /// <summary>audit_records (0045): one page of the log, newest first, for audit:read only.</summary>
+    /// <summary>0101: Transactions' own filters, as the database applies them.</summary>
+    bool MoneyFilter(AuditRecord r, string customer, string what, string paidWith, string status)
+    {
+        if (what is not ("" or "membership" or "amenity" or "day_pass" or "refund" or "cash_shift") || status is not ("" or "pending" or "paid" or "failed" or "refunded" or "voided"))
+            throw Err("bad_audit_filter");
+        var area = r.Action.Split('.')[0];
+        var pay = r.Entity == "payments" ? All<Payment>().FirstOrDefault(p => p.Id.ToString(CultureInfo.InvariantCulture) == r.EntityId) : null;
+        var dayPass = pay?.Kind == PayKind.WalkIn || All<MembershipPackage>().Any(p => p.Id == pay?.PackageSnapshotId && p.IsDayPass);
+        var refunded = pay is not null && All<RefundRequest>().Any(f => f.PaymentId == pay.Id && f.Status == "paid");
+        return (r.Customer ?? "").Contains(customer, StringComparison.OrdinalIgnoreCase)
+            && (paidWith == "" || string.Equals((r.PaidWith ?? "").Replace("PH_", ""), paidWith, StringComparison.OrdinalIgnoreCase))
+            && what switch
+            {
+                "" => true, "refund" or "cash_shift" => area == what,
+                "day_pass" => area == "payment" && dayPass,
+                "membership" => area == "payment" && pay?.Kind is PayKind.Membership or PayKind.Renewal && !dayPass,
+                _ => area == "payment" && pay?.Kind == PayKind.Amenity
+            }
+            && status switch
+            {
+                "" => true, "pending" => pay?.Status == Status.Pending, "voided" => pay?.Status == Status.Voided,
+                "paid" => pay?.Status == Status.Verified && !refunded, "refunded" => pay?.Status == Status.Verified && refunded,
+                _ => pay?.Status is Status.Rejected or Status.Expired
+            };
+    }
+
     List<AuditRecord> AuditRecords(Dictionary<string, object> args)
     {
         Require("audit:read");
@@ -230,6 +256,7 @@ public sealed partial class DemoGateway
                 Customer = Name(x.p?.MemberId) ?? x.p?.WalkInName, Amount = x.p?.Amount,
                 PaidWith = x.e.Details?.GetValueOrDefault("channel")?.ToString() ?? x.p?.Method })
             .Where(r => money is null || (r.Action.Split('.')[0] is "payment" or "refund" or "cash_shift") == money)
+            .Where(r => MoneyFilter(r, S("p_customer").Trim(), S("p_what"), S("p_paid_with"), S("p_status")))
             .Where(r => (from is null || Day(r.CreatedAt) >= from) && (to is null || Day(r.CreatedAt) <= to)
                 && r.ActorName.Contains(user, StringComparison.OrdinalIgnoreCase)
                 && (area == "" || r.Action.Split('.')[0] == area) && (entity == "" || r.Entity == entity))

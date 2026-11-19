@@ -1952,6 +1952,10 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
             ["p_area"] = f.Area ?? "", ["p_entity"] = f.Entity ?? "", ["p_offset"] = offset, ["p_limit"] = limit
         };
         if (f.Money is { } money) args["p_money"] = money;   // 0086
+        if (!string.IsNullOrWhiteSpace(f.Customer)) args["p_customer"] = f.Customer.Trim();   // 0101: Transactions' own filters
+        if (!string.IsNullOrEmpty(f.What)) args["p_what"] = f.What;
+        if (!string.IsNullOrEmpty(f.PaidWith)) args["p_paid_with"] = f.PaidWith;
+        if (!string.IsNullOrEmpty(f.Status)) args["p_status"] = f.Status;
         return await gw.RpcAsync<List<AuditRecord>>("audit_records", args) ?? [];
     }
 

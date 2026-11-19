@@ -61,5 +61,6 @@ public sealed class AuditRecord : BaseModel
 }
 
 /// <summary>Money (0086): true = Transactions (payments, refunds, cash shifts), false = the audit log without them, null = every row.</summary>
-public sealed record AuditFilter(DateOnly? From = null, DateOnly? To = null, string? User = null, string? Area = null, string? Entity = null, bool? Money = null);
+public sealed record AuditFilter(DateOnly? From = null, DateOnly? To = null, string? User = null, string? Area = null, string? Entity = null, bool? Money = null,
+    string? Customer = null, string? What = null, string? PaidWith = null, string? Status = null);   // owner fixes 2026-11-19 Q4 (0101): Transactions only
 public sealed record AuditPage(IReadOnlyList<AuditRecord> Rows, bool HasMore);

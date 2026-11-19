@@ -2138,23 +2138,40 @@ public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive
     public string PageText => $"Page {Page + 1}";
     bool HasPrevious => Page > 0;
     AuditFilter _applied = new();
+    // owner fixes 2026-11-19 Q4 (0101): Transactions has its own filters and its own applied filter; the two tabs never mix
+    public string[] Whats { get; } = ["Everything", "Membership", "Amenity", "Day pass", "Refund", "Cash shift"];
+    static readonly string[] WhatKeys = ["", "membership", "amenity", "day_pass", "refund", "cash_shift"];
+    public string[] PaidWiths { get; } = ["Any way", "Cash", "GCash", "Maya", "QR Ph", "Card"];
+    static readonly string[] PaidWithKeys = ["", "cash", "gcash", "paymaya", "qrph", "cards"];   // Xendit's channel codes, or the payment's method
+    public string[] Statuses { get; } = ["Any status", "Pending", "Paid", "Failed", "Refunded", "Voided"];
+    static readonly string[] StatusKeys = ["", "pending", "paid", "failed", "refunded", "voided"];
+    [ObservableProperty] private string customer = "";
+    [ObservableProperty] private int whatIndex;
+    [ObservableProperty] private int paidWithIndex;
+    [ObservableProperty] private int statusIndex;
+    [ObservableProperty] private string recordedBy = "";
+    [ObservableProperty] private bool moneyUseDates;
+    [ObservableProperty] private DateTime moneyFrom = DateTime.Today.AddDays(-7);
+    [ObservableProperty] private DateTime moneyTo = DateTime.Today;
+    AuditFilter _moneyApplied = new();
+    AuditFilter Shown => ShowMoney ? _moneyApplied with { Money = true } : _applied with { Money = false };
     /// <summary>Set by the page: shows the Save dialog and writes the text. Returns where it went, or null if cancelled.</summary>
     public Func<string, string, Task<string?>>? SaveFile { get; set; }
 
     public override Task OnAppearingAsync() => ShowArchive && Archive is not null ? Archive.OnAppearingAsync() : LoadPageAsync(Page);
 
-    AuditFilter Current()
-    {
-        return new(UseDates ? DateOnly.FromDateTime(From) : null, UseDates ? DateOnly.FromDateTime(To) : null, User,
+    AuditFilter Current() => ShowMoney
+        ? new(MoneyUseDates ? DateOnly.FromDateTime(MoneyFrom) : null, MoneyUseDates ? DateOnly.FromDateTime(MoneyTo) : null, RecordedBy,
+            Customer: Customer, What: WhatKeys[WhatIndex], PaidWith: PaidWithKeys[PaidWithIndex], Status: StatusKeys[StatusIndex])
+        : new(UseDates ? DateOnly.FromDateTime(From) : null, UseDates ? DateOnly.FromDateTime(To) : null, User,
             AreaIndex > 0 ? AuditLabels.Areas.Keys.ElementAt(AreaIndex - 1) : null, ObjectIndex > 0 ? AuditLabels.Objects.Keys.ElementAt(ObjectIndex - 1) : null);
-    }
 
     [RelayCommand]
     private async Task ApplyAsync()
     {
         if (IsBusy) return;
-        if (UseDates && To.Date < From.Date) { ErrorMessage = "The end date must be on or after the start date."; return; }
-        _applied = Current();
+        if (ShowMoney ? MoneyUseDates && MoneyTo.Date < MoneyFrom.Date : UseDates && To.Date < From.Date) { ErrorMessage = "The end date must be on or after the start date."; return; }
+        if (ShowMoney) _moneyApplied = Current(); else _applied = Current();
         await LoadPageAsync(0);
     }
 
@@ -2162,14 +2179,15 @@ public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive
     private async Task ClearFiltersAsync()
     {
         if (IsBusy) return;
-        AreaIndex = ObjectIndex = 0; User = ""; UseDates = false; From = DateTime.Today.AddDays(-7); To = DateTime.Today; _applied = new();
+        if (ShowMoney) { Customer = RecordedBy = ""; WhatIndex = PaidWithIndex = StatusIndex = 0; MoneyUseDates = false; MoneyFrom = DateTime.Today.AddDays(-7); MoneyTo = DateTime.Today; _moneyApplied = new(); }
+        else { AreaIndex = ObjectIndex = 0; User = ""; UseDates = false; From = DateTime.Today.AddDays(-7); To = DateTime.Today; _applied = new(); }
         await LoadPageAsync(0);
     }
 
     async Task LoadPageAsync(int target)
     {
         IsEmpty = false;
-        if (!await RunAsync(() => svc.AuditPageAsync(_applied with { Money = ShowMoney }, target), result =>
+        if (!await RunAsync(() => svc.AuditPageAsync(Shown, target), result =>
             { Fill(Entries, result.Rows); Page = target; HasMore = result.HasMore; IsEmpty = Entries.Count == 0; }))
         { Entries.Clear(); HasMore = false; }
     }
@@ -2184,7 +2202,7 @@ public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive
         if (IsBusy || SaveFile is null) return;
         Notice = null;
         IReadOnlyList<AuditRecord>? rows = null;
-        if (!await RunAsync(() => svc.AuditExportAsync(_applied with { Money = ShowMoney }), r => rows = r)) return;
+        if (!await RunAsync(() => svc.AuditExportAsync(Shown), r => rows = r)) return;
         var where = ShowMoney ? await SaveFile($"transactions-{DateTime.Today:yyyy-MM-dd}.csv", TransactionsCsv.Build(rows!))
                               : await SaveFile($"audit-log-{DateTime.Today:yyyy-MM-dd}.csv", AuditCsv.Build(rows!));
         if (where is not null) Notice = $"Saved {rows!.Count} entr{(rows.Count == 1 ? "y" : "ies")} to {where}.";

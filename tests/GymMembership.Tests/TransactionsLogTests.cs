@@ -53,4 +53,49 @@ public class TransactionsLogTests
         Assert.Contains("\"Ana\"", csv);
         Assert.Contains("\"Cash\"", csv);
     }
+
+    // owner fixes 2026-11-19 Q4 (0101): Transactions has its own filters; the audit log keeps its own, and they don't mix
+    [Fact]
+    public async Task Transactions_filters_by_customer_what_and_paid_with()
+    {
+        var (_, vm) = await AfterASale();
+        await vm.OpenMoneyCommand.ExecuteAsync(null);
+        vm.Customer = "carlo"; vm.WhatIndex = Array.IndexOf(vm.Whats, "Membership"); vm.PaidWithIndex = Array.IndexOf(vm.PaidWiths, "Cash");
+        await vm.ApplyCommand.ExecuteAsync(null);
+        Assert.NotEmpty(vm.Entries);
+        Assert.All(vm.Entries, r => Assert.Equal(("Carlo Diaz", "Cash"), (r.Customer, r.PaidWithText)));
+        vm.WhatIndex = Array.IndexOf(vm.Whats, "Amenity");
+        await vm.ApplyCommand.ExecuteAsync(null);
+        Assert.Empty(vm.Entries);
+    }
+
+    [Fact]   // Review Focus 5
+    public async Task Each_tab_keeps_its_own_filters()
+    {
+        var (_, vm) = await AfterASale();
+        await vm.OpenMoneyCommand.ExecuteAsync(null);
+        vm.Customer = "nobody by this name";
+        await vm.ApplyCommand.ExecuteAsync(null);
+        Assert.Empty(vm.Entries);
+        await vm.OpenLogsCommand.ExecuteAsync(null);
+        Assert.NotEmpty(vm.Entries);                 // the audit log isn't filtered by the Transactions customer
+        vm.User = "Dana";
+        await vm.ApplyCommand.ExecuteAsync(null);
+        await vm.OpenMoneyCommand.ExecuteAsync(null);
+        Assert.Equal("nobody by this name", vm.Customer);
+        Assert.Empty(vm.Entries);                    // still its own filter
+        await vm.ClearFiltersCommand.ExecuteAsync(null);
+        Assert.NotEmpty(vm.Entries);
+        await vm.OpenLogsCommand.ExecuteAsync(null);
+        Assert.Equal("Dana", vm.User);               // clearing Transactions left the audit log's filter alone
+    }
+
+    [Fact]
+    public void Transactions_offers_the_owners_choices()
+    {
+        var vm = new AuditViewModel(new AdminService(new DemoGateway()));
+        Assert.Equal(["Everything", "Membership", "Amenity", "Day pass", "Refund", "Cash shift"], vm.Whats);
+        Assert.Equal(["Any way", "Cash", "GCash", "Maya", "QR Ph", "Card"], vm.PaidWiths);
+        Assert.Equal(["Any status", "Pending", "Paid", "Failed", "Refunded", "Voided"], vm.Statuses);
+    }
 }
