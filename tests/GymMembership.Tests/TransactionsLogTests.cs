@@ -98,4 +98,32 @@ public class TransactionsLogTests
         Assert.Equal(["Any way", "Cash", "GCash", "Maya", "QR Ph", "Card"], vm.PaidWiths);
         Assert.Equal(["Any status", "Pending", "Paid", "Failed", "Refunded", "Voided"], vm.Statuses);
     }
+
+    [Fact]   // Q11: demo Transactions follows refund_requests rows to their payment, as 0101 does
+    public async Task Refund_rows_show_under_Status_Refunded()
+    {
+        var gw = new DemoGateway();
+        Assert.True((await new AuthService(gw).RegisterAsync("Bea", "Cruz", "bea.tx@demo.io", "secret12", true)).Ok);
+        var member = new MembershipService(gw);
+        var monthly = (await member.ListPackagesAsync()).Value!.First(p => p.Name == "Monthly");
+        var pay = (await member.AvailAsync(monthly.Id)).Value!;
+        Assert.True((await member.PayOnlineAsync(pay.Id)).Value!.Paid);
+        var term = (await gw.ListAsync<MembershipTerm>(t => t.PaymentId == pay.Id)).Single();
+        Assert.True((await new SubscriptionService(gw).RequestRefundAsync(term.Id, "Changed my mind", null)).Ok);
+        var req = (await gw.ListAsync<RefundRequest>(r => r.PaymentId == pay.Id)).Single();
+
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var sub = new SubscriptionService(gw);
+        Assert.True((await sub.DecideAsync(req.Id, true, "OK")).Ok);
+        await gw.OpenDrawerAsync();
+        Assert.True((await sub.MarkPaidAsync(req.Id, PayMethod.Cash, null)).Ok);
+
+        var vm = new AuditViewModel(new AdminService(gw));
+        await vm.OpenMoneyCommand.ExecuteAsync(null);
+        vm.WhatIndex = Array.IndexOf(vm.Whats, "Refund");
+        vm.StatusIndex = Array.IndexOf(vm.Statuses, "Refunded");
+        await vm.ApplyCommand.ExecuteAsync(null);
+        Assert.NotEmpty(vm.Entries);
+        Assert.All(vm.Entries, r => Assert.Equal("Refund", r.AreaText));
+    }
 }

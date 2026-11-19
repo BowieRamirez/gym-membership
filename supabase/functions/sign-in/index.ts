@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
   const { data, error } = await auth.auth.signInWithPassword({ email, password });
   // an Auth outage or an unconfirmed email is not a wrong password: say so (the try stays counted, 0104)
   if (error && !/invalid login credentials/i.test(error.message)) {
-    return reply({ error: /not confirmed/i.test(error.message) ? 'email_not_confirmed' : 'auth_unavailable' }, error.status ?? 503);
+    return reply({ error: /not confirmed/i.test(error.message) ? 'email_not_confirmed' : 'auth_unavailable' }, error.status || 503);
   }
   const locked = await admin.rpc('sign_in_result', { p_email: email, p_ok: !error && !!data.session });
   if (error || !data.session) {

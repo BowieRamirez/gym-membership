@@ -17,7 +17,8 @@ public partial class PaymentsPage : BasePage
         vm.DialogOpen = true;
         try
         {
-            if (!await DisplayAlertAsync("Cancel this payment?", $"{item.What}\n₱{item.Amount:N2}\n\nNo membership will be started. You can choose a package again afterwards.", "Cancel payment", "Keep it")) return;
+            var sent = item.HasProof ? "\n\nYou already sent proof. If you really paid, talk to the front desk first: cancelling here does not return money you sent." : "";
+            if (!await DisplayAlertAsync("Cancel this payment?", $"{item.What}\n₱{item.Amount:N2}\n\nNo membership will be started. You can choose a package again afterwards.{sent}", "Cancel payment", "Keep it")) return;
             await vm.CancelPaymentAsync(item);
         }
         finally { vm.DialogOpen = false; }

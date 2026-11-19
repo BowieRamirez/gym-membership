@@ -73,4 +73,32 @@ public class MyPaymentsTests
         Assert.Contains(MemberMenu.Order(true), i => i.Page == "Payments" && !i.MembersOnly);
         Assert.Contains(MemberMenu.Order(false), i => i.Page == "Payments" && !i.MembersOnly);
     }
+
+    [Fact]   // Q11: a payment whose refund was repaid says Refunded
+    public async Task A_repaid_refund_shows_as_Refunded_on_my_payments()
+    {
+        var gw = new DemoGateway();
+        Assert.True((await new AuthService(gw).RegisterAsync("Bea", "Cruz", "bea.ref@demo.io", "secret12", true)).Ok);
+        var uid = gw.CurrentUserId!;
+        var member = new MembershipService(gw);
+        var monthly = (await member.ListPackagesAsync()).Value!.First(p => p.Name == "Monthly");
+        var pay = (await member.AvailAsync(monthly.Id)).Value!;
+        Assert.True((await member.PayOnlineAsync(pay.Id)).Value!.Paid);
+        var term = (await gw.ListAsync<MembershipTerm>(t => t.PaymentId == pay.Id)).Single();
+        var sub = new SubscriptionService(gw);
+        Assert.True((await sub.RequestRefundAsync(term.Id, "Changed my mind", null)).Ok);
+        var req = (await gw.ListAsync<RefundRequest>(r => r.PaymentId == pay.Id)).Single();
+
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var staff = new SubscriptionService(gw);
+        Assert.True((await staff.DecideAsync(req.Id, true, "OK")).Ok);
+        await gw.OpenDrawerAsync();
+        Assert.True((await staff.MarkPaidAsync(req.Id, PayMethod.Cash, null)).Ok);
+
+        await gw.SignInAsync("bea.ref@demo.io", "secret12");
+        var vm = new MyPaymentsViewModel(new MembershipService(gw), new SubscriptionService(gw));
+        await vm.OnAppearingAsync();
+        var row = vm.Rows.Single(r => r.Id == pay.Id);
+        Assert.Equal("Refunded", row.StatusText);
+    }
 }

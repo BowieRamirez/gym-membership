@@ -102,12 +102,12 @@ public sealed partial class DemoGateway : ISupabaseGateway
     bool IsCoach(string? userId) => All<Coach>().Any(c => c.UserId == userId);
     CoachVisit? OpenVisit(string coachId) => All<CoachVisit>().FirstOrDefault(v => v.CoachId == coachId && v.CheckedOutAt is null);
 
-    /// <summary>The demo's stand-in for the database owner (Supabase dashboard) switching an account on or off, which 0037 still allows
-    /// for a super admin when nobody in the app can.</summary>
-    /// <summary>0099: members can't choose cash any more; the ones they chose before still wait at the desk. This makes one of those.</summary>
     /// <summary>0100: Void payment is gone from the app; the database owner can still void (old voided payments exist), signed in as an admin.</summary>
     public Task OwnerVoidAsync(int paymentId, string reason) => RpcAsync("owner:void_payment", new() { ["p_payment_id"] = paymentId, ["p_reason"] = reason });
+    /// <summary>0099: members can't choose cash any more; the ones they chose before still wait at the desk. This makes one of those.</summary>
     public void OwnerMakeCash(int paymentId) => All<Payment>().First(p => p.Id == paymentId).Method = PayMethod.Cash;
+    /// <summary>The demo's stand-in for the database owner (Supabase dashboard) switching an account on or off, which 0037 still allows
+    /// for a super admin when nobody in the app can.</summary>
     public void OwnerSetActive(string userId, bool active) => All<Profile>().First(p => p.Id == userId).IsActive = active;
     /// <summary>0066 (G19): the database owner, not the app, can still leave an amenity set up as a pass, as amenities sold before were.</summary>
     public void OwnerSetPassDays(int amenityId, int? days) => All<Amenity>().First(a => a.Id == amenityId).DurationDays = days;

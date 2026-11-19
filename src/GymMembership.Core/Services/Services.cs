@@ -293,7 +293,7 @@ public static class ManilaTime
 /// <summary>One of the member's payments. Online (qr) payments are paid through Xendit's checkout (Xendit plan, 2026-11-16).</summary>
 public sealed record PaymentItem(int Id, string What, string PaymentCode, string Kind, string Method, decimal Amount, decimal DiscountAmount, string Status,
     DateTime CreatedAt, DateTime? ExpiresAt, string? ReferenceNo, bool HasProof, string? ReceiptNo, string? RejectedReason, int? ItemId, int? PackageSnapshotId = null,
-    bool HasCheckout = false)
+    bool HasCheckout = false, bool Refunded = false)
 {
     /// <summary>An online payment the member still has to pay (a proof sent before the switch is with the desk instead).</summary>
     bool NotExpired => ExpiresAt is not { } e || ManilaTime.Utc(e) > DateTime.UtcNow;
@@ -305,7 +305,7 @@ public sealed record PaymentItem(int Id, string What, string PaymentCode, string
     public bool CanCancel => Status == Models.Status.Pending && Kind is PayKind.Membership or PayKind.Renewal;
     /// <summary>Owner fixes 2026-11-19 Q8: how it was paid and its status, in the member's words.</summary>
     public string MethodText => Method switch { PayMethod.Qr => "Online", PayMethod.Cash => "Cash", PayMethod.Gcash => "GCash", _ => Method };
-    public string StatusText => PaymentStatus.Text(Status);
+    public string StatusText => PaymentStatus.Text(Status, Refunded);
     /// <summary>Rejected and expired payments are final; the member pays again with a fresh one.</summary>
     public bool CanPayAgain => Status is Models.Status.Rejected or Models.Status.Expired && ItemId is not null && Kind != PayKind.Amenity;   // F12: an amenity is booked again on Book an amenity
     public string Detail => Status switch
@@ -423,10 +423,12 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
     {
         var uid = gw.CurrentUserId;
         var pays = await gw.ListAsync<Payment>(p => p.MemberId == uid);
+        var refunded = (await gw.ListAsync<RefundRequest>(r => r.MemberId == uid && r.Status == "paid")).Select(r => r.PaymentId).ToHashSet();
         var look = await PaymentLookup.LoadAsync(gw);
         return pays.OrderByDescending(p => p.CreatedAt).Select(p => new PaymentItem(p.Id,
             p.DiscountAmount > 0 ? look.Item(p) + " (discount)" : look.Item(p), p.PaymentCode, p.Kind, p.Method, p.Amount, p.DiscountAmount, p.Status,
-            p.CreatedAt, p.ExpiresAt, p.ReferenceNo, p.ProofPath is not null, p.ReceiptNo, p.RejectedReason, look.ItemId(p), p.PackageSnapshotId, p.XenditId is not null)).ToList();
+            p.CreatedAt, p.ExpiresAt, p.ReferenceNo, p.ProofPath is not null, p.ReceiptNo, p.RejectedReason, look.ItemId(p), p.PackageSnapshotId, p.XenditId is not null,
+            refunded.Contains(p.Id))).ToList();
     });
 
     static Dictionary<string, object> WithCode(Dictionary<string, object> args, string? code)
@@ -481,19 +483,19 @@ public sealed record ClaimRow(RefundRequest Claim, string Member, string Amenity
     public string Price => $"₱{Claim.Amount:N2}";
     public string Sent => $"Sent {Claim.RequestedAt.ToUniversalTime().AddHours(8).ToString("ddd d MMM, h:mm tt", System.Globalization.CultureInfo.InvariantCulture)}";
 }
-/// <summary>Something the counter can take a payment for: a package, a membership to renew, or an amenity.</summary>
 /// <summary>Owner fixes 2026-11-19 Q5: a payment's status in plain words. The database values don't change.</summary>
 public static class PaymentStatus
 {
-    public static string Text(string status) => status switch   // Transactions filters Refunded in the database (0101)
+    public static string Text(string status, bool refunded = false) => status switch
     {
-        Models.Status.Verified => "Paid",
+        Models.Status.Verified => refunded ? "Refunded" : "Paid",
         Models.Status.Rejected or Models.Status.Expired => "Failed",
         Models.Status.Voided => "Voided",   // only payments voided before 0100
         _ => status.Length == 0 ? "" : char.ToUpper(status[0]) + status[1..]
     };
 }
 
+/// <summary>Something the counter can take a payment for: a package, a membership to renew, or an amenity.</summary>
 public sealed record CounterItem(int Id, string Label, decimal? Price = null, bool DayPass = false);   // 0098: the Day pass package
 
 public interface IPaymentStaffService
@@ -673,7 +675,8 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
         switch (kind)
         {
             case PayKind.Membership:
-                return (await gw.ListAsync<MembershipPackage>(p => p.IsActive == true)).Select(p => new CounterItem(p.Id, p.Name, p.Price, p.IsDayPass)).ToList();
+                return (await gw.ListAsync<MembershipPackage>(p => p.IsActive == true)).Where(p => p.PublishedAt is not null)
+                    .Select(p => new CounterItem(p.Id, p.Name, p.Price, p.IsDayPass)).ToList();
             case PayKind.Amenity:
                 // G19 (0066): sessions only; an amenity still set up as a pass isn't sold until it has a session price
                 return (await gw.ListAsync<Amenity>(a => a.IsActive == true)).Where(a => a.DurationDays is null).Select(a => new CounterItem(a.Id, a.Name, a.Price)).ToList();

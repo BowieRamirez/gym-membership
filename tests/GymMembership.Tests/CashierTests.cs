@@ -302,4 +302,14 @@ public class CashierTests
         vm.PickMethodCommand.Execute("GCash / QR Ph");
         Assert.Equal("Day pass, paid with GCash / QR Ph", vm.OrderHow);
     }
+
+    [Fact]   // Q11: a draft package is never offered at the Cashier (even when an admin opens it and can see drafts)
+    public async Task Draft_packages_are_not_offered_at_the_cashier()
+    {
+        var gw = new DemoGateway(); await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var dayPass = (await gw.ListAsync<MembershipPackage>()).Single(p => p.IsDayPass && p.PublishedAt is not null);
+        var draftId = (await new AdminService(gw).NewPackageVersionAsync(dayPass.Id)).Value;
+        var items = (await new PaymentStaffService(gw).ItemsAsync(PayKind.Membership, null)).Value!;
+        Assert.DoesNotContain(items, i => i.Id == draftId);
+    }
 }

@@ -209,14 +209,21 @@ public sealed partial class DemoGateway
             .OrderBy(r => r.ArchivedAt is null).ThenByDescending(r => r.ArchivedAt).ThenBy(r => r.Type, StringComparer.Ordinal).ThenBy(r => r.RecordId, StringComparer.Ordinal).Skip(offset).Take(limit).ToList();
     }
 
-    /// <summary>audit_records (0045): one page of the log, newest first, for audit:read only.</summary>
+    Payment? PaymentFor(string entity, string? entityId) => entity switch
+    {
+        "payments" => All<Payment>().FirstOrDefault(p => p.Id.ToString(CultureInfo.InvariantCulture) == entityId),
+        "refund_requests" => All<RefundRequest>().FirstOrDefault(f => f.Id.ToString(CultureInfo.InvariantCulture) == entityId) is { } rr
+            ? All<Payment>().FirstOrDefault(p => p.Id == rr.PaymentId) : null,
+        _ => null
+    };
+
     /// <summary>0101: Transactions' own filters, as the database applies them.</summary>
     bool MoneyFilter(AuditRecord r, string customer, string what, string paidWith, string status)
     {
         if (what is not ("" or "membership" or "amenity" or "day_pass" or "refund" or "cash_shift") || status is not ("" or "pending" or "paid" or "failed" or "refunded" or "voided"))
             throw Err("bad_audit_filter");
         var area = r.Action.Split('.')[0];
-        var pay = r.Entity == "payments" ? All<Payment>().FirstOrDefault(p => p.Id.ToString(CultureInfo.InvariantCulture) == r.EntityId) : null;
+        var pay = PaymentFor(r.Entity, r.EntityId);
         var dayPass = pay?.Kind == PayKind.WalkIn || All<MembershipPackage>().Any(p => p.Id == pay?.PackageSnapshotId && p.IsDayPass);
         var refunded = pay is not null && All<RefundRequest>().Any(f => f.PaymentId == pay.Id && f.Status == "paid");
         return (r.Customer ?? "").Contains(customer, StringComparison.OrdinalIgnoreCase)
@@ -236,6 +243,7 @@ public sealed partial class DemoGateway
             };
     }
 
+    /// <summary>audit_records (0045): one page of the log, newest first, for audit:read only.</summary>
     List<AuditRecord> AuditRecords(Dictionary<string, object> args)
     {
         Require("audit:read");
@@ -248,12 +256,12 @@ public sealed partial class DemoGateway
         string? Name(string? id) => All<Profile>().FirstOrDefault(p => p.Id == id)?.FullName;
         DateOnly Day(DateTime at) => DateOnly.FromDateTime(at.ToUniversalTime().AddHours(8));
         bool? money = args.TryGetValue("p_money", out var m) && m is bool b ? b : null;   // 0086
-        Payment? Pay(AuditEntry e) => e.Entity == "payments" ? All<Payment>().FirstOrDefault(p => p.Id.ToString(CultureInfo.InvariantCulture) == e.EntityId) : null;
         return All<AuditEntry>()
-            .Select(e => (e, p: Pay(e)))
+            .Select(e => (e, p: PaymentFor(e.Entity, e.EntityId),
+                rr: e.Entity == "refund_requests" ? All<RefundRequest>().FirstOrDefault(f => f.Id.ToString(CultureInfo.InvariantCulture) == e.EntityId) : null))
             .Select(x => new AuditRecord { Id = x.e.Id, CreatedAt = x.e.CreatedAt, ActorName = Name(x.e.ActorId) ?? "System", Role = x.e.Role, IpAddress = x.e.IpAddress,
                 Action = x.e.Action, Entity = x.e.Entity, EntityId = x.e.EntityId, ObjectName = x.e.Entity is "profiles" or "user_roles" ? Name(x.e.EntityId) : null, Details = x.e.Details,
-                Customer = Name(x.p?.MemberId) ?? x.p?.WalkInName, Amount = x.p?.Amount,
+                Customer = Name(x.p?.MemberId) ?? x.p?.WalkInName, Amount = x.rr?.Amount ?? x.p?.Amount,
                 PaidWith = x.e.Details?.GetValueOrDefault("channel")?.ToString() ?? x.p?.Method })
             .Where(r => money is null || (r.Action.Split('.')[0] is "payment" or "refund" or "cash_shift") == money)
             .Where(r => MoneyFilter(r, S("p_customer").Trim(), S("p_what"), S("p_paid_with"), S("p_status")))
