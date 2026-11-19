@@ -4,7 +4,7 @@
 
 Created: 2026-11-19
 Last updated: 2026-11-19
-Status: BUILT 2026-11-19 (owner: Q1 = (b), Q2 = (a) but the hook needs the Team plan, so (b) was built; Q3 = 1 hour; native execution). Phases 1-8 done, final review fixed (`0dd2be7`); `0097`-`0105` live, sign-in function deployed. Left: owner checks the Auth per-IP sign-in limit, adds the Day pass package live, hand checks on devices. Next migration `0106`.
+Status: BUILT 2026-11-19 (owner: Q1 = (b), Q2 = (a) but the hook needs the Team plan, so (b) was built; Q3 = 1 hour; native execution). Phases 1-8 done, final review fixed (`0dd2be7`); `0097`-`0105` live, sign-in function deployed. Left: owner checks the Auth per-IP sign-in limit, adds the Day pass package live, hand checks on devices. Pushed to GitHub (`5e8358e`). Second round added 2026-11-19: Phases 10-11 PLANNED, wait on Q12 and Q13. Next migration `0106`.
 Branch: `owner-fixes-2026-11-19` (cut from `xendit-payments-2026-11-16` at `f68d440`). **Owner's rule: this branch is not merged into `main`.** No PR, no push to GitHub without the owner.
 
 **Goal:** The owner's list of 2026-11-19: only people with a membership (a Day pass included) book amenities and send time requests; members can buy a Day pass online as a package; the sign-in locks after 10 wrong passwords; package buying is limited to 10 tries; Transactions get their own filters; Void payment goes; members pay online only; the change-password error says what really went wrong; members get a Payments page of their own.
@@ -41,6 +41,8 @@ Same rules as `2026-11-17-desk-amenities-logs-buy-popup.md`:
 | 7 | Payments page for members, apart from My membership | Q8 | DONE (`c10d477`) |
 | 8 | Rate limits: 10 package buys, 10 wrong sign-ins then 5 minutes locked | Q2, Q3 | DEPLOYED (`0102`, `0103`, sign-in function; `dd317bf`, `0da236e`) |
 | 9 | Whole-branch checks, review, owner hand checks | | DONE bar owner hand checks (`0104`, `0105`, `0dd2be7`) |
+| 10 | Small leftovers from the final review | Q10, Q11 | |
+| 11 | Discount codes are checked as they're typed: works, or why not | Q12, Q13 | |
 
 ## 1. Findings (2026-11-19)
 
@@ -69,6 +71,10 @@ Same rules as `2026-11-17-desk-amenities-logs-buy-popup.md`:
 | Q6 | **Members pay online only.** Packages popup: step 2 (Online / Cash) goes, Buy goes straight to online. Book an amenity: no cash choice. In the database, `check_package_method` and `book_amenity` refuse `cash` from a member (`online_only`). Members' cash payments already waiting stay for the desk to verify or expire (0085). The desk's cash flows don't change; each cash payment's audit row already names the staff member (actor, 0078); a test pins it. | From the owner's list |
 | Q7 | **Password errors:** `ErrorText` reads Supabase Auth's `msg` / `error_code` too, so `wrong_password`, `same_password` and `weak_password` show their own sentence (add `weak_password`). The generic Validation text loses its example: "That isn't allowed right now." Membership never matters for changing a password. | Claude's call |
 | Q8 | **Payments page (members):** a new "Payments" menu item for any member account (not `members-only`). Lists only the member's own payments, newest first, 10 a page: date, what (package or amenity name), amount, paid with, status, payment code. Filter chips: All, Membership (Day pass included: it's a package), Amenity. My membership keeps only the waiting payment's actions (Pay online, Cancel); its payment list moves here. Read from `payments` under the existing own-rows rule (check RLS, no new function). | Owner, 2026-11-19 |
+| Q10 | **Second round (owner, 2026-11-19): the final review's small leftovers go in.** A Day pass booking must also **end** by the pass's midnight (11 pm to 1 am is refused with `outside_membership`); other memberships keep the start-only rule. A Day pass paid just after midnight lasts through that new day: kept, it's in the member's favour and the popup already says "until midnight". | Claude's call |
+| Q11 | Leftovers fixed as found: the sign-in function answers a network failure with `auth_unavailable` (`error.status || 503`); the member's Payments page says **Refunded** when a refund for that payment was repaid (the member's own `refund_requests` rows); its Cancel dialog keeps My membership's "you already sent proof" warning; the Cashier and `ItemsAsync` list only **published** packages (no draft Day pass price); the demo's Transactions filter follows a refund row to its payment, as the database does; two doc comments go back above their own members. | Claude's call |
+| Q12 | **Discount codes checked as they're typed (owner, 2026-11-19).** In the Buy popup (Packages) and on Book an amenity, a code is checked about half a second after the member stops typing, and when the box loses focus. Under the box, one line: **"Code works: 10% off. You pay ₱1,350.00."** or the reason it doesn't: **"There's no code with that name."**, "You've already used this code.", "This code has been used up.", "This code has expired.", "That code doesn't work for this package." Pay is unchanged: the server checks the code again when the payment is made. An empty box shows nothing. Recommended: both places, since a booking takes codes the same way. | **Owner to confirm** (both places, or the Buy popup only) |
+| Q13 | Checking a code tells whether it exists, which Pay already did. To stop someone guessing codes quickly, a member can check at most **20 codes in 10 minutes**; after that the line says "Too many checks. Wait a few minutes." Recommended. | **Owner to confirm** the limit |
 | Q9 | **Day pass package.** `membership_packages.is_day_pass boolean not null default false`, at most one on sale (partial unique index). Its term starts when the payment is verified and ends at **midnight Manila that day** (not 24 hours later). A member with an active membership can't buy one (`already_member`); a Day pass doesn't stack or extend. Admins set its name, price and description on the Packages admin page like any package (a "Day pass" switch). Members see it on Packages like any package, paid online. **The desk:** the Cashier's "Day pass" kind with a member picked sells that package to them (a cash or desk-online payment, which makes the term); with no member (a walk-in with no account) it stays a `walk_in` payment with a typed name, as today, at the Day pass package's price. `gym_settings.walk_in_price` is no longer read (left in place, not dropped). | Claude's call, from the owner's (b) |
 
 ## Global Constraints
@@ -179,6 +185,35 @@ Same rules as `2026-11-17-desk-amenities-logs-buy-popup.md`:
 
 - [ ] Failing tests, build, push, owner enables the hook (a), live check with a test account, commit.
 
+## Phase 10: Small leftovers (Q10, Q11)
+
+### Task 12: Day pass bookings end by midnight (next migration)
+
+**Files:** next migration `01xx_day_pass_booking_ends.sql` (`book_amenity_for`, the 0098 term check: when that term's package is the Day pass, also `ends_at >= v_end`), `supabase/tests/local/day-pass-package.mjs`, demo `DemoReservations.cs`, test `DayPassPackageTests.cs`.
+
+- [ ] Failing tests: a Day pass holder booking 11 pm to 1 am → `outside_membership`; 9 to 10 pm → booked; a Monthly member's booking that runs past their term's end still works. Migration, push, grants, commit.
+
+### Task 13: The other leftovers
+
+**Files:** `supabase/functions/sign-in/index.ts` (`error.status || 503`, redeploy); `Services.cs` (`PaymentItem` gets `Refunded`, `MyPaymentsAsync` reads the member's paid `refund_requests`; `PaymentStatus.Text(status, refunded)` back; `ItemsAsync` membership list `PublishedAt is not null`); `PaymentsPage.xaml.cs` (HasProof warning); `DemoArchive.cs` (`MoneyFilter` follows `refund_requests` to the payment; doc comment above `AuditRecords`); `DemoGateway.cs` (doc comments above `OwnerSetActive`, `OwnerVoidAsync`, `OwnerMakeCash`); tests `MyPaymentsTests.cs`, `CashierTests.cs`, `TransactionsLogTests.cs`.
+
+- [ ] One failing test per behaviour (Refunded on Payments, a draft package not sold at the Cashier, demo refund rows under Status = Refunded), fix, whole suite, commit.
+
+## Phase 11: Codes checked as they're typed (Q12, Q13)
+
+### Task 14: `check_discount_code` (next migration)
+
+**Files:** next migration `01xx_check_discount_code.sql`: `check_discount_code(p_code text, p_kind text, p_item bigint) returns table(percent int, amount_off numeric, you_pay numeric)` for the signed-in member. `p_kind` is `package` or `amenity`. It reuses `apply_discount` (exists, used, limit, expiry) and the item check `guard_payment_discount_item` uses (0060), writing nothing; it raises the same codes Pay raises (`invalid_code`, `code_already_used`, `code_limit_reached`, `code_not_for_item`). Q13's limit: a small `code_checks(member_id, checked_at)` log, 20 in 10 minutes, then `too_many_checks`. Granted to authenticated only. `supabase/tests/local/discount-check.mjs`.
+
+- [ ] Failing tests: a good code returns its percent and the price after; each refusal gives its code; a code for amenities only refused for a package; the 21st check in 10 minutes refused; nothing is written to `payments` (uses are counted from payments); anon can't call it. Migration, push, grants, commit.
+
+### Task 15: The line under the code box
+
+**Files:** `MembershipService` (`CheckCodeAsync(string code, string kind, int itemId) -> AppResult<CodeCheck>`), demo mirror (`check_discount_code` case reusing the demo's discount rules), `PackagesViewModel` (`CodeCheck`, `CodeCheckText`, `CodeWorks`; checks on `DiscountCode` change after 500 ms with the newest check winning, and on unfocus; cleared on open and close), `BookAmenityViewModel` (same, for `Code`; the price split uses the checked percent, not only the listed codes), `PackagesPage.xaml` and `BookAmenityPage.xaml` (one line under the box: green check with the price for a good code, the reason in the error colour otherwise), `Foundation.cs` (the sentences in Q12, `too_many_checks`), tests `CodeCheckTests.cs`.
+
+- [ ] Tests first: typing a good code shows "Code works: …" with the price; a wrong one shows "There's no code with that name."; clearing the box clears the line; a slow answer for an old code never overwrites the newer one; closing the popup clears it.
+- [ ] Screens with `impeccable`: Android and Windows, light and dark, 1.3 font scale; the line must not push Buy off a small phone screen. Commit.
+
 ## Phase 9: Checks
 
 - [ ] Whole test suite and database tests green; live grants checked for every migration on this branch.
@@ -191,3 +226,4 @@ Same rules as `2026-11-17-desk-amenities-logs-buy-popup.md`:
 - 2026-11-19: plan written, branch `owner-fixes-2026-11-19` made.
 - 2026-11-19: owner chose Q1 = (b) (Day pass as a package, desk too) and Day pass under Membership (Q8); Phase 3 added. Owner: Q2 = (a), Q3 = 1 hour, build it natively.
 - 2026-11-19: built Phases 1-8 natively; rulings in `.superpowers/sdd/2026-11-19-owner-fixes/progress.md`. Q2 (a) needs the Team plan (Supabase gates the Password Verification hook), so the sign-in Edge Function (b) was built.
+- 2026-11-19: owner asked for the leftovers in the plan and for codes checked as they're typed: Phases 10 and 11 added (Q10-Q13). Waiting on Q12, Q13.
