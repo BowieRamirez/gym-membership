@@ -527,13 +527,23 @@ public partial class MyPaymentsViewModel(IMembershipService svc, ISubscriptionSe
     const int PageSize = 10;
     public ObservableCollection<PaymentItem> Rows { get; } = new();
     IReadOnlyList<PaymentItem> all = [];
+    public string[] PaidWiths { get; } = ["Any way", "Cash", "Online"];
     [ObservableProperty, NotifyPropertyChangedFor(nameof(EmptyText))] private string kind = "All";   // All, Membership (a Day pass is a package) or Amenity
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(EmptyText))] private int paidWithIndex;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(PageText)), NotifyCanExecuteChangedFor(nameof(PreviousCommand))] private int page;
     [ObservableProperty, NotifyCanExecuteChangedFor(nameof(NextCommand))] private bool hasMore;
     [ObservableProperty] private bool isEmpty;
     public string PageText => $"Page {Page + 1}";
-    public string EmptyText => Kind == "All" ? "No payments yet." : $"No {Kind.ToLowerInvariant()} payments yet.";
+    public string EmptyText => (Kind == "All", PaidWithIndex) switch
+    {
+        (true, 0) => "No payments yet.",
+        (false, 0) => $"No {Kind.ToLowerInvariant()} payments yet.",
+        (true, _) => $"No {PaidWiths[PaidWithIndex].ToLowerInvariant()} payments yet.",
+        (false, _) => $"No {PaidWiths[PaidWithIndex].ToLowerInvariant()} {Kind.ToLowerInvariant()} payments yet."
+    };
     public bool DialogOpen { get; set; }
+
+    partial void OnPaidWithIndexChanged(int value) => Show(0);
 
     public override Task OnAppearingAsync() => LoadAsync();
     [RelayCommand] private Task LoadAsync() => RunAsync(svc.MyPaymentsAsync, rows => { all = rows; Show(Page); });
@@ -549,6 +559,11 @@ public partial class MyPaymentsViewModel(IMembershipService svc, ISubscriptionSe
         {
             "Membership" => p.Kind is PayKind.Membership or PayKind.Renewal,
             "Amenity" => p.Kind == PayKind.Amenity,
+            _ => true
+        }).Where(p => PaidWithIndex switch
+        {
+            1 => p.Method == PayMethod.Cash,
+            2 => p.Method != PayMethod.Cash,
             _ => true
         }).OrderByDescending(p => p.CreatedAt).ToList();
         Page = Math.Clamp(target, 0, Math.Max(0, (shown.Count - 1) / PageSize));

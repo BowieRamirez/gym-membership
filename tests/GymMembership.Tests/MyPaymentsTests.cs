@@ -101,4 +101,32 @@ public class MyPaymentsTests
         var row = vm.Rows.Single(r => r.Id == pay.Id);
         Assert.Equal("Refunded", row.StatusText);
     }
+
+    [Fact]
+    public async Task Filters_by_paid_with_dropdown()
+    {
+        var gw = new DemoGateway();
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();
+        var sauna = (await gw.ListAsync<Amenity>()).First(a => a.Name == "Sauna");
+        var res = await new PaymentStaffService(gw).RecordCounterAsync(PayKind.Amenity, PayMethod.Cash, "u-alex", sauna.Id, null, null, null);
+        Assert.True(res.Ok);
+        var cashPay = res.Value!;
+        await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
+
+        var vm = new MyPaymentsViewModel(new MembershipService(gw), new SubscriptionService(gw));
+        await vm.OnAppearingAsync();
+        Assert.Equal(["Any way", "Cash", "Online"], vm.PaidWiths);
+
+        vm.PaidWithIndex = 1;   // Cash
+        Assert.NotEmpty(vm.Rows);
+        Assert.All(vm.Rows, r => Assert.Equal(PayMethod.Cash, r.Method));
+        Assert.Contains(vm.Rows, r => r.Id == cashPay.Id);
+
+        vm.PaidWithIndex = 2;   // Online
+        Assert.All(vm.Rows, r => Assert.NotEqual(PayMethod.Cash, r.Method));
+        Assert.DoesNotContain(vm.Rows, r => r.Id == cashPay.Id);
+
+        vm.SetKindCommand.Execute("Amenity");
+        Assert.Equal("No online amenity payments yet.", vm.EmptyText);
+    }
 }

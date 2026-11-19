@@ -68,8 +68,8 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <!-- what was bought; the chosen chip is filled, as on the other member pages -->
-            <FlexLayout Wrap="Wrap">
+            <!-- what was bought + how it was paid; the chosen chip is filled, as on the other member pages -->
+            <FlexLayout Wrap="Wrap" AlignItems="Center">
                 <Button Text="All" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetKindCommand}" CommandParameter="All">
                     <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="All"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
                 </Button>
@@ -79,6 +79,10 @@
                 <Button Text="Amenity" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetKindCommand}" CommandParameter="Amenity">
                     <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="Amenity"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
                 </Button>
+                <Border Style="{StaticResource Field}" Margin="0,0,0,8">
+                    <Picker ItemsSource="{Binding PaidWiths}" SelectedIndex="{Binding PaidWithIndex}" WidthRequest="130"
+                            SemanticProperties.Description="Filter by how it was paid" AutomationId="PaymentsPaidWithFilter" />
+                </Border>
             </FlexLayout>
 
             <Border Style="{StaticResource TablePanel}">
