@@ -26,11 +26,11 @@
                 <!-- F14: who runs it; an amenity nobody runs works with any coach in the gym -->
                 <Label Text="{Binding RunText}" Style="{StaticResource Caption}" IsVisible="{Binding RunText, Converter={StaticResource HasText}}" />
             </VerticalStackLayout>
-            <!-- coaches: "I run this" -->
+            <!-- coaches: "Can be assigned in this amenity" -->
             <HorizontalStackLayout Spacing="10" IsVisible="{Binding IsCoach}">
                 <Switch x:Name="Runs" IsToggled="{Binding RunsThis, Mode=OneWay}" Toggled="OnRunsToggled" VerticalOptions="Center"
-                        SemanticProperties.Description="I run this" AutomationId="RunsThisSwitch" />
-                <Label Text="I run this" FontFamily="BarlowMedium" VerticalOptions="Center" />
+                        SemanticProperties.Description="Can be assigned in this amenity" AutomationId="RunsThisSwitch" />
+                <Label Text="Can be assigned in this amenity" FontFamily="BarlowMedium" VerticalOptions="Center" />
             </HorizontalStackLayout>
             <FlexLayout Wrap="Wrap">
                 <!-- F12: Book opens the booking sheet (members, when the page offers it) -->

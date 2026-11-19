@@ -209,7 +209,7 @@
                     <!-- the amenities this coach is assigned to run (shown on Dashboard, hidden on My shifts) -->
                     <VerticalStackLayout x:Name="AmenitiesHost" Spacing="8">
                         <BoxView Style="{StaticResource Hairline}" />
-                        <c:CardTitle Text="Amenities you run" />
+                        <c:CardTitle Text="Assigned amenities" />
                         <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding MyAmenities}" IsVisible="{Binding HasAmenities}">
                             <BindableLayout.ItemTemplate>
                                 <DataTemplate x:DataType="x:String">

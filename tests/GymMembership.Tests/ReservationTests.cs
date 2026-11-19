@@ -314,10 +314,10 @@ public class ReservationTests
         Assert.Equal(("Nobody yet: any coach in the gym counts", false), (pool.RunText, pool.RunsThis));
         await coach.ToggleRunsCommand.ExecuteAsync(pool);
         pool = coach.Cards.Single(c => c.Amenity.Name == "Pool");
-        Assert.Equal(("Only you run this", true), (pool.RunText, pool.RunsThis));
+        Assert.Equal(("Only you are assigned", true), (pool.RunText, pool.RunsThis));
 
         var (_, vm) = await Member(gw: gw);
-        Assert.StartsWith("Run by ", vm.Cards.Single(c => c.Amenity.Name == "Pool").RunText);
+        Assert.StartsWith("Coaches: ", vm.Cards.Single(c => c.Amenity.Name == "Pool").RunText);
         Assert.Equal("Any coach in the gym", vm.Cards.Single(c => c.Amenity.Name == "Sauna").RunText);   // Group classes is Lena's (G14 demo)
         Assert.Equal("forbidden", (await new AmenityService(gw).SetRunsAsync(pool.Amenity.Id, true)).Message);
     }

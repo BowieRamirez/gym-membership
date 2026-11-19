@@ -743,8 +743,8 @@ public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow,
         get
         {
             var names = string.Join(", ", Runners ?? []);
-            if (IsCoach) return RunsThis ? (names.Length > 0 ? $"Also run by {names}" : "Only you run this") : names.Length > 0 ? $"Run by {names}" : "Nobody yet: any coach in the gym counts";
-            return names.Length > 0 ? $"Run by {names}" : CanFollow ? "Any coach in the gym" : "";
+            if (IsCoach) return RunsThis ? (names.Length > 0 ? $"Also assigned: {names}" : "Only you are assigned") : names.Length > 0 ? $"Assigned: {names}" : "Nobody yet: any coach in the gym counts";
+            return names.Length > 0 ? $"Coaches: {names}" : CanFollow ? "Any coach in the gym" : "";
         }
     }
 
