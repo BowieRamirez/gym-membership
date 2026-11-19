@@ -3,8 +3,8 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans (owner chose native execution for the last plans) to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
 
 Created: 2026-11-19
-Last updated: 2026-11-19
-Status: BUILT 2026-11-19 (owner: Q1 = (b), Q2 = (a) but the hook needs the Team plan, so (b) was built; Q3 = 1 hour; Q12 = both places; Q13 = 20 in 10 minutes; native execution). Phases 1-8, 10-11 done; `0097`-`0107` live, `sign-in` function redeployed. Pushed to GitHub (`ae14404`). Left: owner checks the Auth per-IP sign-in limit, adds the Day pass package live, hand checks on devices. Next migration `0108`.
+Last updated: 2026-11-20
+Status: BUILT 2026-11-19/20 (owner: Q1 = (b), Q2 = (a) but the hook needs the Team plan, so (b) was built; Q3 = 1 hour; Q12 = both places + Cashier; Q13 = 20 in 10 minutes; native execution). Phases 1-8, 10-11 + follow-ups done; `0097`-`0108` live, `sign-in` function redeployed. Pushed up to `ae14404`; follow-up commits (`183d696`..`0d694bf`) are local on `owner-fixes-2026-11-19`. Left: owner checks the Auth per-IP sign-in limit, adds/publishes the Day pass package live with the Day pass switch, hand checks on devices, and decides on duplicate Xendit rows in Transactions. Next migration `0109`.
 Branch: `owner-fixes-2026-11-19` (cut from `xendit-payments-2026-11-16` at `f68d440`). **Owner's rule: this branch is not merged into `main`.** No PR, no push to GitHub without the owner.
 
 **Goal:** The owner's list of 2026-11-19: only people with a membership (a Day pass included) book amenities and send time requests; members can buy a Day pass online as a package; the sign-in locks after 10 wrong passwords; package buying is limited to 10 tries; Transactions get their own filters; Void payment goes; members pay online only; the change-password error says what really went wrong; members get a Payments page of their own.
@@ -228,3 +228,12 @@ Same rules as `2026-11-17-desk-amenities-logs-buy-popup.md`:
 - 2026-11-19: built Phases 1-8 natively; rulings in `.superpowers/sdd/2026-11-19-owner-fixes/progress.md`. Q2 (a) needs the Team plan (Supabase gates the Password Verification hook), so the sign-in Edge Function (b) was built.
 - 2026-11-19: owner asked for the leftovers in the plan and for codes checked as they're typed: Phases 10 and 11 added (Q10-Q13). Waiting on Q12, Q13.
 - 2026-11-19: owner confirmed Q12 = both places, Q13 = 20 in 10 minutes. Built and deployed Phase 10 (`0106`, `sign-in` redeployed; `82ca78f`, `0a488f4`) and Phase 11 (`0107`, `079a01f`, `ae14404`). Pushed to `origin/owner-fixes-2026-11-19`.
+- 2026-11-19/20 follow-ups (local commits, not pushed yet):
+  - **Cashier live code check (`0108`, `183d696`):** Added `check_discount_code_for` RPC (pushed live) and live discount code feedback + instant Total update in `CashierViewModel` / `CashierPage.xaml`.
+  - **Cashier Day pass for members without membership (`8bd7be3`):** Enabled discount code box, live check, and discount submission on the Cashier's **Day pass** tab when a published Day pass package exists and a member with no active membership is picked.
+  - **My membership coaching cards (`bd84ac4`):** Added **Hired coach** and **Current session** cards to `MyMembershipPage.xaml` / `MyMembershipViewModel`.
+  - **Settings password strength (`fa81050`):** Reused the `c:PasswordStrength` bar and checklist under **New password** in `SettingsPage.xaml` (for all accounts).
+  - **Coach calendar on My shifts & Dashboard (`5a3d1d9`, `da1aa00`, `0576c33`, `befaf0e`):** Extracted `CoachCalendarView` so **My shifts** shows the Dashboard Month/Week calendar (with **Upcoming shifts** under the calendar and **Post a shift** under the chosen-day panel); replaced the Dashboard's **Post a shift** form with **Assigned amenities**.
+  - **Amenity assignment wording (`bd854c4`):** Changed `"I run this"` / `"Only you run this"` / `"Run by …"` to `"Can be assigned in this amenity"` / `"Only you are assigned"` / `"Coaches: …"`.
+  - **Removed Payments to verify (`0d694bf`):** Deleted `VerifyPaymentsPage` / `VerifyPaymentsViewModel`, removed `verify` from `StaffShell` and the front-desk `HomePage` (now 3 tiles + Coaches in the gym now).
+  - **Open item noted:** Desk Xendit payments log two rows in Transactions (`Desk payment sent to Xendit` + `Paid online (Xendit)`); waiting on owner choice (hide sent-to-Xendit from Transactions, label Pending, or leave as-is).
