@@ -847,8 +847,11 @@ public partial class TraineesViewModel(ICoachService svc, IChatService messages,
     }
 }
 
-public partial class ShiftsViewModel(ICoachService svc) : LoadableViewModel
+public partial class ShiftsViewModel(ICoachService svc, ISessionService? sessions = null, IAttendanceService? attendance = null, IMembershipService? gym = null) : LoadableViewModel
 {
+    public AttendanceViewModel? Calendar { get; } = sessions is not null && attendance is not null
+        ? new AttendanceViewModel(sessions, attendance, svc, gym)
+        : null;
     public ObservableCollection<ShiftPost> Shifts { get; } = new();
     public int[] HoursOptions { get; } = [2, 4, 6, 8, 10];
 
@@ -860,7 +863,12 @@ public partial class ShiftsViewModel(ICoachService svc) : LoadableViewModel
     // hiring on/off lives on My coach profile ("Taking new members"); 9.6 took the duplicate Pause hiring button off this page
     public override Task OnAppearingAsync() => LoadAsync();
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.MyShiftsAsync, rows => Fill(Shifts, rows));
+    [RelayCommand]
+    private async Task LoadAsync()
+    {
+        if (!await RunAsync(svc.MyShiftsAsync, rows => Fill(Shifts, rows))) return;
+        if (Calendar is not null) await Calendar.OnAppearingAsync();
+    }
 
     [RelayCommand]
     private async Task PostAsync()
