@@ -45,7 +45,7 @@ const expected = {
   coach_amenities: 'S---',                                 // F14 (0052): read by all; written only by set_runs_amenity
   roles: 'S---', permissions: 'S---', role_permissions: 'S---', user_roles: 'S---',
   // server only
-  email_checks: '----', user_last_seen: '----',
+  email_checks: '----', user_last_seen: '----', code_checks: '----',
 };
 
 try {
