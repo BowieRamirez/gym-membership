@@ -140,8 +140,19 @@
                         <VerticalStackLayout Spacing="6">
                             <Label Text="Discount code (optional)" Style="{StaticResource Caption}" />
                             <Border Style="{StaticResource Field}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" WidthRequest="{OnIdiom Phone=-1, Default=240}">
-                                <Entry Text="{Binding DiscountCode}" Placeholder="Enter a code from the gym" SemanticProperties.Description="Discount code" AutomationId="BuyCode" />
+                                <Entry Text="{Binding DiscountCode}" Placeholder="Enter a code from the gym" Unfocused="OnCodeUnfocused" SemanticProperties.Description="Discount code" AutomationId="BuyCode" />
                             </Border>
+                            <Label Text="{Binding CodeCheckText}" Style="{StaticResource Caption}" LineBreakMode="WordWrap"
+                                   IsVisible="{Binding HasCodeCheck}" AutomationId="BuyCodeFeedback">
+                                <Label.Triggers>
+                                    <DataTrigger TargetType="Label" Binding="{Binding CodeWorks}" Value="True">
+                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource GoodLight}, Dark={StaticResource GoodDark}}" />
+                                    </DataTrigger>
+                                    <DataTrigger TargetType="Label" Binding="{Binding CodeWorks}" Value="False">
+                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
+                                    </DataTrigger>
+                                </Label.Triggers>
+                            </Label>
                             <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding BuyCodes}" IsVisible="{Binding BuyCodes.Count, Converter={StaticResource Any}}">
                                 <BindableLayout.ItemTemplate>
                                     <DataTemplate x:DataType="m:AvailableCode">

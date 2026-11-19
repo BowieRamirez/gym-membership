@@ -259,7 +259,7 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
         finally { _loading = false; }
     }
 
-    [RelayCommand] private void UseCode(AvailableCode code) => DiscountCode = code.Code;
+    [RelayCommand] private void UseCode(AvailableCode code) { DiscountCode = code.Code; _ = CheckCodeNowAsync(); }
 
     // plan 2026-11-17 Z7 (owner's sketch): Buy opens a popup with the code and the package. Owner fixes 2026-11-19 Q6: members pay
     // online only, so its Buy makes the online payment at once. The popup is the confirmation, so it asks nothing more.
@@ -271,14 +271,60 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
         : p.IsDayPass ? $"₱{p.Price:N2} for today. Once paid, it starts right away and ends at midnight.\n{RefundRules.Line}"   // 0098
         : $"₱{p.Price:N2} for {p.DurationDays} days. Once paid, it starts right away, or when your current term ends.\n{RefundRules.Line}";
 
+    // owner fixes 2026-11-19 Q12, Q13 (0107): check discount code as it's typed (500 ms debounce) or on unfocus; newest wins
+    public TimeSpan CodeCheckDelay { get; init; } = TimeSpan.FromMilliseconds(500);
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasCodeCheck))] private CodeCheck? codeCheck;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasCodeCheck))] private string? codeCheckText;
+    [ObservableProperty] private bool codeWorks;
+    public bool HasCodeCheck => !string.IsNullOrWhiteSpace(CodeCheckText);
+    CancellationTokenSource? _codeCheck;
+    (int ItemId, string Code)? _checked;
+
+    partial void OnDiscountCodeChanged(string? value) => _ = ScheduleCodeCheckAsync(value, immediate: false);
+    public Task CheckCodeNowAsync() => ScheduleCodeCheckAsync(DiscountCode, immediate: true);
+
+    void ClearCodeCheck()
+    {
+        _codeCheck?.Cancel(); _codeCheck = null; _checked = null;
+        CodeCheck = null; CodeCheckText = null; CodeWorks = false;
+    }
+
+    async Task ScheduleCodeCheckAsync(string? raw, bool immediate)
+    {
+        var code = raw?.Trim() ?? "";
+        if (immediate && Buying is { } cur && _checked == (cur.Id, code)) return;   // unfocus after debounce already checked this exact code
+        _codeCheck?.Cancel();
+        _checked = null;
+        CodeCheck = null; CodeCheckText = null; CodeWorks = false;
+        if (Buying is not { } pkg || code.Length == 0) return;
+        var cts = _codeCheck = new CancellationTokenSource();
+        if (!immediate && CodeCheckDelay > TimeSpan.Zero)
+        {
+            try { await Task.Delay(CodeCheckDelay, cts.Token); }
+            catch (OperationCanceledException) { return; }
+        }
+        var res = await svc.CheckCodeAsync(code, "package", pkg.Id);
+        if (cts.IsCancellationRequested || Buying?.Id != pkg.Id) return;
+        _checked = (pkg.Id, code);
+        if (!res.Ok)
+        {
+            CodeWorks = false;
+            CodeCheckText = ErrorText.For(res.Error, res.Message);
+            return;
+        }
+        CodeCheck = res.Value;
+        CodeWorks = res.Value!.Works;
+        CodeCheckText = CodeCheckFeedback.Message(res.Value, "package");
+    }
+
     [RelayCommand]
     private void OpenBuy(MembershipPackage package)
     {
-        Notice = null; ErrorMessage = null; DiscountCode = null;
+        Notice = null; ErrorMessage = null; ClearCodeCheck(); DiscountCode = null;
         Fill(BuyCodes, Codes.Where(c => c.AllPackages || c.PackageIds.Contains(package.Id)));
         Buying = package;
     }
-    [RelayCommand] private void CloseBuy() { Buying = null; DiscountCode = null; ErrorMessage = null; }
+    [RelayCommand] private void CloseBuy() { ClearCodeCheck(); Buying = null; DiscountCode = null; ErrorMessage = null; }
 
     // creates a pending online payment, paid on this page's Pay online card through Xendit
     [RelayCommand]

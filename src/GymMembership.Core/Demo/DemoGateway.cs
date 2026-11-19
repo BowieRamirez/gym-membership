@@ -48,6 +48,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     sealed class DemoPass { public string Code = "", Member = ""; public DateTime Expires; public DateTime? ScannedAt; public string? ScannedBy; public int? CheckInId; }
     readonly List<DemoPass> _passes = new();
     readonly Dictionary<string, (string Pin, int Fails, DateTime? LockedUntil)> _pins = new() { ["u-alex"] = ("1234", 0, null) };
+    readonly Dictionary<string, List<DateTime>> _codeChecks = new();   // 0107: 20 checks in 10 minutes per member
     DateTime SubscriptionNow => _clock.GetUtcNow().UtcDateTime;
     public DemoGateway(bool seed = true, TimeProvider? clock = null)
     { _clock = clock ?? TimeProvider.System; if (seed) { Seed(); SeedMembershipTerms(); } }
@@ -781,6 +782,32 @@ public sealed partial class DemoGateway : ISupabaseGateway
                             AllAmenities = items.Any(i => i.Kind == "amenity" && i.ItemId is null), AmenityIds = items.Where(i => i.Kind == "amenity" && i.ItemId is not null).Select(i => i.ItemId!.Value).Order().ToList()
                         };
                     }).ToList();
+            }
+            case "check_discount_code":   // Q12, Q13 (0107): live code check, 20 in 10 minutes per member
+            {
+                RequireActive();
+                var code = (a.GetValueOrDefault("p_code") as string)?.Trim() ?? "";
+                var kind = a.GetValueOrDefault("p_kind") as string ?? "";
+                var item = I("p_item");
+                if (code.Length is 0 or > 50 || kind is not ("package" or "amenity") || item < 1) throw Err("bad_input");
+                var price = kind == "package" ? PackageForSale(item).Price : AmenityForSale(item).Price;
+                if (!_codeChecks.TryGetValue(uid, out var hits)) _codeChecks[uid] = hits = [];
+                hits.RemoveAll(t => t < now.AddMinutes(-10));
+                if (hits.Count >= 20) throw Err("too_many_checks");
+                hits.Add(now);
+                try
+                {
+                    var d = Discounted(uid, new() { ["p_discount_code"] = code }, price, kind, item);
+                    var pct = All<Discount>().First(x => x.Id == d.Id).Percent;
+                    return new List<CodeCheck> { new() { Percent = pct, AmountOff = d.Cut, YouPay = d.Amount } };
+                }
+                catch (Exception ex)
+                {
+                    var reason = ex.Message;
+                    if (reason == "invalid_code" && All<Discount>().Any(x => x.IsActive && !x.Paused && x.ExpiresAt <= now && string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase)))
+                        reason = "code_expired";
+                    return new List<CodeCheck> { new() { Reason = reason } };
+                }
             }
             case "create_discount":   // G2, G3 (0060)
             {

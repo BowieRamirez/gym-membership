@@ -57,14 +57,47 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     [ObservableProperty, NotifyPropertyChangedFor(nameof(MonthText))] private DateOnly month = new(Today.Year, Today.Month, 1);
     [ObservableProperty, NotifyPropertyChangedFor(nameof(DayText), nameof(IsDayClosed))] private DateOnly day = Today;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Summary), nameof(SummaryDetail), nameof(CanBook), nameof(CoachesTitle))] private PickChip? time;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(Summary), nameof(SummaryDetail), nameof(CanBook), nameof(CoachesTitle), nameof(Split), nameof(BookText))] private PickChip? length;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(Summary), nameof(SummaryDetail), nameof(CanBook), nameof(CoachesTitle), nameof(Split), nameof(BookText), nameof(CodeCheckText))] private PickChip? length;
 
     // ---- G14, G13, G4 (0064, approved mockup docs/mockups/amenity-down-payment.html): who, the coach, a code, and the split ----
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsSolo), nameof(CanBook), nameof(Split), nameof(BookText), nameof(HoldText), nameof(SummaryDetail))] private bool isWithCoach;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsSolo), nameof(CanBook), nameof(Split), nameof(BookText), nameof(HoldText), nameof(SummaryDetail), nameof(CodeCheckText))] private bool isWithCoach;
     public bool IsSolo => !IsWithCoach;
     public ObservableCollection<CoachChoice> Coaches { get; } = new();
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanBook), nameof(Split), nameof(BookText), nameof(HoldText), nameof(SummaryDetail))] private FreeCoach? pickedCoach;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanBook), nameof(Split), nameof(BookText), nameof(HoldText), nameof(SummaryDetail), nameof(CodeCheckText))] private FreeCoach? pickedCoach;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Split), nameof(BookText), nameof(SummaryDetail))] private string code = "";
+    // owner fixes 2026-11-19 Q12, Q13 (0107): live code check as it's typed (500 ms debounce) or on unfocus
+    public TimeSpan CodeCheckDelay { get; init; } = TimeSpan.FromMilliseconds(500);
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CodeCheckText), nameof(CodeWorks), nameof(HasCodeCheck), nameof(Split), nameof(BookText), nameof(SummaryDetail))] private CodeCheck? codeCheck;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CodeCheckText), nameof(HasCodeCheck))] private string? codeCheckError;
+    public bool CodeWorks => CodeCheck is { Works: true };
+    public string CodeCheckText => !string.IsNullOrWhiteSpace(CodeCheckError) ? CodeCheckError
+        : CodeCheckFeedback.Message(CodeCheck, "amenity", CodeCheck is { Works: true } ? Split.Due : null);
+    public bool HasCodeCheck => !string.IsNullOrWhiteSpace(CodeCheckText);
+    CancellationTokenSource? _codeCheck;
+    (int ItemId, string Code)? _checked;
+    partial void OnCodeChanged(string value) => _ = ScheduleCodeCheckAsync(value, immediate: false);
+    public Task CheckCodeNowAsync() => ScheduleCodeCheckAsync(Code, immediate: true);
+    void ClearCodeCheck() { _codeCheck?.Cancel(); _codeCheck = null; _checked = null; CodeCheck = null; CodeCheckError = null; }
+    async Task ScheduleCodeCheckAsync(string? raw, bool immediate)
+    {
+        var trimmed = raw?.Trim() ?? "";
+        if (immediate && Picked is { } cur && _checked == (cur.Amenity.Id, trimmed)) return;
+        _codeCheck?.Cancel();
+        _checked = null;
+        CodeCheck = null; CodeCheckError = null;
+        if (membership is null || Picked is not { } card || !PayFirst || trimmed.Length == 0) return;
+        var cts = _codeCheck = new CancellationTokenSource();
+        if (!immediate && CodeCheckDelay > TimeSpan.Zero)
+        {
+            try { await Task.Delay(CodeCheckDelay, cts.Token); }
+            catch (OperationCanceledException) { return; }
+        }
+        var res = await membership.CheckCodeAsync(trimmed, "amenity", card.Amenity.Id);
+        if (cts.IsCancellationRequested || Picked?.Amenity.Id != card.Amenity.Id) return;
+        _checked = (card.Amenity.Id, trimmed);
+        if (!res.Ok) { CodeCheckError = ErrorText.For(res.Error, res.Message); return; }
+        CodeCheck = res.Value;
+    }
     /// <summary>The member's codes that fit this amenity (G4), as on Packages.</summary>
     public ObservableCollection<AvailableCode> Codes { get; } = new();
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Split), nameof(BookText), nameof(SummaryDetail), nameof(PayWithText), nameof(HoldText))] private int percent = 50;
@@ -76,7 +109,8 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     public string CoachFeeText => Picked is { } p && p.Amenity.CoachFee > 0 ? $"+ ₱{p.Amenity.CoachFee:N2} an hour coach fee" : "No coach fee";
     public string CoachesTitle => Time is null || Length is null ? "Pick a time to see who's free"
         : $"Coaches free {Manila(Time.StartUtc).ToString("h:mm", En)} to {Manila(Time.StartUtc.AddMinutes(Length.Minutes)).ToString("h:mm tt", En)}";
-    int CodePercent => Codes.FirstOrDefault(c => string.Equals(c.Code, Code.Trim(), StringComparison.OrdinalIgnoreCase))?.Percent ?? 0;
+    int CodePercent => CodeCheck is { Works: true, Percent: > 0 } ? CodeCheck.Percent.Value
+        : Codes.FirstOrDefault(c => string.Equals(c.Code, Code.Trim(), StringComparison.OrdinalIgnoreCase))?.Percent ?? 0;
     /// <summary>What booking now costs: with a pass only the coach fee, paid at the desk; otherwise the down payment now and the balance at the desk.</summary>
     public PriceSplit Split => Picked is not { } p ? new(0, 0, 0, 0, 0)
         : PayFirst ? BookingPrice.Split(p.Amenity.Price, p.Amenity.CoachFee, IsWithCoach && PickedCoach is not null, Percent, CodePercent, Hours)
@@ -141,7 +175,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     [RelayCommand]
     private async Task OpenAsync(AmenityCard card)
     {
-        Notice = null; ErrorMessage = null;
+        Notice = null; ErrorMessage = null; ClearCodeCheck();
         Picked = card; Month = new(Today.Year, Today.Month, 1);
         (IsWithCoach, PickedCoach, Code) = (false, null, "");
         Coaches.Clear(); OnPropertyChanged(nameof(HasCoaches));
@@ -154,7 +188,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
         if (!Times.Any(t => t.CanPick)) await PickDayAsync(Today.AddDays(1));   // late in the day: start on tomorrow
     }
 
-    [RelayCommand] private void Close() { Picked = null; Time = null; Length = null; Times.Clear(); Lengths.Clear(); Coaches.Clear(); PickedCoach = null; }
+    [RelayCommand] private void Close() { ClearCodeCheck(); Picked = null; Time = null; Length = null; Times.Clear(); Lengths.Clear(); Coaches.Clear(); PickedCoach = null; }
 
     [RelayCommand] private void Solo() { IsWithCoach = false; PickedCoach = null; }
     [RelayCommand] private Task WithCoach() { IsWithCoach = true; return LoadCoachesAsync(); }
@@ -164,7 +198,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
         foreach (var c in Coaches) c.IsPicked = c == choice;
         PickedCoach = choice.Coach;
     }
-    [RelayCommand] private void UseCode(AvailableCode c) => Code = c.Code;
+    [RelayCommand] private void UseCode(AvailableCode c) { Code = c.Code; _ = CheckCodeNowAsync(); }
 
     /// <summary>G14: who is free for the picked time; a coach picked earlier stays only if still free.</summary>
     [RelayCommand]

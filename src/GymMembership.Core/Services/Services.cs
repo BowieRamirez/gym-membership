@@ -324,6 +324,8 @@ public interface IMembershipService
     Task<AppResult<IReadOnlyList<MembershipPackage>>> ListPackagesAsync();
     /// <summary>G4 (0060): codes staff chose to show that this member can still use, each with FitsText filled from the catalog.</summary>
     Task<AppResult<IReadOnlyList<AvailableCode>>> AvailableCodesAsync();
+    /// <summary>Owner fixes 2026-11-19 Q12 (0107): checks a discount code as it's typed, without writing to payments.</summary>
+    Task<AppResult<CodeCheck>> CheckCodeAsync(string code, string kind, int itemId);
     Task<AppResult<IReadOnlyList<MembershipRow>>> MyMembershipsAsync();
     Task<AppResult<IReadOnlyList<PaymentItem>>> MyPaymentsAsync();
     Task<AppResult<Access>> AccessAsync();
@@ -398,6 +400,13 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
         var amenities = (await gw.ListAsync<Amenity>(a => a.IsActive == true)).ToDictionary(a => a.Id, a => a.Name);
         foreach (var c in codes) c.FitsText = DiscountFits.Text(c.AllPackages, c.PackageIds, c.AllAmenities, c.AmenityIds, packages, amenities);
         return codes;
+    });
+
+    public Task<AppResult<CodeCheck>> CheckCodeAsync(string code, string kind, int itemId) => Safe.RunAsync(async () =>
+    {
+        var rows = await gw.RpcAsync<List<CodeCheck>>("check_discount_code",
+            new() { ["p_code"] = code.Trim(), ["p_kind"] = kind, ["p_item"] = itemId });
+        return rows?.FirstOrDefault() ?? new CodeCheck { Reason = "invalid_code" };
     });
 
     public static MembershipRow ToRow(UserMembershipPackage m, MembershipPackage? p, DateTime now)

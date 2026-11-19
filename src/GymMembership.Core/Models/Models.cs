@@ -277,6 +277,16 @@ public sealed class AvailableCode : BaseModel
   /// <summary>ExpiresAt is the midnight that ends the last day, as on the Discounts page.</summary>
   [System.Text.Json.Serialization.JsonIgnore] public string LastDayText => $"Last day {ExpiresAt.AddTicks(-1).ToLocalTime():d MMM yyyy}"; }
 
+/// <summary>Owner fixes 2026-11-19 Q12 (0107): result of check_discount_code as the member types a code.</summary>
+public sealed class CodeCheck : BaseModel
+{
+    [Column("percent")] public int? Percent { get; set; }
+    [Column("amount_off")] public decimal? AmountOff { get; set; }
+    [Column("you_pay")] public decimal? YouPay { get; set; }
+    [Column("reason")] public string? Reason { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore] public bool Works => Reason is null && Percent is > 0;
+}
+
 // one conversation = one coach + one member. A message is sent as one of the two (sender_id) and only read_at changes afterwards
 [Table("messages")] public class ChatMessage : BaseModel
 { [PrimaryKey("message_id")] public int Id { get; set; } [Column("coach_id")] public string CoachId { get; set; } = ""; [Column("member_id")] public string MemberId { get; set; } = "";
