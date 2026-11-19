@@ -9,10 +9,28 @@ public partial class CoachCalendarView : ContentView
 		nameof(ShowPostShift), typeof(bool), typeof(CoachCalendarView), true,
 		propertyChanged: (b, _, v) => ((CoachCalendarView)b).PostShiftHost.IsVisible = (bool)v);
 
+	public static readonly BindableProperty MainFooterProperty = BindableProperty.Create(
+		nameof(MainFooter), typeof(View), typeof(CoachCalendarView), null,
+		propertyChanged: (b, _, v) => { var c = (CoachCalendarView)b; c.MainFooterHost.Content = (View?)v; c.MainFooterHost.IsVisible = v is not null; });
+
+	public static readonly BindableProperty SideFooterProperty = BindableProperty.Create(
+		nameof(SideFooter), typeof(View), typeof(CoachCalendarView), null,
+		propertyChanged: (b, _, v) => { var c = (CoachCalendarView)b; c.SideFooterHost.Content = (View?)v; c.SideFooterHost.IsVisible = v is not null; });
+
 	public bool ShowPostShift
 	{
 		get => (bool)GetValue(ShowPostShiftProperty);
 		set => SetValue(ShowPostShiftProperty, value);
+	}
+	public View? MainFooter
+	{
+		get => (View?)GetValue(MainFooterProperty);
+		set => SetValue(MainFooterProperty, value);
+	}
+	public View? SideFooter
+	{
+		get => (View?)GetValue(SideFooterProperty);
+		set => SetValue(SideFooterProperty, value);
 	}
 
 	public CoachCalendarView() => InitializeComponent();

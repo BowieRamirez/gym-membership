@@ -164,9 +164,11 @@
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
             </VerticalStackLayout>
+            <ContentView x:Name="MainFooterHost" IsVisible="False" />
         </VerticalStackLayout>
 
         <!-- the chosen day: its sessions (in the week view on Windows they are already in the list), its shifts, then post a shift -->
+        <VerticalStackLayout Spacing="12" VerticalOptions="Start">
         <Border Style="{StaticResource SidePanel}">
             <VerticalStackLayout Spacing="12">
                 <Label Text="Tap a day to post a shift or see its sessions." Style="{StaticResource Muted}" IsVisible="{Binding HasDay, Converter={StaticResource Not}}" />
@@ -245,5 +247,7 @@
                 </VerticalStackLayout>
             </VerticalStackLayout>
         </Border>
+        <ContentView x:Name="SideFooterHost" IsVisible="False" />
+        </VerticalStackLayout>
     </c:SideLayout>
 </ContentView>
