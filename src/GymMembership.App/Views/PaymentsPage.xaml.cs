@@ -1,0 +1,25 @@
+using GymMembership.Core.Services;
+using GymMembership.Core.ViewModels;
+
+namespace GymMembership.App.Views;
+
+/// <summary>Owner fixes 2026-11-19 Q8: the member's own payments (moved from My membership).</summary>
+public partial class PaymentsPage : BasePage
+{
+    public PaymentsPage(MyPaymentsViewModel vm) { InitializeComponent(); BindingContext = vm; }
+    protected override TimeSpan? AutoRefresh => TimeSpan.FromSeconds(20);
+    protected override bool LiveRecords => true;
+    void OnPayAgain(object? sender, EventArgs e) => Row<MyPaymentsViewModel>(sender, v => v.PayAgainCommand);
+    async void OnCancelPayment(object? sender, EventArgs e)
+    {
+        if (BindingContext is not MyPaymentsViewModel vm || vm.IsBusy || vm.DialogOpen
+            || (sender as BindableObject)?.BindingContext is not PaymentItem { CanCancel: true } item) return;
+        vm.DialogOpen = true;
+        try
+        {
+            if (!await DisplayAlertAsync("Cancel this payment?", $"{item.What}\n₱{item.Amount:N2}\n\nNo membership will be started. You can choose a package again afterwards.", "Cancel payment", "Keep it")) return;
+            await vm.CancelPaymentAsync(item);
+        }
+        finally { vm.DialogOpen = false; }
+    }
+}

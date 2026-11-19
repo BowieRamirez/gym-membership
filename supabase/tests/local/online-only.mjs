@@ -56,6 +56,12 @@ try {
     const a = (await db.query(`select actor_id from audit_log where action = 'payment.record' and entity_id = $1`, [String(p.payment_id)])).rows;
     assert.equal(a.length, 1); assert.equal(a[0].actor_id, desk);
   });
+  await test('Q8: a member reads only their own payments (the Payments page reads the table directly)', async () => {
+    const one = await member(), two = await member();
+    const seen = await as(one, 'select member_id from payments');
+    assert.ok(seen.length >= 1 && seen.every(r => r.member_id === one));
+    assert.ok(!(await as(one, 'select payment_id from payments where member_id = $1', [two])).length);
+  });
 } finally {
   console.log(`\nonline-only: ${passed} passed, ${failed} failed`);
   if (failed) process.exitCode = 1;

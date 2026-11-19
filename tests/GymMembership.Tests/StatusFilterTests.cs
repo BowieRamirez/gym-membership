@@ -61,38 +61,14 @@ public class StatusFilterTests
         Assert.Equal(past.OrderByDescending(r => r.Session.ScheduledStart), past);
     }
 
-    [Fact]
-    public async Task Membership_payments_filter_by_status()
-    {
-        var gw = await As("member");
-        var vm = new MyMembershipViewModel(new MembershipService(gw), new SubscriptionService(gw));
-        await vm.OnAppearingAsync();
-        var all = vm.Payments.Count;
-        Assert.NotEqual(0, all);
-
-        vm.SetFilterCommand.Execute("Verified");
-        Assert.Equal(all, vm.Payments.Count);    // the demo member's payments are all verified
-        vm.SetFilterCommand.Execute("Pending");
-        Assert.Empty(vm.Payments);
-        Assert.StartsWith("No payments with this status", vm.PaymentsEmptyText);   // not "No payments yet"
-
-        await vm.LoadCommand.ExecuteAsync(null);
-        Assert.Equal("Pending", vm.Filter);
-        Assert.Empty(vm.Payments);
-
-        vm.SetFilterCommand.Execute("All");
-        Assert.Equal(all, vm.Payments.Count);
-    }
+    // owner fixes 2026-11-19 Q8: the payment list moved to Payments, filtered by what was bought (MyPaymentsTests)
 
     [Fact]
     public async Task A_payment_waiting_for_review_shows_under_pending()
     {
         var gw = await As("bea");
-        var vm = new MyMembershipViewModel(new MembershipService(gw), new SubscriptionService(gw));
+        var vm = new MyPaymentsViewModel(new MembershipService(gw), new SubscriptionService(gw));   // Q8: on Payments now
         await vm.OnAppearingAsync();
-        vm.SetFilterCommand.Execute("Pending");
-        Assert.Contains(vm.Payments, p => p.PaymentCode == "GYM-7F3K2");
-        vm.SetFilterCommand.Execute("Expired");
-        Assert.Empty(vm.Payments);
+        Assert.Equal("Pending", vm.Rows.Single(p => p.PaymentCode == "GYM-7F3K2").StatusText);
     }
 }

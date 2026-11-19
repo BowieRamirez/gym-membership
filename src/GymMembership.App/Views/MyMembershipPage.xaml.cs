@@ -13,21 +13,6 @@ public partial class MyMembershipPage : BasePage
     protected override TimeSpan? AutoRefresh => TimeSpan.FromSeconds(20);
     protected override bool LiveRecords => true;
     protected override Controls.UpdatedBar? Updated => UpdatedLine;
-    void OnPayAgain(object? sender, EventArgs e) => Row<MyMembershipViewModel>(sender,v=>v.PayAgainCommand);
-    async void OnCancelPayment(object? sender, EventArgs e)
-    {
-        if (BindingContext is not MyMembershipViewModel vm || vm.IsBusy || vm.DialogOpen) return;
-        var item = (sender as BindableObject)?.BindingContext as PaymentItem ?? vm.PayNow;
-        if (item is not { CanCancel: true }) return;
-        vm.DialogOpen = true;
-        try
-        {
-            var sent = item.HasProof ? "\n\nYou already sent proof. If you really paid, talk to the front desk first: cancelling here does not return money you sent." : "";
-            if (!await DisplayAlertAsync("Cancel this payment?", $"{item.What}\n₱{item.Amount:N2}\n\nNo membership will be started. You can choose a package again afterwards.{sent}", "Cancel payment", "Keep it")) return;
-            await vm.CancelPaymentAsync(item);
-        }
-        finally { vm.DialogOpen = false; }
-    }
     async void OnChoosePackage(object? sender, EventArgs e) => await Controls.PhoneNavigation.GoToAsync(Shell.Current, "//packages");
     // phones: the member QR and the terms rule stay folded until asked for
     void OnToggleQr(object? sender, EventArgs e) { QrBody.IsVisible = !QrBody.IsVisible; QrToggle.Text = QrBody.IsVisible ? "Hide" : "Show"; }

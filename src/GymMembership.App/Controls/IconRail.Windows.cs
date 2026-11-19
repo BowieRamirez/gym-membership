@@ -30,7 +30,7 @@ public static class IconRail
         ["Logs & Archive"] = "archive",
         ["Messages"] = "message-square",
         ["Settings"] = "settings",
-        ["My membership"] = "id-card",
+        ["My membership"] = "id-card", ["Payments"] = "receipt",
         ["Packages"] = "package", ["Renew or change"] = "package",
         ["Amenities"] = "waves",
         ["Book an amenity"] = "calendar-plus",

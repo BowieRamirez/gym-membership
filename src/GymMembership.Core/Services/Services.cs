@@ -303,6 +303,9 @@ public sealed record PaymentItem(int Id, string What, string PaymentCode, string
     public bool PaysAtDesk => Status == Models.Status.Pending && Method == PayMethod.Cash && NotExpired;
     /// <summary>A membership or extension payment nobody has verified yet: the member can still withdraw it.</summary>
     public bool CanCancel => Status == Models.Status.Pending && Kind is PayKind.Membership or PayKind.Renewal;
+    /// <summary>Owner fixes 2026-11-19 Q8: how it was paid and its status, in the member's words.</summary>
+    public string MethodText => Method switch { PayMethod.Qr => "Online", PayMethod.Cash => "Cash", PayMethod.Gcash => "GCash", _ => Method };
+    public string StatusText => PaymentStatus.Text(Status);
     /// <summary>Rejected and expired payments are final; the member pays again with a fresh one.</summary>
     public bool CanPayAgain => Status is Models.Status.Rejected or Models.Status.Expired && ItemId is not null && Kind != PayKind.Amenity;   // F12: an amenity is booked again on Book an amenity
     public string Detail => Status switch

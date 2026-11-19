@@ -323,12 +323,7 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
 public partial class MyMembershipViewModel(IMembershipService svc, ISubscriptionService subscription, IAttendanceService? codes = null) : LoadableViewModel
 {
     public ObservableCollection<MembershipRow> Memberships { get; } = new();
-    /// <summary>The payments the status filter lets through; the full list stays in <c>allPayments</c>.</summary>
-    public ObservableCollection<PaymentItem> Payments { get; } = new();
-    IReadOnlyList<PaymentItem> allPayments = [];
-    /// <summary>All, Verified, Pending or Expired (which also covers rejected). Kept across reloads.</summary>
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(PaymentsEmptyText))] private string filter = "All";
-    public string PaymentsEmptyText => Filter == "All" ? "No payments yet." : "No payments with this status. Choose All to see every payment.";
+    // owner fixes 2026-11-19 Q8: the payment list moved to Payments (MyPaymentsViewModel); this page keeps the count waiting
     [ObservableProperty] private string termEndsText = "–";
     [ObservableProperty] private string paymentsWaitingText = "–";
     [ObservableProperty] private string heroNumber = "–";
@@ -399,7 +394,6 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
         var waiting = false;
         if (!await RunAsync(svc.MyPaymentsAsync, rows =>
         {
-            allPayments = rows; ApplyFilter();
             PaymentsWaitingText = rows.Count(p => p.Status == Status.Pending).ToString();
             PayNow = rows.FirstOrDefault(p => p.NeedsPayment);
             payAtDesk = rows.FirstOrDefault(p => p.PaysAtDesk);   // cash plan 2026-11-17: chosen cash, waiting for the desk
@@ -407,16 +401,6 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
         })) return false;
         return await RunAsync(svc.MyMembershipsAsync, rows => { Fill(Memberships, rows); UpdateHero(rows, waiting); });
     }
-
-    [RelayCommand] private void SetFilter(string f) => Filter = f;
-    partial void OnFilterChanged(string value) => ApplyFilter();
-    void ApplyFilter() => Fill(Payments, allPayments.Where(p => Filter switch
-    {
-        "Verified" => p.Status == Status.Verified,
-        "Pending" => p.Status == Status.Pending,
-        "Expired" => p.Status is Status.Expired or Status.Rejected,
-        _ => true,
-    }));
 
     void UpdateHero(IReadOnlyList<MembershipRow> rows, bool waitingOnPayment)
     {
@@ -441,6 +425,44 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
         else
         { HeroNumber = "–"; HeroCaption = "Pick a package to get started."; LaneFraction = 0; }
     }
+}
+
+/// <summary>Owner fixes 2026-11-19 Q8: the member's own payments, newest first, 10 a page, by what they bought. Moved here from My membership.</summary>
+public partial class MyPaymentsViewModel(IMembershipService svc, ISubscriptionService subscription) : LoadableViewModel
+{
+    const int PageSize = 10;
+    public string[] Kinds { get; } = ["All", "Membership", "Amenity"];   // a Day pass is a package, so it is under Membership
+    public ObservableCollection<PaymentItem> Rows { get; } = new();
+    IReadOnlyList<PaymentItem> all = [];
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(EmptyText))] private string kind = "All";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(PageText)), NotifyCanExecuteChangedFor(nameof(PreviousCommand))] private int page;
+    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(NextCommand))] private bool hasMore;
+    [ObservableProperty] private bool isEmpty;
+    public string PageText => $"Page {Page + 1}";
+    public string EmptyText => Kind == "All" ? "No payments yet." : $"No {Kind.ToLowerInvariant()} payments yet.";
+    public bool DialogOpen { get; set; }
+
+    public override Task OnAppearingAsync() => LoadAsync();
+    [RelayCommand] private Task LoadAsync() => RunAsync(svc.MyPaymentsAsync, rows => { all = rows; Show(Page); });
+
+    [RelayCommand] private void SetKind(string value) { Kind = value; Show(0); }
+    [RelayCommand(CanExecute = nameof(HasPrevious))] private void Previous() => Show(Page - 1);
+    [RelayCommand(CanExecute = nameof(HasMore))] private void Next() => Show(Page + 1);
+    bool HasPrevious => Page > 0;
+
+    void Show(int target)
+    {
+        var shown = all.Where(p => Kind switch
+        {
+            "Membership" => p.Kind is PayKind.Membership or PayKind.Renewal,
+            "Amenity" => p.Kind == PayKind.Amenity,
+            _ => true
+        }).OrderByDescending(p => p.CreatedAt).ToList();
+        Page = Math.Clamp(target, 0, Math.Max(0, (shown.Count - 1) / PageSize));
+        Fill(Rows, shown.Skip(Page * PageSize).Take(PageSize));
+        HasMore = shown.Count > (Page + 1) * PageSize;
+        IsEmpty = Rows.Count == 0;
+    }
 
     [RelayCommand]
     private async Task PayAgainAsync(PaymentItem item)
@@ -449,6 +471,15 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
         if (!await Confirm.AskAsync("Create a new payment?", $"{item.What}\n₱{item.Amount:N2}\nThe expired one stays in your history.", "Create payment")) return;
         if (!await RunAsync(() => svc.PayAgainAsync(item), _ => { })) return;
         Notice = "New payment created. Pay it online on Packages.";
+        await LoadAsync();
+    }
+
+    public async Task CancelPaymentAsync(PaymentItem item)
+    {
+        if (IsBusy) return;
+        Notice = null;
+        if (!await RunAsync(() => subscription.CancelPendingPaymentAsync(item.Id))) return;
+        Notice = "Payment cancelled. Nothing was charged; you can choose a package again.";
         await LoadAsync();
     }
 }

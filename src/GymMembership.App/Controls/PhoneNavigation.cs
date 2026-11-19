@@ -68,7 +68,7 @@ public sealed class PhoneNavigation
         {
             ["Amenities"] = typeof(AmenitiesPage), ["Book an amenity"] = typeof(BookAmenityPage), ["Coaches"] = typeof(CoachesPage),
             ["Time requests"] = typeof(RequestsPage),
-            ["Renew or change"] = typeof(PackagesPage),
+            ["Renew or change"] = typeof(PackagesPage), ["Payments"] = typeof(PaymentsPage),
             ["Settings"] = coach ? typeof(CoachProfilePage) : typeof(SettingsPage)
         };
         var secondary = original.Where(item => !primary.Any(p => p.Item1 == item.Title)).ToList();
