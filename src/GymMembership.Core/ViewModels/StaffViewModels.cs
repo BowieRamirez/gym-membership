@@ -66,64 +66,18 @@ public partial class HomeViewModel(IDeskHomeService svc, IPaymentStaffService? p
     public static IReadOnlyList<HomeTile> Build(DeskSummary s)
     {
         var amenityDetail = string.Join(", ", new[] { s.AmenitiesInUse > 0 ? $"{s.AmenitiesInUse} in use" : null, s.AmenitiesUnavailable > 0 ? $"{s.AmenitiesUnavailable} unavailable" : null }.OfType<string>());
-        // 9.7: one highlighted figure (the page standard). Payments waiting first, then unanswered chats; an unavailable amenity is news,
-        // not a desk task, so it is said in words only. Every tile still says what it needs in its caption.
-        bool pay = s.CashToTake > 0, chats = !pay && (s.UnreadMessages > 0 || s.UnclaimedChats > 0);
+        // 9.7: one highlighted figure (the page standard): unanswered chats.
+        bool chats = s.UnreadMessages > 0 || s.UnclaimedChats > 0;
         return
         [
             new("checkin", "log-in", "Check-ins today", s.CheckInsToday.ToString(),
                 s.CheckInsToday == 0 ? "No one has checked in yet" : "Tap to check someone in", false),
-            // cash plan 2026-11-17: cash members chose in the app (packages and booking down payments) waits on Payments to verify
-            new("verify", "receipt", "Payments to verify", s.CashToTake.ToString(),
-                s.CashToTake == 0 ? "All caught up" : s.CashToTake == 1 ? "1 payment is waiting" : $"{s.CashToTake} payments are waiting", pay),
             new("amenities", "waves", "Amenities available", $"{s.AmenitiesAvailable} of {s.AmenitiesTotal}",
                 amenityDetail.Length == 0 ? "All open" : amenityDetail, false),
             new("messages", "message-square", "Unread messages", s.UnreadMessages.ToString(),
                 s.UnclaimedChats > 0 ? (s.UnclaimedChats == 1 ? "1 chat nobody has taken" : $"{s.UnclaimedChats} chats nobody has taken")
                 : s.UnreadMessages > 0 ? "Open Messages to reply" : "No new messages", chats),
         ];
-    }
-}
-
-/// <summary>Cash plan 2026-11-17: the cash members chose in the app (packages and booking down payments), oldest first.
-/// Approve takes it into the desk's open drawer with a receipt; Reject needs a reason and is final (the member pays again).</summary>
-public partial class VerifyPaymentsViewModel(IPaymentStaffService svc) : LoadableViewModel
-{
-    public ObservableCollection<PaymentRow> Pending { get; } = new();
-    public bool HasPending => Pending.Count > 0;
-    [ObservableProperty] private PaymentRow? rejecting;
-    [ObservableProperty] private string rejectReason = "";
-
-    public override Task OnAppearingAsync() => LoadAsync();
-
-    [RelayCommand]
-    private async Task LoadAsync()
-    {
-        await RunAsync(svc.PendingAsync, rows => Fill(Pending, rows));
-        OnPropertyChanged(nameof(HasPending));
-    }
-
-    [RelayCommand]
-    private async Task ApproveAsync(PaymentRow row)
-    {
-        Notice = null;
-        var booking = row.Booking is { } b ? $"\n{b}" : "";
-        if (!await Confirm.AskAsync($"Take {row.Payer}'s cash?", $"{row.Item}{booking}\n₱{row.Payment.Amount:N2} into your drawer.", "Approve")) return;
-        if (!await RunAsync(() => svc.VerifyAsync(row.Payment.Id, true))) return;
-        Pending.Remove(row); OnPropertyChanged(nameof(HasPending));
-        Notice = $"Took ₱{row.Payment.Amount:N2} from {row.Payer}. Verified, with a receipt number.";
-    }
-
-    [RelayCommand] private void Reject(PaymentRow row) { Notice = null; Rejecting = row; RejectReason = ""; }
-    [RelayCommand] private void KeepPending() => Rejecting = null;
-
-    [RelayCommand]
-    private async Task ConfirmRejectAsync()
-    {
-        if (Rejecting is not { } row) return;
-        if (!await RunAsync(() => svc.VerifyAsync(row.Payment.Id, false, RejectReason))) return;
-        Pending.Remove(row); OnPropertyChanged(nameof(HasPending)); Rejecting = null;
-        Notice = $"Rejected {row.Payer}'s payment. They are told why and can pay again.";
     }
 }
 

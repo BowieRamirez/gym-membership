@@ -37,17 +37,6 @@ public class ReservationTests
         return vm.Bookings.Single(b => b.Amenity == amenity && b.Booking.StartsAt.ToUniversalTime() == At(hm));
     }
 
-    // cashier plan Y7: Payments to verify is gone. Cash at the desk is taken in the Cashier; booking claims are decided on Amenity status.
-    static async Task AsCashier(DemoGateway gw, Func<VerifyPaymentsViewModel, Task> act)
-    {
-        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
-        await gw.OpenDrawerAsync();
-        var desk = new VerifyPaymentsViewModel(new PaymentStaffService(gw));
-        await desk.OnAppearingAsync();
-        await act(desk);
-        await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
-    }
-
     static async Task AsAmenityDesk(DemoGateway gw, Func<AmenityStatusViewModel, Task> act)
     {
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
@@ -131,7 +120,7 @@ public class ReservationTests
         Assert.StartsWith("Down payment ₱250.00 online. Pay by ", row.Detail);
         Assert.StartsWith("Requested.", vm.Notice);
 
-        await AsCashier(gw, desk => { Assert.Empty(desk.Pending); return Task.CompletedTask; });   // an online down payment is not the desk's
+        Assert.Empty((await new PaymentStaffService(gw).PendingAsync()).Value!);   // an online down payment is not the desk's
         await PayOnline(gw, row);
         await vm.LoadCommand.ExecuteAsync(null);
         row = vm.Bookings.Single(b => b.Amenity == "Group classes");

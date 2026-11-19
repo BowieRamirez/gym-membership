@@ -53,31 +53,6 @@ public class ConfirmationTests
         Assert.Empty(vm.Bookings);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Taking_a_bookings_cash_asks_with_the_payer_and_amount(bool yes)   // cashier plan Y7: was Payments to verify's Approve
-    {
-        var gw = await As("member@demo.io");
-        var group = (await gw.ListAsync<Amenity>()).Single(a => a.Name == "Group classes");
-        var day = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8)).AddDays(1);
-        var start = DateTime.SpecifyKind(day.ToDateTime(new TimeOnly(14, 0)).AddHours(-8), DateTimeKind.Utc);
-        var held = await new ReservationService(gw).BookAsync(group.Id, start, 60, PayMethod.Qr, null, null);
-        Assert.True(held.Ok);
-        gw.OwnerMakeCash(held.Value!.PaymentId!.Value);   // 0099: a pay-at-the-desk hold from before members paid online only
-        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
-        await gw.OpenDrawerAsync();
-        var vm = new VerifyPaymentsViewModel(new PaymentStaffService(gw));
-        await vm.OnAppearingAsync();
-        var row = vm.Pending.Single();
-        var asked = Answer(yes);
-        await vm.ApproveCommand.ExecuteAsync(row);
-        var question = Assert.Single(asked);
-        Assert.Contains(row.Payer, question);
-        Assert.Contains($"₱{row.Payment.Amount:N2}", question);
-        Assert.Equal(!yes, (await new PaymentStaffService(gw).PendingAsync()).Value!.Any(p => p.Payment.Id == row.Payment.Id));
-    }
-
     [Fact]
     public async Task Going_back_leaves_an_account_active()
     {
@@ -134,7 +109,7 @@ public class ConfirmationTests
         { "StaffViewModels.cs", "TraineesViewModel", "Remove" },
         { "StaffViewModels.cs", "CoachProfileViewModel", "ToggleVisit" },
         { "StaffViewModels.cs", "CashierViewModel", "Record" },
-        { "StaffViewModels.cs", "VerifyPaymentsViewModel", "Approve" },
+        // removed VerifyPaymentsViewModel entry
         { "StaffViewModels.cs", "CheckInViewModel", "ToggleCoach" },
         { "StaffViewModels.cs", "UsersViewModel", "ToggleActive" },
         { "StaffViewModels.cs", "UsersViewModel", "ToggleRole" },
