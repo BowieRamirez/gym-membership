@@ -443,13 +443,13 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
     public Task<AppResult<bool>> CheckOnlineAsync(int paymentId) => OnlinePay.CheckAsync(gw, paymentId);
 
     public async Task<AppResult<Payment>> PayAgainAsync(PaymentItem item) => item.PackageSnapshotId is { } package && item.Kind is PayKind.Membership or PayKind.Renewal
-        ? await new SubscriptionService(gw).ExtendAsync(package, null, item.Method)   // paid again the same way: cash stays cash
+        ? await new SubscriptionService(gw).ExtendAsync(package, null)   // 0099: paid again online (members don't pay cash any more)
         : item.ItemId is not { } id
         ? AppResult<Payment>.Fail(AppErrorKind.Validation, "not_found")
         : item.Kind switch
         {
-            PayKind.Membership => await AvailAsync(id, null, item.Method),
-            PayKind.Renewal => await RenewAsync(id, null, item.Method),
+            PayKind.Membership => await AvailAsync(id, null),
+            PayKind.Renewal => await RenewAsync(id, null),
             _ => AppResult<Payment>.Fail(AppErrorKind.Validation, "not_found")
         };
 

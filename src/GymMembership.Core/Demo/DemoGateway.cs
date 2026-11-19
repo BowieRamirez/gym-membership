@@ -104,6 +104,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
 
     /// <summary>The demo's stand-in for the database owner (Supabase dashboard) switching an account on or off, which 0037 still allows
     /// for a super admin when nobody in the app can.</summary>
+    /// <summary>0099: members can't choose cash any more; the ones they chose before still wait at the desk. This makes one of those.</summary>
+    public void OwnerMakeCash(int paymentId) => All<Payment>().First(p => p.Id == paymentId).Method = PayMethod.Cash;
     public void OwnerSetActive(string userId, bool active) => All<Profile>().First(p => p.Id == userId).IsActive = active;
     /// <summary>0066 (G19): the database owner, not the app, can still leave an amenity set up as a pass, as amenities sold before were.</summary>
     public void OwnerSetPassDays(int amenityId, int? days) => All<Amenity>().First(a => a.Id == amenityId).DurationDays = days;

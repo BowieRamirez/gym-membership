@@ -221,10 +221,6 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPayCard))] private PaymentItem? payAtDesk;
     /// <summary>The side panel shows when there is one payment to pay, online or at the desk (one pending package payment at a time).</summary>
     public bool HasPayCard => PayNow is not null || PayAtDesk is not null;
-    /// <summary>How the next package is paid: online (qr, the default) or cash at the front desk.</summary>
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(PayCash))] private string method = PayMethod.Qr;
-    public bool PayCash => Method == PayMethod.Cash;
-    [RelayCommand] private void PickMethod(string value) => Method = value;
     /// <summary>Back from Xendit's page: the server is asking Xendit whether it was paid (X10).</summary>
     [ObservableProperty] private bool checking;
     public bool DialogOpen { get; set; }
@@ -265,13 +261,10 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
 
     [RelayCommand] private void UseCode(AvailableCode code) => DiscountCode = code.Code;
 
-    // plan 2026-11-17 Z7 (owner's sketch): Buy opens a popup; step 1 the code and the package, step 2 Online or Cash, then Pay.
-    // The popup is the confirmation, so Pay asks nothing more.
+    // plan 2026-11-17 Z7 (owner's sketch): Buy opens a popup with the code and the package. Owner fixes 2026-11-19 Q6: members pay
+    // online only, so its Buy makes the online payment at once. The popup is the confirmation, so it asks nothing more.
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsBuying), nameof(BuyTerms))] private MembershipPackage? buying;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(OnCodeStep), nameof(OnPayStep))] private bool payStep;
     public bool IsBuying => Buying is not null;
-    public bool OnCodeStep => !PayStep;
-    public bool OnPayStep => PayStep;
     /// <summary>The codes that fit the package in the popup.</summary>
     public ObservableCollection<AvailableCode> BuyCodes { get; } = new();
     public string BuyTerms => Buying is not { } p ? ""
@@ -281,24 +274,20 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
     [RelayCommand]
     private void OpenBuy(MembershipPackage package)
     {
-        Notice = null; ErrorMessage = null; DiscountCode = null; Method = PayMethod.Qr; PayStep = false;
+        Notice = null; ErrorMessage = null; DiscountCode = null;
         Fill(BuyCodes, Codes.Where(c => c.AllPackages || c.PackageIds.Contains(package.Id)));
         Buying = package;
     }
-    [RelayCommand] private void Next() { ErrorMessage = null; PayStep = true; }
-    [RelayCommand] private void Back() => PayStep = false;
     [RelayCommand] private void CloseBuy() { Buying = null; DiscountCode = null; ErrorMessage = null; }
 
-    // creates a pending payment: online is paid on this page's Pay online card through Xendit, cash at the front desk
+    // creates a pending online payment, paid on this page's Pay online card through Xendit
     [RelayCommand]
     private async Task PayAsync()
     {
         if (Buying is not { } package) return;
         Notice = null;
-        Payment? made = null;
-        if (!await RunAsync(() => subscription.ExtendAsync(package.Id, DiscountCode, Method), p => made = p)) return;
-        Notice = PayCash ? $"Payment created. Pay ₱{made!.Amount:N2} in cash at the front desk; your membership starts once the desk verifies it."
-                         : "Payment created. Pay online on this page to start it.";
+        if (!await RunAsync(() => subscription.ExtendAsync(package.Id, DiscountCode), _ => { })) return;
+        Notice = "Payment created. Pay online on this page to start it.";
         CloseBuy();
         await LoadPayAsync();
     }
@@ -459,7 +448,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
         Notice = null;
         if (!await Confirm.AskAsync("Create a new payment?", $"{item.What}\n₱{item.Amount:N2}\nThe expired one stays in your history.", "Create payment")) return;
         if (!await RunAsync(() => svc.PayAgainAsync(item), _ => { })) return;
-        Notice = item.Method == PayMethod.Cash ? "New payment created. Pay it in cash at the front desk." : "New payment created. Pay it online on Packages.";
+        Notice = "New payment created. Pay it online on Packages.";
         await LoadAsync();
     }
 }

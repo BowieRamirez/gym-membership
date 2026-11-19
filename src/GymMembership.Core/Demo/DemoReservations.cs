@@ -214,6 +214,7 @@ public sealed partial class DemoGateway
                 if (!ActiveMember(who)) throw Err("no_active_membership");   // 0097: the desk too
                 var amenityId = I("p_amenity"); var minutes = I("p_minutes");
                 var method = desk ? PayMethod.Cash : a.TryGetValue("p_method", out var m) ? m as string ?? PayMethod.Qr : PayMethod.Qr;
+                if (!desk && method == PayMethod.Cash) throw Err("online_only");   // 0099: members pay online; the desk records cash
                 if (minutes < 60 || minutes % 60 != 0 || method is not (PayMethod.Qr or PayMethod.Cash)) throw Err("bad_input");   // 0090: whole hours
                 var start = DateTime.Parse((string)a["p_start"], null, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal);
                 var end = start.AddMinutes(minutes);

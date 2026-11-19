@@ -9,11 +9,6 @@
 
     <v:BasePage.Resources>
         <toolkit:IntToBoolConverter x:Key="Any" />
-        <!-- the same pay options as the booking sheet (BookAmenityPage) -->
-        <Style x:Key="PayOption" TargetType="Border" BasedOn="{StaticResource Row}">
-            <Setter Property="Padding" Value="12,10" />
-            <Setter Property="StrokeShape" Value="RoundRectangle 12" />
-        </Style>
         <!-- phone: name and length on the left, the price on the right, one line about it, then the button at its own width -->
         <DataTemplate x:Key="PackagePhone" x:DataType="m:MembershipPackage">
             <Border Style="{StaticResource Panel}" Padding="16,14">
@@ -57,7 +52,7 @@
             <Button Text="How buying a package works" Style="{StaticResource LinkButton}" HorizontalOptions="Start" Margin="-4,-8,0,-8" Clicked="OnToggleRules"
                     IsVisible="{OnIdiom Phone=True, Default=False}" />
             <!-- G23 (2026-11-15): the refund rule is said before anyone pays; the last sentence is RefundRules.Line (RefundLineTests checks it) -->
-            <Label x:Name="Rules" Text="Choose your next package. Pay online on this page by GCash or QR Ph (scan it with Maya or any bank app), or in cash at the front desk. Once paid, it starts right away, or when your current term ends. No upgrades or automatic charges.&#10;Refunds: only in a term's first 7 days, for the days not used."
+            <Label x:Name="Rules" Text="Choose your next package. Pay online on this page by GCash or QR Ph (scan it with Maya or any bank app). To pay cash, go to the front desk and they'll record it. Once paid, it starts right away, or when your current term ends. No upgrades or automatic charges.&#10;Refunds: only in a term's first 7 days, for the days not used."
                    Style="{OnIdiom Phone={StaticResource Caption}, Default={StaticResource Muted}}" MaximumWidthRequest="760" HorizontalOptions="Start" IsVisible="{OnIdiom Phone=False, Default=True}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
@@ -117,7 +112,7 @@
         </c:SideLayout></ScrollView>
     </Grid>
 
-    <!-- plan 2026-11-17 Z7 (owner's sketch): the Buy popup. Step 1 the code and the package, step 2 online or cash, then Pay.
+    <!-- plan 2026-11-17 Z7 (owner's sketch): the Buy popup: the code and the package, then Buy pays online (owner fixes 2026-11-19 Q6).
          Same frame as the booking sheet (BookAmenityPage): the page dims behind it; a centred card on Windows, a bottom sheet on a phone -->
     <Grid IsVisible="{Binding IsBuying}">
         <BoxView Color="#9E000000">
@@ -140,8 +135,8 @@
                     </Grid>
                     <c:Banner Message="{Binding ErrorMessage}" />
 
-                    <!-- step 1: the code first (the sketch), the member's codes for this package as chips, then what they get -->
-                    <VerticalStackLayout Spacing="14" IsVisible="{Binding OnCodeStep}">
+                    <!-- the code first (the sketch), the member's codes for this package as chips, then what they get; Buy pays online (0099) -->
+                    <VerticalStackLayout Spacing="14">
                         <VerticalStackLayout Spacing="6">
                             <Label Text="Discount code (optional)" Style="{StaticResource Caption}" />
                             <Border Style="{StaticResource Field}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" WidthRequest="{OnIdiom Phone=-1, Default=240}">
@@ -162,35 +157,9 @@
                             <BindableLayout.ItemTemplate><DataTemplate x:DataType="x:String"><Label Text="{Binding ., StringFormat='• {0}'}" FontSize="14" /></DataTemplate></BindableLayout.ItemTemplate>
                         </VerticalStackLayout>
                         <Label Text="{Binding BuyTerms}" Style="{StaticResource Caption}" />
-                        <Button Text="Buy" Style="{StaticResource SmallButton}" Command="{Binding NextCommand}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" AutomationId="BuyNext" />
+                        <Button Text="Buy and pay online" Style="{StaticResource SmallButton}" Command="{Binding PayCommand}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" AutomationId="BuyNext" />
                     </VerticalStackLayout>
 
-                    <!-- step 2: how they pay (cash plan 2026-11-17); at the desk waits for the front desk to verify it -->
-                    <VerticalStackLayout Spacing="14" IsVisible="{Binding OnPayStep}">
-                        <Label Text="How you'll pay" FontFamily="BarlowSemiBold" />
-                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                        <Border Style="{StaticResource PayOption}">
-                            <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding PayCash}" Value="False"><Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /><Setter Property="StrokeThickness" Value="2" /></DataTrigger></Border.Triggers>
-                            <Grid>
-                                <VerticalStackLayout Spacing="2"><Label Text="Online" FontFamily="BarlowSemiBold" /><Label Text="GCash or QR Ph, here" Style="{StaticResource Caption}" /></VerticalStackLayout>
-                                <Button Margin="-12,-10" BackgroundColor="Transparent" BorderWidth="0" Text="" Command="{Binding PickMethodCommand}" CommandParameter="qr"
-                                        SemanticProperties.Description="Pay online on this page" AutomationId="PayMethodOnline" />
-                            </Grid>
-                        </Border>
-                        <Border Grid.Column="1" Style="{StaticResource PayOption}">
-                            <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding PayCash}" Value="True"><Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /><Setter Property="StrokeThickness" Value="2" /></DataTrigger></Border.Triggers>
-                            <Grid>
-                                <VerticalStackLayout Spacing="2"><Label Text="At the desk" FontFamily="BarlowSemiBold" /><Label Text="Cash" Style="{StaticResource Caption}" /></VerticalStackLayout>
-                                <Button Margin="-12,-10" BackgroundColor="Transparent" BorderWidth="0" Text="" Command="{Binding PickMethodCommand}" CommandParameter="cash"
-                                        SemanticProperties.Description="Pay in cash at the front desk" AutomationId="PayMethodCash" />
-                            </Grid>
-                        </Border>
-                    </Grid>
-                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                            <Button Text="Back" Style="{StaticResource SmallOutlineButton}" Command="{Binding BackCommand}" />
-                            <Button Grid.Column="1" Text="Pay" Style="{StaticResource SmallButton}" Command="{Binding PayCommand}" AutomationId="BuyPay" />
-                        </Grid>
-                    </VerticalStackLayout>
                 </VerticalStackLayout>
             </ScrollView>
         </Border>

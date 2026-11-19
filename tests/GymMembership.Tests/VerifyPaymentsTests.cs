@@ -13,7 +13,8 @@ public class VerifyPaymentsTests
         var gw = new DemoGateway();
         Assert.True((await new AuthService(gw).RegisterAsync("Ana", "Reyes", "ana@demo.io", "secret12", true)).Ok);
         var pkg = (await new MembershipService(gw).ListPackagesAsync()).Value!.First(p => p.Name == "Quarterly");
-        var pay = (await new SubscriptionService(gw).ExtendAsync(pkg.Id, null, PayMethod.Cash)).Value!;
+        var pay = (await new SubscriptionService(gw).ExtendAsync(pkg.Id)).Value!;
+        gw.OwnerMakeCash(pay.Id);   // 0099: a cash payment a member chose before members paid online only
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         if (drawer) await gw.OpenDrawerAsync();
         return (gw, pay);

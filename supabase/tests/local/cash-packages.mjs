@@ -25,6 +25,11 @@ try {
   const desk = await user('employee'), desk2 = await user('employee');
   const pack = (await db.query(`insert into membership_packages(name,price,duration_days) values('C Monthly',1000,30) returning membership_package_id id`)).rows[0].id;
 
+  // owner fixes 2026-11-19 Q6 (0099): members can't choose cash any more; these are the cash package payments made before 0099,
+  // still waiting at the desk until they expire: made online, then switched to cash as they were
+  const legacyCash = async (m) => { const p = (await as(m, 'select * from extend_membership($1,null)', [pack]))[0];
+    return (await db.query(`update payments set method = 'cash' where payment_id = $1 returning *`, [p.payment_id])).rows[0]; };
+
   await test('old apps (no p_method) still pay online', async () => {
     const p = (await as(await user(), 'select * from extend_membership($1,null)', [pack]))[0];
     assert.equal(p.method, 'qr');
@@ -32,9 +37,9 @@ try {
 
   await test('cash is pending cash with a deadline and no checkout', async () => {
     const m = await user();
-    const p = (await as(m, `select * from extend_membership($1,null,'cash')`, [pack]))[0];
+    const p = await legacyCash(m);
     assert.equal(p.method, 'cash'); assert.equal(p.status, 'pending'); assert.ok(p.expires_at);
-    await assert.rejects(as(m, `select * from avail_membership($1,null,'cash')`, [pack]), /already_availed|renewal_pending/);
+    await assert.rejects(as(m, `select * from avail_membership($1,null,'cash')`, [pack]), /online_only|already_availed|renewal_pending/);
   });
 
   await test('gcash and bank are refused for packages', async () => {
@@ -43,7 +48,7 @@ try {
 
   await test('approving needs an open shift; approved cash goes into the drawer and starts the term', async () => {
     const m = await user();
-    const p = (await as(m, `select * from extend_membership($1,null,'cash')`, [pack]))[0];
+    const p = await legacyCash(m);
     await assert.rejects(as(desk2, 'select verify_payment($1,true)', [p.payment_id]), /no_open_shift/);
     await openCashShifts(db);
     await as(desk, 'select verify_payment($1,true)', [p.payment_id]);
@@ -53,14 +58,14 @@ try {
   });
 
   await test('rejecting needs a reason', async () => {
-    const p = (await as(await user(), `select * from extend_membership($1,null,'cash')`, [pack]))[0];
+    const p = await legacyCash(await user());
     await assert.rejects(as(desk, `select verify_payment($1,false,'')`, [p.payment_id]));
     await as(desk, `select verify_payment($1,false,'Did not come in')`, [p.payment_id]);
     assert.equal((await db.query('select status from payments where payment_id=$1', [p.payment_id])).rows[0].status, 'rejected');
   });
 
   await test('a cash package past its deadline cannot be approved and the expiry job expires it (0085)', async () => {
-    const p = (await as(await user(), `select * from extend_membership($1,null,'cash')`, [pack]))[0];
+    const p = await legacyCash(await user());
     await db.query(`update payments set expires_at = now() - interval '1 minute' where payment_id = $1`, [p.payment_id]);
     await assert.rejects(as(desk, 'select verify_payment($1,true)', [p.payment_id]), /payment_expired/);
     await db.query('select public.expire_payments()');

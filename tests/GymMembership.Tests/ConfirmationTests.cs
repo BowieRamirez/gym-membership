@@ -62,7 +62,9 @@ public class ConfirmationTests
         var group = (await gw.ListAsync<Amenity>()).Single(a => a.Name == "Group classes");
         var day = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8)).AddDays(1);
         var start = DateTime.SpecifyKind(day.ToDateTime(new TimeOnly(14, 0)).AddHours(-8), DateTimeKind.Utc);
-        Assert.True((await new ReservationService(gw).BookAsync(group.Id, start, 60, PayMethod.Cash, null, null)).Ok);
+        var held = await new ReservationService(gw).BookAsync(group.Id, start, 60, PayMethod.Qr, null, null);
+        Assert.True(held.Ok);
+        gw.OwnerMakeCash(held.Value!.PaymentId!.Value);   // 0099: a pay-at-the-desk hold from before members paid online only
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         await gw.OpenDrawerAsync();
         var vm = new VerifyPaymentsViewModel(new PaymentStaffService(gw));

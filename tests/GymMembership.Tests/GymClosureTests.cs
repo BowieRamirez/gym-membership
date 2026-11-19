@@ -30,7 +30,8 @@ public class GymClosureTests
     {
         var gw = await As("member@demo.io");
         var classes = (await gw.ListAsync<Amenity>()).Single(a => a.Name == "Group classes");
-        var made = (await new ReservationService(gw).BookAsync(classes.Id, At(Closed, 10), 60, PayMethod.Cash)).Value!;
+        var made = (await new ReservationService(gw).BookAsync(classes.Id, At(Closed, 10), 60, PayMethod.Qr)).Value!;
+        gw.OwnerMakeCash(made.PaymentId!.Value);   // 0099: a pay-at-the-desk hold from before members paid online only
         await As("employee@demo.io", gw);
         await gw.OpenDrawerAsync();
         Assert.True((await new PaymentStaffService(gw).VerifyAsync(made.PaymentId!.Value, true)).Ok);
@@ -77,7 +78,8 @@ public class GymClosureTests
     {
         var gw = await As("member@demo.io");   // Alex has no Group classes pass: booking it is a request with a down payment
         var classes = (await gw.ListAsync<Amenity>()).Single(a => a.Name == "Group classes");
-        var made = (await new ReservationService(gw).BookAsync(classes.Id, At(Closed, 10), 60, PayMethod.Cash)).Value!;
+        var made = (await new ReservationService(gw).BookAsync(classes.Id, At(Closed, 10), 60, PayMethod.Qr)).Value!;
+        gw.OwnerMakeCash(made.PaymentId!.Value);   // 0099: a pay-at-the-desk hold from before members paid online only
         await As("employee@demo.io", gw);
         await gw.OpenDrawerAsync();
         Assert.True((await new PaymentStaffService(gw).VerifyAsync(made.PaymentId!.Value, true)).Ok);

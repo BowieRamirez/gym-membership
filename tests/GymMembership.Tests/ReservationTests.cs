@@ -29,10 +29,9 @@ public class ReservationTests
         vm.PickLengthCommand.Execute(vm.Lengths.Single(l => l.Minutes == minutes));
     }
 
-    static async Task<BookingRow> Booked(BookAmenityViewModel vm, string amenity, string hm, int minutes = 60, string method = PayMethod.Qr)
+    static async Task<BookingRow> Booked(BookAmenityViewModel vm, string amenity, string hm, int minutes = 60)
     {
         await Pick(vm, amenity, hm, minutes);
-        vm.PickMethodCommand.Execute(method);
         await vm.BookCommand.ExecuteAsync(null);
         Assert.Null(vm.ErrorMessage);
         return vm.Bookings.Single(b => b.Amenity == amenity && b.Booking.StartsAt.ToUniversalTime() == At(hm));
@@ -141,24 +140,14 @@ public class ReservationTests
         Assert.Contains((await gw.ListAsync<UserNotification>()).Select(n => n.Title), t => t == "Booking confirmed");
     }
 
-    [Fact]
-    public async Task Pay_at_the_desk_is_approved_by_taking_the_cash()
+    [Fact]   // owner fixes 2026-11-19 Q6 (0099): members book online only; an older app that still sends cash is refused
+    public async Task A_member_booking_cannot_choose_cash()
     {
         var (gw, vm) = await Member();
-        var row = await Booked(vm, "Group classes", "14:00", 60, PayMethod.Cash);
-        Assert.StartsWith("Down payment ₱250.00 at the front desk by ", row.Detail);
-        Assert.False(row.CanPayOnline);
-        await AsCashier(gw, async desk =>
-        {
-            var pay = desk.Pending.Single();
-            Assert.Equal(("Take cash", "At the desk"), (pay.ApproveText, pay.MethodText));
-            Assert.EndsWith("2:00 PM to 3:00 PM · solo · balance ₱250.00 at the desk", pay.Booking);
-            await desk.ApproveCommand.ExecuteAsync(pay);
-            Assert.Null(desk.ErrorMessage);
-            Assert.Empty(desk.Pending);
-        });
-        var cash = (await gw.ListAsync<Payment>(p => p.Id == row.Payment!.Id)).Single();
-        Assert.Equal(Status.Verified, cash.Status);
+        await Pick(vm, "Group classes", "14:00");
+        Assert.Contains("online", vm.PayWithText);
+        var group = (await gw.ListAsync<Amenity>(a => a.Name == "Group classes")).Single();
+        Assert.Equal("online_only", (await new ReservationService(gw).BookAsync(group.Id, At("14:00"), 60, PayMethod.Cash)).Message);
     }
 
     [Fact]

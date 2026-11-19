@@ -82,7 +82,6 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
         : PayFirst ? BookingPrice.Split(p.Amenity.Price, p.Amenity.CoachFee, IsWithCoach && PickedCoach is not null, Percent, CodePercent, Hours)
         : BookingPrice.Split(0, p.Amenity.CoachFee, IsWithCoach && PickedCoach is not null, 0, 0, Hours);
     int Hours => Math.Max(1, (Length?.Minutes ?? 60) / 60);   // 0090: per hour
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(PayQr), nameof(PayCash), nameof(HoldText))] private string method = PayMethod.Qr;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsClaiming))] private BookingRow? claiming;
     [ObservableProperty] private string claimReason = "";
     AmenityGrid? _grid;
@@ -94,8 +93,6 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     public string SheetCaption => Picked is null ? "" : $"{Picked.PassText} · {Picked.RunText}";
     /// <summary>No pass or session for this amenity: the booking is held until the payment is approved, and must start more than 1 hour from now.</summary>
     public bool PayFirst => Picked is { HasPass: false };
-    public bool PayQr => Method == PayMethod.Qr;
-    public bool PayCash => Method == PayMethod.Cash;
     public string MonthText => Month.ToString("MMMM yyyy", En);
     public string DayText => Day.ToString("dddd d MMMM", En);
     public string BookText => PayFirst ? $"Book and pay ₱{Split.Down:N2}" : "Book";
@@ -103,9 +100,8 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     /// <summary>Owner, 2026-11-18: at 100% (Gym settings) the whole price is paid when booking, so there is no "down payment" or balance.</summary>
     bool PaysInFull => Percent >= 100;
     string PayWord => PaysInFull ? "payment" : "down payment";
-    public string PayWithText => $"Pay the {PayWord} with";
-    public string HoldText => PayFirst && PayCash ? $"Not yours until the desk takes the {PayWord}. If someone else's is paid first, yours is refunded."
-        : PayFirst ? $"Not yours until the {PayWord} is paid online. If someone else's is paid first, yours is refunded."
+    public string PayWithText => $"Pay the {PayWord} online: GCash or QR Ph, through Xendit. To pay cash, book at the front desk.";   // 0099: members pay online
+    public string HoldText => PayFirst ? $"Not yours until the {PayWord} is paid online. If someone else's is paid first, yours is refunded."
         : Split.Balance > 0 ? $"Uses your pass. The ₱{Split.Balance:N2} coach fee is paid at the desk." : "Uses your pass, nothing to pay.";
     /// <summary>Why times are faded: none left that day, or (paying first, today) the hold needs the start more than 1 hour away.</summary>
     public bool IsDayClosed => _closed.ContainsKey(Day);
@@ -146,7 +142,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     private async Task OpenAsync(AmenityCard card)
     {
         Notice = null; ErrorMessage = null;
-        Picked = card; Method = PayMethod.Qr; Month = new(Today.Year, Today.Month, 1);
+        Picked = card; Month = new(Today.Year, Today.Month, 1);
         (IsWithCoach, PickedCoach, Code) = (false, null, "");
         Coaches.Clear(); OnPropertyChanged(nameof(HasCoaches));
         if (await svc.DownPaymentPercentAsync() is { Ok: true } pct) Percent = pct.Value;
@@ -232,20 +228,18 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
         if (value is not null && IsWithCoach) _ = LoadCoachesAsync();
     }
 
-    [RelayCommand] private void PickMethod(string value) => Method = value;
-
     [RelayCommand]
     private async Task BookAsync()
     {
         if (Picked is not { } card || Time is null || Length is null) return;
         Notice = null;
         var how = !PayFirst ? HoldText
-            : PaysInFull ? PayCash ? $"Pay ₱{Split.Down:N2} at the front desk. It's yours once the desk takes it." : $"Pay ₱{Split.Down:N2} online now. It's yours once it's paid."
-            : (PayCash ? $"Pay the ₱{Split.Down:N2} down payment at the front desk." : $"Pay the ₱{Split.Down:N2} down payment online now.")
+            : PaysInFull ? $"Pay ₱{Split.Down:N2} online now. It's yours once it's paid."
+            : $"Pay the ₱{Split.Down:N2} down payment online now."
                 + $" The ₱{Split.Balance:N2} balance is paid at the desk. It's yours once the down payment is paid.";
         if (!await Confirm.AskAsync($"Book {card.Amenity.Name}?", $"{Summary}\n{how}", BookText)) return;
         Reservation? made = null;
-        if (!await RunAsync(() => svc.BookAsync(card.Amenity.Id, Time.StartUtc, Length.Minutes, Method, IsWithCoach ? PickedCoach?.CoachId : null, Code), r => made = r))
+        if (!await RunAsync(() => svc.BookAsync(card.Amenity.Id, Time.StartUtc, Length.Minutes, PayMethod.Qr, IsWithCoach ? PickedCoach?.CoachId : null, Code), r => made = r))
         {
             var error = ErrorMessage;   // nothing was booked: show the day as it is now, with the reason
             await PickDayAsync(Day);
@@ -254,10 +248,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
         }
         Close();
         await LoadAsync();
-        var row = Bookings.FirstOrDefault(b => b.Booking.Id == made!.Id);
-        Notice = made!.Status != "awaiting_payment" ? "Booked." : PayCash
-            ? $"Requested. {row?.Detail ?? $"Pay the {PayWord} at the front desk."}"
-            : $"Requested. Tap Pay online on the booking below. It's yours once the {PayWord} is paid.";
+        Notice = made!.Status != "awaiting_payment" ? "Booked." : $"Requested. Tap Pay online on the booking below. It's yours once the {PayWord} is paid.";
     }
 
     // ---------- my bookings ----------
