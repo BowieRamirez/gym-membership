@@ -68,6 +68,7 @@ public sealed partial class DemoGateway
         var method=args.TryGetValue("p_method",out var m0)?Convert.ToString(m0):PayMethod.Qr;   // 0084: online (qr) or cash at the desk
         if(method==PayMethod.Cash) throw Err("online_only");   // 0099: members pay online; the desk records cash
         if(method is not PayMethod.Qr) throw Err("bad_input");
+        if(All<Payment>().Count(p=>p.MemberId==member && p.Kind is PayKind.Membership or PayKind.Renewal && p.CreatedAt>SubscriptionNow.AddHours(-1))>=10) throw Err("too_many_tries");   // 0102
         if(!All<Member>().Any(m=>m.UserId==member) || !All<Profile>().Any(p=>p.Id==member && p.IsActive)) throw Err("not_found");
         if(All<Payment>().Any(p=>p.MemberId==member && p.Status==Status.Pending && p.Kind is PayKind.Membership or PayKind.Renewal)) throw Err("renewal_pending");
         var pkg=PackageForSale(packageId);
