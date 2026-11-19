@@ -72,7 +72,7 @@
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
             <!-- the requests first, then the form (which can be a long dead form while a session is booked); stacked, the form stops at a readable width -->
-            <c:SideLayout SideFirst="False" StackedSideWidth="640">
+            <c:SideLayout SideFirst="False">
                 <!-- main: the requests waiting for a reply -->
                 <VerticalStackLayout Spacing="10">
                     <!-- Windows only: the list and Sessions say the same on a phone -->

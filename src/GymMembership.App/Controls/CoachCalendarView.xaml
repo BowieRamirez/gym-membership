@@ -36,7 +36,7 @@
     </ContentView.Resources>
 
     <!-- Windows: the calendar, the chosen day beside it. Phones: the chosen day (today when the page opens) first, then the calendar. -->
-    <c:SideLayout SideFirst="{OnIdiom Phone=True, Default=False}" SideWidth="420" StackedSideWidth="{OnIdiom Phone=10000, Default=600}">
+    <c:SideLayout SideFirst="{OnIdiom Phone=True, Default=False}" SideWidth="420">
         <VerticalStackLayout Spacing="12">
             <!-- Windows: back, the period, forward, Today, then Month | Week on the right. Phones: Month | Week and Today, then back, the period, forward. -->
             <Grid ColumnDefinitions="{OnIdiom Phone='Auto,*,Auto', Default='Auto,Auto,*,Auto'}" RowDefinitions="{OnIdiom Phone='Auto,Auto', Default='Auto'}"

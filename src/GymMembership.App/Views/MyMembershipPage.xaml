@@ -103,7 +103,7 @@
             </Grid>
 
             <!-- stacked above the tables, the pay panel and the QR row stop at a readable width -->
-            <c:SideLayout StackedSideWidth="600">
+            <c:SideLayout>
                 <!-- main: paid terms (payments moved to their own page, owner fixes 2026-11-19 Q8) -->
                 <VerticalStackLayout Spacing="12">
 

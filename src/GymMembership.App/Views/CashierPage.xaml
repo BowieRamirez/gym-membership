@@ -46,7 +46,7 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <c:SideLayout SideFirst="False" StackedSideWidth="{OnIdiom Phone=10000, Default=600}">
+            <c:SideLayout SideFirst="False">
                 <!-- main: the drawer and sale; order stays beside both on wide windows -->
                 <VerticalStackLayout Spacing="12">
             <!-- F2 (0050): the cashier's own drawer, before the sale. No shift: count the float and start one (outlined, ink in light and yellow in dark as the Check-in PIN step: it's the next step). -->
