@@ -218,7 +218,8 @@ public sealed partial class DemoGateway
                 if (minutes < 60 || minutes % 60 != 0 || method is not (PayMethod.Qr or PayMethod.Cash)) throw Err("bad_input");   // 0090: whole hours
                 var start = DateTime.Parse((string)a["p_start"], null, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal);
                 var end = start.AddMinutes(minutes);
-                if (!All<MembershipTerm>().Any(t => t.MemberId == who && t.CancelledAt is null && t.StartsAt <= start && t.EndsAt > start)) throw Err("outside_membership");   // 0098
+                if (!All<MembershipTerm>().Any(t => t.MemberId == who && t.CancelledAt is null && t.StartsAt <= start && t.EndsAt > start
+                    && (!(All<MembershipPackage>().FirstOrDefault(p => p.Id == t.PackageId)?.IsDayPass ?? false) || t.EndsAt >= end))) throw Err("outside_membership");   // 0098, 0106
                 var coach = a.GetValueOrDefault("p_coach") as string;
                 if ((start - DateTime.UnixEpoch).Ticks % TimeSpan.TicksPerHour != 0) throw Err("not_on_the_hour");   // 0093: pass bookings too
                 ExpireHolds();

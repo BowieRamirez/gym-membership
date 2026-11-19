@@ -78,4 +78,40 @@ public class DayPassPackageTests
         monthly.IsDayPass = true;
         Assert.Equal("package_published", (await admin.SavePackageAsync(monthly)).Message);
     }
+
+    sealed class FixedClock(DateTimeOffset now) : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = now;
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
+    [Fact]   // 0106: a Day pass booking must end by midnight; a Monthly member keeps the start-only rule
+    public async Task A_day_pass_booking_cannot_run_past_midnight_but_monthly_can()
+    {
+        var clock = new FixedClock(new DateTimeOffset(2026, 11, 20, 4, 0, 0, TimeSpan.Zero));   // 12:00 Manila
+        var gw = new DemoGateway(clock: clock);
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var settings = (await gw.ListAsync<GymSettings>()).Single();
+        settings.OpensAt = TimeSpan.Zero; settings.ClosesAt = new TimeSpan(23, 30, 0);
+        await gw.UpdateAsync(settings);
+
+        Assert.True((await new AuthService(gw).RegisterAsync("Ana", "Reyes", "ana@demo.io", "secret12", true)).Ok);
+        var member = new MembershipService(gw);
+        var dayPass = (await member.ListPackagesAsync()).Value!.Single(p => p.IsDayPass);
+        var pay = (await member.AvailAsync(dayPass.Id)).Value!;
+        await member.PayOnlineAsync(pay.Id);
+        var pool = (await gw.ListAsync<Amenity>(a => a.Name == "Pool")).Single();
+        DateTime Manila(int hour) => new DateTime(2026, 11, 20, 0, 0, 0, DateTimeKind.Utc).AddHours(hour - 8);
+
+        var res = new ReservationService(gw);
+        Assert.Equal("outside_membership", (await res.BookAsync(pool.Id, Manila(23), 120, PayMethod.Qr)).Message);
+        Assert.True((await res.BookAsync(pool.Id, Manila(21), 60, PayMethod.Qr)).Ok);
+
+        // Monthly member: advance to the last day of Alex's term; booking that starts before EndsAt and runs past it still works
+        await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
+        var alexTerm = (await gw.ListAsync<MembershipTerm>(t => t.MemberId == gw.CurrentUserId && t.CancelledAt == null)).OrderByDescending(t => t.EndsAt).First();
+        var start = new DateTime(alexTerm.EndsAt.Year, alexTerm.EndsAt.Month, alexTerm.EndsAt.Day, alexTerm.EndsAt.Hour, 0, 0, DateTimeKind.Utc).AddHours(-1);
+        clock.Now = new DateTimeOffset(start.AddHours(-3), TimeSpan.Zero);
+        Assert.True((await res.BookAsync(pool.Id, start, 120, PayMethod.Qr)).Ok);
+    }
 }

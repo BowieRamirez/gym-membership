@@ -65,6 +65,22 @@ try {
     assert.equal(Number(p.amount), 120);
     assert.equal((await db.query(`select count(*)::int n from membership_terms where member_id = $1 and ends_at <= now() + interval '1 day'`, [m])).rows[0].n, 1);
   });
+  // 0106: a Day pass booking must end by the pass's midnight; other memberships keep the start-only rule
+  await test('0106: a Day pass booking running past midnight is refused; 9 to 10 pm is booked', async () => {
+    const m = await user(null); const p = await buy(m, dayPass);
+    await db.query(`update membership_terms set starts_at = now() - interval '1 day', ends_at = $2 where payment_id = $1`, [p.payment_id, await inDays(2, '00:00')]);
+    await assert.rejects(as(m, `select * from book_amenity($1,$2,120)`, [court, await inDays(1, '23:00')]), /outside_membership/);
+    const ok = (await as(m, `select * from book_amenity($1,$2,60)`, [court, await inDays(1, '21:00')]))[0];
+    assert.ok(ok.reservation_id);
+  });
+
+  await test('0106: a Monthly member booking past their term end still works', async () => {
+    const m = await user(null); const p = await buy(m, monthly);
+    await db.query(`update membership_terms set starts_at = now() - interval '1 day', ends_at = $2 where payment_id = $1`, [p.payment_id, await inDays(1, '22:00')]);
+    const ok = (await as(m, `select * from book_amenity($1,$2,120)`, [court, await inDays(1, '21:00')]))[0];
+    assert.ok(ok.reservation_id);
+  });
+
   // final review: the flag travels with a new version and can't change once a package is on sale
   await test('review fix: a new version of the Day pass is a Day pass too', async () => {
     const admin = await user('admin');
