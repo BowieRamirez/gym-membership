@@ -422,3 +422,7 @@ verify_jwt = false
 # webhook verification token (XENDIT_WEBHOOK_TOKEN) is believed (Xendit plan, 2026-11-16).
 [functions.xendit-webhook]
 verify_jwt = false
+
+# Public on purpose: it is how the app signs in, before there is a session. It checks the 10-tries lock (0103) first.
+[functions.sign-in]
+verify_jwt = false

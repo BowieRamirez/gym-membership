@@ -130,11 +130,28 @@ public sealed partial class DemoGateway : ISupabaseGateway
         Add(new AuditEntry { ActorId = CurrentUserId, Action = action, Entity = entity, EntityId = entityId, CreatedAt = DateTime.UtcNow });
 
     // ---------- auth ----------
+    // 0103: 10 wrong passwords for one email lock its sign-in for 5 minutes; a right one clears the count (the sign-in function's job)
+    readonly Dictionary<string, (int Wrong, DateTime? Until)> _signInTries = new(StringComparer.OrdinalIgnoreCase);
+    bool LockedOut(string email) => _signInTries.TryGetValue(email, out var t) && t.Until > SubscriptionNow;
+    /// <summary>Counts a try; true when this wrong one locked the account.</summary>
+    bool CountTry(string email, bool ok)
+    {
+        if (ok) { _signInTries.Remove(email); return false; }
+        var t = _signInTries.GetValueOrDefault(email);
+        if (t.Until is { } until && until <= SubscriptionNow) t = (0, null);
+        t.Wrong++;
+        _signInTries[email] = t.Wrong >= 10 ? (0, SubscriptionNow.AddMinutes(5)) : t;
+        return t.Wrong >= 10;
+    }
+
     public Task SignInAsync(string email, string password)
     {
         if (FailWith is not null) return Task.FromException(FailWith);
-        if (!_accounts.TryGetValue(email.Trim(), out var uid) || password != _passwords.GetValueOrDefault(uid, DemoPassword))
-            return Task.FromException(Err("Invalid login credentials"));
+        email = email.Trim();
+        if (LockedOut(email)) return Task.FromException(Err("account_locked"));
+        var right = _accounts.TryGetValue(email, out var uid) && password == _passwords.GetValueOrDefault(uid, DemoPassword);
+        if (CountTry(email, right)) return Task.FromException(Err("account_locked"));
+        if (!right) return Task.FromException(Err("Invalid login credentials"));
         CurrentUserId = uid;   // like Supabase Auth, a deactivated user still signs in: the app checks profiles.is_active afterwards
         _codeSession = false;
         return Task.CompletedTask;
@@ -208,7 +225,11 @@ public sealed partial class DemoGateway : ISupabaseGateway
     public Task ChangePasswordAsync(string currentPassword, string newPassword)
     {
         var uid = Uid;
-        if (currentPassword != _passwords.GetValueOrDefault(uid, DemoPassword)) return Task.FromException(Err("wrong_password"));
+        var email = _accounts.First(a => a.Value == uid).Key;   // 0103: the current-password check is a sign-in, so it counts and locks too
+        if (LockedOut(email)) return Task.FromException(Err("account_locked"));
+        var right = currentPassword == _passwords.GetValueOrDefault(uid, DemoPassword);
+        if (CountTry(email, right)) return Task.FromException(Err("account_locked"));
+        if (!right) return Task.FromException(Err("wrong_password"));
         if (!AccountRules.IsPassword(newPassword)) return Task.FromException(Err("weak_password"));
         _passwords[uid] = newPassword;
         return Task.CompletedTask;
