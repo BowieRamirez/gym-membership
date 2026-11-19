@@ -4,7 +4,7 @@
 
 Created: 2026-11-19
 Last updated: 2026-11-19
-Status: BUILDING (owner: Q1 = (b), Q2 = (a), Q3 = 1 hour, Q8 Day pass under Membership; native execution). Migrations start at `0097` and take the next free number in phase order.
+Status: BUILT 2026-11-19 (owner: Q1 = (b), Q2 = (a) but the hook needs the Team plan, so (b) was built; Q3 = 1 hour; native execution). Phases 1-8 done; `0097`-`0103` live, sign-in function deployed. Left: final review fixes, owner hand checks, add the Day pass package live. Next migration `0104`.
 Branch: `owner-fixes-2026-11-19` (cut from `xendit-payments-2026-11-16` at `f68d440`). **Owner's rule: this branch is not merged into `main`.** No PR, no push to GitHub without the owner.
 
 **Goal:** The owner's list of 2026-11-19: only people with a membership (a Day pass included) book amenities and send time requests; members can buy a Day pass online as a package; the sign-in locks after 10 wrong passwords; package buying is limited to 10 tries; Transactions get their own filters; Void payment goes; members pay online only; the change-password error says what really went wrong; members get a Payments page of their own.
@@ -32,15 +32,15 @@ Same rules as `2026-11-17-desk-amenities-logs-buy-popup.md`:
 
 | Phase | What | Needs | Status |
 |---|---|---|---|
-| 1 | Change password shows the real error, not "you may need an active membership" | Q7 | |
-| 2 | Amenity booking and time requests need a membership (bug: booked without one) | Q1 | |
-| 3 | Day pass package: members buy it online, the desk sells the same package | Q1, Q9 | |
-| 4 | Members pay online only; cash is the front desk's | Q6 | |
-| 5 | Remove Void payment; keep refunds, statuses, audit | Q5 | |
-| 6 | Transactions get their own filters, apart from the audit log | Q4 | |
-| 7 | Payments page for members, apart from My membership | Q8 | |
-| 8 | Rate limits: 10 package buys, 10 wrong sign-ins then 5 minutes locked | Q2, Q3 | |
-| 9 | Whole-branch checks, review, owner hand checks | | |
+| 1 | Change password shows the real error, not "you may need an active membership" | Q7 | DONE (`b9bde16`) |
+| 2 | Amenity booking and time requests need a membership (bug: booked without one) | Q1 | DEPLOYED (`0097`, `dfa9060`) |
+| 3 | Day pass package: members buy it online, the desk sells the same package | Q1, Q9 | DEPLOYED (`0098`, `11eff23`) |
+| 4 | Members pay online only; cash is the front desk's | Q6 | DEPLOYED (`0099`, `eb43d31`) |
+| 5 | Remove Void payment; keep refunds, statuses, audit | Q5 | DEPLOYED (`0100`, `1d129b5`) |
+| 6 | Transactions get their own filters, apart from the audit log | Q4 | DEPLOYED (`0101`, `14e07c4`) |
+| 7 | Payments page for members, apart from My membership | Q8 | DONE (`c10d477`) |
+| 8 | Rate limits: 10 package buys, 10 wrong sign-ins then 5 minutes locked | Q2, Q3 | DEPLOYED (`0102`, `0103`, sign-in function; `dd317bf`, `0da236e`) |
+| 9 | Whole-branch checks, review, owner hand checks | | IN PROGRESS |
 
 ## 1. Findings (2026-11-19)
 
@@ -190,3 +190,4 @@ Same rules as `2026-11-17-desk-amenities-logs-buy-popup.md`:
 
 - 2026-11-19: plan written, branch `owner-fixes-2026-11-19` made.
 - 2026-11-19: owner chose Q1 = (b) (Day pass as a package, desk too) and Day pass under Membership (Q8); Phase 3 added. Owner: Q2 = (a), Q3 = 1 hour, build it natively.
+- 2026-11-19: built Phases 1-8 natively; rulings in `.superpowers/sdd/2026-11-19-owner-fixes/progress.md`. Q2 (a) needs the Team plan (Supabase gates the Password Verification hook), so the sign-in Edge Function (b) was built.

@@ -65,6 +65,18 @@ try {
     assert.equal(Number(p.amount), 120);
     assert.equal((await db.query(`select count(*)::int n from membership_terms where member_id = $1 and ends_at <= now() + interval '1 day'`, [m])).rows[0].n, 1);
   });
+  // final review: the flag travels with a new version and can't change once a package is on sale
+  await test('review fix: a new version of the Day pass is a Day pass too', async () => {
+    const admin = await user('admin');
+    const draft = (await as(admin, 'select new_package_version($1) id', [dayPass]))[0].id;
+    assert.equal((await db.query('select is_day_pass from membership_packages where membership_package_id = $1', [draft])).rows[0].is_day_pass, true);
+  });
+  await test('review fix: a package on sale cannot be turned into (or out of) the Day pass', async () => {
+    const admin = await user('admin');   // admins edit packages as an app user; the guard is for them
+    await assert.rejects(as(admin, 'update membership_packages set is_day_pass = false where membership_package_id = $1', [dayPass]), /package_published/);
+    await db.query('update membership_packages set is_active = false where membership_package_id = $1', [dayPass]);   // the one-Day-pass index aside
+    await assert.rejects(as(admin, 'update membership_packages set is_day_pass = true where membership_package_id = $1', [monthly]), /package_published/);
+  });
 } finally {
   console.log(`\nday-pass-package: ${passed} passed, ${failed} failed`);
   if (failed) process.exitCode = 1;

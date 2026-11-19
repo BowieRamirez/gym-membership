@@ -10,15 +10,21 @@ async function test(name, fn) {
   try { await fn(); passed++; console.log('  ok  ', name); }
   catch (e) { failed++; console.log('  FAIL', name, e.message); }
 }
-const check = async (email) => (await db.query('select sign_in_check($1) m', [email])).rows[0].m;
+// 0104: each try is counted before Auth sees it (sign_in_begin), so parallel tries can't all slip past the lock
+const check = async (email) => (await db.query('select sign_in_begin($1) m', [email])).rows[0].m;
 const result = async (email, ok) => (await db.query('select sign_in_result($1,$2) m', [email, ok])).rows[0].m;
 
 try {
   await test('9 wrong passwords leave it open; the 10th locks it for 5 minutes', async () => {
-    for (let i = 0; i < 9; i++) assert.equal(await result('Ana@Test.io', false), 0);
+    for (let i = 0; i < 9; i++) { assert.equal(await check('Ana@Test.io'), 0); assert.equal(await result('Ana@Test.io', false), 0); }
     assert.equal(await check('ana@test.io'), 0);
     assert.equal(await result('ana@test.io', false), 5);
     assert.equal(await check('ANA@test.io'), 5);
+  });
+
+  await test('review fix: tries started together are counted before Auth, so only 10 get through', async () => {
+    const answers = await Promise.all(Array.from({ length: 30 }, () => check('race@test.io')));
+    assert.equal(answers.filter(m => m === 0).length, 10);
   });
 
   await test('while locked even the right password is not tried (the function stops at the check)', async () => {
@@ -27,19 +33,19 @@ try {
 
   await test('after 5 minutes it opens again with a fresh count', async () => {
     await db.query(`update sign_in_attempts set locked_until = now() - interval '1 second' where email = 'ana@test.io'`);
-    assert.equal(await check('ana@test.io'), 0);
-    assert.equal(await result('ana@test.io', false), 0);   // the first wrong try of a new count
+    assert.equal(await check('ana@test.io'), 0);           // the first try of a new count
+    assert.equal(await result('ana@test.io', false), 0);
     assert.equal((await db.query(`select wrong from sign_in_attempts where email = 'ana@test.io'`)).rows[0].wrong, 1);
   });
 
   await test('a right password resets the count', async () => {
-    for (let i = 0; i < 5; i++) await result('bo@test.io', false);
+    for (let i = 0; i < 5; i++) { await check('bo@test.io'); await result('bo@test.io', false); }
     assert.equal(await result('bo@test.io', true), 0);
     assert.equal((await db.query(`select count(*)::int n from sign_in_attempts where email = 'bo@test.io'`)).rows[0].n, 0);
   });
 
   await test('the app and anon cannot call them or read the table', async () => {
-    const r = (await db.query(`select has_function_privilege('authenticated','public.sign_in_check(text)','execute') a,
+    const r = (await db.query(`select has_function_privilege('authenticated','public.sign_in_begin(text)','execute') a,
       has_function_privilege('anon','public.sign_in_result(text,boolean)','execute') b,
       has_table_privilege('authenticated','public.sign_in_attempts','select') c,
       has_function_privilege('service_role','public.sign_in_result(text,boolean)','execute') d`)).rows[0];

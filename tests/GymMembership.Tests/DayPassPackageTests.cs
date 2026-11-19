@@ -65,4 +65,17 @@ public class DayPassPackageTests
     [Fact]
     public void Outside_the_membership_has_its_own_sentence() =>
         Assert.Contains("membership", ErrorText.For(AppErrorKind.Validation, "outside_membership"));
+
+    [Fact]   // final review (0105): the flag travels with a new version and can't change once on sale
+    public async Task A_new_version_of_the_day_pass_is_a_day_pass_and_the_flag_is_locked_on_sale()
+    {
+        var gw = new DemoGateway(); await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var admin = new AdminService(gw);
+        var dayPass = (await gw.ListAsync<MembershipPackage>()).Single(p => p.IsDayPass);
+        var draft = (await admin.NewPackageVersionAsync(dayPass.Id)).Value;
+        Assert.True((await gw.ListAsync<MembershipPackage>()).Single(p => p.Id == draft).IsDayPass);
+        var monthly = (await gw.ListAsync<MembershipPackage>()).Single(p => p.Name == "Monthly" && p.PublishedAt is not null);
+        monthly.IsDayPass = true;
+        Assert.Equal("package_published", (await admin.SavePackageAsync(monthly)).Message);
+    }
 }

@@ -38,6 +38,7 @@ const expected = {
   support_threads: 'S---', support_messages: 'S---', amenity_follows: 'S---',
   member_passes: '----', desk_pins: '----',                // F6, F8 (0049): only server functions touch them
   desk_password_proofs: '----',                            // G12 (0062): only the password check-in functions
+  sign_in_attempts: '----',                                // owner fixes 2026-11-19 (0103): only the sign-in function (service role)
   gym_closures: 'S---',                                    // G16 (0065): read by everyone active, written only by close/reopen_gym_day
   cash_shifts: '----',                                     // F2 (0050): open, close and list through server functions only
   announcements: '----', announcement_reads: '----',      // F10 (0051): posted, listed and read through server functions only
