@@ -1210,8 +1210,19 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
     }
 
     [ObservableProperty] private string currentPassword = "";
-    [ObservableProperty] private string newPassword = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasNewPassword), nameof(PasswordStrength), nameof(PasswordStrengthText), nameof(PasswordIsStrong))] private string newPassword = "";
     [ObservableProperty] private string confirmPassword = "";
+    public bool HasNewPassword => !string.IsNullOrEmpty(NewPassword);
+    public int PasswordStrength => AccountRules.PasswordStrength(NewPassword);
+    public bool PasswordIsStrong => PasswordStrength >= 3;
+    public string PasswordStrengthText => PasswordStrength switch
+    {
+        0 => "",
+        1 => "Weak",
+        2 => "Fair — add a capital letter to make it stronger",
+        3 => "Good",
+        _ => "Strong"
+    };
 
     [RelayCommand]
     private async Task ChangePasswordAsync()
