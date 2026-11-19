@@ -33,9 +33,18 @@ public partial class MyMembershipViewModel
 
 public partial class RefundsViewModel(ISubscriptionService subscription) : LoadableViewModel
 {
+    List<RefundCard> _all = [];
     public ObservableCollection<RefundCard> Requests { get; } = new();
+    public string[] ItemTypes { get; } = ["All items", "Membership", "Day pass", "Amenity"];
     /// <summary>The request open in the side panel; each reload swaps in its fresh row, so the panel never shows a stale status.</summary>
     [ObservableProperty] private RefundCard? selected;
+    [ObservableProperty] private string statusFilter = "All";
+    [ObservableProperty] private int itemTypeIndex;
+    [ObservableProperty] private string search = "";
+    public string EmptyText => _all.Count == 0 ? "No cancellation or refund requests." : "No matching refund requests.";
+    [RelayCommand] private void SetStatusFilter(string status) { StatusFilter = status; ApplyFilters(); }
+    partial void OnItemTypeIndexChanged(int value) => ApplyFilters();
+    partial void OnSearchChanged(string value) => ApplyFilters();
     [RelayCommand] private void Open(RefundCard row) { Selected = row; Notice = null; }
     [RelayCommand] private void Close() => Selected = null;
     public bool DialogOpen { get; set; }
@@ -46,8 +55,24 @@ public partial class RefundsViewModel(ISubscriptionService subscription) : Loada
     {
         if (_loading) return;
         _loading=true;
-        try { await RunAsync(subscription.RefundsAsync, rows => { Fill(Requests,rows); Selected = Requests.FirstOrDefault(r => r.Request.Id == Selected?.Request.Id); }); }
+        try { await RunAsync(subscription.RefundsAsync, rows => { _all = rows.ToList(); ApplyFilters(); Selected = _all.FirstOrDefault(r => r.Request.Id == Selected?.Request.Id); }); }
         finally { _loading=false; }
+    }
+    void ApplyFilters()
+    {
+        var q = Search.Trim();
+        var filtered = _all.Where(r =>
+            (StatusFilter == "All" || r.Status == StatusFilter)
+            && ItemTypeIndex switch
+            {
+                1 => r.Request.Kind == "membership",
+                2 => r.Request.Kind == "day_pass",
+                3 => r.Request.ReservationId is not null || r.Request.Kind is "cancel" or "no_show" or "walk_in_booking",
+                _ => true
+            }
+            && (q.Length == 0 || r.Member.Contains(q, StringComparison.OrdinalIgnoreCase) || r.PackageName.Contains(q, StringComparison.OrdinalIgnoreCase)));
+        Fill(Requests, filtered);
+        OnPropertyChanged(nameof(EmptyText));
     }
     public async Task DecideAsync(RefundCard row, bool approve, string reason)
     {

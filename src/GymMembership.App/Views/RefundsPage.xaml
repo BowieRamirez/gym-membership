@@ -68,6 +68,31 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
+            <FlexLayout Wrap="Wrap" AlignItems="Center">
+                <Button Text="All" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetStatusFilterCommand}" CommandParameter="All">
+                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding StatusFilter}" Value="All"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
+                </Button>
+                <Button Text="To review" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetStatusFilterCommand}" CommandParameter="To review">
+                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding StatusFilter}" Value="To review"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
+                </Button>
+                <Button Text="To repay" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetStatusFilterCommand}" CommandParameter="To repay">
+                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding StatusFilter}" Value="To repay"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
+                </Button>
+                <Button Text="Repaid" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetStatusFilterCommand}" CommandParameter="Repaid">
+                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding StatusFilter}" Value="Repaid"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
+                </Button>
+                <Button Text="Rejected" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetStatusFilterCommand}" CommandParameter="Rejected">
+                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding StatusFilter}" Value="Rejected"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
+                </Button>
+                <Border Style="{StaticResource Field}" Margin="0,0,8,8">
+                    <Picker ItemsSource="{Binding ItemTypes}" SelectedIndex="{Binding ItemTypeIndex}" WidthRequest="140"
+                            SemanticProperties.Description="Filter by refund item type" AutomationId="RefundItemTypeFilter" />
+                </Border>
+                <Border Style="{StaticResource Field}" Margin="0,0,0,8" WidthRequest="220">
+                    <Entry Text="{Binding Search}" Placeholder="Search member or item" SemanticProperties.Description="Search refunds by member or item" AutomationId="RefundSearch" />
+                </Border>
+            </FlexLayout>
+
             <c:SideLayout>
                 <Border Style="{StaticResource TablePanel}">
                     <VerticalStackLayout>
@@ -83,7 +108,7 @@
                         </VerticalStackLayout>
                         <c:TableBody Items="{Binding Requests}" Header="{x:Reference RefundHead}" WideFrom="1000"
                                      RowTemplate="{StaticResource RefundRow}" CardTemplate="{StaticResource RefundCard}">
-                            <c:TableBody.Empty><Label Text="No cancellation or refund requests." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
+                            <c:TableBody.Empty><Label Text="{Binding EmptyText}" Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                         </c:TableBody>
                     </VerticalStackLayout>
                 </Border>

@@ -377,4 +377,37 @@ public class SubscriptionTests
         await Assert.ThrowsAnyAsync<Exception>(()=>gw.UpdateAsync(term));
         await Assert.ThrowsAnyAsync<Exception>(()=>gw.InsertAsync(new RefundRequest()));
     }
+
+    [Fact]
+    public async Task Refunds_filters_by_status_item_type_and_search()
+    {
+        var (gw, _, svc, monthly, _) = await Setup();
+        var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
+        var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
+        Assert.True((await svc.RequestRefundAsync(term.Id,"Changed plans","change_of_mind")).Ok);
+
+        await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
+        var vm=new GymMembership.Core.ViewModels.RefundsViewModel(svc);
+        await vm.OnAppearingAsync();
+        var req=Assert.Single(vm.Requests);
+        Assert.Equal("To review",req.Status);
+
+        vm.SetStatusFilterCommand.Execute("To review");
+        Assert.Single(vm.Requests);
+        vm.SetStatusFilterCommand.Execute("Repaid");
+        Assert.Empty(vm.Requests);
+        Assert.Equal("No matching refund requests.",vm.EmptyText);
+
+        vm.SetStatusFilterCommand.Execute("All");
+        vm.ItemTypeIndex=1;   // Membership
+        Assert.Single(vm.Requests);
+        vm.ItemTypeIndex=3;   // Amenity
+        Assert.Empty(vm.Requests);
+
+        vm.ItemTypeIndex=0;
+        vm.Search=req.Member[..4];
+        Assert.Single(vm.Requests);
+        vm.Search="no-such-member-xyz";
+        Assert.Empty(vm.Requests);
+    }
 }
