@@ -509,6 +509,8 @@ public sealed record CounterItem(int Id, string Label, decimal? Price = null, bo
 
 public interface IPaymentStaffService
 {
+    /// <summary>Owner fixes 2026-11-19 Q12 (0108): does this code work for this member and item? Kind is package, amenity or renewal (price shown only).</summary>
+    Task<AppResult<CodeCheck>> CheckCodeAsync(string memberId, string code, string kind, int itemId, decimal? price = null);
     Task<AppResult<IReadOnlyList<PaymentRow>>> PendingAsync();
     /// <summary>Verified payments, newest first. For finding a payment to void.</summary>
     Task<AppResult<IReadOnlyList<PaymentRow>>> RecentAsync();
@@ -538,6 +540,14 @@ public interface IPaymentStaffService
 
 public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffService
 {
+    public Task<AppResult<CodeCheck>> CheckCodeAsync(string memberId, string code, string kind, int itemId, decimal? price = null) => Safe.RunAsync(async () =>
+    {
+        var args = new Dictionary<string, object> { ["p_member"] = memberId, ["p_code"] = code.Trim(), ["p_kind"] = kind, ["p_item"] = itemId };
+        if (price is { } p) args["p_price"] = p;
+        var rows = await gw.RpcAsync<List<CodeCheck>>("check_discount_code_for", args);
+        return rows?.FirstOrDefault() ?? new CodeCheck { Reason = "invalid_code" };
+    });
+
     public Task<AppResult<Payment>> StartDeskOnlineAsync(string kind, string? memberId, int? itemId, string? walkInName, string? discountCode) =>
         Safe.RunAsync(() =>
         {

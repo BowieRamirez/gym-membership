@@ -668,7 +668,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     }
 
     /// <summary>No code: full price. A bad, expired or already-used code is an error, never a silent full price.</summary>
-    (int? Id, decimal Cut, decimal Amount) Discounted(string member, Dictionary<string, object> a, decimal price, string kind, int itemId)
+    (int? Id, decimal Cut, decimal Amount) Discounted(string member, Dictionary<string, object> a, decimal price, string kind, int itemId, bool skipFit = false)
     {
         if (!a.TryGetValue("p_discount_code", out var raw) || string.IsNullOrWhiteSpace(raw as string)) return NotFree((null, 0, price));
         var code = ((string)raw).Trim();
@@ -678,7 +678,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             ?? throw Err("invalid_code");
         if (All<Payment>().Any(p => p.MemberId == member && p.DiscountId == d.Id && p.Status is Status.Pending or Status.Verified or Status.Voided)) throw Err("code_already_used");
         if (d.MaxUses is { } max && Held(d) >= max) throw Err("code_limit_reached");
-        if (!Fits(d.Id, kind, itemId)) throw Err("code_not_for_item");   // G3, as 0060's payment check
+        if (!skipFit && !Fits(d.Id, kind, itemId)) throw Err("code_not_for_item");   // G3, as 0060's payment check
         var cut = Math.Round(price * d.Percent / 100m, 2);
         return NotFree((d.Id, cut, price - cut));
     }
@@ -782,6 +782,35 @@ public sealed partial class DemoGateway : ISupabaseGateway
                             AllAmenities = items.Any(i => i.Kind == "amenity" && i.ItemId is null), AmenityIds = items.Where(i => i.Kind == "amenity" && i.ItemId is not null).Select(i => i.ItemId!.Value).Order().ToList()
                         };
                     }).ToList();
+            }
+            case "check_discount_code_for":   // Q12 (0108): the desk checks a code for a chosen member
+            {
+                Require("payments:record");
+                var who = a.GetValueOrDefault("p_member") as string ?? throw Err("bad_input");
+                var code = (a.GetValueOrDefault("p_code") as string)?.Trim() ?? "";
+                var kind = a.GetValueOrDefault("p_kind") as string ?? "";
+                var item = I("p_item");
+                if (code.Length is 0 or > 50 || kind is not ("package" or "amenity" or "renewal") || item < 1) throw Err("bad_input");
+                if (All<Member>().All(x => x.UserId != who)) throw Err("not_found");
+                var price = kind == "package" ? PackageForSale(item).Price : kind == "amenity" ? AmenityForSale(item).Price : Convert.ToDecimal(a.GetValueOrDefault("p_price") ?? 0m);
+                if (price <= 0) throw Err("not_found");
+                if (!_codeChecks.TryGetValue(uid, out var hits)) _codeChecks[uid] = hits = [];
+                hits.RemoveAll(t => t < now.AddMinutes(-10));
+                if (hits.Count >= 20) throw Err("too_many_checks");
+                hits.Add(now);
+                try
+                {
+                    var d = Discounted(who, new() { ["p_discount_code"] = code }, price, kind == "renewal" ? "package" : kind, item, skipFit: kind == "renewal");
+                    var pct = All<Discount>().First(x => x.Id == d.Id).Percent;
+                    return new List<CodeCheck> { new() { Percent = pct, AmountOff = d.Cut, YouPay = d.Amount } };
+                }
+                catch (Exception ex)
+                {
+                    var reason = ex.Message;
+                    if (reason == "invalid_code" && All<Discount>().Any(x => x.IsActive && !x.Paused && x.ExpiresAt <= now && string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase)))
+                        reason = "code_expired";
+                    return new List<CodeCheck> { new() { Reason = reason } };
+                }
             }
             case "check_discount_code":   // Q12, Q13 (0107): live code check, 20 in 10 minutes per member
             {

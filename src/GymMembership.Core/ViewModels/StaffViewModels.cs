@@ -158,6 +158,37 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWhat), nameof(TotalText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private CounterItem? item;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string walkInName = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(TotalNote))] private string discountCode = "";
+    // owner fixes 2026-11-19 Q12 (0108): the code is checked as the desk types it (500 ms), and again when the member or item changes
+    public TimeSpan CodeCheckDelay { get; init; } = TimeSpan.FromMilliseconds(500);
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(TotalText), nameof(HasCodeCheck))] private CodeCheck? codeCheck;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasCodeCheck))] private string? codeCheckText;
+    [ObservableProperty] private bool codeWorks;
+    public bool HasCodeCheck => !string.IsNullOrWhiteSpace(CodeCheckText);
+    CancellationTokenSource? _codeCheck;
+    (string Member, string Kind, int Item, string Code)? _checked;
+    partial void OnDiscountCodeChanged(string value) => _ = ScheduleCodeCheckAsync(false);
+    public Task CheckCodeNowAsync() => ScheduleCodeCheckAsync(true);
+    async Task ScheduleCodeCheckAsync(bool immediate)
+    {
+        var code = DiscountCode?.Trim() ?? "";
+        var key = Member is { } m && Item is { } it && !IsWalkIn && code.Length > 0 ? (m.MemberId, Kind, it.Id, code) : ((string Member, string Kind, int Item, string Code)?)null;
+        if (immediate && key is not null && _checked == key) return;
+        _codeCheck?.Cancel(); _checked = null;
+        CodeCheck = null; CodeCheckText = null; CodeWorks = false;
+        if (key is not { } k) return;
+        var cts = _codeCheck = new CancellationTokenSource();
+        if (!immediate && CodeCheckDelay > TimeSpan.Zero)
+        {
+            try { await Task.Delay(CodeCheckDelay, cts.Token); } catch (OperationCanceledException) { return; }
+        }
+        var kind = Kind == "Amenity" ? "amenity" : Kind == "Renewal" ? "renewal" : "package";
+        var res = await svc.CheckCodeAsync(k.Member, k.Code, kind, k.Item, Item?.Price);
+        if (cts.IsCancellationRequested) return;
+        _checked = k;
+        if (!res.Ok) { CodeCheckText = ErrorText.For(res.Error, res.Message); return; }
+        CodeCheck = res.Value; CodeWorks = res.Value!.Works;
+        CodeCheckText = CodeCheckFeedback.Message(res.Value, kind == "amenity" ? "amenity" : "package");
+    }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ItemsEmptyText))] private bool loadingItems;
 
     // F2 (0050): the cashier's own drawer shift. Cash needs an open one; GCash doesn't.
@@ -197,9 +228,10 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     // 0098: the Day pass package; a picked member whose name is still in the box buys it (a term until midnight), anyone else is a walk-in
     CounterItem? dayPassPackage;
     MemberHit? DayPassMember => IsWalkIn && dayPassPackage is not null && Member is { } m && DayPassName == m.Username ? m : null;
-    public string TotalText => IsWalkIn ? (dayPassPackage?.Price ?? dayPassPrice) is { } d ? $"₱{d:N2}" : "Day pass" : Item?.Price is { } p ? $"₱{p:N2}" : "₱0.00";
+    public string TotalText => IsWalkIn ? (dayPassPackage?.Price ?? dayPassPrice) is { } d ? $"₱{d:N2}" : "Day pass"
+        : CodeCheck is { Works: true, YouPay: { } off } ? $"₱{off:N2}" : Item?.Price is { } p ? $"₱{p:N2}" : "₱0.00";
     public string TotalNote => IsWalkIn ? dayPassPackage is null ? "The day pass price is set in Gym settings." : "The Day pass price is set on its package."
-        : string.IsNullOrWhiteSpace(DiscountCode) ? "" : "The discount code is checked when you complete the payment.";
+        : "";
     public string ItemsEmptyText => LoadingItems ? "Loading…"
         : Kind == "Renewal" && Member is null ? "Choose a member to see their memberships." : "Nothing to sell here yet.";
     /// <summary>The kind and the way of paying in words, so the order reads the same to someone who cannot see which button is filled.</summary>
@@ -269,9 +301,9 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     }
 
     // an item belongs to the kind (and member) it was listed for: change either and the pick goes
-    partial void OnKindChanged(string value) { Item = null; if (IsWalkIn && Member is { } m && string.IsNullOrWhiteSpace(WalkInName)) WalkInName = m.Username; _ = RefreshItemsAsync(); }   // a typed name is kept (final review)
-    partial void OnMemberChanged(MemberHit? value) { Item = null; if (IsWalkIn && value is not null) WalkInName = value.Username; if (Kind == "Renewal") _ = RefreshItemsAsync(); }
-    partial void OnItemChanged(CounterItem? value) { foreach (var o in Options) o.IsPicked = value is not null && o.Item.Id == value.Id; }
+    partial void OnKindChanged(string value) { _ = ScheduleCodeCheckAsync(false); Item = null; if (IsWalkIn && Member is { } m && string.IsNullOrWhiteSpace(WalkInName)) WalkInName = m.Username; _ = RefreshItemsAsync(); }   // a typed name is kept (final review)
+    partial void OnMemberChanged(MemberHit? value) { _ = ScheduleCodeCheckAsync(false); Item = null; if (IsWalkIn && value is not null) WalkInName = value.Username; if (Kind == "Renewal") _ = RefreshItemsAsync(); }
+    partial void OnItemChanged(CounterItem? value) { _ = ScheduleCodeCheckAsync(false); foreach (var o in Options) o.IsPicked = value is not null && o.Item.Id == value.Id; }
 
     async Task RefreshItemsAsync()
     {

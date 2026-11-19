@@ -247,7 +247,17 @@
 
                                     <VerticalStackLayout Spacing="4" WidthRequest="260" HorizontalOptions="Start" IsVisible="{Binding NeedsMember}">
                                         <Label Text="Discount code (optional)" Style="{StaticResource Caption}" />
-                                        <Border Style="{StaticResource Field}"><Entry Text="{Binding DiscountCode}" SemanticProperties.Description="Discount code" /></Border>
+                                        <Border Style="{StaticResource Field}"><Entry Text="{Binding DiscountCode}" Unfocused="OnCodeUnfocused" SemanticProperties.Description="Discount code" /></Border>
+                                        <Label Text="{Binding CodeCheckText}" Style="{StaticResource Caption}" LineBreakMode="WordWrap" IsVisible="{Binding HasCodeCheck}" AutomationId="CashierCodeFeedback">
+                                            <Label.Triggers>
+                                                <DataTrigger TargetType="Label" Binding="{Binding CodeWorks}" Value="True">
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource GoodLight}, Dark={StaticResource GoodDark}}" />
+                                                </DataTrigger>
+                                                <DataTrigger TargetType="Label" Binding="{Binding CodeWorks}" Value="False">
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
+                                                </DataTrigger>
+                                            </Label.Triggers>
+                                        </Label>
                                     </VerticalStackLayout>
 
                                     <VerticalStackLayout Spacing="2">

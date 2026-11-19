@@ -75,6 +75,17 @@ try {
     await assert.rejects(as(m, `select * from check_discount_code('SAVE10','package',$1)`, [pkg]), /too_many_checks/);
   });
 
+  await test('0108: the desk checks a code for a chosen member; members and anon cannot', async () => {
+    const desk = await user('employee'); const m = await user(null);
+    const r = (await as(desk, `select * from check_discount_code_for($1,'save10','package',$2)`, [m, pkg]))[0];
+    assert.equal(r.reason, null); assert.equal(Number(r.you_pay), 1350);
+    assert.equal((await as(desk, `select * from check_discount_code_for($1,'NOPE','package',$2)`, [m, pkg]))[0].reason, 'invalid_code');
+    assert.equal((await as(desk, `select * from check_discount_code_for($1,'POOL20','package',$2)`, [m, pkg]))[0].reason, 'code_not_for_item');
+    const ren = (await as(desk, `select * from check_discount_code_for($1,'SAVE10','renewal',1,1500)`, [m]))[0];
+    assert.equal(Number(ren.you_pay), 1350);
+    await assert.rejects(as(m, `select * from check_discount_code_for($1,'SAVE10','package',$2)`, [m, pkg]), /forbidden/);
+  });
+
   await test('anon cannot call check_discount_code', async () => {
     await db.query('begin');
     try {
