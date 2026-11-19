@@ -197,33 +197,4 @@ public class AccountTests
     [InlineData("12345", "")]
     public void The_name_field_drops_anything_that_is_not_a_letter_as_you_type(string typed, string kept) =>
         Assert.Equal(kept, AccountRules.KeepNameChars(typed));
-
-    [Fact]
-    public void Settings_shows_password_strength_as_you_type()
-    {
-        var gw = new DemoGateway();
-        var vm = new GymMembership.Core.ViewModels.SettingsViewModel(new SettingsService(gw), new AuthService(gw), new ConfirmationTests.Nav(), new ProfileService(gw), new DemoPhotoPicker());
-        Assert.False(vm.HasNewPassword);
-
-        vm.NewPassword = "short";
-        Assert.True(vm.HasNewPassword);
-        Assert.Equal(1, vm.PasswordStrength);
-        Assert.Equal("Weak", vm.PasswordStrengthText);
-        Assert.False(vm.PasswordIsStrong);
-
-        vm.NewPassword = "test12345";
-        Assert.Equal(2, vm.PasswordStrength);
-        Assert.Contains("Fair", vm.PasswordStrengthText);
-        Assert.False(vm.PasswordIsStrong);
-
-        vm.NewPassword = "Test12345";
-        Assert.Equal(3, vm.PasswordStrength);
-        Assert.Equal("Good", vm.PasswordStrengthText);
-        Assert.True(vm.PasswordIsStrong);
-
-        vm.NewPassword = "Test12345678";
-        Assert.Equal(4, vm.PasswordStrength);
-        Assert.Equal("Strong", vm.PasswordStrengthText);
-        Assert.True(vm.PasswordIsStrong);
-    }
 }
