@@ -5,7 +5,7 @@
        xmlns:c="clr-namespace:GymMembership.App.Controls"
        xmlns:views="clr-namespace:GymMembership.App.Views"
        FlyoutBehavior="{OnPlatform WinUI=Locked, Default=Flyout}"
-       Title="Gym Center">
+       Title="Slim and Shape">
 
     <Shell.TitleView><c:HeaderBar /></Shell.TitleView>
 

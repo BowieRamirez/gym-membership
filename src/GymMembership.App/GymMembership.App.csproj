@@ -38,7 +38,7 @@
 		<MauiXamlInflator>SourceGen</MauiXamlInflator>
 
 		<!-- Display name -->
-		<ApplicationTitle>Gym Center</ApplicationTitle>
+		<ApplicationTitle>Slim and Shape</ApplicationTitle>
 
 		<!-- App Identifier -->
 		<ApplicationId>com.slimshape.gymmembership</ApplicationId>

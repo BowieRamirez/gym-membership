@@ -133,7 +133,7 @@ public class AuthLayout : Grid
             Content = new Image { Source = "gym_badge.png", Aspect = Aspect.AspectFit },
         };
         AutomationProperties.SetIsInAccessibleTree(_badge, false);   // the name beside it says the same
-        _name = new Label { Text = "Health & Fitness Gym Center", FontFamily = "BarlowCondensedSemiBold", LineHeight = 1.15, TextColor = Colors.White };
+        _name = new Label { Text = "Health & Fitness Slim and Shape", FontFamily = "BarlowCondensedSemiBold", LineHeight = 1.15, TextColor = Colors.White };
         _tagline = new Label { Text = "Members, coaches and the front desk, in one place.", LineHeight = 1.2, TextColor = FieldFocus.Pick("MutedDark") };
         _words = new VerticalStackLayout { Spacing = 6, HorizontalOptions = LayoutOptions.Start, Children = { _name, _tagline } };
         _bar = new BoxView { Color = FieldFocus.Pick("Signal"), WidthRequest = 56, HeightRequest = 4, CornerRadius = 2, HorizontalOptions = LayoutOptions.Start };

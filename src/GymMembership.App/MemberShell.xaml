@@ -5,13 +5,13 @@
        xmlns:c="clr-namespace:GymMembership.App.Controls"
        xmlns:views="clr-namespace:GymMembership.App.Views"
        FlyoutBehavior="{OnPlatform WinUI=Locked, Default=Flyout}"
-       Title="Gym Center">
+       Title="Slim and Shape">
 
     <Shell.TitleView><c:HeaderBar /></Shell.TitleView>
 
     <Shell.FlyoutHeader>
         <VerticalStackLayout Padding="20,28,20,16" Spacing="14">
-            <Label Text="Gym Center" Style="{StaticResource Heading}" />
+            <Label Text="Slim and Shape" Style="{StaticResource Heading}" />
             <c:LogoMark Size="36" HorizontalOptions="Start" />
         </VerticalStackLayout>
     </Shell.FlyoutHeader>

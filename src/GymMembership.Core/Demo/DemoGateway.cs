@@ -1489,7 +1489,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         foreach (var r in new[] { "admin", "employee", "coach", "member", "subadmin" }) Add(new Role { Name = r });
         // F10: one announcement, so Messages shows the pinned conversation with something in it
         _announcements.Add(new DemoAnnouncement { Id = 1, Author = "u-admin", Body = "New yoga class on Thursdays at 6:00 PM. Sign up at the front desk.", Posted = now.AddDays(-1) });
-        Add(new GymSettings { GymName = "Health & Fitness Gym Center", QrAccountName = "Demo Gym (GCash)", WalkInPrice = 150, PaymentExpiryHours = 48 });
+        Add(new GymSettings { GymName = "Health & Fitness Slim and Shape", QrAccountName = "Demo Gym (GCash)", WalkInPrice = 150, PaymentExpiryHours = 48 });
 
         AddUser("u-admin", "Dana Reyes", "admin@demo.io", "admin");
         AddUser("u-emp", "Marco Santos", "employee@demo.io", "employee");
