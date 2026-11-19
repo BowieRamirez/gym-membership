@@ -4,7 +4,7 @@
 
 Created: 2026-11-19
 Last updated: 2026-11-19
-Status: BUILT 2026-11-19 (owner: Q1 = (b), Q2 = (a) but the hook needs the Team plan, so (b) was built; Q3 = 1 hour; Q12 = both places; Q13 = 20 in 10 minutes; native execution). Phases 1-8, 10-11 done; `0097`-`0107` live, `sign-in` function redeployed. Left: owner checks the Auth per-IP sign-in limit, adds the Day pass package live, hand checks on devices. Not pushed to GitHub (waiting on owner). Next migration `0108`.
+Status: BUILT 2026-11-19 (owner: Q1 = (b), Q2 = (a) but the hook needs the Team plan, so (b) was built; Q3 = 1 hour; Q12 = both places; Q13 = 20 in 10 minutes; native execution). Phases 1-8, 10-11 done; `0097`-`0107` live, `sign-in` function redeployed. Pushed to GitHub (`ae14404`). Left: owner checks the Auth per-IP sign-in limit, adds the Day pass package live, hand checks on devices. Next migration `0108`.
 Branch: `owner-fixes-2026-11-19` (cut from `xendit-payments-2026-11-16` at `f68d440`). **Owner's rule: this branch is not merged into `main`.** No PR, no push to GitHub without the owner.
 
 **Goal:** The owner's list of 2026-11-19: only people with a membership (a Day pass included) book amenities and send time requests; members can buy a Day pass online as a package; the sign-in locks after 10 wrong passwords; package buying is limited to 10 tries; Transactions get their own filters; Void payment goes; members pay online only; the change-password error says what really went wrong; members get a Payments page of their own.
@@ -42,7 +42,7 @@ Same rules as `2026-11-17-desk-amenities-logs-buy-popup.md`:
 | 8 | Rate limits: 10 package buys, 10 wrong sign-ins then 5 minutes locked | Q2, Q3 | DEPLOYED (`0102`, `0103`, sign-in function; `dd317bf`, `0da236e`) |
 | 9 | Whole-branch checks, review, owner hand checks | | DONE bar owner hand checks (`0104`, `0105`, `0dd2be7`) |
 | 10 | Small leftovers from the final review | Q10, Q11 | DEPLOYED (`0106`, `sign-in` redeployed; `82ca78f`, `0a488f4`) |
-| 11 | Discount codes are checked as they're typed: works, or why not | Q12, Q13 | DEPLOYED (`0107`, `079a01f`) |
+| 11 | Discount codes are checked as they're typed: works, or why not | Q12, Q13 | DEPLOYED (`0107`, `079a01f`, `ae14404`) |
 
 ## 1. Findings (2026-11-19)
 
@@ -103,9 +103,9 @@ Same rules as `2026-11-17-desk-amenities-logs-buy-popup.md`:
 
 **Files:** `src/GymMembership.Core/Services/Foundation.cs` (`ErrorText.ServerMessage`: also read `msg` and `error_code`; `For(AppErrorKind.Validation)` text; `weak_password` sentence; `ErrorMapper` token `weak_password`), `src/GymMembership.Core/Backend/SupabaseGateway.cs:137` only if reproduction shows another cause, test `tests/GymMembership.Tests/AccountTests.cs`.
 
-- [ ] Reproduce on the real project (demo build won't show it): change password to the same password; note the raw body.
-- [ ] Failing tests: `ErrorText.For(Validation, "{\"code\":422,\"error_code\":\"same_password\",\"msg\":\"New password should be different from the old password.\"}")` → "Pick a password that's different from your old one."; same for `weak_password`; `ErrorText.For(Validation)` doesn't contain "membership".
-- [ ] Fix, tests pass, `ponytail:ponytail-review`, commit.
+- [x] Reproduce on the real project (demo build won't show it): change password to the same password; note the raw body.
+- [x] Failing tests: `ErrorText.For(Validation, "{\"code\":422,\"error_code\":\"same_password\",\"msg\":\"New password should be different from the old password.\"}")` → "Pick a password that's different from your old one."; same for `weak_password`; `ErrorText.For(Validation)` doesn't contain "membership".
+- [x] Fix, tests pass, `ponytail:ponytail-review`, commit.
 
 ## Phase 2: Who may book (Q1)
 
@@ -113,9 +113,9 @@ Same rules as `2026-11-17-desk-amenities-logs-buy-popup.md`:
 
 **Files:** found by reproduction; likely `book_amenity_for` (latest body: 0090 + 0093 patch) or the app's Book an amenity path; `src/GymMembership.App/MemberShell.xaml(.cs)` and `PhoneNavigation.cs` (Book an amenity becomes `members-only`), `supabase/tests/local/access.mjs`, test `tests/GymMembership.Tests/AccessTests.cs`.
 
-- [ ] Reproduce the owner's booking first (systematic-debugging): which account, which path (pass, coach, paid, down payment).
-- [ ] Failing tests: an account with no membership → `no_active_membership` for booking and for a time request; the desk's booking for the same member still works.
-- [ ] Fix at the root (one guard in the shared function, not per caller), migration if the database needs it, push (dry run first), live grants, screens checked, commit.
+- [x] Reproduce the owner's booking first (systematic-debugging): which account, which path (pass, coach, paid, down payment).
+- [x] Failing tests: an account with no membership → `no_active_membership` for booking and for a time request; the desk's booking for the same member still works.
+- [x] Fix at the root (one guard in the shared function, not per caller), migration if the database needs it, push (dry run first), live grants, screens checked, commit.
 
 ## Phase 3: Day pass package (Q1, Q9)
 
@@ -123,14 +123,14 @@ Same rules as `2026-11-17-desk-amenities-logs-buy-popup.md`:
 
 **Files:** next migration `00xx_day_pass_package.sql` (`is_day_pass` column and partial unique index on sale; activation sets `ends_at` to the next Manila midnight for a Day pass; `avail_membership` refuses a Day pass with `already_member` when `is_active_member`; `extend_membership` refuses a Day pass; the walk-in price reads the Day pass package), `supabase/tests/local/day-pass.mjs`, `Models.cs` (`MembershipPackage.IsDayPass`), `Foundation.cs` (`already_member`: "You already have a membership, so you don't need a Day pass."), demo mirror, test `tests/GymMembership.Tests/DayPassPackageTests.cs`.
 
-- [ ] Failing tests: bought and verified at 9 am → active until midnight Manila, can book an amenity and send a time request; at 12:01 am → not active; member with a membership → `already_member`; two Day pass packages on sale → refused.
-- [ ] Migration, push, grants, commit.
+- [x] Failing tests: bought and verified at 9 am → active until midnight Manila, can book an amenity and send a time request; at 12:01 am → not active; member with a membership → `already_member`; two Day pass packages on sale → refused.
+- [x] Migration, push, grants, commit.
 
 ### Task 4: Admin, member and desk screens
 
 **Files:** Packages admin page and view model ("Day pass" switch), `PackagesPage.xaml` (Day pass shows "Today only, ends at midnight"), `CashierViewModel` (`Kind == "Day pass"` with a `Member` sells the Day pass package; without one stays `walk_in`; price from the package), tests `DayPassNameTests.cs` updated, `CashierDayPassTests.cs`.
 
-- [ ] Tests first, then screens (`impeccable`): Packages on Android and Windows, light/dark, 1.3 font scale; Cashier and admin Windows only. Commit.
+- [x] Tests first, then screens (`impeccable`): Packages on Android and Windows, light/dark, 1.3 font scale; Cashier and admin Windows only. Commit.
 
 ## Phase 4: Online only for members (Q6)
 
@@ -138,13 +138,13 @@ Same rules as `2026-11-17-desk-amenities-logs-buy-popup.md`:
 
 **Files:** next migration `00xx_members_online_only.sql` (`check_package_method` and `book_amenity`: `cash` from a member → `online_only`), `supabase/tests/local/online-only.mjs` (also: a desk cash payment's audit row names the staff actor), `Foundation.cs` (`online_only`: "Pay online here, or pay cash at the front desk and they'll record it."), demo mirror.
 
-- [ ] Failing tests, migration, push, grants, commit.
+- [x] Failing tests, migration, push, grants, commit.
 
 ### Task 6: Screens
 
 **Files:** `PackagesViewModel` / `PackagesPage.xaml` (Buy popup loses step 2; `Method` always online), Book an amenity's `PayOption` (cash gone), `MyMembershipViewModel` notices, tests `BuyPopupTests.cs`, `CashPackageTests.cs` updated.
 
-- [ ] Tests first, then screens (`impeccable`), Android and Windows, light/dark, 1.3 font scale, commit.
+- [x] Tests first, then screens (`impeccable`), Android and Windows, light/dark, 1.3 font scale, commit.
 
 ## Phase 5: Remove Void (Q5)
 
@@ -152,7 +152,7 @@ Same rules as `2026-11-17-desk-amenities-logs-buy-popup.md`:
 
 **Files:** delete `VoidPaymentsPage.xaml(.cs)` and `VoidPaymentsViewModel`; `RefundsPage.xaml(.cs)` (no Part switch), DI registration, next migration `00xx_drop_void_payment.sql` (`drop function public.void_payment(bigint, text)`), demo `void_payment` case removed, one status label helper reused by Payments (Phase 7) and Transactions (Phase 6): `PaymentStatusText(Payment) -> string`, test `tests/GymMembership.Tests/PaymentStatusTests.cs`.
 
-- [ ] Failing test for the labels (Pending, Paid, Failed, Refunded, Voided), remove, build, tests, push, commit.
+- [x] Failing test for the labels (Pending, Paid, Failed, Refunded, Voided), remove, build, tests, push, commit.
 
 ## Phase 6: Transactions filters (Q4)
 
@@ -160,7 +160,7 @@ Same rules as `2026-11-17-desk-amenities-logs-buy-popup.md`:
 
 **Files:** `AuditViewModel` (`_auditFilter`, `_moneyFilter`; money fields: `What`, `PaidWith`, `Status`, `Customer`, `RecordedBy`, dates), `AuditFilter` in `Services.cs` (money fields), `audit_log_page` + export (next migration: filter by those fields when `p_money`; Day pass rows = `walk_in` payments and Day pass package payments), `AuditPage.xaml` (filter row per tab), test `tests/GymMembership.Tests/TransactionsLogTests.cs` (Review Focus 5).
 
-- [ ] Failing tests, migration and push, screen (`impeccable`, Windows only), commit.
+- [x] Failing tests, migration and push, screen (`impeccable`, Windows only), commit.
 
 ## Phase 7: Payments page (Q8)
 
@@ -168,8 +168,8 @@ Same rules as `2026-11-17-desk-amenities-logs-buy-popup.md`:
 
 **Files:** `PaymentsViewModel` in `MemberViewModels.cs` (`Kind` filter All / Membership / Amenity, Day pass under Membership; `Page`, 10 a page, own rows only), `src/GymMembership.App/Views/PaymentsPage.xaml(.cs)`, `MemberShell.xaml`, `PhoneNavigation.cs`, `IconRail.Windows.cs` (icon), `MyMembershipPage.xaml` (payment list out, waiting payment card stays), test `tests/GymMembership.Tests/MyPaymentsTests.cs` (another member's payment never shows; filter works; a Day pass shows under Membership).
 
-- [ ] Check the `payments` select policy only returns own rows for members (database test).
-- [ ] Tests first, page with `impeccable`: phone two-line rows (what + amount, date + status chip), Windows table; light/dark, 1.3 font scale. Commit.
+- [x] Check the `payments` select policy only returns own rows for members (database test).
+- [x] Tests first, page with `impeccable`: phone two-line rows (what + amount, date + status chip), Windows table; light/dark, 1.3 font scale. Commit.
 
 ## Phase 8: Rate limits (Q2, Q3)
 
@@ -177,13 +177,13 @@ Same rules as `2026-11-17-desk-amenities-logs-buy-popup.md`:
 
 **Files:** next migration `00xx_package_buy_limit.sql` (inside `avail_membership` / `extend_membership`: count the caller's package payments created in the last hour; 10 or more → `too_many_tries` with minutes left), `supabase/tests/local/buy-limit.mjs`, `Foundation.cs` sentence, demo mirror.
 
-- [ ] Failing test (11th refused, after the hour allowed), migration, push, commit.
+- [x] Failing test (11th refused, after the hour allowed), migration, push, commit.
 
 ### Task 11: Sign-in lock (per Q2)
 
 **Files (a):** next migration `00xx_sign_in_lock.sql` (`login_attempts(user_id, wrong, locked_until)`, hook function `password_verification_hook(event jsonb) returns jsonb`: reject while locked, count wrong, lock 5 min at 10, reset on success), enable the hook in the Supabase dashboard (owner step) and `supabase/config.toml`. **(b):** `supabase/functions/sign-in/index.ts` + the same table, `SupabaseGateway.SignInAsync` and `ChangePasswordAsync` call it. Both: `Foundation.cs` (`account_locked`: "Too many wrong tries. Try again in N minutes."), demo mirror, tests `supabase/tests/local/sign-in-lock.mjs`, `tests/GymMembership.Tests/SignInLockTests.cs` (Review Focus 2, 3).
 
-- [ ] Failing tests, build, push, owner enables the hook (a), live check with a test account, commit.
+- [x] Failing tests, build, push, owner enables the hook (a), live check with a test account, commit.
 
 ## Phase 10: Small leftovers (Q10, Q11)
 
@@ -191,13 +191,13 @@ Same rules as `2026-11-17-desk-amenities-logs-buy-popup.md`:
 
 **Files:** next migration `01xx_day_pass_booking_ends.sql` (`book_amenity_for`, the 0098 term check: when that term's package is the Day pass, also `ends_at >= v_end`), `supabase/tests/local/day-pass-package.mjs`, demo `DemoReservations.cs`, test `DayPassPackageTests.cs`.
 
-- [ ] Failing tests: a Day pass holder booking 11 pm to 1 am → `outside_membership`; 9 to 10 pm → booked; a Monthly member's booking that runs past their term's end still works. Migration, push, grants, commit.
+- [x] Failing tests: a Day pass holder booking 11 pm to 1 am → `outside_membership`; 9 to 10 pm → booked; a Monthly member's booking that runs past their term's end still works. Migration (`0106`), push, grants, commit (`82ca78f`).
 
 ### Task 13: The other leftovers
 
 **Files:** `supabase/functions/sign-in/index.ts` (`error.status || 503`, redeploy); `Services.cs` (`PaymentItem` gets `Refunded`, `MyPaymentsAsync` reads the member's paid `refund_requests`; `PaymentStatus.Text(status, refunded)` back; `ItemsAsync` membership list `PublishedAt is not null`); `PaymentsPage.xaml.cs` (HasProof warning); `DemoArchive.cs` (`MoneyFilter` follows `refund_requests` to the payment; doc comment above `AuditRecords`); `DemoGateway.cs` (doc comments above `OwnerSetActive`, `OwnerVoidAsync`, `OwnerMakeCash`); tests `MyPaymentsTests.cs`, `CashierTests.cs`, `TransactionsLogTests.cs`.
 
-- [ ] One failing test per behaviour (Refunded on Payments, a draft package not sold at the Cashier, demo refund rows under Status = Refunded), fix, whole suite, commit.
+- [x] One failing test per behaviour (Refunded on Payments, a draft package not sold at the Cashier, demo refund rows under Status = Refunded), fix, whole suite, commit (`0a488f4`).
 
 ## Phase 11: Codes checked as they're typed (Q12, Q13)
 
@@ -205,21 +205,21 @@ Same rules as `2026-11-17-desk-amenities-logs-buy-popup.md`:
 
 **Files:** next migration `01xx_check_discount_code.sql`: `check_discount_code(p_code text, p_kind text, p_item bigint) returns table(percent int, amount_off numeric, you_pay numeric)` for the signed-in member. `p_kind` is `package` or `amenity`. It reuses `apply_discount` (exists, used, limit, expiry) and the item check `guard_payment_discount_item` uses (0060), writing nothing; it raises the same codes Pay raises (`invalid_code`, `code_already_used`, `code_limit_reached`, `code_not_for_item`). Q13's limit: a small `code_checks(member_id, checked_at)` log, 20 in 10 minutes, then `too_many_checks`. Granted to authenticated only. `supabase/tests/local/discount-check.mjs`.
 
-- [ ] Failing tests: a good code returns its percent and the price after; each refusal gives its code; a code for amenities only refused for a package; the 21st check in 10 minutes refused; nothing is written to `payments` (uses are counted from payments); anon can't call it. Migration, push, grants, commit.
+- [x] Failing tests: a good code returns its percent and the price after; each refusal gives its code; a code for amenities only refused for a package; the 21st check in 10 minutes refused; nothing is written to `payments` (uses are counted from payments); anon can't call it. Migration (`0107`), push, grants, commit (`079a01f`).
 
 ### Task 15: The line under the code box
 
 **Files:** `MembershipService` (`CheckCodeAsync(string code, string kind, int itemId) -> AppResult<CodeCheck>`), demo mirror (`check_discount_code` case reusing the demo's discount rules), `PackagesViewModel` (`CodeCheck`, `CodeCheckText`, `CodeWorks`; checks on `DiscountCode` change after 500 ms with the newest check winning, and on unfocus; cleared on open and close), `BookAmenityViewModel` (same, for `Code`; the price split uses the checked percent, not only the listed codes), `PackagesPage.xaml` and `BookAmenityPage.xaml` (one line under the box: green check with the price for a good code, the reason in the error colour otherwise), `Foundation.cs` (the sentences in Q12, `too_many_checks`), tests `CodeCheckTests.cs`.
 
-- [ ] Tests first: typing a good code shows "Code works: …" with the price; a wrong one shows "There's no code with that name."; clearing the box clears the line; a slow answer for an old code never overwrites the newer one; closing the popup clears it.
-- [ ] Screens with `impeccable`: Android and Windows, light and dark, 1.3 font scale; the line must not push Buy off a small phone screen. Commit.
+- [x] Tests first: typing a good code shows "Code works: …" with the price; a wrong one shows "There's no code with that name."; clearing the box clears the line; a slow answer for an old code never overwrites the newer one; closing the popup clears it.
+- [x] Screens with `impeccable`: Android and Windows, light and dark, 1.3 font scale; the line must not push Buy off a small phone screen. Commit (`ae14404`).
 
 ## Phase 9: Checks
 
-- [ ] Whole test suite and database tests green; live grants checked for every migration on this branch.
-- [ ] `superpowers:requesting-code-review` on the whole branch; fixes committed.
+- [x] Whole test suite and database tests green; live grants checked for every migration on this branch.
+- [x] `superpowers:requesting-code-review` on the whole branch; fixes committed.
 - [ ] Owner hand checks: each finding above on the real project, Android and Windows.
-- [ ] Branch stays off `main`.
+- [x] Branch stays off `main`.
 
 ## Session log
 
@@ -227,3 +227,4 @@ Same rules as `2026-11-17-desk-amenities-logs-buy-popup.md`:
 - 2026-11-19: owner chose Q1 = (b) (Day pass as a package, desk too) and Day pass under Membership (Q8); Phase 3 added. Owner: Q2 = (a), Q3 = 1 hour, build it natively.
 - 2026-11-19: built Phases 1-8 natively; rulings in `.superpowers/sdd/2026-11-19-owner-fixes/progress.md`. Q2 (a) needs the Team plan (Supabase gates the Password Verification hook), so the sign-in Edge Function (b) was built.
 - 2026-11-19: owner asked for the leftovers in the plan and for codes checked as they're typed: Phases 10 and 11 added (Q10-Q13). Waiting on Q12, Q13.
+- 2026-11-19: owner confirmed Q12 = both places, Q13 = 20 in 10 minutes. Built and deployed Phase 10 (`0106`, `sign-in` redeployed; `82ca78f`, `0a488f4`) and Phase 11 (`0107`, `079a01f`, `ae14404`). Pushed to `origin/owner-fixes-2026-11-19`.
