@@ -5,6 +5,16 @@ namespace GymMembership.App.Controls;
 
 public partial class CoachCalendarView : ContentView
 {
+	public static readonly BindableProperty ShowPostShiftProperty = BindableProperty.Create(
+		nameof(ShowPostShift), typeof(bool), typeof(CoachCalendarView), true,
+		propertyChanged: (b, _, v) => ((CoachCalendarView)b).PostShiftHost.IsVisible = (bool)v);
+
+	public bool ShowPostShift
+	{
+		get => (bool)GetValue(ShowPostShiftProperty);
+		set => SetValue(ShowPostShiftProperty, value);
+	}
+
 	public CoachCalendarView() => InitializeComponent();
 
 	protected override void OnBindingContextChanged()

@@ -205,6 +205,7 @@
                     </VerticalStackLayout>
 
                     <!-- post a shift on the chosen day: the start (opening time, or the next half hour today) and 4 hours filled in -->
+                    <ContentView x:Name="PostShiftHost">
                     <VerticalStackLayout Spacing="10" IsVisible="{Binding HasShifts}">
                         <BoxView Style="{StaticResource Hairline}" />
                         <Label Text="Post a shift" FontFamily="BarlowSemiBold" FontSize="17" />
@@ -240,6 +241,7 @@
                             </Label>
                         </FlexLayout>
                     </VerticalStackLayout>
+                    </ContentView>
                 </VerticalStackLayout>
             </VerticalStackLayout>
         </Border>
