@@ -206,44 +206,21 @@
                         </BindableLayout.ItemTemplate>
                     </VerticalStackLayout>
 
-                    <!-- post a shift on the chosen day: the start (opening time, or the next half hour today) and 4 hours filled in -->
-                    <ContentView x:Name="PostShiftHost">
-                    <VerticalStackLayout Spacing="10" IsVisible="{Binding HasShifts}">
+                    <!-- the amenities this coach is assigned to run (shown on Dashboard, hidden on My shifts) -->
+                    <VerticalStackLayout x:Name="AmenitiesHost" Spacing="8">
                         <BoxView Style="{StaticResource Hairline}" />
-                        <Label Text="Post a shift" FontFamily="BarlowSemiBold" FontSize="17" />
-                        <!-- G17 (0065, approved mockup docs/mockups/gym-closed-days.html): a closed day says why in place of a usable form -->
-                        <Border Style="{StaticResource Row}" Padding="14,12" StrokeShape="RoundRectangle 12" IsVisible="{Binding ClosedNote, Converter={StaticResource HasText}}" AutomationId="DashboardClosedNote">
-                            <VerticalStackLayout Spacing="4">
-                                <Label Text="{Binding ClosedNote}" FontFamily="BarlowSemiBold" TextColor="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
-                                <Label Text="You can't post a shift this day. Anything already set up for it was cancelled, and the people involved were told." Style="{StaticResource Caption}" />
-                            </VerticalStackLayout>
-                        </Border>
-                        <Grid ColumnDefinitions="*,110" ColumnSpacing="12">
-                            <VerticalStackLayout Spacing="4">
-                                <Label Text="Starts" Style="{StaticResource Caption}" />
-                                <Border Style="{StaticResource Field}"><TimePicker Time="{Binding PostTime}" SemanticProperties.Description="Shift start" /></Border>
-                            </VerticalStackLayout>
-                            <VerticalStackLayout Grid.Column="1" Spacing="4">
-                                <Label Text="Hours" Style="{StaticResource Caption}" />
-                                <Border Style="{StaticResource Field}">
-                                    <Picker ItemsSource="{Binding HoursOptions}" SelectedItem="{Binding PostHours}" SemanticProperties.Description="Shift length in hours" />
-                                </Border>
-                            </VerticalStackLayout>
-                        </Grid>
-                        <VerticalStackLayout Spacing="4">
-                            <Label Text="Note (optional)" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}"><Entry Text="{Binding PostNote}" Placeholder="What you will be running" /></Border>
-                        </VerticalStackLayout>
-                        <FlexLayout Wrap="Wrap" AlignItems="Center">
-                            <Button Text="Post shift" Style="{StaticResource SmallButton}" Margin="0,0,12,6" FlexLayout.Shrink="0"
-                                    Command="{Binding PostShiftCommand}" IsEnabled="{Binding CanPost}" AutomationId="DashboardPostShift" />
-                            <Label Text="Ends at closing time if it would run past it." Style="{StaticResource Caption}" Margin="0,0,0,6" IsVisible="{Binding CanPost}" />
-                            <Label Text="The gym has no opening hours left on this day." Style="{StaticResource Caption}" Margin="0,0,0,6" IsVisible="{Binding CanPost, Converter={StaticResource Not}}">
-                                <Label.Triggers><DataTrigger TargetType="Label" Binding="{Binding ClosedNote, Converter={StaticResource HasText}}" Value="True"><Setter Property="IsVisible" Value="False" /></DataTrigger></Label.Triggers>
-                            </Label>
+                        <c:CardTitle Text="Amenities you run" />
+                        <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding MyAmenities}" IsVisible="{Binding HasAmenities}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <Border Style="{StaticResource Chip}" Margin="0,0,6,6">
+                                        <Label Text="{Binding .}" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold" />
+                                    </Border>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
                         </FlexLayout>
+                        <Label Text="None selected yet. Pick amenities on Amenities." Style="{StaticResource Muted}" IsVisible="{Binding HasAmenities, Converter={StaticResource Not}}" />
                     </VerticalStackLayout>
-                    </ContentView>
                 </VerticalStackLayout>
             </VerticalStackLayout>
         </Border>

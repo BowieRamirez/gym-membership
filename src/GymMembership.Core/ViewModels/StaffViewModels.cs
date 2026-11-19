@@ -1172,7 +1172,7 @@ public sealed record WeekRow(CalendarDay Day, IReadOnlyList<CalendarSession> Ses
 // the coach's attendance calendar: a month or a week, a day list underneath, and marks that can be corrected in place
 /// <summary>The coach dashboard (D10): this month's numbers, the month/week calendar with attendance marks, and shift posting for the selected day.
 /// Without a coach service (older tests) it is the attendance calendar alone.</summary>
-public partial class AttendanceViewModel(ISessionService sessions, IAttendanceService attendance, ICoachService? coach = null, IMembershipService? gym = null) : LoadableViewModel
+public partial class AttendanceViewModel(ISessionService sessions, IAttendanceService attendance, ICoachService? coach = null, IMembershipService? gym = null, IAmenityService? amenities = null) : LoadableViewModel
 {
     /// <summary>The moment "now" is; tests set a fixed one.</summary>
     public Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
@@ -1183,6 +1183,8 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     public ObservableCollection<WeekRow> WeekRows { get; } = new();          // the week view, 7 rows
     public ObservableCollection<CalendarSession> DaySessions { get; } = new();
     public ObservableCollection<ShiftPost> DayShifts { get; } = new();
+    public ObservableCollection<string> MyAmenities { get; } = new();
+    public bool HasAmenities => MyAmenities.Count > 0;
     public int[] HoursOptions { get; } = [2, 4, 6, 8, 10];
 
     [ObservableProperty] private TimeSpan postTime = new(8, 0, 0);   // the start, as the coach's own clock shows it
@@ -1290,8 +1292,14 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
         var calendar = sessions.CalendarAsync(from, to);
         var coming = sessions.UpcomingAsync();
         var posted = coach?.MyShiftsAsync() ?? Task.FromResult(AppResult<IReadOnlyList<ShiftPost>>.Success([]));
-        await Task.WhenAll(calendar, coming, posted);
+        var board = amenities?.BoardAsync();
+        await Task.WhenAll(calendar, coming, posted, board ?? Task.CompletedTask);
         if (ticket != loadTicket) return;
+        if (board is not null && (await board) is { Ok: true, Value: { } b })
+        {
+            Fill(MyAmenities, b.Cards.Where(c => c.RunsThis).Select(c => c.Amenity.Name).ToList());
+            OnPropertyChanged(nameof(HasAmenities));
+        }
         var cal = await calendar; var up = await coming;
         if ((await posted).Ok) shifts = (await posted).Value!.ToList();
         if (cal.Ok) { loaded = cal.Value!.ToList(); known = true; } else ErrorMessage = ErrorText.For(cal.Error, cal.Message);   // a failed look leaves what is shown as it was

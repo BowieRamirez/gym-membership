@@ -5,9 +5,9 @@ namespace GymMembership.App.Controls;
 
 public partial class CoachCalendarView : ContentView
 {
-	public static readonly BindableProperty ShowPostShiftProperty = BindableProperty.Create(
-		nameof(ShowPostShift), typeof(bool), typeof(CoachCalendarView), true,
-		propertyChanged: (b, _, v) => ((CoachCalendarView)b).PostShiftHost.IsVisible = (bool)v);
+	public static readonly BindableProperty ShowAmenitiesProperty = BindableProperty.Create(
+		nameof(ShowAmenities), typeof(bool), typeof(CoachCalendarView), true,
+		propertyChanged: (b, _, v) => ((CoachCalendarView)b).AmenitiesHost.IsVisible = (bool)v);
 
 	public static readonly BindableProperty MainFooterProperty = BindableProperty.Create(
 		nameof(MainFooter), typeof(View), typeof(CoachCalendarView), null,
@@ -17,10 +17,10 @@ public partial class CoachCalendarView : ContentView
 		nameof(SideFooter), typeof(View), typeof(CoachCalendarView), null,
 		propertyChanged: (b, _, v) => { var c = (CoachCalendarView)b; c.SideFooterHost.Content = (View?)v; c.SideFooterHost.IsVisible = v is not null; });
 
-	public bool ShowPostShift
+	public bool ShowAmenities
 	{
-		get => (bool)GetValue(ShowPostShiftProperty);
-		set => SetValue(ShowPostShiftProperty, value);
+		get => (bool)GetValue(ShowAmenitiesProperty);
+		set => SetValue(ShowAmenitiesProperty, value);
 	}
 	public View? MainFooter
 	{
