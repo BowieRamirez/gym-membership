@@ -261,6 +261,15 @@
                                 </VerticalStackLayout>
                             </Grid>
 
+                            <!-- owner fixes 2026-11-19 Q9 (0098): the Day pass is a package that lasts until midnight; one is on sale at a time -->
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10" IsVisible="{Binding IsPackagePanel}">
+                                <CheckBox IsChecked="{Binding FormDayPass}" VerticalOptions="Center" AutomationId="FormDayPass" SemanticProperties.Description="This package is the Day pass" />
+                                <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                    <Label Text="This is the Day pass" FontFamily="BarlowSemiBold" />
+                                    <Label Text="It lasts until midnight on the day it's paid, whatever the days say. Only one Day pass can be on sale. The front desk sells it to walk-ins too." Style="{StaticResource Caption}" />
+                                </VerticalStackLayout>
+                            </Grid>
+
                             <!-- G14 (0064): amenities: what With a coach adds; ₱0 means a coach costs nothing extra -->
                             <VerticalStackLayout Spacing="4" IsVisible="{Binding IsPackagePanel, Converter={StaticResource Not}}">
                                 <Label Text="Coach fee per hour" Style="{StaticResource Caption}" />

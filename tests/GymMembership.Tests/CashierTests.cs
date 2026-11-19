@@ -129,7 +129,7 @@ public class CashierTests
         var (_, vm) = await Open();
         vm.PickKindCommand.Execute("Day pass");
         Assert.Empty(vm.Options);
-        Assert.Equal("Day pass", vm.TotalText);
+        Assert.Equal("₱150.00", vm.TotalText);   // 0098: the Day pass package's price
         Assert.True(vm.RecordCommand.CanExecute(null));
         Assert.Equal("Day pass, no name", vm.OrderWho);
         vm.WalkInName = "Pedro Ramos";

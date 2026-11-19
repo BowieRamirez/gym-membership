@@ -27,6 +27,8 @@
                     <VerticalStackLayout Spacing="6" Margin="0,0,16,0">
                         <Label Text="Walk-in price (₱)" Style="{StaticResource Caption}" />
                         <Border Style="{StaticResource Field}" WidthRequest="160"><Entry Text="{Binding WalkInPrice}" Keyboard="Numeric" SemanticProperties.Description="Walk-in price" /></Border>
+                        <!-- 0098: the Day pass package's price wins while one is on sale -->
+                        <Label Text="Used only while no Day pass package is on sale." Style="{StaticResource Caption}" WidthRequest="160" />
                     </VerticalStackLayout>
                     <VerticalStackLayout Spacing="6">
                         <Label Text="Opening float (₱)" Style="{StaticResource Caption}" />

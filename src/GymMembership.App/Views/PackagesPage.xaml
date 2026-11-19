@@ -21,7 +21,7 @@
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                         <VerticalStackLayout Spacing="2" VerticalOptions="Center">
                             <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" FontSize="18" />
-                            <Label Text="{Binding DurationDays, StringFormat='{0} days of access'}" Style="{StaticResource Caption}" />
+                            <Label Text="{Binding LengthText}" Style="{StaticResource Caption}" />
                         </VerticalStackLayout>
                         <Label Grid.Column="1" Text="{Binding Price, StringFormat='₱{0:N0}'}" Style="{StaticResource Numeral}" FontSize="30" VerticalOptions="Center" />
                     </Grid>
@@ -39,7 +39,7 @@
                 <VerticalStackLayout Spacing="6">
                     <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" FontSize="18" />
                     <Label Text="{Binding Price, StringFormat='₱{0:N0}'}" Style="{StaticResource Numeral}" FontSize="44" />
-                    <Label Text="{Binding DurationDays, StringFormat='{0} days of access'}" Style="{StaticResource Caption}" />
+                    <Label Text="{Binding LengthText}" Style="{StaticResource Caption}" />
                     <Label Text="{Binding Description}" Style="{StaticResource Muted}" IsVisible="{Binding Description, Converter={StaticResource HasText}}" />
                     <VerticalStackLayout Spacing="2" BindableLayout.ItemsSource="{Binding Benefits}" IsVisible="{Binding Benefits.Count, Converter={StaticResource Any}}">
                         <BindableLayout.ItemTemplate><DataTemplate x:DataType="x:String"><Label Text="{Binding ., StringFormat='• {0}'}" FontSize="14" /></DataTemplate></BindableLayout.ItemTemplate>
@@ -131,7 +131,7 @@
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                         <VerticalStackLayout Spacing="2" VerticalOptions="Center">
                             <Label Text="{Binding Buying.Name, StringFormat='Buy {0}'}" Style="{StaticResource Heading}" />
-                            <Label Text="{Binding Buying.DurationDays, StringFormat='{0} days of access'}" Style="{StaticResource Caption}" />
+                            <Label Text="{Binding Buying.LengthText}" Style="{StaticResource Caption}" />
                         </VerticalStackLayout>
                         <Grid Grid.Column="1" WidthRequest="44" HeightRequest="44" VerticalOptions="Start">
                             <Button Style="{StaticResource SmallOutlineButton}" Padding="0" Command="{Binding CloseBuyCommand}" SemanticProperties.Description="Close" AutomationId="CloseBuy" />

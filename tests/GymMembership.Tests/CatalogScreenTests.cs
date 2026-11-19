@@ -31,6 +31,17 @@ public class CatalogScreenTests
         Assert.Null(vm.ErrorMessage);
     }
 
+    [Fact]   // owner fixes 2026-11-19 Q9 (0098): a package can be the Day pass; it lasts the day, so its length is 1
+    public async Task A_draft_marked_day_pass_is_saved_as_the_day_pass()
+    {
+        var (vm, gw) = await Open();
+        vm.AddPackageCommand.Execute(null);
+        (vm.FormName, vm.FormDescription, vm.FormPrice, vm.FormDayPass) = ("Weekend Day pass", "Today only", 200, true);
+        await vm.SaveDraftCommand.ExecuteAsync(null);
+        var saved = (await gw.ListAsync<MembershipPackage>()).Single(p => p.Name == "Weekend Day pass");
+        Assert.Equal((true, 1), (saved.IsDayPass, saved.DurationDays));
+    }
+
     [Fact]
     public async Task Add_names_every_missing_field_and_saves_nothing()
     {

@@ -122,6 +122,7 @@ public class PaymentTests
         // 0046 refuses it on the server for every path; the demo stands in for that
         var gw = await As("admin@demo.io");
         var settings = (await gw.ListAsync<GymSettings>()).First(); settings.WalkInPrice = 0; await gw.UpdateAsync(settings);
+        Assert.True((await new AdminService(gw).DeletePackageAsync((await gw.ListAsync<MembershipPackage>()).Single(p => p.IsDayPass))).Ok);   // 0098: no Day pass on sale, so the old setting is the price
         // G6 (0061): a package at zero can't go on sale at all (publishing needs a price above zero)
         var admin = new AdminService(gw);
         Assert.True((await admin.SavePackageAsync(new MembershipPackage { Name = "Free", Description = "Nothing to pay", Price = 0, DurationDays = 30 })).Ok);

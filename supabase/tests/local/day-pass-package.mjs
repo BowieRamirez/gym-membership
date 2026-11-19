@@ -1,0 +1,72 @@
+// Owner fixes 2026-11-19 Q1 = (b), Q9: the Day pass is a package (is_day_pass). Its term ends at midnight Manila on the day it is paid,
+// it opens amenity bookings for that day only, someone with a membership (live or queued) can't buy one, and the desk's walk-in
+// Day pass with no account costs the Day pass package's price.
+import { start, openCashShifts } from './harness.mjs';
+import assert from 'node:assert/strict';
+
+const { server, client: db } = await start();
+let passed = 0, failed = 0, serial = 0;
+async function as(uid, sql, args = []) {
+  await db.query('begin');
+  try {
+    await db.query('set local role authenticated');
+    await db.query(`select set_config('request.jwt.claim.sub', $1, true)`, [uid]);
+    const r = await db.query(sql, args); await db.query('commit'); return r.rows;
+  } catch (e) { await db.query('rollback'); throw e; }
+}
+const user = async (role) => (await db.query('insert into auth.users(email,raw_user_meta_data,raw_app_meta_data) values($1,$2,$3) returning id',
+  [`dpp-${++serial}@test.io`, JSON.stringify({ full_name: 'Day Pass Person', terms_version: '2026-11-15' }), JSON.stringify(role ? { role } : {})])).rows[0].id;
+async function test(name, fn) {
+  try { await fn(); passed++; console.log('  ok  ', name); }
+  catch (e) { failed++; console.log('  FAIL', name, e.message); }
+}
+try {
+  const desk = await user('employee');
+  await openCashShifts(db);
+  await db.query(`update gym_settings set opens_at='00:00',closes_at='23:30',walk_in_price=150 where id=1`);
+  const monthly = (await db.query(`insert into membership_packages(name,price,duration_days) values('DP Monthly',1000,30) returning membership_package_id id`)).rows[0].id;
+  const dayPass = (await db.query(`insert into membership_packages(name,price,duration_days,is_day_pass) values('Day pass',120,1,true) returning membership_package_id id`)).rows[0].id;
+  const court = (await db.query(`insert into amenities(name,price) values('DP Court',300) returning amenity_id id`)).rows[0].id;
+  const buy = async (m, pack) => { const p = (await as(m, `select * from avail_membership($1,null)`, [pack]))[0]; await as(desk, 'select verify_payment($1,true)', [p.payment_id]); return p; };
+  const inDays = (n, hm) => db.query(`select (((now() at time zone 'Asia/Manila')::date + $1::int) + $2::time) at time zone 'Asia/Manila' t`, [n, hm]).then(r => r.rows[0].t.toISOString());
+
+  await test('a Day pass term ends at the next midnight in Manila and makes them a member now', async () => {
+    const m = await user(null); const p = await buy(m, dayPass);
+    const t = (await db.query(`select starts_at, ends_at, ends_at = (((starts_at at time zone 'Asia/Manila')::date + 1)::timestamp at time zone 'Asia/Manila') midnight
+      from membership_terms where payment_id = $1`, [p.payment_id])).rows[0];
+    assert.equal(t.midnight, true);
+    assert.equal((await as(m, 'select is_active_member() a'))[0].a, true);
+  });
+
+  await test('a Day pass holder cannot book a day after the pass', async () => {
+    const m = await user(null); await buy(m, dayPass);
+    await assert.rejects(as(m, `select * from book_amenity($1,$2,60)`, [court, await inDays(2, '10:00')]), /outside_membership/);
+  });
+
+  await test('a member with a live membership cannot buy a Day pass, nor one with only a queued term', async () => {
+    const m = await user(null); await buy(m, monthly);
+    await assert.rejects(as(m, `select * from extend_membership($1,null)`, [dayPass]), /already_availed/);
+  });
+
+  await test('two Day pass packages cannot be on sale at once', async () => {
+    await assert.rejects(db.query(`insert into membership_packages(name,price,duration_days,is_day_pass) values('Day pass 2',99,1,true)`), /duplicate key|unique/);
+  });
+
+  await test('the walk-in Day pass with no account costs the Day pass package price', async () => {
+    const p = (await as(desk, `select * from record_counter_payment('walk_in'::payment_kind,'cash'::payment_method,null,null,'Walk In',null,null)`))[0];
+    assert.equal(Number(p.amount), 120);
+    const o = (await as(desk, `select * from start_desk_online_payment('walk_in'::payment_kind,null,null,'Walk In',null)`))[0];
+    assert.equal(Number(o.amount), 120);
+  });
+
+  await test('the desk sells the Day pass package to a member account in cash: a term until midnight', async () => {
+    const m = await user(null);
+    const p = (await as(desk, `select * from record_counter_payment('membership'::payment_kind,'cash'::payment_method,$1,$2,null,null,null)`, [m, dayPass]))[0];
+    assert.equal(Number(p.amount), 120);
+    assert.equal((await db.query(`select count(*)::int n from membership_terms where member_id = $1 and ends_at <= now() + interval '1 day'`, [m])).rows[0].n, 1);
+  });
+} finally {
+  console.log(`\nday-pass-package: ${passed} passed, ${failed} failed`);
+  if (failed) process.exitCode = 1;
+  await db.end(); await server.stop();
+}

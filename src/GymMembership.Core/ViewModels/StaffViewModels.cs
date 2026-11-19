@@ -193,9 +193,12 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     public string OrderWho => IsWalkIn ? DayPassName ?? "Day pass, no name" : Member?.Username ?? "Find and choose a member";
     string? DayPassName => string.IsNullOrWhiteSpace(WalkInName) ? null : WalkInName.Trim();
     public string OrderWhat => Item?.Label ?? (IsWalkIn ? "Day pass" : "Choose what they are paying for");
-    decimal? dayPassPrice;   // Gym settings; the server charges it, this is what the desk reads out
-    public string TotalText => IsWalkIn ? dayPassPrice is { } d ? $"₱{d:N2}" : "Day pass" : Item?.Price is { } p ? $"₱{p:N2}" : "₱0.00";
-    public string TotalNote => IsWalkIn ? "The day pass price is set in Gym settings."
+    decimal? dayPassPrice;   // the server charges it, this is what the desk reads out
+    // 0098: the Day pass package; a picked member whose name is still in the box buys it (a term until midnight), anyone else is a walk-in
+    CounterItem? dayPassPackage;
+    MemberHit? DayPassMember => IsWalkIn && dayPassPackage is not null && Member is { } m && DayPassName == m.Username ? m : null;
+    public string TotalText => IsWalkIn ? (dayPassPackage?.Price ?? dayPassPrice) is { } d ? $"₱{d:N2}" : "Day pass" : Item?.Price is { } p ? $"₱{p:N2}" : "₱0.00";
+    public string TotalNote => IsWalkIn ? dayPassPackage is null ? "The day pass price is set in Gym settings." : "The Day pass price is set on its package."
         : string.IsNullOrWhiteSpace(DiscountCode) ? "" : "The discount code is checked when you complete the payment.";
     public string ItemsEmptyText => LoadingItems ? "Loading…"
         : Kind == "Renewal" && Member is null ? "Choose a member to see their memberships." : "Nothing to sell here yet.";
@@ -275,7 +278,13 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         var ticket = ++itemsTicket;   // the newest request wins: a slow answer for a kind you have left is dropped
         // Cards listed for another kind or member must not stay tappable while the right ones load: a tap would send their item id with the new kind.
         Options.Clear(); Item = null; ErrorMessage = null;
-        if (IsWalkIn) { LoadingItems = false; return; }
+        if (IsWalkIn)
+        {
+            LoadingItems = false;
+            var packages = await svc.ItemsAsync(PayKind.Membership, null);
+            if (ticket == itemsTicket && packages.Ok) { dayPassPackage = packages.Value!.FirstOrDefault(i => i.DayPass); OnPropertyChanged(nameof(TotalText)); OnPropertyChanged(nameof(TotalNote)); }
+            return;
+        }
         LoadingItems = true;
         var result = await svc.ItemsAsync(KindKey(Kind), Member?.MemberId);
         if (ticket != itemsTicket) return;   // a newer request owns the screen now; a stale answer, even a failed one, says nothing
@@ -340,7 +349,11 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
                 + (Kind is "Membership" or "Renewal" ? $"\n\nTell them: {RefundRules.Line}" : ""), "Record payment")) return;   // G23
         if (Method == Online) { await StartOnlineAsync(); return; }
         Payment? paid = null;
-        if (!await RunAsync(() => svc.RecordCounterAsync(KindKey(Kind), PayMethod.Cash, IsWalkIn ? null : Member!.MemberId, Item?.Id,
+        if (DayPassMember is { } m)
+        {
+            if (!await RunAsync(() => svc.RecordCounterAsync(PayKind.Membership, PayMethod.Cash, m.MemberId, dayPassPackage!.Id, null, null, null), p => paid = p)) return;
+        }
+        else if (!await RunAsync(() => svc.RecordCounterAsync(KindKey(Kind), PayMethod.Cash, IsWalkIn ? null : Member!.MemberId, Item?.Id,
                 IsWalkIn ? DayPassName : null, null, IsWalkIn ? null : DiscountCode), p => paid = p)) return;
         await DoneAsync(paid!);
     }
@@ -357,7 +370,9 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     async Task StartOnlineAsync()
     {
         Payment? started = null;
-        if (!await RunAsync(() => svc.StartDeskOnlineAsync(KindKey(Kind), IsWalkIn ? null : Member!.MemberId, Item?.Id,
+        var dayPassFor = DayPassMember;
+        if (!await RunAsync(() => dayPassFor is { } m ? svc.StartDeskOnlineAsync(PayKind.Membership, m.MemberId, dayPassPackage!.Id, null, null)
+                : svc.StartDeskOnlineAsync(KindKey(Kind), IsWalkIn ? null : Member!.MemberId, Item?.Id,
                 IsWalkIn ? DayPassName : null, IsWalkIn ? null : DiscountCode), p => started = p)) return;
         Waiting = started; RecordCommand.NotifyCanExecuteChanged();
         await OpenCheckoutAsync();
@@ -1569,6 +1584,7 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     [ObservableProperty] private string formDescription = "";
     [ObservableProperty] private decimal formPrice;
     [ObservableProperty] private int formDays = 30;
+    [ObservableProperty] private bool formDayPass;   // 0098: the Day pass package (its term ends at midnight)
     [ObservableProperty] private decimal formCoachFee;   // G14 (0064): amenities only, added when a member books With a coach
     /// <summary>G19 (0066): a new amenity is sold per session; one still set up as a pass keeps its days until Sell per session.</summary>
     [ObservableProperty, NotifyPropertyChangedFor(nameof(PriceLabel))] private bool isOldPass;
@@ -1610,7 +1626,7 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
             : (p.Id == 0 ? "Add a package" : "Edit draft", "Save as draft to finish it later. Add puts it on sale.", "Add");
         CanSaveDraft = true;
         VersionNote = replaces is null ? null : $"This is a draft of a new version. {replaces.Name} stays on sale as it is until you publish this one. Discount codes for the old version don't carry over.";
-        FormDays = p.DurationDays;
+        FormDays = p.DurationDays; FormDayPass = p.IsDayPass;
         Benefits.Clear();
         foreach (var b in p.Benefits) Benefits.Add(new BenefitLine { Text = b });
         Open(true, p.Name, p.Description, p.Price, Packages.FirstOrDefault(r => r.Package.Id == p.Id && p.Id != 0)?.PhotoUrl);
@@ -1677,7 +1693,7 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
         if (IsPackagePanel)
         {
             var p = _package!;
-            (p.Name, p.Description, p.Price, p.DurationDays) = (FormName.Trim(), description, FormPrice, FormDays);
+            (p.Name, p.Description, p.Price, p.DurationDays, p.IsDayPass) = (FormName.Trim(), description, FormPrice, FormDayPass ? 1 : FormDays, FormDayPass);
             p.Benefits = Benefits.Select(b => b.Text.Trim()).Where(b => b.Length > 0).ToList();
             ok = await RunAsync(() => svc.SavePackageAsync(p));
             id = p.Id;

@@ -52,6 +52,7 @@ public sealed partial class DemoGateway
         var start=pay.VerifiedAt!.Value;
         while(live.Where(t=>t.StartsAt<=start && t.EndsAt>start).Select(t=>(DateTime?)t.EndsAt).Max() is {} e) start=e;
         var end=start.AddDays(pay.PackageSnapshotDays!.Value);
+        if(All<MembershipPackage>().Any(p=>p.Id==pay.PackageSnapshotId && p.IsDayPass)) end=start.AddHours(8).Date.AddDays(1).AddHours(-8);   // 0098: midnight, Manila
         var later=live.Where(t=>t.StartsAt>=start).ToList();
         if(later.Count>0 && later.Min(t=>t.StartsAt) is var next && next<end)
             foreach(var t in later) {t.StartsAt+=end-next; t.EndsAt+=end-next;}
@@ -69,6 +70,7 @@ public sealed partial class DemoGateway
         if(!All<Member>().Any(m=>m.UserId==member) || !All<Profile>().Any(p=>p.Id==member && p.IsActive)) throw Err("not_found");
         if(All<Payment>().Any(p=>p.MemberId==member && p.Status==Status.Pending && p.Kind is PayKind.Membership or PayKind.Renewal)) throw Err("renewal_pending");
         var pkg=PackageForSale(packageId);
+        if(pkg.IsDayPass && All<MembershipTerm>().Any(t=>t.MemberId==member && t.CancelledAt is null && t.EndsAt>SubscriptionNow)) throw Err("already_availed");   // 0098
         var discount=Discounted(member,args,pkg.Price,"package",pkg.Id);
         var ump=All<UserMembershipPackage>().Where(u=>u.MemberId==member && u.StartsAt is not null).OrderByDescending(u=>u.Id).FirstOrDefault();
         Payment pay;

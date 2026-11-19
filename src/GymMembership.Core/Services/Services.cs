@@ -479,7 +479,7 @@ public sealed record ClaimRow(RefundRequest Claim, string Member, string Amenity
     public string Sent => $"Sent {Claim.RequestedAt.ToUniversalTime().AddHours(8).ToString("ddd d MMM, h:mm tt", System.Globalization.CultureInfo.InvariantCulture)}";
 }
 /// <summary>Something the counter can take a payment for: a package, a membership to renew, or an amenity.</summary>
-public sealed record CounterItem(int Id, string Label, decimal? Price = null);
+public sealed record CounterItem(int Id, string Label, decimal? Price = null, bool DayPass = false);   // 0098: the Day pass package
 
 public interface IPaymentStaffService
 {
@@ -665,7 +665,7 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
         switch (kind)
         {
             case PayKind.Membership:
-                return (await gw.ListAsync<MembershipPackage>(p => p.IsActive == true)).Select(p => new CounterItem(p.Id, p.Name, p.Price)).ToList();
+                return (await gw.ListAsync<MembershipPackage>(p => p.IsActive == true)).Select(p => new CounterItem(p.Id, p.Name, p.Price, p.IsDayPass)).ToList();
             case PayKind.Amenity:
                 // G19 (0066): sessions only; an amenity still set up as a pass isn't sold until it has a session price
                 return (await gw.ListAsync<Amenity>(a => a.IsActive == true)).Where(a => a.DurationDays is null).Select(a => new CounterItem(a.Id, a.Name, a.Price)).ToList();

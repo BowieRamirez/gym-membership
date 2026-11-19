@@ -237,7 +237,9 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
     [RelayCommand]
     private async Task LoadAsync()
     {
-        if (!await RunAsync(svc.ListPackagesAsync, rows => Fill(Packages, rows))) return;
+        var member = false;   // 0098: someone with a membership can't buy a Day pass, so it isn't offered
+        await RunAsync(svc.AccessAsync, a => member = a.Active);
+        if (!await RunAsync(svc.ListPackagesAsync, rows => Fill(Packages, rows.Where(p => !(member && p.IsDayPass))))) return;
         await RunAsync(svc.AvailableCodesAsync, rows => { Fill(Codes, rows.Where(c => c.FitsAnyPackage)); HasCodes = Codes.Count > 0; });
         await LoadPayAsync();
     }
@@ -272,7 +274,9 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
     public bool OnPayStep => PayStep;
     /// <summary>The codes that fit the package in the popup.</summary>
     public ObservableCollection<AvailableCode> BuyCodes { get; } = new();
-    public string BuyTerms => Buying is { } p ? $"₱{p.Price:N2} for {p.DurationDays} days. Once paid, it starts right away, or when your current term ends.\n{RefundRules.Line}" : "";
+    public string BuyTerms => Buying is not { } p ? ""
+        : p.IsDayPass ? $"₱{p.Price:N2} for today. Once paid, it starts right away and ends at midnight.\n{RefundRules.Line}"   // 0098
+        : $"₱{p.Price:N2} for {p.DurationDays} days. Once paid, it starts right away, or when your current term ends.\n{RefundRules.Line}";
 
     [RelayCommand]
     private void OpenBuy(MembershipPackage package)

@@ -875,7 +875,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 {
                     walkIn = Opt("p_walk_in_name") ?? "Day pass";   // 0081: a Day pass may be anonymous
                     memberId = null;
-                    d = NotFree((null, 0, All<GymSettings>().First().WalkInPrice));
+                    d = NotFree((null, 0, All<MembershipPackage>().FirstOrDefault(p => p.IsDayPass && p.IsActive && p.PublishedAt is not null)?.Price
+                        ?? All<GymSettings>().First().WalkInPrice));   // 0098: the Day pass package's price
                 }
                 else
                 {
@@ -1429,6 +1430,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         var monthly = Add(new MembershipPackage { Name = "Monthly", Description = "Full gym floor access for 30 days.", Price = 1500, DurationDays = 30 });
         var quarterly = Add(new MembershipPackage { Name = "Quarterly", Description = "90 days of access at a lower monthly rate.", Price = 4000, DurationDays = 90 });
         Add(new MembershipPackage { Name = "Annual", Description = "A full year, best value for regulars.", Price = 14000, DurationDays = 365 });
+        Add(new MembershipPackage { Name = "Day pass", Description = "The gym floor and amenity bookings for today, until midnight.", Price = 150, DurationDays = 1, IsDayPass = true });   // 0098
 
         var pool = Add(new Amenity { Name = "Pool", Description = "25 m lap pool, open 6:00 to 21:00.", Price = 300 });
         var sauna = Add(new Amenity { Name = "Sauna", Description = "Dry sauna next to the locker rooms.", Price = 200,
