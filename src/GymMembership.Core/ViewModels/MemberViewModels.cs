@@ -431,10 +431,9 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
 public partial class MyPaymentsViewModel(IMembershipService svc, ISubscriptionService subscription) : LoadableViewModel
 {
     const int PageSize = 10;
-    public string[] Kinds { get; } = ["All", "Membership", "Amenity"];   // a Day pass is a package, so it is under Membership
     public ObservableCollection<PaymentItem> Rows { get; } = new();
     IReadOnlyList<PaymentItem> all = [];
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(EmptyText))] private string kind = "All";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(EmptyText))] private string kind = "All";   // All, Membership (a Day pass is a package) or Amenity
     [ObservableProperty, NotifyPropertyChangedFor(nameof(PageText)), NotifyCanExecuteChangedFor(nameof(PreviousCommand))] private int page;
     [ObservableProperty, NotifyCanExecuteChangedFor(nameof(NextCommand))] private bool hasMore;
     [ObservableProperty] private bool isEmpty;

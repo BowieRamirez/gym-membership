@@ -485,9 +485,9 @@ public sealed record ClaimRow(RefundRequest Claim, string Member, string Amenity
 /// <summary>Owner fixes 2026-11-19 Q5: a payment's status in plain words. The database values don't change.</summary>
 public static class PaymentStatus
 {
-    public static string Text(string status, bool refunded = false) => status switch
+    public static string Text(string status) => status switch   // Transactions filters Refunded in the database (0101)
     {
-        Models.Status.Verified => refunded ? "Refunded" : "Paid",
+        Models.Status.Verified => "Paid",
         Models.Status.Rejected or Models.Status.Expired => "Failed",
         Models.Status.Voided => "Voided",   // only payments voided before 0100
         _ => status.Length == 0 ? "" : char.ToUpper(status[0]) + status[1..]

@@ -42,7 +42,6 @@ public class MyPaymentsTests
     public async Task Filters_by_what_was_bought()
     {
         var (_, vm) = await Open();
-        Assert.Equal(["All", "Membership", "Amenity"], vm.Kinds);
         vm.SetKindCommand.Execute("Membership");
         Assert.All(vm.Rows, r => Assert.True(r.Kind is PayKind.Membership or PayKind.Renewal));
         vm.SetKindCommand.Execute("Amenity");
