@@ -245,7 +245,7 @@
                                         </Button>
                                     </FlexLayout>
 
-                                    <VerticalStackLayout Spacing="4" WidthRequest="260" HorizontalOptions="Start" IsVisible="{Binding NeedsMember}">
+                                    <VerticalStackLayout Spacing="4" WidthRequest="260" HorizontalOptions="Start" IsVisible="{Binding CanUseCode}">
                                         <Label Text="Discount code (optional)" Style="{StaticResource Caption}" />
                                         <Border Style="{StaticResource Field}"><Entry Text="{Binding DiscountCode}" Unfocused="OnCodeUnfocused" SemanticProperties.Description="Discount code" /></Border>
                                         <Label Text="{Binding CodeCheckText}" Style="{StaticResource Caption}" LineBreakMode="WordWrap" IsVisible="{Binding HasCodeCheck}" AutomationId="CashierCodeFeedback">

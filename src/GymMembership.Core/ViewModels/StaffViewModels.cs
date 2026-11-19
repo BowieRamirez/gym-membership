@@ -150,13 +150,13 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     public ObservableCollection<ItemOption> Options { get; } = new();
     int itemsTicket;
 
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWalkIn), nameof(NeedsMember), nameof(OrderWho), nameof(OrderWhat), nameof(OrderHow), nameof(TotalText), nameof(TotalNote), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))]
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWalkIn), nameof(NeedsMember), nameof(CanUseCode), nameof(OrderWho), nameof(OrderWhat), nameof(OrderHow), nameof(TotalText), nameof(TotalNote), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))]
     private string kind = "Membership";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderHow), nameof(CashNeedsShift)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string method = "Cash";
     [ObservableProperty] private string search = "";
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private MemberHit? member;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho), nameof(CanUseCode), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private MemberHit? member;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWhat), nameof(TotalText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private CounterItem? item;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string walkInName = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho), nameof(CanUseCode)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string walkInName = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(TotalNote))] private string discountCode = "";
     // owner fixes 2026-11-19 Q12 (0108): the code is checked as the desk types it (500 ms), and again when the member or item changes
     public TimeSpan CodeCheckDelay { get; init; } = TimeSpan.FromMilliseconds(500);
@@ -167,11 +167,14 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     CancellationTokenSource? _codeCheck;
     (string Member, string Kind, int Item, string Code)? _checked;
     partial void OnDiscountCodeChanged(string value) => _ = ScheduleCodeCheckAsync(false);
+    partial void OnWalkInNameChanged(string value) => _ = ScheduleCodeCheckAsync(false);
     public Task CheckCodeNowAsync() => ScheduleCodeCheckAsync(true);
     async Task ScheduleCodeCheckAsync(bool immediate)
     {
         var code = DiscountCode?.Trim() ?? "";
-        var key = Member is { } m && Item is { } it && !IsWalkIn && code.Length > 0 ? (m.MemberId, Kind, it.Id, code) : ((string Member, string Kind, int Item, string Code)?)null;
+        var key = !IsWalkIn && Member is { } m && Item is { } it && code.Length > 0 ? (m.MemberId, Kind, it.Id, code)
+            : DayPassMember is { HasActiveMembership: false } dm && dayPassPackage is { } dp && code.Length > 0 ? (dm.MemberId, "Membership", dp.Id, code)
+            : ((string Member, string Kind, int Item, string Code)?)null;
         if (immediate && key is not null && _checked == key) return;
         _codeCheck?.Cancel(); _checked = null;
         CodeCheck = null; CodeCheckText = null; CodeWorks = false;
@@ -181,8 +184,8 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         {
             try { await Task.Delay(CodeCheckDelay, cts.Token); } catch (OperationCanceledException) { return; }
         }
-        var kind = Kind == "Amenity" ? "amenity" : Kind == "Renewal" ? "renewal" : "package";
-        var res = await svc.CheckCodeAsync(k.Member, k.Code, kind, k.Item, Item?.Price);
+        var kind = k.Kind == "Amenity" ? "amenity" : k.Kind == "Renewal" ? "renewal" : "package";
+        var res = await svc.CheckCodeAsync(k.Member, k.Code, kind, k.Item, k.Kind == "Renewal" ? Item?.Price : null);
         if (cts.IsCancellationRequested) return;
         _checked = k;
         if (!res.Ok) { CodeCheckText = ErrorText.For(res.Error, res.Message); return; }
@@ -216,6 +219,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
 
     public bool IsWalkIn => Kind == "Day pass";
     public bool NeedsMember => !IsWalkIn;
+    public bool CanUseCode => !IsWalkIn || DayPassMember is { HasActiveMembership: false };
     // cashier plan Y6: no reference to type; Xendit confirms an e-wallet payment
 
     // the order panel, in the words the cashier uses
@@ -228,7 +232,9 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     // 0098: the Day pass package; a picked member whose name is still in the box buys it (a term until midnight), anyone else is a walk-in
     CounterItem? dayPassPackage;
     MemberHit? DayPassMember => IsWalkIn && dayPassPackage is not null && Member is { } m && DayPassName == m.Username ? m : null;
-    public string TotalText => IsWalkIn ? (dayPassPackage?.Price ?? dayPassPrice) is { } d ? $"₱{d:N2}" : "Day pass"
+    public string TotalText => IsWalkIn
+        ? CodeCheck is { Works: true, YouPay: { } dOff } ? $"₱{dOff:N2}"
+          : (dayPassPackage?.Price ?? dayPassPrice) is { } d ? $"₱{d:N2}" : "Day pass"
         : CodeCheck is { Works: true, YouPay: { } off } ? $"₱{off:N2}" : Item?.Price is { } p ? $"₱{p:N2}" : "₱0.00";
     public string TotalNote => IsWalkIn ? dayPassPackage is null ? "The day pass price is set in Gym settings." : "The Day pass price is set on its package."
         : "";
@@ -314,7 +320,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         {
             LoadingItems = false;
             var packages = await svc.ItemsAsync(PayKind.Membership, null);
-            if (ticket == itemsTicket && packages.Ok) { dayPassPackage = packages.Value!.FirstOrDefault(i => i.DayPass); OnPropertyChanged(nameof(TotalText)); OnPropertyChanged(nameof(TotalNote)); }
+            if (ticket == itemsTicket && packages.Ok) { dayPassPackage = packages.Value!.FirstOrDefault(i => i.DayPass); OnPropertyChanged(nameof(CanUseCode)); OnPropertyChanged(nameof(TotalText)); OnPropertyChanged(nameof(TotalNote)); }
             return;
         }
         LoadingItems = true;
@@ -383,7 +389,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         Payment? paid = null;
         if (DayPassMember is { } m)
         {
-            if (!await RunAsync(() => svc.RecordCounterAsync(PayKind.Membership, PayMethod.Cash, m.MemberId, dayPassPackage!.Id, null, null, null), p => paid = p)) return;
+            if (!await RunAsync(() => svc.RecordCounterAsync(PayKind.Membership, PayMethod.Cash, m.MemberId, dayPassPackage!.Id, null, null, DiscountCode), p => paid = p)) return;
         }
         else if (!await RunAsync(() => svc.RecordCounterAsync(KindKey(Kind), PayMethod.Cash, IsWalkIn ? null : Member!.MemberId, Item?.Id,
                 IsWalkIn ? DayPassName : null, null, IsWalkIn ? null : DiscountCode), p => paid = p)) return;
@@ -403,7 +409,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     {
         Payment? started = null;
         var dayPassFor = DayPassMember;
-        if (!await RunAsync(() => dayPassFor is { } m ? svc.StartDeskOnlineAsync(PayKind.Membership, m.MemberId, dayPassPackage!.Id, null, null)
+        if (!await RunAsync(() => dayPassFor is { } m ? svc.StartDeskOnlineAsync(PayKind.Membership, m.MemberId, dayPassPackage!.Id, null, DiscountCode)
                 : svc.StartDeskOnlineAsync(KindKey(Kind), IsWalkIn ? null : Member!.MemberId, Item?.Id,
                 IsWalkIn ? DayPassName : null, IsWalkIn ? null : DiscountCode), p => started = p)) return;
         Waiting = started; RecordCommand.NotifyCanExecuteChanged();

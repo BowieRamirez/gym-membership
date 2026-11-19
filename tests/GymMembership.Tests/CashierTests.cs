@@ -330,6 +330,38 @@ public class CashierTests
         Assert.False(vm.HasCodeCheck);
     }
 
+    [Fact]   // Day pass with a member who has no active membership can use discount codes (live check + recorded payment)
+    public async Task Day_pass_for_a_member_without_membership_allows_discount_codes()
+    {
+        var gw = new DemoGateway(); await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        Assert.True((await new AdminService(gw).CreateDiscountAsync(new Discount { Code = "DP10", Percent = 10, ExpiresAt = DateTime.UtcNow.AddDays(7), MaxUses = 5, ShowOnPackages = false },
+            [new DiscountItem { Kind = "package" }])).Ok);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();
+        var vm = new CashierViewModel(new PaymentStaffService(gw), new AttendanceService(gw)) { CodeCheckDelay = TimeSpan.Zero };
+        await vm.OnAppearingAsync();
+
+        vm.PickKindCommand.Execute("Day pass");
+        Assert.False(vm.CanUseCode);   // walk-in without a member cannot use a code
+
+        await ChooseMember(vm, "Alex");   // Alex has an active membership
+        Assert.False(vm.CanUseCode);
+
+        await ChooseMember(vm, "Carlo");   // Carlo has no active membership
+        Assert.True(vm.CanUseCode);
+
+        var dayPassPrice = (await gw.ListAsync<MembershipPackage>()).Single(p => p.IsDayPass && p.PublishedAt is not null).Price;
+        vm.DiscountCode = "dp10"; await vm.CheckCodeNowAsync();
+        Assert.True(vm.CodeWorks);
+        Assert.Equal($"Code works: 10% off. You pay ₱{dayPassPrice * 0.9m:N2}.", vm.CodeCheckText);
+        Assert.Equal($"₱{dayPassPrice * 0.9m:N2}", vm.TotalText);
+
+        Confirm.Answer = (_, _, _) => Task.FromResult(true);
+        await vm.RecordCommand.ExecuteAsync(null);
+        Assert.Null(vm.ErrorMessage);
+        var pay = (await gw.ListAsync<Payment>(p => p.MemberId == "u-carlo")).OrderByDescending(p => p.Id).First();
+        Assert.Equal(dayPassPrice * 0.9m, pay.Amount);
+    }
+
     [Fact]   // Q11: a draft package is never offered at the Cashier (even when an admin opens it and can see drafts)
     public async Task Draft_packages_are_not_offered_at_the_cashier()
     {
