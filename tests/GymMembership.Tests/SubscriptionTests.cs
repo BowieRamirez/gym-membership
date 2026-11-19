@@ -373,7 +373,7 @@ public class SubscriptionTests
         var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
         Assert.True((await svc.RequestRefundAsync(term.Id,"Changed plans","change_of_mind")).Ok);
         await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
-        Assert.False((await new PaymentStaffService(gw).VoidAsync(p.Id,"Wrong payment")).Ok);
+        await Assert.ThrowsAnyAsync<Exception>(()=>gw.OwnerVoidAsync(p.Id,"Wrong payment"));   // 0100: even the owner's void refuses
         await Assert.ThrowsAnyAsync<Exception>(()=>gw.UpdateAsync(term));
         await Assert.ThrowsAnyAsync<Exception>(()=>gw.InsertAsync(new RefundRequest()));
     }

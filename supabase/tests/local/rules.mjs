@@ -1,5 +1,5 @@
 // Behaviour tests for the migrations, run against the throwaway Postgres.
-import { start, openCashShifts } from './harness.mjs';
+import { start, openCashShifts, asOwner } from './harness.mjs';
 import assert from 'node:assert/strict';
 
 const { server, client: db } = await start();
@@ -207,9 +207,9 @@ await test('an amenity bought at the counter is one session, active at once', as
   assert.deepEqual(r.rows[0], { status: 'active', is_session: true });
 });
 await test('only an admin can void; voiding cancels the membership and is audited', async () => {
-  assert.match(await code(run(desk, `select void_payment($1,'oops')`, [counter.payment_id])), /forbidden/);
-  assert.match(await code(run(admin, `select void_payment($1,'')`, [counter.payment_id])), /bad_input/);
-  await run(admin, `select void_payment($1,'Wrong plan')`, [counter.payment_id]);
+  assert.match(await code(asOwner(db, desk, `select void_payment($1,'oops')`, [counter.payment_id])), /forbidden/);
+  assert.match(await code(asOwner(db, admin, `select void_payment($1,'')`, [counter.payment_id])), /bad_input/);
+  await asOwner(db, admin, `select void_payment($1,'Wrong plan')`, [counter.payment_id]);
   assert.equal((await run(eve, `select is_active_member() m`)).rows[0].m, false);
   assert.equal((await run(admin, `select * from audit_log where action='payment.void'`)).rowCount, 1);
 });
@@ -230,7 +230,7 @@ await test('renewing an active plan extends from its end date', async () => {
   const after = (await run(alex, `select ends_at from user_membership_packages`)).rows[0];
   assert.ok(Math.abs(new Date(after.ends_at) - (new Date(ump.ends_at).getTime() + 30 * 864e5)) < 2000);
   // voiding the renewal restores the old end date
-  await run(admin, `select void_payment($1,'test')`, [rp.payment_id]);
+  await asOwner(db, admin, `select void_payment($1,'test')`, [rp.payment_id]);
   const back = (await run(alex, `select ends_at from user_membership_packages`)).rows[0];
   assert.equal(new Date(back.ends_at).getTime(), new Date(ump.ends_at).getTime());
 });

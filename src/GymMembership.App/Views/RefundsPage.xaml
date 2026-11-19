@@ -5,9 +5,8 @@
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
-            x:Class="GymMembership.App.Views.RefundsPage" x:DataType="vm:RefundsViewModel" Title="Refunds &amp; voids">
-    <!-- D30: Cancellations &amp; refunds and Void a payment are one page with the switch; the void half is VoidPaymentsPage's content (BasePage.HostPart).
-         2026-11-15 (owner): refunds are a table like Void a payment, the open request in the side panel; no more cards. -->
+            x:Class="GymMembership.App.Views.RefundsPage" x:DataType="vm:RefundsViewModel" Title="Refunds">
+    <!-- 2026-11-15 (owner): refunds are a table, the open request in the side panel. Owner fixes 2026-11-19 Q5 (0100): Void a payment is gone. -->
 
     <v:BasePage.Resources>
         <!-- what is left to do reads heavier than what is finished -->
@@ -60,10 +59,8 @@
         </DataTemplate>
     </v:BasePage.Resources>
 
-    <Grid RowDefinitions="Auto,*" MaximumWidthRequest="{StaticResource PageWidth}">
-    <c:PartSwitch x:Name="Switch" First="Cancellations &amp; refunds" Second="Void a payment" Margin="16,12,16,0" />
-    <ContentView x:Name="Part" Grid.Row="1" IsVisible="{Binding ShowSecond, Source={x:Reference Switch}, x:DataType=c:PartSwitch}" />
-    <ScrollView Grid.Row="1" IsVisible="{Binding ShowSecond, Source={x:Reference Switch}, x:DataType=c:PartSwitch, Converter={StaticResource Not}}">
+    <Grid MaximumWidthRequest="{StaticResource PageWidth}">
+    <ScrollView>
         <VerticalStackLayout Padding="16,12,16,20" Spacing="12">
             <!-- 9.8: no heading repeating the page title. 2026-11-15 (owner): shortened; the booking rule was out of date (G13) and the
                  confirm dialogs already say approving cancels only that term -->

@@ -1,6 +1,6 @@
 // Phase 4 (D11): receipt-level revenue lines for the PDF. They must add up to revenue_summary for the same range:
 // verified payments on their Manila verification day, minus approved/paid refunds on their Manila approval day, voids excluded.
-import { start, openCashShifts } from './harness.mjs';
+import { start, openCashShifts, asOwner } from './harness.mjs';
 import assert from 'node:assert/strict';
 
 const { server, client: db } = await start();
@@ -38,7 +38,7 @@ const summary = (from, to) => as(admin, 'select * from revenue_summary($1,$2)', 
 const money = rows => rows.reduce((s, r) => s + Number(r.amount ?? r.total), 0);
 
 const ana = await paid('Ana Reyes'), ben = await paid('Ben Cruz'), voided = await paid('Void Person'), refunded = await paid('Refund Person');
-await as(admin, `select void_payment($1,'Wrong payment')`, [voided.pay.payment_id]);
+await asOwner(db, admin, `select void_payment($1,'Wrong payment')`, [voided.pay.payment_id]);
 const term = (await as(refunded.uid, 'select * from membership_terms'))[0];
 const request = (await as(refunded.uid, 'select * from request_membership_refund($1,$2,$3)', [term.term_id, 'Changed my plans', 'change_of_mind']))[0];
 await as(admin, 'select decide_membership_refund($1,true,$2)', [request.refund_request_id, 'Approved']);

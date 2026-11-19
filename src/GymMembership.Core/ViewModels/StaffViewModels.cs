@@ -416,30 +416,6 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     }
 }
 
-// admin: verified payments, newest first, so a mistake can be voided with a reason and then recorded again
-public partial class VoidPaymentsViewModel(IPaymentStaffService svc) : LoadableViewModel
-{
-    public ObservableCollection<PaymentRow> Recent { get; } = new();
-    [ObservableProperty] private PaymentRow? voiding;
-    [ObservableProperty] private string reason = "";
-
-    public override Task OnAppearingAsync() => LoadAsync();
-
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.RecentAsync, rows => Fill(Recent, rows));
-    [RelayCommand] private void Start(PaymentRow row) { Voiding = row; Reason = ""; Notice = null; }
-    [RelayCommand] private void Keep() => Voiding = null;
-
-    [RelayCommand]
-    private async Task ConfirmAsync()
-    {
-        if (Voiding is not { } row) return;
-        if (!await RunAsync(() => svc.VoidAsync(row.Payment.Id, Reason))) return;
-        Voiding = null;
-        Notice = $"Voided {row.Payer}'s payment. What it switched on is reversed.";
-        await LoadAsync();
-    }
-}
-
 public partial class CheckInViewModel(IAttendanceService svc, ICoachService coaches, OfflineDesk? offline = null, IProfileService? profile = null, TimeProvider? clock = null, IReportFiles? files = null, ISubscriptionService? refunds = null) : LoadableViewModel
 {
     // ---- owner, 2026-11-18: View on a Day pass in Checked in today shows who and what was paid; Print opens the receipt PDF ----
@@ -448,7 +424,7 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
     [RelayCommand] private void ViewDayPass(CheckInRow row) { ViewingDayPass = row; IsAskingRefund = false; }
     [RelayCommand] private void CloseDayPass() { ViewingDayPass = null; IsAskingRefund = false; }
 
-    // ---- 0096: the desk asks for the refund with a reason; the System admin decides on Refunds & voids ----
+    // ---- 0096: the desk asks for the refund with a reason; the System admin decides on Refunds ----
     [ObservableProperty] private bool isAskingRefund;
     [ObservableProperty] private string refundReason = "";
     [RelayCommand] private void AskRefund() { RefundReason = ""; IsAskingRefund = true; Notice = null; }
@@ -461,7 +437,7 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
         if (string.IsNullOrWhiteSpace(RefundReason)) { ErrorMessage = "Say why the customer wants a refund."; return; }
         Notice = null;
         if (!await RunAsync(() => refunds.RequestWalkInRefundAsync(pass.PaymentId, RefundReason))) return;
-        IsAskingRefund = false; Notice = "Refund requested. The System admin decides it on Refunds & voids.";
+        IsAskingRefund = false; Notice = "Refund requested. The System admin decides it on Refunds.";
         await LoadTodayAsync();
     }
 
@@ -2249,7 +2225,7 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
     [RelayCommand] private void View(BookedRow row) { Viewing = row; IsAskingRefund = false; }
     [RelayCommand] private void CloseView() { Viewing = null; IsAskingRefund = false; }
 
-    // ---- 0096: the desk asks for a walk-in's refund with a reason; the System admin decides on Refunds & voids ----
+    // ---- 0096: the desk asks for a walk-in's refund with a reason; the System admin decides on Refunds ----
     [ObservableProperty] private bool isAskingRefund;
     [ObservableProperty] private string refundReason = "";
     [RelayCommand] private void AskRefund() { RefundReason = ""; IsAskingRefund = true; Notice = null; }
@@ -2262,7 +2238,7 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
         if (string.IsNullOrWhiteSpace(RefundReason)) { ErrorMessage = "Say why the customer wants a refund."; return; }
         Notice = null;
         if (!await RunAsync(() => refunds.RequestWalkInRefundAsync(pay, RefundReason, row.IsUnder24Hours))) return;
-        IsAskingRefund = false; Notice = "Refund requested. The System admin decides it on Refunds & voids.";
+        IsAskingRefund = false; Notice = "Refund requested. The System admin decides it on Refunds.";
         await LoadBookedAsync();
     }
 
@@ -2319,7 +2295,7 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
         if (payments is null || Deciding is not { } row) return;
         if (!await RunAsync(() => payments.DecideClaimAsync(row.Claim.Id, DecideApprove, DecideReason))) return;
         Claims.Remove(row); OnPropertyChanged(nameof(HasClaims)); Deciding = null;
-        Notice = DecideApprove ? $"Refund approved. Admin repays {row.Member} from Refunds & voids." : $"Declined. {row.Member} is told why.";
+        Notice = DecideApprove ? $"Refund approved. Admin repays {row.Member} from Refunds." : $"Declined. {row.Member} is told why.";
     }
 
     // ---- G13 (0064): today's confirmed bookings with a balance; the desk takes it once, cash into the drawer or GCash with a reference ----
@@ -2650,7 +2626,7 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
         Waiting = null;
         if (now!.Booking.Status != "confirmed")
         {
-            ErrorMessage = "Paid, but the slot was booked by someone else first. The System admin repays it from Refunds & voids.";
+            ErrorMessage = "Paid, but the slot was booked by someone else first. The System admin repays it from Refunds.";
             Booked?.Invoke(); await LoadGridAsync(); return;
         }
         var name = Amenities.FirstOrDefault(x => x.Id == w.AmenityId)?.Name ?? "Amenity";

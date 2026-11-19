@@ -1,5 +1,5 @@
 // Phase 2 (D3): voiding a payment and deciding/repaying a refund all need the payments:void grant.
-import { start, openCashShifts } from './harness.mjs';
+import { start, openCashShifts, asOwner } from './harness.mjs';
 import assert from 'node:assert/strict';
 
 const { server, client: db } = await start();
@@ -35,7 +35,7 @@ async function fixture() {
   const request = (await as(uid, 'select * from request_membership_refund($1,$2,$3)', [term.term_id, 'Changed my plans', 'change_of_mind']))[0];
   return { uid, pay, request };
 }
-const voidIt = (actor, pay) => as(actor, 'select void_payment($1,$2)', [pay.payment_id, 'Wrong payment']);
+const voidIt = (actor, pay) => asOwner(db, actor, 'select void_payment($1,$2)', [pay.payment_id, 'Wrong payment']);
 const decide = (actor, r) => as(actor, 'select decide_membership_refund($1,true,$2)', [r.refund_request_id, 'Approved']);
 const repay = (actor, r) => as(actor, `select record_membership_refund_paid($1,'cash',null)`, [r.refund_request_id]);
 const grant = `from role_permissions where role_id=(select role_id from roles where name='admin')
@@ -82,6 +82,11 @@ try {
     const audit = (await db.query(`select actor_id from audit_log where action='payment.void' and entity_id=$1`, [String(b.pay.payment_id)])).rows;
     assert.deepEqual(audit.map(x => x.actor_id), [admin]);
     await assert.rejects(voidIt(admin, b.pay), /already_processed/);
+  });
+  await test('owner fixes 2026-11-19 Q5 (0100): no one can void a payment from the app', async () => {
+    const { pay } = await fixture();
+    for (const who of [admin, desk, member]) await assert.rejects(as(who, 'select void_payment($1,$2)', [pay.payment_id, 'Wrong payment']), /permission denied/);
+    assert.equal((await db.query(`select has_function_privilege('authenticated','public.void_payment(bigint,text)','execute') x`)).rows[0].x, false);
   });
 } finally {
   await db.end(); await server.stop();

@@ -355,8 +355,8 @@ public class StatusChip : ContentView
     readonly Ellipse _dot = new();
     readonly Label _label = new() { VerticalOptions = LayoutOptions.Center, FontSize = 13 };
 
-    static readonly HashSet<string> Good = new(["verified", "active", "completed", "approved", "present", "available", "on sale"], StringComparer.OrdinalIgnoreCase);
-    static readonly HashSet<string> Bad = new(["rejected", "expired", "no_membership", "cancelled", "absent", "no_show", "inactive", "unavailable", "deleted"], StringComparer.OrdinalIgnoreCase);
+    static readonly HashSet<string> Good = new(["verified", "paid", "active", "completed", "approved", "present", "available", "on sale"], StringComparer.OrdinalIgnoreCase);
+    static readonly HashSet<string> Bad = new(["rejected", "expired", "failed", "voided", "no_membership", "cancelled", "absent", "no_show", "inactive", "unavailable", "deleted"], StringComparer.OrdinalIgnoreCase);
     static readonly HashSet<string> Wait = new(["pending", "late", "in_use", "hired", "requested"], StringComparer.OrdinalIgnoreCase);
 
     public StatusChip()
@@ -548,7 +548,7 @@ public class PasswordStrength : VerticalStackLayout
 }
 
 /// <summary>
-/// The quiet two-way switch at the top of a combined page (Refunds &amp; voids), drawn like
+/// The quiet two-way switch at the top of a combined page, drawn like
 /// Logs &amp; Archive's: the open side bold and filled. Pages show their halves from ShowSecond.
 /// </summary>
 public class PartSwitch : ContentView

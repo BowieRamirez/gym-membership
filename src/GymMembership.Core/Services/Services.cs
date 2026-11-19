@@ -479,6 +479,18 @@ public sealed record ClaimRow(RefundRequest Claim, string Member, string Amenity
     public string Sent => $"Sent {Claim.RequestedAt.ToUniversalTime().AddHours(8).ToString("ddd d MMM, h:mm tt", System.Globalization.CultureInfo.InvariantCulture)}";
 }
 /// <summary>Something the counter can take a payment for: a package, a membership to renew, or an amenity.</summary>
+/// <summary>Owner fixes 2026-11-19 Q5: a payment's status in plain words. The database values don't change.</summary>
+public static class PaymentStatus
+{
+    public static string Text(string status, bool refunded = false) => status switch
+    {
+        Models.Status.Verified => refunded ? "Refunded" : "Paid",
+        Models.Status.Rejected or Models.Status.Expired => "Failed",
+        Models.Status.Voided => "Voided",   // only payments voided before 0100
+        _ => status.Length == 0 ? "" : char.ToUpper(status[0]) + status[1..]
+    };
+}
+
 public sealed record CounterItem(int Id, string Label, decimal? Price = null, bool DayPass = false);   // 0098: the Day pass package
 
 public interface IPaymentStaffService
@@ -492,7 +504,6 @@ public interface IPaymentStaffService
     Task<AppResult<bool>> DecideClaimAsync(int requestId, bool approve, string reason);
     /// <summary>Cash or GCash at the counter, verified at once. itemId is a package id, a membership id or an amenity id depending on kind.</summary>
     Task<AppResult<Payment>> RecordCounterAsync(string kind, string method, string? memberId, int? itemId, string? walkInName, string? referenceNo, string? discountCode);
-    Task<AppResult<bool>> VoidAsync(int paymentId, string reason);
     /// <summary>Cashier plan Y6 (0080): GCash or QR Ph at the desk, through Xendit: a pending online payment that Xendit's confirmation verifies.</summary>
     Task<AppResult<Payment>> StartDeskOnlineAsync(string kind, string? memberId, int? itemId, string? walkInName, string? discountCode);
     Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId);
@@ -630,12 +641,6 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
             if (!string.IsNullOrWhiteSpace(discountCode)) args["p_discount_code"] = discountCode.Trim();
             return gw.RpcAsync<Payment>("record_counter_payment", args);
         });
-
-    public async Task<AppResult<bool>> VoidAsync(int paymentId, string reason)
-    {
-        if (string.IsNullOrWhiteSpace(reason)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
-        return await Safe.RunAsync(async () => { await gw.RpcAsync("void_payment", new() { ["p_payment_id"] = paymentId, ["p_reason"] = reason.Trim() }); return true; });
-    }
 
 
     public Task<AppResult<(CashShift? Open, decimal DefaultFloat)>> ShiftAsync() => Safe.RunAsync(async () =>

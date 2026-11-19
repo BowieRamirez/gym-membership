@@ -105,6 +105,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
     /// <summary>The demo's stand-in for the database owner (Supabase dashboard) switching an account on or off, which 0037 still allows
     /// for a super admin when nobody in the app can.</summary>
     /// <summary>0099: members can't choose cash any more; the ones they chose before still wait at the desk. This makes one of those.</summary>
+    /// <summary>0100: Void payment is gone from the app; the database owner can still void (old voided payments exist), signed in as an admin.</summary>
+    public Task OwnerVoidAsync(int paymentId, string reason) => RpcAsync("owner:void_payment", new() { ["p_payment_id"] = paymentId, ["p_reason"] = reason });
     public void OwnerMakeCash(int paymentId) => All<Payment>().First(p => p.Id == paymentId).Method = PayMethod.Cash;
     public void OwnerSetActive(string userId, bool active) => All<Profile>().First(p => p.Id == userId).IsActive = active;
     /// <summary>0066 (G19): the database owner, not the app, can still leave an amenity set up as a pass, as amenities sold before were.</summary>
@@ -602,6 +604,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
 
     object? Watched(string function, Dictionary<string, object> args)
     {
+        if (function == "void_payment") throw Err("forbidden");   // 0100: no one voids from the app; OwnerVoidAsync makes the old voided rows tests need
         var before = LiveStamp();
         var result = Call(function, args);
         if (LiveStamp() != before) RecordsChanged?.Invoke();
@@ -925,7 +928,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 Audit("payment.record", "payments", pay.Id.ToString());
                 return Clone(pay);
             }
-            case "void_payment":
+            case "owner:void_payment":
             {
                 Require("payments:void");
                 var reason = Opt("p_reason") ?? throw Err("bad_input");

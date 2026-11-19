@@ -6,7 +6,7 @@ namespace GymMembership.App.Views;
 
 public partial class RefundsPage : BasePage
 {
-    public RefundsPage(RefundsViewModel vm, VoidPaymentsPage voids) {InitializeComponent();BindingContext=vm;HostPart(Switch, Part, voids);}
+    public RefundsPage(RefundsViewModel vm) {InitializeComponent();BindingContext=vm;}   // 0100: Void a payment is gone
     protected override TimeSpan? AutoRefresh => TimeSpan.FromSeconds(20);
     void OnOpen(object? sender, EventArgs e)
     {

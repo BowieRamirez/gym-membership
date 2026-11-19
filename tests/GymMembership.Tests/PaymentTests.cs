@@ -157,24 +157,17 @@ public class PaymentTests
     }
 
     // ---------- voids ----------
-    [Fact]
-    public async Task Only_an_admin_voids_with_a_reason_and_the_plan_it_switched_on_is_reversed()
+    [Fact]   // owner fixes 2026-11-19 Q5 (0100): Void payment is gone; a mistake is put right with a refund
+    public async Task No_one_voids_a_payment_from_the_app()
     {
         var gw = await As("employee@demo.io");
-        var staff = new PaymentStaffService(gw);
         var monthly = await Package(gw, "Monthly");
-        var paid = (await staff.RecordCounterAsync(PayKind.Membership, PayMethod.Cash, "u-carlo", monthly.Id, null, null, null)).Value!;
-        Assert.Equal(AppErrorKind.Unauthorized, (await staff.VoidAsync(paid.Id, "mistake")).Error);   // front desk can't void
-
+        var paid = (await new PaymentStaffService(gw).RecordCounterAsync(PayKind.Membership, PayMethod.Cash, "u-carlo", monthly.Id, null, null, null)).Value!;
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
-        Assert.Equal(AppErrorKind.Validation, (await staff.VoidAsync(paid.Id, " ")).Error);
-        Assert.True((await staff.VoidAsync(paid.Id, "Wrong plan")).Ok);
-        Assert.Equal(AppErrorKind.Conflict, (await staff.VoidAsync(paid.Id, "again")).Error);
-
-        Assert.Contains(await gw.ListAsync<AuditEntry>(), a => a.Action == "payment.void" && a.EntityId == paid.Id.ToString());
-        await gw.SignInAsync("carlo@demo.io", DemoGateway.DemoPassword);
-        Assert.False((await new MembershipService(gw).AccessAsync()).Value!.Active);
-        Assert.Contains((await new MembershipService(gw).MyPaymentsAsync()).Value!, p => p.Id == paid.Id && p.Status == Status.Voided);
+        var ex = await Assert.ThrowsAnyAsync<Exception>(() => gw.RpcAsync("void_payment", new() { ["p_payment_id"] = paid.Id, ["p_reason"] = "Wrong plan" }));
+        Assert.Equal(AppErrorKind.Unauthorized, ErrorMapper.Map(ex));
+        Assert.DoesNotContain(typeof(IPaymentStaffService).GetMethods(), m => m.Name.Contains("Void"));
+        Assert.Equal(Status.Verified, (await gw.ListAsync<Payment>(p => p.Id == paid.Id)).Single().Status);
     }
 
     [Fact]
@@ -194,7 +187,7 @@ public class PaymentTests
         decimal Total() => admin.RevenueAsync(today.AddDays(-60), today.AddDays(1)).Result.Value!.Sum(r => r.Total);
         var withRenewal = Total();
 
-        await staff.VoidAsync(paid.Id, "Taken twice");
+        await gw.OwnerVoidAsync(paid.Id, "Taken twice");   // 0100: an old voided payment
         Assert.Equal(before, (await gw.ListAsync<UserMembershipPackage>(m => m.Id == alexPlan.Id)).Single().EndsAt);
         Assert.Equal(withRenewal - 1500m, Total());
     }

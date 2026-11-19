@@ -198,7 +198,7 @@ public class CashierTests
         public Task<AppResult<IReadOnlyList<ClaimRow>>> ClaimsAsync() => throw new NotSupportedException();
         public Task<AppResult<bool>> DecideClaimAsync(int requestId, bool approve, string reason) => throw new NotSupportedException();
         public Task<AppResult<Payment>> RecordCounterAsync(string kind, string method, string? memberId, int? itemId, string? walkInName, string? referenceNo, string? discountCode) => throw new NotSupportedException();
-        public Task<AppResult<bool>> VoidAsync(int paymentId, string reason) => throw new NotSupportedException();        public Task<AppResult<(CashShift? Open, decimal DefaultFloat)>> ShiftAsync() => Task.FromResult(AppResult<(CashShift?, decimal)>.Success((null, 5000m)));
+                public Task<AppResult<(CashShift? Open, decimal DefaultFloat)>> ShiftAsync() => Task.FromResult(AppResult<(CashShift?, decimal)>.Success((null, 5000m)));
         public Task<AppResult<CashShift>> OpenShiftAsync(decimal openingFloat, string? note) => throw new NotSupportedException();
         public Task<AppResult<CashShift>> CloseShiftAsync(decimal counted, string? note) => throw new NotSupportedException();
     }

@@ -158,7 +158,7 @@ public sealed partial class DemoGateway
                 r.Status="paid";r.PaidAt=now;r.PaidBy=Uid;r.RepaymentMethod=method;r.RepaymentReference=reference;
                 Notify(r.MemberId,"payment","Refund repaid",method);Audit("refund.paid","refund_requests",r.Id.ToString());return true;
             }
-            case "void_payment":
+            case "owner:void_payment":
             {
                 Require("payments:void");var reason=Reason();
                 var p=All<Payment>().FirstOrDefault(p=>p.Id==I("p_payment_id"))??throw Err("not_found");

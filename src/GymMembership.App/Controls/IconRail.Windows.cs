@@ -23,7 +23,7 @@ public static class IconRail
         ["Users and roles"] = "users",
         ["Packages and amenities"] = "package",
         ["Discounts"] = "tag",
-        ["Refunds & voids"] = "undo",
+        ["Refunds"] = "undo",
         ["Gym settings"] = "sliders-horizontal",
         ["Revenue"] = "chart-line",
         ["Announcements"] = "megaphone",
