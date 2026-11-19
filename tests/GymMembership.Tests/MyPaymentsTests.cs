@@ -115,7 +115,7 @@ public class MyPaymentsTests
 
         var vm = new MyPaymentsViewModel(new MembershipService(gw), new SubscriptionService(gw));
         await vm.OnAppearingAsync();
-        Assert.Equal(["Any way", "Cash", "Online"], vm.PaidWiths);
+        Assert.Equal(["All", "Cash", "Online"], vm.PaidWiths);
 
         vm.PaidWithIndex = 1;   // Cash
         Assert.NotEmpty(vm.Rows);

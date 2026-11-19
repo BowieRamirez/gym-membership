@@ -527,7 +527,7 @@ public partial class MyPaymentsViewModel(IMembershipService svc, ISubscriptionSe
     const int PageSize = 10;
     public ObservableCollection<PaymentItem> Rows { get; } = new();
     IReadOnlyList<PaymentItem> all = [];
-    public string[] PaidWiths { get; } = ["Any way", "Cash", "Online"];
+    public string[] PaidWiths { get; } = ["All", "Cash", "Online"];
     [ObservableProperty, NotifyPropertyChangedFor(nameof(EmptyText))] private string kind = "All";   // All, Membership (a Day pass is a package) or Amenity
     [ObservableProperty, NotifyPropertyChangedFor(nameof(EmptyText))] private int paidWithIndex;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(PageText)), NotifyCanExecuteChangedFor(nameof(PreviousCommand))] private int page;
