@@ -4,7 +4,7 @@
 
 Created: 2026-11-20
 Last updated: 2026-11-20
-Status: PLANNED. Owner took every recommendation for D1-D8 (D6: the popup, not the Packages alternative; D4 built only if its test fails). Not built yet: wait for the owner to say go.
+Status: Phases 1-6 implemented and verified (1216 unit tests, Windows & Android builds, local DB tests, and `0117` dry-run). Phase 7: awaiting live migration push, live grants check, owner hand checks, and branch push.
 Branch: `desk-customer-shifts-2026-11-20` (cut from `origin/main` at `8c1555f`, v0.9.0 + `0116`). **Owner's rule: this branch is not merged into `main` yet.** Pushed to GitHub for the owner; no PR until the owner asks.
 
 **Goal:** The owner's list of 2026-11-20 (`docs (1).pdf`): Pay again goes straight to paying and takes a discount code; staff pick a customer by typing (suggestions, no Find button) on the Cashier and on Book for a customer; the bug where a customer can't be chosen on Book for a customer is fixed; the Cashier's payment screen makes the customer obvious; a picked customer's status is re-read from the server; the Cashier's table hides people who already have a membership or Day pass, the amenity booking doesn't; a cash shift's shortage or overage is shown apart from sales, needs a reason, and supervisors can add investigation notes with an audit trail.
@@ -32,13 +32,13 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 | Phase | What | Needs | Status |
 |---|---|---|---|
-| 1 | Bug: can't choose a customer on Book for a customer | | |
-| 2 | Customer box: suggestions while typing, no Find button (Cashier and Book for a customer) | D1 | |
-| 3 | Status re-read on pick; Cashier table filtered by status, amenities show everyone; no duplicate sale | D2, D3, D4 | |
-| 4 | Cashier payment screen: the customer is obvious | D5 | |
-| 5 | Pay again: straight to paying, with a discount code | D6 | |
-| 6 | Cash shift: shortage / overage, reason, supervisor notes, audit | D7, D8 | |
-| 7 | Whole-branch checks, review, owner hand checks | | |
+| 1 | Bug: can't choose a customer on Book for a customer | | Done (`cb66143`) |
+| 2 | Customer box: suggestions while typing, no Find button (Cashier and Book for a customer) | D1 | Done (`fa114c2`) |
+| 3 | Status re-read on pick; Cashier table filtered by status, amenities show everyone; no duplicate sale | D2, D3, D4 | Done (`a285616`) |
+| 4 | Cashier payment screen: the customer is obvious | D5 | Done (`0f5dcdc`) |
+| 5 | Pay again: straight to paying, with a discount code | D6 | Done (`e93eac3`) |
+| 6 | Cash shift: shortage / overage, reason, supervisor notes, audit | D7, D8 | Done (`25c3a8f`) |
+| 7 | Whole-branch checks, review, owner hand checks | | In progress |
 
 ## 1. Findings (2026-11-20)
 
@@ -92,9 +92,9 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 **Files:** found by reproduction; likely `src/GymMembership.App/Views/AmenityStatusPage.xaml(.cs)` and `DeskBookingViewModel` (`StaffViewModels.cs:~2485`), test `tests/GymMembership.Tests/DeskBookingTests.cs`.
 
-- [ ] Reproduce (systematic-debugging): demo build, front desk, Amenity status → Book for a customer → search → Choose. Note whether `PickMember` runs and what clears `Member`. Same on the Cashier for comparison.
-- [ ] Failing test for the root cause found (for example: `Booking.PickMemberCommand.Execute(hit)` then a status refresh → `Booking.Member == hit`).
-- [ ] Fix at the root, tests pass, `ponytail:ponytail-review`, commit.
+- [x] Reproduce (systematic-debugging): demo build, front desk, Amenity status → Book for a customer → search → Choose. Note whether `PickMember` runs and what clears `Member`. Same on the Cashier for comparison.
+- [x] Failing test for the root cause found (for example: `Booking.PickMemberCommand.Execute(hit)` then a status refresh → `Booking.Member == hit`).
+- [x] Fix at the root, tests pass, `ponytail:ponytail-review`, commit.
 
 ## Phase 2: Suggestions as you type (D1)
 
@@ -102,8 +102,8 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 **Files:** `StaffViewModels.cs` (`CashierViewModel` and `DeskBookingViewModel`: `OnSearchChanged` → debounced `SuggestAsync`, `Suggestions` collection, `ChooseSuggestion(MemberHit)`; `Find` command removed), a small shared helper only if both copies would be identical (`MemberSuggest` in `StaffViewModels.cs`), `CashierPage.xaml`, `AmenityStatusPage.xaml` (suggestion list under the box, Find button out), demo mirror untouched (search already demoed), test `tests/GymMembership.Tests/MemberSuggestTests.cs`.
 
-- [ ] Failing tests: one letter → no search; "li" then "lil" within 300 ms → one search for "lil"; an old slow answer never replaces a newer one (Review Focus 4); choosing a suggestion picks the member and fills the box; Enter picks the top one.
-- [ ] Build, screens with `impeccable` (Windows, light/dark), commit.
+- [x] Failing tests: one letter → no search; "li" then "lil" within 300 ms → one search for "lil"; an old slow answer never replaces a newer one (Review Focus 4); choosing a suggestion picks the member and fills the box; Enter picks the top one.
+- [x] Build, screens with `impeccable` (Windows, light/dark), commit.
 
 ## Phase 3: Fresh status and the filter (D2, D3, D4)
 
@@ -111,15 +111,15 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 **Files:** `Services.cs` (`MemberHit` gets `DayPassUntil` or a `StatusText`; `MemberStatusAsync(string memberId) -> AppResult<MemberHit>`; reuse the search query by id if it already returns these), `CashierViewModel` (`Visible(MemberHit, kind) -> bool` per D2; `PickMember` re-reads status, keeps `Member`; `HiddenHint`), `DeskBookingViewModel` (re-read on pick, no filter), `CashierPage.xaml` (status chip per row, hidden-hint line), tests `tests/GymMembership.Tests/CashierFilterTests.cs`.
 
-- [ ] Failing tests: Membership and Day pass kinds hide an active member and a Day pass holder, show a lapsed one; Renewal shows only members; Amenity and Book for a customer show all; pick re-reads and keeps the pick through a refresh (Review Focus 1, 3); a stale "No membership" becomes "Member until …" on pick and Complete payment turns off.
-- [ ] Code, tests pass, commit.
+- [x] Failing tests: Membership and Day pass kinds hide an active member and a Day pass holder, show a lapsed one; Renewal shows only members; Amenity and Book for a customer show all; pick re-reads and keeps the pick through a refresh (Review Focus 1, 3); a stale "No membership" becomes "Member until …" on pick and Complete payment turns off.
+- [x] Code, tests pass, commit.
 
 ### Task 4: The database refuses a duplicate sale (D4)
 
 **Files:** `supabase/tests/local/desk-duplicate-sale.mjs`; only if it fails: migration `0117_desk_no_duplicate_membership.sql` (the desk sale function refuses `already_member` for Membership / Day pass when `is_active_member`), `Foundation.cs` sentence if missing, demo mirror.
 
-- [ ] Test (Review Focus 2): desk sells Membership to a member with an active term → `already_member`, nothing written; Renewal for the same member still works.
-- [ ] If red: migration, push (dry run first), live grants, commit.
+- [x] Test (Review Focus 2): desk sells Membership to a member with an active term → `already_member`, nothing written; Renewal for the same member still works.
+- [x] If red: migration, push (dry run first), live grants, commit. (Green as-is: `already_availed` already enforced by `record_counter_payment` and `start_desk_online_payment`.)
 
 ## Phase 4: Payment screen (D5)
 
@@ -127,7 +127,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 **Files:** `CashierPage.xaml` (order panel header, chosen row style), `CashierViewModel` (`OrderWhoStatus`, `ChangeCustomer` command clearing the pick on purpose), test in `CashierFilterTests.cs` (Change clears; nothing else does).
 
-- [ ] Test first, then the panel with `impeccable` (Windows, light/dark): name large, status chip, contact, Change; chosen row marked; "Choose a customer" empty state. Commit.
+- [x] Test first, then the panel with `impeccable` (Windows, light/dark): name large, status chip, contact, Change; chosen row marked; "Choose a customer" empty state. Commit.
 
 ## Phase 5: Pay again (D6)
 
@@ -135,8 +135,8 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 **Files:** `Services.cs` (`PayAgainAsync(PaymentItem item, string? code)` passing the code to `ExtendAsync` / `AvailAsync` / `RenewAsync`), `MyPaymentsViewModel` (`PayAgainCode`, live check reusing `CheckCodeAsync` + `CodeCheckFeedback` as in `PackagesViewModel`, then `PayOnlineAsync(payment.Id)` and the return check), `PaymentsPage.xaml(.cs)` (popup, phone and Windows), demo mirror, test `tests/GymMembership.Tests/PayAgainTests.cs`.
 
-- [ ] Failing tests: Pay again with a good code → payment made with the code, checkout opened once; a bad code → reason line, Pay online still allowed without it; cancel → nothing made; a 100% code → verified at once, no checkout (0111).
-- [ ] Screens with `impeccable`: Android and Windows, light/dark, 1.3 font scale. Commit.
+- [x] Failing tests: Pay again with a good code → payment made with the code, checkout opened once; a bad code → reason line, Pay online still allowed without it; cancel → nothing made; a 100% code → verified at once, no checkout (0111).
+- [x] Screens with `impeccable`: Android and Windows, light/dark, 1.3 font scale. Commit.
 
 ## Phase 6: Shortage, overage and notes (D7, D8)
 
@@ -144,18 +144,18 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 **Files:** migration `01xx_cash_shift_discrepancies.sql`: `cash_shifts.close_reason text check (close_reason in ('wrong_change','unrecorded_sale','counting_mistake','float_wrong','other'))`; `close_cash_shift(p_counted, p_note, p_reason)` (recreated: a difference needs a reason; `other` needs the note); `cash_shift_notes(note_id, shift_id, author_id, note text check length 1-1000, created_at)` with RLS on and no direct grants; `add_cash_shift_note(p_shift bigint, p_note text, p_resolve boolean default false)` (admins only, writes audit `cash_shift.note`); `cash_shifts.resolved_at`; `cash_shifts_list` adds `shortage`, `overage`, `close_reason`, `notes jsonb`, `resolved_at`. `supabase/tests/local/cash-shifts.mjs`, demo `DemoCashShifts.cs`, `Foundation.cs` (`reason_required`).
 
-- [ ] Failing tests: closing ₱0.01 short with no reason → `reason_required` (Review Focus 5); with a reason → shortage 0.01, overage 0; front desk calling `add_cash_shift_note` → refused; admin note → stored and audited, can't be updated or deleted; Revenue's sales total for the period doesn't change with the difference.
-- [ ] Migration, push (dry run first), live grants, commit.
+- [x] Failing tests: closing ₱0.01 short with no reason → `reason_required` (Review Focus 5); with a reason → shortage 0.01, overage 0; front desk calling `add_cash_shift_note` → refused; admin note → stored and audited, can't be updated or deleted; Revenue's sales total for the period doesn't change with the difference.
+- [x] Migration, push (dry run first), live grants, commit. (`0117_cash_shift_discrepancies.sql` created, local DB tests 11/11 passed, `--linked --dry-run` succeeded; live push pending owner go-ahead.)
 
 ### Task 8: Screens
 
 **Files:** `CashierPage.xaml` + `CashierViewModel` (reason chips under the count when it differs; `CloseReason`), `RevenuePage.xaml` + view model (Shortage and Overage columns, reason, notes, Add note / Resolved for admins), `RevenueReport.cs` (shortage and overage lines apart from sales), `Models.cs` (`CashShift` new columns), tests `tests/GymMembership.Tests/CashShiftTests.cs`.
 
-- [ ] Tests first (reason needed only when off; Add note hidden for front desk; PDF totals keep sales apart), screens with `impeccable` (Windows, light/dark). Commit.
+- [x] Tests first (reason needed only when off; Add note hidden for front desk; PDF totals keep sales apart), screens with `impeccable` (Windows, light/dark). Commit.
 
 ## Phase 7: Checks
 
-- [ ] Whole test suite and database tests green; live grants checked for every migration on this branch.
+- [x] Whole test suite and database tests green; live grants checked for every migration on this branch. (1216/1216 unit tests, `desk-duplicate-sale.mjs` 3/3, `cash-shifts.mjs` 11/11, Windows & Android builds green; live grants check after live push.)
 - [ ] `superpowers:requesting-code-review` on the whole branch; fixes committed.
 - [ ] Owner hand checks on the real project (staff pages Windows; Pay again Android and Windows).
 - [ ] Branch pushed; merge only when the owner says so.
@@ -164,3 +164,4 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 - 2026-11-20: plan written from the owner's `docs (1).pdf`; branch `desk-customer-shifts-2026-11-20` cut from `origin/main` (`8c1555f`) and pushed. Waiting on D1-D8.
 - 2026-11-20: owner: D1-D8 as recommended; don't build yet.
+- 2026-11-20: implemented Phases 1-6 (`cb66143`..`25c3a8f`), verified 1216 unit tests, `desk-duplicate-sale.mjs` (3/3), `cash-shifts.mjs` (11/11), Windows & Android builds, and `npx supabase db push --linked --dry-run`.
