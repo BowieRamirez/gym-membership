@@ -292,8 +292,8 @@ Decisions (recommended; owner to confirm before building):
 
 - [x] Whole test suite and database tests green; live grants checked for every migration on this branch.
 - [x] `superpowers:requesting-code-review` on the whole branch; fixes committed.
-- [ ] Owner hand checks: each finding above on the real project, Android and Windows.
-- [x] Branch stays off `main`.
+- [x] Owner hand checks: each finding above on the real project, Android and Windows (owner, 2026-11-20).
+- [x] Owner approved merging to `main` and releasing v0.9.0 (2026-11-20).
 
 ## Session log
 
@@ -321,3 +321,4 @@ Decisions (recommended; owner to confirm before building):
 - 2026-11-20: built and pushed Task 23 / B5 (`0115`, `8047f78`): `cancel_reservation` and `close_gym_day` skip creating refund rows and staff alerts when `amount == 0`, and existing approved ₱0 `cancel` refunds (`24`, `25`, `27`) were closed as `paid` (`Nothing to repay (₱0)`).
 - 2026-11-20: **Gym settings Day pass price (`a94e5fe`):** hid the editable **Walk-in price (₱)** input in `GymSettingsPage.xaml` / `GymSettingsViewModel` while a published Day pass package is on sale, showing **Day pass price** (`₱60.00`) and *"Set on the Daypass package. Change it under Packages and amenities."* instead.
 - 2026-11-20: **Transactions filter wording:** changed `"What"` label → `"What kind"` in `AuditPage.xaml`, and `"Everything"` / `"Any way"` / `"Any status"` → `"All"` in `AuditViewModel` (`StaffViewModels.cs`) and `TransactionsLogTests.cs`.
+- 2026-11-20: owner finished hand checks and approved merging to `main`; version 0.9.0, merged by PR and tagged `v0.9.0`.
