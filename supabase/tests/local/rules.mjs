@@ -298,6 +298,8 @@ await test('a pending request can be withdrawn only by whoever made it', async (
 await test('attendance is the coach only and sets the session status', async () => {
   const s = (await run(alex, `select training_session_id id from training_sessions`)).rows[0].id;
   assert.match(await code(run(alex, `select record_session_attendance($1,'present')`, [s])), /forbidden/);
+  assert.match(await code(run(coach, `select record_session_attendance($1,'absent')`, [s])), /too_soon/);   // B2 (0110): not before it starts
+  await db.query(`update training_sessions set scheduled_start = now() - interval '1 hour', scheduled_end = now() where training_session_id = $1`, [s]);
   await run(coach, `select record_session_attendance($1,'absent')`, [s]);
   assert.equal((await run(alex, `select status from training_sessions`)).rows[0].status, 'no_show');
 });

@@ -76,13 +76,11 @@ try {
     const next = new Date(Math.ceil((Date.now() + 1000) / 3600000) * 3600000).toISOString();
     await assert.rejects(as(uid, 'select * from book_amenity($1,$2,60,$3::payment_method)', [a, next, 'qr']), /too_soon/);
   });
-  await test('G13: a confirmed booking keeps its slot and cooldown; requests no longer hold one', async () => {
+  await test('G13: a confirmed booking keeps its slot; a taken slot is refused before paying (0112); no cooldown (0113)', async () => {
     const one = await member(), two = await member(), a = await amenity('B Clash');
     await approve(await book(one, a, '10:00'));
-    assert.equal((await book(two, a, '10:00')).status, 'awaiting_payment');   // a request may still be made...
-    const cool = await book(two, a, '11:00'); await approve(cool);              // ...but 11:00-11:30 is the cooldown
-    assert.equal((await res(cool.reservation_id)).cancel_reason, 'Slot taken');
-    const after = await book(two, a, '12:00');   // 0093: next start on the hour after the cooldown
+    await assert.rejects(book(two, a, '10:00'), /slot_taken/);
+    const after = await book(two, a, '11:00');   // starts as one's booking ends
     await approve(after);
     assert.equal((await res(after.reservation_id)).status, 'confirmed');
   });

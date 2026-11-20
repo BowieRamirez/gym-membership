@@ -190,7 +190,10 @@ try {
     await as(f.coach,'select respond_time_request($1,true)',[id]);
     const s=(await as(f.member,'select * from training_sessions'))[0];
     if(state==='cancelled') await as(f.member,'select cancel_session($1)',[s.training_session_id]);
-    else await as(f.coach,'select record_session_attendance($1,$2)',[s.training_session_id,state==='completed'?'present':'absent']);
+    else {
+      await db.query(`update training_sessions set scheduled_start=now()-interval '1 hour', scheduled_end=now() where training_session_id=$1`,[s.training_session_id]);   // B2 (0110): attendance only once started
+      await as(f.coach,'select record_session_attendance($1,$2)',[s.training_session_id,state==='completed'?'present':'absent']);
+    }
     await invite(f.coach,f.member);
     await request(f.member,f.coach);
   });
