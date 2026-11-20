@@ -288,8 +288,25 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     }
 
     // an item belongs to the kind (and member) it was listed for: change either and the pick goes
-    partial void OnKindChanged(string value) { _ = ScheduleCodeCheckAsync(false); Item = null; if (IsWalkIn && Member is { } m && string.IsNullOrWhiteSpace(WalkInName)) WalkInName = m.Username; _ = RefreshItemsAsync(); }   // a typed name is kept (final review)
-    partial void OnMemberChanged(MemberHit? value) { _ = ScheduleCodeCheckAsync(false); Item = null; if (IsWalkIn && value is not null) WalkInName = value.Username; if (Kind == "Renewal") _ = RefreshItemsAsync(); }
+    bool _refreshingStatus;
+    partial void OnKindChanged(string value)
+    {
+        _ = ScheduleCodeCheckAsync(false); Item = null;
+        if (IsWalkIn && Member is { } m && string.IsNullOrWhiteSpace(WalkInName)) WalkInName = m.Username;
+        ApplyFilter(hasQuery: (Search?.Trim().Length ?? 0) >= 2, err: null);
+        OnPropertyChanged(nameof(OrderIneligibleText)); OnPropertyChanged(nameof(HasOrderIneligible));
+        RecordCommand.NotifyCanExecuteChanged();
+        _ = RefreshItemsAsync();
+    }   // a typed name is kept (final review)
+    partial void OnMemberChanged(MemberHit? value)
+    {
+        OnPropertyChanged(nameof(OrderIneligibleText)); OnPropertyChanged(nameof(HasOrderIneligible));
+        RecordCommand.NotifyCanExecuteChanged();
+        if (_refreshingStatus) return;   // D3: re-reading status updates the chip without dropping Item/code
+        _ = ScheduleCodeCheckAsync(false); Item = null;
+        if (IsWalkIn && value is not null) WalkInName = value.Username;
+        if (Kind == "Renewal") _ = RefreshItemsAsync();
+    }
     partial void OnItemChanged(CounterItem? value) { _ = ScheduleCodeCheckAsync(false); foreach (var o in Options) o.IsPicked = value is not null && o.Item.Id == value.Id; }
 
     async Task RefreshItemsAsync()
@@ -314,7 +331,10 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
 
     /// <summary>Cashier plan Y1: search ran and nobody matched; the page says so.</summary>
     [ObservableProperty] private bool noMatch;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasHiddenHint))] private string? hiddenHint;
+    public bool HasHiddenHint => !string.IsNullOrWhiteSpace(HiddenHint) && !IsRegistering;
     readonly MemberSuggest _suggest = new(members);
+    List<MemberHit> _allHits = new();
     bool _suppressSearch;
     public TimeSpan SearchDelay { get => _suggest.Delay; set => _suggest.Delay = value; }
     public ObservableCollection<MemberHit> Suggestions { get; } = new();
@@ -323,16 +343,47 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     partial void OnSearchChanged(string value) { if (!_suppressSearch) _ = SuggestAsync(immediate: false); }
     public Task SuggestNowAsync() => SuggestAsync(immediate: true);
 
+    public static bool Visible(MemberHit hit, string kind) => kind switch
+    {
+        "Membership" or "Day pass" => !hit.HasActiveMembership,
+        "Renewal" => hit.HasActiveMembership && !hit.IsDayPass,
+        _ => true,
+    };
+
+    static string? IneligibleReason(MemberHit h, string kind)
+    {
+        if (kind is "Membership" or "Day pass" && h.HasActiveMembership)
+            return h.IsDayPass ? $"{h.Username} already has a Day pass until midnight."
+                : h.PaidUntil is { } u ? $"{h.Username} already has a membership until {ManilaTime.Of(u):d MMM yyyy}."
+                : $"{h.Username} already has an active membership.";
+        if (kind == "Renewal" && !h.HasActiveMembership)
+            return $"{h.Username} has no active membership to renew.";
+        return null;
+    }
+
+    public string? OrderIneligibleText => IsWalkIn
+        ? (DayPassMember is { HasActiveMembership: true } dm ? IneligibleReason(dm, "Day pass") : null)
+        : (Member is { } m ? IneligibleReason(m, Kind) : null);
+    public bool HasOrderIneligible => OrderIneligibleText is not null;
+
     async Task SuggestAsync(bool immediate)
     {
         var (applied, rows, err) = await _suggest.RunAsync(Search, immediate);
         if (!applied) return;
         ErrorMessage = err;
         IsRegistering = false;
-        var hasQuery = (Search?.Trim().Length ?? 0) >= 2;
-        Fill(Suggestions, rows.Take(8));
-        Fill(Hits, rows);
-        NoMatch = hasQuery && err is null && rows.Count == 0;
+        _allHits = rows.ToList();
+        ApplyFilter(hasQuery: (Search?.Trim().Length ?? 0) >= 2, err);
+    }
+
+    void ApplyFilter(bool hasQuery, string? err)
+    {
+        var visible = _allHits.Where(h => Visible(h, Kind)).ToList();
+        Fill(Suggestions, visible.Take(8));
+        Fill(Hits, visible);
+        HiddenHint = hasQuery && err is null && _allHits.Count > 0 && visible.Count == 0
+            ? IneligibleReason(_allHits[0], Kind) : null;
+        NoMatch = hasQuery && err is null && _allHits.Count == 0;
         OnPropertyChanged(nameof(HasSuggestions)); OnPropertyChanged(nameof(ShowSuggestions));
         OnPropertyChanged(nameof(HasHits)); OnPropertyChanged(nameof(ShowHits));
     }
@@ -341,7 +392,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     private void ChooseSuggestion(MemberHit hit)
     {
         _suggest.Cancel();
-        Member = hit;
+        PickMember(hit);
         _suppressSearch = true;
         Search = hit.Username;
         _suppressSearch = false;
@@ -361,9 +412,23 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     // owner, 2026-11-16: one at a time: search shows the table, Register new member shows its form
     public bool ShowHits => HasHits && !IsRegistering;
     public bool ShowNoMatch => NoMatch && !IsRegistering;
-    partial void OnIsRegisteringChanged(bool value) { OnPropertyChanged(nameof(ShowSuggestions)); OnPropertyChanged(nameof(ShowHits)); OnPropertyChanged(nameof(ShowNoMatch)); }
+    partial void OnIsRegisteringChanged(bool value) { OnPropertyChanged(nameof(ShowSuggestions)); OnPropertyChanged(nameof(ShowHits)); OnPropertyChanged(nameof(ShowNoMatch)); OnPropertyChanged(nameof(HasHiddenHint)); }
     partial void OnNoMatchChanged(bool value) => OnPropertyChanged(nameof(ShowNoMatch));
-    [RelayCommand] private void PickMember(MemberHit hit) => Member = hit;
+    [RelayCommand]
+    private void PickMember(MemberHit hit)
+    {
+        Member = hit;
+        _ = RefreshMemberStatusAsync(hit.MemberId);
+    }
+
+    async Task RefreshMemberStatusAsync(string memberId)
+    {
+        var res = await members.MemberStatusAsync(memberId);
+        if (res is not { Ok: true, Value: { } fresh } || Member?.MemberId != memberId) return;
+        _refreshingStatus = true;
+        Member = fresh;
+        _refreshingStatus = false;
+    }
 
     // ---- cashier plan Y2: nobody matched, so the desk registers the customer as a member (search first, so nobody is made twice) ----
     [ObservableProperty] private bool isRegistering;
@@ -395,6 +460,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
 
     bool CanComplete() =>
         (IsWalkIn || Member is not null && Item is not null)
+        && OrderIneligibleText is null
         && !CashNeedsShift && Waiting is null;
 
     // The command is off while it runs, so a double tap records one payment.
@@ -2586,7 +2652,7 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
     {
         _suggest.Cancel();
         IsWalkIn = false;
-        Member = hit;
+        PickMember(hit);
         _suppressSearch = true;
         Search = hit.Username;
         _suppressSearch = false;
@@ -2601,7 +2667,18 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
         if (Suggestions.Count > 0) ChooseSuggestion(Suggestions[0]);
     }
 
-    [RelayCommand] private void PickMember(MemberHit hit) => Member = hit;
+    [RelayCommand]
+    private void PickMember(MemberHit hit)
+    {
+        Member = hit;
+        _ = RefreshMemberStatusAsync(hit.MemberId);
+    }
+
+    async Task RefreshMemberStatusAsync(string memberId)
+    {
+        var res = await members.MemberStatusAsync(memberId);
+        if (res is { Ok: true, Value: { } fresh } && Member?.MemberId == memberId) Member = fresh;
+    }
     /// <summary>Book for a walk-in: hides suggestions (and the pick), shows the name box.</summary>
     [RelayCommand]
     private void StartWalkIn()

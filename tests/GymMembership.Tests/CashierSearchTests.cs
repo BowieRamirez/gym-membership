@@ -61,6 +61,7 @@ public class CashierSearchTests
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();
         var vm = new CashierViewModel(new PaymentStaffService(gw), new AttendanceService(gw));
         await vm.OnAppearingAsync();
+        vm.PickKindCommand.Execute("Amenity");
         vm.Search = "demo"; await vm.SuggestNowAsync();   // every demo account's email
         Assert.DoesNotContain(vm.Hits, h => h.Username == "Carlo Diaz");                 // deactivated
         Assert.Contains(vm.Hits, h => h.Username == "Joy");                              // active, no membership

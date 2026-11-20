@@ -10,6 +10,7 @@ public class MemberSuggestTests
     {
         public readonly List<string> Queries = new();
         public Task<AppResult<IReadOnlyList<MemberHit>>> FindMembersAsync(string query) { Queries.Add(query); return find(query, CancellationToken.None); }
+        public Task<AppResult<MemberHit?>> MemberStatusAsync(string memberId) => Task.FromResult(AppResult<MemberHit?>.Success(null));
         public Task<AppResult<bool>> RecordAsync(int sessionId, string status) => throw new NotImplementedException();
         public Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null, string? pin = null, string? reason = null, string? proof = null, string? idType = null) => throw new NotImplementedException();
         public Task<AppResult<string>> VerifyPasswordAsync(string memberId, string password) => throw new NotImplementedException();

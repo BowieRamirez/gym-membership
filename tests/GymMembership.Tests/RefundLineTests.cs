@@ -36,7 +36,7 @@ public class RefundLineTests
         if (kind == "Day pass") vm.WalkInName = "Pedro Ramos";
         else
         {
-            vm.Search = "Alex"; await vm.SuggestNowAsync(); vm.Member = vm.Hits.First();
+            vm.Search = kind == "Renewal" ? "Alex" : "Carlo"; await vm.SuggestNowAsync(); vm.Member = vm.Hits.First();
             await Task.Delay(50);
             vm.PickItemCommand.Execute(vm.Options[0]);
         }

@@ -90,7 +90,7 @@ public class WalkInProcessTests
     public async Task Find_and_register_show_one_at_a_time()
     {
         var (_, vm) = await Open();
-        vm.Search = "al"; await vm.SuggestNowAsync();
+        vm.Search = "bea"; await vm.SuggestNowAsync();
         Assert.Equal((true, false), (vm.ShowHits, vm.IsRegistering));
         vm.StartRegisterCommand.Execute(null);
         Assert.Equal((false, true, false), (vm.ShowHits, vm.IsRegistering, vm.ShowNoMatch));

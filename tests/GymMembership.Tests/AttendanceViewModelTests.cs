@@ -60,6 +60,7 @@ public class AttendanceViewModelTests
         public Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null, string? pin = null, string? reason = null, string? proof = null, string? idType = null) => throw new NotSupportedException();
         public Task<AppResult<string>> VerifyPasswordAsync(string memberId, string password) => throw new NotSupportedException();
         public Task<AppResult<bool>> CanSkipPinAsync() => throw new NotSupportedException();
+        public Task<AppResult<MemberHit?>> MemberStatusAsync(string memberId) => throw new NotSupportedException();
         public Task<AppResult<MemberPass>> MyPassAsync() => throw new NotSupportedException();
         public Task<AppResult<MemberScan>> ScanAsync(string code) => throw new NotSupportedException();
         public Task<AppResult<IReadOnlyList<CheckInRow>>> CheckInsOnAsync(DateOnly manilaDay) => throw new NotSupportedException();

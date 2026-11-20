@@ -105,6 +105,7 @@ public class CashierTests
         vm.PickItemCommand.Execute(vm.Options[0]);
         Assert.NotNull(vm.Item);
 
+        vm.PickKindCommand.Execute("Amenity");
         await ChooseMember(vm, "Bea");      // a different member: the renewal belonged to Alex
         Assert.Null(vm.Item);
     }
@@ -343,7 +344,9 @@ public class CashierTests
         vm.PickKindCommand.Execute("Day pass");
         Assert.False(vm.CanUseCode);   // walk-in without a member cannot use a code
 
+        vm.PickKindCommand.Execute("Amenity");
         await ChooseMember(vm, "Alex");   // Alex has an active membership
+        vm.PickKindCommand.Execute("Day pass");
         Assert.False(vm.CanUseCode);
 
         await ChooseMember(vm, "Carlo");   // Carlo has no active membership

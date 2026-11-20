@@ -1378,11 +1378,15 @@ public static class MemberCheck
 
 /// <param name="Status">Online only: active, pending, expired or inactive (G10). Null on the saved list, which knows paid or not.</param>
 public sealed record MemberHit(string MemberId, string Username, bool HasActiveMembership, DateTime? PaidUntil = null, string? AvatarPath = null,
-    string? Status = null, DateTime? EndedAt = null, string? Phone = null, string? Email = null)
+    string? Status = null, DateTime? EndedAt = null, string? Phone = null, string? Email = null, bool IsDayPass = false)
 {
     /// <summary>The Cashier's contact column: phone and email, so two people with the same name can be told apart.</summary>
     public string ContactText => string.Join(" · ", new[] { Phone, Email }.Where(s => !string.IsNullOrWhiteSpace(s)));
     public string PlanStatus => HasActiveMembership ? "active" : Status == "expired" && EndedAt is null ? "no_membership" : Status ?? "inactive";
+    /// <summary>D3 (2026-11-20): status text for Cashier and Book for a customer.</summary>
+    public string DeskStatusText => HasActiveMembership
+        ? (IsDayPass ? "Day pass until midnight" : PaidUntil is { } until ? $"Member until {ManilaTime.Of(until):d MMM yyyy}" : "Active member")
+        : "No membership";
     /// <summary>Forgot phone: what staff check before letting someone in without a QR; the reason when they can't (G10).</summary>
     public string PlanText => HasActiveMembership ? PaidUntil is { } until ? $"Paid until {ManilaTime.Of(until):d MMM yyyy}" : "Paid"
         : Status is { } s ? MemberCheck.Reason(s, EndedAt) : "No active membership";
@@ -1408,6 +1412,8 @@ public interface IAttendanceService
     /// <summary>F8: true for Admin and System admin, who may check in by name without the PIN, with a reason.</summary>
     Task<AppResult<bool>> CanSkipPinAsync();
     Task<AppResult<IReadOnlyList<MemberHit>>> FindMembersAsync(string usernameFragment);
+    /// <summary>D3 (2026-11-20): re-read one member's live status when picked.</summary>
+    Task<AppResult<MemberHit?>> MemberStatusAsync(string memberId);
     /// <summary>F6: a new one-use QR pass for the signed-in member, good for 5 minutes. The previous unused one stops working.</summary>
     Task<AppResult<MemberPass>> MyPassAsync();
     /// <summary>Front desk and admins: who a scanned code belongs to and their live status. Every scan is logged by the server.</summary>
@@ -1559,26 +1565,40 @@ public sealed class AttendanceService(ISupabaseGateway gw, TimeProvider? time = 
         return (await gw.ListAsync<Role>()).Any(r => r.Name is "admin" or "subadmin" && mine.Contains(r.RoleId));
     });
 
-    public Task<AppResult<IReadOnlyList<MemberHit>>> FindMembersAsync(string fragment) => Safe.RunAsync<IReadOnlyList<MemberHit>>(async () =>
+    public Task<AppResult<IReadOnlyList<MemberHit>>> FindMembersAsync(string fragment) => Safe.RunAsync<IReadOnlyList<MemberHit>>(() =>
+    {
+        // cashier plan Y1: name, sign-in email (the username) or phone; a phone matches on its digits, so "0917-555" finds "0917 555 0142"
+        static string Digits(string? s) => new((s ?? "").Where(char.IsDigit).ToArray());
+        var text = fragment.Trim(); var digits = Digits(text);
+        return BuildHitsAsync((p, name) => name.Contains(text, StringComparison.OrdinalIgnoreCase) || p.Username.Contains(text, StringComparison.OrdinalIgnoreCase)
+            || (digits.Length >= 3 && Digits(p.Phone).Contains(digits)));
+    });
+
+    public Task<AppResult<MemberHit?>> MemberStatusAsync(string memberId) => Safe.RunAsync<MemberHit?>(async () =>
+        (await BuildHitsAsync((p, _) => p.Id == memberId)).FirstOrDefault());
+
+    async Task<IReadOnlyList<MemberHit>> BuildHitsAsync(Func<Profile, string, bool> matches)
     {
         var members = await gw.ListAsync<Member>();
         var profiles = await gw.ListAsync<Profile>();
         var now = clock.GetUtcNow().UtcDateTime;
+        var dayPassIds = (await gw.ListAsync<MembershipPackage>(p => p.IsDayPass)).Select(p => p.Id).ToHashSet();
         var memberships = await gw.ListAsync<UserMembershipPackage>();
-        var active = memberships.Where(m => m.Status == "active" && ManilaTime.Utc(m.EndsAt) > now).GroupBy(m => m.MemberId).ToDictionary(g => g.Key, g => g.Max(m => ManilaTime.Utc(m.EndsAt)));
+        var active = memberships.Where(m => m.Status == "active" && ManilaTime.Utc(m.EndsAt) > now)
+            .GroupBy(m => m.MemberId)
+            .ToDictionary(g => g.Key, g => (Until: g.Max(m => ManilaTime.Utc(m.EndsAt)), IsDayPass: g.Any(m => dayPassIds.Contains(m.MembershipPackageId))));
         var ended = memberships.Where(m => ManilaTime.Utc(m.EndsAt) <= now).GroupBy(m => m.MemberId).ToDictionary(g => g.Key, g => g.Max(m => ManilaTime.Utc(m.EndsAt)));
         var waiting = (await gw.ListAsync<Payment>(p => p.Status == Status.Pending)).Where(p => p.Kind is PayKind.Membership or PayKind.Renewal).Select(p => p.MemberId).ToHashSet();
         // G10: the same order scan_member uses: deactivated, active, waiting for a payment, otherwise expired (or never had one)
         string StatusOf(Profile p) => !p.IsActive ? "inactive" : active.ContainsKey(p.Id) ? "active" : waiting.Contains(p.Id) ? "pending" : "expired";
-        // cashier plan Y1: name, sign-in email (the username) or phone; a phone matches on its digits, so "0917-555" finds "0917 555 0142"
-        static string Digits(string? s) => new((s ?? "").Where(char.IsDigit).ToArray());
-        var text = fragment.Trim(); var digits = Digits(text);
-        bool Matches(Profile p, string name) => name.Contains(text, StringComparison.OrdinalIgnoreCase) || p.Username.Contains(text, StringComparison.OrdinalIgnoreCase)
-            || (digits.Length >= 3 && Digits(p.Phone).Contains(digits));
-        return members.Join(profiles, m => m.UserId, p => p.Id, (m, p) => (p, Hit: new MemberHit(m.UserId, string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName,
-                p.IsActive && active.ContainsKey(m.UserId), active.GetValueOrDefault(m.UserId), p.AvatarPath, StatusOf(p), ended.GetValueOrDefault(m.UserId), p.Phone, p.Username)))
-            .Where(x => Matches(x.p, x.Hit.Username)).Select(x => x.Hit).ToList();   // every match: the Cashier's table pages by 10
-    });
+        return members.Join(profiles, m => m.UserId, p => p.Id, (m, p) => (p, Name: string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName))
+            .Where(x => matches(x.p, x.Name))
+            .Select(x =>
+            {
+                var has = active.TryGetValue(x.p.Id, out var term) && x.p.IsActive;
+                return new MemberHit(x.p.Id, x.Name, has, has ? term.Until : null, x.p.AvatarPath, StatusOf(x.p), ended.GetValueOrDefault(x.p.Id), x.p.Phone, x.p.Username, has && term.IsDayPass);
+            }).ToList();
+    }
 
     public Task<AppResult<MemberPass>> MyPassAsync() =>
         Safe.RunAsync(async () => (await gw.RpcAsync<List<MemberPass>>("issue_member_pass", new())).Single());

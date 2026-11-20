@@ -184,6 +184,7 @@
                                     </VerticalStackLayout>
                                     <!-- cashier plan Y2: search first, so nobody gets a second account; then register them here -->
                                     <Label Text="No member found. Check the spelling, or try their email or phone. New here? Register new member." Style="{StaticResource Muted}" IsVisible="{Binding ShowNoMatch}" />
+                                    <Label Text="{Binding HiddenHint}" Style="{StaticResource Muted}" IsVisible="{Binding HasHiddenHint}" AutomationId="CashierHiddenHint" />
                                     <Border Style="{StaticResource Panel}" IsVisible="{Binding IsRegistering}" MaximumWidthRequest="640" HorizontalOptions="Start">
                                         <VerticalStackLayout Spacing="10">
                                             <c:CardTitle Text="Register a new member" />
