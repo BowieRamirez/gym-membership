@@ -164,7 +164,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 # Part 2: Coach revamp (owner, 2026-11-20)
 
-**Not built yet.** Model agreed with the owner (2026-11-20, E1-E8 below); E9-E12 are recommendations still to confirm. Same branch, same rules ("How to use this plan"). Migrations start at `0118`. Member and coach screens get Android and Windows (light, dark, 1.3 font scale, real phone layouts); front desk and admin screens are Windows only.
+**Not built yet.** Model agreed with the owner (2026-11-20, E1-E7 below); E8-E11 are recommendations still to confirm. Same branch, same rules ("How to use this plan"). Migrations start at `0118`. Member and coach screens get Android and Windows (light, dark, 1.3 font scale, real phone layouts); front desk and admin screens are Windows only.
 
 **Source:** owner's messages 2026-11-20: coaches are staff; **no coach rate**; the gym pays its coaches; **coaches are booked per session** (no more hiring); a member picks the coach they want for a day in the app; when creating a package the admin switches **Coach included** on or off; a package with it off (the Day pass included) gets a coach as an **add-on, an extra fee**; one-on-one; coach sessions kept separate from amenity bookings; the 10-step coach flow pasted in chat (available coaches only, checked again on confirm, QR check-in with the coach's arrival confirmed, session status apart from payment, damage report reviewed by management, payment closed once verified).
 
@@ -210,6 +210,8 @@ Same rules as `2026-11-19-owner-fixes.md`:
 | E11 | **Coach hours report** on Revenue (admins): per coach and date range, completed sessions, hours, no-shows, cancelled by the coach. No money; for the gym's own coach pay. Add-on income shows in sales as "Coach add-on". | Recommended, confirm |
 
 ## Pages that change
+
+**Every page in these tables is changed with the `impeccable` skill** (and `frontend-design`, per CLAUDE.md), so it doesn't look like slop or AI: run `impeccable` before writing the page's XAML, follow the existing sage/lime look and components (`StatusChip`, `FilterChip`, `Panel`, `TableRow`, `Hairline`), and check it with `impeccable` again before the commit. A page only losing a box or a button still gets the check, so the gap is closed properly and nothing is left floating. Member and coach pages: real phone layouts (two-line rows, chips, folded rules), Android and Windows, light and dark, 1.3 font scale. Front desk and admin pages: Windows only, light and dark.
 
 **Members (Android and Windows)**
 
@@ -279,7 +281,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 - [ ] Grep every reader of `hourly_rate`, `coach_fee` and the booking's coach parameter (migrations, Edge Functions, app, demo) first.
 - [ ] Failing tests: an amenity booking costs the amenity price only; an old-style call with a coach is charged the same and books no coach; refund of an older booking that included a coach fee returns the full paid amount.
-- [ ] Migration, push (dry run first), live grants, screens with `impeccable`, commit.
+- [ ] Screens with `impeccable`: coach Settings, Coaches, Book an amenity (member, Android and Windows, light/dark, 1.3 font scale); amenity admin (Packages and amenities) and Amenity status / Book for a customer (Windows). Migration, push (dry run first), live grants, commit.
 
 ## Phase 9: Coach included and the add-on price (E3, E4)
 
@@ -288,7 +290,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 **Files:** migration `01xx_package_includes_coach.sql` (`membership_packages.includes_coach boolean not null default false`, copied on new version; `membership_packages.coach_addon_price numeric(12,2) check (coach_addon_price > 0)`, null when Coach included is on, copied on new version; `gym_settings.max_coach_sessions_per_day int default 1`, `max_upcoming_coach_sessions int default 2`), Packages admin page (switch; Coach add-on price box shown when the switch is off), Gym settings page (the two limits), Packages member page ("Coach included" tag), `Models.cs`, demo mirror, tests.
 
 - [ ] Failing tests: switch saved and carried to a new version; a member can read whether their package includes a coach; only admins set a package's add-on price; Coach included on → no add-on price stored; a package with the switch off and no add-on price → `coach_not_offered` when booking; a price change in a new version doesn't touch payments already made.
-- [ ] Migration, push, grants, screens, commit.
+- [ ] Screens with `impeccable`: Packages and amenities admin, Gym settings (Windows); Packages "Coach included" tag (member, Android and Windows, light/dark, 1.3 font scale). Migration, push, grants, commit.
 
 ## Phase 10: Book a coach (E5, E6, E7)
 
@@ -303,7 +305,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 **Files:** `SessionsPage` (member: Book a coach flow, list with status and QR, price line), `CoachesPage` (Book this coach), `PackagesPage` Day pass Buy popup (Add a coach step), Cashier (Day pass with a coach; coach add-on), view models, `Foundation.cs` sentences (`coach_taken`, `too_many_coach_sessions`, `coach_booking_blocked`, `coach_not_free`), tests `tests/GymMembership.Tests/CoachSessionBookingTests.cs`.
 
-- [ ] Tests first (list reloads and keeps the day and time on `coach_taken`; price line per package; Add a coach hidden with no free hour today), screens with `impeccable` (member Android/Windows, light/dark, 1.3 font scale; Cashier Windows), commit.
+- [ ] Tests first (list reloads and keeps the day and time on `coach_taken`; price line per package; Add a coach hidden with no free hour today), screens with `impeccable`: Sessions (Book a coach), Coaches (Book this coach), Packages Day pass Add a coach, Payments Coach chip (member, Android and Windows, light/dark, 1.3 font scale); Cashier and Amenity status Book a coach for a customer (Windows). Commit.
 
 ## Phase 11: Hiring and Time requests out (E8)
 
@@ -312,7 +314,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 **Files:** migration `01xx_end_hiring.sql` (revoke and drop `hire_coach`, `answer_hire`, `cancel_hire_request`, `request_time`, `respond_time_request` and the other time request functions; message rules: member and coach may write while a session is today or upcoming or ended in the last 7 days, or an old hire is still active; old hires end with the member's current term), app: Time requests pages and view models out of both shells, `PhoneNavigation.cs`, `IconRail.Windows.cs`, Coaches (Hire out, Hired tag out), My membership (Next coach session card), coach Trainees page → Members I've coached, demo mirror, tests.
 
 - [ ] Failing tests: hire and time request calls gone (anon and members can't call); messaging allowed with a session, refused 8 days after the last one; an active old hire still messages until the term ends.
-- [ ] Migration, push, grants, screens, commit.
+- [ ] Screens with `impeccable`: Coaches, My membership, Messages (member); Trainees → Members I've coached, Messages (coach); menus without Time requests on both (Android and Windows, light/dark, 1.3 font scale). Migration, push, grants, commit.
 
 ## Phase 12: Desk check-in and session status (E9)
 
@@ -321,7 +323,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 **Files:** migration (`training_sessions.session_code`, `checked_in_at`, `coach_arrived_at`; `scan_session(p_code)` reads current status and refuses with a reason; `mark_coach_arrived(p_session)`; the coach's `cancel_session` with a reason alerts the member and refunds an add-on), Membership checking (today's sessions for the scanned member, Coach is here), front desk Home (Today's coach sessions), member Sessions (QR), coach Dashboard and Sessions (Completed / No-show, cancel with reason), demo mirror, tests.
 
 - [ ] Failing tests: Review Focus 5; a scheduled session today checks in; not In session until Coach is here; payment status untouched by session changes; coach cancel → member alert, add-on refunded.
-- [ ] Migration, push, grants, screens, commit.
+- [ ] Screens with `impeccable`: member Sessions (QR); coach Dashboard and Sessions (Android and Windows, light/dark, 1.3 font scale); Membership checking, front desk Home (Windows). Migration, push, grants, commit.
 
 ## Phase 13: Damage reports (E10)
 
@@ -330,7 +332,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 **Files:** migration (`damage_reports`; RLS: the session's coach and the desk insert, admins read and update; `report_damage`, `review_damage`; audit rows; admin alert), coach's after-session prompt, admin Damage reports page (Windows), "Set amenity to Maintenance" reuse, demo mirror, tests.
 
 - [ ] Failing tests: coach reports on own completed session; another coach can't; admin closes with a note; no payment or refund row made.
-- [ ] Migration, push, grants, screens, commit.
+- [ ] Screens with `impeccable`: coach after-session damage prompt (Android and Windows, light/dark, 1.3 font scale); Damage reports admin page, new (Windows). Migration, push, grants, commit.
 
 ## Phase 14: Coach hours report (E11)
 
@@ -339,7 +341,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 **Files:** `coach_hours_report(p_from, p_to)` (admins only; per coach: completed sessions, hours, no-shows, coach cancellations; no money), Revenue page section and CSV, "Coach add-on" line in sales, demo mirror, tests.
 
 - [ ] Failing tests: counts completed sessions and hours only; no-shows counted apart; front desk can't call it.
-- [ ] Migration, push, grants, screens, commit.
+- [ ] Screens with `impeccable`: Revenue (Coach hours section, Coach add-on in sales), Refunds, Discounts and Logs & Archive (Transactions "Coach add-on") (Windows). Migration, push, grants, commit.
 
 ## Phase 15: Part 2 checks
 
@@ -358,3 +360,4 @@ Same rules as `2026-11-19-owner-fixes.md`:
 - 2026-11-20: owner: coaches are bookable by their posted shifts, not by desk check-in (plan as written, no late-coach alert).
 - 2026-11-20: owner: E4, the admin sets the coach price per package (included in the package price, or a Coach add-on price on the Day pass / plain packages).
 - 2026-11-20: owner: full front desk and admin page changes for the coach overhaul added to "Pages that change", plus the coach's Trainees page.
+- 2026-11-21: owner: every changed page uses `impeccable`; rule added under "Pages that change" and each Part 2 task's screen step names its pages.
