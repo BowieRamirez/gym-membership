@@ -408,7 +408,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     break;
                 case AmenityUsage u:
                     if (!CoachInGymFor(All<UserAmenity>().FirstOrDefault(a => a.Id == u.UserAmenityId)?.AmenityId ?? 0)) throw Err("no_coach_present");   // 0043, 0052
-                    if (!ActiveMember(Uid) || !All<UserAmenity>().Any(a => a.Id == u.UserAmenityId && a.MemberId == Uid && a.Status == Status.Active && (a.ExpiresAt is null || a.ExpiresAt > DateTime.UtcNow)))
+                    if (!ActiveMember(Uid) || !All<UserAmenity>().Any(a => a.Id == u.UserAmenityId && a.MemberId == Uid && a.Status == Status.Active && (a.ExpiresAt is null || a.ExpiresAt > SubscriptionNow)))
                         throw Err(Rls);
                     break;
                 default: throw Err(Rls);
