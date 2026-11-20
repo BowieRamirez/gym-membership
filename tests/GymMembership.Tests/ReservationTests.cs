@@ -339,4 +339,30 @@ public class ReservationTests
         Assert.Contains($"online. Receipt {receipt}", msg.Body);
         Assert.NotEqual("u-alex", msg.SenderId);
     }
+
+    [Fact]   // B5 (0115): cancelling or closing a day on a ₱0 booking creates no refund row and no staff alert
+    public async Task Cancelling_or_closing_a_day_on_a_zero_amount_booking_creates_no_refund()
+    {
+        var (gw, _) = await Member();
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        Assert.True((await new AdminService(gw).CreateDiscountAsync(new Discount { Code = "FREEBOOK1", Percent = 100, MaxUses = 5, ExpiresAt = DateTime.UtcNow.AddDays(5) }, DiscountItem.Everything)).Ok);
+        Assert.True((await new AdminService(gw).CreateDiscountAsync(new Discount { Code = "FREEBOOK2", Percent = 100, MaxUses = 5, ExpiresAt = DateTime.UtcNow.AddDays(5) }, DiscountItem.Everything)).Ok);
+        await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
+
+        var group = (await gw.ListAsync<Amenity>(a => a.Name == "Group classes")).Single();
+        var later = At("10:00").AddDays(2);
+        var r1 = (await new ReservationService(gw).BookAsync(group.Id, later, 60, PayMethod.Qr, code: "FREEBOOK1")).Value!;
+        Assert.Equal("confirmed", r1.Status);
+        Assert.True((await new ReservationService(gw).CancelAsync(r1.Id)).Ok);
+
+        var r2 = (await new ReservationService(gw).BookAsync(group.Id, later.AddHours(1), 60, PayMethod.Qr, code: "FREEBOOK2")).Value!;
+        Assert.Equal("confirmed", r2.Status);
+
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var closeDay = DateOnly.FromDateTime(later.AddHours(8));
+        Assert.True((await new AdminService(gw).CloseDayAsync(closeDay, "Holiday")).Ok);
+
+        Assert.DoesNotContain(await gw.ListAsync<RefundRequest>(), f => f.ReservationId == r1.Id || f.ReservationId == r2.Id);
+        Assert.DoesNotContain(await gw.ListAsync<UserNotification>(), n => n.Title == "Booking refund to repay");
+    }
 }

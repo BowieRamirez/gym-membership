@@ -224,6 +224,7 @@ Found by driving the app's Core services against the live project as admin, coac
 | B2 | **A coach can mark attendance for a session that hasn't happened.** The session becomes `completed` / `no_show`, can no longer be cancelled (`already_processed`), and the member is alerted "Attendance recorded". | `record_session_attendance` (`0005`) has no time check; `AttendanceCalendar.cs:10` `CanMark => !Cancelled`. | Session tomorrow 11:00 marked `present` today |
 | B3 | **A 100% code on an online purchase can't be paid.** It makes a ₱0 `qr` payment; `xendit-checkout` sends `amount: 0`, Xendit refuses, and the app shows "unavailable". The booking/payment waits until it expires and holds the code's use. | `book_amenity_for` / `avail_membership` / `extend_membership` (paid path) + `supabase/functions/xendit-checkout/index.ts` | Payment 73 (Boxing ring, code 100%) |
 | B4 | **A member can be sent to pay for a slot that's already booked.** The paid path of `book_amenity_for` has no check for a confirmed booking on that slot (the walk-in function has one, `0092`), so the member pays online and the confirm then fails (refund). Same member double-booked too. | `book_amenity_for` paid path (`0090`, patched by `0093`, `0099`, `0106`) | Reservations 19 (confirmed, pass) and 20 (awaiting payment), same 10:00 slot |
+| B5 | **Cancelling a ₱0 booking makes a ₱0 refund "To repay".** Found after the B3 fix (2026-11-20): a booking paid ₱0 with a 100% code is now confirmed, and cancelling it 24 hours or more ahead creates an approved `cancel` refund of ₱0 and alerts staff "Booking refund to repay", with nothing to give back. Closing the gym on that day would do the same. Membership refunds already refuse ₱0 (`not_refundable`, 0068). | `cancel_reservation` (`0064`) and `close_gym_day` (`0065`) insert the refund without checking the amount | Refunds 24, 25 (RefundTest Member, 21 Nov 6 PM) and 27 (Claude Retest, 22 Nov 4 PM), all ₱0 with ₱100 off |
 
 Settings and design changes found by the same test:
 
@@ -277,6 +278,12 @@ Decisions (recommended; owner to confirm before building):
 
 - [x] Failing tests: 18:00–19:00 booked → 19:00 books; overlapping hours still refused. Migration (`0113`), push, live check, commit.
 
+### Task 23: No refund when nothing was paid (B5)
+
+**Files:** migration `0115_no_zero_booking_refund.sql`: `cancel_reservation` makes the refund only when `v_pay.amount > 0`; `close_gym_day` only when the refund total (down payment + balance) is above 0; with nothing paid the booking is simply cancelled, no refund row and no "Booking refund to repay" alert (the cancel still goes in the audit log). The same migration closes the approved ₱0 `cancel` refunds already there (24, 25, 27) as `paid` with no money moved, reference "Nothing to repay (₱0)". Tests `supabase/tests/local/amenity-booking.mjs`, `gym-closures.mjs`, demo mirror (`DemoReservations.cs` cancel and close day), xUnit.
+
+- [x] Failing tests: a ₱0 booking (100% code) cancelled 24 hours or more ahead → cancelled, no refund row, no staff alert; the same in a closed day; a paid booking still gets its refund. Migration (`0115`), push, grants, live check (no ₱0 rows left on Refunds), commit.
+
 ### Task 20: Clean up the live test records
 
 - [x] Archived 10 `@example.com` test accounts and cancelled test bookings/codes (`claude.desk.1120071128@example.com` and `claude.codes.1120071443@example.com` remain with `account_has_commitments`).
@@ -309,3 +316,5 @@ Decisions (recommended; owner to confirm before building):
   - **Rebrand Gym Center to Slim and Shape (`1fab6f3`):** Updated `"Gym Center"` / `"Health & Fitness Gym Center"` to `"Slim and Shape"` / `"Health & Fitness Slim and Shape"` across app titles, shells, `AuthLayout`, `IconRail.Windows.cs`, `DemoGateway.cs`, `LogoTests.cs`, and `gym_badge.png`.
   - **Open item noted:** Desk Xendit payments log two rows in Transactions (`Desk payment sent to Xendit` + `Paid online (Xendit)`); waiting on owner choice (hide sent-to-Xendit from Transactions, label Pending, or leave as-is).
 - 2026-11-20: live test of all roles against the real project (~440 checks). Four bugs found (B1-B4) and four settings/design changes (C1-C4) listed as Phase 12, with recommended decisions Q14-Q18 waiting on the owner's OK. Online payment completion not tested (needs a Xendit test-mode payment by hand).
+- 2026-11-20: Phase 12 retested live (`bfe309f`, 0109-0114): B1-B4 and C1-C3 all pass (amenity add/publish/status; future attendance `too_soon` and calendar hides marks; 100% code online verified at once for package, extension and booking, no Xendit link; booked slot refused before any payment, own booking `member_busy`; back-to-back hours book; Day pass package ends at Manila midnight and sets the walk-in price; gym name). Read-only regression for all roles unchanged. Retest bookings cancelled and "Claude Retest Room" archived; retest accounts `claude.re*@example.com` left.
+- 2026-11-20: owner spotted ₱0 "To repay" rows on Refunds: cancelling a ₱0 booking (possible since B3) makes a ₱0 refund. Added as B5 / Task 23 (next migration `0115`).

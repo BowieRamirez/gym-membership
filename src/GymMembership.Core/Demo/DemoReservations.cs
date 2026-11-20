@@ -191,13 +191,16 @@ public sealed partial class DemoGateway
                 var was = r.Status;
                 r.Status = "cancelled"; r.CancelledAt = now; r.CancelledBy = Uid; r.CancelReason = string.IsNullOrEmpty(reason) ? null : reason;
                 if (was == AwaitingPayment && pay is { Status: Status.Pending }) { pay.Status = Status.Rejected; pay.RejectedReason = "Booking cancelled"; CancelTarget(pay); }
-                else if (paid && (!mine || r.StartsAt.AddHours(-24) >= now))   // G13: 24 hours or more before, or the gym cancelling
+                else if (paid)
                 {
-                    var f = Add(new RefundRequest { Kind = "cancel", ReservationId = r.Id, PaymentId = pay!.Id, MemberId = r.MemberId, Amount = pay.Amount,
-                        Reason = string.IsNullOrEmpty(reason) ? "Booking cancelled" : reason, RequestedAt = now, Status = "approved", DecidedBy = Uid, DecidedAt = now,
-                        DecisionReason = mine ? "Cancelled 24 hours or more before the start: down payment refunded" : "Cancelled by the gym: down payment refunded" });
-                    NotifyStaff("payment", "Booking refund to repay");
-                    Audit("refund.request", "refund_requests", f.Id.ToString());
+                    if (pay!.Amount > 0 && (!mine || r.StartsAt.AddHours(-24) >= now))   // G13 & B5: 24 hours or more before, or the gym cancelling, and only when paid > 0
+                    {
+                        var f = Add(new RefundRequest { Kind = "cancel", ReservationId = r.Id, PaymentId = pay.Id, MemberId = r.MemberId, Amount = pay.Amount,
+                            Reason = string.IsNullOrEmpty(reason) ? "Booking cancelled" : reason, RequestedAt = now, Status = "approved", DecidedBy = Uid, DecidedAt = now,
+                            DecisionReason = mine ? "Cancelled 24 hours or more before the start: down payment refunded" : "Cancelled by the gym: down payment refunded" });
+                        NotifyStaff("payment", "Booking refund to repay");
+                        Audit("refund.request", "refund_requests", f.Id.ToString());
+                    }
                 }
                 else if (!paid && r.UserAmenityId is { } session) foreach (var p in All<UserAmenity>().Where(p => p.Id == session && p.IsSession)) p.Status = Status.Active;
                 if (r.MemberId != Uid) Notify(r.MemberId, "amenity", "Booking cancelled", reason);
