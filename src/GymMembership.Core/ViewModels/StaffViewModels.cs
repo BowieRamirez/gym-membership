@@ -2159,11 +2159,11 @@ public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive
     bool HasPrevious => Page > 0;
     AuditFilter _applied = new();
     // owner fixes 2026-11-19 Q4 (0101): Transactions has its own filters and its own applied filter; the two tabs never mix
-    public string[] Whats { get; } = ["Everything", "Membership", "Amenity", "Day pass", "Refund", "Cash shift"];
+    public string[] Whats { get; } = ["All", "Membership", "Amenity", "Day pass", "Refund", "Cash shift"];
     static readonly string[] WhatKeys = ["", "membership", "amenity", "day_pass", "refund", "cash_shift"];
-    public string[] PaidWiths { get; } = ["Any way", "Cash", "GCash", "Maya", "QR Ph", "Card"];
+    public string[] PaidWiths { get; } = ["All", "Cash", "GCash", "Maya", "QR Ph", "Card"];
     static readonly string[] PaidWithKeys = ["", "cash", "gcash", "paymaya", "qrph", "cards"];   // Xendit's channel codes, or the payment's method
-    public string[] Statuses { get; } = ["Any status", "Pending", "Paid", "Failed", "Refunded", "Voided"];
+    public string[] Statuses { get; } = ["All", "Pending", "Paid", "Failed", "Refunded", "Voided"];
     static readonly string[] StatusKeys = ["", "pending", "paid", "failed", "refunded", "voided"];
     [ObservableProperty] private string customer = "";
     [ObservableProperty] private int whatIndex;

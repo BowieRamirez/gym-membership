@@ -94,9 +94,9 @@ public class TransactionsLogTests
     public void Transactions_offers_the_owners_choices()
     {
         var vm = new AuditViewModel(new AdminService(new DemoGateway()));
-        Assert.Equal(["Everything", "Membership", "Amenity", "Day pass", "Refund", "Cash shift"], vm.Whats);
-        Assert.Equal(["Any way", "Cash", "GCash", "Maya", "QR Ph", "Card"], vm.PaidWiths);
-        Assert.Equal(["Any status", "Pending", "Paid", "Failed", "Refunded", "Voided"], vm.Statuses);
+        Assert.Equal(["All", "Membership", "Amenity", "Day pass", "Refund", "Cash shift"], vm.Whats);
+        Assert.Equal(["All", "Cash", "GCash", "Maya", "QR Ph", "Card"], vm.PaidWiths);
+        Assert.Equal(["All", "Pending", "Paid", "Failed", "Refunded", "Voided"], vm.Statuses);
     }
 
     [Fact]   // Q11: demo Transactions follows refund_requests rows to their payment, as 0101 does

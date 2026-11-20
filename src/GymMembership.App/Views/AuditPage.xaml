@@ -172,7 +172,7 @@
                                 <Border Style="{StaticResource Field}"><Entry Text="{Binding Customer}" Placeholder="Part of a name" ReturnCommand="{Binding ApplyCommand}" AutomationId="MoneyCustomer" /></Border>
                             </VerticalStackLayout>
                             <VerticalStackLayout WidthRequest="160" Margin="0,0,12,8" Spacing="4">
-                                <Label Text="What" Style="{StaticResource Caption}" />
+                                <Label Text="What kind" Style="{StaticResource Caption}" />
                                 <Border Style="{StaticResource Field}"><Picker SemanticProperties.Description="What was paid for" ItemsSource="{Binding Whats}" SelectedIndex="{Binding WhatIndex}" AutomationId="MoneyWhat" /></Border>
                             </VerticalStackLayout>
                             <VerticalStackLayout WidthRequest="140" Margin="0,0,12,8" Spacing="4">
