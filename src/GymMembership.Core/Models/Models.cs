@@ -60,7 +60,10 @@ public static class PayMethod
   // one opening and closing time for every day, Manila wall-clock (0028)
   [Column("opens_at")] public TimeSpan OpensAt { get; set; } = TimeSpan.FromHours(6); [Column("closes_at")] public TimeSpan ClosesAt { get; set; } = TimeSpan.FromHours(22);
   [Column("opening_float")] public decimal OpeningFloat { get; set; } = 5000;
-  [Column("down_payment_percent")] public int DownPaymentPercent { get; set; } = 50; }   // G13 (0064): of an amenity booking's price   // F2 (0050): the drawer float a cashier starts a shift with
+  [Column("down_payment_percent")] public int DownPaymentPercent { get; set; } = 50;
+  [Column("max_coach_sessions_per_day")] public int MaxCoachSessionsPerDay { get; set; } = 1;
+  [Column("max_upcoming_coach_sessions")] public int MaxUpcomingCoachSessions { get; set; } = 2;
+  [Column("max_coach_hours_per_day")] public int? MaxCoachHoursPerDay { get; set; } = 6; }   // G13 (0064): of an amenity booking's price   // F2 (0050): the drawer float a cashier starts a shift with
 
 /// <summary>G16 (0065): a whole Manila day the gym is closed; written only by close_gym_day and reopen_gym_day.</summary>
 [Table("gym_closures")] public class GymClosure : BaseModel
@@ -72,7 +75,10 @@ public static class PayMethod
 { [PrimaryKey("membership_package_id")] public int Id { get; set; } [Column("name")] public string Name { get; set; } = ""; [Column("description")] public string? Description { get; set; }
   [Column("price")] public decimal Price { get; set; } [Column("duration_days")] public int DurationDays { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true;
   [Column("is_day_pass")] public bool IsDayPass { get; set; }   // 0098: its term ends at midnight in Manila on the day it is paid
+  [Column("includes_coach")] public bool IncludesCoach { get; set; }   // 0119: E3
+  [Column("coach_addon_price")] public decimal? CoachAddonPrice { get; set; }   // 0119: E4
   [System.Text.Json.Serialization.JsonIgnore] public string LengthText => IsDayPass ? "Today only, until midnight" : $"{DurationDays} days of access";
+  [System.Text.Json.Serialization.JsonIgnore] public string CoachText => IncludesCoach ? "Coach included" : CoachAddonPrice is { } p ? $"Add a coach: \u20B1{p:N0}" : "";
   // G6/G9 (0061): null = a draft; set only by publish_catalog_item. A version points at the package it replaces.
   [Column("published_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? PublishedAt { get; set; }
   [Column("replaces_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? ReplacesId { get; set; }

@@ -76,7 +76,7 @@ public sealed partial class DemoGateway
         var p = All<MembershipPackage>().FirstOrDefault(p => p.Id == id) ?? throw Err("not_found");
         if (p.State != CatalogState.Published) throw Err("not_published");
         if (All<MembershipPackage>().Any(x => x.ReplacesId == id && x.PublishedAt is null)) throw Err("draft_exists");
-        var v = Add(new MembershipPackage { Name = p.Name, Description = p.Description, Price = p.Price, DurationDays = p.DurationDays, Benefits = [.. p.Benefits], ImagePath = p.ImagePath, ReplacesId = id, IsDayPass = p.IsDayPass });   // 0105
+        var v = Add(new MembershipPackage { Name = p.Name, Description = p.Description, Price = p.Price, DurationDays = p.DurationDays, Benefits = [.. p.Benefits], ImagePath = p.ImagePath, ReplacesId = id, IsDayPass = p.IsDayPass, IncludesCoach = p.IncludesCoach, CoachAddonPrice = p.CoachAddonPrice });   // 0105, 0119
         Audit("catalog.new_version", "membership_packages", v.Id.ToString());
         return v.Id;
     }

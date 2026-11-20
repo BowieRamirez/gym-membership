@@ -462,8 +462,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 case (MembershipPackage p, MembershipPackage old):
                     if (!Has("catalog:manage")) throw Err(Rls);
                     // G9 (0061): a published package changes only by being archived
-                    if (old.PublishedAt is not null && ((p.Name, p.Description, p.Price, p.DurationDays, p.IsDayPass) != (old.Name, old.Description, old.Price, old.DurationDays, old.IsDayPass) || !p.Benefits.SequenceEqual(old.Benefits)))   // 0105: IsDayPass too
+                    if (old.PublishedAt is not null && ((p.Name, p.Description, p.Price, p.DurationDays, p.IsDayPass, p.IncludesCoach, p.CoachAddonPrice) != (old.Name, old.Description, old.Price, old.DurationDays, old.IsDayPass, old.IncludesCoach, old.CoachAddonPrice) || !p.Benefits.SequenceEqual(old.Benefits)))   // 0105, 0119
                         throw Err("package_published");
+                    if (p.IncludesCoach && p.CoachAddonPrice is not null || p.CoachAddonPrice is <= 0) throw Err("bad_input");
                     var kept = Clone(p); kept.PublishedAt = old.PublishedAt; kept.ReplacesId = old.ReplacesId; kept.ImagePath = old.ImagePath;
                     list[index] = kept;
                     break;

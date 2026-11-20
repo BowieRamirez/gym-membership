@@ -1880,8 +1880,12 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
     public Task<AppResult<bool>> ArchiveDiscountAsync(Discount d) => Rpc("archive_catalog_record", new() { ["p_type"] = "code", ["p_id"] = d.Id, ["p_reason"] = "Archived code" });
     public Task<AppResult<bool>> DeleteDiscountAsync(Discount d) => Rpc("delete_discount", new() { ["p_id"] = d.Id });
 
-    public Task<AppResult<bool>> SavePackageAsync(MembershipPackage p) =>
-        Safe.RunAsync(async () => { if (p.Id == 0) p.Id = (await gw.InsertAsync(p)).Id; else await gw.UpdateAsync(p); return true; });
+    public Task<AppResult<bool>> SavePackageAsync(MembershipPackage p)
+    {
+        if (p.IncludesCoach) p.CoachAddonPrice = null;
+        if (p.CoachAddonPrice is <= 0) return Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input"));
+        return Safe.RunAsync(async () => { if (p.Id == 0) p.Id = (await gw.InsertAsync(p)).Id; else await gw.UpdateAsync(p); return true; });
+    }
     public Task<AppResult<bool>> PublishAsync(string kind, int id) => Rpc("publish_catalog_item", new() { ["p_kind"] = kind, ["p_id"] = id });
     public Task<AppResult<int>> NewPackageVersionAsync(int packageId) => Safe.RunAsync(() => gw.RpcAsync<int>("new_package_version", new() { ["p_id"] = packageId }));
     public Task<AppResult<bool>> DeleteDraftAsync(string kind, int id) => Rpc("delete_catalog_item", new() { ["p_kind"] = kind, ["p_id"] = id });
@@ -2002,6 +2006,8 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         if (string.IsNullOrWhiteSpace(s.GymName)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
         if (s.WalkInPrice <= 0) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_walk_in_price");   // D4: ₱0 could never be paid
         if (s.DownPaymentPercent is < 1 or > 100) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_down_payment");   // G13, as 0064's check
+        if (s.MaxCoachSessionsPerDay < 1 || s.MaxUpcomingCoachSessions < 1 || s.MaxCoachHoursPerDay is < 1)
+            return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
         static bool OnGrid(TimeSpan t) => t.Seconds == 0 && t.Minutes is 0 or 30 && t >= TimeSpan.Zero && t < TimeSpan.FromDays(1);
         if (!OnGrid(s.OpensAt) || !OnGrid(s.ClosesAt) || s.ClosesAt <= s.OpensAt) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_hours");
         return await Safe.RunAsync(async () =>

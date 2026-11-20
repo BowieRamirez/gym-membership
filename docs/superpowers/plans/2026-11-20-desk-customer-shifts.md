@@ -291,8 +291,8 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 **Files:** migration `01xx_package_includes_coach.sql` (`membership_packages.includes_coach boolean not null default false`, copied on new version; `membership_packages.coach_addon_price numeric(12,2) check (coach_addon_price > 0)`, null when Coach included is on, copied on new version; `gym_settings.max_coach_sessions_per_day int default 1`, `max_upcoming_coach_sessions int default 2`, `max_coach_hours_per_day int default 6` (E12)), Packages admin page (switch; Coach add-on price box shown when the switch is off), Gym settings page (the two member limits and the coach daily maximum), Packages member page ("Coach included" tag), `Models.cs`, demo mirror, tests.
 
-- [ ] Failing tests: switch saved and carried to a new version; a member can read whether their package includes a coach; only admins set a package's add-on price; Coach included on → no add-on price stored; a package with the switch off and no add-on price → `coach_not_offered` when booking; a price change in a new version doesn't touch payments already made.
-- [ ] Screens with `impeccable`: Packages and amenities admin, Gym settings (Windows); Packages "Coach included" tag (member, Android and Windows, light/dark, 1.3 font scale). Migration, push, grants, commit.
+- [x] Failing tests: switch saved and carried to a new version; a member can read whether their package includes a coach; only admins set a package's add-on price; Coach included on → no add-on price stored; a package with the switch off and no add-on price → `coach_not_offered` when booking; a price change in a new version doesn't touch payments already made.
+- [x] Screens with `impeccable`: Packages and amenities admin, Gym settings (Windows); Packages "Coach included" tag (member, Android and Windows, light/dark, 1.3 font scale). Migration, push (dry-run verified), grants, commit.
 
 ## Phase 10: Book a coach (E5, E6, E7)
 

@@ -1724,6 +1724,9 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     [ObservableProperty] private decimal formPrice;
     [ObservableProperty] private int formDays = 30;
     [ObservableProperty] private bool formDayPass;   // 0098: the Day pass package (its term ends at midnight)
+    [ObservableProperty] private bool formIncludesCoach;   // 0119: E3
+    [ObservableProperty] private string formCoachAddonPrice = "";   // 0119: E4; blank = no add-on
+    partial void OnFormIncludesCoachChanged(bool value) { if (value) FormCoachAddonPrice = ""; }
     /// <summary>G19 (0066): a new amenity is sold per session; one still set up as a pass keeps its days until Sell per session.</summary>
     [ObservableProperty, NotifyPropertyChangedFor(nameof(PriceLabel))] private bool isOldPass;
     public string PriceLabel => IsPackagePanel ? "Price" : IsOldPass ? "Price for the pass" : "Price per hour";
@@ -1765,6 +1768,8 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
         CanSaveDraft = true;
         VersionNote = replaces is null ? null : $"This is a draft of a new version. {replaces.Name} stays on sale as it is until you publish this one. Discount codes for the old version don't carry over.";
         FormDays = p.DurationDays; FormDayPass = p.IsDayPass;
+        FormIncludesCoach = p.IncludesCoach;
+        FormCoachAddonPrice = p.CoachAddonPrice is { } cap ? cap.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) : "";
         Benefits.Clear();
         foreach (var b in p.Benefits) Benefits.Add(new BenefitLine { Text = b });
         Open(true, p.Name, p.Description, p.Price, Packages.FirstOrDefault(r => r.Package.Id == p.Id && p.Id != 0)?.PhotoUrl);
@@ -1830,8 +1835,19 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
         int id;
         if (IsPackagePanel)
         {
+            decimal? addon = null;
+            if (!FormIncludesCoach && !string.IsNullOrWhiteSpace(FormCoachAddonPrice))
+            {
+                if (!decimal.TryParse(FormCoachAddonPrice.Trim(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var parsed) || parsed <= 0)
+                {
+                    MissingText = "Coach add-on price must be more than zero, or leave it blank.";
+                    return false;
+                }
+                addon = parsed;
+            }
             var p = _package!;
-            (p.Name, p.Description, p.Price, p.DurationDays, p.IsDayPass) = (FormName.Trim(), description, FormPrice, FormDayPass ? 1 : FormDays, FormDayPass);
+            (p.Name, p.Description, p.Price, p.DurationDays, p.IsDayPass, p.IncludesCoach, p.CoachAddonPrice) =
+                (FormName.Trim(), description, FormPrice, FormDayPass ? 1 : FormDays, FormDayPass, FormIncludesCoach, FormIncludesCoach ? null : addon);
             p.Benefits = Benefits.Select(b => b.Text.Trim()).Where(b => b.Length > 0).ToList();
             ok = await RunAsync(() => svc.SavePackageAsync(p));
             id = p.Id;
@@ -2235,6 +2251,9 @@ public partial class GymSettingsViewModel(IAdminService svc) : LoadableViewModel
     [ObservableProperty] private TimeSpan closesAt = TimeSpan.FromHours(22);
     [ObservableProperty] private decimal openingFloat = 5000;   // F2: what each cashier's drawer starts with
     [ObservableProperty] private int downPaymentPercent = 50;   // G13 (0064): of an amenity booking, paid to reserve it
+    [ObservableProperty] private int maxCoachSessionsPerDay = 1;   // E12 (0119)
+    [ObservableProperty] private int maxUpcomingCoachSessions = 2;   // E12 (0119)
+    [ObservableProperty] private string maxCoachHoursPerDay = "6";   // E12 (0119): blank = unlimited
     GymSettings? _loaded;
 
     public override async Task OnAppearingAsync() { await LoadAsync(); await LoadClosuresAsync(); }
@@ -2245,6 +2264,8 @@ public partial class GymSettingsViewModel(IAdminService svc) : LoadableViewModel
         await RunAsync(svc.GymSettingsAsync, g =>
         {
             _loaded = g; GymName = g.GymName; WalkInPrice = g.WalkInPrice; OpensAt = g.OpensAt; ClosesAt = g.ClosesAt; OpeningFloat = g.OpeningFloat; DownPaymentPercent = g.DownPaymentPercent;
+            MaxCoachSessionsPerDay = g.MaxCoachSessionsPerDay; MaxUpcomingCoachSessions = g.MaxUpcomingCoachSessions;
+            MaxCoachHoursPerDay = g.MaxCoachHoursPerDay?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
         });
         var pkgs = await svc.AllPackagesAsync();
         if (pkgs.Ok)
@@ -2256,9 +2277,16 @@ public partial class GymSettingsViewModel(IAdminService svc) : LoadableViewModel
     {
         Notice = null;
         if (_loaded is null) return;
+        int? maxHours = null;
+        if (!string.IsNullOrWhiteSpace(MaxCoachHoursPerDay))
+        {
+            if (!int.TryParse(MaxCoachHoursPerDay.Trim(), out var h) || h < 1) { ErrorMessage = "Coach daily hours must be at least 1, or leave blank."; return; }
+            maxHours = h;
+        }
         if (!await Confirm.AskAsync("Save gym settings?", $"Open {DateTime.Today.Add(OpensAt):h:mm tt} to {DateTime.Today.Add(ClosesAt):h:mm tt} every day.", "Save settings")) return;
         _loaded.GymName = GymName.Trim(); _loaded.WalkInPrice = WalkInPrice;
         _loaded.OpensAt = OpensAt; _loaded.ClosesAt = ClosesAt; _loaded.OpeningFloat = OpeningFloat; _loaded.DownPaymentPercent = DownPaymentPercent;
+        _loaded.MaxCoachSessionsPerDay = MaxCoachSessionsPerDay; _loaded.MaxUpcomingCoachSessions = MaxUpcomingCoachSessions; _loaded.MaxCoachHoursPerDay = maxHours;
         if (!await RunAsync(() => svc.SaveGymSettingsAsync(_loaded))) return;
         Notice = "Saved.";
         await LoadAsync();

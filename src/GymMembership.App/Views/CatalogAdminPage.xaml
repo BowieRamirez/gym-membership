@@ -270,6 +270,21 @@
                                 </VerticalStackLayout>
                             </Grid>
 
+                            <!-- E3/E4 (0119): coach included vs paid add-on -->
+                            <VerticalStackLayout Spacing="8" IsVisible="{Binding IsPackagePanel}">
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                    <CheckBox IsChecked="{Binding FormIncludesCoach}" VerticalOptions="Center" AutomationId="FormIncludesCoach" SemanticProperties.Description="Coach included" />
+                                    <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                        <Label Text="Coach included" FontFamily="BarlowSemiBold" />
+                                        <Label Text="Members on this package can book a coach at no extra charge." Style="{StaticResource Caption}" />
+                                    </VerticalStackLayout>
+                                </Grid>
+                                <VerticalStackLayout Spacing="6" IsVisible="{Binding FormIncludesCoach, Converter={StaticResource Invert}}">
+                                    <Label Text="Coach add-on price per hour (₱)" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><Entry Text="{Binding FormCoachAddonPrice}" Keyboard="Numeric" Placeholder="Leave blank if no add-on" AutomationId="FormCoachAddonPrice" SemanticProperties.Description="Coach add-on price per hour" /></Border>
+                                </VerticalStackLayout>
+                            </VerticalStackLayout>
+
                             <!-- packages: benefits, one per line, shown to members -->
                             <VerticalStackLayout Spacing="8" IsVisible="{Binding IsPackagePanel}">
                                 <Label Text="Benefits, one per line (shown to members)" Style="{StaticResource Caption}" />

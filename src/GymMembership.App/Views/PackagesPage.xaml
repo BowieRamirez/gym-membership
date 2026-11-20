@@ -17,6 +17,7 @@
                         <VerticalStackLayout Spacing="2" VerticalOptions="Center">
                             <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" FontSize="18" />
                             <Label Text="{Binding LengthText}" Style="{StaticResource Caption}" />
+                            <Label Text="{Binding CoachText}" FontFamily="BarlowSemiBold" FontSize="13" TextColor="{AppThemeBinding Light={StaticResource AccentInkLight}, Dark={StaticResource Accent}}" IsVisible="{Binding CoachText, Converter={StaticResource HasText}}" />
                         </VerticalStackLayout>
                         <Label Grid.Column="1" Text="{Binding Price, StringFormat='₱{0:N0}'}" Style="{StaticResource Numeral}" FontSize="30" VerticalOptions="Center" />
                     </Grid>
@@ -35,6 +36,7 @@
                     <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" FontSize="18" />
                     <Label Text="{Binding Price, StringFormat='₱{0:N0}'}" Style="{StaticResource Numeral}" FontSize="44" />
                     <Label Text="{Binding LengthText}" Style="{StaticResource Caption}" />
+                    <Label Text="{Binding CoachText}" FontFamily="BarlowSemiBold" FontSize="13" TextColor="{AppThemeBinding Light={StaticResource AccentInkLight}, Dark={StaticResource Accent}}" IsVisible="{Binding CoachText, Converter={StaticResource HasText}}" />
                     <Label Text="{Binding Description}" Style="{StaticResource Muted}" IsVisible="{Binding Description, Converter={StaticResource HasText}}" />
                     <VerticalStackLayout Spacing="2" BindableLayout.ItemsSource="{Binding Benefits}" IsVisible="{Binding Benefits.Count, Converter={StaticResource Any}}">
                         <BindableLayout.ItemTemplate><DataTemplate x:DataType="x:String"><Label Text="{Binding ., StringFormat='• {0}'}" FontSize="14" /></DataTemplate></BindableLayout.ItemTemplate>
