@@ -164,7 +164,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 # Part 2: Coach revamp (owner, 2026-11-20)
 
-**Not built yet.** Model agreed with the owner (2026-11-20, E1-E7 below); E8-E12 are recommendations still to confirm. Same branch, same rules ("How to use this plan"). Migrations start at `0118`. Member and coach screens get Android and Windows (light, dark, 1.3 font scale, real phone layouts); front desk and admin screens are Windows only.
+**Not built yet.** Model agreed with the owner (2026-11-20, E1-E7; 2026-11-21, E8-E12 confirmed as recommended). Same branch, same rules ("How to use this plan"). Migrations start at `0118`. Member and coach screens get Android and Windows (light, dark, 1.3 font scale, real phone layouts); front desk and admin screens are Windows only.
 
 **Source:** owner's messages 2026-11-20: coaches are staff; **no coach rate**; the gym pays its coaches; **coaches are booked per session** (no more hiring); a member picks the coach they want for a day in the app; when creating a package the admin switches **Coach included** on or off; a package with it off (the Day pass included) gets a coach as an **add-on, an extra fee**; one-on-one; coach sessions kept separate from amenity bookings; the 10-step coach flow pasted in chat (available coaches only, checked again on confirm, QR check-in with the coach's arrival confirmed, session status apart from payment, damage report reviewed by management, payment closed once verified).
 
@@ -172,7 +172,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 | Phase | What | Needs | Status |
 |---|---|---|---|
-| 8 | Coach rate and amenity coach fee removed; amenity booking "With a coach" goes | E1, E2 | |
+| 8 | Coach rate and amenity coach fee removed; amenity booking "With a coach" goes | E1, E2 | Done |
 | 9 | Packages: Coach included switch; coach add-on price per package | E3, E4 | |
 | 10 | Book a coach: day → coach → time, one-on-one, checked again on confirm; add-on paid; limits | E5, E6, E7 | |
 | 11 | Hiring and Time requests removed; messages follow sessions | E8 | |
@@ -281,9 +281,9 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 **Files:** migration `0118_remove_coach_rate_and_fee.sql` (`book_amenity_for` and the desk booking stop taking a coach and adding `coach_fee`; then drop `coaches.hourly_rate` with `coaches_rate_positive` and `amenities.coach_fee` with its grants; every function reading them recreated first; past payments keep their amounts), app: coach Settings (rate out), Coaches page (rate out), amenity admin page (coach fee out), Book an amenity and Book for a customer (Solo / With a coach and coach line out), `Models.cs` (`HourlyRate`, `CoachFee` out), demo mirror, tests `supabase/tests/local/coach-fee-removed.mjs`, `tests/GymMembership.Tests/CoachRateRemovedTests.cs`.
 
-- [ ] Grep every reader of `hourly_rate`, `coach_fee` and the booking's coach parameter (migrations, Edge Functions, app, demo) first.
-- [ ] Failing tests: an amenity booking costs the amenity price only; an old-style call with a coach is charged the same and books no coach; refund of an older booking that included a coach fee returns the full paid amount.
-- [ ] Screens with `impeccable`: coach Settings, Coaches, Book an amenity (member, Android and Windows, light/dark, 1.3 font scale); amenity admin (Packages and amenities) and Amenity status / Book for a customer (Windows). Migration, push (dry run first), live grants, commit.
+- [x] Grep every reader of `hourly_rate`, `coach_fee` and the booking's coach parameter (migrations, Edge Functions, app, demo) first.
+- [x] Failing tests: an amenity booking costs the amenity price only; an old-style call with a coach is charged the same and books no coach; refund of an older booking that included a coach fee returns the full paid amount.
+- [x] Screens with `impeccable`: coach Settings, Coaches, Book an amenity (member, Android and Windows, light/dark, 1.3 font scale); amenity admin (Packages and amenities) and Amenity status / Book for a customer (Windows). Migration, push (dry run first), live grants, commit. (`0118_remove_coach_rate_and_fee.sql` dry-run verified; live push pending.)
 
 ## Phase 9: Coach included and the add-on price (E3, E4)
 
@@ -364,4 +364,4 @@ Same rules as `2026-11-19-owner-fixes.md`:
 - 2026-11-20: owner: full front desk and admin page changes for the coach overhaul added to "Pages that change", plus the coach's Trainees page.
 - 2026-11-21: owner: every changed page uses `impeccable`; rule added under "Pages that change" and each Part 2 task's screen step names its pages.
 - 2026-11-21: Part 2 read through: E3 and E4 made consistent (no add-on price = no coach), no-show rule fixed in the database (only the two counts in Gym settings), held add-on sessions spelled out (`scheduled` + `held_until`, cancelled by the payment expiry), coach add-on discount codes (kind `coach`) added to Tasks 11 and 16, stale status and log lines corrected.
-- 2026-11-21: owner asked how a coach's day works: E12 added (many members a day, one at a time; limits are per member; coach daily maximum 6 hours), recommended, to confirm.
+- 2026-11-21: owner confirmed E8-E12 as recommended and said start Part 2 (starting Phase 8).

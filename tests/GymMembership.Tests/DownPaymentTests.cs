@@ -61,27 +61,19 @@ public class DownPaymentTests
         Assert.Equal("Book and pay ₱250.00", vm.BookText);
     }
 
-    [Fact]
-    public async Task With_a_coach_lists_the_free_coaches_and_books_with_the_fee_and_the_down_payment()
+    [Fact]   // 0118 (E2): amenity bookings cost amenity price only and book no coach
+    public async Task Amenity_booking_charges_amenity_price_only_with_down_payment()
     {
         var (gw, vm) = await Member();
         await Pick(vm, "Group classes", "10:00");
         Assert.Equal(50, vm.Percent);
-        Assert.Equal((500m, 250m), (vm.Split.Due, vm.Split.Down));
-        vm.WithCoachCommand.Execute(null);
-        await vm.LoadCoachesCommand.ExecuteAsync(null);
-        var lena = Assert.Single(vm.Coaches);
-        Assert.Equal("Lena Cruz", lena.Name);
-        Assert.False(vm.CanBook);                                // with a coach needs one picked
-        vm.PickCoachCommand.Execute(lena);
-        Assert.True(vm.CanBook);
-        Assert.Equal((600m, 300m, 300m), (vm.Split.Due, vm.Split.Down, vm.Split.Balance));
-        Assert.Equal("Book and pay ₱300.00", vm.BookText);
+        Assert.Equal((500m, 250m, 250m), (vm.Split.Due, vm.Split.Down, vm.Split.Balance));
+        Assert.Equal("Book and pay ₱250.00", vm.BookText);
         await vm.BookCommand.ExecuteAsync(null);
 
         Assert.Null(vm.ErrorMessage);
         var row = vm.Bookings.Single(b => b.Amenity == "Group classes");
-        Assert.Equal(("awaiting_payment", "u-coach1", 600m, 300m, 300m), (row.Booking.Status, row.Booking.CoachId, row.Booking.TotalPrice, row.Booking.DownPayment, row.Payment!.Amount));
+        Assert.Equal(("awaiting_payment", (string?)null, 500m, 250m, 250m), (row.Booking.Status, row.Booking.CoachId, row.Booking.TotalPrice, row.Booking.DownPayment, row.Payment!.Amount));
         Assert.Equal("Waiting for down payment", row.StatusText);
 
         await vm.OpenCommand.ExecuteAsync(vm.Cards.Single(c => c.Amenity.Name == "Group classes"));   // a request holds nothing...

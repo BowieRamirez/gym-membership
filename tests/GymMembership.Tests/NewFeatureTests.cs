@@ -207,9 +207,9 @@ public class NewFeatureTests
     {
         var gw = await As("coach@demo.io");
         var coaches = new CoachService(gw);
-        Assert.True((await coaches.UpdateProfileAsync("New bio", "Mobility", 900m, false)).Ok);
+        Assert.True((await coaches.UpdateProfileAsync("New bio", "Mobility", false)).Ok);
         var me = (await coaches.MyCoachAsync()).Value!;
-        Assert.Equal(("New bio", "Mobility", 900m, false), (me.Bio, me.Specialty, me.HourlyRate, me.IsAvailable));
+        Assert.Equal(("New bio", "Mobility", false), (me.Bio, me.Specialty, me.IsAvailable));
         Assert.Equal("Boxing and mobility", (await gw.ListAsync<Coach>(c => c.UserId == "u-coach2")).Single().Specialty);
 
         // writing someone else's row is refused
@@ -321,7 +321,7 @@ public class NewFeatureTests
         var gw = await As("coach@demo.io");
         var coaches = new CoachService(gw);
         var me = (await coaches.MyCoachAsync()).Value!;
-        Assert.True((await coaches.UpdateProfileAsync(me.Bio, me.Specialty, me.HourlyRate, false)).Ok);
+        Assert.True((await coaches.UpdateProfileAsync(me.Bio, me.Specialty, false)).Ok);
 
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         var card = (await coaches.ListCoachesAsync()).Value!.First(c => c.Name == "Lena Cruz");

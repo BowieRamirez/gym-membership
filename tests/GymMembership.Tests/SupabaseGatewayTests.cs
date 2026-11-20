@@ -475,11 +475,11 @@ public sealed class SupabaseGatewayTests : IDisposable
     }
 
     [Fact]
-    public async Task A_coach_profile_update_sends_the_four_editable_fields_and_filters_on_their_own_id()
+    public async Task A_coach_profile_update_sends_the_three_editable_fields_and_filters_on_their_own_id()
     {
         var gw = await SignedInAsync();
-        await gw.UpdateAsync(new Coach { UserId = "u-1", Bio = "b", Specialty = "s", HourlyRate = 800, IsAvailable = true });
-        Assert.Equal(new[] { "bio", "hourly_rate", "is_available", "specialty" }, Columns(Last.Body).Order());
+        await gw.UpdateAsync(new Coach { UserId = "u-1", Bio = "b", Specialty = "s", IsAvailable = true });
+        Assert.Equal(new[] { "bio", "is_available", "specialty" }, Columns(Last.Body).Order());
         Assert.Contains("user_id=eq.u-1", Last.Query);
         Assert.DoesNotContain("user_id", Columns(Last.Body));   // coaches may not change their own key column
     }

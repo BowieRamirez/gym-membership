@@ -892,24 +892,6 @@ public sealed class AmenityService(ISupabaseGateway gw) : IAmenityService
 }
 
 // ===================== Coaches =====================
-/// <summary>An hourly rate is a peso amount above 0 with at most two decimals. Never parsed or shown with the device's own separators.</summary>
-public static partial class CoachRate
-{
-    [GeneratedRegex(@"^\d{1,10}([.,]\d{1,2})?$")] private static partial Regex Shape();
-
-    /// <summary>"350", "350.5", "350,50" are fine; "0", "-1", "350.505", "1,000.00" are not.</summary>
-    public static bool TryParse(string? text, out decimal rate)
-    {
-        rate = 0;
-        var t = text?.Trim() ?? "";
-        return Shape().IsMatch(t) && decimal.TryParse(t.Replace(',', '.'), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out rate) && rate > 0;
-    }
-
-    public static bool IsValid(decimal rate) => rate > 0 && decimal.Round(rate, 2) == rate;
-    public static string Input(decimal? rate) => rate is > 0 ? rate.Value.ToString("0.00", CultureInfo.InvariantCulture) : "";
-    public static string Text(decimal? rate) => rate is > 0 ? $"₱{rate.Value.ToString("N2", CultureInfo.InvariantCulture)} per hour" : "Rate not set";
-}
-
 /// <summary>InGym: the coach has an open physical visit (0032). The list shows only coaches in the gym, plus your own coach.</summary>
 public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId, IReadOnlyList<ShiftPost>? Shifts = null, string? PhotoUrl = null, bool InGym = true, bool Taken = false, int? RequestId = null)
 {
@@ -925,10 +907,9 @@ public sealed record CoachCard(Coach Coach, string Name, bool Hired, int? HireId
     public bool Closed => !Coach.IsAvailable && !Hired;
     /// <summary>G29 (0072): any coach taking members can be asked at any time, in the gym or not; not twice while waiting (G30).</summary>
     public bool CanHire => !Closed && !Requested;
-    public string RateText => CoachRate.Text(Coach.HourlyRate);
 
     public bool SameAs(CoachCard o) => Name == o.Name && Hired == o.Hired && HireId == o.HireId && InGym == o.InGym && Taken == o.Taken && RequestId == o.RequestId && PhotoUrl == o.PhotoUrl && ShiftsText == o.ShiftsText
-        && Coach.IsAvailable == o.Coach.IsAvailable && Coach.Bio == o.Coach.Bio && Coach.Specialty == o.Coach.Specialty && Coach.HourlyRate == o.Coach.HourlyRate;
+        && Coach.IsAvailable == o.Coach.IsAvailable && Coach.Bio == o.Coach.Bio && Coach.Specialty == o.Coach.Specialty;
 
     public string ShiftsText => Shifts is { Count: > 0 }
         ? string.Join("\n", Shifts.Take(3).Select(s => $"{Fmt.Range(s.Start, s.End)}{(string.IsNullOrWhiteSpace(s.Note) ? "" : "  " + s.Note)}"))
@@ -971,7 +952,7 @@ public interface ICoachService
     /// <summary>G30: the signed-in coach's waiting requests, oldest first.</summary>
     Task<AppResult<IReadOnlyList<HireRequestRow>>> HireRequestsAsync();
     Task<AppResult<Coach?>> MyCoachAsync();
-    Task<AppResult<bool>> UpdateProfileAsync(string? bio, string? specialty, decimal? rate, bool available);
+    Task<AppResult<bool>> UpdateProfileAsync(string? bio, string? specialty, bool available);
     Task<AppResult<IReadOnlyList<TraineeRow>>> TraineesAsync();
     Task<AppResult<IReadOnlyList<ShiftPost>>> MyShiftsAsync();
     Task<AppResult<bool>> PostShiftAsync(DateTime startUtc, DateTime endUtc, string? note);
@@ -1060,11 +1041,11 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
     public Task<AppResult<Coach?>> MyCoachAsync() => Safe.RunAsync<Coach?>(async () =>
     { var uid = gw.CurrentUserId; return (await gw.ListAsync<Coach>(c => c.UserId == uid)).FirstOrDefault(); });
 
-    public async Task<AppResult<bool>> UpdateProfileAsync(string? bio, string? specialty, decimal? rate, bool available) =>
-        rate is { } r && !CoachRate.IsValid(r) ? AppResult<bool>.Fail(AppErrorKind.Validation, "bad_rate") : await Safe.RunAsync(async () =>
+    public Task<AppResult<bool>> UpdateProfileAsync(string? bio, string? specialty, bool available) =>
+        Safe.RunAsync(async () =>
     {
         var c = (await MyCoachAsync()).Value ?? throw new Exception("not_found");
-        c.Bio = bio; c.Specialty = specialty; c.HourlyRate = rate; c.IsAvailable = available;
+        c.Bio = bio; c.Specialty = specialty; c.IsAvailable = available;
         await gw.UpdateAsync(c);
         return true;
     });

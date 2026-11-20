@@ -872,7 +872,6 @@ public partial class CoachProfileViewModel(ICoachService svc) : LoadableViewMode
 {
     [ObservableProperty] private string? bio;
     [ObservableProperty] private string? specialty;
-    [ObservableProperty] private string rateInput = "";   // text, parsed by CoachRate: never by the device's own decimal separator
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HiringText))] private bool isAvailable;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(InGym), nameof(VisitText), nameof(VisitButton))] private CoachVisit? visit;
 
@@ -890,7 +889,7 @@ public partial class CoachProfileViewModel(ICoachService svc) : LoadableViewMode
     private async Task LoadAsync()
     {
         if (await RunAsync(svc.MyCoachAsync, c =>
-            { if (c is null) return; Bio = c.Bio; Specialty = c.Specialty; RateInput = CoachRate.Input(c.HourlyRate); IsAvailable = c.IsAvailable; }))
+            { if (c is null) return; Bio = c.Bio; Specialty = c.Specialty; IsAvailable = c.IsAvailable; }))
             await RunAsync(svc.MyVisitAsync, v => Visit = v);
     }
 
@@ -910,9 +909,7 @@ public partial class CoachProfileViewModel(ICoachService svc) : LoadableViewMode
     private async Task SaveAsync()
     {
         Notice = null;
-        // D10: a rate is required on every profile save; a bad one keeps what was typed and says how to fix it
-        if (!CoachRate.TryParse(RateInput, out var rate)) { ErrorMessage = ErrorText.For(AppErrorKind.Validation, "bad_rate"); return; }
-        if (await RunAsync(() => svc.UpdateProfileAsync(Bio, Specialty, rate, IsAvailable))) { RateInput = CoachRate.Input(rate); Notice = "Profile saved."; }
+        if (await RunAsync(() => svc.UpdateProfileAsync(Bio, Specialty, IsAvailable))) Notice = "Profile saved.";
     }
 }
 
@@ -1727,7 +1724,6 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     [ObservableProperty] private decimal formPrice;
     [ObservableProperty] private int formDays = 30;
     [ObservableProperty] private bool formDayPass;   // 0098: the Day pass package (its term ends at midnight)
-    [ObservableProperty] private decimal formCoachFee;   // G14 (0064): amenities only, added when a member books With a coach
     /// <summary>G19 (0066): a new amenity is sold per session; one still set up as a pass keeps its days until Sell per session.</summary>
     [ObservableProperty, NotifyPropertyChangedFor(nameof(PriceLabel))] private bool isOldPass;
     public string PriceLabel => IsPackagePanel ? "Price" : IsOldPass ? "Price for the pass" : "Price per hour";
@@ -1782,7 +1778,7 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
             ? ($"Edit {a.Name}", "Changes apply to new purchases. Passes and sessions already paid keep what was paid.", "Save changes", false)
             : (a.Id == 0 ? "Add an amenity" : "Edit draft", "Save as draft to finish it later. Add puts it on sale.", "Add", true);
         VersionNote = null;
-        (IsOldPass, FormCoachFee) = (a.DurationDays is not null, a.CoachFee);
+        IsOldPass = a.DurationDays is not null;
         Benefits.Clear();
         Open(false, a.Name, a.Description, a.Price, Amenities.FirstOrDefault(r => r.Amenity.Id == a.Id && a.Id != 0)?.PhotoUrl);
     }
@@ -1843,7 +1839,7 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
         else
         {
             var a = _amenity!;
-            (a.Name, a.Description, a.Price, a.CoachFee) = (FormName.Trim(), description, FormPrice, Math.Max(0, FormCoachFee));
+            (a.Name, a.Description, a.Price) = (FormName.Trim(), description, FormPrice);
             ok = await RunAsync(() => svc.SaveAmenityAsync(a));
             id = a.Id;
         }

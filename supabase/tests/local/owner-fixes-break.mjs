@@ -28,7 +28,7 @@ const admin = await user('admin'), desk = await user('employee'), coach = await 
 await openCashShifts(db);
 await db.query(`update gym_settings set opens_at='00:00',closes_at='23:30',payment_expiry_hours=24 where id=1`);
 const pack = (await db.query(`insert into membership_packages(name,price,duration_days) values('OF Monthly',1000,30) returning membership_package_id id`)).rows[0].id;
-const court = (await db.query(`insert into amenities(name,price,coach_fee) values('OF Court',200,100) returning amenity_id id`)).rows[0].id;
+const court = (await db.query(`insert into amenities(name,price) values('OF Court',200) returning amenity_id id`)).rows[0].id;
 async function member() {
   const uid = await user();
   const p = (await rows(uid, 'select * from extend_membership($1,null)', [pack]))[0];
@@ -101,7 +101,7 @@ try {
     assert.ok(!JSON.stringify(g).includes(alex), 'the grid carries the member id');
   });
   await test('a booking "with a coach" must name a real, active coach of that amenity who is free', async () => {
-    const pool = (await db.query(`insert into amenities(name,price,coach_fee) values('OF Pool',200,100) returning amenity_id id`)).rows[0].id;
+    const pool = (await db.query(`insert into amenities(name,price) values('OF Pool',200) returning amenity_id id`)).rows[0].id;
     const sneaky = (c, hm) => rows(bea, `select * from book_amenity(p_amenity=>$1, p_start=>$2, p_minutes=>60, p_method=>'qr'::payment_method, p_coach=>$3)`,
       [court, at(hm), c]);
     await assert.rejects(sneaky(alex, '12:00'), /coach_not_free/);            // a member named as the coach
@@ -130,7 +130,6 @@ try {
     // refused (42501) or no row touched (RLS); any other error means the test aimed wrong
     const none = async (sql, args) => assert.equal((await as(desk, sql, args).catch(e => ({ rowCount: e.code === '42501' ? 0 : -1 }))).rowCount, 0, sql);
     await none('update membership_packages set published_at=now() where membership_package_id=$1', [draftPack]);
-    await none('update amenities set coach_fee=0 where amenity_id=$1', [court]);
     await none('update amenities set duration_days=30 where amenity_id=$1', [court]);
     const ci = (await rows(desk, `select record_check_in(p_member_id=>$1, p_method=>'id', p_id_type=>'passport') id`, [bea]))[0].id;
     await none(`update gym_check_ins set id_type='other' where check_in_id=$1`, [ci]);

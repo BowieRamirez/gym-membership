@@ -236,7 +236,7 @@ await test('renewing an active plan extends from its end date', async () => {
 });
 
 console.log('\ncoaching');
-await db.query(`update coaches set specialty='Boxing', hourly_rate=500 where user_id=$1`, [coach]);
+await db.query(`update coaches set specialty='Boxing' where user_id=$1`, [coach]);
 await db.query('insert into coach_visits(coach_id,checked_in_by) values($1,$1)', [coach]);   // a new hire needs the coach in the gym (0032)
 let hire;
 await test('an active member hires a coach; a guest cannot', async () => {

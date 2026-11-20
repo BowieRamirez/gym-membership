@@ -201,7 +201,6 @@ public static class CashCount
 { [PrimaryKey("amenity_id")] public int Id { get; set; } [Column("name")] public string Name { get; set; } = ""; [Column("description")] public string? Description { get; set; }
   [Column("price")] public decimal Price { get; set; } [Column("duration_days")] public int? DurationDays { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true;
   [Column("image_path", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? ImagePath { get; set; }
-  [Column("coach_fee")] public decimal CoachFee { get; set; }   // G14 (0064): added when a member books With a coach
   [Column("published_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? PublishedAt { get; set; }   // G6/G7 (0061): null = a draft
   [System.Text.Json.Serialization.JsonIgnore] public CatalogState State => Catalog.StateOf(IsActive, PublishedAt);
   // live status: written only by set_amenity_status, so a catalog edit never sends these
@@ -235,7 +234,7 @@ public class NotifiedMember : BaseModel
 // keyed by the coach's Auth uuid. A coach edits bio, specialty, rate and availability only
 [Table("coaches")] public class Coach : BaseModel
 { [PrimaryKey("user_id")] public string UserId { get; set; } = ""; [Column("bio")] public string? Bio { get; set; }
-  [Column("specialty")] public string? Specialty { get; set; } [Column("hourly_rate")] public decimal? HourlyRate { get; set; } [Column("is_available")] public bool IsAvailable { get; set; } = true; }
+  [Column("specialty")] public string? Specialty { get; set; } [Column("is_available")] public bool IsAvailable { get; set; } = true; }
 
 [Table("members")] public class Member : BaseModel
 { [PrimaryKey("user_id")] public string UserId { get; set; } = ""; [Column("goals")] public string? Goals { get; set; } }

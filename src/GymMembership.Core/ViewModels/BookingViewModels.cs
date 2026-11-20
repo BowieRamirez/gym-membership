@@ -52,18 +52,14 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     public ObservableCollection<PickChip> Times { get; } = new();
     public ObservableCollection<PickChip> Lengths { get; } = new();
 
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPicking), nameof(SheetTitle), nameof(SheetCaption), nameof(PayFirst), nameof(BookText), nameof(HoldText), nameof(Split), nameof(CoachFeeText))]
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPicking), nameof(SheetTitle), nameof(SheetCaption), nameof(PayFirst), nameof(BookText), nameof(HoldText), nameof(Split))]
     private AmenityCard? picked;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(MonthText))] private DateOnly month = new(Today.Year, Today.Month, 1);
     [ObservableProperty, NotifyPropertyChangedFor(nameof(DayText), nameof(IsDayClosed))] private DateOnly day = Today;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(Summary), nameof(SummaryDetail), nameof(CanBook), nameof(CoachesTitle))] private PickChip? time;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(Summary), nameof(SummaryDetail), nameof(CanBook), nameof(CoachesTitle), nameof(Split), nameof(BookText), nameof(CodeCheckText))] private PickChip? length;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(Summary), nameof(SummaryDetail), nameof(CanBook))] private PickChip? time;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(Summary), nameof(SummaryDetail), nameof(CanBook), nameof(Split), nameof(BookText), nameof(CodeCheckText))] private PickChip? length;
 
-    // ---- G14, G13, G4 (0064, approved mockup docs/mockups/amenity-down-payment.html): who, the coach, a code, and the split ----
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsSolo), nameof(CanBook), nameof(Split), nameof(BookText), nameof(HoldText), nameof(SummaryDetail), nameof(CodeCheckText))] private bool isWithCoach;
-    public bool IsSolo => !IsWithCoach;
-    public ObservableCollection<CoachChoice> Coaches { get; } = new();
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanBook), nameof(Split), nameof(BookText), nameof(HoldText), nameof(SummaryDetail), nameof(CodeCheckText))] private FreeCoach? pickedCoach;
+    // ---- G13, G4 (0064): a code and the split (0118: amenity price only, no coach fee) ----
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Split), nameof(BookText), nameof(SummaryDetail))] private string code = "";
     // owner fixes 2026-11-19 Q12, Q13 (0107): live code check as it's typed (500 ms debounce) or on unfocus
     public TimeSpan CodeCheckDelay { get; init; } = TimeSpan.FromMilliseconds(500);
@@ -104,17 +100,13 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     IReadOnlyList<AvailableCode> _myCodes = [];
     IReadOnlyDictionary<DateOnly, string> _closed = new Dictionary<DateOnly, string>();   // G16 (0065)
 
-    public bool HasCoaches => Coaches.Count > 0;
     public bool HasCodes => Codes.Count > 0;
-    public string CoachFeeText => Picked is { } p && p.Amenity.CoachFee > 0 ? $"+ ₱{p.Amenity.CoachFee:N2} an hour coach fee" : "No coach fee";
-    public string CoachesTitle => Time is null || Length is null ? "Pick a time to see who's free"
-        : $"Coaches free {Manila(Time.StartUtc).ToString("h:mm", En)} to {Manila(Time.StartUtc.AddMinutes(Length.Minutes)).ToString("h:mm tt", En)}";
     int CodePercent => CodeCheck is { Works: true, Percent: > 0 } ? CodeCheck.Percent.Value
         : Codes.FirstOrDefault(c => string.Equals(c.Code, Code.Trim(), StringComparison.OrdinalIgnoreCase))?.Percent ?? 0;
-    /// <summary>What booking now costs: with a pass only the coach fee, paid at the desk; otherwise the down payment now and the balance at the desk.</summary>
+    /// <summary>What booking now costs: with a pass nothing to pay; otherwise the down payment now and the balance at the desk.</summary>
     public PriceSplit Split => Picked is not { } p ? new(0, 0, 0, 0, 0)
-        : PayFirst ? BookingPrice.Split(p.Amenity.Price, p.Amenity.CoachFee, IsWithCoach && PickedCoach is not null, Percent, CodePercent, Hours)
-        : BookingPrice.Split(0, p.Amenity.CoachFee, IsWithCoach && PickedCoach is not null, 0, 0, Hours);
+        : PayFirst ? BookingPrice.Split(p.Amenity.Price, 0, false, Percent, CodePercent, Hours)
+        : new(0, 0, 0, 0, 0);
     int Hours => Math.Max(1, (Length?.Minutes ?? 60) / 60);   // 0090: per hour
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsClaiming))] private BookingRow? claiming;
     [ObservableProperty] private string claimReason = "";
@@ -130,7 +122,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     public string MonthText => Month.ToString("MMMM yyyy", En);
     public string DayText => Day.ToString("dddd d MMMM", En);
     public string BookText => PayFirst ? $"Book and pay ₱{Split.Down:N2}" : "Book";
-    public bool CanBook => Time is not null && Length is not null && (!IsWithCoach || PickedCoach is not null);
+    public bool CanBook => Time is not null && Length is not null;
     /// <summary>Owner, 2026-11-18: at 100% (Gym settings) the whole price is paid when booking, so there is no "down payment" or balance.</summary>
     bool PaysInFull => Percent >= 100;
     string PayWord => PaysInFull ? "payment" : "down payment";
@@ -177,8 +169,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     {
         Notice = null; ErrorMessage = null; ClearCodeCheck();
         Picked = card; Month = new(Today.Year, Today.Month, 1);
-        (IsWithCoach, PickedCoach, Code) = (false, null, "");
-        Coaches.Clear(); OnPropertyChanged(nameof(HasCoaches));
+        Code = "";
         if (await svc.DownPaymentPercentAsync() is { Ok: true } pct) Percent = pct.Value;
         if (await svc.ClosedDaysAsync() is { Ok: true, Value: { } closed }) _closed = closed;
         if (membership is not null && await membership.AvailableCodesAsync() is { Ok: true, Value: { } codes }) _myCodes = codes;
@@ -188,28 +179,8 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
         if (!Times.Any(t => t.CanPick)) await PickDayAsync(Today.AddDays(1));   // late in the day: start on tomorrow
     }
 
-    [RelayCommand] private void Close() { ClearCodeCheck(); Picked = null; Time = null; Length = null; Times.Clear(); Lengths.Clear(); Coaches.Clear(); PickedCoach = null; }
-
-    [RelayCommand] private void Solo() { IsWithCoach = false; PickedCoach = null; }
-    [RelayCommand] private Task WithCoach() { IsWithCoach = true; return LoadCoachesAsync(); }
-    [RelayCommand]
-    private void PickCoach(CoachChoice choice)
-    {
-        foreach (var c in Coaches) c.IsPicked = c == choice;
-        PickedCoach = choice.Coach;
-    }
+    [RelayCommand] private void Close() { ClearCodeCheck(); Picked = null; Time = null; Length = null; Times.Clear(); Lengths.Clear(); }
     [RelayCommand] private void UseCode(AvailableCode c) { Code = c.Code; _ = CheckCodeNowAsync(); }
-
-    /// <summary>G14: who is free for the picked time; a coach picked earlier stays only if still free.</summary>
-    [RelayCommand]
-    private async Task LoadCoachesAsync()
-    {
-        if (!IsWithCoach || Picked is not { } card || Time is null || Length is null) { Coaches.Clear(); OnPropertyChanged(nameof(HasCoaches)); return; }
-        if (!await RunAsync(() => svc.FreeCoachesAsync(card.Amenity.Id, Time.StartUtc, Length.Minutes),
-                list => Fill(Coaches, list.Select(f => new CoachChoice(f) { IsPicked = f.CoachId == PickedCoach?.CoachId })))) return;
-        if (PickedCoach is { } c && Coaches.All(x => x.Coach.CoachId != c.CoachId)) PickedCoach = null;
-        OnPropertyChanged(nameof(HasCoaches));
-    }
 
     [RelayCommand] private void PreviousMonth() { if (Month > new DateOnly(Today.Year, Today.Month, 1)) { Month = Month.AddMonths(-1); BuildDays(); } }
     [RelayCommand] private void NextMonth() { var last = Today.AddDays(DaysAhead); if (Month < new DateOnly(last.Year, last.Month, 1)) { Month = Month.AddMonths(1); BuildDays(); } }
@@ -259,7 +230,6 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     partial void OnLengthChanged(PickChip? value)
     {
         foreach (var c in Lengths) c.IsPicked = c == value;
-        if (value is not null && IsWithCoach) _ = LoadCoachesAsync();
     }
 
     [RelayCommand]
@@ -273,7 +243,7 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
                 + $" The ₱{Split.Balance:N2} balance is paid at the desk. It's yours once the down payment is paid.";
         if (!await Confirm.AskAsync($"Book {card.Amenity.Name}?", $"{Summary}\n{how}", BookText)) return;
         Reservation? made = null;
-        if (!await RunAsync(() => svc.BookAsync(card.Amenity.Id, Time.StartUtc, Length.Minutes, PayMethod.Qr, IsWithCoach ? PickedCoach?.CoachId : null, Code), r => made = r))
+        if (!await RunAsync(() => svc.BookAsync(card.Amenity.Id, Time.StartUtc, Length.Minutes, PayMethod.Qr, null, Code), r => made = r))
         {
             var error = ErrorMessage;   // nothing was booked: show the day as it is now, with the reason
             await PickDayAsync(Day);

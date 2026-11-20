@@ -480,11 +480,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     GuardShift(old, s);
                     old.Start = s.Start; old.End = s.End; old.Note = s.Note; old.Status = s.Status;
                     break;
-                case (Coach c, Coach old):           // bio, specialty, rate, availability
+                case (Coach c, Coach old):           // bio, specialty, availability
                     if (old.UserId != Uid && !RolesOf(Uid).Contains("admin")) throw Err(Rls);
                     if (!All<Profile>().Any(p => p.Id == old.UserId && p.IsActive)) throw Err("record_archived");
-                    if (c.HourlyRate is <= 0) throw Err("new row violates check constraint \"coaches_rate_positive\"");   // 0033
-                    old.Bio = c.Bio; old.Specialty = c.Specialty; old.HourlyRate = c.HourlyRate; old.IsAvailable = c.IsAvailable;
+                    old.Bio = c.Bio; old.Specialty = c.Specialty; old.IsAvailable = c.IsAvailable;
                     break;
                 case (UserSettings s, UserSettings old):
                     if (old.UserId != Uid) throw Err(Rls);
@@ -1503,9 +1502,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
         AddUser("u-carlo", "Carlo Diaz", "carlo@demo.io", "member");
         AddUser("u-joy", "Joy", "joy@demo.io", "member", "Joy", "");   // item 3: an old one-word account, no last name to guess
 
-        var lena = All<Coach>().First(c => c.UserId == "u-coach1"); lena.Specialty = "Strength and conditioning"; lena.HourlyRate = 800;
+        var lena = All<Coach>().First(c => c.UserId == "u-coach1"); lena.Specialty = "Strength and conditioning";
         lena.Bio = "Ten years coaching powerlifting and general strength. Works with beginners and returning lifters.";
-        var kai = All<Coach>().First(c => c.UserId == "u-coach2"); kai.Specialty = "Boxing and mobility"; kai.HourlyRate = 700;
+        var kai = All<Coach>().First(c => c.UserId == "u-coach2"); kai.Specialty = "Boxing and mobility";
         kai.Bio = "Former amateur boxer. Sessions focus on footwork, conditioning and joint mobility.";
         // both coaches start in the gym so the coach list has someone to hire (0032); the demo has no closing-time job
         foreach (var c in new[] { "u-coach1", "u-coach2" }) Add(new CoachVisit { CoachId = c, CheckedInBy = c, CheckedInAt = now });
@@ -1590,7 +1589,6 @@ public sealed partial class DemoGateway : ISupabaseGateway
         Add(new ShiftPost { CoachId = "u-coach1", Start = At(1, 6), End = At(1, 14), Note = "Strength floor, squat rack priority" });
         // G14 (0064): Lena runs Group classes, which has a coach fee, so With a coach has someone to offer tomorrow morning
         Add(new CoachAmenity { CoachId = "u-coach1", AmenityId = All<Amenity>().First(x => x.Name == "Group classes").Id });
-        All<Amenity>().First(x => x.Name == "Group classes").CoachFee = 100;
         Add(new ShiftPost { CoachId = "u-coach1", Start = At(3, 14), End = At(3, 20) });
         Add(new ShiftPost { CoachId = "u-coach2", Start = At(1, 14), End = At(1, 22), Note = "Heavy bags and pad work" });
 

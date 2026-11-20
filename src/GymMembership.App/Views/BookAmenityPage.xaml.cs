@@ -17,7 +17,6 @@ public partial class BookAmenityPage : BasePage
 	void OnOpen(object? sender, EventArgs e) => Row<BookAmenityViewModel>(sender, v => v.OpenCommand);
 	void OnDay(object? sender, EventArgs e) => Row<BookAmenityViewModel>(sender, v => v.PickDayCommand);
 	void OnTime(object? sender, EventArgs e) => Row<BookAmenityViewModel>(sender, v => v.PickTimeCommand);
-	void OnCoach(object? sender, EventArgs e) => Row<BookAmenityViewModel>(sender, v => v.PickCoachCommand);   // G14
 	void OnCode(object? sender, EventArgs e) => Row<BookAmenityViewModel>(sender, v => v.UseCodeCommand);     // G4
 	void OnCodeUnfocused(object? sender, FocusEventArgs e) { if (BindingContext is BookAmenityViewModel vm) _ = vm.CheckCodeNowAsync(); }
 	void OnPayOnline(object? sender, EventArgs e) => Row<BookAmenityViewModel>(sender, v => v.PayOnlineCommand);

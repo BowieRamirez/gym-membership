@@ -42,7 +42,6 @@
                                 <Label Text="On the floor" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold" />
                                 <Label Text="{Binding ShiftsText}" Style="{StaticResource Caption}" />
                             </VerticalStackLayout>
-                            <Label Text="{Binding RateText}" FontFamily="BarlowSemiBold" />
                             <FlexLayout Wrap="Wrap">
                                 <Button Text="Hire" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
                                         IsVisible="{Binding ShowHire}" IsEnabled="{Binding CanHire}" Clicked="OnHire" />

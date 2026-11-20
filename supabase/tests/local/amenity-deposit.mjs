@@ -27,7 +27,7 @@ const admin = await user('admin'), desk = await user('employee'), coach = await 
 await openCashShifts(db);
 await db.query(`update gym_settings set opens_at='00:00',closes_at='23:30',payment_expiry_hours=24 where id=1`);
 const pack = (await db.query(`insert into membership_packages(name,price,duration_days) values('D Monthly',1000,30) returning membership_package_id id`)).rows[0].id;
-const amenity = async (name, fee = 0) => (await db.query('insert into amenities(name,price,coach_fee) values($1,200,$2) returning amenity_id id', [name, fee])).rows[0].id;
+const amenity = async (name) => (await db.query('insert into amenities(name,price) values($1,200) returning amenity_id id', [name])).rows[0].id;
 async function member() {
   const uid = await user();
   const p = (await as(uid, 'select * from extend_membership($1,null)', [pack]))[0];
@@ -163,7 +163,7 @@ try {
     await assert.rejects(book(await member(), other, '10:00', { code: 'DEP20' }), /code_not_for_item/);
   });
   await test('a pass holder still books solo straight away; with a coach, the coach fee is the balance at the desk', async () => {
-    const uid = await member(), a = (await db.query(`insert into amenities(name,price,duration_days,coach_fee) values('D Pass',300,30,120) returning amenity_id id`)).rows[0].id;
+    const uid = await member(), a = (await db.query(`insert into amenities(name,price,duration_days) values('D Pass',300,30) returning amenity_id id`)).rows[0].id;
     await oldPass(db, uid, a);   // 0066: bought before passes stopped selling
     const solo = await book(uid, a, '09:00');
     assert.deepEqual([solo.status, Number(solo.total_price ?? 0)], ['confirmed', 0]);
