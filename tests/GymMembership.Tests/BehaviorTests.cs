@@ -173,12 +173,20 @@ public class BehaviorTests
         Assert.Equal(AppErrorKind.Conflict, (await svc.CancelRequestAsync(mine.Request.Id)).Error);
     }
 
+    sealed class Clock : TimeProvider
+    {
+        public DateTimeOffset Now = DateTimeOffset.UtcNow;
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
     [Fact]
     public async Task A_coach_records_attendance_and_the_session_status_follows()
     {
-        var gw = await As("coach@demo.io");
+        var clock = new Clock();
+        var gw = await As("coach@demo.io", new DemoGateway(clock: clock));
         var sessions = new SessionService(gw);
         var booked = (await sessions.SessionsAsync()).Value!.First(r => r.Session.Status == "scheduled").Session;
+        clock.Now = new DateTimeOffset(booked.ScheduledStart.AddMinutes(5), TimeSpan.Zero);
         Assert.True((await new AttendanceService(gw).RecordAsync(booked.Id, "absent")).Ok);
         Assert.Contains((await sessions.SessionsAsync()).Value!, r => r.Session.Id == booked.Id && r.Session.Status == "no_show");
         Assert.Contains(await gw.ListAsync<SessionAttendance>(), a => a.SessionId == booked.Id && a.Status == "absent");

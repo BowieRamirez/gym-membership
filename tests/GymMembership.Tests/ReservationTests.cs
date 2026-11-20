@@ -146,8 +146,8 @@ public class ReservationTests
         var row = await Booked(vm, "Group classes", "10:00");
         await vm.OpenCommand.ExecuteAsync(vm.Cards.Single(c => c.Amenity.Name == "Group classes"));
         await vm.PickDayCommand.ExecuteAsync(vm.Days.Single(d => d.Date == Tomorrow));
-        Assert.Equal((false, false, true), (vm.Times.Single(t => t.StartUtc == At("10:00")).CanPick, vm.Times.Single(t => t.StartUtc == At("11:00")).CanPick,
-            vm.Times.Single(t => t.StartUtc == At("12:00")).CanPick));   // held, then its cooldown
+        Assert.Equal((false, true, true), (vm.Times.Single(t => t.StartUtc == At("10:00")).CanPick, vm.Times.Single(t => t.StartUtc == At("11:00")).CanPick,
+            vm.Times.Single(t => t.StartUtc == At("12:00")).CanPick));   // held 10:00-11:00; 11:00 is free (no cooldown, 0113)
         Assert.All(vm.Times, t => Assert.Equal(0, t.StartUtc.Minute));   // owner, 2026-11-17: start times on the hour only
         Assert.True(vm.Days.Single(d => d.Date == Tomorrow).HasBooking);
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);

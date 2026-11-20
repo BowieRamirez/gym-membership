@@ -89,6 +89,14 @@ public sealed partial class DemoGateway
         }
         SnapshotMembershipPayment(pay,pkg);
         pay.Method=method;
+        if(pay.Amount==0 && pay.Status==Status.Pending)
+        {
+            pay.Status=Status.Verified;
+            pay.VerifiedAt=SubscriptionNow;
+            pay.ReceiptNo=ReceiptNo();
+            ActivateMembershipTerm(pay);
+            Notify(member,"payment","Payment received",pay.PaymentCode);
+        }
         return pay;
     }
 

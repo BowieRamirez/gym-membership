@@ -1251,6 +1251,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 RequireActive();
                 var s = All<TrainingSession>().FirstOrDefault(x => x.Id == I("p_session_id") && x.CoachId == uid) ?? throw Err("forbidden");
                 if (s.Status == Status.Cancelled) throw Err("already_processed");
+                if (s.ScheduledStart > now) throw Err("too_soon");
                 var status = S("p_status");
                 if (status is not ("present" or "late" or "absent" or "excused")) throw Err("bad_input");
                 var existing = All<SessionAttendance>().FirstOrDefault(x => x.SessionId == s.Id);

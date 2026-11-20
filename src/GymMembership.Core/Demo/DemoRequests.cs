@@ -18,7 +18,7 @@ public sealed partial class DemoGateway
         if (start <= now) throw Err("past_slot");
         if (amenityId is null) return;
         if (!All<Amenity>().Any(a => a.Id == amenityId && a.State == CatalogState.Published)) throw Err("not_found");
-        static bool OffGrid(DateTime t) => (t.ToUniversalTime() - DateTime.UnixEpoch).Ticks % Cooldown.Ticks != 0;
+        static bool OffGrid(DateTime t) => (t.ToUniversalTime() - DateTime.UnixEpoch).Ticks % SlotStep.Ticks != 0;
         if (OffGrid(start) || OffGrid(end)) throw Err("off_grid");
         if (end - start > TimeSpan.FromHours(2)) throw Err("too_long");
         var g = All<GymSettings>().First();

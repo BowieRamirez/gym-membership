@@ -299,7 +299,7 @@ public class SubscriptionTests
         Assert.True((await new AdminService(gw).PublishAsync("plan",trial.Id)).Ok);   // G6 (0061): added as a draft
         Assert.True((await new AdminService(gw).CreateDiscountAsync(new Discount {Code="TRIALFREE",Percent=100,MaxUses=5,ExpiresAt=DateTime.UtcNow.AddDays(1)},DiscountItem.Everything)).Ok);
         await gw.SignInAsync("phase7@demo.io","secret12");
-        var p=(await svc.ExtendAsync(trial.Id,"TRIALFREE")).Value!; Assert.Equal(0m,p.Amount); await Verify(gw,p);
+        var p=(await svc.ExtendAsync(trial.Id,"TRIALFREE")).Value!; Assert.Equal(0m,p.Amount); Assert.Equal(Status.Verified,p.Status);
         var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
         Assert.False((await svc.RequestRefundAsync(term.Id,"Changed plans","change_of_mind")).Ok);
     }

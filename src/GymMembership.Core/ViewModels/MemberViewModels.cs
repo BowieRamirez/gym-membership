@@ -332,8 +332,11 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
     {
         if (Buying is not { } package) return;
         Notice = null;
-        if (!await RunAsync(() => subscription.ExtendAsync(package.Id, DiscountCode), _ => { })) return;
-        Notice = "Payment created. Pay online on this page to start it.";
+        Payment? created = null;
+        if (!await RunAsync(() => subscription.ExtendAsync(package.Id, DiscountCode), p => created = p)) return;
+        Notice = created?.Status == Status.Verified
+            ? "Membership started."
+            : "Payment created. Pay online on this page to start it.";
         CloseBuy();
         await LoadPayAsync();
     }

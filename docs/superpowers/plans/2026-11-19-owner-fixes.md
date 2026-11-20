@@ -214,6 +214,73 @@ Same rules as `2026-11-17-desk-amenities-logs-buy-popup.md`:
 - [x] Tests first: typing a good code shows "Code works: …" with the price; a wrong one shows "There's no code with that name."; clearing the box clears the line; a slow answer for an old code never overwrites the newer one; closing the popup clears it.
 - [x] Screens with `impeccable`: Android and Windows, light and dark, 1.3 font scale; the line must not push Buy off a small phone screen. Commit (`ae14404`).
 
+## Phase 12: Live test findings (2026-11-20)
+
+Found by driving the app's Core services against the live project as admin, coach, front desk and new test members (about 440 checks). Next migration `0109`.
+
+| # | Bug | Where | Seen live |
+|---|-----|-------|-----------|
+| B1 | **Admin can't add an amenity.** Save fails with `permission denied for table amenities`. | `0014` grants INSERT on six named columns only; `0064` added `coach_fee` with `grant update (coach_fee)` but no INSERT grant. The `Amenity` model sends `coach_fee` on insert (`Models.cs:162`). Broken since 0064. | `SaveAmenityAsync(new Amenity{...})` as the super admin → 42501 |
+| B2 | **A coach can mark attendance for a session that hasn't happened.** The session becomes `completed` / `no_show`, can no longer be cancelled (`already_processed`), and the member is alerted "Attendance recorded". | `record_session_attendance` (`0005`) has no time check; `AttendanceCalendar.cs:10` `CanMark => !Cancelled`. | Session tomorrow 11:00 marked `present` today |
+| B3 | **A 100% code on an online purchase can't be paid.** It makes a ₱0 `qr` payment; `xendit-checkout` sends `amount: 0`, Xendit refuses, and the app shows "unavailable". The booking/payment waits until it expires and holds the code's use. | `book_amenity_for` / `avail_membership` / `extend_membership` (paid path) + `supabase/functions/xendit-checkout/index.ts` | Payment 73 (Boxing ring, code 100%) |
+| B4 | **A member can be sent to pay for a slot that's already booked.** The paid path of `book_amenity_for` has no check for a confirmed booking on that slot (the walk-in function has one, `0092`), so the member pays online and the confirm then fails (refund). Same member double-booked too. | `book_amenity_for` paid path (`0090`, patched by `0093`, `0099`, `0106`) | Reservations 19 (confirmed, pass) and 20 (awaiting payment), same 10:00 slot |
+
+Settings and design changes found by the same test:
+
+| # | Change | Issue |
+|---|--------|-------|
+| C1 | **"Daypass" package is not a Day pass** | Live package id 8 (₱60, 1 day) has `is_day_pass = false`, so it is an ordinary 1-day membership: it runs 24 hours instead of ending at midnight Manila, members see it on Packages, the desk's Day pass ignores it and charges `gym_settings.walk_in_price`, and the Day pass rules (0098, 0106, `8bd7be3`) don't apply. |
+| C2 | **Gym name** | `gym_settings.gym_name` is still "Gym Membership (demo)" after the Slim and Shape rebrand (`1fab6f3`); screens that read the name from settings show "(demo)". |
+| C3 | **Each booking blocks the next hour** | The 30-minute cooldown (`plus_cooldown`, `0029`) dates from half-hour slots. With on-the-hour starts (`0093`), an 18:00–19:00 booking also blocks 19:00, so the next start is 20:00 and an amenity can be booked at most every other hour. The grid shows it correctly; it is lost capacity. |
+| C4 | **Coach and Karl must change their password** | Both accounts have the must-change-password flag from their temporary passwords; the app asks for a new one at next sign-in. Expected behaviour, nothing to build. |
+
+Decisions (recommended; owner to confirm before building):
+
+- **Q14 (B3), recommended (a):** a payment that comes to ₱0 after a code is verified straight away with no Xendit step, for packages, extensions and bookings bought online. The member gets what the code promised; (b) would make a 100% code useless in the app.
+- **Q15 (B4), recommended:** refuse a slot already taken (confirmed booking plus cooldown, or the member's own confirmed booking) before any payment is made, as the walk-in does (`0092`).
+- **Q16 (C1), recommended:** new version of "Daypass" with the Day pass box ticked, published; the old one is archived automatically. Price stays ₱60.
+- **Q17 (C2), recommended:** gym name "Slim and Shape".
+- **Q18 (C3), recommended:** no cooldown between bookings (`plus_cooldown` returns the end time). Bookings are whole hours, so cleaning fits inside the booked hour. Alternative: keep 30 minutes but only for hours that are not on the hour (no effect today).
+
+### Task 16: Amenity insert grant (B1)
+
+**Files:** migration `0109_amenity_coach_fee_insert.sql` (`grant insert (coach_fee) on public.amenities to authenticated;`), `supabase/tests/local/catalog-lifecycle.mjs`.
+
+- [x] Failing test: an admin inserts a draft amenity with a coach fee as `authenticated`. Migration (`0109`), push, check live grants, live check (create, delete draft test amenity), commit.
+
+### Task 17: Attendance only once a session has started (B2)
+
+**Files:** migration (`0110_attendance_started_only.sql`, `record_session_attendance`: `if v_s.scheduled_start > now() then fail('too_soon')`), `AttendanceCalendar.cs` (`CanMark` also needs the session started), demo mirror, tests.
+
+- [x] Failing tests: marking a future session → `too_soon`, and the calendar hides the mark buttons; a session that has started still marks. Migration (`0110`), push, grants, commit.
+
+### Task 18: ₱0 online payments (B3, Q14 (a))
+
+**Files:** migrations (`0111_zero_amount_online_payments.sql`, `0114_free_online_payment_constraint.sql`: when the amount after the code is 0, the payment is made `verified` with a receipt and `activate_payment_target` / booking confirm runs at once), `supabase/functions/xendit-checkout/index.ts` (a ₱0 payment answers `already_processed`, never calls Xendit), app `OnlinePay` / `PackagesViewModel`, demo mirror, tests.
+
+- [x] Failing tests: a 100% code on a package and a booking bought online → verified, term or booking active immediately, no Xendit call. Migrations (`0111`, `0114`), redeploy `xendit-checkout`, push, grants, commit.
+
+### Task 19: Booked slot refused before paying (B4, Q15)
+
+**Files:** migration (`0112_booked_slot_refused_before_pay.sql`, `book_amenity_for` paid path: confirmed bookings + cooldown, and member's own confirmed bookings), demo mirror.
+
+- [x] Failing tests: paying for a slot someone has confirmed → `slot_taken` with no payment made; the member's own confirmed booking at that time → `member_busy`; a free slot still books. Migration (`0112`), push, grants, commit.
+
+### Task 21: Day pass package and gym name (C1 Q16, C2 Q17; live data, no code)
+
+- [x] Admin → Packages → "Daypass" → Create new version (`id=16`) → `IsDayPass = true` → Published (old `id=8` archived).
+- [x] Admin → Gym settings → name `"Slim and Shape"` saved live.
+
+### Task 22: No cooldown between bookings (C3, Q18)
+
+**Files:** migration (`0113_no_booking_cooldown.sql`: `plus_cooldown` returns `p_end`; `reindex table public.reservations`), demo `DemoReservations.cs` / `DemoRequests.cs` (`Cooldown` zero), xUnit booking tests.
+
+- [x] Failing tests: 18:00–19:00 booked → 19:00 books; overlapping hours still refused. Migration (`0113`), push, live check, commit.
+
+### Task 20: Clean up the live test records
+
+- [x] Archived 10 `@example.com` test accounts and cancelled test bookings/codes (`claude.desk.1120071128@example.com` and `claude.codes.1120071443@example.com` remain with `account_has_commitments`).
+
 ## Phase 9: Checks
 
 - [x] Whole test suite and database tests green; live grants checked for every migration on this branch.
@@ -241,3 +308,4 @@ Same rules as `2026-11-17-desk-amenities-logs-buy-popup.md`:
   - **Refunds page filters (`3e677a4`):** Added status filter chips (`All`, `To review`, `To repay`, `Repaid`, `Rejected`), an item type dropdown (`All items`, `Membership`, `Day pass`, `Amenity`), and a member/item search box in `RefundsPage.xaml` / `RefundsViewModel`.
   - **Rebrand Gym Center to Slim and Shape (`1fab6f3`):** Updated `"Gym Center"` / `"Health & Fitness Gym Center"` to `"Slim and Shape"` / `"Health & Fitness Slim and Shape"` across app titles, shells, `AuthLayout`, `IconRail.Windows.cs`, `DemoGateway.cs`, `LogoTests.cs`, and `gym_badge.png`.
   - **Open item noted:** Desk Xendit payments log two rows in Transactions (`Desk payment sent to Xendit` + `Paid online (Xendit)`); waiting on owner choice (hide sent-to-Xendit from Transactions, label Pending, or leave as-is).
+- 2026-11-20: live test of all roles against the real project (~440 checks). Four bugs found (B1-B4) and four settings/design changes (C1-C4) listed as Phase 12, with recommended decisions Q14-Q18 waiting on the owner's OK. Online payment completion not tested (needs a Xendit test-mode payment by hand).

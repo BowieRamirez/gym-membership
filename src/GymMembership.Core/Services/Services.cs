@@ -365,6 +365,8 @@ public static class OnlinePay
 {
     public static Task<AppResult<OnlineCheckout>> OpenAsync(ISupabaseGateway gw, int paymentId) => Safe.RunAsync(async () =>
     {
+        if ((await gw.ListAsync<Payment>(p => p.Id == paymentId)).FirstOrDefault()?.Status == Status.Verified)
+            return new OnlineCheckout(null, true);
         var answer = System.Text.Json.JsonDocument.Parse(await gw.InvokeFunctionAsync("xendit-checkout", new() { ["payment_id"] = paymentId })).RootElement;
         return new OnlineCheckout(answer.TryGetProperty("url", out var url) ? url.GetString() : null,
             answer.TryGetProperty("paid", out var paid) && paid.GetBoolean());
