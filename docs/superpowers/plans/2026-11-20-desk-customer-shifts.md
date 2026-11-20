@@ -305,7 +305,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 ### Task 12: Screens
 
-**Files:** `SessionsPage` (member: Book a coach flow, list with status and QR, price line), `CoachesPage` (Book this coach), `PackagesPage` Day pass Buy popup (Add a coach step), Cashier (Day pass with a coach; coach add-on), view models, `Foundation.cs` sentences (`coach_taken`, `too_many_coach_sessions`, `coach_booking_blocked`, `coach_not_free`), tests `tests/GymMembership.Tests/CoachSessionBookingTests.cs`.
+**Files:** `SessionsPage` (member: Book a coach flow, list with status and QR, price line), `CoachesPage` (Book this coach), `PackagesPage` Day pass Buy popup (Add a coach step), Cashier (Day pass with a coach; coach add-on), view models, `Foundation.cs` sentences (`coach_taken`, `too_many_coach_sessions`, `coach_booking_blocked`, `coach_not_free`, `coach_day_full`), tests `tests/GymMembership.Tests/CoachSessionBookingTests.cs`.
 
 - [ ] Tests first (list reloads and keeps the day and time on `coach_taken`; price line per package; Add a coach hidden with no free hour today), screens with `impeccable`: Sessions (Book a coach), Coaches (Book this coach), Packages Day pass Add a coach, Payments Coach chip (member, Android and Windows, light/dark, 1.3 font scale); Cashier and Amenity status Book a coach for a customer (Windows). Commit.
 
