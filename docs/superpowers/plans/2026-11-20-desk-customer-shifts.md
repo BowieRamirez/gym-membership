@@ -232,10 +232,31 @@ Same rules as `2026-11-19-owner-fixes.md`:
 | Sessions | Their sessions; Completed / No-show; cancel with reason; damage report |
 | Time requests | Removed |
 | My shifts | Booked hours shown inside each shift (a shift with sessions already can't be cut, 0028) |
+| Trainees | Hired members list goes; becomes **Members I've coached** (past sessions, newest first), since nobody is hired any more |
 | Settings | Rate box removed |
 | Messages | Members they have a session with |
 
-**Staff (Windows):** Packages admin (Coach included switch, Coach add-on price per package), Gym settings (limits), Cashier (Day pass with a coach; add-on payment for a session), Membership checking (today's sessions, Coach is here), Amenity status (coach line gone from Book for a customer), Revenue (Coach hours report), Damage reports (new, admins).
+**Front desk (Windows)**
+
+| Page | Change |
+|---|---|
+| Home | "Coaches in the gym now" stays; adds **Today's coach sessions** (time, member, coach, checked in or not) |
+| Cashier | Day pass gets **Add a coach** (coach, time, add-on price); new: take payment for a member's **coach add-on** (cash or online) |
+| Membership checking | Scanning a member or their session QR shows today's coach sessions, with **Coach is here**; a cancelled or unpaid session is refused with the reason |
+| Amenity status | Book for a customer loses Solo / With a coach and the coach fee line; new: **Book a coach for a customer** (same steps as the member's, at the counter) |
+
+**Admin (Windows)**
+
+| Page | Change |
+|---|---|
+| Packages and amenities | Packages: **Coach included** switch, **Coach add-on price** box when it's off (E4). Amenities: coach fee box out; which coaches run each amenity stays |
+| Gym settings | Coach booking limits: free sessions per day (1), booked ahead (2), no-show rule (E6) |
+| Revenue | New **Coach hours** report (E11); "Coach add-on" in sales |
+| Refunds | Coach add-on refunds (member cancelled 24 hours or more ahead, or the coach cancelled) |
+| Discounts | Codes can be set to work on the coach add-on, like packages and amenities |
+| Logs & Archive | New log entries: coach session booked / cancelled, Coach is here, damage reported / reviewed; Transactions gets "Coach add-on" under What kind |
+| **Damage reports** (new) | Review reports from coaches or the desk, set the amenity to Maintenance, close with a note; nothing charged automatically (E10) |
+| Users and roles, Announcements | No change |
 
 ## Global Constraints (Part 2)
 
@@ -336,3 +357,4 @@ Same rules as `2026-11-19-owner-fixes.md`:
 - 2026-11-20: owner: coaches booked per session (no hiring); Coach included switch per package (on = free, off and the Day pass = coach add-on fee); one-on-one; coach sessions separate from amenity bookings; limits for coach-included as recommended. Part 2 rewritten (E1-E11, Phases 8-15); E4, E8-E11 recommended, to confirm. Not built.
 - 2026-11-20: owner: coaches are bookable by their posted shifts, not by desk check-in (plan as written, no late-coach alert).
 - 2026-11-20: owner: E4, the admin sets the coach price per package (included in the package price, or a Coach add-on price on the Day pass / plain packages).
+- 2026-11-20: owner: full front desk and admin page changes for the coach overhaul added to "Pages that change", plus the coach's Trainees page.
