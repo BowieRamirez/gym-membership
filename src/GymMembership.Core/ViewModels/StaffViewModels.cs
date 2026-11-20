@@ -2046,6 +2046,12 @@ public partial class GymSettingsViewModel(IAdminService svc) : LoadableViewModel
 {
     [ObservableProperty] private string gymName = "";
     [ObservableProperty] private decimal walkInPrice;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasDayPassPackage), nameof(CanEditWalkInPrice), nameof(DayPassPriceText), nameof(DayPassPackageNote))]
+    private MembershipPackage? dayPassPackage;
+    public bool HasDayPassPackage => DayPassPackage is not null;
+    public bool CanEditWalkInPrice => DayPassPackage is null;
+    public string DayPassPriceText => DayPassPackage is { } p ? $"₱{p.Price:N2}" : "";
+    public string DayPassPackageNote => DayPassPackage is { } p ? $"Set on the {p.Name} package. Change it under Packages and amenities." : "";
     [ObservableProperty] private TimeSpan opensAt = TimeSpan.FromHours(6);
     [ObservableProperty] private TimeSpan closesAt = TimeSpan.FromHours(22);
     [ObservableProperty] private decimal openingFloat = 5000;   // F2: what each cashier's drawer starts with
@@ -2055,10 +2061,16 @@ public partial class GymSettingsViewModel(IAdminService svc) : LoadableViewModel
     public override async Task OnAppearingAsync() { await LoadAsync(); await LoadClosuresAsync(); }
 
     [RelayCommand]
-    private Task LoadAsync() => RunAsync(svc.GymSettingsAsync, g =>
+    private async Task LoadAsync()
     {
-        _loaded = g; GymName = g.GymName; WalkInPrice = g.WalkInPrice; OpensAt = g.OpensAt; ClosesAt = g.ClosesAt; OpeningFloat = g.OpeningFloat; DownPaymentPercent = g.DownPaymentPercent;
-    });
+        await RunAsync(svc.GymSettingsAsync, g =>
+        {
+            _loaded = g; GymName = g.GymName; WalkInPrice = g.WalkInPrice; OpensAt = g.OpensAt; ClosesAt = g.ClosesAt; OpeningFloat = g.OpeningFloat; DownPaymentPercent = g.DownPaymentPercent;
+        });
+        var pkgs = await svc.AllPackagesAsync();
+        if (pkgs.Ok)
+            DayPassPackage = pkgs.Value!.FirstOrDefault(p => p.IsDayPass && p.IsActive && p.PublishedAt is not null);
+    }
 
     [RelayCommand]
     private async Task SaveAsync()

@@ -114,4 +114,22 @@ public class DayPassPackageTests
         clock.Now = new DateTimeOffset(start.AddHours(-3), TimeSpan.Zero);
         Assert.True((await res.BookAsync(pool.Id, start, 120, PayMethod.Qr)).Ok);
     }
+
+    [Fact]
+    public async Task Gym_settings_hides_walk_in_price_while_day_pass_package_is_on_sale()
+    {
+        var gw = new DemoGateway();
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var admin = new AdminService(gw);
+        var vm = new GymMembership.Core.ViewModels.GymSettingsViewModel(admin);
+        await vm.OnAppearingAsync();
+        Assert.False(vm.CanEditWalkInPrice);
+        Assert.True(vm.HasDayPassPackage);
+        Assert.Contains("Day", vm.DayPassPackageNote);
+
+        await gw.RpcAsync("archive_catalog_record", new() { ["p_type"] = "plan", ["p_id"] = vm.DayPassPackage!.Id, ["p_reason"] = "Retiring" });
+        await vm.OnAppearingAsync();
+        Assert.True(vm.CanEditWalkInPrice);
+        Assert.False(vm.HasDayPassPackage);
+    }
 }
