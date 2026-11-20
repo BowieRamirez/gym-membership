@@ -27,7 +27,7 @@ public static class AuditLabels
         ["discount.create"] = "Code added", ["discount.turn_off"] = "Code turned off", ["discount.turn_on"] = "Code turned on", ["discount.delete"] = "Code deleted",
         ["catalog.archive"] = "Archived", ["catalog.restore"] = "Restored from archive",
         ["catalog.publish"] = "Published", ["catalog.new_version"] = "New version drafted", ["catalog.delete"] = "Deleted draft",
-        ["cash_shift.open"] = "Cash shift started", ["cash_shift.close"] = "Cash shift ended",
+        ["cash_shift.open"] = "Cash shift started", ["cash_shift.close"] = "Cash shift ended", ["cash_shift.note"] = "Cash shift note added",
         ["announcement.post"] = "Announcement posted",
         ["gym.close"] = "Gym closed for a day", ["gym.reopen"] = "Gym opened again",   // G16 (0065)
     };

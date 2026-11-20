@@ -67,8 +67,9 @@ public class CashShiftTests
         var (_, svc) = await As("employee@demo.io");
         await svc.OpenShiftAsync(5000, null);
         await WalkIn(svc);
-        Assert.Equal("note_required", (await svc.CloseShiftAsync(5100, null)).Message);
-        var closed = (await svc.CloseShiftAsync(5100, "Gave change twice")).Value!;
+        Assert.Equal("reason_required", (await svc.CloseShiftAsync(5100, null)).Message);
+        Assert.Equal("note_required", (await svc.CloseShiftAsync(5100, null, "other")).Message);
+        var closed = (await svc.CloseShiftAsync(5100, "Gave change twice", "wrong_change")).Value!;
         Assert.Equal((5150m, 5100m, -50m), (closed.Expected, closed.Counted!.Value, closed.Difference!.Value));
         Assert.Null((await svc.ShiftAsync()).Value.Open);
         Assert.Equal("no_open_shift", (await svc.CloseShiftAsync(5150, null)).Message);
@@ -130,7 +131,11 @@ public class CashShiftTests
         vm.Counted = 5150; Assert.Equal("Matches the expected cash", vm.CountText); Assert.False(vm.CloseNeedsNote);
         vm.Counted = 5100; Assert.Equal("₱50.00 short", vm.CountText); Assert.True(vm.CloseNeedsNote);
         await vm.EndShiftCommand.ExecuteAsync(null);
-        Assert.True(vm.HasShift); Assert.NotNull(vm.ErrorMessage);   // the note is missing: the server refuses, the shift stays open
+        Assert.True(vm.HasShift); Assert.NotNull(vm.ErrorMessage);   // the reason is missing: the server refuses, the shift stays open
+        vm.PickCloseReasonCommand.Execute("other");
+        await vm.EndShiftCommand.ExecuteAsync(null);
+        Assert.True(vm.HasShift); Assert.NotNull(vm.ErrorMessage);   // Other requires a note
+        vm.PickCloseReasonCommand.Execute("wrong_change");
         vm.CloseNote = "Gave change twice";
         await vm.EndShiftCommand.ExecuteAsync(null);
         Assert.True(vm.NeedsShift); Assert.False(vm.IsClosing);
@@ -142,7 +147,7 @@ public class CashShiftTests
     {
         var gw = new DemoGateway(); await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         var desk = new PaymentStaffService(gw);
-        await desk.OpenShiftAsync(5000, null); await WalkIn(desk); await desk.CloseShiftAsync(5100, "Gave change twice");
+        await desk.OpenShiftAsync(5000, null); await WalkIn(desk); await desk.CloseShiftAsync(5100, "Gave change twice", "wrong_change");
         await desk.OpenShiftAsync(5000, null);
         var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8));
         Assert.False((await new AdminService(gw).CashShiftsAsync(today, today)).Ok);
@@ -153,8 +158,44 @@ public class CashShiftTests
             Assert.Equal(2, rows.Count);
             Assert.All(rows, r => Assert.Equal("Marco Santos", r.Cashier));
             Assert.Null(rows[0].ClosedAt);   // newest first: the open one, with live totals
-            Assert.Equal((-50m, "Gave change twice"), (rows[1].Difference!.Value, rows[1].CloseNote));
+            Assert.Equal((-50m, 50m, 0m, "wrong_change", "Gave change twice"), (rows[1].Difference!.Value, rows[1].Shortage, rows[1].Overage, rows[1].CloseReason, rows[1].CloseNote));
         }
+    }
+
+    [Fact]   // Phase 6 (D8): supervisor investigation notes + Revenue keeps sales apart from shortages/overages
+    public async Task Supervisor_adds_notes_and_Revenue_keeps_sales_apart_from_discrepancies()
+    {
+        var gw = new DemoGateway(); await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        var desk = new PaymentStaffService(gw);
+        await desk.OpenShiftAsync(5000, null); await WalkIn(desk);
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var revBefore = new RevenueViewModel(new AdminService(gw));
+        await revBefore.OnAppearingAsync();
+        var salesBefore = revBefore.TotalText;
+
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        await desk.CloseShiftAsync(5100, "Gave change twice", "wrong_change");
+
+        Assert.False((await new AdminService(gw).AddCashShiftNoteAsync(1, "Desk cannot")).Ok);
+
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var rev = new RevenueViewModel(new AdminService(gw));
+        await rev.OnAppearingAsync();
+        Assert.Equal(salesBefore, rev.TotalText);   // sales total unchanged by the ₱50 shortage
+        Assert.Equal("Shortages: ₱50.00 · Overages: ₱0.00", rev.ShiftTotalsText);
+
+        rev.StartShiftNoteCommand.Execute(rev.Shifts.Single());
+        rev.SupervisorNote = "Confirmed change error";
+        rev.ResolveShift = true;
+        await rev.SaveShiftNoteCommand.ExecuteAsync(null);
+        Assert.False(rev.IsAddingShiftNote);
+        var updated = rev.Shifts.Single();
+        Assert.True(updated.IsResolved);
+        Assert.Single(updated.Notes);
+
+        var font = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoSans-Regular.ttf"));
+        var pdf = CashShiftPdf.Build(DateOnly.FromDateTime(DateTime.Today), DateOnly.FromDateTime(DateTime.Today), rev.Shifts, DateTime.UtcNow, font);
+        Assert.True(pdf.Length > 0);
     }
 
     [Fact]

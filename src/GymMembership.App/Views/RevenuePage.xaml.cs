@@ -12,4 +12,6 @@ public partial class RevenuePage : BasePage
 		Dashboard.Content = BuildDashboard(vm);
 #endif
 	}
+
+	void OnAddShiftNote(object? sender, EventArgs e) => Row<RevenueViewModel>(sender, v => v.StartShiftNoteCommand);
 }

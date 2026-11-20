@@ -132,8 +132,8 @@ public static class RevenuePdf
 public static class CashShiftPdf
 {
     static readonly (string Title, double Width, bool Right)[] Columns =
-        [("Cashier", 80, false), ("Shift", 105, false), ("Float", 52, true), ("Cash taken", 52, true), ("Paid back", 52, true),
-         ("Expected", 58, true), ("Counted", 58, true), ("Over / short", 58, true)];
+        [("Cashier", 72, false), ("Shift", 95, false), ("Float", 48, true), ("Cash in", 48, true), ("Cash out", 48, true),
+         ("Expected", 52, true), ("Counted", 52, true), ("Shortage", 50, true), ("Overage", 50, true)];
 
     static string Span(CashShift s) => RevenuePdf.Manila(s.OpenedAt) + (s.ClosedAt is { } c ? " to " + ManilaTime.Of(c).ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture) : ", open");
 
@@ -141,16 +141,22 @@ public static class CashShiftPdf
     {
         var closed = shifts.Where(s => s.ClosedAt is not null).ToList();
         var off = closed.Where(s => s.Difference is not 0m).ToList();
+        var notes = shifts.SelectMany(s => new[]
+        {
+            s.OpenNote is null ? null : $"{s.Cashier}, {RevenuePdf.Manila(s.OpenedAt)}. Opened: {s.OpenNote}",
+            s.CloseReasonText is { Length: > 0 } || s.CloseNote is not null
+                ? $"{s.Cashier}, {RevenuePdf.Manila(s.OpenedAt)}. Ended{(s.CloseReasonText is { Length: > 0 } r ? $" ({r})" : "")}: {s.CloseNote ?? "–"}"
+                : null
+        }.Concat(s.Notes.Select(n => $"{s.Cashier}, {RevenuePdf.Manila(s.OpenedAt)}. Note: {n.Summary}"))).Where(x => x is not null).Cast<string>().ToList();
+
         return RevenuePdf.Document("Cash shifts", "Cash shifts " + RevenuePdf.Range(from, to), font,
             [(RevenuePdf.Range(from, to), RevenuePdf.Kind.Text), ($"Generated {RevenuePdf.Manila(generatedUtc)} (Asia/Manila)", RevenuePdf.Kind.Text),
-             ("Shifts opened in this period. Expected cash is the float plus cash taken minus cash paid back; open shifts show it so far.", RevenuePdf.Kind.Body),
+             ("Shifts opened in this period. Expected cash is the float plus cash taken minus cash paid back; shortages and overages are kept apart from sales.", RevenuePdf.Kind.Body),
              ("", RevenuePdf.Kind.Gap),
              ($"Shifts: {shifts.Count}, {closed.Count} ended", RevenuePdf.Kind.Text),
-             ($"Over or short: {off.Count}, net {RevenuePdf.Money(off.Sum(s => s.Difference ?? 0))}", RevenuePdf.Kind.Strong)],
+             ($"Over or short: {off.Count} · Shortages: {RevenuePdf.Money(off.Sum(s => s.Shortage))} · Overages: {RevenuePdf.Money(off.Sum(s => s.Overage))}", RevenuePdf.Kind.Strong)],
             Columns, shifts.Select(s => new[] { s.Cashier ?? "", Span(s), RevenuePdf.Money(s.OpeningFloat), RevenuePdf.Money(s.CashIn), RevenuePdf.Money(s.CashOut),
-                RevenuePdf.Money(s.Expected), s.Counted is { } c ? RevenuePdf.Money(c) : "", s.IsOpen ? "" : s.DifferenceText }).ToList(),
-            null, "No cash shifts in this period.",
-            shifts.SelectMany(s => new[] { (s, "Opened", s.OpenNote), (s, "Ended", s.CloseNote) }).Where(n => n.Item3 is not null)
-                .Select(n => $"{n.s.Cashier}, {RevenuePdf.Manila(n.s.OpenedAt)}. {n.Item2}: {n.Item3}").ToList());
+                RevenuePdf.Money(s.Expected), s.Counted is { } c ? RevenuePdf.Money(c) : "", s.IsOpen ? "" : RevenuePdf.Money(s.Shortage), s.IsOpen ? "" : RevenuePdf.Money(s.Overage) }).ToList(),
+            null, "No cash shifts in this period.", notes);
     }
 }

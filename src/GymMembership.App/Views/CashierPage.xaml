@@ -135,9 +135,29 @@
                                 </Label.Triggers>
                             </Label>
                         </FlexLayout>
-                        <VerticalStackLayout Spacing="4" WidthRequest="360" HorizontalOptions="Start" IsVisible="{Binding CloseNeedsNote}">
-                            <Label Text="What happened? (needed when the count differs)" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}"><Entry Text="{Binding CloseNote}" ReturnCommand="{Binding EndShiftCommand}" Placeholder="For example: gave change twice" SemanticProperties.Description="Why the count differs" /></Border>
+                        <VerticalStackLayout Spacing="6" IsVisible="{Binding CloseNeedsNote}">
+                            <Label Text="Why does it differ? (needed when the count differs)" Style="{StaticResource Caption}" />
+                            <FlexLayout Wrap="Wrap">
+                                <Button Text="Wrong change given" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickCloseReasonCommand}" CommandParameter="wrong_change">
+                                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding CloseReason}" Value="wrong_change"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
+                                </Button>
+                                <Button Text="Sale not recorded" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickCloseReasonCommand}" CommandParameter="unrecorded_sale">
+                                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding CloseReason}" Value="unrecorded_sale"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
+                                </Button>
+                                <Button Text="Counting mistake" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickCloseReasonCommand}" CommandParameter="counting_mistake">
+                                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding CloseReason}" Value="counting_mistake"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
+                                </Button>
+                                <Button Text="Float was wrong" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickCloseReasonCommand}" CommandParameter="float_wrong">
+                                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding CloseReason}" Value="float_wrong"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
+                                </Button>
+                                <Button Text="Other" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickCloseReasonCommand}" CommandParameter="other">
+                                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding CloseReason}" Value="other"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
+                                </Button>
+                            </FlexLayout>
+                            <VerticalStackLayout Spacing="4" WidthRequest="360" HorizontalOptions="Start">
+                                <Label Text="Note (required for Other)" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><Entry Text="{Binding CloseNote}" ReturnCommand="{Binding EndShiftCommand}" Placeholder="For example: gave change twice" SemanticProperties.Description="Why the count differs" /></Border>
+                            </VerticalStackLayout>
                         </VerticalStackLayout>
                         <HorizontalStackLayout Spacing="10">
                             <Button Text="End shift" Command="{Binding EndShiftCommand}" AutomationId="ConfirmEndShift" />

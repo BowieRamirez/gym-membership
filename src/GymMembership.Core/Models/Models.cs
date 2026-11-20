@@ -133,20 +133,62 @@ public static class PackageChanges
   [Column("cash_shift_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? CashShiftId { get; set; }   // F2 (0050): the drawer that took this cash
   [Column("created_at")] public DateTime CreatedAt { get; set; } }
 
+/// <summary>D8 (0117): append-only supervisor investigation note on a closed cash shift.</summary>
+public sealed class CashShiftNote
+{
+    [System.Text.Json.Serialization.JsonPropertyName("note_id")] public int Id { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("author")] public string Author { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("note")] public string Note { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("resolved")] public bool Resolved { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("created_at")] public DateTime CreatedAt { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore] public string Summary => $"{Author} ({CreatedAt.ToLocalTime():d MMM, h:mm tt}): {Note}" + (Resolved ? " [Resolved]" : "");
+}
+
 /// <summary>F2 (0050): a cash-drawer shift. my_cash_shift() fills the open one; cash_shifts_list() adds the cashier, count and difference.</summary>
 public sealed class CashShift : BaseModel
 { [Column("shift_id")] public int Id { get; set; } [Column("cashier")] public string? Cashier { get; set; }
   [Column("opened_at")] public DateTime OpenedAt { get; set; } [Column("closed_at")] public DateTime? ClosedAt { get; set; }
   [Column("opening_float")] public decimal OpeningFloat { get; set; } [Column("cash_in")] public decimal CashIn { get; set; } [Column("cash_out")] public decimal CashOut { get; set; }
   [Column("expected")] public decimal Expected { get; set; } [Column("counted")] public decimal? Counted { get; set; } [Column("difference")] public decimal? Difference { get; set; }
+  [Column("shortage")] public decimal Shortage { get; set; } [Column("overage")] public decimal Overage { get; set; }
   [Column("open_note")] public string? OpenNote { get; set; } [Column("close_note")] public string? CloseNote { get; set; }
+  [Column("close_reason")] public string? CloseReason { get; set; } [Column("resolved_at")] public DateTime? ResolvedAt { get; set; }
+  [Column("notes")] public List<CashShiftNote> Notes { get; set; } = new();
   // the Revenue table's words
   [System.Text.Json.Serialization.JsonIgnore] public bool IsOpen => ClosedAt is null;
   [System.Text.Json.Serialization.JsonIgnore] public bool IsOff => Difference is { } d && d != 0;
+  [System.Text.Json.Serialization.JsonIgnore] public bool HasShortage => Shortage > 0;
+  [System.Text.Json.Serialization.JsonIgnore] public bool HasOverage => Overage > 0;
+  [System.Text.Json.Serialization.JsonIgnore] public bool IsResolved => ResolvedAt is not null;
   [System.Text.Json.Serialization.JsonIgnore] public string SpanText => $"{OpenedAt.ToLocalTime():ddd d MMM, h:mm tt}" + (ClosedAt is { } c ? $" to {c.ToLocalTime():h:mm tt}" : "");
   [System.Text.Json.Serialization.JsonIgnore] public string DifferenceText => Difference is { } d ? d == 0 ? "Matches" : CashCount.Words(d) : "–";
-  [System.Text.Json.Serialization.JsonIgnore] public string NoteText =>
-      string.Join(" · ", new[] { CloseNote, OpenNote is null ? null : "Opened: " + OpenNote }.Where(n => n is not null)) is { Length: > 0 } t ? t : "–"; }
+  [System.Text.Json.Serialization.JsonIgnore] public string ShortageText => Shortage > 0 ? $"₱{Shortage:N2}" : "–";
+  [System.Text.Json.Serialization.JsonIgnore] public string OverageText => Overage > 0 ? $"₱{Overage:N2}" : "–";
+  [System.Text.Json.Serialization.JsonIgnore] public string CloseReasonText => ReasonLabel(CloseReason);
+  [System.Text.Json.Serialization.JsonIgnore] public string NoteText
+  {
+      get
+      {
+          var parts = new List<string>();
+          if (!string.IsNullOrWhiteSpace(CloseReasonText)) parts.Add(CloseReasonText);
+          if (!string.IsNullOrWhiteSpace(CloseNote)) parts.Add(CloseNote);
+          if (!string.IsNullOrWhiteSpace(OpenNote)) parts.Add("Opened: " + OpenNote);
+          if (Notes.Count > 0) parts.Add(string.Join(" | ", Notes.Select(n => n.Summary)));
+          if (IsResolved) parts.Add("Resolved");
+          return parts.Count > 0 ? string.Join(" · ", parts) : "–";
+      }
+  }
+
+  public static string ReasonLabel(string? code) => code switch
+  {
+      "wrong_change" => "Wrong change given",
+      "unrecorded_sale" => "Sale not recorded",
+      "counting_mistake" => "Counting mistake",
+      "float_wrong" => "Float was wrong",
+      "other" => "Other",
+      _ => ""
+  };
+}
 
 public static class CashCount
 {

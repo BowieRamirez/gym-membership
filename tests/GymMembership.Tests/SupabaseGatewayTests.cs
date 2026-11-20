@@ -555,7 +555,7 @@ public sealed class SupabaseGatewayTests : IDisposable
         _reply = _ => (200, """{"shift_id":7,"cashier_id":"u-emp","opened_at":"2026-11-09T01:00:00+00:00","opening_float":5000.00,"open_note":null,"closed_at":"2026-11-09T09:00:00+00:00","cash_in":150.00,"cash_out":0,"expected":5150.00,"counted":5100.00,"close_note":"Gave change twice"}""");
         var closed = (await new PaymentStaffService(gw).CloseShiftAsync(5100, "Gave change twice")).Value!;
         Assert.Equal((5150m, -50m), (closed.Expected, closed.Difference));
-        Assert.Equal(new[] { "p_counted", "p_note" }, Columns(Last.Body).Order());
+        Assert.Equal(new[] { "p_counted", "p_note", "p_reason" }, Columns(Last.Body).Order());
     }
 
     [Fact]

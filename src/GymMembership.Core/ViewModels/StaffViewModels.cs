@@ -184,6 +184,8 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CountText), nameof(CloseNeedsNote))] private decimal? counted;
     [ObservableProperty] private string countedText = "";   // the box: an empty or unreadable count is no count, not the last number typed
     [ObservableProperty] private string closeNote = "";
+    [ObservableProperty] private string closeReason = "";
+    [RelayCommand] private void PickCloseReason(string reason) => CloseReason = reason;
     decimal defaultFloat;
 
     public bool HasShift => Shift is not null;
@@ -274,7 +276,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         Notice = $"Shift started with a float of ₱{StartFloat:N2}.";
     }
 
-    [RelayCommand] private void BeginClose() { IsClosing = true; CountedText = ""; Counted = null; CloseNote = ""; Notice = null; }
+    [RelayCommand] private void BeginClose() { IsClosing = true; CountedText = ""; Counted = null; CloseNote = ""; CloseReason = ""; Notice = null; }
     [RelayCommand] private void KeepShift() => IsClosing = false;
 
     [RelayCommand]
@@ -284,9 +286,9 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         if (Shift is not { } open) return;
         if (Counted is not { } count) { ErrorMessage = "Type the cash you counted in the drawer."; return; }
         if (!await Confirm.AskAsync("End your shift?", $"Expected ₱{open.Expected:N2}\nCounted ₱{count:N2}\n{CountText}", "End shift")) return;
-        if (!await RunAsync(() => svc.CloseShiftAsync(count, CloseNote), _ => { })) return;
+        if (!await RunAsync(() => svc.CloseShiftAsync(count, CloseNote, CloseReason), _ => { })) return;
         var notice = count == open.Expected ? $"Shift ended. Your count matches the expected ₱{count:N2}." : $"Shift ended. Counted ₱{count:N2}: {CountText}.";
-        IsClosing = false; CountedText = ""; Counted = null; CloseNote = "";
+        IsClosing = false; CountedText = ""; Counted = null; CloseNote = ""; CloseReason = "";
         await LoadShiftAsync();
         Notice = notice;
     }
@@ -2072,7 +2074,7 @@ public partial class RevenueViewModel(IAdminService svc, IReportFiles? files = n
         TotalText = $"₱{rows.Sum(r => r.Total):N2}";
         _loaded = (from, to, rows.Sum(r => r.Total));
         ExportPdfCommand.NotifyCanExecuteChanged(); ExportShiftsPdfCommand.NotifyCanExecuteChanged();
-    }) && await RunAsync(() => svc.CashShiftsAsync(from, to), shifts => Fill(Shifts, shifts))
+    }) && await RunAsync(() => svc.CashShiftsAsync(from, to), shifts => { Fill(Shifts, shifts); OnPropertyChanged(nameof(ShiftTotalsText)); })
        && await LoadDashboardAsync(from, to);
 
     // ---------- the Windows page (owner 2026-11-12, mockup docs/mockups/revenue.html); Android shows only the parts above ----------
@@ -2162,6 +2164,30 @@ public partial class RevenueViewModel(IAdminService svc, IReportFiles? files = n
         MoreDaysText = _allDays ? "Show the 7 latest days" : $"Show all {_days.Count} days";
     }
 
+    public string ShiftTotalsText => $"Shortages: ₱{Shifts.Sum(s => s.Shortage):N2} · Overages: ₱{Shifts.Sum(s => s.Overage):N2}";
+
+    // ---- D8 (2026-11-20): supervisor investigation notes on closed shifts ----
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsAddingShiftNote), nameof(NoteShiftTitle))] private CashShift? noteShift;
+    [ObservableProperty] private string supervisorNote = "";
+    [ObservableProperty] private bool resolveShift;
+    public bool IsAddingShiftNote => NoteShift is not null;
+    public string NoteShiftTitle => NoteShift is { } s ? $"Add note for {s.Cashier}'s shift ({s.DifferenceText})" : "";
+
+    [RelayCommand] private void StartShiftNote(CashShift shift) { NoteShift = shift; SupervisorNote = ""; ResolveShift = false; Notice = null; ErrorMessage = null; }
+    [RelayCommand] private void CancelShiftNote() { NoteShift = null; SupervisorNote = ""; ResolveShift = false; }
+
+    [RelayCommand]
+    private async Task SaveShiftNoteAsync()
+    {
+        if (NoteShift is not { } s) return;
+        if (string.IsNullOrWhiteSpace(SupervisorNote)) { ErrorMessage = "Type an investigation note first."; return; }
+        Notice = null;
+        if (!await RunAsync(() => svc.AddCashShiftNoteAsync(s.Id, SupervisorNote, ResolveShift), _ => { })) return;
+        NoteShift = null; SupervisorNote = ""; ResolveShift = false;
+        if (_loaded is { } shown) await RunAsync(() => svc.CashShiftsAsync(shown.From, shown.To), shifts => { Fill(Shifts, shifts); OnPropertyChanged(nameof(ShiftTotalsText)); });
+        Notice = "Investigation note added.";
+    }
+
     [RelayCommand(CanExecute = nameof(CanExport))]
     private async Task ExportShiftsPdfAsync()
     {
@@ -2170,6 +2196,7 @@ public partial class RevenueViewModel(IAdminService svc, IReportFiles? files = n
         IReadOnlyList<CashShift> shifts = [];
         if (!await RunAsync(() => svc.CashShiftsAsync(shown.From, shown.To), s => shifts = s)) return;   // fresh: an open shift's figures move
         Fill(Shifts, shifts);
+        OnPropertyChanged(nameof(ShiftTotalsText));
         var name = $"cash-shifts-{shown.From:yyyy-MM-dd}-to-{shown.To:yyyy-MM-dd}.pdf";
         if (await RunAsync(() => Safe.RunAsync(async () => { await files.ShareAsync(name, CashShiftPdf.Build(shown.From, shown.To, shifts, DateTime.UtcNow, await files.FontAsync())); return true; })))
             Notice = "Cash shifts PDF created. Choose where to save or send it.";

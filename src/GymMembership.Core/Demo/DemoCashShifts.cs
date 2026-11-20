@@ -10,6 +10,7 @@ public sealed partial class DemoGateway
     {
         public int Id; public string Cashier = ""; public DateTime OpenedAt; public decimal Float; public string? OpenNote;
         public DateTime? ClosedAt; public decimal CashIn, CashOut, Expected; public decimal? Counted; public string? CloseNote;
+        public string? CloseReason; public DateTime? ResolvedAt; public List<CashShiftNote> Notes = new();
     }
     readonly List<DemoShift> _shifts = new();
 
@@ -23,11 +24,16 @@ public sealed partial class DemoGateway
     CashShift Row(DemoShift s)
     {
         var (cashIn, cashOut) = s.ClosedAt is null ? ShiftTotals(s.Id) : (s.CashIn, s.CashOut);
+        var exp = s.ClosedAt is null ? s.Float + cashIn - cashOut : s.Expected;
+        var diff = s.Counted - exp;
         return new CashShift
         {
             Id = s.Id, Cashier = All<Profile>().First(p => p.Id == s.Cashier).FullName, OpenedAt = s.OpenedAt, ClosedAt = s.ClosedAt,
-            OpeningFloat = s.Float, CashIn = cashIn, CashOut = cashOut, Expected = s.ClosedAt is null ? s.Float + cashIn - cashOut : s.Expected,
-            Counted = s.Counted, Difference = s.Counted - s.Expected, OpenNote = s.OpenNote, CloseNote = s.CloseNote
+            OpeningFloat = s.Float, CashIn = cashIn, CashOut = cashOut, Expected = exp,
+            Counted = s.Counted, Difference = diff,
+            Shortage = diff is < 0 ? -diff.Value : 0m, Overage = diff is > 0 ? diff.Value : 0m,
+            OpenNote = s.OpenNote, CloseNote = s.CloseNote, CloseReason = s.CloseReason,
+            ResolvedAt = s.ResolvedAt, Notes = s.Notes.ToList()
         };
     }
 
@@ -35,7 +41,8 @@ public sealed partial class DemoGateway
     {
         result = null;
         decimal Money(string k) => a.TryGetValue(k, out var v) && v is not null ? Convert.ToDecimal(v) : throw Err("bad_input");
-        string? Note() => a.TryGetValue("p_note", out var v) && v is string s && !string.IsNullOrWhiteSpace(s) ? s.Trim() : null;
+        string? Str(string k) => a.TryGetValue(k, out var v) && v is string s && !string.IsNullOrWhiteSpace(s) ? s.Trim() : null;
+        string? Note() => Str("p_note");
         switch (fn)
         {
             case "open_cash_shift":
@@ -53,14 +60,37 @@ public sealed partial class DemoGateway
             case "close_cash_shift":
             {
                 Require("payments:record");
-                var counted = Math.Round(Money("p_counted"), 2); var note = Note();
+                var counted = Math.Round(Money("p_counted"), 2); var note = Note(); var reason = Str("p_reason");
                 if (counted is < 0 or > 10_000_000 || note?.Length > 500) throw Err("bad_input");
                 var s = _shifts.FirstOrDefault(x => x.Cashier == Uid && x.ClosedAt is null) ?? throw Err("no_open_shift");
                 var (cashIn, cashOut) = ShiftTotals(s.Id);
-                if (counted != s.Float + cashIn - cashOut && note is null) throw Err("note_required");
-                s.ClosedAt = SubscriptionNow; s.CashIn = cashIn; s.CashOut = cashOut; s.Expected = s.Float + cashIn - cashOut; s.Counted = counted; s.CloseNote = note;
+                var expected = s.Float + cashIn - cashOut;
+                if (counted != expected)
+                {
+                    if (reason is null) throw Err("reason_required");
+                    if (reason is not ("wrong_change" or "unrecorded_sale" or "counting_mistake" or "float_wrong" or "other")) throw Err("bad_input");
+                    if (reason == "other" && note is null) throw Err("note_required");
+                }
+                else reason = null;
+                s.ClosedAt = SubscriptionNow; s.CashIn = cashIn; s.CashOut = cashOut; s.Expected = expected;
+                s.Counted = counted; s.CloseNote = note; s.CloseReason = reason;
                 Audit("cash_shift.close", "cash_shifts", s.Id.ToString());
                 result = Row(s); return true;
+            }
+            case "add_cash_shift_note":
+            {
+                Require("reports:revenue");
+                var id = Convert.ToInt32(a["p_shift"]); var note = Note();
+                var resolve = a.TryGetValue("p_resolve", out var rv) && rv is bool b && b;
+                if (note is null || note.Length > 1000) throw Err("bad_input");
+                var s = _shifts.FirstOrDefault(x => x.Id == id) ?? throw Err("bad_input");
+                if (s.ClosedAt is null) throw Err("bad_input");
+                var author = All<Profile>().First(p => p.Id == Uid).FullName;
+                var n = new CashShiftNote { Id = s.Notes.Count + 1, Author = author, Note = note, Resolved = resolve, CreatedAt = SubscriptionNow };
+                s.Notes.Add(n);
+                if (resolve && s.ResolvedAt is null) s.ResolvedAt = SubscriptionNow;
+                Audit("cash_shift.note", "cash_shifts", s.Id.ToString());
+                result = n; return true;
             }
             case "my_cash_shift":
                 Require("payments:record");
