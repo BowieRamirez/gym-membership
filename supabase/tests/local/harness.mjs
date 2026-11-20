@@ -77,3 +77,13 @@ export const openCashShifts = db => db.query(`insert into cash_shifts(cashier_id
 // 0066 (G19): passes are no longer sold. Files that test what an existing pass still does seed one as it was sold before.
 export const oldPass = async (db, member, amenity, days = 30) => (await db.query(`insert into user_amenities(member_id,amenity_id,status,expires_at)
   values($1,$2,'active',now()+make_interval(days=>$3)) returning *`, [member, amenity, days])).rows[0];
+
+// owner fixes 2026-11-19 Q5 (0100): nobody can void a payment from the app any more. Old voided payments still exist, so tests
+// that need one void it as the database owner, signed in as an admin (auth.uid() still names who voided it).
+export async function asOwner(db, uid, sql, args = []) {
+  await db.query('begin');
+  try {
+    await db.query(`select set_config('request.jwt.claim.sub', $1, true)`, [uid]);
+    const r = await db.query(sql, args); await db.query('commit'); return r.rows;
+  } catch (e) { await db.query('rollback'); throw e; }
+}

@@ -129,7 +129,7 @@ public class CashierTests
         var (_, vm) = await Open();
         vm.PickKindCommand.Execute("Day pass");
         Assert.Empty(vm.Options);
-        Assert.Equal("Day pass", vm.TotalText);
+        Assert.Equal("₱150.00", vm.TotalText);   // 0098: the Day pass package's price
         Assert.True(vm.RecordCommand.CanExecute(null));
         Assert.Equal("Day pass, no name", vm.OrderWho);
         vm.WalkInName = "Pedro Ramos";
@@ -175,14 +175,14 @@ public class CashierTests
         var (_, vm) = await Open();
         Assert.Equal("", vm.TotalNote);
         vm.DiscountCode = "WELCOME10";
-        Assert.Equal("The discount code is checked when you complete the payment.", vm.TotalNote);   // honest: there is no preview, the server applies it
+        Assert.Equal("", vm.TotalNote);   // Q12 (0108): the answer shows under the box (CodeCheckText), not in this note
         vm.DiscountCode = "";
-        Assert.Equal("", vm.TotalNote);
     }
 
     // an items service whose answers the test releases by hand, to make two kinds answer out of order
     sealed class SlowItems : IPaymentStaffService
     {
+        public Task<AppResult<CodeCheck>> CheckCodeAsync(string memberId, string code, string kind, int itemId, decimal? price = null) => throw new NotSupportedException();
         public readonly Queue<(string Kind, TaskCompletionSource<AppResult<IReadOnlyList<CounterItem>>> Reply)> Waiting = new();
         public Task<AppResult<IReadOnlyList<CounterItem>>> ItemsAsync(string kind, string? memberId)
         { var tcs = new TaskCompletionSource<AppResult<IReadOnlyList<CounterItem>>>(); Waiting.Enqueue((kind, tcs)); return tcs.Task; }
@@ -198,7 +198,7 @@ public class CashierTests
         public Task<AppResult<IReadOnlyList<ClaimRow>>> ClaimsAsync() => throw new NotSupportedException();
         public Task<AppResult<bool>> DecideClaimAsync(int requestId, bool approve, string reason) => throw new NotSupportedException();
         public Task<AppResult<Payment>> RecordCounterAsync(string kind, string method, string? memberId, int? itemId, string? walkInName, string? referenceNo, string? discountCode) => throw new NotSupportedException();
-        public Task<AppResult<bool>> VoidAsync(int paymentId, string reason) => throw new NotSupportedException();        public Task<AppResult<(CashShift? Open, decimal DefaultFloat)>> ShiftAsync() => Task.FromResult(AppResult<(CashShift?, decimal)>.Success((null, 5000m)));
+                public Task<AppResult<(CashShift? Open, decimal DefaultFloat)>> ShiftAsync() => Task.FromResult(AppResult<(CashShift?, decimal)>.Success((null, 5000m)));
         public Task<AppResult<CashShift>> OpenShiftAsync(decimal openingFloat, string? note) => throw new NotSupportedException();
         public Task<AppResult<CashShift>> CloseShiftAsync(decimal counted, string? note) => throw new NotSupportedException();
     }
@@ -301,5 +301,74 @@ public class CashierTests
         vm.PickKindCommand.Execute("Day pass");
         vm.PickMethodCommand.Execute("GCash / QR Ph");
         Assert.Equal("Day pass, paid with GCash / QR Ph", vm.OrderHow);
+    }
+
+    [Fact]   // Q12 (0108): the desk sees at once whether the code works for the chosen member, and the total follows
+    public async Task The_cashier_shows_whether_a_code_works_as_it_is_typed()
+    {
+        var gw = new DemoGateway(); await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        Assert.True((await new AdminService(gw).CreateDiscountAsync(new Discount { Code = "DESK10", Percent = 10, ExpiresAt = DateTime.UtcNow.AddDays(7), MaxUses = 5, ShowOnPackages = false },
+            [new DiscountItem { Kind = "package" }])).Ok);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();
+        var vm = new CashierViewModel(new PaymentStaffService(gw), new AttendanceService(gw)) { CodeCheckDelay = TimeSpan.Zero };
+        await vm.OnAppearingAsync();
+        await ChooseMember(vm, "Carlo");
+        vm.PickItemCommand.Execute(vm.Options[0]);
+        var price = vm.Options[0].Item.Price!.Value;
+
+        vm.DiscountCode = "desk10"; await vm.CheckCodeNowAsync();
+        Assert.True(vm.CodeWorks);
+        Assert.Equal($"Code works: 10% off. You pay ₱{price * 0.9m:N2}.", vm.CodeCheckText);
+        Assert.Equal($"₱{price * 0.9m:N2}", vm.TotalText);
+
+        vm.DiscountCode = "asda"; await vm.CheckCodeNowAsync();
+        Assert.False(vm.CodeWorks);
+        Assert.Equal("There's no code with that name.", vm.CodeCheckText);
+        Assert.Equal(Peso(price), vm.TotalText);
+
+        vm.DiscountCode = "";
+        Assert.False(vm.HasCodeCheck);
+    }
+
+    [Fact]   // Day pass with a member who has no active membership can use discount codes (live check + recorded payment)
+    public async Task Day_pass_for_a_member_without_membership_allows_discount_codes()
+    {
+        var gw = new DemoGateway(); await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        Assert.True((await new AdminService(gw).CreateDiscountAsync(new Discount { Code = "DP10", Percent = 10, ExpiresAt = DateTime.UtcNow.AddDays(7), MaxUses = 5, ShowOnPackages = false },
+            [new DiscountItem { Kind = "package" }])).Ok);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();
+        var vm = new CashierViewModel(new PaymentStaffService(gw), new AttendanceService(gw)) { CodeCheckDelay = TimeSpan.Zero };
+        await vm.OnAppearingAsync();
+
+        vm.PickKindCommand.Execute("Day pass");
+        Assert.False(vm.CanUseCode);   // walk-in without a member cannot use a code
+
+        await ChooseMember(vm, "Alex");   // Alex has an active membership
+        Assert.False(vm.CanUseCode);
+
+        await ChooseMember(vm, "Carlo");   // Carlo has no active membership
+        Assert.True(vm.CanUseCode);
+
+        var dayPassPrice = (await gw.ListAsync<MembershipPackage>()).Single(p => p.IsDayPass && p.PublishedAt is not null).Price;
+        vm.DiscountCode = "dp10"; await vm.CheckCodeNowAsync();
+        Assert.True(vm.CodeWorks);
+        Assert.Equal($"Code works: 10% off. You pay ₱{dayPassPrice * 0.9m:N2}.", vm.CodeCheckText);
+        Assert.Equal($"₱{dayPassPrice * 0.9m:N2}", vm.TotalText);
+
+        Confirm.Answer = (_, _, _) => Task.FromResult(true);
+        await vm.RecordCommand.ExecuteAsync(null);
+        Assert.Null(vm.ErrorMessage);
+        var pay = (await gw.ListAsync<Payment>(p => p.MemberId == "u-carlo")).OrderByDescending(p => p.Id).First();
+        Assert.Equal(dayPassPrice * 0.9m, pay.Amount);
+    }
+
+    [Fact]   // Q11: a draft package is never offered at the Cashier (even when an admin opens it and can see drafts)
+    public async Task Draft_packages_are_not_offered_at_the_cashier()
+    {
+        var gw = new DemoGateway(); await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var dayPass = (await gw.ListAsync<MembershipPackage>()).Single(p => p.IsDayPass && p.PublishedAt is not null);
+        var draftId = (await new AdminService(gw).NewPackageVersionAsync(dayPass.Id)).Value;
+        var items = (await new PaymentStaffService(gw).ItemsAsync(PayKind.Membership, null)).Value!;
+        Assert.DoesNotContain(items, i => i.Id == draftId);
     }
 }

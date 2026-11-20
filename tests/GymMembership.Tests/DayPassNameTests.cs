@@ -50,6 +50,27 @@ public class DayPassNameTests
         Assert.Equal("Day pass", (await Last(gw)).WalkInName);
     }
 
+    [Fact]   // owner fixes 2026-11-19 Q9 (0098): a picked member's Day pass is the Day pass package, so it makes them a member until midnight
+    public async Task A_picked_members_day_pass_is_the_package_and_makes_them_a_member()
+    {
+        var (gw, vm) = await Open();
+        vm.PickKindCommand.Execute("Day pass");
+        await vm.RecordCommand.ExecuteAsync(null);
+        var pay = await Last(gw);
+        Assert.Equal((PayKind.Membership, "u-carlo"), (pay.Kind, pay.MemberId));
+        var term = (await gw.ListAsync<MembershipTerm>(t => t.PaymentId == pay.Id)).Single();
+        Assert.Equal(term.StartsAt.AddHours(8).Date.AddDays(1).AddHours(-8), term.EndsAt);
+    }
+
+    [Fact]   // Q9: the desk reads out the Day pass package's price
+    public async Task The_day_pass_total_is_the_packages_price()
+    {
+        var (gw, vm) = await Open();
+        vm.PickKindCommand.Execute("Day pass");
+        var price = (await gw.ListAsync<MembershipPackage>(p => p.IsDayPass)).Single().Price;
+        Assert.Equal($"₱{price:N2}", vm.TotalText);
+    }
+
     [Fact]   // final review: a name typed for a Day pass survives switching to another kind and back
     public async Task A_typed_name_survives_switching_kind()
     {

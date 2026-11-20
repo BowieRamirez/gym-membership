@@ -1,4 +1,4 @@
-import { start, openCashShifts } from './harness.mjs';
+import { start, openCashShifts, asOwner } from './harness.mjs';
 import assert from 'node:assert/strict';
 import pg from 'pg';
 
@@ -184,10 +184,10 @@ try {
   });
   await test('void and refund are mutually exclusive, including pending approval and repayment', async () => {
     const a = await fixture(), r = await request(a.uid,a.term);
-    await assert.rejects(as(admin,'select void_payment($1,$2)',[a.pay.payment_id,'Void']),/refund_in_progress/);
+    await assert.rejects(asOwner(db, admin, 'select void_payment($1,$2)', [a.pay.payment_id,'Void']),/refund_in_progress/);
     await decide(r.refund_request_id); await paid(r.refund_request_id);
-    await assert.rejects(as(admin,'select void_payment($1,$2)',[a.pay.payment_id,'Void']),/refund_in_progress/);
-    const b = await fixture(); await as(admin,'select void_payment($1,$2)',[b.pay.payment_id,'Wrong payment']);
+    await assert.rejects(asOwner(db, admin, 'select void_payment($1,$2)', [a.pay.payment_id,'Void']),/refund_in_progress/);
+    const b = await fixture(); await asOwner(db, admin, 'select void_payment($1,$2)', [b.pay.payment_id,'Wrong payment']);
     await assert.rejects(request(b.uid,b.term),/not_refundable|already_processed/); assert.equal(await active(b.uid),false);
   });
   await test('manual repayment is separate, validates method/reference, and cannot happen twice', async () => {
@@ -219,7 +219,7 @@ try {
   await test('voiding an earlier payment never deletes or moves a later paid term', async () => {
     const a = await fixture(), p = await extend(a.uid,annual); await verify(p);
     const next = (await terms(a.uid))[1];
-    await as(admin,'select void_payment($1,$2)',[a.pay.payment_id,'Wrong payment']);
+    await asOwner(db, admin, 'select void_payment($1,$2)', [a.pay.payment_id,'Wrong payment']);
     assert.equal(await active(a.uid),false);
     const after = (await terms(a.uid))[1]; assert.equal(after.cancelled_at,null); assert.equal(+after.starts_at,+next.starts_at); assert.equal(+after.ends_at,+next.ends_at);
   });
@@ -244,7 +244,7 @@ try {
     const a = await fixture(), r = await request(a.uid,a.term);
     const connection = new pg.Client(db.connectionParameters); await connection.connect();
     try {
-      const results = await Promise.allSettled([decide(r.refund_request_id),as(admin,'select void_payment($1,$2)',[a.pay.payment_id,'Race'],connection)]);
+      const results = await Promise.allSettled([decide(r.refund_request_id),asOwner(connection, admin, 'select void_payment($1,$2)', [a.pay.payment_id,'Race'])]);
       assert.equal(results[0].status,'fulfilled'); assert.equal(results[1].status,'rejected');
       assert.equal((await as(a.uid,'select status from refund_requests where refund_request_id=$1',[r.refund_request_id]))[0].status,'approved');
     } finally { await connection.end(); }

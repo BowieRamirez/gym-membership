@@ -133,7 +133,7 @@ public class AuthLayout : Grid
             Content = new Image { Source = "gym_badge.png", Aspect = Aspect.AspectFit },
         };
         AutomationProperties.SetIsInAccessibleTree(_badge, false);   // the name beside it says the same
-        _name = new Label { Text = "Health & Fitness Gym Center", FontFamily = "BarlowCondensedSemiBold", LineHeight = 1.15, TextColor = Colors.White };
+        _name = new Label { Text = "Health & Fitness Slim and Shape", FontFamily = "BarlowCondensedSemiBold", LineHeight = 1.15, TextColor = Colors.White };
         _tagline = new Label { Text = "Members, coaches and the front desk, in one place.", LineHeight = 1.2, TextColor = FieldFocus.Pick("MutedDark") };
         _words = new VerticalStackLayout { Spacing = 6, HorizontalOptions = LayoutOptions.Start, Children = { _name, _tagline } };
         _bar = new BoxView { Color = FieldFocus.Pick("Signal"), WidthRequest = 56, HeightRequest = 4, CornerRadius = 2, HorizontalOptions = LayoutOptions.Start };
@@ -355,8 +355,8 @@ public class StatusChip : ContentView
     readonly Ellipse _dot = new();
     readonly Label _label = new() { VerticalOptions = LayoutOptions.Center, FontSize = 13 };
 
-    static readonly HashSet<string> Good = new(["verified", "active", "completed", "approved", "present", "available", "on sale"], StringComparer.OrdinalIgnoreCase);
-    static readonly HashSet<string> Bad = new(["rejected", "expired", "no_membership", "cancelled", "absent", "no_show", "inactive", "unavailable", "deleted"], StringComparer.OrdinalIgnoreCase);
+    static readonly HashSet<string> Good = new(["verified", "paid", "active", "completed", "approved", "present", "available", "on sale"], StringComparer.OrdinalIgnoreCase);
+    static readonly HashSet<string> Bad = new(["rejected", "expired", "failed", "voided", "no_membership", "cancelled", "absent", "no_show", "inactive", "unavailable", "deleted"], StringComparer.OrdinalIgnoreCase);
     static readonly HashSet<string> Wait = new(["pending", "late", "in_use", "hired", "requested"], StringComparer.OrdinalIgnoreCase);
 
     public StatusChip()
@@ -548,7 +548,7 @@ public class PasswordStrength : VerticalStackLayout
 }
 
 /// <summary>
-/// The quiet two-way switch at the top of a combined page (Refunds &amp; voids), drawn like
+/// The quiet two-way switch at the top of a combined page, drawn like
 /// Logs &amp; Archive's: the open side bold and filled. Pages show their halves from ShowSecond.
 /// </summary>
 public class PartSwitch : ContentView

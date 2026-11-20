@@ -53,29 +53,6 @@ public class ConfirmationTests
         Assert.Empty(vm.Bookings);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Taking_a_bookings_cash_asks_with_the_payer_and_amount(bool yes)   // cashier plan Y7: was Payments to verify's Approve
-    {
-        var gw = await As("member@demo.io");
-        var group = (await gw.ListAsync<Amenity>()).Single(a => a.Name == "Group classes");
-        var day = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8)).AddDays(1);
-        var start = DateTime.SpecifyKind(day.ToDateTime(new TimeOnly(14, 0)).AddHours(-8), DateTimeKind.Utc);
-        Assert.True((await new ReservationService(gw).BookAsync(group.Id, start, 60, PayMethod.Cash, null, null)).Ok);
-        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
-        await gw.OpenDrawerAsync();
-        var vm = new VerifyPaymentsViewModel(new PaymentStaffService(gw));
-        await vm.OnAppearingAsync();
-        var row = vm.Pending.Single();
-        var asked = Answer(yes);
-        await vm.ApproveCommand.ExecuteAsync(row);
-        var question = Assert.Single(asked);
-        Assert.Contains(row.Payer, question);
-        Assert.Contains($"₱{row.Payment.Amount:N2}", question);
-        Assert.Equal(!yes, (await new PaymentStaffService(gw).PendingAsync()).Value!.Any(p => p.Payment.Id == row.Payment.Id));
-    }
-
     [Fact]
     public async Task Going_back_leaves_an_account_active()
     {
@@ -110,7 +87,7 @@ public class ConfirmationTests
         { "MemberViewModels.cs", "HeaderViewModel", "SignOut" },
         { "MemberViewModels.cs", "SettingsViewModel", "ChangePassword" },
         // PackagesViewModel.Avail left this list 2026-11-17 (Z7): the Buy popup is the confirmation (BuyPopupTests)
-        { "MemberViewModels.cs", "MyMembershipViewModel", "PayAgain" },
+        { "MemberViewModels.cs", "MyPaymentsViewModel", "PayAgain" },
         { "MemberViewModels.cs", "PackagesViewModel", "PayOnline" },   // Xendit plan: replaced Send proof; on Packages since 2026-11-16
         { "MemberViewModels.cs", "CoachesViewModel", "Hire" },
         { "MemberViewModels.cs", "CoachesViewModel", "EndHire" },
@@ -132,7 +109,7 @@ public class ConfirmationTests
         { "StaffViewModels.cs", "TraineesViewModel", "Remove" },
         { "StaffViewModels.cs", "CoachProfileViewModel", "ToggleVisit" },
         { "StaffViewModels.cs", "CashierViewModel", "Record" },
-        { "StaffViewModels.cs", "VerifyPaymentsViewModel", "Approve" },
+        // removed VerifyPaymentsViewModel entry
         { "StaffViewModels.cs", "CheckInViewModel", "ToggleCoach" },
         { "StaffViewModels.cs", "UsersViewModel", "ToggleActive" },
         { "StaffViewModels.cs", "UsersViewModel", "ToggleRole" },

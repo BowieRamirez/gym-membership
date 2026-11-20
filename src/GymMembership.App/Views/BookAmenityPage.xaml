@@ -259,8 +259,19 @@
                                     <!-- one wrapping layout only: a FlexLayout inside another took WinUI down when the sheet opened -->
                                     <VerticalStackLayout Spacing="6">
                                         <Border Style="{StaticResource Field}" WidthRequest="170" HorizontalOptions="Start">
-                                            <Entry Text="{Binding Code}" Placeholder="Optional" AutomationId="BookingCode" SemanticProperties.Description="Discount code" />
+                                            <Entry Text="{Binding Code}" Placeholder="Optional" Unfocused="OnCodeUnfocused" AutomationId="BookingCode" SemanticProperties.Description="Discount code" />
                                         </Border>
+                                        <Label Text="{Binding CodeCheckText}" Style="{StaticResource Caption}" LineBreakMode="WordWrap"
+                                               IsVisible="{Binding HasCodeCheck}" AutomationId="BookingCodeFeedback">
+                                            <Label.Triggers>
+                                                <DataTrigger TargetType="Label" Binding="{Binding CodeWorks}" Value="True">
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource GoodLight}, Dark={StaticResource GoodDark}}" />
+                                                </DataTrigger>
+                                                <DataTrigger TargetType="Label" Binding="{Binding CodeWorks}" Value="False">
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
+                                                </DataTrigger>
+                                            </Label.Triggers>
+                                        </Label>
                                         <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Codes}" IsVisible="{Binding HasCodes}">
                                             <BindableLayout.ItemTemplate>
                                                 <DataTemplate x:DataType="m:AvailableCode">
@@ -271,29 +282,8 @@
                                         </FlexLayout>
                                     </VerticalStackLayout>
                                 </VerticalStackLayout>
-                                <VerticalStackLayout Spacing="6" IsVisible="{Binding PayFirst}">
-                                    <Label Text="{Binding PayWithText}" Style="{StaticResource Caption}" />
-                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                        <Border Style="{StaticResource PayOption}">
-                                            <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding PayQr}" Value="True"><Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /><Setter Property="StrokeThickness" Value="2" /></DataTrigger></Border.Triggers>
-                                            <Grid>
-                                                <VerticalStackLayout Spacing="2"><Label Text="Online now" FontFamily="BarlowSemiBold" /><Label Text="GCash or QR Ph" Style="{StaticResource Caption}" /></VerticalStackLayout>
-                                                <!-- a clear button over the option, so it works by keyboard and screen reader too -->
-                                                <Button Margin="-12,-10" BackgroundColor="Transparent" BorderWidth="0" Text="" Command="{Binding PickMethodCommand}" CommandParameter="qr"
-                                                        SemanticProperties.Description="Pay online now, through Xendit" />
-                                            </Grid>
-                                        </Border>
-                                        <Border Grid.Column="1" Style="{StaticResource PayOption}">
-                                            <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding PayCash}" Value="True"><Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" /><Setter Property="StrokeThickness" Value="2" /></DataTrigger></Border.Triggers>
-                                            <Grid>
-                                                <VerticalStackLayout Spacing="2"><Label Text="At the desk" FontFamily="BarlowSemiBold" /><Label Text="Cash" Style="{StaticResource Caption}" /></VerticalStackLayout>
-                                                <!-- a clear button over the option, so it works by keyboard and screen reader too -->
-                                                <Button Margin="-12,-10" BackgroundColor="Transparent" BorderWidth="0" Text="" Command="{Binding PickMethodCommand}" CommandParameter="cash"
-                                                        SemanticProperties.Description="Pay at the desk in cash" />
-                                            </Grid>
-                                        </Border>
-                                    </Grid>
-                                </VerticalStackLayout>
+                                <!-- owner fixes 2026-11-19 Q6 (0099): members pay online only; cash is booked at the front desk -->
+                                <Label Text="{Binding PayWithText}" Style="{StaticResource Caption}" IsVisible="{Binding PayFirst}" />
                             </VerticalStackLayout>
                         </Grid>
                     </ScrollView>

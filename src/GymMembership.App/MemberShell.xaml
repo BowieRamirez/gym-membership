@@ -5,13 +5,13 @@
        xmlns:c="clr-namespace:GymMembership.App.Controls"
        xmlns:views="clr-namespace:GymMembership.App.Views"
        FlyoutBehavior="{OnPlatform WinUI=Locked, Default=Flyout}"
-       Title="Gym Center">
+       Title="Slim and Shape">
 
     <Shell.TitleView><c:HeaderBar /></Shell.TitleView>
 
     <Shell.FlyoutHeader>
         <VerticalStackLayout Padding="20,28,20,16" Spacing="14">
-            <Label Text="Gym Center" Style="{StaticResource Heading}" />
+            <Label Text="Slim and Shape" Style="{StaticResource Heading}" />
             <c:LogoMark Size="36" HorizontalOptions="Start" />
         </VerticalStackLayout>
     </Shell.FlyoutHeader>
@@ -23,5 +23,6 @@
     <FlyoutItem Title="Messages" Route="messages"><ShellContent ContentTemplate="{DataTemplate views:MessagesPage}" /></FlyoutItem>
     <FlyoutItem Title="Sessions" ClassId="members-only"><ShellContent ContentTemplate="{DataTemplate views:SessionsPage}" /></FlyoutItem>
     <FlyoutItem Title="Time requests" ClassId="members-only" Route="requests"><ShellContent ContentTemplate="{DataTemplate views:RequestsPage}" /></FlyoutItem>
+    <FlyoutItem Title="Payments" Route="payments"><ShellContent ContentTemplate="{DataTemplate views:PaymentsPage}" /></FlyoutItem>   <!-- owner fixes 2026-11-19 Q8 -->
     <FlyoutItem Title="Settings" Route="settings"><ShellContent ContentTemplate="{DataTemplate views:SettingsPage}" /></FlyoutItem>
 </Shell>

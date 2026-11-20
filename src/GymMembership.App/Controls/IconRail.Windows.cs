@@ -23,14 +23,14 @@ public static class IconRail
         ["Users and roles"] = "users",
         ["Packages and amenities"] = "package",
         ["Discounts"] = "tag",
-        ["Refunds & voids"] = "undo",
+        ["Refunds"] = "undo",
         ["Gym settings"] = "sliders-horizontal",
         ["Revenue"] = "chart-line",
         ["Announcements"] = "megaphone",
         ["Logs & Archive"] = "archive",
         ["Messages"] = "message-square",
         ["Settings"] = "settings",
-        ["My membership"] = "id-card",
+        ["My membership"] = "id-card", ["Payments"] = "receipt",
         ["Packages"] = "package", ["Renew or change"] = "package",
         ["Amenities"] = "waves",
         ["Book an amenity"] = "calendar-plus",
@@ -110,8 +110,8 @@ public static class IconRail
 
         // top: the logo, which also says whose menu this is
         var logo = new ContentView { Content = new LogoMark { Size = 44 }, HorizontalOptions = LayoutOptions.Center };
-        ToolTipProperties.SetText(logo, "Gym Center, " + roleName);
-        SemanticProperties.SetDescription(logo, "Gym Center, " + roleName);
+        ToolTipProperties.SetText(logo, "Slim and Shape, " + roleName);
+        SemanticProperties.SetDescription(logo, "Slim and Shape, " + roleName);
 
         // bottom: Sign out, then your picture (opens Settings, as the header picture does on phones)
         var (signOutCell, signOut, _) = IconCell("log-out", "Sign out");

@@ -47,7 +47,7 @@ public class LogoTests
         var layout = controls[controls.IndexOf("class AuthLayout")..];
         layout = layout[..layout.IndexOf("/// <summary>")];
         Assert.Contains("\"gym_badge.png\"", layout);
-        Assert.Contains("\"Health & Fitness Gym Center\"", layout);
+        Assert.Contains("\"Health & Fitness Slim and Shape\"", layout);
         Assert.Contains("Width >= WideFrom", layout);   // a narrow window gets the band, not two squeezed columns
         Assert.True(File.Exists(AppFile("Resources", "Images", "gym_badge.png")));
         foreach (var (page, action) in new[] { ("LoginPage.xaml", "Sign in"), ("RegisterPage.xaml", "Create account") })
@@ -59,14 +59,14 @@ public class LogoTests
     }
 
     [Fact]
-    public void The_app_is_called_Gym_Center()
+    public void The_app_is_called_Slim_and_Shape()
     {
-        Assert.Contains("<ApplicationTitle>Gym Center</ApplicationTitle>", File.ReadAllText(AppFile("GymMembership.App.csproj")));
+        Assert.Contains("<ApplicationTitle>Slim and Shape</ApplicationTitle>", File.ReadAllText(AppFile("GymMembership.App.csproj")));
         Assert.Contains("<ApplicationId>com.slimshape.gymmembership</ApplicationId>", File.ReadAllText(AppFile("GymMembership.App.csproj")));   // same app on devices
-        Assert.Contains("\"Gym Center\"", File.ReadAllText(AppFile("App.xaml.cs")));
+        Assert.Contains("\"Slim and Shape\"", File.ReadAllText(AppFile("App.xaml.cs")));
         foreach (var file in new[] { "App.xaml.cs", "MemberShell.xaml", "CoachShell.xaml", "StaffShell.xaml", Path.Combine("Controls", "IconRail.Windows.cs"), Path.Combine("Resources", "Styles", "Styles.xaml") })
             Assert.DoesNotContain("Gym Membership", File.ReadAllText(AppFile(file)));
         var demo = File.ReadAllText(Path.Combine(TestPaths.AppFolder(), "..", "GymMembership.Core", "Demo", "DemoGateway.cs"));
-        Assert.Contains("GymName = \"Health & Fitness Gym Center\"", demo);
+        Assert.Contains("GymName = \"Health & Fitness Slim and Shape\"", demo);
     }
 }

@@ -88,7 +88,7 @@ public sealed class SupabaseGatewayTests : IDisposable
     async Task<SupabaseGateway> SignedInAsync()
     {
         var gw = new SupabaseGateway(new SupabaseSettings(_url, "anon-key"));
-        _reply = s => s.Path.Contains("/auth/v1/token") ? (200, SessionJson())
+        _reply = s => s.Path.Contains("/auth/v1/token") || s.Path.EndsWith("/functions/v1/sign-in") ? (200, SessionJson()) : s.Path.EndsWith("/auth/v1/user") && s.Method == "GET" ? (200, UserJson("ana@demo.io"))
             : s.Path.EndsWith("/rpc/is_active_member") ? (200, "false") : (200, "[]");
         await gw.SignInAsync("ana@demo.io", "secret12");
         return gw;
@@ -113,9 +113,9 @@ public sealed class SupabaseGatewayTests : IDisposable
     public async Task Sign_in_posts_the_credentials_with_the_anon_key_and_keeps_the_user_id()
     {
         var gw = await SignedInAsync();
-        var login = _seen.First(s => s.Path.Contains("/auth/v1/token"));
+        var login = _seen.First(s => s.Path.EndsWith("/functions/v1/sign-in"));   // 0103: through the sign-in function, which counts wrong passwords
         Assert.Equal("POST", login.Method);
-        Assert.Contains("grant_type=password", login.Query);
+        Assert.DoesNotContain(_seen, s => s.Path.Contains("/auth/v1/token") && s.Query.Contains("grant_type=password"));   // never straight to Auth
         Assert.Equal("ana@demo.io", JsonDocument.Parse(login.Body).RootElement.GetProperty("email").GetString());
         Assert.Equal("anon-key", login.Headers["apikey"]);
         Assert.Equal("u-1", gw.CurrentUserId);
@@ -152,7 +152,7 @@ public sealed class SupabaseGatewayTests : IDisposable
         var root = JsonDocument.Parse(otp.Body).RootElement;
         Assert.Equal("ana@demo.io", root.GetProperty("email").GetString());
         Assert.False(root.GetProperty("create_user").GetBoolean());
-        Assert.DoesNotContain(_seen, s => s.Path.EndsWith("/auth/v1/user"));
+        Assert.DoesNotContain(_seen, s => s.Path.EndsWith("/auth/v1/user") && s.Method != "GET");   // no change to the user (the GET is the sign-in reading it, 0103)
 
         _reply = s => s.Path.EndsWith("/auth/v1/verify") ? (200, SessionJson()) : (200, "[]");
         await gw.VerifyEmailCodeAsync("ana@demo.io", "123456");
@@ -228,7 +228,7 @@ public sealed class SupabaseGatewayTests : IDisposable
     public async Task A_bad_password_is_a_failed_sign_in_the_app_reports_as_unauthorized()
     {
         var gw = new SupabaseGateway(new SupabaseSettings(_url, "anon-key"));
-        _reply = _ => (400, """{"code":400,"error_code":"invalid_credentials","msg":"Invalid login credentials"}""");
+        _reply = _ => (400, """{"error":"invalid_credentials"}""");   // the sign-in function's answer (0103)
         var result = await Safe.RunAsync(async () => { await gw.SignInAsync("a@b.io", "wrong"); return true; });
         Assert.Equal(AppErrorKind.Unauthorized, result.Error);
         Assert.Null(gw.CurrentUserId);
@@ -762,12 +762,12 @@ public sealed class SupabaseGatewayTests : IDisposable
     public async Task A_saved_session_signs_the_member_in_again_and_signing_out_forgets_it()
     {
         var store = new MemoryStore();
-        _reply = s => s.Path.Contains("/auth/v1/token") ? (200, SessionJson()) : (200, "[]");
+        _reply = s => s.Path.Contains("/auth/v1/token") || s.Path.EndsWith("/functions/v1/sign-in") ? (200, SessionJson()) : s.Path.EndsWith("/auth/v1/user") && s.Method == "GET" ? (200, UserJson("ana@demo.io")) : (200, "[]");
         var first = new SupabaseGateway(new SupabaseSettings(_url, "anon-key"), store);
         await first.SignInAsync("ana@demo.io", "secret12");
         Assert.NotNull(store.Saved);                                   // written to the device
 
-        _reply = s => s.Path.Contains("/auth/v1/user") ? (200, """{"id":"u-1","email":"ana@demo.io","aud":"authenticated"}""") : s.Path.Contains("/auth/v1/token") ? (200, SessionJson()) : (200, "[]");
+        _reply = s => s.Path.Contains("/auth/v1/user") ? (200, """{"id":"u-1","email":"ana@demo.io","aud":"authenticated"}""") : s.Path.Contains("/auth/v1/token") || s.Path.EndsWith("/functions/v1/sign-in") ? (200, SessionJson()) : s.Path.EndsWith("/auth/v1/user") && s.Method == "GET" ? (200, UserJson("ana@demo.io")) : (200, "[]");
         var relaunched = new SupabaseGateway(new SupabaseSettings(_url, "anon-key"), store);
         Assert.True(await relaunched.RestoreSessionAsync());
         Assert.Equal("u-1", relaunched.CurrentUserId);

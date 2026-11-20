@@ -61,11 +61,22 @@ public class CalendarServiceTests
         Assert.Equal(up.OrderBy(r => r.Session.ScheduledStart).Select(r => r.Session.Id), up.Select(r => r.Session.Id));
     }
 
+    sealed class Clock : TimeProvider
+    {
+        public DateTimeOffset Now = DateTimeOffset.UtcNow;
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
     [Fact]
     public async Task Marking_a_session_shows_up_in_the_next_load()
     {
-        var (gw, svc) = await As("coach@demo.io");
+        var clock = new Clock();
+        var gw = new DemoGateway(clock: clock);
+        await gw.SignInAsync("coach@demo.io", DemoGateway.DemoPassword);
+        var svc = new SessionService(gw);
         var target = (await svc.UpcomingAsync()).Value!.First().Session;
+        Assert.Equal("too_soon", (await new AttendanceService(gw).RecordAsync(target.Id, "late")).Message);
+        clock.Now = new DateTimeOffset(target.ScheduledStart.AddMinutes(5), TimeSpan.Zero);
         Assert.True((await new AttendanceService(gw).RecordAsync(target.Id, "late")).Ok);
         var rows = (await svc.CalendarAsync(target.ScheduledStart.AddMinutes(-1), target.ScheduledStart.AddMinutes(1))).Value!;
         Assert.Equal("late", rows.Single(r => r.Session.Id == target.Id).Mark);

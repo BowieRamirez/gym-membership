@@ -293,7 +293,7 @@ public static class ManilaTime
 /// <summary>One of the member's payments. Online (qr) payments are paid through Xendit's checkout (Xendit plan, 2026-11-16).</summary>
 public sealed record PaymentItem(int Id, string What, string PaymentCode, string Kind, string Method, decimal Amount, decimal DiscountAmount, string Status,
     DateTime CreatedAt, DateTime? ExpiresAt, string? ReferenceNo, bool HasProof, string? ReceiptNo, string? RejectedReason, int? ItemId, int? PackageSnapshotId = null,
-    bool HasCheckout = false)
+    bool HasCheckout = false, bool Refunded = false)
 {
     /// <summary>An online payment the member still has to pay (a proof sent before the switch is with the desk instead).</summary>
     bool NotExpired => ExpiresAt is not { } e || ManilaTime.Utc(e) > DateTime.UtcNow;
@@ -303,6 +303,9 @@ public sealed record PaymentItem(int Id, string What, string PaymentCode, string
     public bool PaysAtDesk => Status == Models.Status.Pending && Method == PayMethod.Cash && NotExpired;
     /// <summary>A membership or extension payment nobody has verified yet: the member can still withdraw it.</summary>
     public bool CanCancel => Status == Models.Status.Pending && Kind is PayKind.Membership or PayKind.Renewal;
+    /// <summary>Owner fixes 2026-11-19 Q8: how it was paid and its status, in the member's words.</summary>
+    public string MethodText => Method switch { PayMethod.Qr => "Online", PayMethod.Cash => "Cash", PayMethod.Gcash => "GCash", _ => Method };
+    public string StatusText => PaymentStatus.Text(Status, Refunded);
     /// <summary>Rejected and expired payments are final; the member pays again with a fresh one.</summary>
     public bool CanPayAgain => Status is Models.Status.Rejected or Models.Status.Expired && ItemId is not null && Kind != PayKind.Amenity;   // F12: an amenity is booked again on Book an amenity
     public string Detail => Status switch
@@ -321,6 +324,8 @@ public interface IMembershipService
     Task<AppResult<IReadOnlyList<MembershipPackage>>> ListPackagesAsync();
     /// <summary>G4 (0060): codes staff chose to show that this member can still use, each with FitsText filled from the catalog.</summary>
     Task<AppResult<IReadOnlyList<AvailableCode>>> AvailableCodesAsync();
+    /// <summary>Owner fixes 2026-11-19 Q12 (0107): checks a discount code as it's typed, without writing to payments.</summary>
+    Task<AppResult<CodeCheck>> CheckCodeAsync(string code, string kind, int itemId);
     Task<AppResult<IReadOnlyList<MembershipRow>>> MyMembershipsAsync();
     Task<AppResult<IReadOnlyList<PaymentItem>>> MyPaymentsAsync();
     Task<AppResult<Access>> AccessAsync();
@@ -360,6 +365,8 @@ public static class OnlinePay
 {
     public static Task<AppResult<OnlineCheckout>> OpenAsync(ISupabaseGateway gw, int paymentId) => Safe.RunAsync(async () =>
     {
+        if ((await gw.ListAsync<Payment>(p => p.Id == paymentId)).FirstOrDefault()?.Status == Status.Verified)
+            return new OnlineCheckout(null, true);
         var answer = System.Text.Json.JsonDocument.Parse(await gw.InvokeFunctionAsync("xendit-checkout", new() { ["payment_id"] = paymentId })).RootElement;
         return new OnlineCheckout(answer.TryGetProperty("url", out var url) ? url.GetString() : null,
             answer.TryGetProperty("paid", out var paid) && paid.GetBoolean());
@@ -397,6 +404,13 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
         return codes;
     });
 
+    public Task<AppResult<CodeCheck>> CheckCodeAsync(string code, string kind, int itemId) => Safe.RunAsync(async () =>
+    {
+        var rows = await gw.RpcAsync<List<CodeCheck>>("check_discount_code",
+            new() { ["p_code"] = code.Trim(), ["p_kind"] = kind, ["p_item"] = itemId });
+        return rows?.FirstOrDefault() ?? new CodeCheck { Reason = "invalid_code" };
+    });
+
     public static MembershipRow ToRow(UserMembershipPackage m, MembershipPackage? p, DateTime now)
     {
         int? left = m.EndsAt is { } e ? Math.Max(0, (int)Math.Ceiling((e - now).TotalDays)) : null;
@@ -420,10 +434,12 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
     {
         var uid = gw.CurrentUserId;
         var pays = await gw.ListAsync<Payment>(p => p.MemberId == uid);
+        var refunded = (await gw.ListAsync<RefundRequest>(r => r.MemberId == uid && r.Status == "paid")).Select(r => r.PaymentId).ToHashSet();
         var look = await PaymentLookup.LoadAsync(gw);
         return pays.OrderByDescending(p => p.CreatedAt).Select(p => new PaymentItem(p.Id,
             p.DiscountAmount > 0 ? look.Item(p) + " (discount)" : look.Item(p), p.PaymentCode, p.Kind, p.Method, p.Amount, p.DiscountAmount, p.Status,
-            p.CreatedAt, p.ExpiresAt, p.ReferenceNo, p.ProofPath is not null, p.ReceiptNo, p.RejectedReason, look.ItemId(p), p.PackageSnapshotId, p.XenditId is not null)).ToList();
+            p.CreatedAt, p.ExpiresAt, p.ReferenceNo, p.ProofPath is not null, p.ReceiptNo, p.RejectedReason, look.ItemId(p), p.PackageSnapshotId, p.XenditId is not null,
+            refunded.Contains(p.Id))).ToList();
     });
 
     static Dictionary<string, object> WithCode(Dictionary<string, object> args, string? code)
@@ -443,13 +459,13 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
     public Task<AppResult<bool>> CheckOnlineAsync(int paymentId) => OnlinePay.CheckAsync(gw, paymentId);
 
     public async Task<AppResult<Payment>> PayAgainAsync(PaymentItem item) => item.PackageSnapshotId is { } package && item.Kind is PayKind.Membership or PayKind.Renewal
-        ? await new SubscriptionService(gw).ExtendAsync(package, null, item.Method)   // paid again the same way: cash stays cash
+        ? await new SubscriptionService(gw).ExtendAsync(package, null)   // 0099: paid again online (members don't pay cash any more)
         : item.ItemId is not { } id
         ? AppResult<Payment>.Fail(AppErrorKind.Validation, "not_found")
         : item.Kind switch
         {
-            PayKind.Membership => await AvailAsync(id, null, item.Method),
-            PayKind.Renewal => await RenewAsync(id, null, item.Method),
+            PayKind.Membership => await AvailAsync(id, null),
+            PayKind.Renewal => await RenewAsync(id, null),
             _ => AppResult<Payment>.Fail(AppErrorKind.Validation, "not_found")
         };
 
@@ -478,11 +494,25 @@ public sealed record ClaimRow(RefundRequest Claim, string Member, string Amenity
     public string Price => $"₱{Claim.Amount:N2}";
     public string Sent => $"Sent {Claim.RequestedAt.ToUniversalTime().AddHours(8).ToString("ddd d MMM, h:mm tt", System.Globalization.CultureInfo.InvariantCulture)}";
 }
+/// <summary>Owner fixes 2026-11-19 Q5: a payment's status in plain words. The database values don't change.</summary>
+public static class PaymentStatus
+{
+    public static string Text(string status, bool refunded = false) => status switch
+    {
+        Models.Status.Verified => refunded ? "Refunded" : "Paid",
+        Models.Status.Rejected or Models.Status.Expired => "Failed",
+        Models.Status.Voided => "Voided",   // only payments voided before 0100
+        _ => status.Length == 0 ? "" : char.ToUpper(status[0]) + status[1..]
+    };
+}
+
 /// <summary>Something the counter can take a payment for: a package, a membership to renew, or an amenity.</summary>
-public sealed record CounterItem(int Id, string Label, decimal? Price = null);
+public sealed record CounterItem(int Id, string Label, decimal? Price = null, bool DayPass = false);   // 0098: the Day pass package
 
 public interface IPaymentStaffService
 {
+    /// <summary>Owner fixes 2026-11-19 Q12 (0108): does this code work for this member and item? Kind is package, amenity or renewal (price shown only).</summary>
+    Task<AppResult<CodeCheck>> CheckCodeAsync(string memberId, string code, string kind, int itemId, decimal? price = null);
     Task<AppResult<IReadOnlyList<PaymentRow>>> PendingAsync();
     /// <summary>Verified payments, newest first. For finding a payment to void.</summary>
     Task<AppResult<IReadOnlyList<PaymentRow>>> RecentAsync();
@@ -492,7 +522,6 @@ public interface IPaymentStaffService
     Task<AppResult<bool>> DecideClaimAsync(int requestId, bool approve, string reason);
     /// <summary>Cash or GCash at the counter, verified at once. itemId is a package id, a membership id or an amenity id depending on kind.</summary>
     Task<AppResult<Payment>> RecordCounterAsync(string kind, string method, string? memberId, int? itemId, string? walkInName, string? referenceNo, string? discountCode);
-    Task<AppResult<bool>> VoidAsync(int paymentId, string reason);
     /// <summary>Cashier plan Y6 (0080): GCash or QR Ph at the desk, through Xendit: a pending online payment that Xendit's confirmation verifies.</summary>
     Task<AppResult<Payment>> StartDeskOnlineAsync(string kind, string? memberId, int? itemId, string? walkInName, string? discountCode);
     Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId);
@@ -513,6 +542,14 @@ public interface IPaymentStaffService
 
 public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffService
 {
+    public Task<AppResult<CodeCheck>> CheckCodeAsync(string memberId, string code, string kind, int itemId, decimal? price = null) => Safe.RunAsync(async () =>
+    {
+        var args = new Dictionary<string, object> { ["p_member"] = memberId, ["p_code"] = code.Trim(), ["p_kind"] = kind, ["p_item"] = itemId };
+        if (price is { } p) args["p_price"] = p;
+        var rows = await gw.RpcAsync<List<CodeCheck>>("check_discount_code_for", args);
+        return rows?.FirstOrDefault() ?? new CodeCheck { Reason = "invalid_code" };
+    });
+
     public Task<AppResult<Payment>> StartDeskOnlineAsync(string kind, string? memberId, int? itemId, string? walkInName, string? discountCode) =>
         Safe.RunAsync(() =>
         {
@@ -631,12 +668,6 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
             return gw.RpcAsync<Payment>("record_counter_payment", args);
         });
 
-    public async Task<AppResult<bool>> VoidAsync(int paymentId, string reason)
-    {
-        if (string.IsNullOrWhiteSpace(reason)) return AppResult<bool>.Fail(AppErrorKind.Validation, "bad_input");
-        return await Safe.RunAsync(async () => { await gw.RpcAsync("void_payment", new() { ["p_payment_id"] = paymentId, ["p_reason"] = reason.Trim() }); return true; });
-    }
-
 
     public Task<AppResult<(CashShift? Open, decimal DefaultFloat)>> ShiftAsync() => Safe.RunAsync(async () =>
         ((await gw.RpcAsync<List<CashShift>>("my_cash_shift", new()) ?? []).FirstOrDefault(), (await gw.ListAsync<GymSettings>()).First().OpeningFloat));
@@ -665,7 +696,8 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
         switch (kind)
         {
             case PayKind.Membership:
-                return (await gw.ListAsync<MembershipPackage>(p => p.IsActive == true)).Select(p => new CounterItem(p.Id, p.Name, p.Price)).ToList();
+                return (await gw.ListAsync<MembershipPackage>(p => p.IsActive == true)).Where(p => p.PublishedAt is not null)
+                    .Select(p => new CounterItem(p.Id, p.Name, p.Price, p.IsDayPass)).ToList();
             case PayKind.Amenity:
                 // G19 (0066): sessions only; an amenity still set up as a pass isn't sold until it has a session price
                 return (await gw.ListAsync<Amenity>(a => a.IsActive == true)).Where(a => a.DurationDays is null).Select(a => new CounterItem(a.Id, a.Name, a.Price)).ToList();
@@ -713,8 +745,8 @@ public sealed record AmenityCard(Amenity Amenity, bool Followed, bool CanFollow,
         get
         {
             var names = string.Join(", ", Runners ?? []);
-            if (IsCoach) return RunsThis ? (names.Length > 0 ? $"Also run by {names}" : "Only you run this") : names.Length > 0 ? $"Run by {names}" : "Nobody yet: any coach in the gym counts";
-            return names.Length > 0 ? $"Run by {names}" : CanFollow ? "Any coach in the gym" : "";
+            if (IsCoach) return RunsThis ? (names.Length > 0 ? $"Also assigned: {names}" : "Only you are assigned") : names.Length > 0 ? $"Assigned: {names}" : "Nobody yet: any coach in the gym counts";
+            return names.Length > 0 ? $"Coaches: {names}" : CanFollow ? "Any coach in the gym" : "";
         }
     }
 
@@ -1947,6 +1979,10 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
             ["p_area"] = f.Area ?? "", ["p_entity"] = f.Entity ?? "", ["p_offset"] = offset, ["p_limit"] = limit
         };
         if (f.Money is { } money) args["p_money"] = money;   // 0086
+        if (!string.IsNullOrWhiteSpace(f.Customer)) args["p_customer"] = f.Customer.Trim();   // 0101: Transactions' own filters
+        if (!string.IsNullOrEmpty(f.What)) args["p_what"] = f.What;
+        if (!string.IsNullOrEmpty(f.PaidWith)) args["p_paid_with"] = f.PaidWith;
+        if (!string.IsNullOrEmpty(f.Status)) args["p_status"] = f.Status;
         return await gw.RpcAsync<List<AuditRecord>>("audit_records", args) ?? [];
     }
 

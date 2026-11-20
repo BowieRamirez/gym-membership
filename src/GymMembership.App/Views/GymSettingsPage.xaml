@@ -12,8 +12,6 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <!-- the gym's details and its payment QR, side by side -->
-            <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}">
             <Border Style="{StaticResource Panel}">
             <VerticalStackLayout Spacing="16">
             <VerticalStackLayout Spacing="6">
@@ -24,9 +22,16 @@
             <VerticalStackLayout Spacing="6">
                 <!-- F2 (0050): the float sits beside the day-pass price; Start shift on the Cashier page fills it in -->
                 <FlexLayout Wrap="Wrap" AlignItems="End">
-                    <VerticalStackLayout Spacing="6" Margin="0,0,16,0">
+                    <VerticalStackLayout Spacing="6" Margin="0,0,16,0" IsVisible="{Binding CanEditWalkInPrice}">
                         <Label Text="Walk-in price (₱)" Style="{StaticResource Caption}" />
                         <Border Style="{StaticResource Field}" WidthRequest="160"><Entry Text="{Binding WalkInPrice}" Keyboard="Numeric" SemanticProperties.Description="Walk-in price" /></Border>
+                        <!-- 0098: the Day pass package's price wins while one is on sale -->
+                        <Label Text="Used only while no Day pass package is on sale." Style="{StaticResource Caption}" WidthRequest="160" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="6" Margin="0,0,16,0" IsVisible="{Binding HasDayPassPackage}">
+                        <Label Text="Day pass price" Style="{StaticResource Caption}" />
+                        <Label Text="{Binding DayPassPriceText}" Style="{StaticResource Heading}" />
+                        <Label Text="{Binding DayPassPackageNote}" Style="{StaticResource Caption}" WidthRequest="180" />
                     </VerticalStackLayout>
                     <VerticalStackLayout Spacing="6">
                         <Label Text="Opening float (₱)" Style="{StaticResource Caption}" />
@@ -54,8 +59,6 @@
             </VerticalStackLayout>
             </VerticalStackLayout>
             </Border>
-
-            </c:CardGrid>
 
             <Button Text="Save settings" HorizontalOptions="Start" Command="{Binding SaveCommand}" />
 

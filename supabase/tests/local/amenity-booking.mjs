@@ -34,8 +34,13 @@ async function member() {
 }
 const day = (await db.query(`select ((now() at time zone 'Asia/Manila')::date + 2)::text d`)).rows[0].d;
 const at = (hm, d = day) => new Date(`${d}T${hm}:00+08:00`).toISOString();
+// owner fixes 2026-11-19 Q6 (0099): members book online only; 'cash' here is a pay-at-the-desk hold made before 0099 (still live until it
+// expires): booked online, then switched to cash as those were
 const book = (uid, a, hm, minutes = 60, method = 'qr') =>
-  as(uid, 'select * from book_amenity($1,$2,$3,$4::payment_method)', [a, at(hm), minutes, method]).then(r => r[0]);
+  as(uid, 'select * from book_amenity($1,$2,$3,$4::payment_method)', [a, at(hm), minutes, method === 'cash' ? 'qr' : method]).then(async r => {
+    if (method === 'cash') await db.query(`update payments set method = 'cash' where payment_id = $1`, [r[0].payment_id]);
+    return r[0];
+  });
 const res = async id => (await db.query('select * from reservations where reservation_id=$1', [id])).rows[0];
 const payOf = async r => (await db.query('select * from payments where payment_id=$1', [r.payment_id])).rows[0];
 const approve = r => as(desk, 'select verify_payment($1,true)', [r.payment_id]);
@@ -61,7 +66,8 @@ try {
     const soon = (await db.query(`select to_char(date_trunc('hour', now() at time zone 'Asia/Manila') + interval '3 hours','YYYY-MM-DD"T"HH24:MI') t`)).rows[0].t;
     const [d, hm] = soon.split('T');
     if (hm >= '22:30') return;   // a 1-hour booking would run past closing
-    const near = (await as(uid, 'select * from book_amenity($1,$2,60,$3::payment_method)', [a, at(hm, d), 'cash']))[0];
+    const near = (await as(uid, 'select * from book_amenity($1,$2,60,$3::payment_method)', [a, at(hm, d), 'qr']))[0];
+    await db.query(`update payments set method = 'cash' where payment_id = $1`, [near.payment_id]);   // a hold from before 0099
     assert.equal(new Date((await payOf(near)).expires_at).getTime(), new Date(near.starts_at).getTime() - 3600000);
     assert.equal((await payOf(near)).method, 'cash');
   });

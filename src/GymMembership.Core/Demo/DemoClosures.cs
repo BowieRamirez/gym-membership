@@ -72,10 +72,14 @@ public sealed partial class DemoGateway
             if (was == "awaiting_payment" && pay is { Status: Status.Pending }) { pay.Status = Status.Rejected; pay.RejectedReason = "Booking cancelled"; CancelTarget(pay); }
             else if (pay?.Status == Status.Verified || r.BalancePaymentId is not null)
             {
-                Add(new RefundRequest { Kind = "cancel", ReservationId = r.Id, PaymentId = pay?.Status == Status.Verified ? pay.Id : r.BalancePaymentId!.Value, MemberId = r.MemberId,
-                    Amount = (pay?.Status == Status.Verified ? pay.Amount : 0) + balance, Reason = why, RequestedAt = now, Status = "approved", DecidedBy = Uid, DecidedAt = now,
-                    DecisionReason = "Cancelled by the gym: refunded" });
-                NotifyStaff("payment", "Booking refund to repay");
+                var refundAmount = (pay?.Status == Status.Verified ? pay.Amount : 0) + balance;
+                if (refundAmount > 0)
+                {
+                    Add(new RefundRequest { Kind = "cancel", ReservationId = r.Id, PaymentId = pay?.Status == Status.Verified ? pay.Id : r.BalancePaymentId!.Value, MemberId = r.MemberId,
+                        Amount = refundAmount, Reason = why, RequestedAt = now, Status = "approved", DecidedBy = Uid, DecidedAt = now,
+                        DecisionReason = "Cancelled by the gym: refunded" });
+                    NotifyStaff("payment", "Booking refund to repay");
+                }
             }
             else if (r.UserAmenityId is { } session) foreach (var p in All<UserAmenity>().Where(p => p.Id == session && p.IsSession)) p.Status = Status.Active;
             Notify(r.MemberId, "amenity", "Booking cancelled", why);

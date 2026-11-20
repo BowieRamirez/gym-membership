@@ -8,42 +8,6 @@
             x:Class="GymMembership.App.Views.HomePage" x:DataType="vm:HomeViewModel" Title="Home">
 
     <v:BasePage.Resources>
-        <!-- cash plan 2026-11-17: cash members chose in the app; Verify opens Payments to verify, where it is approved or rejected -->
-        <DataTemplate x:Key="PayRow" x:DataType="svc:PaymentRow">
-            <VerticalStackLayout>
-                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,*,110,100,90">
-                    <Label Text="{Binding Payer}" FontFamily="BarlowMedium" VerticalOptions="Center" />
-                    <Label Grid.Column="1" Text="{Binding Item}" VerticalOptions="Center" />
-                    <Label Grid.Column="2" Text="{Binding Payment.PaymentCode}" Style="{StaticResource Muted}" VerticalOptions="Center" />
-                    <Label Grid.Column="3" Text="{Binding Payment.Amount, StringFormat='₱{0:N2}'}" HorizontalOptions="End" VerticalOptions="Center" />
-                    <Button Grid.Column="4" Text="Verify" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="End" Clicked="OnVerify"
-                            SemanticProperties.Hint="Opens Payments to verify" />
-                </Grid>
-                <BoxView Style="{StaticResource Hairline}" />
-            </VerticalStackLayout>
-        </DataTemplate>
-        <DataTemplate x:Key="PayCard" x:DataType="svc:PaymentRow">
-            <VerticalStackLayout>
-                <Grid Padding="14,10" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                    <VerticalStackLayout Spacing="2">
-                        <Label Text="{Binding Payer}" FontFamily="BarlowSemiBold" />
-                        <Label Text="{Binding Item}" />
-                        <Label Style="{StaticResource Caption}">
-                            <Label.Text>
-                                <MultiBinding StringFormat="{}{0}, ₱{1:N2}">
-                                    <Binding Path="Payment.PaymentCode" />
-                                    <Binding Path="Payment.Amount" />
-                                </MultiBinding>
-                            </Label.Text>
-                        </Label>
-                    </VerticalStackLayout>
-                    <Button Grid.Column="1" Text="Verify" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" Clicked="OnVerify"
-                            SemanticProperties.Hint="Opens Payments to verify" />
-                </Grid>
-                <BoxView Style="{StaticResource Hairline}" />
-            </VerticalStackLayout>
-        </DataTemplate>
-
         <DataTemplate x:Key="CoachRow" x:DataType="svc:CoachPresenceRow">
             <VerticalStackLayout>
                 <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,*,110">
@@ -77,7 +41,7 @@
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
             <!-- The one tile with the desk's next task turns yellow AND says what in words, so colour is never the only signal (HomeViewModel.Build) -->
-            <c:CardGrid Columns="{OnIdiom Phone=2, Default=4}" MinColumnWidth="150" BindableLayout.ItemsSource="{Binding Tiles}">
+            <c:CardGrid Columns="{OnIdiom Phone=2, Default=3}" MinColumnWidth="150" BindableLayout.ItemsSource="{Binding Tiles}">
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="vm:HomeTile">
                         <Border Style="{StaticResource Panel}"
@@ -107,44 +71,23 @@
                 </BindableLayout.ItemTemplate>
             </c:CardGrid>
 
-            <!-- what needs the desk next: side by side when there is room -->
-            <c:CardGrid Columns="{OnIdiom Phone=1, Default=2}" MinColumnWidth="420" IsVisible="{Binding HasLists}">
-                <Border Style="{StaticResource TablePanel}">
-                    <VerticalStackLayout>
-                        <c:CardTitle Text="Payments to verify" Margin="14,12,14,4" />
-                        <VerticalStackLayout x:Name="PayHead" IsVisible="{OnIdiom Phone=False, Default=True}">
-                            <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,*,110,100,90">
-                                <Label Text="Payer" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="1" Text="Item" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="2" Text="Code" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="3" Text="Amount" Style="{StaticResource Caption}" HorizontalOptions="End" />
-                            </Grid>
-                            <BoxView Style="{StaticResource Hairline}" />
-                        </VerticalStackLayout>
-                        <c:TableBody Items="{Binding ToVerify}" Header="{x:Reference PayHead}" WideFrom="560"
-                                     RowTemplate="{StaticResource PayRow}" CardTemplate="{StaticResource PayCard}">
-                            <c:TableBody.Empty><Label Text="No cash is waiting. Online payments verify themselves." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
-                        </c:TableBody>
+            <!-- coaches currently checked in -->
+            <Border Style="{StaticResource TablePanel}" IsVisible="{Binding HasLists}">
+                <VerticalStackLayout>
+                    <c:CardTitle Text="Coaches in the gym now" Margin="14,12,14,4" />
+                    <VerticalStackLayout x:Name="CoachHead" IsVisible="{OnIdiom Phone=False, Default=True}">
+                        <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,*,110">
+                            <Label Text="Coach" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="1" Text="Since" Style="{StaticResource Caption}" />
+                        </Grid>
+                        <BoxView Style="{StaticResource Hairline}" />
                     </VerticalStackLayout>
-                </Border>
-
-                <Border Style="{StaticResource TablePanel}">
-                    <VerticalStackLayout>
-                        <c:CardTitle Text="Coaches in the gym now" Margin="14,12,14,4" />
-                        <VerticalStackLayout x:Name="CoachHead" IsVisible="{OnIdiom Phone=False, Default=True}">
-                            <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,*,110">
-                                <Label Text="Coach" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="1" Text="Since" Style="{StaticResource Caption}" />
-                            </Grid>
-                            <BoxView Style="{StaticResource Hairline}" />
-                        </VerticalStackLayout>
-                        <c:TableBody Items="{Binding InGym}" Header="{x:Reference CoachHead}" WideFrom="420"
-                                     RowTemplate="{StaticResource CoachRow}" CardTemplate="{StaticResource CoachCard}">
-                            <c:TableBody.Empty><Label Text="No coaches checked in. Check them in on the Membership checking page." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
-                        </c:TableBody>
-                    </VerticalStackLayout>
-                </Border>
-            </c:CardGrid>
+                    <c:TableBody Items="{Binding InGym}" Header="{x:Reference CoachHead}" WideFrom="420"
+                                 RowTemplate="{StaticResource CoachRow}" CardTemplate="{StaticResource CoachCard}">
+                        <c:TableBody.Empty><Label Text="No coaches checked in. Check them in on the Membership checking page." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
+                    </c:TableBody>
+                </VerticalStackLayout>
+            </Border>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

@@ -119,6 +119,7 @@ public class OnlinePaymentTests
         }
         public Task<AppResult<IReadOnlyList<MembershipPackage>>> ListPackagesAsync() => real.ListPackagesAsync();
         public Task<AppResult<IReadOnlyList<AvailableCode>>> AvailableCodesAsync() => real.AvailableCodesAsync();
+        public Task<AppResult<CodeCheck>> CheckCodeAsync(string code, string kind, int itemId) => real.CheckCodeAsync(code, kind, itemId);
         public Task<AppResult<IReadOnlyList<MembershipRow>>> MyMembershipsAsync() => real.MyMembershipsAsync();
         public Task<AppResult<Access>> AccessAsync() => real.AccessAsync();
         public Task<AppResult<Payment>> AvailAsync(int packageId, string? discountCode = null, string method = PayMethod.Qr) => real.AvailAsync(packageId, discountCode, method);

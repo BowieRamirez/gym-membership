@@ -108,7 +108,22 @@ public sealed class SupabaseGateway : ISupabaseGateway
     public async Task SignInAsync(string email, string password)
     {
         var c = await ReadyAsync();
-        await c.Auth.SignIn(email.Trim(), password);
+        await SignInThroughLockAsync(c, email, password);
+    }
+
+    // owner fixes 2026-11-19 Q2 (0103): through the sign-in function, which counts wrong passwords and locks the account for
+    // 5 minutes after 10; it answers with the session, which the client then takes over
+    async Task SignInThroughLockAsync(Supabase.Client c, string email, string password)
+    {
+        string json;
+        try
+        {
+            json = await c.Functions.Invoke("sign-in", null, new Supabase.Functions.Client.InvokeFunctionOptions
+                { Body = new Dictionary<string, object> { ["email"] = email.Trim(), ["password"] = password } });
+        }
+        catch (Exception ex) when (ErrorCode(ex.Message) is { } code) { throw new Exception(code, ex); }   // invalid_credentials, account_locked, ...
+        var root = JsonDocument.Parse(json).RootElement;
+        await c.Auth.SetSession(root.GetProperty("access_token").GetString()!, root.GetProperty("refresh_token").GetString()!);
     }
 
     public async Task SignUpAsync(string email, string password, string firstName, string lastName, string termsVersion)
@@ -138,8 +153,9 @@ public sealed class SupabaseGateway : ISupabaseGateway
     {
         var c = await ReadyAsync();
         var email = c.Auth.CurrentUser?.Email ?? throw new Exception("not authenticated");
-        try { await c.Auth.SignIn(email, currentPassword); }   // Supabase does not ask for the old password, so check it here
-        catch (GotrueException) { throw new Exception("wrong_password"); }
+        // Supabase does not ask for the old password, so check it here; it is a sign-in, so it counts toward the lock (0103)
+        try { await SignInThroughLockAsync(c, email, currentPassword); }
+        catch (Exception ex) when (ex.Message == "invalid_credentials") { throw new Exception("wrong_password"); }
         await c.Auth.Update(new UserAttributes { Password = newPassword });
     }
 

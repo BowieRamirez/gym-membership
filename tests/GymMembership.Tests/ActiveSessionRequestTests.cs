@@ -24,18 +24,31 @@ public class ActiveSessionRequestTests
         Assert.False((await svc.RequestAsync("u-coach1", Start, Start.AddHours(1), null)).Ok);
     }
 
+    sealed class Clock : TimeProvider
+    {
+        public DateTimeOffset Now = DateTimeOffset.UtcNow;
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
     [Theory]
     [InlineData("cancelled")]
     [InlineData("completed")]
     [InlineData("no_show")]
     public async Task Resolving_the_booking_allows_a_new_invitation(string status)
     {
-        var gw = new DemoGateway();
+        var clock = new Clock();
+        var gw = new DemoGateway(clock: clock);
         var svc = new SessionService(gw);
         await SignIn(gw, "coach@demo.io");
         foreach (var row in (await svc.SessionsAsync()).Value!.Where(r => r.Session.MemberId == "u-alex" && r.Session.Status == Status.Scheduled))
+        {
+            if (status != Status.Cancelled && row.Session.ScheduledStart > clock.Now.UtcDateTime)
+                clock.Now = new DateTimeOffset(row.Session.ScheduledStart.AddMinutes(5), TimeSpan.Zero);
             Assert.True((status == Status.Cancelled ? await svc.CancelSessionAsync(row.Session.Id) : await svc.SetSessionStatusAsync(row.Session.Id, status)).Ok);
-        Assert.True((await svc.InviteMemberAsync("u-alex", Start, Start.AddHours(1))).Ok);
+        }
+        var future = clock.Now.UtcDateTime.AddDays(3);
+        var inviteStart = new DateTime(future.Year, future.Month, future.Day, 10, 0, 0, DateTimeKind.Utc);
+        Assert.True((await svc.InviteMemberAsync("u-alex", inviteStart, inviteStart.AddHours(1))).Ok);
     }
 
     [Fact]

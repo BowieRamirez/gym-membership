@@ -7,7 +7,7 @@ namespace GymMembership.Core.Services;
 public sealed record CalendarSession(TrainingSession Session, string With, string? Mark)
 {
     public bool Cancelled => Session.Status == Status.Cancelled;
-    public bool CanMark => !Cancelled;
+    public bool CanMark => !Cancelled && Session.ScheduledStart <= DateTime.UtcNow;
     public bool Attended => !Cancelled && Mark is "present" or "late";
     public bool Absent => !Cancelled && Mark == "absent";
     public bool Excused => !Cancelled && Mark == "excused";

@@ -35,7 +35,7 @@ public static class ErrorMapper
         if (Has(m, "forbidden", "42501", "jwt", "row-level security", "invalid login", "invalid_credentials", "not authenticated")) return AppErrorKind.Unauthorized;
         if (Has(m, "item_not_for_sale", "already_published", "package_published", "package_archived", "name_taken", "draft_exists", "not_published", "published_archive_instead", "account_has_commitments", "account_archived", "record_archived", "record_not_restorable", "code_limit_reached", "code_taken", "discount_used", "name_complete", "shift_has_sessions", "slot_taken", "member_busy", "stale_proposal", "coach_unavailable", "coach_busy", "already_started", "not_in_use", "amenity_unavailable", "not_archived", "already_processed", "already_availed", "renewal_pending", "already_requested", "refund_in_progress", "not_refundable", "pending_session_request", "active_coaching_session", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
         if (Has(m, "account_inactive", "no_open_shift", "shift_open", "note_required", "bad_archive_reason", "bad_correction_reason", "discount_fixed", "discount_locked", "wrong_pin", "has_desk_pin", "bad_down_payment", "coach_not_free", "not_confirmed", "balance_paid", "wrong_member_password", "proof_invalid", "auth_unavailable", "pin_locked", "no_desk_pin", "pin_required", "scan_required", "bad_pin", "refund_reason_required", "no_coach_present", "self_archive", "last_active_admin", "no_active_membership", "self_verify", "self_decision", "not_renewable", "wrong_member", "not_found", "23514",
-                   "missing_fields", "not_on_the_hour", "refund_window_closed", "refund_week_passed", "nothing_to_refund", "terms_required", "too_soon", "too_late_to_cancel", "not_ended", "claim_window_closed", "payment_expired", "gym_closed", "day_closed", "day_past", "coach_not_in_gym", "hire_already_requested", "bad_rate", "invite_member_inactive", "invalid_code", "code_already_used", "code_not_for_item", "no_items", "item_not_found", "limit_required", "bad_hours", "off_grid", "outside_gym_hours", "too_long", "past_slot", "too_far_ahead", "no_pass", "limit_below_used", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "super_admin_protected", "bad_code", "code_not_verified", "resend_wait", "same_password", "end must be after start")) return AppErrorKind.Validation;
+                   "missing_fields", "not_on_the_hour", "refund_window_closed", "refund_week_passed", "nothing_to_refund", "terms_required", "too_soon", "too_late_to_cancel", "not_ended", "claim_window_closed", "payment_expired", "gym_closed", "day_closed", "day_past", "coach_not_in_gym", "hire_already_requested", "bad_rate", "invite_member_inactive", "invalid_code", "code_already_used", "code_not_for_item", "no_items", "item_not_found", "limit_required", "bad_hours", "off_grid", "outside_gym_hours", "too_long", "past_slot", "too_far_ahead", "no_pass", "limit_below_used", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "super_admin_protected", "bad_code", "code_not_verified", "resend_wait", "same_password", "weak_password", "outside_membership", "online_only", "too_many_tries", "account_locked", "too_many_checks", "code_expired", "end must be after start")) return AppErrorKind.Validation;
         return AppErrorKind.Unknown;
     }
 
@@ -43,6 +43,29 @@ public static class ErrorMapper
 }
 
 // Plain words: what happened and what to do next.
+/// <summary>Owner fixes 2026-11-19 Q12: one-line live feedback under the discount code box.</summary>
+public static class CodeCheckFeedback
+{
+    public static string Message(GymMembership.Core.Models.CodeCheck? check, string kind, decimal? customPay = null)
+    {
+        if (check is null) return "";
+        if (check.Works)
+        {
+            var pay = customPay ?? check.YouPay ?? 0m;
+            return $"Code works: {check.Percent}% off. You pay ₱{pay:N2}.";
+        }
+        return check.Reason switch
+        {
+            "invalid_code" => "There's no code with that name.",
+            "code_already_used" => "You've already used this code.",
+            "code_limit_reached" => "This code has been used up.",
+            "code_expired" => "This code has expired.",
+            "code_not_for_item" => kind == "amenity" ? "That code doesn't work for this amenity." : "That code doesn't work for this package.",
+            _ => ErrorText.For(AppErrorKind.Validation, check.Reason)
+        };
+    }
+}
+
 public static class ErrorText
 {
     public static string For(AppErrorKind kind) => kind switch
@@ -50,7 +73,7 @@ public static class ErrorText
         AppErrorKind.Offline => "Can't reach the server. Check your connection and try again.",
         AppErrorKind.Unauthorized => "You don't have permission to do that, or your session ended. Sign in again.",
         AppErrorKind.Conflict => "That clashes with an existing record. Refresh the list and try again.",
-        AppErrorKind.Validation => "That isn't allowed right now. For example, you may need an active membership.",
+        AppErrorKind.Validation => "That isn't allowed right now.",
         _ => "Something went wrong. Try again."
     };
 
@@ -67,7 +90,13 @@ public static class ErrorText
     static string? ServerMessage(string? raw)
     {
         if (raw is null || !raw.TrimStart().StartsWith('{')) return raw;
-        try { return System.Text.Json.JsonDocument.Parse(raw).RootElement.TryGetProperty("message", out var m) && m.GetString() is { } s ? s : raw; }
+        try
+        {
+            // PostgREST puts the reason in "message"; Supabase Auth puts it in "error_code" (owner fixes 2026-11-19 Q7)
+            var root = System.Text.Json.JsonDocument.Parse(raw).RootElement;
+            return root.TryGetProperty("message", out var m) && m.GetString() is { } s ? s
+                : root.TryGetProperty("error_code", out var c) && c.GetString() is { } code ? code : raw;
+        }
         catch (System.Text.Json.JsonException) { return raw; }
     }
 
@@ -102,6 +131,10 @@ public static class ErrorText
         "pin_required" => "Enter the member's desk PIN.",
         "has_desk_pin" => "This member has a desk PIN, so a reason isn't enough. Ask them to type their PIN, or use Sign in instead.",
         "no_open_shift" => "Start your cash shift on the Cashier page first: cash you take or pay back goes through your drawer.",
+        "email_not_confirmed" => "Confirm your email first: open the link we sent you, then sign in.",   // 0103: the sign-in function says so
+        "account_locked" => "Too many wrong passwords. This account is locked for 5 minutes; try again after that.",   // 0103
+        "too_many_tries" => "You've started 10 payments in the last hour. Wait a while, then try again: each one stops counting an hour after you started it.",   // 0102
+        "online_only" => "Pay online here. To pay cash, go to the front desk and they'll record it for you.",   // 0099
         "shift_open" => "Your shift is already open. End it before starting a new one.",
         "note_required" => "Add a note: the amount differs from what's expected.",
         "scan_required" => "Scan the member's QR code again, then check them in.",
@@ -148,6 +181,8 @@ public static class ErrorText
         "bad_archive_filter" => "Check the archive filters and date range, then try again.",
         "account_inactive" => "This account is inactive and cannot receive a new booking, coaching hire or pending payment.",
         "invalid_code" => "That discount code isn't valid, or it has expired.",
+        "code_expired" => "This code has expired.",
+        "too_many_checks" => "Too many checks. Wait a few minutes.",
         "bad_walk_in_price" => "Enter a walk-in price above ₱0.",
         "bad_down_payment" => "The down payment is a percent from 1 to 100.",
         "coach_not_free" => "That coach isn't free for the whole time any more. Pick another coach or another time.",
@@ -158,7 +193,7 @@ public static class ErrorText
         "name_complete" => "Your name is already complete. A System admin can correct it if it is wrong.",
         "bad_name" => "Enter a first and a last name in letters. Spaces, hyphens and apostrophes are fine. At least 2 letters each, 60 characters together.",
         "bad_email" => "Enter a valid email address, for example name@example.com. Up to 100 characters.",
-        "bad_password" => "Use 8 to 64 characters for your password, with at least one letter and one number.",
+        "bad_password" or "weak_password" => "Use 8 to 64 characters for your password, with at least one letter and one number.",
         // Supabase Auth's own refusal (D5: minimum 8, letters_digits), in case the app's check was older than the server's
         _ when raw?.Contains("weak_password", StringComparison.OrdinalIgnoreCase) == true => For(kind, "bad_password"),
         "bad_image" => "Choose a JPG, PNG or WebP picture under 5 MB.",
@@ -199,6 +234,7 @@ public static class ErrorText
         "self_decision" => "You can't decide or repay your own refund request.",
         "self_verify" => "You can't approve a payment you made yourself.",
         "no_active_membership" => "You need an active membership for that. Buy a package and wait for the payment to be verified.",
+        "outside_membership" => "Your membership doesn't cover that time. Pick a time within it, or buy or renew a package first.",   // 0098
         "already_processed" => "That was already handled. Refresh the page and try again.",
         "no_active_hire" => "You can only message a coach you have hired, or a trainee who is hired to you.",
         "empty_message" => "Type a message first.",

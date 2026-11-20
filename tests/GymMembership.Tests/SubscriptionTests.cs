@@ -299,7 +299,7 @@ public class SubscriptionTests
         Assert.True((await new AdminService(gw).PublishAsync("plan",trial.Id)).Ok);   // G6 (0061): added as a draft
         Assert.True((await new AdminService(gw).CreateDiscountAsync(new Discount {Code="TRIALFREE",Percent=100,MaxUses=5,ExpiresAt=DateTime.UtcNow.AddDays(1)},DiscountItem.Everything)).Ok);
         await gw.SignInAsync("phase7@demo.io","secret12");
-        var p=(await svc.ExtendAsync(trial.Id,"TRIALFREE")).Value!; Assert.Equal(0m,p.Amount); await Verify(gw,p);
+        var p=(await svc.ExtendAsync(trial.Id,"TRIALFREE")).Value!; Assert.Equal(0m,p.Amount); Assert.Equal(Status.Verified,p.Status);
         var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
         Assert.False((await svc.RequestRefundAsync(term.Id,"Changed plans","change_of_mind")).Ok);
     }
@@ -373,8 +373,41 @@ public class SubscriptionTests
         var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
         Assert.True((await svc.RequestRefundAsync(term.Id,"Changed plans","change_of_mind")).Ok);
         await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
-        Assert.False((await new PaymentStaffService(gw).VoidAsync(p.Id,"Wrong payment")).Ok);
+        await Assert.ThrowsAnyAsync<Exception>(()=>gw.OwnerVoidAsync(p.Id,"Wrong payment"));   // 0100: even the owner's void refuses
         await Assert.ThrowsAnyAsync<Exception>(()=>gw.UpdateAsync(term));
         await Assert.ThrowsAnyAsync<Exception>(()=>gw.InsertAsync(new RefundRequest()));
+    }
+
+    [Fact]
+    public async Task Refunds_filters_by_status_item_type_and_search()
+    {
+        var (gw, _, svc, monthly, _) = await Setup();
+        var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
+        var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
+        Assert.True((await svc.RequestRefundAsync(term.Id,"Changed plans","change_of_mind")).Ok);
+
+        await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
+        var vm=new GymMembership.Core.ViewModels.RefundsViewModel(svc);
+        await vm.OnAppearingAsync();
+        var req=Assert.Single(vm.Requests);
+        Assert.Equal("To review",req.Status);
+
+        vm.SetStatusFilterCommand.Execute("To review");
+        Assert.Single(vm.Requests);
+        vm.SetStatusFilterCommand.Execute("Repaid");
+        Assert.Empty(vm.Requests);
+        Assert.Equal("No matching refund requests.",vm.EmptyText);
+
+        vm.SetStatusFilterCommand.Execute("All");
+        vm.ItemTypeIndex=1;   // Membership
+        Assert.Single(vm.Requests);
+        vm.ItemTypeIndex=3;   // Amenity
+        Assert.Empty(vm.Requests);
+
+        vm.ItemTypeIndex=0;
+        vm.Search=req.Member[..4];
+        Assert.Single(vm.Requests);
+        vm.Search="no-such-member-xyz";
+        Assert.Empty(vm.Requests);
     }
 }

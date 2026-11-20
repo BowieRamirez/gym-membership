@@ -20,6 +20,17 @@ public class AccountTests
         Assert.Equal(AppRole.Employee, (await new AuthService(gw).SignInAsync("dana@demo.io", "desk1234")).Value);
     }
 
+    // Owner fixes 2026-11-19 Q7: Supabase Auth's error body names the reason in error_code / msg, not message
+    [Theory]
+    [InlineData("{\"code\":422,\"error_code\":\"same_password\",\"msg\":\"New password should be different from the old password.\"}", "Pick a password that's different from your old one.")]
+    [InlineData("{\"code\":422,\"error_code\":\"weak_password\",\"msg\":\"Password should be at least 6 characters.\"}", "Use 8 to 64 characters for your password, with at least one letter and one number.")]
+    public void Supabase_auth_errors_show_their_own_sentence(string body, string sentence) =>
+        Assert.Equal(sentence, ErrorText.For(ErrorMapper.Map(new Exception(body)), body));
+
+    [Fact]
+    public void The_generic_refusal_never_blames_the_membership() =>
+        Assert.DoesNotContain("membership", ErrorText.For(AppErrorKind.Validation));
+
     [Fact]
     public async Task Changing_your_password_needs_the_current_one_and_replaces_it()
     {

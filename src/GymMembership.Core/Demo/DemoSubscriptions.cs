@@ -52,6 +52,7 @@ public sealed partial class DemoGateway
         var start=pay.VerifiedAt!.Value;
         while(live.Where(t=>t.StartsAt<=start && t.EndsAt>start).Select(t=>(DateTime?)t.EndsAt).Max() is {} e) start=e;
         var end=start.AddDays(pay.PackageSnapshotDays!.Value);
+        if(All<MembershipPackage>().Any(p=>p.Id==pay.PackageSnapshotId && p.IsDayPass)) end=start.AddHours(8).Date.AddDays(1).AddHours(-8);   // 0098: midnight, Manila
         var later=live.Where(t=>t.StartsAt>=start).ToList();
         if(later.Count>0 && later.Min(t=>t.StartsAt) is var next && next<end)
             foreach(var t in later) {t.StartsAt+=end-next; t.EndsAt+=end-next;}
@@ -65,10 +66,13 @@ public sealed partial class DemoGateway
     {
         RequireActive();
         var method=args.TryGetValue("p_method",out var m0)?Convert.ToString(m0):PayMethod.Qr;   // 0084: online (qr) or cash at the desk
-        if(method is not (PayMethod.Qr or PayMethod.Cash)) throw Err("bad_input");
+        if(method==PayMethod.Cash) throw Err("online_only");   // 0099: members pay online; the desk records cash
+        if(method is not PayMethod.Qr) throw Err("bad_input");
+        if(All<Payment>().Count(p=>p.MemberId==member && p.Kind is PayKind.Membership or PayKind.Renewal && p.CreatedAt>SubscriptionNow.AddHours(-1))>=10) throw Err("too_many_tries");   // 0102
         if(!All<Member>().Any(m=>m.UserId==member) || !All<Profile>().Any(p=>p.Id==member && p.IsActive)) throw Err("not_found");
         if(All<Payment>().Any(p=>p.MemberId==member && p.Status==Status.Pending && p.Kind is PayKind.Membership or PayKind.Renewal)) throw Err("renewal_pending");
         var pkg=PackageForSale(packageId);
+        if(pkg.IsDayPass && All<MembershipTerm>().Any(t=>t.MemberId==member && t.CancelledAt is null && t.EndsAt>SubscriptionNow)) throw Err("already_availed");   // 0098
         var discount=Discounted(member,args,pkg.Price,"package",pkg.Id);
         var ump=All<UserMembershipPackage>().Where(u=>u.MemberId==member && u.StartsAt is not null).OrderByDescending(u=>u.Id).FirstOrDefault();
         Payment pay;
@@ -85,6 +89,14 @@ public sealed partial class DemoGateway
         }
         SnapshotMembershipPayment(pay,pkg);
         pay.Method=method;
+        if(pay.Amount==0 && pay.Status==Status.Pending)
+        {
+            pay.Status=Status.Verified;
+            pay.VerifiedAt=SubscriptionNow;
+            pay.ReceiptNo=ReceiptNo();
+            ActivateMembershipTerm(pay);
+            Notify(member,"payment","Payment received",pay.PaymentCode);
+        }
         return pay;
     }
 
@@ -155,7 +167,7 @@ public sealed partial class DemoGateway
                 r.Status="paid";r.PaidAt=now;r.PaidBy=Uid;r.RepaymentMethod=method;r.RepaymentReference=reference;
                 Notify(r.MemberId,"payment","Refund repaid",method);Audit("refund.paid","refund_requests",r.Id.ToString());return true;
             }
-            case "void_payment":
+            case "owner:void_payment":
             {
                 Require("payments:void");var reason=Reason();
                 var p=All<Payment>().FirstOrDefault(p=>p.Id==I("p_payment_id"))??throw Err("not_found");

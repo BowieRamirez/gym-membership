@@ -53,53 +53,6 @@
             </VerticalStackLayout>
         </DataTemplate>
 
-        <DataTemplate x:Key="PaymentRow" x:DataType="svc:PaymentItem">
-            <VerticalStackLayout>
-                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,110,*,130,170,120,240">
-                    <Label Text="{Binding What}" FontFamily="BarlowMedium" VerticalOptions="Center" />
-                    <c:StatusChip Grid.Column="1" Status="{Binding Status}" VerticalOptions="Center" />
-                    <Label Grid.Column="2" Text="{Binding Detail}" VerticalOptions="Center" />
-                    <Label Grid.Column="3" Text="{Binding PaymentCode}" Style="{StaticResource Muted}" VerticalOptions="Center" />
-                    <Label Grid.Column="4" Text="{Binding CreatedAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM yyyy, h:mm tt'}" VerticalOptions="Center" />
-                    <Label Grid.Column="5" Text="{Binding Amount, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center" />
-                    <HorizontalStackLayout Grid.Column="6" Spacing="6" VerticalOptions="Center" HorizontalOptions="End">
-                        <Button Text="Pay again" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanPayAgain}" Clicked="OnPayAgain" />
-                        <Button Text="Cancel payment" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanCancel}" Clicked="OnCancelPayment" />
-                    </HorizontalStackLayout>
-                </Grid>
-                <BoxView Style="{StaticResource Hairline}" />
-            </VerticalStackLayout>
-        </DataTemplate>
-        <!-- phone and narrow windows: what and how much; then the status, the day and the payment code; the receipt or reason only when there is one -->
-        <DataTemplate x:Key="PaymentCard" x:DataType="svc:PaymentItem">
-            <VerticalStackLayout>
-                <VerticalStackLayout Spacing="4" Padding="14,12">
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                        <Label Text="{Binding What}" FontFamily="BarlowSemiBold" />
-                        <Label Grid.Column="1" Text="{Binding Amount, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" />
-                    </Grid>
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                        <c:StatusChip Status="{Binding Status}" VerticalOptions="Center" />
-                        <Label Grid.Column="1" Style="{StaticResource Caption}" VerticalOptions="Center">
-                            <Label.Text>
-                                <MultiBinding StringFormat="{}{0}  ·  {1}">
-                                    <Binding Path="CreatedAt" Converter="{StaticResource LocalDate}" ConverterParameter="d MMM yyyy" />
-                                    <Binding Path="PaymentCode" />
-                                </MultiBinding>
-                            </Label.Text>
-                        </Label>
-                    </Grid>
-                    <Label Text="{Binding Detail}" Style="{StaticResource Caption}" IsVisible="{Binding Detail, Converter={StaticResource HasText}}" />
-                    <HorizontalStackLayout Spacing="8" Margin="0,6,0,0" IsVisible="{Binding CanPayAgain}">
-                        <Button Text="Pay again" Style="{StaticResource FilterChip}" Clicked="OnPayAgain" />
-                    </HorizontalStackLayout>
-                    <HorizontalStackLayout Spacing="8" Margin="0,6,0,0" IsVisible="{Binding CanCancel}">
-                        <Button Text="Cancel payment" Style="{StaticResource FilterChip}" Clicked="OnCancelPayment" />
-                    </HorizontalStackLayout>
-                </VerticalStackLayout>
-                <BoxView Style="{StaticResource Hairline}" />
-            </VerticalStackLayout>
-        </DataTemplate>
     </v:BasePage.Resources>
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
@@ -150,8 +103,8 @@
             </Grid>
 
             <!-- stacked above the tables, the pay panel and the QR row stop at a readable width -->
-            <c:SideLayout StackedSideWidth="600">
-                <!-- main: paid terms, payments -->
+            <c:SideLayout>
+                <!-- main: paid terms (payments moved to their own page, owner fixes 2026-11-19 Q8) -->
                 <VerticalStackLayout Spacing="12">
 
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
@@ -187,42 +140,6 @@
                             IsVisible="{OnIdiom Phone=True, Default=False}" />
                     <Label x:Name="TermsRule" Text="A new term starts when your current one ends, or right away if none is running. A term bought ahead moves back if the new one runs into it. No upgrades or unused-time credits."
                            Style="{StaticResource Caption}" IsVisible="{OnIdiom Phone=False, Default=True}" />
-
-                    <Label Text="Payments" Style="{StaticResource SectionTitle}" Margin="{OnIdiom Phone=0, Default='0,10,0,0'}" />
-                    <!-- status filter chips; they wrap onto a second line on a narrow phone; the yellow one is in use -->
-                    <FlexLayout Wrap="Wrap">
-                            <Button Text="All" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="All">
-                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="All"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
-                            </Button>
-                            <Button Text="Verified" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Verified">
-                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Verified"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
-                            </Button>
-                            <Button Text="Pending" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Pending">
-                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Pending"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
-                            </Button>
-                            <Button Text="Expired or rejected" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="Expired">
-                                <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="Expired"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
-                            </Button>
-                    </FlexLayout>
-                    <Border Style="{StaticResource TablePanel}">
-                        <VerticalStackLayout>
-                            <VerticalStackLayout x:Name="PaymentsHead" IsVisible="{OnIdiom Phone=False, Default=True}">
-                                <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,110,*,130,170,120,240">
-                                    <Label Text="Item" Style="{StaticResource Caption}" />
-                                    <Label Grid.Column="1" Text="Status" Style="{StaticResource Caption}" />
-                                    <Label Grid.Column="2" Text="Details" Style="{StaticResource Caption}" />
-                                    <Label Grid.Column="3" Text="Payment code" Style="{StaticResource Caption}" />
-                                    <Label Grid.Column="4" Text="Date" Style="{StaticResource Caption}" />
-                                    <Label Grid.Column="5" Text="Amount" Style="{StaticResource Caption}" HorizontalOptions="End" />
-                                </Grid>
-                                <BoxView Style="{StaticResource Hairline}" />
-                            </VerticalStackLayout>
-                            <c:TableBody Items="{Binding Payments}" Header="{x:Reference PaymentsHead}" WideFrom="1000"
-                                         RowTemplate="{StaticResource PaymentRow}" CardTemplate="{StaticResource PaymentCard}">
-                                <c:TableBody.Empty><Label Text="{Binding PaymentsEmptyText, Source={RelativeSource AncestorType={x:Type vm:MyMembershipViewModel}}}" Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
-                            </c:TableBody>
-                        </VerticalStackLayout>
-                    </Border>
                 </VerticalStackLayout>
 
                 <!-- side: the member QR (the Pay online card moved to Packages, owner 2026-11-16) -->
@@ -251,6 +168,22 @@
                                 <Label Text="{Binding PassLeftText}" FontFamily="BarlowSemiBold" HorizontalOptions="Center" AutomationId="PassLeft" />
                                 <Label Text="It identifies you at the front desk; it is not for paying." Style="{StaticResource Caption}" HorizontalOptions="Center" />
                             </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border Style="{StaticResource SidePanel}">
+                        <VerticalStackLayout Spacing="6">
+                            <c:CardTitle Text="Hired coach" />
+                            <Label Text="{Binding HiredCoachName}" Style="{StaticResource Heading}" FontSize="22" LineBreakMode="WordWrap" />
+                            <Label Text="{Binding HiredCoachNote}" Style="{StaticResource Caption}" LineBreakMode="WordWrap" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border Style="{StaticResource SidePanel}">
+                        <VerticalStackLayout Spacing="6">
+                            <c:CardTitle Text="Current session" />
+                            <Label Text="{Binding CurrentSessionText}" Style="{StaticResource Heading}" FontSize="22" LineBreakMode="WordWrap" />
+                            <Label Text="{Binding CurrentSessionNote}" Style="{StaticResource Caption}" LineBreakMode="WordWrap" />
                         </VerticalStackLayout>
                     </Border>
                 </VerticalStackLayout>

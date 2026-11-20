@@ -43,7 +43,7 @@ public class WalkInProcessTests
         vm.PickMemberCommand.Execute(vm.Hits.Single());
         Assert.Equal("Carlo Diaz", vm.OrderWho);
         await vm.RecordCommand.ExecuteAsync(null);
-        Assert.Equal("Carlo Diaz", (await Last(gw)).WalkInName);
+        var pay = await Last(gw); Assert.Equal((PayKind.Membership, "u-carlo"), (pay.Kind, pay.MemberId));   // 0098: their Day pass is the package
     }
 
     [Fact]   // final review: the member chosen for the last sale must not name the next anonymous Day pass

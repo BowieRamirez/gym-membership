@@ -57,9 +57,31 @@ try {
     assert.ok(all.some(x => x.action === 'role.grant') && all.some(x => x.action === 'payment.record'));
   });
 
+  // owner fixes 2026-11-19 Q4 (0101): Transactions has its own filters: customer, what was bought, how it was paid, status
+  const money = (args) => as(admin, `select * from audit_records(p_money=>true, p_limit=>1000, p_customer=>$1, p_what=>$2, p_paid_with=>$3, p_status=>$4)`,
+    [args.customer ?? '', args.what ?? '', args.paid ?? '', args.status ?? '']);
+  await test('Q4: Transactions filters by customer name', async () => {
+    const r = await money({ customer: 'pedro' });
+    assert.ok(r.length >= 1 && r.every(x => x.customer === 'Pedro Ramos'));
+  });
+  await test('Q4: Transactions filters by what was bought: membership, Day pass', async () => {
+    assert.ok((await money({ what: 'membership' })).every(x => x.customer === 'Alex Tan'));
+    assert.ok((await money({ what: 'day_pass' })).every(x => x.customer === 'Pedro Ramos'));
+    assert.equal((await money({ what: 'amenity' })).length, 0);
+  });
+  await test('Q4: Transactions filters by how it was paid and by status', async () => {
+    assert.ok((await money({ paid: 'gcash' })).every(x => x.paid_with.toLowerCase() === 'gcash'));
+    assert.equal((await money({ paid: 'gcash' })).length, 1);
+    assert.ok((await money({ status: 'paid' })).length >= 2);
+    assert.equal((await money({ status: 'failed' })).length, 0);
+  });
+  await test('Q4: an unknown filter value is refused', async () => {
+    await assert.rejects(money({ what: 'boats' }), /bad_audit_filter/);
+  });
+
   await test('members cannot read it and anon cannot call it', async () => {
     await assert.rejects(rows(member, true), /forbidden|permission|not_allowed/);
-    const r = (await db.query(`select has_function_privilege('anon','public.audit_records(date,date,text,text,text,integer,integer,boolean)','execute') a`)).rows[0];
+    const r = (await db.query(`select has_function_privilege('anon','public.audit_records(date,date,text,text,text,integer,integer,boolean,text,text,text,text)','execute') a`)).rows[0];
     assert.equal(r.a, false);
   });
 } finally {

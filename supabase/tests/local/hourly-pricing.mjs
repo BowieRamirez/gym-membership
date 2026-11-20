@@ -56,7 +56,7 @@ try {
   });
 
   await test('the desk takes the hourly price for every hour', async () => {
-    const r = (await as(desk, 'select * from desk_book_amenity(p_member=>$1, p_amenity=>$2, p_start=>$3, p_minutes=>180)', [await user(null), ring, at('09:00')]))[0];
+    const r = (await as(desk, 'select * from desk_book_amenity(p_member=>$1, p_amenity=>$2, p_start=>$3, p_minutes=>180)', [await member(), ring, at('09:00')]))[0];
     assert.equal(Number(r.total_price), 300);
   });
 } finally {

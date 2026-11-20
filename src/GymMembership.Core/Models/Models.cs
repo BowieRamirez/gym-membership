@@ -71,6 +71,8 @@ public static class PayMethod
 [Table("membership_packages")] public class MembershipPackage : BaseModel
 { [PrimaryKey("membership_package_id")] public int Id { get; set; } [Column("name")] public string Name { get; set; } = ""; [Column("description")] public string? Description { get; set; }
   [Column("price")] public decimal Price { get; set; } [Column("duration_days")] public int DurationDays { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true;
+  [Column("is_day_pass")] public bool IsDayPass { get; set; }   // 0098: its term ends at midnight in Manila on the day it is paid
+  [System.Text.Json.Serialization.JsonIgnore] public string LengthText => IsDayPass ? "Today only, until midnight" : $"{DurationDays} days of access";
   // G6/G9 (0061): null = a draft; set only by publish_catalog_item. A version points at the package it replaces.
   [Column("published_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? PublishedAt { get; set; }
   [Column("replaces_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? ReplacesId { get; set; }
@@ -274,6 +276,16 @@ public sealed class AvailableCode : BaseModel
   [System.Text.Json.Serialization.JsonIgnore] public string ForText => GymMembership.Core.Services.DiscountFits.For(FitsText);
   /// <summary>ExpiresAt is the midnight that ends the last day, as on the Discounts page.</summary>
   [System.Text.Json.Serialization.JsonIgnore] public string LastDayText => $"Last day {ExpiresAt.AddTicks(-1).ToLocalTime():d MMM yyyy}"; }
+
+/// <summary>Owner fixes 2026-11-19 Q12 (0107): result of check_discount_code as the member types a code.</summary>
+public sealed class CodeCheck : BaseModel
+{
+    [Column("percent")] public int? Percent { get; set; }
+    [Column("amount_off")] public decimal? AmountOff { get; set; }
+    [Column("you_pay")] public decimal? YouPay { get; set; }
+    [Column("reason")] public string? Reason { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore] public bool Works => Reason is null && Percent is > 0;
+}
 
 // one conversation = one coach + one member. A message is sent as one of the two (sender_id) and only read_at changes afterwards
 [Table("messages")] public class ChatMessage : BaseModel

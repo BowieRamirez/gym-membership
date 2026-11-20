@@ -66,64 +66,18 @@ public partial class HomeViewModel(IDeskHomeService svc, IPaymentStaffService? p
     public static IReadOnlyList<HomeTile> Build(DeskSummary s)
     {
         var amenityDetail = string.Join(", ", new[] { s.AmenitiesInUse > 0 ? $"{s.AmenitiesInUse} in use" : null, s.AmenitiesUnavailable > 0 ? $"{s.AmenitiesUnavailable} unavailable" : null }.OfType<string>());
-        // 9.7: one highlighted figure (the page standard). Payments waiting first, then unanswered chats; an unavailable amenity is news,
-        // not a desk task, so it is said in words only. Every tile still says what it needs in its caption.
-        bool pay = s.CashToTake > 0, chats = !pay && (s.UnreadMessages > 0 || s.UnclaimedChats > 0);
+        // 9.7: one highlighted figure (the page standard): unanswered chats.
+        bool chats = s.UnreadMessages > 0 || s.UnclaimedChats > 0;
         return
         [
             new("checkin", "log-in", "Check-ins today", s.CheckInsToday.ToString(),
                 s.CheckInsToday == 0 ? "No one has checked in yet" : "Tap to check someone in", false),
-            // cash plan 2026-11-17: cash members chose in the app (packages and booking down payments) waits on Payments to verify
-            new("verify", "receipt", "Payments to verify", s.CashToTake.ToString(),
-                s.CashToTake == 0 ? "All caught up" : s.CashToTake == 1 ? "1 payment is waiting" : $"{s.CashToTake} payments are waiting", pay),
             new("amenities", "waves", "Amenities available", $"{s.AmenitiesAvailable} of {s.AmenitiesTotal}",
                 amenityDetail.Length == 0 ? "All open" : amenityDetail, false),
             new("messages", "message-square", "Unread messages", s.UnreadMessages.ToString(),
                 s.UnclaimedChats > 0 ? (s.UnclaimedChats == 1 ? "1 chat nobody has taken" : $"{s.UnclaimedChats} chats nobody has taken")
                 : s.UnreadMessages > 0 ? "Open Messages to reply" : "No new messages", chats),
         ];
-    }
-}
-
-/// <summary>Cash plan 2026-11-17: the cash members chose in the app (packages and booking down payments), oldest first.
-/// Approve takes it into the desk's open drawer with a receipt; Reject needs a reason and is final (the member pays again).</summary>
-public partial class VerifyPaymentsViewModel(IPaymentStaffService svc) : LoadableViewModel
-{
-    public ObservableCollection<PaymentRow> Pending { get; } = new();
-    public bool HasPending => Pending.Count > 0;
-    [ObservableProperty] private PaymentRow? rejecting;
-    [ObservableProperty] private string rejectReason = "";
-
-    public override Task OnAppearingAsync() => LoadAsync();
-
-    [RelayCommand]
-    private async Task LoadAsync()
-    {
-        await RunAsync(svc.PendingAsync, rows => Fill(Pending, rows));
-        OnPropertyChanged(nameof(HasPending));
-    }
-
-    [RelayCommand]
-    private async Task ApproveAsync(PaymentRow row)
-    {
-        Notice = null;
-        var booking = row.Booking is { } b ? $"\n{b}" : "";
-        if (!await Confirm.AskAsync($"Take {row.Payer}'s cash?", $"{row.Item}{booking}\n₱{row.Payment.Amount:N2} into your drawer.", "Approve")) return;
-        if (!await RunAsync(() => svc.VerifyAsync(row.Payment.Id, true))) return;
-        Pending.Remove(row); OnPropertyChanged(nameof(HasPending));
-        Notice = $"Took ₱{row.Payment.Amount:N2} from {row.Payer}. Verified, with a receipt number.";
-    }
-
-    [RelayCommand] private void Reject(PaymentRow row) { Notice = null; Rejecting = row; RejectReason = ""; }
-    [RelayCommand] private void KeepPending() => Rejecting = null;
-
-    [RelayCommand]
-    private async Task ConfirmRejectAsync()
-    {
-        if (Rejecting is not { } row) return;
-        if (!await RunAsync(() => svc.VerifyAsync(row.Payment.Id, false, RejectReason))) return;
-        Pending.Remove(row); OnPropertyChanged(nameof(HasPending)); Rejecting = null;
-        Notice = $"Rejected {row.Payer}'s payment. They are told why and can pay again.";
     }
 }
 
@@ -150,14 +104,48 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     public ObservableCollection<ItemOption> Options { get; } = new();
     int itemsTicket;
 
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWalkIn), nameof(NeedsMember), nameof(OrderWho), nameof(OrderWhat), nameof(OrderHow), nameof(TotalText), nameof(TotalNote), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))]
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWalkIn), nameof(NeedsMember), nameof(CanUseCode), nameof(OrderWho), nameof(OrderWhat), nameof(OrderHow), nameof(TotalText), nameof(TotalNote), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))]
     private string kind = "Membership";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderHow), nameof(CashNeedsShift)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string method = "Cash";
     [ObservableProperty] private string search = "";
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private MemberHit? member;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho), nameof(CanUseCode), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private MemberHit? member;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWhat), nameof(TotalText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private CounterItem? item;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string walkInName = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho), nameof(CanUseCode)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string walkInName = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(TotalNote))] private string discountCode = "";
+    // owner fixes 2026-11-19 Q12 (0108): the code is checked as the desk types it (500 ms), and again when the member or item changes
+    public TimeSpan CodeCheckDelay { get; init; } = TimeSpan.FromMilliseconds(500);
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(TotalText), nameof(HasCodeCheck))] private CodeCheck? codeCheck;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasCodeCheck))] private string? codeCheckText;
+    [ObservableProperty] private bool codeWorks;
+    public bool HasCodeCheck => !string.IsNullOrWhiteSpace(CodeCheckText);
+    CancellationTokenSource? _codeCheck;
+    (string Member, string Kind, int Item, string Code)? _checked;
+    partial void OnDiscountCodeChanged(string value) => _ = ScheduleCodeCheckAsync(false);
+    partial void OnWalkInNameChanged(string value) => _ = ScheduleCodeCheckAsync(false);
+    public Task CheckCodeNowAsync() => ScheduleCodeCheckAsync(true);
+    async Task ScheduleCodeCheckAsync(bool immediate)
+    {
+        var code = DiscountCode?.Trim() ?? "";
+        var key = !IsWalkIn && Member is { } m && Item is { } it && code.Length > 0 ? (m.MemberId, Kind, it.Id, code)
+            : DayPassMember is { HasActiveMembership: false } dm && dayPassPackage is { } dp && code.Length > 0 ? (dm.MemberId, "Membership", dp.Id, code)
+            : ((string Member, string Kind, int Item, string Code)?)null;
+        if (immediate && key is not null && _checked == key) return;
+        _codeCheck?.Cancel(); _checked = null;
+        CodeCheck = null; CodeCheckText = null; CodeWorks = false;
+        if (key is not { } k) return;
+        var cts = _codeCheck = new CancellationTokenSource();
+        if (!immediate && CodeCheckDelay > TimeSpan.Zero)
+        {
+            try { await Task.Delay(CodeCheckDelay, cts.Token); } catch (OperationCanceledException) { return; }
+        }
+        var kind = k.Kind == "Amenity" ? "amenity" : k.Kind == "Renewal" ? "renewal" : "package";
+        var res = await svc.CheckCodeAsync(k.Member, k.Code, kind, k.Item, k.Kind == "Renewal" ? Item?.Price : null);
+        if (cts.IsCancellationRequested) return;
+        _checked = k;
+        if (!res.Ok) { CodeCheckText = ErrorText.For(res.Error, res.Message); return; }
+        CodeCheck = res.Value; CodeWorks = res.Value!.Works;
+        CodeCheckText = CodeCheckFeedback.Message(res.Value, kind == "amenity" ? "amenity" : "package");
+    }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ItemsEmptyText))] private bool loadingItems;
 
     // F2 (0050): the cashier's own drawer shift. Cash needs an open one; GCash doesn't.
@@ -185,6 +173,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
 
     public bool IsWalkIn => Kind == "Day pass";
     public bool NeedsMember => !IsWalkIn;
+    public bool CanUseCode => !IsWalkIn || DayPassMember is { HasActiveMembership: false };
     // cashier plan Y6: no reference to type; Xendit confirms an e-wallet payment
 
     // the order panel, in the words the cashier uses
@@ -193,10 +182,16 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     public string OrderWho => IsWalkIn ? DayPassName ?? "Day pass, no name" : Member?.Username ?? "Find and choose a member";
     string? DayPassName => string.IsNullOrWhiteSpace(WalkInName) ? null : WalkInName.Trim();
     public string OrderWhat => Item?.Label ?? (IsWalkIn ? "Day pass" : "Choose what they are paying for");
-    decimal? dayPassPrice;   // Gym settings; the server charges it, this is what the desk reads out
-    public string TotalText => IsWalkIn ? dayPassPrice is { } d ? $"₱{d:N2}" : "Day pass" : Item?.Price is { } p ? $"₱{p:N2}" : "₱0.00";
-    public string TotalNote => IsWalkIn ? "The day pass price is set in Gym settings."
-        : string.IsNullOrWhiteSpace(DiscountCode) ? "" : "The discount code is checked when you complete the payment.";
+    decimal? dayPassPrice;   // the server charges it, this is what the desk reads out
+    // 0098: the Day pass package; a picked member whose name is still in the box buys it (a term until midnight), anyone else is a walk-in
+    CounterItem? dayPassPackage;
+    MemberHit? DayPassMember => IsWalkIn && dayPassPackage is not null && Member is { } m && DayPassName == m.Username ? m : null;
+    public string TotalText => IsWalkIn
+        ? CodeCheck is { Works: true, YouPay: { } dOff } ? $"₱{dOff:N2}"
+          : (dayPassPackage?.Price ?? dayPassPrice) is { } d ? $"₱{d:N2}" : "Day pass"
+        : CodeCheck is { Works: true, YouPay: { } off } ? $"₱{off:N2}" : Item?.Price is { } p ? $"₱{p:N2}" : "₱0.00";
+    public string TotalNote => IsWalkIn ? dayPassPackage is null ? "The day pass price is set in Gym settings." : "The Day pass price is set on its package."
+        : "";
     public string ItemsEmptyText => LoadingItems ? "Loading…"
         : Kind == "Renewal" && Member is null ? "Choose a member to see their memberships." : "Nothing to sell here yet.";
     /// <summary>The kind and the way of paying in words, so the order reads the same to someone who cannot see which button is filled.</summary>
@@ -266,16 +261,22 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     }
 
     // an item belongs to the kind (and member) it was listed for: change either and the pick goes
-    partial void OnKindChanged(string value) { Item = null; if (IsWalkIn && Member is { } m && string.IsNullOrWhiteSpace(WalkInName)) WalkInName = m.Username; _ = RefreshItemsAsync(); }   // a typed name is kept (final review)
-    partial void OnMemberChanged(MemberHit? value) { Item = null; if (IsWalkIn && value is not null) WalkInName = value.Username; if (Kind == "Renewal") _ = RefreshItemsAsync(); }
-    partial void OnItemChanged(CounterItem? value) { foreach (var o in Options) o.IsPicked = value is not null && o.Item.Id == value.Id; }
+    partial void OnKindChanged(string value) { _ = ScheduleCodeCheckAsync(false); Item = null; if (IsWalkIn && Member is { } m && string.IsNullOrWhiteSpace(WalkInName)) WalkInName = m.Username; _ = RefreshItemsAsync(); }   // a typed name is kept (final review)
+    partial void OnMemberChanged(MemberHit? value) { _ = ScheduleCodeCheckAsync(false); Item = null; if (IsWalkIn && value is not null) WalkInName = value.Username; if (Kind == "Renewal") _ = RefreshItemsAsync(); }
+    partial void OnItemChanged(CounterItem? value) { _ = ScheduleCodeCheckAsync(false); foreach (var o in Options) o.IsPicked = value is not null && o.Item.Id == value.Id; }
 
     async Task RefreshItemsAsync()
     {
         var ticket = ++itemsTicket;   // the newest request wins: a slow answer for a kind you have left is dropped
         // Cards listed for another kind or member must not stay tappable while the right ones load: a tap would send their item id with the new kind.
         Options.Clear(); Item = null; ErrorMessage = null;
-        if (IsWalkIn) { LoadingItems = false; return; }
+        if (IsWalkIn)
+        {
+            LoadingItems = false;
+            var packages = await svc.ItemsAsync(PayKind.Membership, null);
+            if (ticket == itemsTicket && packages.Ok) { dayPassPackage = packages.Value!.FirstOrDefault(i => i.DayPass); OnPropertyChanged(nameof(CanUseCode)); OnPropertyChanged(nameof(TotalText)); OnPropertyChanged(nameof(TotalNote)); }
+            return;
+        }
         LoadingItems = true;
         var result = await svc.ItemsAsync(KindKey(Kind), Member?.MemberId);
         if (ticket != itemsTicket) return;   // a newer request owns the screen now; a stale answer, even a failed one, says nothing
@@ -340,7 +341,11 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
                 + (Kind is "Membership" or "Renewal" ? $"\n\nTell them: {RefundRules.Line}" : ""), "Record payment")) return;   // G23
         if (Method == Online) { await StartOnlineAsync(); return; }
         Payment? paid = null;
-        if (!await RunAsync(() => svc.RecordCounterAsync(KindKey(Kind), PayMethod.Cash, IsWalkIn ? null : Member!.MemberId, Item?.Id,
+        if (DayPassMember is { } m)
+        {
+            if (!await RunAsync(() => svc.RecordCounterAsync(PayKind.Membership, PayMethod.Cash, m.MemberId, dayPassPackage!.Id, null, null, DiscountCode), p => paid = p)) return;
+        }
+        else if (!await RunAsync(() => svc.RecordCounterAsync(KindKey(Kind), PayMethod.Cash, IsWalkIn ? null : Member!.MemberId, Item?.Id,
                 IsWalkIn ? DayPassName : null, null, IsWalkIn ? null : DiscountCode), p => paid = p)) return;
         await DoneAsync(paid!);
     }
@@ -357,7 +362,9 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     async Task StartOnlineAsync()
     {
         Payment? started = null;
-        if (!await RunAsync(() => svc.StartDeskOnlineAsync(KindKey(Kind), IsWalkIn ? null : Member!.MemberId, Item?.Id,
+        var dayPassFor = DayPassMember;
+        if (!await RunAsync(() => dayPassFor is { } m ? svc.StartDeskOnlineAsync(PayKind.Membership, m.MemberId, dayPassPackage!.Id, null, DiscountCode)
+                : svc.StartDeskOnlineAsync(KindKey(Kind), IsWalkIn ? null : Member!.MemberId, Item?.Id,
                 IsWalkIn ? DayPassName : null, IsWalkIn ? null : DiscountCode), p => started = p)) return;
         Waiting = started; RecordCommand.NotifyCanExecuteChanged();
         await OpenCheckoutAsync();
@@ -401,30 +408,6 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     }
 }
 
-// admin: verified payments, newest first, so a mistake can be voided with a reason and then recorded again
-public partial class VoidPaymentsViewModel(IPaymentStaffService svc) : LoadableViewModel
-{
-    public ObservableCollection<PaymentRow> Recent { get; } = new();
-    [ObservableProperty] private PaymentRow? voiding;
-    [ObservableProperty] private string reason = "";
-
-    public override Task OnAppearingAsync() => LoadAsync();
-
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.RecentAsync, rows => Fill(Recent, rows));
-    [RelayCommand] private void Start(PaymentRow row) { Voiding = row; Reason = ""; Notice = null; }
-    [RelayCommand] private void Keep() => Voiding = null;
-
-    [RelayCommand]
-    private async Task ConfirmAsync()
-    {
-        if (Voiding is not { } row) return;
-        if (!await RunAsync(() => svc.VoidAsync(row.Payment.Id, Reason))) return;
-        Voiding = null;
-        Notice = $"Voided {row.Payer}'s payment. What it switched on is reversed.";
-        await LoadAsync();
-    }
-}
-
 public partial class CheckInViewModel(IAttendanceService svc, ICoachService coaches, OfflineDesk? offline = null, IProfileService? profile = null, TimeProvider? clock = null, IReportFiles? files = null, ISubscriptionService? refunds = null) : LoadableViewModel
 {
     // ---- owner, 2026-11-18: View on a Day pass in Checked in today shows who and what was paid; Print opens the receipt PDF ----
@@ -433,7 +416,7 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
     [RelayCommand] private void ViewDayPass(CheckInRow row) { ViewingDayPass = row; IsAskingRefund = false; }
     [RelayCommand] private void CloseDayPass() { ViewingDayPass = null; IsAskingRefund = false; }
 
-    // ---- 0096: the desk asks for the refund with a reason; the System admin decides on Refunds & voids ----
+    // ---- 0096: the desk asks for the refund with a reason; the System admin decides on Refunds ----
     [ObservableProperty] private bool isAskingRefund;
     [ObservableProperty] private string refundReason = "";
     [RelayCommand] private void AskRefund() { RefundReason = ""; IsAskingRefund = true; Notice = null; }
@@ -446,7 +429,7 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
         if (string.IsNullOrWhiteSpace(RefundReason)) { ErrorMessage = "Say why the customer wants a refund."; return; }
         Notice = null;
         if (!await RunAsync(() => refunds.RequestWalkInRefundAsync(pass.PaymentId, RefundReason))) return;
-        IsAskingRefund = false; Notice = "Refund requested. The System admin decides it on Refunds & voids.";
+        IsAskingRefund = false; Notice = "Refund requested. The System admin decides it on Refunds.";
         await LoadTodayAsync();
     }
 
@@ -818,8 +801,11 @@ public partial class TraineesViewModel(ICoachService svc, IChatService messages,
     }
 }
 
-public partial class ShiftsViewModel(ICoachService svc) : LoadableViewModel
+public partial class ShiftsViewModel(ICoachService svc, ISessionService? sessions = null, IAttendanceService? attendance = null, IMembershipService? gym = null) : LoadableViewModel
 {
+    public AttendanceViewModel? Calendar { get; } = sessions is not null && attendance is not null
+        ? new AttendanceViewModel(sessions, attendance, svc, gym)
+        : null;
     public ObservableCollection<ShiftPost> Shifts { get; } = new();
     public int[] HoursOptions { get; } = [2, 4, 6, 8, 10];
 
@@ -831,7 +817,12 @@ public partial class ShiftsViewModel(ICoachService svc) : LoadableViewModel
     // hiring on/off lives on My coach profile ("Taking new members"); 9.6 took the duplicate Pause hiring button off this page
     public override Task OnAppearingAsync() => LoadAsync();
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.MyShiftsAsync, rows => Fill(Shifts, rows));
+    [RelayCommand]
+    private async Task LoadAsync()
+    {
+        if (!await RunAsync(svc.MyShiftsAsync, rows => Fill(Shifts, rows))) return;
+        if (Calendar is not null) await Calendar.OnAppearingAsync();
+    }
 
     [RelayCommand]
     private async Task PostAsync()
@@ -1135,7 +1126,7 @@ public sealed record WeekRow(CalendarDay Day, IReadOnlyList<CalendarSession> Ses
 // the coach's attendance calendar: a month or a week, a day list underneath, and marks that can be corrected in place
 /// <summary>The coach dashboard (D10): this month's numbers, the month/week calendar with attendance marks, and shift posting for the selected day.
 /// Without a coach service (older tests) it is the attendance calendar alone.</summary>
-public partial class AttendanceViewModel(ISessionService sessions, IAttendanceService attendance, ICoachService? coach = null, IMembershipService? gym = null) : LoadableViewModel
+public partial class AttendanceViewModel(ISessionService sessions, IAttendanceService attendance, ICoachService? coach = null, IMembershipService? gym = null, IAmenityService? amenities = null) : LoadableViewModel
 {
     /// <summary>The moment "now" is; tests set a fixed one.</summary>
     public Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
@@ -1146,6 +1137,8 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     public ObservableCollection<WeekRow> WeekRows { get; } = new();          // the week view, 7 rows
     public ObservableCollection<CalendarSession> DaySessions { get; } = new();
     public ObservableCollection<ShiftPost> DayShifts { get; } = new();
+    public ObservableCollection<string> MyAmenities { get; } = new();
+    public bool HasAmenities => MyAmenities.Count > 0;
     public int[] HoursOptions { get; } = [2, 4, 6, 8, 10];
 
     [ObservableProperty] private TimeSpan postTime = new(8, 0, 0);   // the start, as the coach's own clock shows it
@@ -1253,8 +1246,14 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
         var calendar = sessions.CalendarAsync(from, to);
         var coming = sessions.UpcomingAsync();
         var posted = coach?.MyShiftsAsync() ?? Task.FromResult(AppResult<IReadOnlyList<ShiftPost>>.Success([]));
-        await Task.WhenAll(calendar, coming, posted);
+        var board = amenities?.BoardAsync();
+        await Task.WhenAll(calendar, coming, posted, board ?? Task.CompletedTask);
         if (ticket != loadTicket) return;
+        if (board is not null && (await board) is { Ok: true, Value: { } b })
+        {
+            Fill(MyAmenities, b.Cards.Where(c => c.RunsThis).Select(c => c.Amenity.Name).ToList());
+            OnPropertyChanged(nameof(HasAmenities));
+        }
         var cal = await calendar; var up = await coming;
         if ((await posted).Ok) shifts = (await posted).Value!.ToList();
         if (cal.Ok) { loaded = cal.Value!.ToList(); known = true; } else ErrorMessage = ErrorText.For(cal.Error, cal.Message);   // a failed look leaves what is shown as it was
@@ -1569,6 +1568,7 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     [ObservableProperty] private string formDescription = "";
     [ObservableProperty] private decimal formPrice;
     [ObservableProperty] private int formDays = 30;
+    [ObservableProperty] private bool formDayPass;   // 0098: the Day pass package (its term ends at midnight)
     [ObservableProperty] private decimal formCoachFee;   // G14 (0064): amenities only, added when a member books With a coach
     /// <summary>G19 (0066): a new amenity is sold per session; one still set up as a pass keeps its days until Sell per session.</summary>
     [ObservableProperty, NotifyPropertyChangedFor(nameof(PriceLabel))] private bool isOldPass;
@@ -1610,7 +1610,7 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
             : (p.Id == 0 ? "Add a package" : "Edit draft", "Save as draft to finish it later. Add puts it on sale.", "Add");
         CanSaveDraft = true;
         VersionNote = replaces is null ? null : $"This is a draft of a new version. {replaces.Name} stays on sale as it is until you publish this one. Discount codes for the old version don't carry over.";
-        FormDays = p.DurationDays;
+        FormDays = p.DurationDays; FormDayPass = p.IsDayPass;
         Benefits.Clear();
         foreach (var b in p.Benefits) Benefits.Add(new BenefitLine { Text = b });
         Open(true, p.Name, p.Description, p.Price, Packages.FirstOrDefault(r => r.Package.Id == p.Id && p.Id != 0)?.PhotoUrl);
@@ -1677,7 +1677,7 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
         if (IsPackagePanel)
         {
             var p = _package!;
-            (p.Name, p.Description, p.Price, p.DurationDays) = (FormName.Trim(), description, FormPrice, FormDays);
+            (p.Name, p.Description, p.Price, p.DurationDays, p.IsDayPass) = (FormName.Trim(), description, FormPrice, FormDayPass ? 1 : FormDays, FormDayPass);
             p.Benefits = Benefits.Select(b => b.Text.Trim()).Where(b => b.Length > 0).ToList();
             ok = await RunAsync(() => svc.SavePackageAsync(p));
             id = p.Id;
@@ -2046,6 +2046,12 @@ public partial class GymSettingsViewModel(IAdminService svc) : LoadableViewModel
 {
     [ObservableProperty] private string gymName = "";
     [ObservableProperty] private decimal walkInPrice;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasDayPassPackage), nameof(CanEditWalkInPrice), nameof(DayPassPriceText), nameof(DayPassPackageNote))]
+    private MembershipPackage? dayPassPackage;
+    public bool HasDayPassPackage => DayPassPackage is not null;
+    public bool CanEditWalkInPrice => DayPassPackage is null;
+    public string DayPassPriceText => DayPassPackage is { } p ? $"₱{p.Price:N2}" : "";
+    public string DayPassPackageNote => DayPassPackage is { } p ? $"Set on the {p.Name} package. Change it under Packages and amenities." : "";
     [ObservableProperty] private TimeSpan opensAt = TimeSpan.FromHours(6);
     [ObservableProperty] private TimeSpan closesAt = TimeSpan.FromHours(22);
     [ObservableProperty] private decimal openingFloat = 5000;   // F2: what each cashier's drawer starts with
@@ -2055,10 +2061,16 @@ public partial class GymSettingsViewModel(IAdminService svc) : LoadableViewModel
     public override async Task OnAppearingAsync() { await LoadAsync(); await LoadClosuresAsync(); }
 
     [RelayCommand]
-    private Task LoadAsync() => RunAsync(svc.GymSettingsAsync, g =>
+    private async Task LoadAsync()
     {
-        _loaded = g; GymName = g.GymName; WalkInPrice = g.WalkInPrice; OpensAt = g.OpensAt; ClosesAt = g.ClosesAt; OpeningFloat = g.OpeningFloat; DownPaymentPercent = g.DownPaymentPercent;
-    });
+        await RunAsync(svc.GymSettingsAsync, g =>
+        {
+            _loaded = g; GymName = g.GymName; WalkInPrice = g.WalkInPrice; OpensAt = g.OpensAt; ClosesAt = g.ClosesAt; OpeningFloat = g.OpeningFloat; DownPaymentPercent = g.DownPaymentPercent;
+        });
+        var pkgs = await svc.AllPackagesAsync();
+        if (pkgs.Ok)
+            DayPassPackage = pkgs.Value!.FirstOrDefault(p => p.IsDayPass && p.IsActive && p.PublishedAt is not null);
+    }
 
     [RelayCommand]
     private async Task SaveAsync()
@@ -2146,23 +2158,40 @@ public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive
     public string PageText => $"Page {Page + 1}";
     bool HasPrevious => Page > 0;
     AuditFilter _applied = new();
+    // owner fixes 2026-11-19 Q4 (0101): Transactions has its own filters and its own applied filter; the two tabs never mix
+    public string[] Whats { get; } = ["All", "Membership", "Amenity", "Day pass", "Refund", "Cash shift"];
+    static readonly string[] WhatKeys = ["", "membership", "amenity", "day_pass", "refund", "cash_shift"];
+    public string[] PaidWiths { get; } = ["All", "Cash", "GCash", "Maya", "QR Ph", "Card"];
+    static readonly string[] PaidWithKeys = ["", "cash", "gcash", "paymaya", "qrph", "cards"];   // Xendit's channel codes, or the payment's method
+    public string[] Statuses { get; } = ["All", "Pending", "Paid", "Failed", "Refunded", "Voided"];
+    static readonly string[] StatusKeys = ["", "pending", "paid", "failed", "refunded", "voided"];
+    [ObservableProperty] private string customer = "";
+    [ObservableProperty] private int whatIndex;
+    [ObservableProperty] private int paidWithIndex;
+    [ObservableProperty] private int statusIndex;
+    [ObservableProperty] private string recordedBy = "";
+    [ObservableProperty] private bool moneyUseDates;
+    [ObservableProperty] private DateTime moneyFrom = DateTime.Today.AddDays(-7);
+    [ObservableProperty] private DateTime moneyTo = DateTime.Today;
+    AuditFilter _moneyApplied = new();
+    AuditFilter Shown => ShowMoney ? _moneyApplied with { Money = true } : _applied with { Money = false };
     /// <summary>Set by the page: shows the Save dialog and writes the text. Returns where it went, or null if cancelled.</summary>
     public Func<string, string, Task<string?>>? SaveFile { get; set; }
 
     public override Task OnAppearingAsync() => ShowArchive && Archive is not null ? Archive.OnAppearingAsync() : LoadPageAsync(Page);
 
-    AuditFilter Current()
-    {
-        return new(UseDates ? DateOnly.FromDateTime(From) : null, UseDates ? DateOnly.FromDateTime(To) : null, User,
+    AuditFilter Current() => ShowMoney
+        ? new(MoneyUseDates ? DateOnly.FromDateTime(MoneyFrom) : null, MoneyUseDates ? DateOnly.FromDateTime(MoneyTo) : null, RecordedBy,
+            Customer: Customer, What: WhatKeys[WhatIndex], PaidWith: PaidWithKeys[PaidWithIndex], Status: StatusKeys[StatusIndex])
+        : new(UseDates ? DateOnly.FromDateTime(From) : null, UseDates ? DateOnly.FromDateTime(To) : null, User,
             AreaIndex > 0 ? AuditLabels.Areas.Keys.ElementAt(AreaIndex - 1) : null, ObjectIndex > 0 ? AuditLabels.Objects.Keys.ElementAt(ObjectIndex - 1) : null);
-    }
 
     [RelayCommand]
     private async Task ApplyAsync()
     {
         if (IsBusy) return;
-        if (UseDates && To.Date < From.Date) { ErrorMessage = "The end date must be on or after the start date."; return; }
-        _applied = Current();
+        if (ShowMoney ? MoneyUseDates && MoneyTo.Date < MoneyFrom.Date : UseDates && To.Date < From.Date) { ErrorMessage = "The end date must be on or after the start date."; return; }
+        if (ShowMoney) _moneyApplied = Current(); else _applied = Current();
         await LoadPageAsync(0);
     }
 
@@ -2170,14 +2199,15 @@ public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive
     private async Task ClearFiltersAsync()
     {
         if (IsBusy) return;
-        AreaIndex = ObjectIndex = 0; User = ""; UseDates = false; From = DateTime.Today.AddDays(-7); To = DateTime.Today; _applied = new();
+        if (ShowMoney) { Customer = RecordedBy = ""; WhatIndex = PaidWithIndex = StatusIndex = 0; MoneyUseDates = false; MoneyFrom = DateTime.Today.AddDays(-7); MoneyTo = DateTime.Today; _moneyApplied = new(); }
+        else { AreaIndex = ObjectIndex = 0; User = ""; UseDates = false; From = DateTime.Today.AddDays(-7); To = DateTime.Today; _applied = new(); }
         await LoadPageAsync(0);
     }
 
     async Task LoadPageAsync(int target)
     {
         IsEmpty = false;
-        if (!await RunAsync(() => svc.AuditPageAsync(_applied with { Money = ShowMoney }, target), result =>
+        if (!await RunAsync(() => svc.AuditPageAsync(Shown, target), result =>
             { Fill(Entries, result.Rows); Page = target; HasMore = result.HasMore; IsEmpty = Entries.Count == 0; }))
         { Entries.Clear(); HasMore = false; }
     }
@@ -2192,7 +2222,7 @@ public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive
         if (IsBusy || SaveFile is null) return;
         Notice = null;
         IReadOnlyList<AuditRecord>? rows = null;
-        if (!await RunAsync(() => svc.AuditExportAsync(_applied with { Money = ShowMoney }), r => rows = r)) return;
+        if (!await RunAsync(() => svc.AuditExportAsync(Shown), r => rows = r)) return;
         var where = ShowMoney ? await SaveFile($"transactions-{DateTime.Today:yyyy-MM-dd}.csv", TransactionsCsv.Build(rows!))
                               : await SaveFile($"audit-log-{DateTime.Today:yyyy-MM-dd}.csv", AuditCsv.Build(rows!));
         if (where is not null) Notice = $"Saved {rows!.Count} entr{(rows.Count == 1 ? "y" : "ies")} to {where}.";
@@ -2233,7 +2263,7 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
     [RelayCommand] private void View(BookedRow row) { Viewing = row; IsAskingRefund = false; }
     [RelayCommand] private void CloseView() { Viewing = null; IsAskingRefund = false; }
 
-    // ---- 0096: the desk asks for a walk-in's refund with a reason; the System admin decides on Refunds & voids ----
+    // ---- 0096: the desk asks for a walk-in's refund with a reason; the System admin decides on Refunds ----
     [ObservableProperty] private bool isAskingRefund;
     [ObservableProperty] private string refundReason = "";
     [RelayCommand] private void AskRefund() { RefundReason = ""; IsAskingRefund = true; Notice = null; }
@@ -2246,7 +2276,7 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
         if (string.IsNullOrWhiteSpace(RefundReason)) { ErrorMessage = "Say why the customer wants a refund."; return; }
         Notice = null;
         if (!await RunAsync(() => refunds.RequestWalkInRefundAsync(pay, RefundReason, row.IsUnder24Hours))) return;
-        IsAskingRefund = false; Notice = "Refund requested. The System admin decides it on Refunds & voids.";
+        IsAskingRefund = false; Notice = "Refund requested. The System admin decides it on Refunds.";
         await LoadBookedAsync();
     }
 
@@ -2303,7 +2333,7 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
         if (payments is null || Deciding is not { } row) return;
         if (!await RunAsync(() => payments.DecideClaimAsync(row.Claim.Id, DecideApprove, DecideReason))) return;
         Claims.Remove(row); OnPropertyChanged(nameof(HasClaims)); Deciding = null;
-        Notice = DecideApprove ? $"Refund approved. Admin repays {row.Member} from Refunds & voids." : $"Declined. {row.Member} is told why.";
+        Notice = DecideApprove ? $"Refund approved. Admin repays {row.Member} from Refunds." : $"Declined. {row.Member} is told why.";
     }
 
     // ---- G13 (0064): today's confirmed bookings with a balance; the desk takes it once, cash into the drawer or GCash with a reference ----
@@ -2634,7 +2664,7 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
         Waiting = null;
         if (now!.Booking.Status != "confirmed")
         {
-            ErrorMessage = "Paid, but the slot was booked by someone else first. The System admin repays it from Refunds & voids.";
+            ErrorMessage = "Paid, but the slot was booked by someone else first. The System admin repays it from Refunds.";
             Booked?.Invoke(); await LoadGridAsync(); return;
         }
         var name = Amenities.FirstOrDefault(x => x.Id == w.AmenityId)?.Name ?? "Amenity";

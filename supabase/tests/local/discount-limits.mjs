@@ -1,6 +1,6 @@
 // Phase 3 (D4/D5): discount codes have a use limit. Pending, verified and voided payments hold a place;
 // rejected, expired and member-cancelled ones give it back. A code that reaches its limit is archived for good.
-import { start, openCashShifts } from './harness.mjs';
+import { start, openCashShifts, asOwner } from './harness.mjs';
 import assert from 'node:assert/strict';
 import pg from 'pg';
 
@@ -93,7 +93,7 @@ try {
   await test('voided uses stay counted, and the same member cannot reuse the code after a void', async () => {
     await addCode('VOIDME', 3);
     const uid = await user(), pay = await buy(uid, 'VOIDME'); await verify(pay);
-    await as(admin, `select void_payment($1,'Wrong payment')`, [pay.payment_id]);
+    await asOwner(db, admin, `select void_payment($1,'Wrong payment')`, [pay.payment_id]);
     assert.equal(Number((await usage((await code('VOIDME')).discount_id)).used), 1);
     await assert.rejects(buy(uid, 'VOIDME'), /code_already_used/);
   });

@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
   // the member's own payment, or one the desk recorded for a customer at the counter (cashier plan Y6)
   if (!p || (p.member_id !== caller.user.id && p.recorded_by !== caller.user.id)) return reply({ error: 'not_found' }, 404);
   if (p.status === 'verified') return reply({ paid: true });
-  if (p.status !== 'pending' || p.method !== 'qr') return reply({ error: 'already_processed' }, 409);
+  if (p.status !== 'pending' || p.method !== 'qr' || Number(p.amount) <= 0) return reply({ error: 'already_processed' }, 409);
 
   try {
     const session = p.xendit_id ? await xendit(`/sessions/${encodeURIComponent(p.xendit_id)}`) : null;

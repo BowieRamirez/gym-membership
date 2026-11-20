@@ -94,7 +94,7 @@ public class DiscountLimitTests
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         await new PaymentStaffService(gw).VerifyAsync(pay.Id, true);
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
-        Assert.True((await new PaymentStaffService(gw).VoidAsync(pay.Id, "Wrong payment")).Ok);
+        await gw.OwnerVoidAsync(pay.Id, "Wrong payment");   // 0100: an old voided payment
 
         Assert.Equal(AppErrorKind.Validation, (await Buy(gw, "carlo@demo.io", "THREE")).Error);
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
