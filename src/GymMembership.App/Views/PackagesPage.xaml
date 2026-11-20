@@ -170,6 +170,20 @@
                             <BindableLayout.ItemTemplate><DataTemplate x:DataType="x:String"><Label Text="{Binding ., StringFormat='• {0}'}" FontSize="14" /></DataTemplate></BindableLayout.ItemTemplate>
                         </VerticalStackLayout>
                         <Label Text="{Binding BuyTerms}" Style="{StaticResource Caption}" />
+                        <!-- E7: Day pass Add a coach (hidden when no free hour left today) -->
+                        <VerticalStackLayout Spacing="8" IsVisible="{Binding HasDayPassCoach}">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <CheckBox IsChecked="{Binding AddDayPassCoach}" VerticalOptions="Center" />
+                                <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                    <Label Text="Add a coach (1 hour today)" FontFamily="BarlowSemiBold" />
+                                    <Label Text="{Binding Buying.CoachText}" Style="{StaticResource Caption}" />
+                                </VerticalStackLayout>
+                            </Grid>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8" IsVisible="{Binding AddDayPassCoach}">
+                                <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding DayPassCoaches}" ItemDisplayBinding="{Binding FullName}" SelectedItem="{Binding SelectedDayPassCoach}" Title="Coach" /></Border>
+                                <Border Grid.Column="1" Style="{StaticResource Field}"><Picker ItemsSource="{Binding DayPassHours}" ItemDisplayBinding="{Binding Label}" SelectedItem="{Binding SelectedDayPassHour}" Title="Hour" /></Border>
+                            </Grid>
+                        </VerticalStackLayout>
                         <Button Text="Buy and pay online" Style="{StaticResource SmallButton}" Command="{Binding PayCommand}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" AutomationId="BuyNext" />
                     </VerticalStackLayout>
 

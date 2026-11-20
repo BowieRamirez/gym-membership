@@ -33,7 +33,7 @@ public static class ErrorMapper
     {
         var m = message.ToLowerInvariant();
         if (Has(m, "forbidden", "42501", "jwt", "row-level security", "invalid login", "invalid_credentials", "not authenticated")) return AppErrorKind.Unauthorized;
-        if (Has(m, "item_not_for_sale", "already_published", "package_published", "package_archived", "name_taken", "draft_exists", "not_published", "published_archive_instead", "account_has_commitments", "account_archived", "record_archived", "record_not_restorable", "code_limit_reached", "code_taken", "discount_used", "name_complete", "shift_has_sessions", "slot_taken", "member_busy", "stale_proposal", "coach_unavailable", "coach_busy", "already_started", "not_in_use", "amenity_unavailable", "not_archived", "already_processed", "already_availed", "renewal_pending", "already_requested", "refund_in_progress", "not_refundable", "pending_session_request", "active_coaching_session", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
+        if (Has(m, "item_not_for_sale", "already_published", "package_published", "package_archived", "name_taken", "draft_exists", "not_published", "published_archive_instead", "account_has_commitments", "account_archived", "record_archived", "record_not_restorable", "code_limit_reached", "code_taken", "discount_used", "name_complete", "shift_has_sessions", "slot_taken", "member_busy", "stale_proposal", "coach_unavailable", "coach_busy", "coach_taken", "too_many_coach_sessions", "coach_booking_blocked", "coach_not_free", "coach_day_full", "coach_not_offered", "already_started", "not_in_use", "amenity_unavailable", "not_archived", "already_processed", "already_availed", "renewal_pending", "already_requested", "refund_in_progress", "not_refundable", "pending_session_request", "active_coaching_session", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
         if (Has(m, "account_inactive", "no_open_shift", "shift_open", "note_required", "reason_required", "bad_archive_reason", "bad_correction_reason", "discount_fixed", "discount_locked", "wrong_pin", "has_desk_pin", "bad_down_payment", "coach_not_free", "not_confirmed", "balance_paid", "wrong_member_password", "proof_invalid", "auth_unavailable", "pin_locked", "no_desk_pin", "pin_required", "scan_required", "bad_pin", "refund_reason_required", "no_coach_present", "self_archive", "last_active_admin", "no_active_membership", "self_verify", "self_decision", "not_renewable", "wrong_member", "not_found", "23514",
                    "missing_fields", "not_on_the_hour", "refund_window_closed", "refund_week_passed", "nothing_to_refund", "terms_required", "too_soon", "too_late_to_cancel", "not_ended", "claim_window_closed", "payment_expired", "gym_closed", "day_closed", "day_past", "coach_not_in_gym", "hire_already_requested", "bad_rate", "invite_member_inactive", "invalid_code", "code_already_used", "code_not_for_item", "no_items", "item_not_found", "limit_required", "bad_hours", "off_grid", "outside_gym_hours", "too_long", "past_slot", "too_far_ahead", "no_pass", "limit_below_used", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "super_admin_protected", "bad_code", "code_not_verified", "resend_wait", "same_password", "weak_password", "outside_membership", "online_only", "too_many_tries", "account_locked", "too_many_checks", "code_expired", "end must be after start")) return AppErrorKind.Validation;
         return AppErrorKind.Unknown;
@@ -156,6 +156,11 @@ public static class ErrorText
         "slot_taken" => "One of those slots was just taken, or would run into another booking's cooldown. Nothing was booked; the grid now shows what is free.",
         "member_busy" => "You already have a booking or session at that time. Nothing was booked.",
         "coach_busy" => "The coach is already booked at that time.",
+        "coach_taken" => "That coach was just booked for that hour. Nothing was booked; the list now shows what is free.",
+        "too_many_coach_sessions" => "You've reached your coach session limit for now. You can still book after an existing session ends.",
+        "coach_booking_blocked" => "Free coach bookings are paused for 7 days after two missed sessions in 30 days.",
+        "coach_day_full" => "This coach has reached their daily hour limit. Pick another coach or another day.",
+        "coach_not_offered" => "Your current package doesn't include a coach or a coach add-on.",
         "too_long" => "A booking can be at most 2 hours (four touching slots).",
         "past_slot" => "That time has already started. Pick a later slot.",
         "too_far_ahead" => "You can book up to 14 days ahead.",
@@ -301,6 +306,7 @@ public interface IAppNavigator
     /// <summary>Time requests, for a member or a coach (F11: a request message links there).</summary>
     void GoToRequests();
     void GoToMembership();
+    void GoToSessions() { }
     /// <summary>Book an amenity, for a member (F15: a booking on the Calendar opens it).</summary>
     void GoToBookings() { }
     void ApplyTheme(string theme);

@@ -23,6 +23,7 @@ public static class AuditLabels
         ["refund.request"] = "Refund requested", ["refund.decide"] = "Refund decided", ["refund.paid"] = "Refund repaid",
         ["reservation.book"] = "Booking made", ["reservation.desk_walk_in"] = "Walk-in booked at the desk", ["reservation.desk_walk_in_online"] = "Walk-in booked at the desk, paying online", ["reservation.hold"] = "Booking held for payment", ["reservation.request"] = "Booking requested", ["reservation.balance"] = "Booking balance taken", ["reservation.request"] = "Booking requested", ["reservation.balance"] = "Booking balance taken", ["reservation.cancel"] = "Booking cancelled", ["reservation.end"] = "Booking ended",
         ["reservation.extend"] = "Booking extended",
+        ["coach_session.book"] = "Coach session booked", ["coach_session.cancel"] = "Coach session cancelled",
         ["amenity.status"] = "Amenity status changed", ["amenity.runs"] = "Coach runs amenity changed",
         ["discount.create"] = "Code added", ["discount.turn_off"] = "Code turned off", ["discount.turn_on"] = "Code turned on", ["discount.delete"] = "Code deleted",
         ["catalog.archive"] = "Archived", ["catalog.restore"] = "Restored from archive",
@@ -36,14 +37,14 @@ public static class AuditLabels
     public static readonly IReadOnlyDictionary<string, string> Areas = new Dictionary<string, string>
     {
         ["user"] = "Account", ["role"] = "Role", ["payment"] = "Payment", ["check_in"] = "Check-in", ["refund"] = "Refund",
-        ["reservation"] = "Booking", ["amenity"] = "Amenity", ["catalog"] = "Catalog", ["cash_shift"] = "Cash shift", ["announcement"] = "Announcement", ["discount"] = "Discount code", ["gym"] = "Gym",
+        ["reservation"] = "Booking", ["coach_session"] = "Coach session", ["amenity"] = "Amenity", ["catalog"] = "Catalog", ["cash_shift"] = "Cash shift", ["announcement"] = "Announcement", ["discount"] = "Discount code", ["gym"] = "Gym",
     };
 
     /// <summary>Object type: the table the entry is about. The filter sends the key.</summary>
     public static readonly IReadOnlyDictionary<string, string> Objects = new Dictionary<string, string>
     {
         ["profiles"] = "Account", ["user_roles"] = "Role", ["payments"] = "Payment", ["refund_requests"] = "Refund request",
-        ["reservations"] = "Booking", ["amenities"] = "Amenity", ["membership_packages"] = "Package", ["discounts"] = "Discount code",
+        ["reservations"] = "Booking", ["training_sessions"] = "Coach session", ["amenities"] = "Amenity", ["membership_packages"] = "Package", ["discounts"] = "Discount code",
         ["cash_shifts"] = "Cash shift", ["announcements"] = "Announcement", ["gym_closures"] = "Closed day", ["gym_check_ins"] = "Check-in",
     };
 

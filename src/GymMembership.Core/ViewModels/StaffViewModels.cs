@@ -1190,7 +1190,7 @@ public partial class RequestsViewModel(ISessionService svc) : LoadableViewModel
     }
 }
 
-public partial class SessionsViewModel(ISessionService svc) : LoadableViewModel
+public partial class SessionsViewModel(ISessionService svc, IMembershipService? membership = null, IUrlOpener? opener = null) : LoadableViewModel
 {
     /// <summary>The rows the status filter lets through, scheduled first (soonest first), then the rest newest first; the full list stays in <c>all</c>.</summary>
     public ObservableCollection<SessionRow> Sessions { get; } = new();
@@ -1202,7 +1202,17 @@ public partial class SessionsViewModel(ISessionService svc) : LoadableViewModel
     [ObservableProperty] private DateTime date = DateTime.Today.AddDays(1);
     [ObservableProperty] private TimeSpan time = new(9, 0, 0);
 
-    public override Task OnAppearingAsync() => LoadAsync();
+    public override async Task OnAppearingAsync()
+    {
+        await LoadAsync();
+        await LoadPackageCoachInfoAsync();
+        if (svc.PendingCoachId is { } cid)
+        {
+            svc.PendingCoachId = null;
+            IsBookingCoach = true;
+            await LoadFreeCoachesAsync(cid);
+        }
+    }
 
     [RelayCommand] private Task LoadAsync() => RunAsync(svc.SessionsAsync, rows => { all = Ordered(rows); Apply(); });
     [RelayCommand] private void SetFilter(string f) => Filter = f;
@@ -1268,6 +1278,125 @@ public partial class SessionsViewModel(ISessionService svc) : LoadableViewModel
         var (title, button) = status == Status.NoShow ? ("Mark this session as a no-show?", "Mark no-show") : ("Mark this session completed?", "Mark completed");
         if (!await Confirm.AskAsync(title, $"With {row.With}, {Fmt.Range(row.Session.ScheduledStart, row.Session.ScheduledEnd)}.", button)) return;
         if (await RunAsync(() => svc.SetSessionStatusAsync(row.Session.Id, status))) await LoadAsync();
+    }
+
+    // ---- E5/E6/E7 (0120): Member Book a coach flow ----
+    public sealed record HourOption(int Hour, string Label);
+    [ObservableProperty] private bool isBookingCoach;
+    [ObservableProperty] private DateTime bookDay = DateTime.Today;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(PackageCoachText))] private int bookHours = 1;
+    [ObservableProperty] private HourOption? bookHour;
+    [ObservableProperty] private FreeCoachSlot? selectedFreeCoach;
+    [ObservableProperty] private string bookCode = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(PackageCoachText))] private MembershipPackage? currentPackage;
+    public ObservableCollection<FreeCoachSlot> FreeCoaches { get; } = new();
+    public ObservableCollection<HourOption> AvailableHours { get; } = new();
+    public bool CanShowBookCoach => membership is not null;
+
+    public string PackageCoachText => CurrentPackage is null
+        ? "Needs an active membership covering the session."
+        : CurrentPackage.IncludesCoach ? "Included in your package (free)"
+        : CurrentPackage.CoachAddonPrice is { } p ? $"Coach add-on: ₱{p * BookHours:N0} ({BookHours} hr{(BookHours == 1 ? "" : "s")})"
+        : "Your current package doesn't include a coach or add-on.";
+
+    partial void OnBookDayChanged(DateTime value) { if (IsBookingCoach) _ = LoadFreeCoachesAsync(); }
+    partial void OnSelectedFreeCoachChanged(FreeCoachSlot? value) => RefreshHours();
+
+    void RefreshHours()
+    {
+        var prev = BookHour?.Hour;
+        AvailableHours.Clear();
+        if (SelectedFreeCoach is { } c)
+        {
+            foreach (var h in c.FreeHours)
+            {
+                if (BookHours == 2 && !c.FreeHours.Contains(h + 1)) continue;
+                var label = $"{DateTime.Today.AddHours(h):h tt} – {DateTime.Today.AddHours(h + BookHours):h tt}";
+                AvailableHours.Add(new HourOption(h, label));
+            }
+        }
+        BookHour = prev is { } p ? AvailableHours.FirstOrDefault(x => x.Hour == p) ?? AvailableHours.FirstOrDefault() : AvailableHours.FirstOrDefault();
+    }
+
+    [RelayCommand]
+    private void SetBookHours(int hours)
+    {
+        BookHours = hours == 2 ? 2 : 1;
+        RefreshHours();
+    }
+
+    [RelayCommand]
+    private async Task OpenBookCoachAsync()
+    {
+        IsBookingCoach = !IsBookingCoach;
+        if (IsBookingCoach)
+        {
+            await LoadPackageCoachInfoAsync();
+            await LoadFreeCoachesAsync();
+        }
+    }
+
+    async Task LoadPackageCoachInfoAsync()
+    {
+        if (membership is null) return;
+        var my = await membership.MyMembershipsAsync();
+        var pkgs = await membership.ListPackagesAsync();
+        if (!my.Ok || !pkgs.Ok || my.Value is not { } rows) { CurrentPackage = null; return; }
+        var active = rows.FirstOrDefault(r => r.Status == Status.Active) ?? rows.FirstOrDefault();
+        CurrentPackage = active is null ? null : pkgs.Value?.FirstOrDefault(p => p.Name == active.PackageName);
+    }
+
+    [RelayCommand]
+    private Task LoadFreeCoachesAsync() => LoadFreeCoachesAsync(SelectedFreeCoach?.CoachId);
+
+    async Task LoadFreeCoachesAsync(string? preferCoachId)
+    {
+        var prevHour = BookHour?.Hour;
+        var day = DateOnly.FromDateTime(BookDay.Date);
+        var res = await svc.FreeCoachesAsync(day);
+        if (!res.Ok) { ErrorMessage = ErrorText.For(res.Error, res.Message); return; }
+        Fill(FreeCoaches, res.Value!);
+        SelectedFreeCoach = (preferCoachId is not null ? FreeCoaches.FirstOrDefault(c => c.CoachId == preferCoachId) : null)
+            ?? FreeCoaches.FirstOrDefault();
+        if (prevHour is { } ph && AvailableHours.FirstOrDefault(h => h.Hour == ph) is { } match)
+            BookHour = match;
+    }
+
+    [RelayCommand]
+    private async Task BookCoachAsync()
+    {
+        ErrorMessage = Notice = null;
+        if (SelectedFreeCoach is not { } coach || BookHour is not { } hr)
+        {
+            ErrorMessage = "Choose a coach and an available hour.";
+            return;
+        }
+        var manilaOffset = TimeSpan.FromHours(8);
+        var startUtc = new DateTimeOffset(BookDay.Date.AddHours(hr.Hour), manilaOffset).UtcDateTime;
+        var res = await svc.BookCoachAsync(coach.CoachId, startUtc, BookHours, string.IsNullOrWhiteSpace(BookCode) ? null : BookCode.Trim());
+        if (!res.Ok)
+        {
+            ErrorMessage = ErrorText.For(res.Error, res.Message);
+            if (res.Error == AppErrorKind.Conflict)
+                await LoadFreeCoachesAsync(coach.CoachId);   // keep day & hour, reload free coaches
+            return;
+        }
+        var booked = res.Value!;
+        if (booked.IsFree || booked.Amount <= 0)
+        {
+            Notice = $"Booked {coach.FullName} on {BookDay:ddd d MMM} at {hr.Label}.";
+            IsBookingCoach = false;
+            await LoadAsync();
+            return;
+        }
+        Notice = $"Session held for 15 minutes (code {booked.PaymentCode}, ₱{booked.Amount:N2}). Pay online to confirm.";
+        if (membership is not null && booked.PaymentId is { } pid)
+        {
+            var pay = await membership.PayOnlineAsync(pid);
+            if (pay.Ok && pay.Value!.Url is { } url && opener is not null)
+                await opener.OpenAsync(url);
+        }
+        await LoadAsync();
     }
 }
 
@@ -2450,7 +2579,8 @@ public sealed record StatusChoice(string Value, string Label);
 
 /// <summary>Front desk and admin: mark an amenity available, in use or unavailable, and see who was alerted.</summary>
 public partial class AmenityStatusViewModel(IAmenityService svc, IReservationService? reservations = null, IPaymentStaffService? payments = null,
-    DeskBookingViewModel? booking = null, IReportFiles? files = null, ISubscriptionService? refunds = null) : LoadableViewModel
+    DeskBookingViewModel? booking = null, IReportFiles? files = null, ISubscriptionService? refunds = null,
+    ISessionService? sessions = null, IAttendanceService? members = null) : LoadableViewModel
 {
     // ---- owner, 2026-11-17: the Booked card on the right: confirmed bookings not yet ended; View shows the details, Print opens the receipt PDF ----
     public ObservableCollection<BookedRow> Booked { get; } = new();
@@ -2508,9 +2638,103 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
     }
     async Task OpenBookingAsync()
     {
-        IsBooking = true;
+        IsBooking = true; IsBookingCoach = false;
         Booking!.Booked -= OnDeskBooked; Booking.Booked += OnDeskBooked;   // a new booking shows on the Booked card
         await Booking.OnAppearingAsync();
+    }
+
+    // ---- E5/E6/E7 (0120): Book a coach for a customer at the counter ----
+    public bool HasCoachBooking => sessions is not null && members is not null;
+    [ObservableProperty] private bool isBookingCoach;
+    [ObservableProperty] private string coachCustomerSearch = "";
+    [ObservableProperty] private MemberHit? coachCustomer;
+    [ObservableProperty] private DateTime coachBookDay = DateTime.Today;
+    [ObservableProperty] private int coachBookHours = 1;
+    [ObservableProperty] private FreeCoachSlot? selectedDeskCoach;
+    [ObservableProperty] private SessionsViewModel.HourOption? selectedDeskCoachHour;
+    [ObservableProperty] private string deskCoachMethod = "Cash";
+    [ObservableProperty] private string deskCoachCode = "";
+    public ObservableCollection<MemberHit> CoachCustomerHits { get; } = new();
+    public ObservableCollection<FreeCoachSlot> DeskFreeCoaches { get; } = new();
+    public ObservableCollection<SessionsViewModel.HourOption> DeskCoachHours { get; } = new();
+
+    partial void OnCoachCustomerSearchChanged(string value) => _ = SearchCoachCustomerAsync(value);
+    partial void OnCoachBookDayChanged(DateTime value) { if (IsBookingCoach) _ = LoadDeskCoachesAsync(); }
+    partial void OnSelectedDeskCoachChanged(FreeCoachSlot? value) => RefreshDeskCoachHours();
+
+    async Task SearchCoachCustomerAsync(string q)
+    {
+        if (members is null || string.IsNullOrWhiteSpace(q)) { CoachCustomerHits.Clear(); return; }
+        var res = await members.FindMembersAsync(q.Trim());
+        if (res.Ok) Fill(CoachCustomerHits, res.Value!.Take(6).ToList());
+    }
+
+    void RefreshDeskCoachHours()
+    {
+        DeskCoachHours.Clear();
+        if (SelectedDeskCoach is not { } c) { SelectedDeskCoachHour = null; return; }
+        foreach (var h in c.FreeHours)
+        {
+            if (CoachBookHours == 2 && !c.FreeHours.Contains(h + 1)) continue;
+            DeskCoachHours.Add(new SessionsViewModel.HourOption(h, $"{DateTime.Today.AddHours(h):h tt} – {DateTime.Today.AddHours(h + CoachBookHours):h tt}"));
+        }
+        SelectedDeskCoachHour = DeskCoachHours.FirstOrDefault();
+    }
+
+    [RelayCommand]
+    private void SetDeskCoachHours(int hours)
+    {
+        CoachBookHours = hours == 2 ? 2 : 1;
+        RefreshDeskCoachHours();
+    }
+
+    [RelayCommand]
+    private void PickDeskCoachMethod(string m) => DeskCoachMethod = m;
+
+    [RelayCommand]
+    private void ChooseCoachCustomer(MemberHit hit) { CoachCustomer = hit; CoachCustomerHits.Clear(); }
+
+    [RelayCommand]
+    private async Task ToggleCoachBookingAsync()
+    {
+        IsBookingCoach = !IsBookingCoach;
+        if (IsBookingCoach) { IsBooking = false; await LoadDeskCoachesAsync(); }
+    }
+
+    async Task LoadDeskCoachesAsync()
+    {
+        if (sessions is null) return;
+        var res = await sessions.FreeCoachesAsync(DateOnly.FromDateTime(CoachBookDay.Date));
+        if (!res.Ok) { ErrorMessage = ErrorText.For(res.Error, res.Message); return; }
+        Fill(DeskFreeCoaches, res.Value!);
+        SelectedDeskCoach = DeskFreeCoaches.FirstOrDefault();
+    }
+
+    [RelayCommand]
+    private async Task DeskBookCoachAsync()
+    {
+        ErrorMessage = Notice = null;
+        if (sessions is null || CoachCustomer is not { } m || SelectedDeskCoach is not { } c || SelectedDeskCoachHour is not { } hr)
+        {
+            ErrorMessage = "Choose a member, coach, and available hour.";
+            return;
+        }
+        var startUtc = new DateTimeOffset(CoachBookDay.Date.AddHours(hr.Hour), TimeSpan.FromHours(8)).UtcDateTime;
+        var method = DeskCoachMethod == "Cash" ? "cash" : "qr";
+        var res = await sessions.DeskBookCoachAsync(m.MemberId, c.CoachId, startUtc, CoachBookHours, method, string.IsNullOrWhiteSpace(DeskCoachCode) ? null : DeskCoachCode.Trim());
+        if (!res.Ok)
+        {
+            ErrorMessage = ErrorText.For(res.Error, res.Message);
+            if (res.Error == AppErrorKind.Conflict) await LoadDeskCoachesAsync();
+            return;
+        }
+        var r = res.Value!;
+        Notice = r.IsFree
+            ? $"Booked {c.FullName} for {m.Username} on {CoachBookDay:ddd d MMM} at {hr.Label} (included)."
+            : method == "cash"
+                ? $"Booked {c.FullName} for {m.Username} at {hr.Label} — ₱{r.Amount:N2} cash recorded ({r.PaymentCode})."
+                : $"Held {c.FullName} for {m.Username} for 15 minutes (code {r.PaymentCode}, ₱{r.Amount:N2}).";
+        IsBookingCoach = false;
     }
 
     // ---- F13 booking refund claims ("I didn't use it"), decided by the desk with a reason; moved here from Payments to verify (cashier plan Y7) ----

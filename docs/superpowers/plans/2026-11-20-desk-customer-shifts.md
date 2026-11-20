@@ -307,7 +307,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 **Files:** `SessionsPage` (member: Book a coach flow, list with status and QR, price line), `CoachesPage` (Book this coach), `PackagesPage` Day pass Buy popup (Add a coach step), Cashier (Day pass with a coach; coach add-on), view models, `Foundation.cs` sentences (`coach_taken`, `too_many_coach_sessions`, `coach_booking_blocked`, `coach_not_free`, `coach_day_full`), tests `tests/GymMembership.Tests/CoachSessionBookingTests.cs`.
 
-- [ ] Tests first (list reloads and keeps the day and time on `coach_taken`; price line per package; Add a coach hidden with no free hour today), screens with `impeccable`: Sessions (Book a coach), Coaches (Book this coach), Packages Day pass Add a coach, Payments Coach chip (member, Android and Windows, light/dark, 1.3 font scale); Cashier and Amenity status Book a coach for a customer (Windows). Commit.
+- [x] Tests first (list reloads and keeps the day and time on `coach_taken`; price line per package; Add a coach hidden with no free hour today), screens with `impeccable`: Sessions (Book a coach), Coaches (Book this coach), Packages Day pass Add a coach, Payments Coach chip (member, Android and Windows, light/dark, 1.3 font scale); Cashier and Amenity status Book a coach for a customer (Windows). Commit.
 
 ## Phase 11: Hiring and Time requests out (E8)
 
@@ -365,3 +365,4 @@ Same rules as `2026-11-19-owner-fixes.md`:
 - 2026-11-21: owner: every changed page uses `impeccable`; rule added under "Pages that change" and each Part 2 task's screen step names its pages.
 - 2026-11-21: Part 2 read through: E3 and E4 made consistent (no add-on price = no coach), no-show rule fixed in the database (only the two counts in Gym settings), held add-on sessions spelled out (`scheduled` + `held_until`, cancelled by the payment expiry), coach add-on discount codes (kind `coach`) added to Tasks 11 and 16, stale status and log lines corrected.
 - 2026-11-21: owner confirmed E8-E12 as recommended and said start Part 2 (starting Phase 8).
+- 2026-11-21: completed Phases 8, 9, and 10 (`0118_remove_coach_rate_and_fee.sql`, `0119_package_includes_coach.sql`, `0120_book_coach_session.sql`), verified local DB tests and unit/App builds; paused at end of Phase 10 per owner request (Phases 11-15 and live push of `0118`-`0120` remain).

@@ -18,6 +18,10 @@ public partial class AmenityStatusPage : BasePage
 	{
 		if (BindingContext is AmenityStatusViewModel { Booking: { } b } && (sender as BindableObject)?.BindingContext is GymMembership.Core.Services.MemberHit hit) b.ChooseSuggestionCommand.Execute(hit);
 	}
+	void OnPickCoachCustomer(object? sender, TappedEventArgs e)
+	{
+		if (BindingContext is AmenityStatusViewModel vm && (sender as BindableObject)?.BindingContext is GymMembership.Core.Services.MemberHit hit) vm.ChooseCoachCustomerCommand.Execute(hit);
+	}
 	void OnCloseBooking(object? sender, EventArgs e) => ((AmenityStatusViewModel)BindingContext).IsBooking = false;
 	void OnChange(object? sender, EventArgs e) => Row<AmenityStatusViewModel>(sender, v => v.SelectCommand);
 	void OnViewBooked(object? sender, EventArgs e) => Row<AmenityStatusViewModel>(sender, v => v.ViewCommand);   // the Booked card

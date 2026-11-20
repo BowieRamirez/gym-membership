@@ -17,8 +17,77 @@
 
             <!-- plan 2026-11-17 Z1, Z2: the desk books a slot for a customer standing at the counter and takes the full price in cash.
                  Find a member, or book a walk-in by name (0091: no account), then amenity, day, time and length; then the receipt -->
-            <Button Text="Book for a customer" Style="{StaticResource SmallButton}" HorizontalOptions="Start" Command="{Binding ToggleBookingCommand}"
-                    IsVisible="{Binding HasBooking}" AutomationId="DeskBookOpen" />
+            <HorizontalStackLayout Spacing="10">
+                <Button Text="Book for a customer" Style="{StaticResource SmallButton}" Command="{Binding ToggleBookingCommand}"
+                        IsVisible="{Binding HasBooking}" AutomationId="DeskBookOpen" />
+                <Button Text="Book a coach for a customer" Style="{StaticResource SmallOutlineButton}" Command="{Binding ToggleCoachBookingCommand}"
+                        IsVisible="{Binding HasCoachBooking}" />
+            </HorizontalStackLayout>
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding IsBookingCoach}">
+                <VerticalStackLayout Spacing="12">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout Spacing="2">
+                            <c:CardTitle Text="Book a coach for a customer" />
+                            <Label Text="Included in VIP packages, or paid add-on (cash or online) for other packages." Style="{StaticResource Caption}" />
+                        </VerticalStackLayout>
+                        <Button Grid.Column="1" Text="Close" Style="{StaticResource SmallOutlineButton}" Command="{Binding ToggleCoachBookingCommand}" />
+                    </Grid>
+                    <VerticalStackLayout Spacing="4" WidthRequest="300" HorizontalOptions="Start">
+                        <Label Text="Member" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><Entry Text="{Binding CoachCustomerSearch}" Placeholder="Name, email or phone" /></Border>
+                    </VerticalStackLayout>
+                    <Border Style="{StaticResource TablePanel}" IsVisible="{Binding CoachCustomerHits.Count, Converter={StaticResource Any}}" MaximumWidthRequest="480" HorizontalOptions="Start">
+                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding CoachCustomerHits}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="svc:MemberHit">
+                                    <VerticalStackLayout>
+                                        <Grid ColumnDefinitions="*,Auto" Padding="12,8">
+                                            <Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnPickCoachCustomer" /></Grid.GestureRecognizers>
+                                            <Label Text="{Binding Username}" FontFamily="BarlowSemiBold" />
+                                            <c:StatusChip Grid.Column="1" Status="{Binding PlanStatus}" />
+                                        </Grid>
+                                        <BoxView Style="{StaticResource Hairline}" />
+                                    </VerticalStackLayout>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+                    </Border>
+                    <Label Text="{Binding CoachCustomer.Username, StringFormat='Booking for {0}'}" FontFamily="BarlowSemiBold" IsVisible="{Binding CoachCustomer, Converter={StaticResource IsNotNull}}" />
+                    <FlexLayout Wrap="Wrap" AlignItems="End">
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                            <Label Text="Day" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><DatePicker Date="{Binding CoachBookDay}" MinimumDate="{x:Static x:DateTime.Today}" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                            <Label Text="Length" Style="{StaticResource Caption}" />
+                            <HorizontalStackLayout Spacing="6">
+                                <Button Text="1 hour" Style="{StaticResource FilterChip}" Command="{Binding SetDeskCoachHoursCommand}" CommandParameter="1" />
+                                <Button Text="2 hours" Style="{StaticResource FilterChip}" Command="{Binding SetDeskCoachHoursCommand}" CommandParameter="2" />
+                            </HorizontalStackLayout>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="200">
+                            <Label Text="Coach" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding DeskFreeCoaches}" ItemDisplayBinding="{Binding FullName}" SelectedItem="{Binding SelectedDeskCoach}" Title="Coach" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="180">
+                            <Label Text="Hour" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding DeskCoachHours}" ItemDisplayBinding="{Binding Label}" SelectedItem="{Binding SelectedDeskCoachHour}" Title="Hour" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                            <Label Text="Method" Style="{StaticResource Caption}" />
+                            <HorizontalStackLayout Spacing="6">
+                                <Button Text="Cash" Style="{StaticResource FilterChip}" Command="{Binding PickDeskCoachMethodCommand}" CommandParameter="Cash" />
+                                <Button Text="Online" Style="{StaticResource FilterChip}" Command="{Binding PickDeskCoachMethodCommand}" CommandParameter="Online" />
+                            </HorizontalStackLayout>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="160">
+                            <Label Text="Discount code" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding DeskCoachCode}" Placeholder="Optional" /></Border>
+                        </VerticalStackLayout>
+                    </FlexLayout>
+                    <Button Text="Book coach session" Style="{StaticResource SmallButton}" HorizontalOptions="Start" Command="{Binding DeskBookCoachCommand}" />
+                </VerticalStackLayout>
+            </Border>
             <ContentView IsVisible="{Binding IsBooking}">
             <Border Style="{StaticResource Panel}" BindingContext="{Binding Booking}">
                 <VerticalStackLayout Spacing="14" x:DataType="vm:DeskBookingViewModel">

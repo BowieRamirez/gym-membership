@@ -747,6 +747,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     object? CallLocked(string fn, Dictionary<string, object> a)
     {
         if (SubscriptionCall(fn, a, out var subscriptionResult)) return subscriptionResult;
+        if (CoachSessionCall(fn, a, out var coachSessionResult)) return coachSessionResult;
         if (ReservationCall(fn, a, out var reservationResult)) return reservationResult;
         if (ClosureCall(fn, a, out var closureResult)) return closureResult;
         if (RequestCall(fn, a, out var requestResult)) return requestResult;
@@ -790,9 +791,11 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 var code = (a.GetValueOrDefault("p_code") as string)?.Trim() ?? "";
                 var kind = a.GetValueOrDefault("p_kind") as string ?? "";
                 var item = I("p_item");
-                if (code.Length is 0 or > 50 || kind is not ("package" or "amenity" or "renewal") || item < 1) throw Err("bad_input");
+                if (code.Length is 0 or > 50 || kind is not ("package" or "amenity" or "renewal" or "coach") || item < 1) throw Err("bad_input");
                 if (All<Member>().All(x => x.UserId != who)) throw Err("not_found");
-                var price = kind == "package" ? PackageForSale(item).Price : kind == "amenity" ? AmenityForSale(item).Price : Convert.ToDecimal(a.GetValueOrDefault("p_price") ?? 0m);
+                var price = kind == "package" ? PackageForSale(item).Price : kind == "amenity" ? AmenityForSale(item).Price
+                    : kind == "coach" ? (Convert.ToDecimal(a.GetValueOrDefault("p_price") ?? 0m) is var cp && cp > 0 ? cp : All<MembershipPackage>().FirstOrDefault(p => p.Id == item)?.CoachAddonPrice ?? 0m)
+                    : Convert.ToDecimal(a.GetValueOrDefault("p_price") ?? 0m);
                 if (price <= 0) throw Err("not_found");
                 if (!_codeChecks.TryGetValue(uid, out var hits)) _codeChecks[uid] = hits = [];
                 hits.RemoveAll(t => t < now.AddMinutes(-10));
@@ -818,8 +821,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 var code = (a.GetValueOrDefault("p_code") as string)?.Trim() ?? "";
                 var kind = a.GetValueOrDefault("p_kind") as string ?? "";
                 var item = I("p_item");
-                if (code.Length is 0 or > 50 || kind is not ("package" or "amenity") || item < 1) throw Err("bad_input");
-                var price = kind == "package" ? PackageForSale(item).Price : AmenityForSale(item).Price;
+                if (code.Length is 0 or > 50 || kind is not ("package" or "amenity" or "coach") || item < 1) throw Err("bad_input");
+                var price = kind == "package" ? PackageForSale(item).Price
+                    : kind == "amenity" ? AmenityForSale(item).Price
+                    : All<MembershipPackage>().FirstOrDefault(p => p.Id == item)?.CoachAddonPrice ?? throw Err("not_found");
                 if (!_codeChecks.TryGetValue(uid, out var hits)) _codeChecks[uid] = hits = [];
                 hits.RemoveAll(t => t < now.AddMinutes(-10));
                 if (hits.Count >= 20) throw Err("too_many_checks");
@@ -851,7 +856,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     var i = (IDictionary<string, object?>)o;
                     var kind = i.TryGetValue("kind", out var k) ? k as string : null;
                     int? id = i.TryGetValue("id", out var v) && v is not null ? Convert.ToInt32(v) : null;
-                    if (kind is not ("package" or "amenity")) throw Err("bad_input");
+                    if (kind is not ("package" or "amenity" or "coach")) throw Err("bad_input");
+                    if (kind == "coach") id = null;
                     if (id is { } x && !(kind == "package" ? All<MembershipPackage>().Any(p => p.Id == x && p.State == CatalogState.Published) : All<Amenity>().Any(m => m.Id == x && m.State == CatalogState.Published))) throw Err("item_not_found");
                     return (kind, id);   // kind is checked above
                 }).Distinct().ToList();
@@ -1237,12 +1243,22 @@ public sealed partial class DemoGateway : ISupabaseGateway
             case "cancel_session":
             {
                 RequireActive();
-                var s = All<TrainingSession>().FirstOrDefault(x => x.Id == I("p_session_id") && (x.CoachId == uid || x.MemberId == uid)) ?? throw Err("not_found");
+                var s = All<TrainingSession>().FirstOrDefault(x => x.Id == I("p_session_id") && (x.CoachId == uid || x.MemberId == uid || Has("members:read"))) ?? throw Err("not_found");
                 if (s.Status != Status.Scheduled) throw Err("already_processed");
+                if (s.ScheduledStart <= now) throw Err("already_started");
                 s.Status = Status.Cancelled;
                 foreach (var req in All<TimeRequest>().Where(x => x.SessionId == s.Id && x.Status == Status.Pending)) req.Status = Status.Cancelled;
                 foreach (var held in Confirmed.Where(x => x.TrainingSessionId == s.Id).ToList())   // frees the session's amenity
                 { held.Status = "cancelled"; held.CancelledAt = now; held.CancelledBy = uid; held.CancelReason = Opt("p_reason") ?? "Session cancelled"; }
+                if (s.PaymentId is { } pid && All<Payment>().FirstOrDefault(p => p.Id == pid) is { } pay)
+                {
+                    if (pay.Status == Status.Pending) { pay.Status = Status.Rejected; pay.RejectedReason = "Session cancelled"; }
+                    else if (pay.Status == Status.Verified && pay.Amount > 0 && (s.MemberId != uid || s.ScheduledStart - TimeSpan.FromHours(24) >= now))
+                    {
+                        Add(new RefundRequest { Kind = "coach_addon", PaymentId = pay.Id, MemberId = s.MemberId, Amount = pay.Amount,
+                            Reason = Opt("p_reason") ?? "Coach session cancelled", Status = "approved", DecidedBy = uid, DecidedAt = now });
+                    }
+                }
                 Notify(uid == s.CoachId ? s.MemberId : s.CoachId, "system", "A training session was cancelled", Opt("p_reason"));
                 return null;
             }
@@ -1510,10 +1526,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
         // both coaches start in the gym so the coach list has someone to hire (0032); the demo has no closing-time job
         foreach (var c in new[] { "u-coach1", "u-coach2" }) Add(new CoachVisit { CoachId = c, CheckedInBy = c, CheckedInAt = now });
 
-        var monthly = Add(new MembershipPackage { Name = "Monthly", Description = "Full gym floor access for 30 days.", Price = 1500, DurationDays = 30 });
-        var quarterly = Add(new MembershipPackage { Name = "Quarterly", Description = "90 days of access at a lower monthly rate.", Price = 4000, DurationDays = 90 });
-        Add(new MembershipPackage { Name = "Annual", Description = "A full year, best value for regulars.", Price = 14000, DurationDays = 365 });
-        Add(new MembershipPackage { Name = "Day pass", Description = "The gym floor and amenity bookings for today, until midnight.", Price = 150, DurationDays = 1, IsDayPass = true });   // 0098
+        var monthly = Add(new MembershipPackage { Name = "Monthly", Description = "Full gym floor access for 30 days.", Price = 1500, DurationDays = 30, CoachAddonPrice = 250 });
+        var quarterly = Add(new MembershipPackage { Name = "Quarterly", Description = "90 days of access at a lower monthly rate.", Price = 4000, DurationDays = 90, CoachAddonPrice = 200 });
+        Add(new MembershipPackage { Name = "Annual", Description = "A full year, best value for regulars.", Price = 14000, DurationDays = 365, IncludesCoach = true });
+        Add(new MembershipPackage { Name = "Day pass", Description = "The gym floor and amenity bookings for today, until midnight.", Price = 150, DurationDays = 1, IsDayPass = true, CoachAddonPrice = 250 });   // 0098, 0119
 
         var pool = Add(new Amenity { Name = "Pool", Description = "25 m lap pool, open 6:00 to 21:00.", Price = 300 });
         var sauna = Add(new Amenity { Name = "Sauna", Description = "Dry sauna next to the locker rooms.", Price = 200,

@@ -207,7 +207,7 @@ public partial class RegisterViewModel(IAuthService auth, IAppNavigator nav) : L
     [RelayCommand] private void BackToSignIn() => nav.GoToLogin();
 }
 
-public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav, ISubscriptionService subscription, IUrlOpener? opener = null) : LoadableViewModel
+public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav, ISubscriptionService subscription, IUrlOpener? opener = null, ISessionService? sessions = null) : LoadableViewModel
 {
     public ObservableCollection<MembershipPackage> Packages { get; } = new();
     /// <summary>G4 (0060): shown codes this member can still use that fit a package, newest first. The section hides when there are none.</summary>
@@ -323,6 +323,37 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
         Notice = null; ErrorMessage = null; ClearCodeCheck(); DiscountCode = null;
         Fill(BuyCodes, Codes.Where(c => c.AllPackages || c.PackageIds.Contains(package.Id)));
         Buying = package;
+        HasDayPassCoach = false; AddDayPassCoach = false; DayPassCoaches.Clear(); DayPassHours.Clear(); SelectedDayPassCoach = null; SelectedDayPassHour = null;
+        if (package.IsDayPass && package.CoachAddonPrice is > 0 && sessions is not null)
+            _ = LoadDayPassCoachesAsync(package);
+    }
+
+    [ObservableProperty] private bool hasDayPassCoach;
+    [ObservableProperty] private bool addDayPassCoach;
+    [ObservableProperty] private FreeCoachSlot? selectedDayPassCoach;
+    [ObservableProperty] private SessionsViewModel.HourOption? selectedDayPassHour;
+    public ObservableCollection<FreeCoachSlot> DayPassCoaches { get; } = new();
+    public ObservableCollection<SessionsViewModel.HourOption> DayPassHours { get; } = new();
+    (string CoachId, int Hour)? _pendingDayPassCoach;
+
+    partial void OnSelectedDayPassCoachChanged(FreeCoachSlot? value)
+    {
+        DayPassHours.Clear();
+        if (value is null) { SelectedDayPassHour = null; return; }
+        foreach (var h in value.FreeHours)
+            DayPassHours.Add(new SessionsViewModel.HourOption(h, $"{DateTime.Today.AddHours(h):h tt} – {DateTime.Today.AddHours(h + 1):h tt}"));
+        SelectedDayPassHour = DayPassHours.FirstOrDefault();
+    }
+
+    async Task LoadDayPassCoachesAsync(MembershipPackage package)
+    {
+        if (sessions is null) return;
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8));
+        var res = await sessions.FreeCoachesAsync(today);
+        if (!res.Ok || Buying?.Id != package.Id) return;
+        Fill(DayPassCoaches, res.Value!);
+        HasDayPassCoach = DayPassCoaches.Count > 0;
+        SelectedDayPassCoach = DayPassCoaches.FirstOrDefault();
     }
     [RelayCommand] private void CloseBuy() { ClearCodeCheck(); Buying = null; DiscountCode = null; ErrorMessage = null; }
 
@@ -332,8 +363,16 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
     {
         if (Buying is not { } package) return;
         Notice = null;
+        _pendingDayPassCoach = AddDayPassCoach && SelectedDayPassCoach is { } dc && SelectedDayPassHour is { } dh ? (dc.CoachId, dh.Hour) : null;
         Payment? created = null;
         if (!await RunAsync(() => subscription.ExtendAsync(package.Id, DiscountCode), p => created = p)) return;
+        if (created?.Status == Status.Verified && _pendingDayPassCoach is { } pc && sessions is not null)
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8));
+            var startUtc = new DateTimeOffset(today.ToDateTime(TimeOnly.MinValue).AddHours(pc.Hour), TimeSpan.FromHours(8)).UtcDateTime;
+            await sessions.BookCoachAsync(pc.CoachId, startUtc, 1, null);
+            _pendingDayPassCoach = null;
+        }
         Notice = created?.Status == Status.Verified
             ? "Membership started."
             : "Payment created. Pay online on this page to start it.";
@@ -707,7 +746,7 @@ public partial class AmenityBoardViewModel(IAmenityService svc) : LoadableViewMo
     { Notice = null; if (await RunAsync(() => svc.SetRunsAsync(card.Amenity.Id, !card.RunsThis))) await LoadAsync(); }
 }
 
-public partial class CoachesViewModel(ICoachService svc, IChatService messages, IAppNavigator nav) : LoadableViewModel
+public partial class CoachesViewModel(ICoachService svc, IChatService messages, IAppNavigator nav, ISessionService? sessions = null) : LoadableViewModel
 {
     public ObservableCollection<CoachCard> Cards { get; } = new();
 
@@ -747,6 +786,13 @@ public partial class CoachesViewModel(ICoachService svc, IChatService messages, 
 
     [RelayCommand]
     private void Message(CoachCard card) { messages.Pending = (card.Coach.UserId, null); nav.GoToMessages(); }
+
+    [RelayCommand]
+    private void BookCoach(CoachCard card)
+    {
+        if (sessions is not null) sessions.PendingCoachId = card.Coach.UserId;
+        nav.GoToSessions();
+    }
 }
 
 /// <summary>A conversation row: the thread plus its picture, which is looked up after the list is shown.</summary>

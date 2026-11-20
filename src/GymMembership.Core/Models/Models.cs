@@ -17,9 +17,9 @@ public static class Status
 
 public static class PayKind
 {
-    public const string Membership = "membership", Renewal = "renewal", Amenity = "amenity", WalkIn = "walk_in";
+    public const string Membership = "membership", Renewal = "renewal", Amenity = "amenity", WalkIn = "walk_in", CoachAddon = "coach_addon";
     /// <summary>What a kind is called on screen (9.8: Revenue showed the codes). Extension, as the payment lists say for a renewal.</summary>
-    public static string Name(string k) => k switch { Membership => "Membership", Renewal => "Extension", Amenity => "Amenity", WalkIn => "Day pass", _ => k };   // cashier plan Y3
+    public static string Name(string k) => k switch { Membership => "Membership", Renewal => "Extension", Amenity => "Amenity", WalkIn => "Day pass", CoachAddon => "Coach add-on", _ => k };   // cashier plan Y3
 }
 public static class PayMethod
 {
@@ -263,7 +263,10 @@ public class NotifiedMember : BaseModel
 [Table("training_sessions")] public class TrainingSession : BaseModel
 { [PrimaryKey("training_session_id")] public int Id { get; set; } [Column("coach_id")] public string CoachId { get; set; } = ""; [Column("member_id")] public string MemberId { get; set; } = "";
   [Column("title")] public string? Title { get; set; } [Column("scheduled_start")] public DateTime ScheduledStart { get; set; } [Column("scheduled_end")] public DateTime ScheduledEnd { get; set; }
-  [Column("status")] public string Status { get; set; } = "scheduled"; }
+  [Column("status")] public string Status { get; set; } = "scheduled";
+  [Column("payment_id")] public int? PaymentId { get; set; }
+  [Column("held_until")] public DateTime? HeldUntil { get; set; }
+  [Column("is_paid_addon")] public bool IsPaidAddon { get; set; } }
 
 [Table("session_attendance")] public class SessionAttendance : BaseModel
 { [PrimaryKey("training_session_id")] public int SessionId { get; set; } [Column("status")] public string Status { get; set; } = "present";

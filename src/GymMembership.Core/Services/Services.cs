@@ -1108,7 +1108,27 @@ public sealed record SessionRow(TrainingSession Session, string With, bool IsMin
 {
     // the coach running a session on an amenity can add time until it ends (extend_reservation)
     public bool CanExtend => IsMine && ReservationId is not null && Session.Status == Status.Scheduled && Session.ScheduledEnd.ToUniversalTime() > DateTime.UtcNow;
+    public bool IsWaitingForPayment => Session.Status == Status.Scheduled && Session.HeldUntil is not null;
+    public string StatusText => IsWaitingForPayment ? "Waiting for payment" : Session.Status;
 }
+public sealed record FreeCoachSlot(
+    [property: System.Text.Json.Serialization.JsonPropertyName("coach_id")] string CoachId,
+    [property: System.Text.Json.Serialization.JsonPropertyName("full_name")] string FullName,
+    [property: System.Text.Json.Serialization.JsonPropertyName("specialty")] string? Specialty,
+    [property: System.Text.Json.Serialization.JsonPropertyName("bio")] string? Bio,
+    [property: System.Text.Json.Serialization.JsonPropertyName("avatar_path")] string? AvatarPath,
+    [property: System.Text.Json.Serialization.JsonPropertyName("free_hours")] int[] FreeHours,
+    string? PhotoUrl = null)
+{
+    public string HoursSummary => FreeHours.Length == 0 ? "No free hours" : string.Join(", ", FreeHours.Select(h => DateTime.Today.AddHours(h).ToString("h tt")));
+}
+public sealed record BookCoachResult(
+    [property: System.Text.Json.Serialization.JsonPropertyName("training_session_id")] int TrainingSessionId,
+    [property: System.Text.Json.Serialization.JsonPropertyName("payment_id")] int? PaymentId,
+    [property: System.Text.Json.Serialization.JsonPropertyName("payment_code")] string? PaymentCode,
+    [property: System.Text.Json.Serialization.JsonPropertyName("amount")] decimal Amount,
+    [property: System.Text.Json.Serialization.JsonPropertyName("held_until")] DateTime? HeldUntil,
+    [property: System.Text.Json.Serialization.JsonPropertyName("is_free")] bool IsFree);
 public sealed record RequestMember(string MemberId, string Name);
 public sealed record RequestsView(IReadOnlyList<RequestRow> Rows, bool IsCoach, IReadOnlyList<CoachCard> HiredCoaches, IReadOnlyList<RequestMember>? Trainees = null,
     IReadOnlyList<TrainingSession>? ActiveSessions = null, IReadOnlyList<Amenity>? Amenities = null);
@@ -1140,6 +1160,10 @@ public interface ISessionService
     Task<AppResult<IReadOnlyList<CalendarSession>>> CalendarAsync(DateTime fromUtc, DateTime toUtc);
     /// <summary>The signed-in coach's scheduled sessions from now on, nearest first.</summary>
     Task<AppResult<IReadOnlyList<CalendarSession>>> UpcomingAsync();
+    string? PendingCoachId { get => null; set { } }
+    Task<AppResult<IReadOnlyList<FreeCoachSlot>>> FreeCoachesAsync(DateOnly day) => Task.FromResult(AppResult<IReadOnlyList<FreeCoachSlot>>.Success([]));
+    Task<AppResult<BookCoachResult>> BookCoachAsync(string coachId, DateTime startUtc, int hours, string? code = null) => Task.FromResult(AppResult<BookCoachResult>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<BookCoachResult>> DeskBookCoachAsync(string memberId, string coachId, DateTime startUtc, int hours, string method, string? code = null) => Task.FromResult(AppResult<BookCoachResult>.Fail(AppErrorKind.Unknown, "not_implemented"));
 }
 
 public sealed class SessionService(ISupabaseGateway gw) : ISessionService
@@ -1332,6 +1356,35 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
         var names = await Directory_.UserNamesAsync(gw);
         return sessions.OrderBy(s => s.ScheduledStart).Select(s => new CalendarSession(s, names.GetValueOrDefault(s.MemberId, "Member"), null)).ToList();
     });
+
+    public string? PendingCoachId { get; set; }
+
+    public Task<AppResult<IReadOnlyList<FreeCoachSlot>>> FreeCoachesAsync(DateOnly day) => Safe.RunAsync<IReadOnlyList<FreeCoachSlot>>(async () =>
+    {
+        var rows = await gw.RpcAsync<List<FreeCoachSlot>>("free_coaches", new() { ["p_day"] = day.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) }) ?? [];
+        var photos = new LinkCache(gw, "avatars", rememberMisses: true);
+        return await Task.WhenAll(rows.Select(async r => r with { PhotoUrl = (await Safe.RunAsync(() => photos.UrlAsync(r.AvatarPath))).Value }));
+    });
+
+    public Task<AppResult<BookCoachResult>> BookCoachAsync(string coachId, DateTime startUtc, int hours, string? code = null) => Safe.RunAsync(() =>
+        gw.RpcAsync<BookCoachResult>("book_coach_session", new()
+        {
+            ["p_coach"] = coachId,
+            ["p_start"] = startUtc.ToString("O"),
+            ["p_hours"] = hours,
+            ["p_code"] = (string.IsNullOrWhiteSpace(code) ? null : code.Trim())!
+        }));
+
+    public Task<AppResult<BookCoachResult>> DeskBookCoachAsync(string memberId, string coachId, DateTime startUtc, int hours, string method, string? code = null) => Safe.RunAsync(() =>
+        gw.RpcAsync<BookCoachResult>("desk_book_coach_session", new()
+        {
+            ["p_member"] = memberId,
+            ["p_coach"] = coachId,
+            ["p_start"] = startUtc.ToString("O"),
+            ["p_hours"] = hours,
+            ["p_method"] = method,
+            ["p_code"] = (string.IsNullOrWhiteSpace(code) ? null : code.Trim())!
+        }));
 }
 
 // ===================== Attendance and check-ins =====================
