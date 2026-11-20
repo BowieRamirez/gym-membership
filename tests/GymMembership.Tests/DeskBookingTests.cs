@@ -380,4 +380,19 @@ public class DeskBookingTests
         await vm.BookCommand.ExecuteAsync(null);   // the slot is free again for someone else
         Assert.Null(vm.ErrorMessage);
     }
+
+    [Fact]   // Phase 1: picking a customer on Book for a customer survives the page's auto refresh
+    public async Task Picked_customer_stays_through_status_refresh()
+    {
+        var (gw, booking) = await Open();
+        var status = new AmenityStatusViewModel(new AmenityService(gw), new ReservationService(gw), new PaymentStaffService(gw), booking);
+        await status.OnAppearingAsync();
+        await status.ToggleBookingCommand.ExecuteAsync(null);
+        booking.Search = "carlo";
+        await booking.FindCommand.ExecuteAsync(null);
+        var hit = booking.Hits.First();
+        booking.PickMemberCommand.Execute(hit);
+        await status.AutoRefreshAsync();
+        Assert.Same(hit, booking.Member);
+    }
 }
