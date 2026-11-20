@@ -4,7 +4,7 @@
 
 Created: 2026-11-20
 Last updated: 2026-11-20
-Status: Part 2 (coach revamp, Phases 8-15) PLANNED, waiting on E1-E12, not built. Part 1: Phases 1-6 implemented and verified (1216 unit tests, Windows & Android builds, local DB tests, and `0117` dry-run). Phase 7: awaiting live migration push, live grants check, owner hand checks, and branch push.
+Status: Part 2 (coach revamp, Phases 8-15) PLANNED, model agreed, E4 and E8-E11 to confirm, not built. Part 1: Phases 1-6 implemented and verified (1216 unit tests, Windows & Android builds, local DB tests, and `0117` dry-run). Phase 7: awaiting live migration push, live grants check, owner hand checks, and branch push.
 Branch: `desk-customer-shifts-2026-11-20` (cut from `origin/main` at `8c1555f`, v0.9.0 + `0116`). **Owner's rule: this branch is not merged into `main` yet.** Pushed to GitHub for the owner; no PR until the owner asks.
 
 **Goal:** The owner's list of 2026-11-20 (`docs (1).pdf`): Pay again goes straight to paying and takes a discount code; staff pick a customer by typing (suggestions, no Find button) on the Cashier and on Book for a customer; the bug where a customer can't be chosen on Book for a customer is fixed; the Cashier's payment screen makes the customer obvious; a picked customer's status is re-read from the server; the Cashier's table hides people who already have a membership or Day pass, the amenity booking doesn't; a cash shift's shortage or overage is shown apart from sales, needs a reason, and supervisors can add investigation notes with an audit trail.
@@ -164,145 +164,167 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 # Part 2: Coach revamp (owner, 2026-11-20)
 
-**Not built yet.** E1, E2, E12 answered by the owner (2026-11-20): **no coach rate at all; the gym pays its coaches; members never pay for a coach.** Waiting on the rest. Same branch, same rules ("How to use this plan"). Migrations start at `0118`. Coach and member screens get Android and Windows (light, dark, 1.3 font scale); front desk and admin screens are Windows only.
+**Not built yet.** Model agreed with the owner (2026-11-20, E1-E8 below); E9-E12 are recommendations still to confirm. Same branch, same rules ("How to use this plan"). Migrations start at `0118`. Member and coach screens get Android and Windows (light, dark, 1.3 font scale, real phone layouts); front desk and admin screens are Windows only.
 
-**Source:** owner's message 2026-11-20: coaches become staff; the coach's own rate goes; a member can hire a coach only on a package with **coach included** (a switch when making a package); the Day pass is sold **with or without a coach** (extra fee); the 10-step booking flow pasted in chat (choose amenity → date, time, length → available coaches → pick one → checked again on confirm → booking saved → QR check-in at the desk with the coach's arrival confirmed → session → damage check → payment closed once verified). Owner's follow-up: "remove the coach rate as i said … the coach payment [is] handled by the gym, members don't have to pay their rates", so the flow's rate, fee and rate-snapshot parts (steps 4, 5, 6, 10) are dropped.
+**Source:** owner's messages 2026-11-20: coaches are staff; **no coach rate**; the gym pays its coaches; **coaches are booked per session** (no more hiring); a member picks the coach they want for a day in the app; when creating a package the admin switches **Coach included** on or off; a package with it off (the Day pass included) gets a coach as an **add-on, an extra fee**; one-on-one; coach sessions kept separate from amenity bookings; the 10-step coach flow pasted in chat (available coaches only, checked again on confirm, QR check-in with the coach's arrival confirmed, session status apart from payment, damage report reviewed by management, payment closed once verified).
 
 ## Phase table (Part 2)
 
 | Phase | What | Needs | Status |
 |---|---|---|---|
-| 8 | Coach rate and coach fees removed; With a coach costs the same as Solo | E1, E2 | |
-| 9 | "Coach included" switch on packages; Day pass with or without a coach | E3, E4, E5 | |
-| 10 | Hiring only on a coach-included package; existing hires | E6, E7 | |
-| 11 | Booking with a coach: available coaches, checked again on confirm | E8, E9 | |
-| 12 | Booking QR at the desk; coach arrival; session status apart from payment | E10 | |
-| 13 | Damage report after the session, reviewed by management | E11 | |
-| 14 | Coach hours report for the gym's coach pay | E12 | |
+| 8 | Coach rate and amenity coach fee removed; amenity booking "With a coach" goes | E1, E2 | |
+| 9 | Packages: Coach included switch; coach add-on price | E3, E4 | |
+| 10 | Book a coach: day → coach → time, one-on-one, checked again on confirm; add-on paid; limits | E5, E6, E7 | |
+| 11 | Hiring and Time requests removed; messages follow sessions | E8 | |
+| 12 | Desk: QR, Coach is here, session status apart from payment | E9 | |
+| 13 | Damage report after a session, reviewed by admins | E10 | |
+| 14 | Coach hours report for the gym's coach pay | E11 | |
 | 15 | Part 2 checks, review, owner hand checks | | |
 
 ## 3. Findings: coaches today
 
 | Item | Today | Consequence |
 |---|---|---|
-| Rate | Each coach sets their own `coaches.hourly_rate` on their profile (0002, 0033: positive or empty, "Rate not set"). Members see it on the Coaches page; the money is between member and coach (0072). | Removed (E1). |
-| Booking with a coach | `book_amenity_for` (0064 G14, 0090) has Solo / With a coach. A coach is free when they run the amenity (`coach_amenities`), have a posted shift over the whole time (0028), and have no confirmed booking or scheduled session then; an exclusion constraint on `reservations` (`coach_id` with `tstzrange`, confirmed only) stops two confirmed bookings of one coach overlapping. The fee is the **amenity's** `coach_fee` per hour (0090), added to the price, paid to the gym. | Steps 3 and 5 of the flow already exist; the amenity's coach fee stops being charged (E2). |
-| Hiring | Members send a hire request, the coach accepts (0073, 0074). An active hire unlocks time requests, sessions and messages (0021, 0031, 0051). Any member with an active membership can hire, any coach, any number (0071, 0072). | Hiring needs a coach-included package (E6). |
-| Packages | `membership_packages` has name, price, `duration_days`, `is_day_pass` (0098), versions and publish; no coach flag. | New `includes_coach` switch (E3). |
-| QR | Each member has a gym check-in QR (0034); bookings have no QR or code of their own. | Booking QR (E10). |
-| Session status | `reservations.status` (requested, confirmed, cancelled…) mixes booking and payment; coach sessions have attendance (`record_session_attendance`, 0005, `too_soon` 0110). | Session status kept apart (E10). |
-| Damage | Nothing. Amenities can be set to Maintenance on the status page. | New report (E11). |
+| Rate | Each coach sets `coaches.hourly_rate` on their profile (0002, 0033). Members see it on Coaches; money was between member and coach (0072). | Removed (E1). |
+| Amenity with a coach | `book_amenity_for` (0064 G14, 0090) has Solo / With a coach, adding the amenity's `coach_fee` per hour. | Removed; coach sessions are their own bookings (E2). |
+| Hiring | Hire request, coach accepts (0073, 0074, `hire_coach`, `answer_hire`, `end_hire`). An active hire unlocks time requests, sessions and messages (0021, 0031, 0051). | Replaced by per-session booking (E8). |
+| Sessions | `training_sessions` (0002): coach, member, start, end, `status` (`scheduled`…), notes; exclusion constraints stop a coach's and a member's scheduled sessions overlapping; `check_session_time` (0031) keeps a session inside the coach's posted shift (0028); `cancel_session`, `record_session_attendance` (0005, `too_soon` 0110). Today sessions come only from accepted time requests. | Reused: booking a coach inserts a `training_sessions` row directly. One-on-one and the race on confirm are already enforced by the constraints. |
+| Packages | `membership_packages`: name, price, `duration_days`, `is_day_pass` (0098), versions, publish; no coach flag. | `includes_coach` switch (E3). |
+| Member pages | My membership, Packages, Book an amenity, Coaches, Messages, Sessions, Time requests, Payments, Settings (`MemberShell.xaml`). | See "Pages that change". |
+| Coach pages | Dashboard, Sessions, Time requests, My shifts, Messages, Amenities, Settings (`CoachShell.xaml`). | See "Pages that change". |
 
-## 4. Decisions (Part 2): recommendations, owner to answer
+## 4. Decisions (Part 2)
 
 | # | Decision | Answer |
 |---|---|---|
-| E1 | **Coach rate removed.** The rate goes from the coach's profile, the Coaches page, the coach's own settings and every booking screen. `coaches.hourly_rate` is dropped with its check (0033), since nothing reads it any more. Coaches are staff; how the gym pays them is outside the app. | Owner, 2026-11-20: remove it |
-| E2 | **No coach fee on bookings.** With a coach costs the same as Solo (the amenity's price per hour only). The amenity's `coach_fee` (0064/0090) is no longer charged and its box goes from the amenity admin page; the column is dropped with its grants (0064, 0109). Old app versions sending With a coach are charged nothing extra. | Owner, 2026-11-20: members don't pay coach rates |
-| E3 | **Coach-included package:** a **Coach included** switch when creating or versioning a package (`membership_packages.includes_coach`). The package price already covers the coach. A member on such a package may hire a coach (E6): their own coach for the term, with time requests, sessions and messages as hires have today. Members see a "Coach included" tag on Packages. Recommended. | |
-| E4 | **What coach-included gives over a plain package**, now that coached bookings cost nothing: (a) a hired coach of their own (E6) **and** no limit on upcoming coached bookings (plain members: 2, E8 item 5); (b) the hire only, same booking limit as everyone. Recommended **(a)**, so the coach-included price buys something visible. | |
-| E5 | **Day pass with a coach:** the extra fee is a **package price paid to the gym**, not a coach rate. The Day pass package gets a **coach add-on price** (`coach_addon_price`, flat, set by admin). On buying (app or desk) the member picks **No coach** or **With coach (+₱x)**. With coach: they may book amenities with a coach that day. **No coach: no coached bookings that day** (otherwise the add-on buys nothing, since coached bookings are free). Recommended. | |
-| E6 | **Hiring:** Hire on the Coaches page shows only to members whose active package has `includes_coach`; the database refuses others (`coach_not_included`). Accept/decline (0074) stays. A hire ends when that package's term ends (no coach-included term left → hire becomes `ended`). Recommended. | |
-| E7 | **Hires already active** for members without a coach-included package: (a) end today, with a notice to both; (b) **run until that member's current term ends**, no new ones. Recommended (b): nobody loses what they paid for. | |
-| E8 | **Members on a plain package (for example 1 month) and coaches: per session.** See "Per-session coaching for 1-month members" below. Recommended. | |
-| E9 | **Coach taken while confirming (step 5):** the confirm re-checks inside the same transaction (the exclusion constraint already makes it race-proof). If the coach was taken: nothing is charged or saved, the message "Coach Ana was just booked for that time. Choose another coach or time." shows, and the coach list reloads with the member's amenity, day and time kept. | |
-| E10 | **Booking QR and arrival (steps 7-8):** every confirmed booking gets a booking code and QR (on My bookings and the receipt). The desk scans it: the app reads the booking's **current** status from the server (cancelled, wrong day, not paid → refused with the reason). For a coached booking the desk then taps **Coach is here** (`coach_arrived_at`, audit row); until then the session isn't started. Session status is its own column: **Scheduled → Checked in → In session → Completed / No-show**, apart from the payment's status. The coach marks Completed (after the start, `too_soon` rule of 0110). Recommended. | |
-| E11 | **Damage report (step 9):** after a coached session, the coach answers "Anything broken or damaged?" No / Yes with a description (and optional photo). Yes makes a `damage_reports` row (booking, amenity, coach, description, status Open / Reviewed / Closed), alerts admins, and offers **Set amenity to Maintenance**. Admins review and close with a note. **Nothing is charged automatically** to coach or member. Solo bookings: the desk can file one too. Recommended. | |
-| E12 | **Paying coaches (step 10):** the gym pays its coaches; members pay nothing for a coach. The booking's own payment (the amenity) works as today and is closed once verified. To help the gym pay coaches, a **Coach hours** report on Revenue (admins) lists, per coach and date range: completed coached sessions, hours coached, no-shows, and hires active in the range. No money amounts. Recommended (the report); paying them is outside the app. | Owner, 2026-11-20: gym pays coaches |
+| E1 | **Coach rate removed** from the coach's settings, Coaches page and every booking screen; `coaches.hourly_rate` dropped with its check (0033). How the gym pays coaches is outside the app. | Owner, 2026-11-20 |
+| E2 | **Amenity bookings lose "With a coach"** and the amenity's `coach_fee` (column and grants dropped, 0064, 0109). Booking an amenity and booking a coach are separate; a member who wants the ring with a coach books both for the same time. Old app versions sending With a coach are charged the amenity price only. | Owner, 2026-11-20: keep separate |
+| E3 | **Coach included switch** on each package (create and new version): `membership_packages.includes_coach`. On: members on that package book coach sessions **at no extra charge**. Off (any package, the Day pass included): members book a coach session **with the coach add-on fee** each time. Members see "Coach included" on Packages. | Owner, 2026-11-20 |
+| E4 | **Coach add-on price:** one price per session hour in Gym settings (`gym_settings.coach_addon_price`), the same for every package with Coach included off and for every coach. Paid to the gym. Recommended (one number to keep up to date); per-package prices can come later if wanted. | Recommended, confirm |
+| E5 | **Booking a coach:** Sessions → **Book a coach** (or **Book this coach** on Coaches) → day → the coaches with a posted shift that day who are free → time inside that coach's shift, whole hours, 1 or 2 hours → the price line ("Included with your package" or "Coach add-on ₱x") → Confirm. **One-on-one.** Coach-included: confirmed at once. Add-on: the session is held for 15 minutes while it's paid (online in the app, or at the desk), then confirmed; unpaid → released. The confirm checks again (the exclusion constraints make it race-proof); if the coach was just taken: "Coach Ana was just booked for that time. Choose another coach or time.", the list reloads, the day and time are kept, nothing is charged. The coach doesn't have to accept: the posted shift is their availability. | Owner, 2026-11-20 (one-on-one); rest recommended |
+| E6 | **Limits, coach-included sessions only** (they're free): 1 coach session a day; 2 upcoming at a time; cancelling 24 hours or more ahead is free, later or not showing up is a no-show; 2 no-shows in 30 days → no coach booking for 7 days (the desk can still book for them). Numbers in Gym settings. **Add-on sessions:** no count limits (paid each time); cancel 24 hours or more ahead → add-on refunded, later → kept. | Owner, 2026-11-20: limits as recommended |
+| E7 | **Day pass with a coach:** the Day pass has Coach included off, so it uses the add-on. The Buy popup (app) and the Cashier's Day pass offer **Add a coach**: coach and time for today, paid with the pass in one total. They can also add a coach later that day from Sessions. The session must end by midnight (the Day pass ends then); if no coach has a free hour left today, Add a coach isn't offered. | Owner, 2026-11-20 |
+| E8 | **Hiring and Time requests go.** `hire_coach`, `answer_hire`, time requests and their pages are removed; `coach_hires` and `time_requests` rows stay for history. Hires active today run until that member's current term ends, then end; no new ones. **Messages** between a member and a coach are open while they have a session today or upcoming, and for 7 days after the last one. Recommended. | Recommended, confirm |
+| E9 | **At the desk (steps 7-8):** every session has a code and QR (on the member's Sessions page). The desk scans it (or the member's check-in QR, which lists today's sessions): the server reads the session's **current** status (cancelled, other day, add-on not paid → refused with the reason). The desk taps **Coach is here** (`coach_arrived_at`, audit row). Session status: Scheduled → Checked in → In session → Completed / No-show, kept apart from the payment's status. The coach marks Completed or No-show after the start (`too_soon`, 0110). The coach can cancel a session with a reason; the member is alerted and an add-on is refunded. | Recommended, confirm |
+| E10 | **Damage report (step 9):** after a session the coach answers "Anything broken or damaged?" No / Yes with a description (photo optional). Yes makes a `damage_reports` row (session, amenity if any, coach, description, Open / Reviewed / Closed), alerts admins and offers **Set amenity to Maintenance**. Admins review and close with a note. **Nothing is charged automatically.** The desk can file one too. | Recommended, confirm |
+| E11 | **Coach hours report** on Revenue (admins): per coach and date range, completed sessions, hours, no-shows, cancelled by the coach. No money; for the gym's own coach pay. Add-on income shows in sales as "Coach add-on". | Recommended, confirm |
 
-### Per-session coaching for 1-month members (E8, recommendation)
+## Pages that change
 
-1. **No hire.** A member on a package without a coach (1 month, 3 months, Day pass with no coach) can't hire; the Coaches page shows each coach's shifts and the amenities they run, with **Book a session** instead of Hire.
-2. **Book a session = book an amenity With a coach** (flow steps 1-6). There is no coach session without an amenity and a time; the amenity booking is the coach session. This reuses `book_amenity_for` instead of building a second booking system.
-3. **No coach fee.** The member pays only the amenity's price, exactly as Solo; the screen says "Coach: free with your membership".
-4. **Same rules as amenity bookings:** whole hours, inside the coach's shift and gym hours, the member's membership covers the time (Day pass: ends by midnight, Q10 of 2026-11-19, and only With coach, E5), cancel 24 hours or more ahead to get the amenity payment back; later, the gym keeps it.
-5. **Limit:** at most **2 upcoming coached bookings** per member at a time without a coach-included package, so one member can't reserve a coach's whole week. Coached bookings are free now, so this limit (and the 24-hour cancel rule) is what keeps coaches' time fair. Set in Gym settings (`max_coached_bookings`, default 2).
-6. **Time requests and messages** (today only for hires) stay for hires only. A per-session member talks to the coach through the booking: the booking shows the coach's name, and the coach sees the member's name and notes on their calendar.
-7. **The desk** books the same way for a member at the counter (Book for a customer, With a coach), with the same limit and no coach fee.
-8. **No-shows count:** a member marked No-show on 2 coached bookings in 30 days can't book a coach for 7 days (the desk can still book for them). Recommended, since a free booking that's never used still blocks the coach.
+**Members (Android and Windows)**
+
+| Page | Change |
+|---|---|
+| Coaches | Hire → **Book this coach**; each coach's photo, bio, amenities and shifts; no rate, no Hired tag |
+| Sessions | Main coach page: **Book a coach**, upcoming and past sessions (coach, day, time, status, QR), Cancel, the price line |
+| Time requests | Removed from the menu |
+| Packages | "Coach included" tag; Day pass Buy popup gets **Add a coach** (coach, time, + add-on) |
+| My membership | Hired coach card → **Next coach session**; says whether the package includes a coach |
+| Book an amenity | "With a coach" and the coach fee line go |
+| Payments | Coach add-on payments, with a **Coach** filter chip |
+| Messages | Only coaches they have a session with (E8) |
+
+**Coaches (Android and Windows)**
+
+| Page | Change |
+|---|---|
+| Dashboard | Today by hour: who booked them, checked in, Coach is here |
+| Sessions | Their sessions; Completed / No-show; cancel with reason; damage report |
+| Time requests | Removed |
+| My shifts | Booked hours shown inside each shift (a shift with sessions already can't be cut, 0028) |
+| Settings | Rate box removed |
+| Messages | Members they have a session with |
+
+**Staff (Windows):** Packages admin (Coach included switch), Gym settings (coach add-on price, limits), Cashier (Day pass with a coach; add-on payment for a session), Membership checking (today's sessions, Coach is here), Amenity status (coach line gone from Book for a customer), Revenue (Coach hours report), Damage reports (new, admins).
 
 ## Global Constraints (Part 2)
 
-- Everything in Part 1's Global Constraints, plus: migrations from `0118`; members are never charged for a coach (the Day pass coach add-on is a package price); no coach rate anywhere; no automatic charge from a damage report.
-- Staff pages Windows only; member and coach pages Android and Windows.
+- Everything in Part 1's Global Constraints, plus: migrations from `0118`; no coach rate anywhere; members pay for a coach only through the add-on (packages with Coach included off), paid to the gym; one member per coach per hour; no automatic charge from a damage report.
+- Member and coach pages Android and Windows; staff pages Windows only.
 
 ## Review Focus (Part 2)
 
-1. **Two members confirm the same coach for overlapping hours at once** → one confirmed, the other gets E9's message, nothing charged.
-2. **Old app (v0.9.0) books With a coach on an amenity that had a coach fee** → charged the amenity price only, same as Solo; refunds of older bookings that did include a coach fee still return what was paid.
-3. **Coach-included member's term ends while a hire is active** → hire ends; time requests and messages close; upcoming coached bookings already paid stay.
-4. **Day pass with coach bought at 9 pm** → the coached hour must end by midnight; the coach add-on isn't sold if no coach has a shift left today (the buy screen says so).
-5. **QR of a cancelled or refunded booking scanned** → refused with the reason, nothing recorded.
+1. **Two members confirm the same coach and hour at once** → one confirmed, the other gets E5's message, nothing charged.
+2. **Add-on session not paid within 15 minutes** → released; the hour shows free again; no payment left pending.
+3. **Day pass member adds a coach at 10:30 pm** → only times ending by midnight; none left → Add a coach hidden.
+4. **Member's package changes from Coach included to a plain one (term ends, buys a plain package) with sessions booked** → sessions already booked stay as booked (free); new ones need the add-on.
+5. **QR of a cancelled session, or an add-on session not paid, scanned** → refused with the reason, nothing recorded.
 
-## Phase 8: No coach rate, no coach fee (E1, E2)
+## Phase 8: No coach rate, no amenity coach fee (E1, E2)
 
-### Task 9: Remove the rate and the fee
+### Task 9: Remove the rate, the fee and With a coach
 
-**Files:** migration `0118_remove_coach_rate_and_fee.sql` (`book_amenity_for` stops adding `coach_fee`; then drop `coaches.hourly_rate` with `coaches_rate_positive`, and `amenities.coach_fee` with its grants; every function that reads either is recreated first; past payments keep their amounts), app: coach profile / settings (rate box out), Coaches page and coach cards (rate out, "Rate not set" out), amenity admin page (coach fee box out), Book an amenity and desk booking (price split without a coach line), `Models.cs` (`HourlyRate`, `CoachFee` out), demo mirror, tests `supabase/tests/local/coach-fee-removed.mjs`, `tests/GymMembership.Tests/CoachRateRemovedTests.cs`.
+**Files:** migration `0118_remove_coach_rate_and_fee.sql` (`book_amenity_for` and the desk booking stop taking a coach and adding `coach_fee`; then drop `coaches.hourly_rate` with `coaches_rate_positive` and `amenities.coach_fee` with its grants; every function reading them recreated first; past payments keep their amounts), app: coach Settings (rate out), Coaches page (rate out), amenity admin page (coach fee out), Book an amenity and Book for a customer (Solo / With a coach and coach line out), `Models.cs` (`HourlyRate`, `CoachFee` out), demo mirror, tests `supabase/tests/local/coach-fee-removed.mjs`, `tests/GymMembership.Tests/CoachRateRemovedTests.cs`.
 
-- [ ] Grep every reader of `hourly_rate` and `coach_fee` (migrations, Edge Functions, app, demo) before writing the migration.
-- [ ] Failing tests: 2 hours With a coach costs the same as 2 hours Solo; an old-style call with a coach is charged the amenity price only (Review Focus 2); a coach is offered without any rate; refund of an older booking that included a coach fee returns its full paid amount.
+- [ ] Grep every reader of `hourly_rate`, `coach_fee` and the booking's coach parameter (migrations, Edge Functions, app, demo) first.
+- [ ] Failing tests: an amenity booking costs the amenity price only; an old-style call with a coach is charged the same and books no coach; refund of an older booking that included a coach fee returns the full paid amount.
 - [ ] Migration, push (dry run first), live grants, screens with `impeccable`, commit.
 
-## Phase 9: Coach-included packages and Day pass with a coach (E3, E4, E5)
+## Phase 9: Coach included and the add-on price (E3, E4)
 
-### Task 10: Package switch and hours
+### Task 10: Package switch, Gym settings
 
-**Files:** migration `01xx_package_includes_coach.sql` (`membership_packages.includes_coach boolean not null default false`, `coach_addon_price numeric(12,2)` for the Day pass only; `user_membership_packages.with_coach boolean` (the Day pass choice, true for any coach-included package); `avail_membership` / desk sale take `p_with_coach boolean` for a Day pass and add the add-on price), Packages admin page (switch, add-on on the Day pass), Packages (member: "Coach included" tag; Day pass: No coach / With coach (+₱x)), Cashier Day pass (same choice), demo mirror, tests `supabase/tests/local/coach-included.mjs`, `tests/GymMembership.Tests/CoachIncludedTests.cs`.
+**Files:** migration `01xx_package_includes_coach.sql` (`membership_packages.includes_coach boolean not null default false`, copied on new version; `gym_settings.coach_addon_price numeric(12,2)`, `max_coach_sessions_per_day int default 1`, `max_upcoming_coach_sessions int default 2`), Packages admin page (switch), Gym settings page (add-on price, the two limits), Packages member page ("Coach included" tag), `Models.cs`, demo mirror, tests.
 
-- [ ] Failing tests: coach-included package bought → `with_coach` true; Day pass With coach → price + add-on, can book with a coach that day; Day pass No coach → booking With a coach refused (`coach_not_included`); With coach refused when no coach has a shift left today (Review Focus 4); a non-Day-pass package ignores the add-on.
-- [ ] Migration, push, grants, screens (`impeccable`), commit.
-
-## Phase 10: Hiring only on coach-included (E6, E7)
-
-### Task 11: Hire guard and hire end
-
-**Files:** migration `01xx_hire_needs_coach_package.sql` (`request_hire` / accept refuse `coach_not_included`; a job or the term-end path sets hires `ended` when no coach-included term is left; existing hires per E7), Coaches page (Hire vs Book a session), `Foundation.cs` sentence, demo mirror, tests.
-
-- [ ] Failing tests: plain-package member hiring → `coach_not_included`; coach-included member hires; term ends → hire ended, time request refused (Review Focus 3); existing hire on a plain package per E7.
+- [ ] Failing tests: switch saved and carried to a new version; a member can read whether their package includes a coach; only admins change the add-on price.
 - [ ] Migration, push, grants, screens, commit.
 
-## Phase 11: Booking with a coach (E8, E9)
+## Phase 10: Book a coach (E5, E6, E7)
 
-### Task 12: Available coaches, confirm
+### Task 11: The booking function
 
-**Files:** `available_coaches(p_amenity, p_start, p_hours)` returning coach id, name and photo (reuses 0064's free-coach check), `book_amenity_for` (2-upcoming limit for non-included members per E4, no-show block per E8 item 8, Day pass needs With coach, `coach_taken` on the race), `gym_settings.max_coached_bookings`, `BookAmenityViewModel` and page (step 3 list after date/time/length; "Coach: free with your membership"; on `coach_taken` reload the list, keep the choices), desk booking same, demo mirror, tests `supabase/tests/local/coach-booking.mjs`, `tests/GymMembership.Tests/CoachBookingTests.cs`.
+**Files:** migration `01xx_book_coach_session.sql`: `free_coaches(p_day date) ` (coaches with a posted shift that day and their free whole hours, reusing `check_session_time` and the overlap constraints), `book_coach_session(p_coach uuid, p_start timestamptz, p_hours int, p_code text default null)` for the signed-in member: active membership covering the time (Day pass: ends by midnight); coach-included → `training_sessions` row `scheduled` at once, limits of E6 (`too_many_coach_sessions`, `coach_booking_blocked` with days left); otherwise a pending add-on payment (`kind` coach add-on, `coach_addon_price` × hours, discount code allowed) and a held session confirmed by `activate_payment_target` when verified, released after 15 minutes unpaid (same expiry as other online payments); overlap → `coach_taken`. `cancel_session` refunds a paid add-on when 24 hours or more ahead; later it counts as a no-show for coach-included. Desk version `desk_book_coach_session(p_member, ...)` (cash or online, no E6 block). Tests `supabase/tests/local/coach-session-booking.mjs`, demo mirror (`DemoRequests` or a new `DemoCoachSessions.cs`).
 
-- [ ] Failing tests: coach with no shift or an overlapping booking not listed; two confirms for one coach → one wins, other `coach_taken`, no payment (Review Focus 1); third upcoming coached booking for a 1-month member refused, a coach-included member's allowed; 2 no-shows in 30 days → coached booking refused for 7 days, desk booking still works.
-- [ ] Migration, push, grants, screens (member Android/Windows, desk Windows), commit.
+- [ ] Failing tests: Review Focus 1, 2, 3, 4; coach without a shift that day not listed; a 2nd session the same day and a 3rd upcoming refused for coach-included, allowed with the add-on; 2 no-shows in 30 days → blocked 7 days, desk still books; add-on cancel ≥24 h refunded, later kept.
+- [ ] Migration, push, grants, commit.
 
-## Phase 12: QR, arrival, session status (E10)
+### Task 12: Screens
 
-### Task 13: Booking code at the desk
+**Files:** `SessionsPage` (member: Book a coach flow, list with status and QR, price line), `CoachesPage` (Book this coach), `PackagesPage` Day pass Buy popup (Add a coach step), Cashier (Day pass with a coach; coach add-on), view models, `Foundation.cs` sentences (`coach_taken`, `too_many_coach_sessions`, `coach_booking_blocked`, `coach_not_free`), tests `tests/GymMembership.Tests/CoachSessionBookingTests.cs`.
 
-**Files:** migration (`reservations.booking_code`, `session_status`, `checked_in_at`, `coach_arrived_at`; `scan_booking(p_code)` reads current state and refuses with a reason; `mark_coach_arrived(p_reservation)`; `complete_session` by the coach after start), My bookings (QR), desk scanner (reuse the member-QR scanner of 0034), coach calendar (Completed / No-show), demo mirror, tests.
+- [ ] Tests first (list reloads and keeps the day and time on `coach_taken`; price line per package; Add a coach hidden with no free hour today), screens with `impeccable` (member Android/Windows, light/dark, 1.3 font scale; Cashier Windows), commit.
 
-- [ ] Failing tests: scanning a confirmed booking today → checked in; cancelled or not-paid → refused (Review Focus 5); session not In session until Coach is here; payment status unchanged by session changes.
+## Phase 11: Hiring and Time requests out (E8)
+
+### Task 13: Remove and hand over
+
+**Files:** migration `01xx_end_hiring.sql` (revoke and drop `hire_coach`, `answer_hire`, `cancel_hire_request`, `request_time`, `respond_time_request` and the other time request functions; message rules: member and coach may write while a session is today or upcoming or ended in the last 7 days, or an old hire is still active; old hires end with the member's current term), app: Time requests pages and view models out of both shells, `PhoneNavigation.cs`, `IconRail.Windows.cs`, Coaches (Hire out, Hired tag out), My membership (Next coach session card), demo mirror, tests.
+
+- [ ] Failing tests: hire and time request calls gone (anon and members can't call); messaging allowed with a session, refused 8 days after the last one; an active old hire still messages until the term ends.
 - [ ] Migration, push, grants, screens, commit.
 
-## Phase 13: Damage reports (E11)
+## Phase 12: Desk check-in and session status (E9)
 
-### Task 14: Report and review
+### Task 14: Session code at the desk
 
-**Files:** migration (`damage_reports`, RLS: coach and desk insert own, admins read and update; `report_damage`, `review_damage`; audit rows; admin alert), coach's after-session prompt, admin Damage reports list (Windows), "Set amenity to Maintenance" reuse, demo mirror, tests.
+**Files:** migration (`training_sessions.session_code`, `checked_in_at`, `coach_arrived_at`; `scan_session(p_code)` reads current status and refuses with a reason; `mark_coach_arrived(p_session)`; the coach's `cancel_session` with a reason alerts the member and refunds an add-on), Membership checking (today's sessions for the scanned member, Coach is here), member Sessions (QR), coach Dashboard and Sessions (Completed / No-show, cancel with reason), demo mirror, tests.
+
+- [ ] Failing tests: Review Focus 5; a scheduled session today checks in; not In session until Coach is here; payment status untouched by session changes; coach cancel → member alert, add-on refunded.
+- [ ] Migration, push, grants, screens, commit.
+
+## Phase 13: Damage reports (E10)
+
+### Task 15: Report and review
+
+**Files:** migration (`damage_reports`; RLS: the session's coach and the desk insert, admins read and update; `report_damage`, `review_damage`; audit rows; admin alert), coach's after-session prompt, admin Damage reports page (Windows), "Set amenity to Maintenance" reuse, demo mirror, tests.
 
 - [ ] Failing tests: coach reports on own completed session; another coach can't; admin closes with a note; no payment or refund row made.
 - [ ] Migration, push, grants, screens, commit.
 
-## Phase 14: Coach hours report (E12)
+## Phase 14: Coach hours report (E11)
 
-### Task 15: Hours per coach
+### Task 16: Hours per coach
 
-**Files:** `coach_hours_report(p_from, p_to)` (admins only; per coach: completed coached sessions, hours, no-shows, hires active in the range; no money), Revenue page section and CSV export, demo mirror, tests.
+**Files:** `coach_hours_report(p_from, p_to)` (admins only; per coach: completed sessions, hours, no-shows, coach cancellations; no money), Revenue page section and CSV, "Coach add-on" line in sales, demo mirror, tests.
 
-- [ ] Failing tests: counts completed sessions and their hours only; cancelled and no-show not in hours (no-shows counted apart); front desk can't call it.
+- [ ] Failing tests: counts completed sessions and hours only; no-shows counted apart; front desk can't call it.
 - [ ] Migration, push, grants, screens, commit.
 
 ## Phase 15: Part 2 checks
 
-- [ ] Whole suite and database tests green; live grants for 0118 onwards.
+- [ ] Whole suite and database tests green; live grants for `0118` onwards.
 - [ ] `superpowers:requesting-code-review` on the Part 2 diff; fixes committed.
-- [ ] Owner hand checks: coach, member (Android and Windows), desk and admin (Windows).
+- [ ] Owner hand checks: member and coach (Android and Windows), desk and admin (Windows).
 
 ## Session log
 
@@ -311,3 +333,4 @@ Same rules as `2026-11-19-owner-fixes.md`:
 - 2026-11-20: implemented Phases 1-6 (`cb66143`..`25c3a8f`), verified 1216 unit tests, `desk-duplicate-sale.mjs` (3/3), `cash-shifts.mjs` (11/11), Windows & Android builds, and pushed `0117_cash_shift_discrepancies.sql` live to `avxcitoddadbblxuhiik`.
 - 2026-11-20: owner asked for a coach revamp (coaches as staff, coach-included packages, Day pass with a coach, 10-step coach booking flow) and recommendations for per-session coaching of 1-month members: Part 2 added (Phases 8-15, E1-E12), not built. Part 1 Phases 1-6 were built by another session and are local only (not pushed; `0117` dry run only).
 - 2026-11-20: owner: E1 remove the coach rate entirely, E2/E12 the gym pays coaches and members never pay for a coach. Part 2 rewritten: no rate or coach fee anywhere, Coach hours report instead of Coach fees; E4, E5 and the per-session limits reworked since coached bookings are now free. Not built.
+- 2026-11-20: owner: coaches booked per session (no hiring); Coach included switch per package (on = free, off and the Day pass = coach add-on fee); one-on-one; coach sessions separate from amenity bookings; limits for coach-included as recommended. Part 2 rewritten (E1-E11, Phases 8-15); E4, E8-E11 recommended, to confirm. Not built.
