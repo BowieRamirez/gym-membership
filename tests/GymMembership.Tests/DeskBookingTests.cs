@@ -25,8 +25,8 @@ public class DeskBookingTests
 
     static async Task Pick(DeskBookingViewModel vm, string who)
     {
-        vm.Search = who; await vm.FindCommand.ExecuteAsync(null);
-        vm.PickMemberCommand.Execute(vm.Hits.First());
+        vm.Search = who; await vm.SuggestNowAsync();
+        vm.ChooseSuggestionCommand.Execute(vm.Suggestions.First());
         vm.Amenity = vm.Amenities.First(a => a.Name == "Pool");
         vm.Start = vm.Starts.First();
         vm.Length = vm.Lengths.First();
@@ -125,19 +125,19 @@ public class DeskBookingTests
         Assert.Contains("chat", vm.Receipt.Note);
     }
 
-    [Fact]   // owner, 2026-11-17: Find and Book for a walk-in show one at a time
+    [Fact]   // owner, 2026-11-17: Suggestions and Book for a walk-in show one at a time
     public async Task Find_and_walk_in_hide_each_other()
     {
         var (_, vm) = await Open();
-        vm.Search = "carlo"; await vm.FindCommand.ExecuteAsync(null);
-        vm.PickMemberCommand.Execute(vm.Hits.First());
+        vm.Search = "carlo"; await vm.SuggestNowAsync();
+        vm.PickMemberCommand.Execute(vm.Suggestions.First());
         vm.StartWalkInCommand.Execute(null);
         Assert.True(vm.IsWalkIn);
-        Assert.False(vm.HasHits);
+        Assert.False(vm.HasSuggestions);
         Assert.Null(vm.Member);
-        await vm.FindCommand.ExecuteAsync(null);
+        await vm.SuggestNowAsync();
         Assert.False(vm.IsWalkIn);
-        Assert.True(vm.HasHits);
+        Assert.True(vm.HasSuggestions);
     }
 
     [Fact]   // final review: a new search drops the customer picked before, so Book can't go to the wrong person
@@ -145,7 +145,7 @@ public class DeskBookingTests
     {
         var (_, vm) = await Open();
         await Pick(vm, "carlo");
-        vm.Search = "alex"; await vm.FindCommand.ExecuteAsync(null);
+        vm.Search = "alex"; await vm.SuggestNowAsync();
         Assert.Null(vm.Member);
         Assert.False(vm.BookCommand.CanExecute(null));
     }
@@ -389,9 +389,9 @@ public class DeskBookingTests
         await status.OnAppearingAsync();
         await status.ToggleBookingCommand.ExecuteAsync(null);
         booking.Search = "carlo";
-        await booking.FindCommand.ExecuteAsync(null);
-        var hit = booking.Hits.First();
-        booking.PickMemberCommand.Execute(hit);
+        await booking.SuggestNowAsync();
+        var hit = booking.Suggestions.First();
+        booking.ChooseSuggestionCommand.Execute(hit);
         await status.AutoRefreshAsync();
         Assert.Same(hit, booking.Member);
     }

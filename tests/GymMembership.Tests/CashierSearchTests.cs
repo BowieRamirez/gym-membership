@@ -15,7 +15,7 @@ public class CashierSearchTests
         return vm;
     }
 
-    static async Task<CashierViewModel> Find(string text) { var vm = await Open(); vm.Search = text; await vm.FindCommand.ExecuteAsync(null); return vm; }
+    static async Task<CashierViewModel> Find(string text) { var vm = await Open(); vm.Search = text; await vm.SuggestNowAsync(); return vm; }
 
     [Fact]
     public async Task Find_by_part_of_a_name_lists_matches()
@@ -61,7 +61,7 @@ public class CashierSearchTests
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();
         var vm = new CashierViewModel(new PaymentStaffService(gw), new AttendanceService(gw));
         await vm.OnAppearingAsync();
-        vm.Search = "demo"; await vm.FindCommand.ExecuteAsync(null);   // every demo account's email
+        vm.Search = "demo"; await vm.SuggestNowAsync();   // every demo account's email
         Assert.DoesNotContain(vm.Hits, h => h.Username == "Carlo Diaz");                 // deactivated
         Assert.Contains(vm.Hits, h => h.Username == "Joy");                              // active, no membership
         Assert.Contains(vm.Hits, h => h.Username == "Alex Tan");                         // active, with one

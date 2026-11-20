@@ -14,9 +14,9 @@ public partial class AmenityStatusPage : BasePage
 	// every 5 seconds while a walk-in is paying online, so the receipt and the Booked card follow by themselves
 	protected override TimeSpan? AutoRefresh => TimeSpan.FromSeconds((BindingContext as AmenityStatusViewModel)?.Booking?.IsWaiting == true ? 5 : 30);
 
-	void OnPickCustomer(object? sender, EventArgs e)
+	void OnPickCustomer(object? sender, TappedEventArgs e)
 	{
-		if (BindingContext is AmenityStatusViewModel { Booking: { } b } && (sender as BindableObject)?.BindingContext is GymMembership.Core.Services.MemberHit hit) b.PickMemberCommand.Execute(hit);
+		if (BindingContext is AmenityStatusViewModel { Booking: { } b } && (sender as BindableObject)?.BindingContext is GymMembership.Core.Services.MemberHit hit) b.ChooseSuggestionCommand.Execute(hit);
 	}
 	void OnCloseBooking(object? sender, EventArgs e) => ((AmenityStatusViewModel)BindingContext).IsBooking = false;
 	void OnChange(object? sender, EventArgs e) => Row<AmenityStatusViewModel>(sender, v => v.SelectCommand);

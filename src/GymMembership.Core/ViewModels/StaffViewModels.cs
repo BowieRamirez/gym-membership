@@ -81,6 +81,33 @@ public partial class HomeViewModel(IDeskHomeService svc, IPaymentStaffService? p
     }
 }
 
+/// <summary>Shared 300 ms debounced member suggestor for Cashier and DeskBookingViewModel: 2+ chars, newest request wins.</summary>
+internal sealed class MemberSuggest(IAttendanceService members)
+{
+    CancellationTokenSource? _cts;
+    public TimeSpan Delay { get; set; } = TimeSpan.FromMilliseconds(300);
+
+    public void Cancel() => _cts?.Cancel();
+
+    public async Task<(bool Applied, IReadOnlyList<MemberHit> Rows, string? Error)> RunAsync(string? query, bool immediate = false)
+    {
+        _cts?.Cancel();
+        var q = query?.Trim() ?? "";
+        if (q.Length < 2) return (true, Array.Empty<MemberHit>(), null);
+        var cts = _cts = new CancellationTokenSource();
+        if (!immediate && Delay > TimeSpan.Zero)
+        {
+            try { await Task.Delay(Delay, cts.Token); }
+            catch (OperationCanceledException) { return (false, Array.Empty<MemberHit>(), null); }
+        }
+        var res = await members.FindMembersAsync(q);
+        if (cts.IsCancellationRequested) return (false, Array.Empty<MemberHit>(), null);
+        return res.Ok
+            ? (true, res.Value!.Where(h => h.Status != "inactive").ToList(), null)
+            : (true, Array.Empty<MemberHit>(), ErrorText.For(res.Error, res.Message));
+    }
+}
+
 // front desk: cash and GCash at the counter, and walk-ins. Verified straight away with a receipt number
 /// <summary>One thing for sale on the cashier's grid, and whether it is the one picked.</summary>
 public partial class ItemOption(CounterItem item) : ObservableObject
@@ -285,17 +312,56 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         Fill(Options, result.Value!.Select(r => new ItemOption(r)));
     }
 
-    /// <summary>Cashier plan Y1: Find ran and nobody matched; the page says so (it used to fill a closed dropdown in silence).</summary>
+    /// <summary>Cashier plan Y1: search ran and nobody matched; the page says so.</summary>
     [ObservableProperty] private bool noMatch;
-    // owner, 2026-11-16: the Cashier lists only active accounts (with or without a membership); Membership checking still shows a
-    // deactivated one with its reason (G10), so the filter is here, not in the shared search
-    [RelayCommand] private Task FindAsync() => RunAsync(() => members.FindMembersAsync(Search), all => { var rows = all.Where(h => h.Status != "inactive").ToList(); IsRegistering = false; Fill(Hits, rows); NoMatch = rows.Count == 0; OnPropertyChanged(nameof(HasHits)); OnPropertyChanged(nameof(ShowHits)); });
+    readonly MemberSuggest _suggest = new(members);
+    bool _suppressSearch;
+    public TimeSpan SearchDelay { get => _suggest.Delay; set => _suggest.Delay = value; }
+    public ObservableCollection<MemberHit> Suggestions { get; } = new();
+    public bool HasSuggestions => Suggestions.Count > 0;
+    public bool ShowSuggestions => HasSuggestions && !IsRegistering;
+    partial void OnSearchChanged(string value) { if (!_suppressSearch) _ = SuggestAsync(immediate: false); }
+    public Task SuggestNowAsync() => SuggestAsync(immediate: true);
+
+    async Task SuggestAsync(bool immediate)
+    {
+        var (applied, rows, err) = await _suggest.RunAsync(Search, immediate);
+        if (!applied) return;
+        ErrorMessage = err;
+        IsRegistering = false;
+        var hasQuery = (Search?.Trim().Length ?? 0) >= 2;
+        Fill(Suggestions, rows.Take(8));
+        Fill(Hits, rows);
+        NoMatch = hasQuery && err is null && rows.Count == 0;
+        OnPropertyChanged(nameof(HasSuggestions)); OnPropertyChanged(nameof(ShowSuggestions));
+        OnPropertyChanged(nameof(HasHits)); OnPropertyChanged(nameof(ShowHits));
+    }
+
+    [RelayCommand]
+    private void ChooseSuggestion(MemberHit hit)
+    {
+        _suggest.Cancel();
+        Member = hit;
+        _suppressSearch = true;
+        Search = hit.Username;
+        _suppressSearch = false;
+        Suggestions.Clear();
+        OnPropertyChanged(nameof(HasSuggestions)); OnPropertyChanged(nameof(ShowSuggestions));
+    }
+
+    [RelayCommand]
+    private async Task PickTopSuggestionAsync()
+    {
+        if (Suggestions.Count == 0 && (Search?.Trim().Length ?? 0) >= 2) await SuggestAsync(immediate: true);
+        if (Suggestions.Count > 0) ChooseSuggestion(Suggestions[0]);
+    }
+
     /// <summary>The results table shows once a search found someone.</summary>
     public bool HasHits => Hits.Count > 0;
-    // owner, 2026-11-16: one at a time: Find shows the table, Register new member shows its form
+    // owner, 2026-11-16: one at a time: search shows the table, Register new member shows its form
     public bool ShowHits => HasHits && !IsRegistering;
     public bool ShowNoMatch => NoMatch && !IsRegistering;
-    partial void OnIsRegisteringChanged(bool value) { OnPropertyChanged(nameof(ShowHits)); OnPropertyChanged(nameof(ShowNoMatch)); }
+    partial void OnIsRegisteringChanged(bool value) { OnPropertyChanged(nameof(ShowSuggestions)); OnPropertyChanged(nameof(ShowHits)); OnPropertyChanged(nameof(ShowNoMatch)); }
     partial void OnNoMatchChanged(bool value) => OnPropertyChanged(nameof(ShowNoMatch));
     [RelayCommand] private void PickMember(MemberHit hit) => Member = hit;
 
@@ -2487,29 +2553,62 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
     /// <summary>What the desk shows after booking: the customer photographs it (walk-in) or has it in chat (member).</summary>
     public sealed record ReceiptView(string ReceiptNo, string Customer, string Amenity, string When, string Paid, string Note);
 
-    // ---- the customer: a member (the Cashier's search) or a walk-in; one at a time (owner, 2026-11-17) ----
-    public ObservableCollection<MemberHit> Hits { get; } = new();
+    // ---- the customer: suggestions while typing or a walk-in; one at a time (owner, 2026-11-17; D1 2026-11-20) ----
+    public ObservableCollection<MemberHit> Suggestions { get; } = new();
     [ObservableProperty] private string search = "";
     [ObservableProperty] private bool noMatch;
     [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand), nameof(PayOnlineCommand))] private MemberHit? member;
     [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand), nameof(PayOnlineCommand))] private bool isWalkIn;
     [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand), nameof(PayOnlineCommand))] private string walkInName = "";
     [ObservableProperty] private ReceiptView? receipt;
-    public bool HasHits => Hits.Count > 0;
+    public bool HasSuggestions => Suggestions.Count > 0;
+
+    readonly MemberSuggest _suggest = new(members);
+    bool _suppressSearch;
+    public TimeSpan SearchDelay { get => _suggest.Delay; set => _suggest.Delay = value; }
+    partial void OnSearchChanged(string value) { if (!_suppressSearch) _ = SuggestAsync(immediate: false); }
+    public Task SuggestNowAsync() => SuggestAsync(immediate: true);
+
+    async Task SuggestAsync(bool immediate)
+    {
+        var (applied, rows, err) = await _suggest.RunAsync(Search, immediate);
+        if (!applied) return;
+        ErrorMessage = err;
+        var hasQuery = (Search?.Trim().Length ?? 0) >= 2;
+        if (hasQuery) { IsWalkIn = false; Member = null; }   // a new search drops the old pick (final review)
+        Fill(Suggestions, rows.Take(8));
+        NoMatch = hasQuery && err is null && rows.Count == 0;
+        OnPropertyChanged(nameof(HasSuggestions));
+    }
 
     [RelayCommand]
-    private Task FindAsync() => RunAsync(() => members.FindMembersAsync(Search), all =>
+    private void ChooseSuggestion(MemberHit hit)
     {
-        var rows = all.Where(h => h.Status != "inactive").ToList();
-        IsWalkIn = false; Member = null; Fill(Hits, rows); NoMatch = rows.Count == 0; OnPropertyChanged(nameof(HasHits));   // a new search drops the old pick (final review)
-    });
+        _suggest.Cancel();
+        IsWalkIn = false;
+        Member = hit;
+        _suppressSearch = true;
+        Search = hit.Username;
+        _suppressSearch = false;
+        Suggestions.Clear();
+        OnPropertyChanged(nameof(HasSuggestions));
+    }
+
+    [RelayCommand]
+    private async Task PickTopSuggestionAsync()
+    {
+        if (Suggestions.Count == 0 && (Search?.Trim().Length ?? 0) >= 2) await SuggestAsync(immediate: true);
+        if (Suggestions.Count > 0) ChooseSuggestion(Suggestions[0]);
+    }
+
     [RelayCommand] private void PickMember(MemberHit hit) => Member = hit;
-    /// <summary>Book for a walk-in: hides the member table (and the pick), shows the name box.</summary>
+    /// <summary>Book for a walk-in: hides suggestions (and the pick), shows the name box.</summary>
     [RelayCommand]
     private void StartWalkIn()
     {
+        _suggest.Cancel();
         Notice = null; ErrorMessage = null; Member = null; NoMatch = false;
-        Hits.Clear(); OnPropertyChanged(nameof(HasHits));
+        Suggestions.Clear(); OnPropertyChanged(nameof(HasSuggestions));
         IsWalkIn = true;
     }
 

@@ -150,16 +150,38 @@
                                 </VerticalStackLayout>
 
                                 <VerticalStackLayout Spacing="12">
-                                    <!-- cashier plan Y1: the matches are rows you can see and choose (they used to sit in a closed dropdown) -->
-                                    <FlexLayout Wrap="Wrap" AlignItems="End">
-                                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="300">
-                                            <Label Text="Find the member" Style="{StaticResource Caption}" />
-                                            <Border Style="{StaticResource Field}"><Entry Text="{Binding Search}" Placeholder="Name, email or phone" ReturnCommand="{Binding FindCommand}" SemanticProperties.Description="Search members by name, email or phone" AutomationId="CashierSearch" /></Border>
-                                        </VerticalStackLayout>
-                                        <Button Text="Find" Style="{StaticResource SmallOutlineButton}" Margin="0,0,12,8" Command="{Binding FindCommand}" AutomationId="CashierFind" />
-                                        <!-- owner, 2026-11-16: always visible, so the desk can find it; search first still avoids a second account -->
-                                        <Button Text="Register new member" Style="{StaticResource SmallOutlineButton}" Margin="0,0,12,8" Command="{Binding StartRegisterCommand}" AutomationId="CashierRegister" />
-                                    </FlexLayout>
+                                    <!-- D1 (2026-11-20): typing 2+ letters shows up to 8 suggestions under the box; Enter picks the top one -->
+                                    <VerticalStackLayout Spacing="4">
+                                        <FlexLayout Wrap="Wrap" AlignItems="End">
+                                            <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="300">
+                                                <Label Text="Customer" Style="{StaticResource Caption}" />
+                                                <Border Style="{StaticResource Field}"><Entry Text="{Binding Search}" Placeholder="Name, email or phone" ReturnCommand="{Binding PickTopSuggestionCommand}" SemanticProperties.Description="Search members by name, email or phone" AutomationId="CashierSearch" /></Border>
+                                            </VerticalStackLayout>
+                                            <!-- owner, 2026-11-16: always visible, so the desk can find it; search first still avoids a second account -->
+                                            <Button Text="Register new member" Style="{StaticResource SmallOutlineButton}" Margin="0,0,12,8" Command="{Binding StartRegisterCommand}" AutomationId="CashierRegister" />
+                                        </FlexLayout>
+                                        <Border Style="{StaticResource TablePanel}" IsVisible="{Binding ShowSuggestions}" MaximumWidthRequest="480" HorizontalOptions="Start" AutomationId="CashierSuggestions">
+                                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Suggestions}">
+                                                <BindableLayout.ItemTemplate>
+                                                    <DataTemplate x:DataType="svc:MemberHit">
+                                                        <VerticalStackLayout>
+                                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="12,8" SemanticProperties.Description="{Binding Username, StringFormat='Choose {0}'}">
+                                                                <Grid.GestureRecognizers>
+                                                                    <TapGestureRecognizer Tapped="OnPickCashierSuggestion" />
+                                                                </Grid.GestureRecognizers>
+                                                                <VerticalStackLayout Spacing="1" VerticalOptions="Center">
+                                                                    <Label Text="{Binding Username}" FontFamily="BarlowSemiBold" LineBreakMode="TailTruncation" />
+                                                                    <Label Text="{Binding ContactText}" Style="{StaticResource Caption}" LineBreakMode="TailTruncation" />
+                                                                </VerticalStackLayout>
+                                                                <c:StatusChip Grid.Column="1" Status="{Binding PlanStatus}" VerticalOptions="Center" />
+                                                            </Grid>
+                                                            <BoxView Style="{StaticResource Hairline}" />
+                                                        </VerticalStackLayout>
+                                                    </DataTemplate>
+                                                </BindableLayout.ItemTemplate>
+                                            </VerticalStackLayout>
+                                        </Border>
+                                    </VerticalStackLayout>
                                     <!-- cashier plan Y2: search first, so nobody gets a second account; then register them here -->
                                     <Label Text="No member found. Check the spelling, or try their email or phone. New here? Register new member." Style="{StaticResource Muted}" IsVisible="{Binding ShowNoMatch}" />
                                     <Border Style="{StaticResource Panel}" IsVisible="{Binding IsRegistering}" MaximumWidthRequest="640" HorizontalOptions="Start">

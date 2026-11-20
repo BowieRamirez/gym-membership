@@ -51,7 +51,7 @@ public class CashierTests
 
     static async Task ChooseMember(CashierViewModel vm, string name)
     {
-        vm.Search = name; await vm.FindCommand.ExecuteAsync(null);
+        vm.Search = name; await vm.SuggestNowAsync();
         vm.Member = vm.Hits.Single();
     }
 

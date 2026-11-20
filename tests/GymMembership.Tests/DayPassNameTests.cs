@@ -13,7 +13,7 @@ public class DayPassNameTests
         var gw = new DemoGateway(); await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();
         var vm = new CashierViewModel(new PaymentStaffService(gw), new AttendanceService(gw));
         await vm.OnAppearingAsync();
-        vm.Search = "carlo"; await vm.FindCommand.ExecuteAsync(null);
+        vm.Search = "carlo"; await vm.SuggestNowAsync();
         vm.PickMemberCommand.Execute(vm.Hits.Single());
         return (gw, vm);
     }
