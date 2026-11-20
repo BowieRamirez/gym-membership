@@ -309,7 +309,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 ### Task 13: Remove and hand over
 
-**Files:** migration `01xx_end_hiring.sql` (revoke and drop `hire_coach`, `answer_hire`, `cancel_hire_request`, `request_time`, `respond_time_request` and the other time request functions; message rules: member and coach may write while a session is today or upcoming or ended in the last 7 days, or an old hire is still active; old hires end with the member's current term), app: Time requests pages and view models out of both shells, `PhoneNavigation.cs`, `IconRail.Windows.cs`, Coaches (Hire out, Hired tag out), My membership (Next coach session card), demo mirror, tests.
+**Files:** migration `01xx_end_hiring.sql` (revoke and drop `hire_coach`, `answer_hire`, `cancel_hire_request`, `request_time`, `respond_time_request` and the other time request functions; message rules: member and coach may write while a session is today or upcoming or ended in the last 7 days, or an old hire is still active; old hires end with the member's current term), app: Time requests pages and view models out of both shells, `PhoneNavigation.cs`, `IconRail.Windows.cs`, Coaches (Hire out, Hired tag out), My membership (Next coach session card), coach Trainees page → Members I've coached, demo mirror, tests.
 
 - [ ] Failing tests: hire and time request calls gone (anon and members can't call); messaging allowed with a session, refused 8 days after the last one; an active old hire still messages until the term ends.
 - [ ] Migration, push, grants, screens, commit.
@@ -318,7 +318,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 ### Task 14: Session code at the desk
 
-**Files:** migration (`training_sessions.session_code`, `checked_in_at`, `coach_arrived_at`; `scan_session(p_code)` reads current status and refuses with a reason; `mark_coach_arrived(p_session)`; the coach's `cancel_session` with a reason alerts the member and refunds an add-on), Membership checking (today's sessions for the scanned member, Coach is here), member Sessions (QR), coach Dashboard and Sessions (Completed / No-show, cancel with reason), demo mirror, tests.
+**Files:** migration (`training_sessions.session_code`, `checked_in_at`, `coach_arrived_at`; `scan_session(p_code)` reads current status and refuses with a reason; `mark_coach_arrived(p_session)`; the coach's `cancel_session` with a reason alerts the member and refunds an add-on), Membership checking (today's sessions for the scanned member, Coach is here), front desk Home (Today's coach sessions), member Sessions (QR), coach Dashboard and Sessions (Completed / No-show, cancel with reason), demo mirror, tests.
 
 - [ ] Failing tests: Review Focus 5; a scheduled session today checks in; not In session until Coach is here; payment status untouched by session changes; coach cancel → member alert, add-on refunded.
 - [ ] Migration, push, grants, screens, commit.
