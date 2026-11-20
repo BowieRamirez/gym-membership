@@ -145,7 +145,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 **Files:** migration `01xx_cash_shift_discrepancies.sql`: `cash_shifts.close_reason text check (close_reason in ('wrong_change','unrecorded_sale','counting_mistake','float_wrong','other'))`; `close_cash_shift(p_counted, p_note, p_reason)` (recreated: a difference needs a reason; `other` needs the note); `cash_shift_notes(note_id, shift_id, author_id, note text check length 1-1000, created_at)` with RLS on and no direct grants; `add_cash_shift_note(p_shift bigint, p_note text, p_resolve boolean default false)` (admins only, writes audit `cash_shift.note`); `cash_shifts.resolved_at`; `cash_shifts_list` adds `shortage`, `overage`, `close_reason`, `notes jsonb`, `resolved_at`. `supabase/tests/local/cash-shifts.mjs`, demo `DemoCashShifts.cs`, `Foundation.cs` (`reason_required`).
 
 - [x] Failing tests: closing ₱0.01 short with no reason → `reason_required` (Review Focus 5); with a reason → shortage 0.01, overage 0; front desk calling `add_cash_shift_note` → refused; admin note → stored and audited, can't be updated or deleted; Revenue's sales total for the period doesn't change with the difference.
-- [x] Migration, push (dry run first), live grants, commit. (`0117_cash_shift_discrepancies.sql` created, local DB tests 11/11 passed, `--linked --dry-run` succeeded; live push pending owner go-ahead.)
+- [x] Migration, push (dry run first), live grants, commit. (`0117_cash_shift_discrepancies.sql` pushed live to `avxcitoddadbblxuhiik` after `--dry-run`; `revoke all ... from public, anon, authenticated` + `grant execute ... to authenticated` in `0117`.)
 
 ### Task 8: Screens
 
@@ -164,4 +164,4 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 - 2026-11-20: plan written from the owner's `docs (1).pdf`; branch `desk-customer-shifts-2026-11-20` cut from `origin/main` (`8c1555f`) and pushed. Waiting on D1-D8.
 - 2026-11-20: owner: D1-D8 as recommended; don't build yet.
-- 2026-11-20: implemented Phases 1-6 (`cb66143`..`25c3a8f`), verified 1216 unit tests, `desk-duplicate-sale.mjs` (3/3), `cash-shifts.mjs` (11/11), Windows & Android builds, and `npx supabase db push --linked --dry-run`.
+- 2026-11-20: implemented Phases 1-6 (`cb66143`..`25c3a8f`), verified 1216 unit tests, `desk-duplicate-sale.mjs` (3/3), `cash-shifts.mjs` (11/11), Windows & Android builds, and pushed `0117_cash_shift_discrepancies.sql` live to `avxcitoddadbblxuhiik`.
