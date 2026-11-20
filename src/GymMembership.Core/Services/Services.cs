@@ -337,7 +337,7 @@ public interface IMembershipService
     /// <summary>Asks the server whether the checkout was paid, and confirms it if Xendit's notice hasn't arrived (X10).</summary>
     Task<AppResult<bool>> CheckOnlineAsync(int paymentId);
     /// <summary>Starts a fresh payment for the same item after a rejection or expiry.</summary>
-    Task<AppResult<Payment>> PayAgainAsync(PaymentItem item);
+    Task<AppResult<Payment>> PayAgainAsync(PaymentItem item, string? code = null);
     Task<AppResult<GymSettings>> GymAsync();
     /// <summary>G16: closed days from today on, with their reasons.</summary>
     Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync();
@@ -458,14 +458,14 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
     public Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId) => OnlinePay.OpenAsync(gw, paymentId);
     public Task<AppResult<bool>> CheckOnlineAsync(int paymentId) => OnlinePay.CheckAsync(gw, paymentId);
 
-    public async Task<AppResult<Payment>> PayAgainAsync(PaymentItem item) => item.PackageSnapshotId is { } package && item.Kind is PayKind.Membership or PayKind.Renewal
-        ? await new SubscriptionService(gw).ExtendAsync(package, null)   // 0099: paid again online (members don't pay cash any more)
+    public async Task<AppResult<Payment>> PayAgainAsync(PaymentItem item, string? code = null) => item.PackageSnapshotId is { } package && item.Kind is PayKind.Membership or PayKind.Renewal
+        ? await new SubscriptionService(gw).ExtendAsync(package, code)   // 0099: paid again online (members don't pay cash any more)
         : item.ItemId is not { } id
         ? AppResult<Payment>.Fail(AppErrorKind.Validation, "not_found")
         : item.Kind switch
         {
-            PayKind.Membership => await AvailAsync(id, null),
-            PayKind.Renewal => await RenewAsync(id, null),
+            PayKind.Membership => await AvailAsync(id, code),
+            PayKind.Renewal => await RenewAsync(id, code),
             _ => AppResult<Payment>.Fail(AppErrorKind.Validation, "not_found")
         };
 

@@ -525,7 +525,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
 }
 
 /// <summary>Owner fixes 2026-11-19 Q8: the member's own payments, newest first, 10 a page, by what they bought. Moved here from My membership.</summary>
-public partial class MyPaymentsViewModel(IMembershipService svc, ISubscriptionService subscription) : LoadableViewModel
+public partial class MyPaymentsViewModel(IMembershipService svc, ISubscriptionService subscription, IUrlOpener? opener = null, IAppNavigator? nav = null) : LoadableViewModel
 {
     const int PageSize = 10;
     public ObservableCollection<PaymentItem> Rows { get; } = new();
@@ -575,14 +575,95 @@ public partial class MyPaymentsViewModel(IMembershipService svc, ISubscriptionSe
         IsEmpty = Rows.Count == 0;
     }
 
-    [RelayCommand]
-    private async Task PayAgainAsync(PaymentItem item)
+    // ---- D6 (2026-11-20): Pay again popup: optional discount code with live check, then straight to Xendit checkout ----
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPayingAgain), nameof(PayAgainTitle), nameof(PayAgainPriceText))] private PaymentItem? payingAgain;
+    [ObservableProperty] private string payAgainCode = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPayAgainCodeCheck))] private string? payAgainCodeText;
+    [ObservableProperty] private bool payAgainCodeWorks;
+    public bool IsPayingAgain => PayingAgain is not null;
+    public string PayAgainTitle => PayingAgain?.What ?? "";
+    public string PayAgainPriceText => PayingAgain is { } p ? $"₱{p.Amount:N2}" : "";
+    public bool HasPayAgainCodeCheck => !string.IsNullOrWhiteSpace(PayAgainCodeText);
+    public TimeSpan CodeCheckDelay { get; set; } = TimeSpan.FromMilliseconds(500);
+    CancellationTokenSource? _codeCheck;
+    int? _waitingOnlineId;
+
+    partial void OnPayAgainCodeChanged(string value) => _ = SchedulePayAgainCodeAsync(false);
+    public Task CheckPayAgainCodeNowAsync() => SchedulePayAgainCodeAsync(true);
+
+    void ClearPayAgainCode() { _codeCheck?.Cancel(); PayAgainCodeText = null; PayAgainCodeWorks = false; }
+
+    async Task SchedulePayAgainCodeAsync(bool immediate)
     {
-        Notice = null;
-        if (!await Confirm.AskAsync("Create a new payment?", $"{item.What}\n₱{item.Amount:N2}\nThe expired one stays in your history.", "Create payment")) return;
-        if (!await RunAsync(() => svc.PayAgainAsync(item), _ => { })) return;
-        Notice = "New payment created. Pay it online on Packages.";
+        _codeCheck?.Cancel();
+        PayAgainCodeText = null; PayAgainCodeWorks = false;
+        var code = PayAgainCode?.Trim() ?? "";
+        if (PayingAgain is not { } item || code.Length == 0) return;
+        var (kind, itemId) = item.PackageSnapshotId is { } pkgId ? ("package", pkgId)
+            : item.Kind == PayKind.Renewal && item.ItemId is { } renId ? ("renewal", renId)
+            : item.ItemId is { } id ? ("package", id) : ((string, int)?)null ?? ("", 0);
+        if (itemId == 0) return;
+        var cts = _codeCheck = new CancellationTokenSource();
+        if (!immediate && CodeCheckDelay > TimeSpan.Zero)
+        {
+            try { await Task.Delay(CodeCheckDelay, cts.Token); } catch (OperationCanceledException) { return; }
+        }
+        var res = await svc.CheckCodeAsync(code, kind, itemId);
+        if (cts.IsCancellationRequested || PayingAgain?.Id != item.Id) return;
+        if (!res.Ok) { PayAgainCodeText = ErrorText.For(res.Error, res.Message); return; }
+        PayAgainCodeWorks = res.Value!.Works;
+        PayAgainCodeText = CodeCheckFeedback.Message(res.Value, "package");
+    }
+
+    [RelayCommand]
+    private void PayAgain(PaymentItem item)
+    {
+        Notice = null; ErrorMessage = null;
+        PayAgainCode = ""; ClearPayAgainCode();
+        PayingAgain = item;
+    }
+
+    [RelayCommand]
+    private void ClosePayAgain() { ClearPayAgainCode(); PayAgainCode = ""; PayingAgain = null; }
+
+    [RelayCommand]
+    private async Task ConfirmPayAgainAsync()
+    {
+        if (PayingAgain is not { } item) return;
+        Notice = null; ErrorMessage = null;
+        if (!string.IsNullOrWhiteSpace(PayAgainCode) && PayAgainCodeText is null) await SchedulePayAgainCodeAsync(true);
+        var code = PayAgainCodeWorks ? PayAgainCode.Trim() : null;
+        Payment? made = null;
+        if (!await RunAsync(() => svc.PayAgainAsync(item, code), p => made = p)) return;
+        PayingAgain = null; PayAgainCode = ""; ClearPayAgainCode();
+
+        OnlineCheckout? checkout = null;
+        if (!await RunAsync(() => svc.PayOnlineAsync(made!.Id), c => checkout = c)) { await LoadAsync(); return; }
+        if (checkout!.Paid)
+        {
+            Notice = "Membership activated.";
+            await LoadAsync();
+            nav?.GoToMembership();
+            return;
+        }
+        _waitingOnlineId = made!.Id;
+        if (checkout.Url is { } url && opener is not null) await opener.OpenAsync(url);
+        Notice = "Finish paying on Xendit's page, then come back here.";
         await LoadAsync();
+    }
+
+    public override async Task AutoRefreshAsync()
+    {
+        if (IsBusy) return;
+        if (_waitingOnlineId is { } id && await svc.CheckOnlineAsync(id) is { Ok: true, Value: true })
+        {
+            _waitingOnlineId = null;
+            Notice = "Payment confirmed. Membership activated.";
+            await LoadAsync();
+            return;
+        }
+        var res = await svc.MyPaymentsAsync();
+        if (res.Ok) { all = res.Value!; Show(Page); }
     }
 
     public async Task CancelPaymentAsync(PaymentItem item)

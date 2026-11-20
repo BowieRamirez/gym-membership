@@ -87,7 +87,6 @@ public class ConfirmationTests
         { "MemberViewModels.cs", "HeaderViewModel", "SignOut" },
         { "MemberViewModels.cs", "SettingsViewModel", "ChangePassword" },
         // PackagesViewModel.Avail left this list 2026-11-17 (Z7): the Buy popup is the confirmation (BuyPopupTests)
-        { "MemberViewModels.cs", "MyPaymentsViewModel", "PayAgain" },
         { "MemberViewModels.cs", "PackagesViewModel", "PayOnline" },   // Xendit plan: replaced Send proof; on Packages since 2026-11-16
         { "MemberViewModels.cs", "CoachesViewModel", "Hire" },
         { "MemberViewModels.cs", "CoachesViewModel", "EndHire" },
