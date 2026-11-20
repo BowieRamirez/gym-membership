@@ -206,7 +206,11 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     // the order panel, in the words the cashier uses
     // cashier plan Y3: a Day pass may carry a member found by search, a typed name, or nothing (anonymous)
     // plan 2026-11-17 Z3: the name box is the one source; picking a member only fills it, so what the desk typed wins
-    public string OrderWho => IsWalkIn ? DayPassName ?? "Day pass, no name" : Member?.Username ?? "Find and choose a member";
+    public string OrderWho => IsWalkIn ? DayPassName ?? "Day pass, no name" : Member?.Username ?? "Choose a customer";
+    public string? OrderWhoStatus => Member?.DeskStatusText;
+    public string? OrderWhoContact => Member?.ContactText;
+    public bool HasChosenMember => Member is not null;
+    public bool ShowChooseCustomerEmpty => !IsWalkIn && Member is null;
     string? DayPassName => string.IsNullOrWhiteSpace(WalkInName) ? null : WalkInName.Trim();
     public string OrderWhat => Item?.Label ?? (IsWalkIn ? "Day pass" : "Choose what they are paying for");
     decimal? dayPassPrice;   // the server charges it, this is what the desk reads out
@@ -294,13 +298,21 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         _ = ScheduleCodeCheckAsync(false); Item = null;
         if (IsWalkIn && Member is { } m && string.IsNullOrWhiteSpace(WalkInName)) WalkInName = m.Username;
         ApplyFilter(hasQuery: (Search?.Trim().Length ?? 0) >= 2, err: null);
+        OnPropertyChanged(nameof(ShowChooseCustomerEmpty));
         OnPropertyChanged(nameof(OrderIneligibleText)); OnPropertyChanged(nameof(HasOrderIneligible));
         RecordCommand.NotifyCanExecuteChanged();
         _ = RefreshItemsAsync();
     }   // a typed name is kept (final review)
     partial void OnMemberChanged(MemberHit? value)
     {
+        OnPropertyChanged(nameof(OrderWhoStatus)); OnPropertyChanged(nameof(OrderWhoContact));
+        OnPropertyChanged(nameof(HasChosenMember)); OnPropertyChanged(nameof(ShowChooseCustomerEmpty));
         OnPropertyChanged(nameof(OrderIneligibleText)); OnPropertyChanged(nameof(HasOrderIneligible));
+        for (var i = 0; i < Hits.Count; i++)
+        {
+            var chosen = value is not null && Hits[i].MemberId == value.MemberId;
+            if (Hits[i].IsChosen != chosen) Hits[i] = Hits[i] with { IsChosen = chosen };
+        }
         RecordCommand.NotifyCanExecuteChanged();
         if (_refreshingStatus) return;   // D3: re-reading status updates the chip without dropping Item/code
         _ = ScheduleCodeCheckAsync(false); Item = null;
@@ -378,7 +390,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
 
     void ApplyFilter(bool hasQuery, string? err)
     {
-        var visible = _allHits.Where(h => Visible(h, Kind)).ToList();
+        var visible = _allHits.Where(h => Visible(h, Kind)).Select(h => h with { IsChosen = Member is not null && h.MemberId == Member.MemberId }).ToList();
         Fill(Suggestions, visible.Take(8));
         Fill(Hits, visible);
         HiddenHint = hasQuery && err is null && _allHits.Count > 0 && visible.Count == 0
@@ -386,6 +398,18 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         NoMatch = hasQuery && err is null && _allHits.Count == 0;
         OnPropertyChanged(nameof(HasSuggestions)); OnPropertyChanged(nameof(ShowSuggestions));
         OnPropertyChanged(nameof(HasHits)); OnPropertyChanged(nameof(ShowHits));
+    }
+
+    [RelayCommand]
+    private void ChangeCustomer()
+    {
+        _suggest.Cancel();
+        Member = null;
+        _suppressSearch = true;
+        Search = "";
+        _suppressSearch = false;
+        Suggestions.Clear();
+        OnPropertyChanged(nameof(HasSuggestions)); OnPropertyChanged(nameof(ShowSuggestions));
     }
 
     [RelayCommand]

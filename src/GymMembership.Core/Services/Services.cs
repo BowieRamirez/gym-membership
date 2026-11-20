@@ -1378,7 +1378,7 @@ public static class MemberCheck
 
 /// <param name="Status">Online only: active, pending, expired or inactive (G10). Null on the saved list, which knows paid or not.</param>
 public sealed record MemberHit(string MemberId, string Username, bool HasActiveMembership, DateTime? PaidUntil = null, string? AvatarPath = null,
-    string? Status = null, DateTime? EndedAt = null, string? Phone = null, string? Email = null, bool IsDayPass = false)
+    string? Status = null, DateTime? EndedAt = null, string? Phone = null, string? Email = null, bool IsDayPass = false, bool IsChosen = false)
 {
     /// <summary>The Cashier's contact column: phone and email, so two people with the same name can be told apart.</summary>
     public string ContactText => string.Join(" · ", new[] { Phone, Email }.Where(s => !string.IsNullOrWhiteSpace(s)));

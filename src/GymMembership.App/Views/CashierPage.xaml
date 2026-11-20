@@ -13,12 +13,23 @@
         <DataTemplate x:Key="HitRow" x:DataType="svc:MemberHit">
             <VerticalStackLayout>
                 <Grid Style="{StaticResource TableRow}" ColumnDefinitions="1.2*,1.1*,1.6*,150,110" ColumnSpacing="12">
+                    <Grid.Triggers>
+                        <DataTrigger TargetType="Grid" Binding="{Binding IsChosen}" Value="True">
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}" />
+                        </DataTrigger>
+                    </Grid.Triggers>
                     <Label Text="{Binding Username}" FontFamily="BarlowSemiBold" VerticalOptions="Center" LineBreakMode="TailTruncation" />
-                    <Label Grid.Column="1" Text="{Binding PlanText}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="1" Text="{Binding DeskStatusText}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
                     <Label Grid.Column="2" Text="{Binding ContactText}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
                     <c:StatusChip Grid.Column="3" Status="{Binding PlanStatus}" VerticalOptions="Center" />
                     <Button Grid.Column="4" Text="Choose" Style="{StaticResource SmallOutlineButton}" Clicked="OnPickMember" HorizontalOptions="End" VerticalOptions="Center"
-                            SemanticProperties.Description="{Binding Username, StringFormat='Choose {0}'}" />
+                            SemanticProperties.Description="{Binding Username, StringFormat='Choose {0}'}">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button" Binding="{Binding IsChosen}" Value="True">
+                                <Setter Property="Text" Value="✓ Chosen" />
+                            </DataTrigger>
+                        </Button.Triggers>
+                    </Button>
                 </Grid>
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
@@ -27,13 +38,24 @@
         <DataTemplate x:Key="HitCard" x:DataType="svc:MemberHit">
             <VerticalStackLayout>
                 <Grid Padding="14,10" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <Grid.Triggers>
+                        <DataTrigger TargetType="Grid" Binding="{Binding IsChosen}" Value="True">
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}" />
+                        </DataTrigger>
+                    </Grid.Triggers>
                     <VerticalStackLayout Spacing="2">
                         <Label Text="{Binding Username}" FontFamily="BarlowSemiBold" />
-                        <Label Text="{Binding PlanText}" Style="{StaticResource Caption}" />
+                        <Label Text="{Binding DeskStatusText}" Style="{StaticResource Caption}" />
                         <Label Text="{Binding ContactText}" Style="{StaticResource Caption}" />
                     </VerticalStackLayout>
                     <Button Grid.Column="1" Text="Choose" Style="{StaticResource SmallOutlineButton}" Clicked="OnPickMember" VerticalOptions="Center"
-                            SemanticProperties.Description="{Binding Username, StringFormat='Choose {0}'}" />
+                            SemanticProperties.Description="{Binding Username, StringFormat='Choose {0}'}">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button" Binding="{Binding IsChosen}" Value="True">
+                                <Setter Property="Text" Value="✓ Chosen" />
+                            </DataTrigger>
+                        </Button.Triggers>
+                    </Button>
                 </Grid>
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
@@ -249,11 +271,25 @@
                                 </VerticalStackLayout>
 
                 </VerticalStackLayout>
-                <!-- side: the order, always in view while choosing -->
+                <!-- side: the order, always in view while choosing (D5: customer header at the top) -->
                 <Border Style="{StaticResource SidePanel}">
                                 <VerticalStackLayout Spacing="12">
+                                    <VerticalStackLayout Spacing="4" IsVisible="{Binding HasChosenMember}">
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                            <Label Text="{Binding Member.Username}" FontFamily="BarlowBold" FontSize="22" LineBreakMode="WordWrap" VerticalOptions="Center" />
+                                            <Button Grid.Column="1" Text="Change" Style="{StaticResource SmallOutlineButton}" Command="{Binding ChangeCustomerCommand}" VerticalOptions="Start" AutomationId="CashierChangeCustomer" />
+                                        </Grid>
+                                        <HorizontalStackLayout Spacing="8">
+                                            <c:StatusChip Status="{Binding Member.PlanStatus}" VerticalOptions="Center" />
+                                            <Label Text="{Binding OrderWhoStatus}" Style="{StaticResource Caption}" VerticalOptions="Center" />
+                                        </HorizontalStackLayout>
+                                        <Label Text="{Binding OrderWhoContact}" Style="{StaticResource Caption}" IsVisible="{Binding OrderWhoContact, Converter={StaticResource HasText}}" LineBreakMode="TailTruncation" />
+                                    </VerticalStackLayout>
+                                    <Label Text="Choose a customer" Style="{StaticResource Heading}" IsVisible="{Binding ShowChooseCustomerEmpty}" />
+                                    <Label Text="{Binding OrderWho}" FontFamily="BarlowSemiBold" FontSize="18" IsVisible="{Binding IsWalkIn}" />
+                                    <Label Text="{Binding OrderIneligibleText}" Style="{StaticResource Caption}" TextColor="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" IsVisible="{Binding HasOrderIneligible}" LineBreakMode="WordWrap" />
+                                    <BoxView Style="{StaticResource Hairline}" />
                                     <c:CardTitle Text="Order" />
-                                    <Label Text="{Binding OrderWho}" FontFamily="BarlowSemiBold" />
                                     <Label Text="{Binding OrderWhat}" Style="{StaticResource Muted}" />
                                     <Label Text="{Binding OrderHow}" Style="{StaticResource Caption}" />
 

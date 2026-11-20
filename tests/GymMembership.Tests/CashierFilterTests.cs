@@ -138,4 +138,25 @@ public class CashierFilterTests
         Assert.NotNull(vm.Item);
         Assert.Equal("SAVE10", vm.DiscountCode);
     }
+
+    [Fact]   // Phase 4 (D5): ChangeCustomer clears the pick and marks/unmarks the chosen row
+    public async Task Change_customer_clears_pick_and_row_marker()
+    {
+        var (_, vm, _) = await OpenAsync();
+        vm.Search = "bea";
+        await vm.SuggestNowAsync();
+        var bea = vm.Suggestions.Single();
+        vm.ChooseSuggestionCommand.Execute(bea);
+        await Task.Delay(50);
+
+        Assert.Equal("No membership", vm.OrderWhoStatus);
+        Assert.Equal("0917 555 0142 · bea@demo.io", vm.OrderWhoContact);
+        Assert.True(vm.Hits.Single().IsChosen);
+
+        vm.ChangeCustomerCommand.Execute(null);
+        Assert.Null(vm.Member);
+        Assert.Equal("", vm.Search);
+        Assert.False(vm.Hits.Single().IsChosen);
+        Assert.True(vm.ShowChooseCustomerEmpty);
+    }
 }
