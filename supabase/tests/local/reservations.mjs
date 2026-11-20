@@ -62,12 +62,11 @@ try {
   await test('a booking longer than 2 hours is refused', async () => {
     await assert.rejects(book(ben, [[ring, '16:00'], [ring, '16:30'], [ring, '17:00'], [ring, '17:30'], [ring, '18:00']]), /too_long/);
   });
-  await test('the 30-minute cooldown blocks the next half hour; the exact boundary is allowed', async () => {
-    await assert.rejects(book(ben, [[court, '09:00']]), /slot_taken/);        // inside Ana's cooldown 09:00-09:30
-    await assert.rejects(book(ben, [[court, '07:30']]), /slot_taken/);        // its own cooldown would run into Ana's 08:00
-    await book(ben, [[court, '09:30']]);                                      // exact boundary
-    await book(ben, [[court, '06:00'], [court, '06:30']]);                    // ends 07:00, cooldown to 07:30: fine
-    assert.deepEqual(await mine(ben), [`${court}@06:00-07:00`, `${court}@09:30-10:00`]);
+  await test('no cooldown (0113): an overlap is refused, back-to-back is allowed', async () => {
+    await assert.rejects(book(ben, [[court, '08:30']]), /slot_taken/);        // inside Ana's 08:00-09:00
+    await book(ben, [[court, '09:00']]);                                      // starts as Ana's ends
+    await book(ben, [[court, '06:00'], [court, '06:30']]);
+    assert.deepEqual(await mine(ben), [`${court}@06:00-07:00`, `${court}@09:00-09:30`]);
   });
   await test('different amenities run at the same time, but one member cannot be in two places', async () => {
     const cara = await member();
@@ -114,11 +113,11 @@ try {
     await assert.rejects(as(ana, `insert into reservations(member_id,amenity_id,starts_at,ends_at) values($1,$2,$3,$4)`, [ana, court, at('11:00'), at('11:30')]), /permission denied/);
     await assert.rejects(as(ana, `update reservations set ends_at=ends_at+interval '1 hour' where member_id=$1`, [ana]), /permission denied/);
   });
-  await test('the grid shows occupancy and cooldown but only your own bookings are identified', async () => {
+  await test('the grid shows occupancy (no cooldown) but only your own bookings are identified', async () => {
     const g = (await as(ben, 'select amenity_grid($1::date) g', [day]))[0].g;
     const block = g.blocks.find(b => b.mine === false);   // someone else's booking, on any amenity
     assert.ok(block && block.id === null && !('member' in block));
-    assert.equal(new Date(block.cooldown) - new Date(block.ends), 30 * 60e3);
+    assert.equal(new Date(block.cooldown) - new Date(block.ends), 0);   // 0113
     assert.ok(g.blocks.some(b => b.mine === true && b.id));
     assert.ok(g.now && g.opens && g.closes);
     assert.ok(!JSON.stringify(g).includes('Ana Private'));
@@ -141,9 +140,10 @@ try {
     await assert.rejects(as(ana, 'select extend_reservation($1,30)', [id]), /not_found|forbidden/);
     await assert.rejects(as(coach, 'select extend_reservation($1,20)', [id]), /bad_input/);
     await as(coach, 'select extend_reservation($1,30)', [id]);
-    await book(ben, [[ring, '12:00']]);                                       // 11:30 end + cooldown 12:00: boundary ok
+    await book(ben, [[ring, '12:00']]);
+    await as(coach, 'select extend_reservation($1,30)', [id]);                // to 12:00, touching Ben's start: fine (0113)
     await assert.rejects(as(coach, 'select extend_reservation($1,30)', [id]), /slot_taken/);
-    assert.equal((await db.query(`select to_char(ends_at at time zone 'Asia/Manila','HH24:MI') e from reservations where reservation_id=$1`, [id])).rows[0].e, '11:30');
+    assert.equal((await db.query(`select to_char(ends_at at time zone 'Asia/Manila','HH24:MI') e from reservations where reservation_id=$1`, [id])).rows[0].e, '12:00');
   });
   await test('two members racing for the same slot: exactly one booking', async () => {
     const [x, y] = [await member(), await member()];

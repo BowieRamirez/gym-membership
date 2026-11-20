@@ -48,7 +48,7 @@ export async function start({ beforeMigration } = {}) {
   // PG18's Windows I/O workers can stall initdb; these disposable tests use synchronous I/O.
   const flags = process.platform === 'win32' ? ['-c', 'io_method=sync'] : [];
   const server = new EmbeddedPostgres({ databaseDir: DIR, user: 'postgres', password: 'pw', port: PORT, persistent: false,
-    initdbFlags: flags, postgresFlags: flags });
+    initdbFlags: process.platform === 'win32' ? [...flags, '--encoding=UTF8', '--locale=en-US'] : flags, postgresFlags: flags });   // Windows defaults to WIN1252, which has no ₱
   await server.initialise();
   await server.start();
   const client = new pg.Client({ host: 'localhost', port: PORT, user: 'postgres', password: 'pw', database: 'postgres' });
