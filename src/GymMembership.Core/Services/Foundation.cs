@@ -161,7 +161,7 @@ public static class ErrorText
         "member_busy" => "You already have a booking or session at that time. Nothing was booked.",
         "coach_busy" => "The coach is already booked at that time.",
         "coach_taken" => "That coach was just booked for that hour. Nothing was booked; the list now shows what is free.",
-        "too_many_coach_sessions" => "You've reached your coach session limit for now. You can still book after an existing session ends.",
+        "too_many_coach_sessions" => "You already have an active coach session. Cancel or finish it before booking another.",
         "coach_booking_blocked" => "Free coach bookings are paused for 7 days after two missed sessions in 30 days.",
         "coach_day_full" => "This coach has reached their daily hour limit. Pick another coach or another day.",
         "coach_not_offered" => "Your current package doesn't include a coach or a coach add-on.",

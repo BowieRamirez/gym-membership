@@ -1334,9 +1334,11 @@ public partial class SessionsViewModel(ISessionService svc, IMembershipService? 
         }
     }
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.SessionsAsync, rows => { all = Ordered(rows); Apply(); });
+    [RelayCommand] private Task LoadAsync() => RunAsync(svc.SessionsAsync, rows => { all = Ordered(rows); Apply(); OnPropertyChanged(nameof(HasMemberActiveSession)); });
     [RelayCommand] private void SetFilter(string f) => Filter = f;
     partial void OnFilterChanged(string value) => Apply();
+    public bool HasMemberActiveSession => CanShowBookCoach && all.Any(r => r.Session.Status == Status.Scheduled && (r.Session.HeldUntil is null || r.Session.HeldUntil > DateTime.UtcNow));
+
     void Apply() => Fill(Sessions, all.Where(r => Filter switch
     {
         "Scheduled" => r.Session.Status == Status.Scheduled,

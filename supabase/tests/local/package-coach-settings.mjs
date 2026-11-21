@@ -54,7 +54,7 @@ try {
 
   await test('gym_settings has coach limits (1, 2, 6) and admin can update or clear daily max', async () => {
     const def = (await db.query(`select max_coach_sessions_per_day, max_upcoming_coach_sessions, max_coach_hours_per_day from gym_settings where id=1`)).rows[0];
-    assert.deepEqual([def.max_coach_sessions_per_day, def.max_upcoming_coach_sessions, def.max_coach_hours_per_day], [1, 2, 6]);
+    assert.deepEqual([def.max_coach_sessions_per_day, def.max_upcoming_coach_sessions, def.max_coach_hours_per_day], [1, 1, 6]);
 
     await as(admin, `update gym_settings set max_coach_sessions_per_day=2, max_upcoming_coach_sessions=4, max_coach_hours_per_day=null where id=1`);
     const upd = (await db.query(`select max_coach_sessions_per_day, max_upcoming_coach_sessions, max_coach_hours_per_day from gym_settings where id=1`)).rows[0];

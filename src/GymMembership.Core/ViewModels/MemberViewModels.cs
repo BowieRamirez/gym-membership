@@ -747,10 +747,16 @@ public partial class AmenityBoardViewModel(IAmenityService svc) : LoadableViewMo
 public partial class CoachesViewModel(ICoachService svc, IChatService messages, IAppNavigator nav, ISessionService? sessions = null) : LoadableViewModel
 {
     public ObservableCollection<CoachCard> Cards { get; } = new();
+    [ObservableProperty] private bool hasActiveSession;
 
     public override Task OnAppearingAsync() => LoadAsync();
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.ListCoachesAsync, rows => Fill(Cards, rows));
+    [RelayCommand]
+    private async Task LoadAsync()
+    {
+        if (!await RunAsync(svc.ListCoachesAsync, rows => Fill(Cards, rows))) return;
+        await RefreshActiveSessionAsync();
+    }
 
     // coaches come and go as they check in and out: quiet, keeps the scroll position
     public override async Task AutoRefreshAsync()
@@ -758,6 +764,15 @@ public partial class CoachesViewModel(ICoachService svc, IChatService messages, 
         if (IsBusy) return;
         var rows = await svc.ListCoachesAsync();
         if (rows.Ok) Sync(Cards, rows.Value!, c => c.Coach.UserId, (a, b) => a.SameAs(b));
+        await RefreshActiveSessionAsync();
+    }
+
+    async Task RefreshActiveSessionAsync()
+    {
+        if (sessions is null) return;
+        var res = await sessions.SessionsAsync();
+        if (res.Ok)
+            HasActiveSession = res.Value!.Any(r => !r.IsMine && r.Session.Status == Status.Scheduled && (r.Session.HeldUntil is null || r.Session.HeldUntil > DateTime.UtcNow));
     }
 
     [RelayCommand]
@@ -788,6 +803,11 @@ public partial class CoachesViewModel(ICoachService svc, IChatService messages, 
     [RelayCommand]
     private void BookCoach(CoachCard card)
     {
+        if (HasActiveSession)
+        {
+            ErrorMessage = "You already have an active coach session. Cancel or finish it before booking another.";
+            return;
+        }
         if (sessions is not null) sessions.PendingCoachId = card.Coach.UserId;
         nav.GoToSessions();
     }

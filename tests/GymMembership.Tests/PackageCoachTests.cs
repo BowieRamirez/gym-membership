@@ -66,7 +66,7 @@ public class PackageCoachTests
         await vm.OnAppearingAsync();
 
         Assert.Equal(1, vm.MaxCoachSessionsPerDay);
-        Assert.Equal(2, vm.MaxUpcomingCoachSessions);
+        Assert.Equal(1, vm.MaxUpcomingCoachSessions);
         Assert.Equal("6", vm.MaxCoachHoursPerDay);
 
         vm.MaxCoachSessionsPerDay = 2;

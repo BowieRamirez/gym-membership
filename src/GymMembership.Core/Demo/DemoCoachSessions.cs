@@ -134,7 +134,7 @@ public sealed partial class DemoGateway
                 var cntDay = All<TrainingSession>().Count(ts => ts.MemberId == memberId && !ts.IsPaidAddon && ts.Status is Status.Scheduled or Status.Completed
                     && DateOnly.FromDateTime((ts.ScheduledStart.ToUniversalTime() + Manila).Date) == day);
                 if (cntDay >= g.MaxCoachSessionsPerDay) throw Err("too_many_coach_sessions");
-                var cntUp = All<TrainingSession>().Count(ts => ts.MemberId == memberId && !ts.IsPaidAddon && ts.Status == Status.Scheduled && ts.ScheduledStart > now);
+                var cntUp = All<TrainingSession>().Count(ts => ts.MemberId == memberId && !ts.IsPaidAddon && ts.Status == Status.Scheduled && (ts.HeldUntil is null || ts.HeldUntil > now));
                 if (cntUp >= g.MaxUpcomingCoachSessions) throw Err("too_many_coach_sessions");
             }
             if (All<TrainingSession>().Any(ts => ts.MemberId == memberId && ts.Status == Status.Scheduled && ts.ScheduledStart < end && start < ts.ScheduledEnd)) throw Err("member_busy");

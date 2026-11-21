@@ -95,7 +95,8 @@ try {
     assert.equal(held.amount, 240);
     assert.ok(held.held_until);
 
-    // Taken while held
+    // Taken while held (complete mInc's prior scheduled sessions first so 1-active-session limit doesn't mask coach_taken)
+    await db.query(`update training_sessions set status = 'completed' where member_id = $1 and status = 'scheduled'`, [mInc]);
     await assert.rejects(as(mInc, `select book_coach_session($1,$2,1,null)`, [coach2, s2(10)]), /coach_taken/);
 
     // Simulate 15 min expiry
@@ -142,6 +143,7 @@ try {
   await test('Package switch from Coach included to plain keeps existing booked sessions free, new ones need add-on', async () => {
     const day5 = (await db.query(`select ((now() at time zone 'Asia/Manila')::date + 9)::text d`)).rows[0].d;
     const s5 = (h) => `${day5} ${String(h).padStart(2, '0')}:00:00+08`;
+    await db.query(`update training_sessions set status = 'completed' where member_id = $1 and status = 'scheduled'`, [mExtra]);
     await db.query(`insert into shift_posts(coach_id,starts_at,ends_at,status) values($1,$2,$3,'scheduled')`, [coach2, s5(10), s5(15)]);
     const freeSes = (await as(mExtra, `select book_coach_session($1,$2,1,null) r`, [coach2, s5(10)]))[0].r;
     assert.equal(freeSes.is_free, true);
@@ -158,6 +160,8 @@ try {
     assert.equal(existing.status, 'scheduled');
     assert.equal(existing.is_paid_addon, false);
 
+    // Complete freeSes, then next session uses the new package
+    await db.query(`update training_sessions set status = 'completed' where training_session_id = $1`, [freeSes.training_session_id]);
     const nextSes = (await as(mExtra, `select book_coach_session($1,$2,1,null) r`, [coach2, s5(11)]))[0].r;
     assert.equal(nextSes.is_free, false);
     assert.equal(nextSes.amount, 300);

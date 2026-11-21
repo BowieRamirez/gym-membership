@@ -126,7 +126,10 @@
             </Border>
             <!-- member (E5/E6/E7): Book a coach -->
             <VerticalStackLayout Spacing="10" IsVisible="{Binding CanShowBookCoach}">
-                <Button Text="Book a coach" Style="{StaticResource SmallButton}" HorizontalOptions="Start" Command="{Binding OpenBookCoachCommand}" />
+                <Button Text="Book a coach" Style="{StaticResource SmallButton}" HorizontalOptions="Start" Command="{Binding OpenBookCoachCommand}"
+                        IsEnabled="{Binding HasMemberActiveSession, Converter={StaticResource Not}}" />
+                <Label Text="You already have an active coach session. Cancel or finish it before booking another." Style="{StaticResource Caption}"
+                       IsVisible="{Binding HasMemberActiveSession}" />
                 <Border Style="{StaticResource Panel}" IsVisible="{Binding IsBookingCoach}" Padding="16,14">
                     <VerticalStackLayout Spacing="12">
                         <c:CardTitle Text="Book a coach" />

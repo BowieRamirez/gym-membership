@@ -62,7 +62,7 @@ public static class PayMethod
   [Column("opening_float")] public decimal OpeningFloat { get; set; } = 5000;
   [Column("down_payment_percent")] public int DownPaymentPercent { get; set; } = 50;
   [Column("max_coach_sessions_per_day")] public int MaxCoachSessionsPerDay { get; set; } = 1;
-  [Column("max_upcoming_coach_sessions")] public int MaxUpcomingCoachSessions { get; set; } = 2;
+  [Column("max_upcoming_coach_sessions")] public int MaxUpcomingCoachSessions { get; set; } = 1;
   [Column("max_coach_hours_per_day")] public int? MaxCoachHoursPerDay { get; set; } = 6; }   // G13 (0064): of an amenity booking's price   // F2 (0050): the drawer float a cashier starts a shift with
 
 /// <summary>G16 (0065): a whole Manila day the gym is closed; written only by close_gym_day and reopen_gym_day.</summary>
