@@ -254,7 +254,7 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
             Checking = true;
             try { await RunAsync(() => svc.CheckOnlineAsync(open.Id), v => paid = v); }
             finally { Checking = false; }
-            if (paid) { PayNow = null; nav.GoToMembership(); }   // paid: the started term is on My membership
+            if (paid) { await BookPendingDayPassCoachAsync(); PayNow = null; nav.GoToMembership(); }   // paid: the started term is on My membership
         }
         finally { _loading = false; }
     }
@@ -324,8 +324,11 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
         Fill(BuyCodes, Codes.Where(c => c.AllPackages || c.PackageIds.Contains(package.Id)));
         Buying = package;
         HasDayPassCoach = false; AddDayPassCoach = false; DayPassCoaches.Clear(); DayPassHours.Clear(); SelectedDayPassCoach = null; SelectedDayPassHour = null;
-        if (package.IsDayPass && package.CoachAddonPrice is > 0 && sessions is not null)
+        if (package.IsDayPass && (package.IncludesCoach || package.CoachAddonPrice is > 0) && sessions is not null)
+        {
+            if (package.IncludesCoach) AddDayPassCoach = true;
             _ = LoadDayPassCoachesAsync(package);
+        }
     }
 
     [ObservableProperty] private bool hasDayPassCoach;
@@ -366,18 +369,21 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
         _pendingDayPassCoach = AddDayPassCoach && SelectedDayPassCoach is { } dc && SelectedDayPassHour is { } dh ? (dc.CoachId, dh.Hour) : null;
         Payment? created = null;
         if (!await RunAsync(() => subscription.ExtendAsync(package.Id, DiscountCode), p => created = p)) return;
-        if (created?.Status == Status.Verified && _pendingDayPassCoach is { } pc && sessions is not null)
-        {
-            var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8));
-            var startUtc = new DateTimeOffset(today.ToDateTime(TimeOnly.MinValue).AddHours(pc.Hour), TimeSpan.FromHours(8)).UtcDateTime;
-            await sessions.BookCoachAsync(pc.CoachId, startUtc, 1, null);
-            _pendingDayPassCoach = null;
-        }
+        if (created?.Status == Status.Verified) await BookPendingDayPassCoachAsync();
         Notice = created?.Status == Status.Verified
             ? "Membership started."
             : "Payment created. Pay online on this page to start it.";
         CloseBuy();
         await LoadPayAsync();
+    }
+
+    async Task BookPendingDayPassCoachAsync()
+    {
+        if (_pendingDayPassCoach is not { } pc || sessions is null) return;
+        _pendingDayPassCoach = null;
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8));
+        var startUtc = new DateTimeOffset(today.ToDateTime(TimeOnly.MinValue).AddHours(pc.Hour), TimeSpan.FromHours(8)).UtcDateTime;
+        await sessions.BookCoachAsync(pc.CoachId, startUtc, 1, null);
     }
 
     // Xendit's checkout opens in the browser; the 20 s tick checks it on return. Demo mode is paid at once.
@@ -389,7 +395,7 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
         if (!await Confirm.AskAsync($"Pay ₱{pay.Amount:N2} online?", $"{pay.What}\nYou pay on Xendit's page by GCash or QR Ph, then come back here.", "Pay online")) return;
         OnlineCheckout? checkout = null;
         if (!await RunAsync(() => svc.PayOnlineAsync(pay.Id), c => checkout = c)) return;
-        if (checkout!.Paid) { PayNow = null; nav.GoToMembership(); return; }
+        if (checkout!.Paid) { await BookPendingDayPassCoachAsync(); PayNow = null; nav.GoToMembership(); return; }
         if (checkout.Url is { } url && opener is not null)
         {
             await opener.OpenAsync(url);

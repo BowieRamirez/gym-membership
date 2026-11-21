@@ -175,7 +175,7 @@
                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                                 <CheckBox IsChecked="{Binding AddDayPassCoach}" VerticalOptions="Center" />
                                 <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
-                                    <Label Text="Add a coach (1 hour today)" FontFamily="BarlowSemiBold" />
+                                    <Label Text="Choose a coach (1 hour today)" FontFamily="BarlowSemiBold" />
                                     <Label Text="{Binding Buying.CoachText}" Style="{StaticResource Caption}" />
                                 </VerticalStackLayout>
                             </Grid>

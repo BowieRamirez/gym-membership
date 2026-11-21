@@ -266,11 +266,11 @@
                                 <CheckBox IsChecked="{Binding FormDayPass}" VerticalOptions="Center" AutomationId="FormDayPass" SemanticProperties.Description="This package is the Day pass" />
                                 <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
                                     <Label Text="This is the Day pass" FontFamily="BarlowSemiBold" />
-                                    <Label Text="It lasts until midnight on the day it's paid, whatever the days say. Only one Day pass can be on sale. The front desk sells it to walk-ins too." Style="{StaticResource Caption}" />
+                                    <Label Text="It lasts until midnight on the day it's paid, whatever the days say. You can have one regular Day pass and one with Coach included. The front desk sells it to walk-ins too." Style="{StaticResource Caption}" />
                                 </VerticalStackLayout>
                             </Grid>
 
-                            <!-- E3/E4 (0119): coach included vs paid add-on -->
+                            <!-- E3 (0119): coach included -->
                             <VerticalStackLayout Spacing="8" IsVisible="{Binding IsPackagePanel}">
                                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                                     <CheckBox IsChecked="{Binding FormIncludesCoach}" VerticalOptions="Center" AutomationId="FormIncludesCoach" SemanticProperties.Description="Coach included" />
@@ -279,10 +279,6 @@
                                         <Label Text="Members on this package can book a coach at no extra charge." Style="{StaticResource Caption}" />
                                     </VerticalStackLayout>
                                 </Grid>
-                                <VerticalStackLayout Spacing="6" IsVisible="{Binding FormIncludesCoach, Converter={StaticResource Invert}}">
-                                    <Label Text="Coach add-on price per hour (₱)" Style="{StaticResource Caption}" />
-                                    <Border Style="{StaticResource Field}"><Entry Text="{Binding FormCoachAddonPrice}" Keyboard="Numeric" Placeholder="Leave blank if no add-on" AutomationId="FormCoachAddonPrice" SemanticProperties.Description="Coach add-on price per hour" /></Border>
-                                </VerticalStackLayout>
                             </VerticalStackLayout>
 
                             <!-- packages: benefits, one per line, shown to members -->

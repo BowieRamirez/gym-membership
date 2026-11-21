@@ -133,7 +133,7 @@ public partial class ItemOption(CounterItem item) : ObservableObject
     [ObservableProperty] private bool isPicked;
 }
 
-public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceService members, IUrlOpener? opener = null, IMembershipService? gym = null) : LoadableViewModel
+public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceService members, IUrlOpener? opener = null, IMembershipService? gym = null, ISessionService? sessions = null) : LoadableViewModel
 {
     public string[] Kinds { get; } = ["Membership", "Renewal", "Amenity", "Day pass"];   // cashier plan Y3: a walk-in buys a Day pass
     /// <summary>Cashier plan Y6: e-wallets at the desk go through Xendit's checkout (GCash, Maya or any bank app by QR Ph).</summary>
@@ -146,13 +146,13 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     public ObservableCollection<ItemOption> Options { get; } = new();
     int itemsTicket;
 
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWalkIn), nameof(NeedsMember), nameof(CanUseCode), nameof(OrderWho), nameof(OrderWhat), nameof(OrderHow), nameof(TotalText), nameof(TotalNote), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))]
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWalkIn), nameof(NeedsMember), nameof(CanUseCode), nameof(OrderWho), nameof(OrderWhat), nameof(OrderHow), nameof(TotalText), nameof(TotalNote), nameof(ItemsEmptyText), nameof(HasMultipleDayPassOptions), nameof(DayPassWithCoach), nameof(OrderIneligibleText), nameof(HasOrderIneligible)), NotifyCanExecuteChangedFor(nameof(RecordCommand))]
     private string kind = "Membership";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderHow), nameof(CashNeedsShift)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string method = "Cash";
     [ObservableProperty] private string search = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho), nameof(CanUseCode), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private MemberHit? member;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWhat), nameof(TotalText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private CounterItem? item;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho), nameof(CanUseCode)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string walkInName = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho), nameof(CanUseCode), nameof(OrderIneligibleText), nameof(HasOrderIneligible)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string walkInName = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(TotalNote))] private string discountCode = "";
     // owner fixes 2026-11-19 Q12 (0108): the code is checked as the desk types it (500 ms), and again when the member or item changes
     public TimeSpan CodeCheckDelay { get; init; } = TimeSpan.FromMilliseconds(500);
@@ -229,10 +229,50 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     public bool HasChosenMember => Member is not null;
     public bool ShowChooseCustomerEmpty => !IsWalkIn && Member is null;
     string? DayPassName => string.IsNullOrWhiteSpace(WalkInName) ? null : WalkInName.Trim();
-    public string OrderWhat => Item?.Label ?? (IsWalkIn ? "Day pass" : "Choose what they are paying for");
+    public string OrderWhat => Item?.Label ?? (IsWalkIn ? dayPassPackage?.Label ?? "Day pass" : "Choose what they are paying for");
     decimal? dayPassPrice;   // the server charges it, this is what the desk reads out
-    // 0098: the Day pass package; a picked member whose name is still in the box buys it (a term until midnight), anyone else is a walk-in
+    // 0098, 0125: Day pass packages (regular vs Coach included); a picked member whose name is still in the box buys it (a term until midnight), anyone else is a walk-in
     CounterItem? dayPassPackage;
+    public ObservableCollection<ItemOption> DayPassOptions { get; } = new();
+    public bool HasMultipleDayPassOptions => IsWalkIn && DayPassOptions.Count > 1;
+    public bool DayPassWithCoach => IsWalkIn && dayPassPackage is { IncludesCoach: true };
+    public ObservableCollection<FreeCoachSlot> DayPassCoaches { get; } = new();
+    public ObservableCollection<SessionsViewModel.HourOption> DayPassHours { get; } = new();
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderIneligibleText), nameof(HasOrderIneligible)), NotifyCanExecuteChangedFor(nameof(RecordCommand))]
+    private FreeCoachSlot? selectedDayPassCoach;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderIneligibleText), nameof(HasOrderIneligible)), NotifyCanExecuteChangedFor(nameof(RecordCommand))]
+    private SessionsViewModel.HourOption? selectedDayPassHour;
+    (string MemberId, string CoachId, int Hour, string Method)? _pendingDayPassCoach;
+    partial void OnSelectedDayPassCoachChanged(FreeCoachSlot? value)
+    {
+        DayPassHours.Clear();
+        if (value is null) { SelectedDayPassHour = null; return; }
+        foreach (var h in value.FreeHours)
+            DayPassHours.Add(new SessionsViewModel.HourOption(h, $"{DateTime.Today.AddHours(h):h tt} – {DateTime.Today.AddHours(h + 1):h tt}"));
+        SelectedDayPassHour = DayPassHours.FirstOrDefault();
+    }
+    [RelayCommand]
+    private void PickDayPassOption(ItemOption option)
+    {
+        dayPassPackage = option.Item;
+        foreach (var o in DayPassOptions) o.IsPicked = o.Item.Id == option.Item.Id;
+        OnPropertyChanged(nameof(OrderWhat)); OnPropertyChanged(nameof(CanUseCode)); OnPropertyChanged(nameof(TotalText)); OnPropertyChanged(nameof(TotalNote));
+        OnPropertyChanged(nameof(DayPassWithCoach)); OnPropertyChanged(nameof(OrderIneligibleText)); OnPropertyChanged(nameof(HasOrderIneligible));
+        RecordCommand.NotifyCanExecuteChanged();
+        _ = ScheduleCodeCheckAsync(false);
+        if (dayPassPackage.IncludesCoach) _ = LoadDayPassCoachesAsync();
+    }
+    async Task LoadDayPassCoachesAsync()
+    {
+        if (sessions is null) return;
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8));
+        var res = await sessions.FreeCoachesAsync(today);
+        if (!res.Ok) return;
+        Fill(DayPassCoaches, res.Value!);
+        SelectedDayPassCoach = DayPassCoaches.FirstOrDefault();
+        OnPropertyChanged(nameof(OrderIneligibleText)); OnPropertyChanged(nameof(HasOrderIneligible));
+        RecordCommand.NotifyCanExecuteChanged();
+    }
     MemberHit? DayPassMember => IsWalkIn && dayPassPackage is not null && Member is { } m && DayPassName == m.Username ? m : null;
     public string TotalText => IsWalkIn
         ? CodeCheck is { Works: true, YouPay: { } dOff } ? $"₱{dOff:N2}"
@@ -347,7 +387,18 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         {
             LoadingItems = false;
             var packages = await svc.ItemsAsync(PayKind.Membership, null);
-            if (ticket == itemsTicket && packages.Ok) { dayPassPackage = packages.Value!.FirstOrDefault(i => i.DayPass); OnPropertyChanged(nameof(CanUseCode)); OnPropertyChanged(nameof(TotalText)); OnPropertyChanged(nameof(TotalNote)); }
+            if (ticket == itemsTicket && packages.Ok)
+            {
+                var dps = packages.Value!.Where(i => i.DayPass).OrderBy(i => i.IncludesCoach).ToList();
+                Fill(DayPassOptions, dps.Select(i => new ItemOption(i)));
+                dayPassPackage = dps.FirstOrDefault(i => dayPassPackage is not null && i.Id == dayPassPackage.Id) ?? dps.FirstOrDefault();
+                foreach (var o in DayPassOptions) o.IsPicked = dayPassPackage is not null && o.Item.Id == dayPassPackage.Id;
+                OnPropertyChanged(nameof(HasMultipleDayPassOptions)); OnPropertyChanged(nameof(DayPassWithCoach));
+                OnPropertyChanged(nameof(CanUseCode)); OnPropertyChanged(nameof(TotalText)); OnPropertyChanged(nameof(TotalNote)); OnPropertyChanged(nameof(OrderWhat));
+                OnPropertyChanged(nameof(OrderIneligibleText)); OnPropertyChanged(nameof(HasOrderIneligible));
+                RecordCommand.NotifyCanExecuteChanged();
+                if (dayPassPackage?.IncludesCoach == true) _ = LoadDayPassCoachesAsync();
+            }
             return;
         }
         LoadingItems = true;
@@ -391,7 +442,10 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     }
 
     public string? OrderIneligibleText => IsWalkIn
-        ? (DayPassMember is { HasActiveMembership: true } dm ? IneligibleReason(dm, "Day pass") : null)
+        ? (DayPassMember is { HasActiveMembership: true } dm ? IneligibleReason(dm, "Day pass")
+            : DayPassWithCoach && DayPassMember is null ? "Choose or register a member to book a coach session."
+            : DayPassWithCoach && sessions is not null && (SelectedDayPassCoach is null || SelectedDayPassHour is null) ? "No coach is free today for a Day pass with coach."
+            : null)
         : (Member is { } m ? IneligibleReason(m, Kind) : null);
     public bool HasOrderIneligible => OrderIneligibleText is not null;
 
@@ -512,6 +566,8 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         if (!IsWalkIn && (Member is null || Item is null)) { ErrorMessage = "Choose the member and what they are paying for."; return; }
         if (!await Confirm.AskAsync("Record this payment?", $"{OrderWho}\n{OrderWhat}\n{TotalText}\n{OrderHow}"
                 + (Kind is "Membership" or "Renewal" ? $"\n\nTell them: {RefundRules.Line}" : ""), "Record payment")) return;   // G23
+        _pendingDayPassCoach = DayPassMember is { } dpm && DayPassWithCoach && SelectedDayPassCoach is { } dc && SelectedDayPassHour is { } dh
+            ? (dpm.MemberId, dc.CoachId, dh.Hour, Method == Online ? "online" : "cash") : null;
         if (Method == Online) { await StartOnlineAsync(); return; }
         Payment? paid = null;
         if (DayPassMember is { } m)
@@ -525,7 +581,16 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
 
     async Task DoneAsync(Payment paid)
     {
-        Notice = $"Payment complete: ₱{paid.Amount:N2}. Receipt {paid.ReceiptNo}.";
+        var bookedCoach = false;
+        if (_pendingDayPassCoach is { } pcb && sessions is not null)
+        {
+            _pendingDayPassCoach = null;
+            var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8));
+            var startUtc = new DateTimeOffset(today.ToDateTime(TimeOnly.MinValue).AddHours(pcb.Hour), TimeSpan.FromHours(8)).UtcDateTime;
+            var bookRes = await sessions.DeskBookCoachAsync(pcb.MemberId, pcb.CoachId, startUtc, 1, pcb.Method, null);
+            bookedCoach = bookRes.Ok;
+        }
+        Notice = $"Payment complete: ₱{paid.Amount:N2}. Receipt {paid.ReceiptNo}." + (bookedCoach ? " Coach session booked." : "");
         Item = null; Member = null; DiscountCode = ""; WalkInName = ""; Waiting = null;   // the next customer starts clean (final review)
         var notice = Notice; await LoadShiftAsync(); Notice = notice;
         RecordCommand.NotifyCanExecuteChanged();

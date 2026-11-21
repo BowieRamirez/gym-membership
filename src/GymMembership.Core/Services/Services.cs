@@ -507,7 +507,7 @@ public static class PaymentStatus
 }
 
 /// <summary>Something the counter can take a payment for: a package, a membership to renew, or an amenity.</summary>
-public sealed record CounterItem(int Id, string Label, decimal? Price = null, bool DayPass = false);   // 0098: the Day pass package
+public sealed record CounterItem(int Id, string Label, decimal? Price = null, bool DayPass = false, bool IncludesCoach = false);   // 0098, 0125: Day pass packages
 
 public interface IPaymentStaffService
 {
@@ -699,7 +699,7 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
         {
             case PayKind.Membership:
                 return (await gw.ListAsync<MembershipPackage>(p => p.IsActive == true)).Where(p => p.PublishedAt is not null)
-                    .Select(p => new CounterItem(p.Id, p.Name, p.Price, p.IsDayPass)).ToList();
+                    .Select(p => new CounterItem(p.Id, p.Name, p.Price, p.IsDayPass, p.IncludesCoach)).ToList();
             case PayKind.Amenity:
                 // G19 (0066): sessions only; an amenity still set up as a pass isn't sold until it has a session price
                 return (await gw.ListAsync<Amenity>(a => a.IsActive == true)).Where(a => a.DurationDays is null).Select(a => new CounterItem(a.Id, a.Name, a.Price)).ToList();
