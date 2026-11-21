@@ -208,7 +208,7 @@
                                     <FlexLayout Wrap="Wrap" AlignItems="End" IsVisible="{Binding DayPassWithCoach}">
                                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="220">
                                             <Label Text="Coach (1 hour today)" Style="{StaticResource Caption}" />
-                                            <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding DayPassCoaches}" ItemDisplayBinding="{Binding FullName}" SelectedItem="{Binding SelectedDayPassCoach}" Title="Coach" /></Border>
+                                            <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding DayPassCoaches}" ItemDisplayBinding="{Binding FullName}" SelectedItem="{Binding SelectedDayPassCoach}" Title="{Binding DayPassCoachTitle}" /></Border>
                                         </VerticalStackLayout>
                                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="190">
                                             <Label Text="Hour" Style="{StaticResource Caption}" />

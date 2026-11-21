@@ -242,6 +242,8 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     private FreeCoachSlot? selectedDayPassCoach;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderIneligibleText), nameof(HasOrderIneligible)), NotifyCanExecuteChangedFor(nameof(RecordCommand))]
     private SessionsViewModel.HourOption? selectedDayPassHour;
+    [ObservableProperty] private bool loadingCoaches;
+    public string DayPassCoachTitle => LoadingCoaches ? "Loading coaches…" : DayPassCoaches.Count == 0 ? "No coaches free today" : "Coach";
     (string MemberId, string CoachId, int Hour, string Method)? _pendingDayPassCoach;
     partial void OnSelectedDayPassCoachChanged(FreeCoachSlot? value)
     {
@@ -265,13 +267,21 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     async Task LoadDayPassCoachesAsync()
     {
         if (sessions is null) return;
-        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8));
-        var res = await sessions.FreeCoachesAsync(today);
-        if (!res.Ok) return;
-        Fill(DayPassCoaches, res.Value!);
-        SelectedDayPassCoach = DayPassCoaches.FirstOrDefault();
-        OnPropertyChanged(nameof(OrderIneligibleText)); OnPropertyChanged(nameof(HasOrderIneligible));
-        RecordCommand.NotifyCanExecuteChanged();
+        LoadingCoaches = true; OnPropertyChanged(nameof(DayPassCoachTitle));
+        try
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8));
+            var res = await sessions.FreeCoachesAsync(today);
+            if (!res.Ok) { ErrorMessage = ErrorText.For(res.Error, res.Message); return; }
+            Fill(DayPassCoaches, res.Value!);
+            SelectedDayPassCoach = DayPassCoaches.FirstOrDefault();
+            OnPropertyChanged(nameof(OrderIneligibleText)); OnPropertyChanged(nameof(HasOrderIneligible));
+            RecordCommand.NotifyCanExecuteChanged();
+        }
+        finally
+        {
+            LoadingCoaches = false; OnPropertyChanged(nameof(DayPassCoachTitle));
+        }
     }
     MemberHit? DayPassMember => IsWalkIn && dayPassPackage is not null && Member is { } m && DayPassName == m.Username ? m : null;
     public string TotalText => IsWalkIn
