@@ -131,6 +131,18 @@ try {
     assert.equal(ref.status, 'approved');
     assert.equal(Number(ref.amount), 400);
   });
+
+  await test('desk can book walk-in coach session without member account; member cannot call it', async () => {
+    const m5 = await user('member', 'Ria Cruz');
+    const tomorrow = (await db.query(`select ((now() at time zone 'Asia/Manila')::date + 2)::text d`)).rows[0].d;
+    const wStart = `${tomorrow}T10:00:00+08:00`, wEnd = `${tomorrow}T18:00:00+08:00`;
+    await db.query(`insert into shift_posts(coach_id, starts_at, ends_at) values($1,$2,$3)`, [coach, wStart, wEnd]);
+    await assert.rejects(as(m5, `select desk_book_walkin_coach_session($1,$2,1,'test23')`, [coach, `${tomorrow}T11:00:00+08:00`]), /forbidden/);
+    const wid = (await as(desk, `select desk_book_walkin_coach_session($1,$2,1,'test23') id`, [coach, `${tomorrow}T11:00:00+08:00`]))[0].id;
+    const row = (await db.query(`select member_id, walk_in_name from training_sessions where training_session_id=$1`, [wid])).rows[0];
+    assert.equal(row.member_id, null);
+    assert.equal(row.walk_in_name, 'test23');
+  });
 } finally {
   await db.end(); await server.stop();
   console.log(`\nSessionCheckin: ${passed} passed, ${failed} failed`);

@@ -244,7 +244,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     private SessionsViewModel.HourOption? selectedDayPassHour;
     [ObservableProperty] private bool loadingCoaches;
     public string DayPassCoachTitle => LoadingCoaches ? "Loading coaches…" : DayPassCoaches.Count == 0 ? "No coaches free today" : "Coach";
-    (string MemberId, string CoachId, int Hour, string Method)? _pendingDayPassCoach;
+    (string? MemberId, string? WalkInName, string CoachId, int Hour, string Method)? _pendingDayPassCoach;
     partial void OnSelectedDayPassCoachChanged(FreeCoachSlot? value)
     {
         DayPassHours.Clear();
@@ -453,7 +453,6 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
 
     public string? OrderIneligibleText => IsWalkIn
         ? (DayPassMember is { HasActiveMembership: true } dm ? IneligibleReason(dm, "Day pass")
-            : DayPassWithCoach && DayPassMember is null ? "Choose or register a member to book a coach session."
             : DayPassWithCoach && sessions is not null && (SelectedDayPassCoach is null || SelectedDayPassHour is null) ? "No coach is free today for a Day pass with coach."
             : null)
         : (Member is { } m ? IneligibleReason(m, Kind) : null);
@@ -576,15 +575,15 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         if (!IsWalkIn && (Member is null || Item is null)) { ErrorMessage = "Choose the member and what they are paying for."; return; }
         if (!await Confirm.AskAsync("Record this payment?", $"{OrderWho}\n{OrderWhat}\n{TotalText}\n{OrderHow}"
                 + (Kind is "Membership" or "Renewal" ? $"\n\nTell them: {RefundRules.Line}" : ""), "Record payment")) return;   // G23
-        _pendingDayPassCoach = DayPassMember is { } dpm && DayPassWithCoach && SelectedDayPassCoach is { } dc && SelectedDayPassHour is { } dh
-            ? (dpm.MemberId, dc.CoachId, dh.Hour, Method == Online ? "online" : "cash") : null;
+        _pendingDayPassCoach = DayPassWithCoach && SelectedDayPassCoach is { } dc && SelectedDayPassHour is { } dh
+            ? (DayPassMember?.MemberId, DayPassName, dc.CoachId, dh.Hour, Method == Online ? "online" : "cash") : null;
         if (Method == Online) { await StartOnlineAsync(); return; }
         Payment? paid = null;
         if (DayPassMember is { } m)
         {
             if (!await RunAsync(() => svc.RecordCounterAsync(PayKind.Membership, PayMethod.Cash, m.MemberId, dayPassPackage!.Id, null, null, DiscountCode), p => paid = p)) return;
         }
-        else if (!await RunAsync(() => svc.RecordCounterAsync(KindKey(Kind), PayMethod.Cash, IsWalkIn ? null : Member!.MemberId, Item?.Id,
+        else if (!await RunAsync(() => svc.RecordCounterAsync(KindKey(Kind), PayMethod.Cash, IsWalkIn ? null : Member!.MemberId, IsWalkIn ? dayPassPackage?.Id : Item?.Id,
                 IsWalkIn ? DayPassName : null, null, IsWalkIn ? null : DiscountCode), p => paid = p)) return;
         await DoneAsync(paid!);
     }
@@ -597,8 +596,16 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
             _pendingDayPassCoach = null;
             var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8));
             var startUtc = new DateTimeOffset(today.ToDateTime(TimeOnly.MinValue).AddHours(pcb.Hour), TimeSpan.FromHours(8)).UtcDateTime;
-            var bookRes = await sessions.DeskBookCoachAsync(pcb.MemberId, pcb.CoachId, startUtc, 1, pcb.Method, null);
-            bookedCoach = bookRes.Ok;
+            if (pcb.MemberId is { } mid)
+            {
+                var bookRes = await sessions.DeskBookCoachAsync(mid, pcb.CoachId, startUtc, 1, pcb.Method, null);
+                bookedCoach = bookRes.Ok;
+            }
+            else
+            {
+                var bookRes = await sessions.DeskBookWalkInCoachAsync(pcb.CoachId, startUtc, 1, pcb.WalkInName);
+                bookedCoach = bookRes.Ok;
+            }
         }
         Notice = $"Payment complete: ₱{paid.Amount:N2}. Receipt {paid.ReceiptNo}." + (bookedCoach ? " Coach session booked." : "");
         Item = null; Member = null; DiscountCode = ""; WalkInName = ""; Waiting = null;   // the next customer starts clean (final review)
@@ -612,7 +619,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         Payment? started = null;
         var dayPassFor = DayPassMember;
         if (!await RunAsync(() => dayPassFor is { } m ? svc.StartDeskOnlineAsync(PayKind.Membership, m.MemberId, dayPassPackage!.Id, null, DiscountCode)
-                : svc.StartDeskOnlineAsync(KindKey(Kind), IsWalkIn ? null : Member!.MemberId, Item?.Id,
+                : svc.StartDeskOnlineAsync(KindKey(Kind), IsWalkIn ? null : Member!.MemberId, IsWalkIn ? dayPassPackage?.Id : Item?.Id,
                 IsWalkIn ? DayPassName : null, IsWalkIn ? null : DiscountCode), p => started = p)) return;
         Waiting = started; RecordCommand.NotifyCanExecuteChanged();
         await OpenCheckoutAsync();

@@ -268,6 +268,7 @@ public class NotifiedMember : BaseModel
   [Column("held_until")] public DateTime? HeldUntil { get; set; }
   [Column("is_paid_addon")] public bool IsPaidAddon { get; set; }
   [Column("session_code")] public string? SessionCode { get; set; }
+  [Column("walk_in_name")] public string? WalkInName { get; set; }
   [Column("checked_in_at")] public DateTime? CheckedInAt { get; set; }
   [Column("coach_arrived_at")] public DateTime? CoachArrivedAt { get; set; } }
 

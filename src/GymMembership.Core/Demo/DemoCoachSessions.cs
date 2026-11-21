@@ -71,6 +71,20 @@ public sealed partial class DemoGateway
                 result = BookCoachCore(memberId, S("p_coach"), T("p_start"), I("p_hours"), method == "online" ? PayMethod.Qr : method, Opt("p_code"), skipE6: true, recordedBy: uid, now);
                 return true;
             }
+            case "desk_book_walkin_coach_session":
+            {
+                Require("payments:record");
+                var coachId = S("p_coach");
+                var start = T("p_start");
+                var hours = I("p_hours");
+                if (hours is not (1 or 2) || start <= now) throw Err("bad_input");
+                var end = start.AddHours(hours);
+                if (!All<ShiftPost>().Any(sp => sp.CoachId == coachId && sp.Status == Status.Scheduled && sp.Start <= start && sp.End >= end)) throw Err("coach_not_free");
+                if (All<TrainingSession>().Any(ts => ts.CoachId == coachId && ts.Status == Status.Scheduled && (ts.HeldUntil is null || ts.HeldUntil > now) && ts.ScheduledStart < end && start < ts.ScheduledEnd)) throw Err("coach_taken");
+                var s = Add(new TrainingSession { CoachId = coachId, MemberId = "", WalkInName = Opt("p_walk_in_name"), ScheduledStart = start, ScheduledEnd = end, Status = Status.Scheduled });
+                result = s.Id;
+                return true;
+            }
         }
         return false;
     }

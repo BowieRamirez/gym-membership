@@ -1188,6 +1188,7 @@ public interface ISessionService
     Task<AppResult<IReadOnlyList<FreeCoachSlot>>> FreeCoachesAsync(DateOnly day) => Task.FromResult(AppResult<IReadOnlyList<FreeCoachSlot>>.Success([]));
     Task<AppResult<BookCoachResult>> BookCoachAsync(string coachId, DateTime startUtc, int hours, string? code = null) => Task.FromResult(AppResult<BookCoachResult>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<BookCoachResult>> DeskBookCoachAsync(string memberId, string coachId, DateTime startUtc, int hours, string method, string? code = null) => Task.FromResult(AppResult<BookCoachResult>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<int>> DeskBookWalkInCoachAsync(string coachId, DateTime startUtc, int hours, string? walkInName = null) => Task.FromResult(AppResult<int>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<TodayCoachSession>> ScanSessionAsync(string code) => Task.FromResult(AppResult<TodayCoachSession>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<bool>> MarkCoachArrivedAsync(int sessionId) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<IReadOnlyList<TodayCoachSession>>> TodayCoachSessionsAsync() => Task.FromResult(AppResult<IReadOnlyList<TodayCoachSession>>.Success([]));
@@ -1340,8 +1341,9 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
         {
             var isMine = s.CoachId == uid;
             var with = isMine ? s.MemberId : s.CoachId;
+            var withName = isMine && string.IsNullOrEmpty(with) ? (s.WalkInName ?? "Walk-in") : names.GetValueOrDefault(with, "Unknown");
             var r = held.GetValueOrDefault(s.Id);
-            return new SessionRow(s, names.GetValueOrDefault(with, "Unknown"), isMine, isMine && s.Status == Status.Scheduled, s.Status == Status.Scheduled,
+            return new SessionRow(s, withName, isMine, isMine && s.Status == Status.Scheduled, s.Status == Status.Scheduled,
                 r?.Id, r is null ? null : amenities.FirstOrDefault(a => a.Id == r.AmenityId)?.Name ?? "Amenity");
         }).ToList();
     });
@@ -1406,6 +1408,15 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
             ["p_start"] = startUtc.ToString("O"),
             ["p_hours"] = hours,
             ["p_code"] = (string.IsNullOrWhiteSpace(code) ? null : code.Trim())!
+        }));
+
+    public Task<AppResult<int>> DeskBookWalkInCoachAsync(string coachId, DateTime startUtc, int hours, string? walkInName = null) => Safe.RunAsync(() =>
+        gw.RpcAsync<int>("desk_book_walkin_coach_session", new()
+        {
+            ["p_coach"] = coachId,
+            ["p_start"] = startUtc.ToString("O"),
+            ["p_hours"] = hours,
+            ["p_walk_in_name"] = (string.IsNullOrWhiteSpace(walkInName) ? null : walkInName.Trim())!
         }));
 
     public Task<AppResult<BookCoachResult>> DeskBookCoachAsync(string memberId, string coachId, DateTime startUtc, int hours, string method, string? code = null) => Safe.RunAsync(() =>
