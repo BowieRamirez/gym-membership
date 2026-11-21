@@ -149,10 +149,15 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
     public Task<AppResult<IReadOnlyList<TermCard>>> TermsAsync() => Safe.RunAsync<IReadOnlyList<TermCard>>(async () =>
     {
         var uid = gw.CurrentUserId;
-        var terms = await gw.ListAsync<MembershipTerm>(t => t.MemberId == uid);
-        var payments = await gw.ListAsync<Payment>(p => p.MemberId == uid);
-        var refunds = await gw.ListAsync<RefundRequest>(r => r.MemberId == uid);
-        var checkIns = await gw.ListAsync<GymCheckIn>(c => c.MemberId == uid);
+        var termsTask = gw.ListAsync<MembershipTerm>(t => t.MemberId == uid);
+        var payTask = gw.ListAsync<Payment>(p => p.MemberId == uid);
+        var refTask = gw.ListAsync<RefundRequest>(r => r.MemberId == uid);
+        var ciTask = gw.ListAsync<GymCheckIn>(c => c.MemberId == uid);
+        await Task.WhenAll(termsTask, payTask, refTask, ciTask);
+        var terms = termsTask.Result;
+        var payments = payTask.Result;
+        var refunds = refTask.Result;
+        var checkIns = ciTask.Result;
         var now = clock.GetUtcNow().UtcDateTime;
         return terms.Select(InUtc).OrderBy(t => t.CancelledAt is not null || t.EndsAt <= now).ThenBy(t => t.StartsAt).Select(t =>
         {

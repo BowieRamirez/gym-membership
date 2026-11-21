@@ -234,10 +234,15 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
     private async Task LoadAsync()
     {
         var member = false;   // 0098: someone with a membership can't buy a Day pass, so it isn't offered
-        await RunAsync(svc.AccessAsync, a => member = a.Active);
-        if (!await RunAsync(svc.ListPackagesAsync, rows => Fill(Packages, rows.Where(p => !(member && p.IsDayPass))))) return;
-        await RunAsync(svc.AvailableCodesAsync, rows => { Fill(Codes, rows.Where(c => c.FitsAnyPackage)); HasCodes = Codes.Count > 0; });
-        await LoadPayAsync();
+        IReadOnlyList<MembershipPackage>? allPackages = null;
+        await Task.WhenAll(
+            RunAsync(svc.AccessAsync, a => member = a.Active),
+            RunAsync(svc.ListPackagesAsync, rows => allPackages = rows),
+            RunAsync(svc.AvailableCodesAsync, rows => { Fill(Codes, rows.Where(c => c.FitsAnyPackage)); HasCodes = Codes.Count > 0; }),
+            LoadPayAsync()
+        );
+        if (allPackages is not null)
+            Fill(Packages, allPackages.Where(p => !(member && p.IsDayPass)));
     }
 
     async Task LoadPayAsync()
@@ -553,14 +558,16 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
         _loading = true;
         try
         {
-            await TickPassAsync(DateTime.UtcNow);
-            if (!await RunAsync(subscription.TermsAsync, rows =>
-            {
-                Fill(Terms, rows);
-                TermEndsText = rows.FirstOrDefault(t => t.State == Status.Active) is { } t ? $"{t.Term.EndsAt.AddHours(8):d MMM yyyy}" : "No active term";   // Manila, as the terms table
-            })) return;
-            if (!await LoadPaymentsAsync()) return;
-            await LoadCoachingAsync();
+            await Task.WhenAll(
+                TickPassAsync(DateTime.UtcNow),
+                RunAsync(subscription.TermsAsync, rows =>
+                {
+                    Fill(Terms, rows);
+                    TermEndsText = rows.FirstOrDefault(t => t.State == Status.Active) is { } t ? $"{t.Term.EndsAt.AddHours(8):d MMM yyyy}" : "No active term";   // Manila, as the terms table
+                }),
+                LoadPaymentsAsync(),
+                LoadCoachingAsync()
+            );
             if (PayNow is { HasCheckout: true } open)
             {
                 // back from Xendit's page: if its notice hasn't arrived yet, the server asks Xendit and confirms it

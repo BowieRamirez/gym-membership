@@ -34,9 +34,13 @@ public partial class HomeViewModel(IDeskHomeService svc, IPaymentStaffService? p
     private async Task LoadAsync()
     {
         if (!await RunAsync(svc.SummaryAsync, s => Show(s)) || !HasLists) return;
-        if (!await RunAsync(payments!.PendingAsync, ShowPayments)) return;
-        await RunAsync(coaches!.PresenceAsync, ShowCoaches);
-        if (sessions is not null) await RunAsync(sessions.TodayCoachSessionsAsync, ShowTodaySessions);
+        var tasks = new List<Task>
+        {
+            RunAsync(payments!.PendingAsync, ShowPayments),
+            RunAsync(coaches!.PresenceAsync, ShowCoaches),
+        };
+        if (sessions is not null) tasks.Add(RunAsync(sessions.TodayCoachSessionsAsync, ShowTodaySessions));
+        await Task.WhenAll(tasks);
     }
 
     // Quiet: the error line is never touched and a failed look leaves the numbers as they were.

@@ -254,9 +254,16 @@ sealed class PaymentLookup
     PaymentLookup(IEnumerable<UserMembershipPackage> u, IEnumerable<MembershipRenewal> r, IEnumerable<UserAmenity> a, IEnumerable<MembershipPackage> p, IEnumerable<Amenity> c)
     { _umps = u.ToList(); _renewals = r.ToList(); _amenities = a.ToList(); _packages = p.ToList(); _catalog = c.ToList(); }
 
-    public static async Task<PaymentLookup> LoadAsync(ISupabaseGateway gw) =>
-        new(await gw.ListAsync<UserMembershipPackage>(), await gw.ListAsync<MembershipRenewal>(), await gw.ListAsync<UserAmenity>(),
-            await gw.ListAsync<MembershipPackage>(), await gw.ListAsync<Amenity>());
+    public static async Task<PaymentLookup> LoadAsync(ISupabaseGateway gw)
+    {
+        var umpsTask = gw.ListAsync<UserMembershipPackage>();
+        var renTask = gw.ListAsync<MembershipRenewal>();
+        var uaTask = gw.ListAsync<UserAmenity>();
+        var pkgTask = gw.ListAsync<MembershipPackage>();
+        var amTask = gw.ListAsync<Amenity>();
+        await Task.WhenAll(umpsTask, renTask, uaTask, pkgTask, amTask);
+        return new(umpsTask.Result, renTask.Result, uaTask.Result, pkgTask.Result, amTask.Result);
+    }
 
     string PackageName(int umpId) => _packages.FirstOrDefault(k => k.Id == _umps.FirstOrDefault(u => u.Id == umpId)?.MembershipPackageId)?.Name ?? "Membership";
 
@@ -402,10 +409,12 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
     public Task<AppResult<Access>> AccessAsync() => Safe.RunAsync(async () =>
     {
         var uid = gw.CurrentUserId;
-        var active = await gw.RpcAsync<bool>("is_active_member");
-        var pays = await gw.ListAsync<Payment>(p => p.MemberId == uid);
+        var activeTask = gw.RpcAsync<bool>("is_active_member");
+        var paysTask = gw.ListAsync<Payment>(p => p.MemberId == uid);
+        await Task.WhenAll(activeTask, paysTask);
+        var active = activeTask.Result;
         // only what the member menu shows: a plan payment waiting matters to the locked pages; an amenity down payment must not rebuild the menu
-        return new Access(active, !active && pays.Any(p => p.Status == Status.Pending && p.Kind is PayKind.Membership or PayKind.Renewal));
+        return new Access(active, !active && paysTask.Result.Any(p => p.Status == Status.Pending && p.Kind is PayKind.Membership or PayKind.Renewal));
     });
 
     public Task<AppResult<IReadOnlyList<MembershipPackage>>> ListPackagesAsync() =>
@@ -413,10 +422,14 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
 
     public Task<AppResult<IReadOnlyList<AvailableCode>>> AvailableCodesAsync() => Safe.RunAsync<IReadOnlyList<AvailableCode>>(async () =>
     {
-        var codes = await gw.RpcAsync<List<AvailableCode>>("my_discount_codes", new()) ?? [];
+        var codesTask = gw.RpcAsync<List<AvailableCode>>("my_discount_codes", new());
+        var pkgsTask = gw.ListAsync<MembershipPackage>(p => p.IsActive == true);
+        var amsTask = gw.ListAsync<Amenity>(a => a.IsActive == true);
+        await Task.WhenAll(codesTask, pkgsTask, amsTask);
+        var codes = codesTask.Result ?? [];
         if (codes.Count == 0) return codes;
-        var packages = (await gw.ListAsync<MembershipPackage>(p => p.IsActive == true)).ToDictionary(p => p.Id, p => p.Name);
-        var amenities = (await gw.ListAsync<Amenity>(a => a.IsActive == true)).ToDictionary(a => a.Id, a => a.Name);
+        var packages = pkgsTask.Result.ToDictionary(p => p.Id, p => p.Name);
+        var amenities = amsTask.Result.ToDictionary(a => a.Id, a => a.Name);
         foreach (var c in codes) c.FitsText = DiscountFits.Text(c.AllPackages, c.PackageIds, c.AllAmenities, c.AmenityIds, packages, amenities);
         return codes;
     });
@@ -450,9 +463,13 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
     public Task<AppResult<IReadOnlyList<PaymentItem>>> MyPaymentsAsync() => Safe.RunAsync<IReadOnlyList<PaymentItem>>(async () =>
     {
         var uid = gw.CurrentUserId;
-        var pays = await gw.ListAsync<Payment>(p => p.MemberId == uid);
-        var refunded = (await gw.ListAsync<RefundRequest>(r => r.MemberId == uid && r.Status == "paid")).Select(r => r.PaymentId).ToHashSet();
-        var look = await PaymentLookup.LoadAsync(gw);
+        var paysTask = gw.ListAsync<Payment>(p => p.MemberId == uid);
+        var refTask = gw.ListAsync<RefundRequest>(r => r.MemberId == uid && r.Status == "paid");
+        var lookTask = PaymentLookup.LoadAsync(gw);
+        await Task.WhenAll(paysTask, refTask, lookTask);
+        var pays = paysTask.Result;
+        var refunded = refTask.Result.Select(r => r.PaymentId).ToHashSet();
+        var look = lookTask.Result;
         return pays.OrderByDescending(p => p.CreatedAt).Select(p => new PaymentItem(p.Id,
             p.DiscountAmount > 0 ? look.Item(p) + " (discount)" : look.Item(p), p.PaymentCode, p.Kind, p.Method, p.Amount, p.DiscountAmount, p.Status,
             p.CreatedAt, p.ExpiresAt, p.ReferenceNo, p.ProofPath is not null, p.ReceiptNo, p.RejectedReason, look.ItemId(p), p.PackageSnapshotId, p.XenditId is not null,
@@ -615,9 +632,13 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
 
     async Task<IReadOnlyList<PaymentRow>> RowsAsync(IEnumerable<Payment> payments)
     {
-        var names = await Directory_.UserNamesAsync(gw);
-        var look = await PaymentLookup.LoadAsync(gw);
-        var held = (await gw.ListAsync<Reservation>(r => r.Status == "awaiting_payment")).Where(r => r.PaymentId is not null).ToDictionary(r => r.PaymentId!.Value);
+        var namesTask = Directory_.UserNamesAsync(gw);
+        var lookTask = PaymentLookup.LoadAsync(gw);
+        var heldTask = gw.ListAsync<Reservation>(r => r.Status == "awaiting_payment");
+        await Task.WhenAll(namesTask, lookTask, heldTask);
+        var names = namesTask.Result;
+        var look = lookTask.Result;
+        var held = heldTask.Result.Where(r => r.PaymentId is not null).ToDictionary(r => r.PaymentId!.Value);
         return payments.Select(p => held.GetValueOrDefault(p.Id) is { } r
             // G13, G14 (0064): the down payment, the coach and what's left to pay at the desk
             ? new PaymentRow(p, names.GetValueOrDefault(p.MemberId ?? "", "Unknown"), $"{look.Item(p)} booking · down payment", p.ProofPath is not null,

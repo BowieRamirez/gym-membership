@@ -13,7 +13,7 @@ public class BasePage : ContentPage
         if (LiveRecords && _live is null && IPlatformApplication.Current?.Services.GetService<Core.Services.ILiveRecords>() is { } live)
         {
             _live = new Core.Services.LiveRefresh(live, () => Dispatcher.DispatchAsync(RefreshNowAsync));
-            try { await live.StartAsync(); } catch { /* no live updates: the timer and Refresh still work */ }
+            _ = StartLiveQuietlyAsync(live);   // don't block initial page data load on Realtime socket handshake
         }
         await Task.WhenAll(new[] { BindingContext, _part?.BindingContext }.OfType<LoadableViewModel>().Select(vm => vm.OnAppearingAsync()));
         MarkUpdated();
@@ -25,6 +25,11 @@ public class BasePage : ContentPage
             _refresh.Tick += OnRefreshTick;
             _refresh.Start();
         }
+    }
+
+    static async Task StartLiveQuietlyAsync(Core.Services.ILiveRecords live)
+    {
+        try { await live.StartAsync(); } catch { /* no live updates: the timer and Refresh still work */ }
     }
 
     protected override void OnDisappearing()
