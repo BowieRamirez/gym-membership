@@ -68,6 +68,14 @@ try {
     assert.equal(payAfter, payBefore);
     assert.equal(refAfter, refBefore);
   });
+
+  await test('B3: coach cannot insert directly into damage_reports as closed', async () => {
+    await assert.rejects(
+      as(coach1, `insert into damage_reports(training_session_id, amenity_id, coach_id, reported_by, description, status, review_note)
+                  values($1, $2, $3, $3, 'Fake closed', 'closed', 'self-closed')`, [ses, ring, coach1]),
+      /permission denied/
+    );
+  });
 } finally {
   await db.end(); await server.stop();
   console.log(`\nDamageReports: ${passed} passed, ${failed} failed`);

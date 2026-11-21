@@ -80,7 +80,7 @@ try {
     )).rows[0].payment_id;
     const ses = (await db.query(
       `insert into training_sessions(coach_id, member_id, scheduled_start, scheduled_end, status, payment_id)
-       values($1,$2, now() + interval '5 hours', now() + interval '6 hours', 'scheduled', $3)
+       values($1,$2, ((now() at time zone 'Asia/Manila')::date + time '08:00') at time zone 'Asia/Manila', ((now() at time zone 'Asia/Manila')::date + time '09:00') at time zone 'Asia/Manila', 'scheduled', $3)
        returning training_session_id, session_code`,
       [coach, m3, addonPayId]
     )).rows[0];
@@ -142,6 +142,16 @@ try {
     const row = (await db.query(`select member_id, walk_in_name from training_sessions where training_session_id=$1`, [wid])).rows[0];
     assert.equal(row.member_id, null);
     assert.equal(row.walk_in_name, 'test23');
+
+    // B2: unrelated member and other coach cannot cancel walk-in session; owning coach must give a reason
+    const otherCoach = await user('coach', 'Coach Lee');
+    await assert.rejects(as(m5, 'select cancel_session($1, null)', [wid]), /not_found/);
+    await assert.rejects(as(otherCoach, 'select cancel_session($1, $2)', [wid, 'Not mine']), /not_found/);
+    await assert.rejects(as(coach, 'select cancel_session($1, $2)', [wid, '   ']), /reason_required/);
+    await as(coach, 'select cancel_session($1, $2)', [wid, 'Coach unavailable']);
+    const cancelled = (await db.query(`select status, cancel_reason from training_sessions where training_session_id=$1`, [wid])).rows[0];
+    assert.equal(cancelled.status, 'cancelled');
+    assert.equal(cancelled.cancel_reason, 'Coach unavailable');
   });
 } finally {
   await db.end(); await server.stop();

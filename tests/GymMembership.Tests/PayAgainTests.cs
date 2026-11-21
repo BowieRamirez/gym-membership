@@ -124,4 +124,33 @@ public class PayAgainTests
         var latest = (await gw.ListAsync<Payment>()).OrderByDescending(p => p.Id).First();
         Assert.Equal((0m, Status.Verified), (latest.Amount, latest.Status));
     }
+
+    [Fact]
+    public async Task PayAgain_follows_replaced_package_to_active_version()
+    {
+        var gw = new DemoGateway();
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var catalog = new AdminService(gw);
+        var oldPkg = new MembershipPackage { Name = "Starter", Description = "Old", Price = 1500, DurationDays = 30 };
+        Assert.True((await catalog.SavePackageAsync(oldPkg)).Ok);
+        Assert.True((await catalog.PublishAsync("plan", oldPkg.Id)).Ok);
+
+        var newIdRes = await catalog.NewPackageVersionAsync(oldPkg.Id);
+        Assert.True(newIdRes.Ok);
+        var newPkg = (await gw.ListAsync<MembershipPackage>()).First(p => p.Id == newIdRes.Value);
+        newPkg.Price = 1000;
+        Assert.True((await catalog.SavePackageAsync(newPkg)).Ok);
+        Assert.True((await catalog.PublishAsync("plan", newPkg.Id)).Ok);
+
+        await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
+        var mem = new MembershipService(gw);
+        var rejectedOldItem = new PaymentItem(
+            999, "Starter", "GYM-OLD", PayKind.Renewal, PayMethod.Qr, 1500m, 0m,
+            Status.Rejected, DateTime.UtcNow.AddDays(-2), null, null, false, null,
+            "Rejected", oldPkg.Id, oldPkg.Id);
+
+        var again = await mem.PayAgainAsync(rejectedOldItem);
+        Assert.True(again.Ok, again.Message);
+        Assert.Equal(1000m, again.Value!.Amount);
+    }
 }

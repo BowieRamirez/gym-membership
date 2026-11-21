@@ -458,16 +458,34 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
     public Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId) => OnlinePay.OpenAsync(gw, paymentId);
     public Task<AppResult<bool>> CheckOnlineAsync(int paymentId) => OnlinePay.CheckAsync(gw, paymentId);
 
-    public async Task<AppResult<Payment>> PayAgainAsync(PaymentItem item, string? code = null) => item.PackageSnapshotId is { } package && item.Kind is PayKind.Membership or PayKind.Renewal
-        ? await new SubscriptionService(gw).ExtendAsync(package, code)   // 0099: paid again online (members don't pay cash any more)
-        : item.ItemId is not { } id
-        ? AppResult<Payment>.Fail(AppErrorKind.Validation, "not_found")
-        : item.Kind switch
+    public async Task<AppResult<Payment>> PayAgainAsync(PaymentItem item, string? code = null)
+    {
+        if (item.PackageSnapshotId is { } package && item.Kind is PayKind.Membership or PayKind.Renewal)
+        {
+            var packages = await gw.ListAsync<MembershipPackage>();
+            var cur = packages.FirstOrDefault(p => p.Id == package);
+            if (cur is null || !cur.IsActive || cur.PublishedAt is null)
+            {
+                var seen = new HashSet<int> { package };
+                var curId = package;
+                while (packages.FirstOrDefault(p => p.ReplacesId == curId && !seen.Contains(p.Id)) is { } next)
+                {
+                    seen.Add(next.Id);
+                    cur = next;
+                    curId = next.Id;
+                }
+            }
+            var targetId = cur is { IsActive: true, PublishedAt: not null } ? cur.Id : package;
+            return await new SubscriptionService(gw).ExtendAsync(targetId, code);   // 0099, B1: follow replacement chain to active version
+        }
+        if (item.ItemId is not { } id) return AppResult<Payment>.Fail(AppErrorKind.Validation, "not_found");
+        return item.Kind switch
         {
             PayKind.Membership => await AvailAsync(id, code),
             PayKind.Renewal => await RenewAsync(id, code),
             _ => AppResult<Payment>.Fail(AppErrorKind.Validation, "not_found")
         };
+    }
 
     public Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync() => Safe.RunAsync(() => GymClosures.ByDayAsync(gw));
     public Task<AppResult<GymSettings>> GymAsync() => Safe.RunAsync(async () => (await gw.ListAsync<GymSettings>()).First());
