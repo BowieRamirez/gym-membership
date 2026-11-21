@@ -10,15 +10,15 @@
     <v:BasePage.Resources>
         <DataTemplate x:Key="ShiftRow" x:DataType="m:CashShift">
             <VerticalStackLayout>
-                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,1.3*,84,84,84,90,90,90,90,1.4*,100">
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,1.6*,80,80,80,86,86,86,86,1.6*,96">
                     <Label Text="{Binding Cashier}" FontFamily="BarlowMedium" VerticalOptions="Center" />
-                    <HorizontalStackLayout Grid.Column="1" Spacing="8" VerticalOptions="Center">
+                    <Grid Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="6" VerticalOptions="Center">
                         <Label Text="{Binding SpanText}" VerticalOptions="Center" LineBreakMode="WordWrap" />
                         <!-- an open shift: yellow chip with the word, figures so far -->
-                        <Border BackgroundColor="{StaticResource Signal}" StrokeThickness="0" StrokeShape="RoundRectangle 10" Padding="9,2" VerticalOptions="Center" IsVisible="{Binding IsOpen}">
+                        <Border Grid.Column="1" BackgroundColor="{StaticResource Signal}" StrokeThickness="0" StrokeShape="RoundRectangle 10" Padding="9,2" VerticalOptions="Center" IsVisible="{Binding IsOpen}">
                             <Label Text="Open" TextColor="{StaticResource Black}" FontFamily="BarlowMedium" FontSize="12.5" />
                         </Border>
-                    </HorizontalStackLayout>
+                    </Grid>
                     <Label Grid.Column="2" Text="{Binding OpeningFloat, StringFormat='₱{0:N2}'}" HorizontalOptions="End" VerticalOptions="Center" />
                     <Label Grid.Column="3" Text="{Binding CashIn, StringFormat='₱{0:N2}'}" HorizontalOptions="End" VerticalOptions="Center" />
                     <Label Grid.Column="4" Text="{Binding CashOut, StringFormat='₱{0:N2}'}" HorizontalOptions="End" VerticalOptions="Center" />
@@ -40,7 +40,7 @@
                             </DataTrigger>
                         </Label.Triggers>
                     </Label>
-                    <Label Grid.Column="9" Text="{Binding NoteText}" VerticalOptions="Center" LineBreakMode="WordWrap" Margin="14,0,0,0" />
+                    <Label Grid.Column="9" Text="{Binding NoteText}" VerticalOptions="Center" MaxLines="2" LineBreakMode="TailTruncation" ToolTipProperties.Text="{Binding NoteText}" Margin="14,0,0,0" />
                     <Button Grid.Column="10" Text="Add note" Style="{StaticResource SmallOutlineButton}" Clicked="OnAddShiftNote" HorizontalOptions="End" VerticalOptions="Center"
                             IsVisible="{Binding IsOpen, Converter={StaticResource Not}}" />
                 </Grid>
@@ -165,7 +165,7 @@
             <Border Style="{StaticResource TablePanel}">
                 <VerticalStackLayout>
                     <VerticalStackLayout x:Name="ShiftHead">
-                        <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,1.3*,84,84,84,90,90,90,90,1.4*,100">
+                        <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,1.6*,80,80,80,86,86,86,86,1.6*,96">
                             <Label Text="Cashier" Style="{StaticResource Caption}" />
                             <Label Grid.Column="1" Text="Shift" Style="{StaticResource Caption}" />
                             <Label Grid.Column="2" Text="Float" Style="{StaticResource Caption}" HorizontalOptions="End" />
@@ -179,7 +179,7 @@
                         </Grid>
                         <BoxView Style="{StaticResource Hairline}" />
                     </VerticalStackLayout>
-                    <c:TableBody Items="{Binding Shifts}" Header="{x:Reference ShiftHead}" WideFrom="1050"
+                    <c:TableBody Items="{Binding Shifts}" Header="{x:Reference ShiftHead}" WideFrom="1150"
                                  RowTemplate="{StaticResource ShiftRow}" CardTemplate="{StaticResource ShiftCard}">
                         <c:TableBody.Empty><Label Text="No cash shifts were opened in this period." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                     </c:TableBody>
