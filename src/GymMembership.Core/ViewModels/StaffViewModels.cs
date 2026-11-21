@@ -1406,9 +1406,9 @@ public partial class SessionsViewModel(ISessionService svc, IMembershipService? 
     }
 
     [RelayCommand]
-    private void SetBookHours(int hours)
+    private void SetBookHours(object? hours)
     {
-        BookHours = hours == 2 ? 2 : 1;
+        BookHours = int.TryParse(hours?.ToString(), out var parsed) && parsed == 2 ? 2 : 1;
         RefreshHours();
     }
 
@@ -2788,9 +2788,9 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
     }
 
     [RelayCommand]
-    private void SetDeskCoachHours(int hours)
+    private void SetDeskCoachHours(object? hours)
     {
-        CoachBookHours = hours == 2 ? 2 : 1;
+        CoachBookHours = int.TryParse(hours?.ToString(), out var parsed) && parsed == 2 ? 2 : 1;
         RefreshDeskCoachHours();
     }
 
