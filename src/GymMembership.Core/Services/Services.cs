@@ -1057,7 +1057,7 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
         var now = DateTime.UtcNow;
         var sessions = (await gw.ListAsync<TrainingSession>(s => s.CoachId == uid && s.Status != Status.Cancelled && (s.HeldUntil == null || s.HeldUntil > now)))
             .ToList();
-        return sessions.GroupBy(s => s.MemberId).Select(g =>
+        return sessions.Where(s => !string.IsNullOrEmpty(s.MemberId)).GroupBy(s => s.MemberId).Select(g =>
         {
             var latest = g.OrderByDescending(s => s.ScheduledStart).First();
             var next = g.Where(s => s.Status == Status.Scheduled && s.ScheduledStart > now).OrderBy(s => s.ScheduledStart).FirstOrDefault();
@@ -1380,7 +1380,7 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
         var marks = (await gw.ListAsync<SessionAttendance>(a => ids.Contains(a.SessionId))).ToDictionary(a => a.SessionId, a => a.Status);   // asked even for an empty month: one tiny request, and the filter stays proven
         var names = await Directory_.UserNamesAsync(gw);
         return sessions.OrderBy(s => s.ScheduledStart)
-            .Select(s => new CalendarSession(s, names.GetValueOrDefault(s.MemberId, "Member"), marks.GetValueOrDefault(s.Id))).ToList();
+            .Select(s => new CalendarSession(s, string.IsNullOrEmpty(s.MemberId) ? (s.WalkInName ?? "Walk-in") : names.GetValueOrDefault(s.MemberId, "Member"), marks.GetValueOrDefault(s.Id))).ToList();
     });
 
     public Task<AppResult<IReadOnlyList<CalendarSession>>> UpcomingAsync() => Safe.RunAsync<IReadOnlyList<CalendarSession>>(async () =>
@@ -1389,7 +1389,8 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
         var now = DateTime.UtcNow;
         var sessions = await gw.ListAsync<TrainingSession>(s => s.CoachId == uid && s.Status == Status.Scheduled && s.ScheduledStart >= now);
         var names = await Directory_.UserNamesAsync(gw);
-        return sessions.OrderBy(s => s.ScheduledStart).Select(s => new CalendarSession(s, names.GetValueOrDefault(s.MemberId, "Member"), null)).ToList();
+        return sessions.OrderBy(s => s.ScheduledStart)
+            .Select(s => new CalendarSession(s, string.IsNullOrEmpty(s.MemberId) ? (s.WalkInName ?? "Walk-in") : names.GetValueOrDefault(s.MemberId, "Member"), null)).ToList();
     });
 
     public string? PendingCoachId { get; set; }
