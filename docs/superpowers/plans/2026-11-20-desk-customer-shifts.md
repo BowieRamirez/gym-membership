@@ -160,6 +160,12 @@ Same rules as `2026-11-19-owner-fixes.md`:
 - [ ] Owner hand checks on the real project (staff pages Windows; Pay again Android and Windows).
 - [ ] Branch pushed; merge only when the owner says so.
 
+### Bugs found in the live test (2026-11-21)
+
+| # | Bug | Found | Fix (owner to choose) | Status |
+|---|---|---|---|---|
+| B1 | **Pay again on a replaced or archived package fails.** `CanPayAgain` (`Services.cs:310`) shows Pay again on any rejected/expired membership or renewal payment, but `PayAgainAsync` (`Services.cs:461`) calls `extend_membership` with the payment's old `membership_package_snapshot_id`, and `create_membership_extension` only takes an active package, so the member gets `not_found` and nothing is made. Live: the test member's payment #5 (rejected renewal, ₱1,500) is on package 1, since replaced by Monthly (package 5, ₱1,000). Hits every rejected/expired payment whose package was versioned or archived. | Live test with the member account; Pay again on the current Monthly (package 5) works: payment made, Xendit checkout opened, return check "not paid yet". | **Recommended:** Pay again follows the package to its current version (`replaces_id` chain) and the popup shows that version's price. Alternative: hide Pay again when the package is no longer on sale. Failing test first (`PayAgainTests.cs`). | Open |
+
 ---
 
 # Part 2: Coach revamp (owner, 2026-11-20)
@@ -351,6 +357,29 @@ Same rules as `2026-11-19-owner-fixes.md`:
 - [ ] `superpowers:requesting-code-review` on the Part 2 diff; fixes committed.
 - [ ] Owner hand checks: member and coach (Android and Windows), desk and admin (Windows).
 
+### Bugs found in the live test (2026-11-21)
+
+| # | Bug | Found | Fix | Status |
+|---|---|---|---|---|
+| B2 | **Anyone signed in can cancel a walk-in coach session, and a coach can cancel one with no reason.** `cancel_session` (0122) checks `v_s.member_id <> v_uid`; walk-in sessions (0126) have `member_id` null, so the check is null and both the "not yours" guard and the coach `reason_required` guard are skipped. | Live: the test member cancelled walk-in session #13 ("not mine"); the coach cancelled #11 with an empty reason. | Use `is distinct from` for both comparisons in `cancel_session`; a database test for walk-in sessions (member, other coach, coach without reason). | Open |
+| B3 | **A coach can write a damage report straight into the table already "Closed" with their own review note**, skipping admin review, the admin alert and the audit row. 0123 grants `insert, update` on `damage_reports` to `authenticated`, and the insert policy doesn't limit `status`, `review_note`, `reviewed_by`. | Live: coach inserted report #1 as `closed`, review note "self-closed"; no "Damage report filed" alert (report #2 through `report_damage` did alert). | Revoke direct `insert, update` on `damage_reports` (`report_damage` / `review_damage` are security definer), keep `select`. | Open |
+| Q1 | **Not a bug, a gap to decide:** the plain packages (Monthly, 3 Months, Daypass) have Coach included off and no add-on price, so their members can't book any coach (`coach_not_offered`). Since the add-on box was taken off Admin Packages (2026-11-21), there is no way to offer them one. E3/E4 still describe an add-on price on plain packages. | Live: the test member (Monthly) gets `coach_not_offered`. | Owner: bring back the add-on price box, or confirm "coach only with Coach-included packages" and update E3/E4. | Owner |
+
+**The 8 failed checks of the Part 2 live test:**
+
+| # | Failed check | What happened | Cause |
+|---|---|---|---|
+| 1 | Member books a coach (junel sabado, 23 Nov 8:00) | Refused `coach_not_offered` | Q1: the member's Monthly package offers no coach |
+| 2 | Coach cancelling a walk-in session with no reason → `reason_required` | The cancel went through (session #11) | B2 |
+| 3 | An unrelated member cannot cancel a walk-in session (first run) | Got past the "not yours" check; refused only because #11 was already cancelled | B2 |
+| 4 | Coach cannot write a damage report straight in as "Closed" | Report #1 created as `closed`, review note "self-closed" | B3 |
+| 5 | Admins alerted ("Damage report filed") | The check read a table that doesn't exist (`notifications`); the alert is in `user_notifications` and did arrive for report #2 | Test script mistake |
+| 6 | Nothing charged by the report (no payment in the last 10 min) | Found payment #104, the Part 1 Pay again test payment; no coach payment exists | Test script mistake |
+| 7 | Coach cancels with a reason (cleanup) | `already_processed`: #11 was already cancelled by check 2 | Follows from B2 |
+| 8 | An unrelated member cannot cancel a walk-in session (confirm run) | The member cancelled walk-in session #13 ("not mine") | B2 |
+
+Not tested live (needs a member on a Coach-included package): coach-included booking, the per-member limits, the 15-minute hold for an add-on, add-on refunds. Live `gym_settings.max_upcoming_coach_sessions` is 1 (plan default 2).
+
 ## Session log
 
 - 2026-11-20: plan written from the owner's `docs (1).pdf`; branch `desk-customer-shifts-2026-11-20` cut from `origin/main` (`8c1555f`) and pushed. Waiting on D1-D8.
@@ -369,3 +398,5 @@ Same rules as `2026-11-19-owner-fixes.md`:
 - 2026-11-21: completed Phases 11–14 (`0121_end_hiring.sql`, `0122_session_checkin_and_status.sql`, `0123_damage_reports.sql`, `0124_coach_hours_report.sql`) and Phase 15 automated verification (`dotnet test` 1216/1216, Windows & Android builds, local DB test suite); pushed migrations `0118`–`0124` live to `avxcitoddadbblxuhiik`. Owner hand checks remain.
 - 2026-11-21: owner follow-up: fixed `SessionsPage` / `AmenityStatusPage` `CommandParameter` `int` binding crash (`453b59c`); removed `Coach add-on price per hour` from Admin Packages (`CatalogAdminPage.xaml`), allowed one regular Day pass and one Coach-included Day pass on sale together (`0125_day_pass_coach_packages.sql`, pushed live), added Day pass option chips + Coach/Hour pickers to Front desk Cashier (`CashierPage.xaml` / `CashierViewModel`), and enabled the Coach/Hour picker in the Member app Day pass popup (`PackagesPage.xaml` / `PackagesViewModel`) for Coach-included Day passes (`6f36c02`). Verified `dotnet test` (1216/1216), Windows & Android builds, and `day-pass.mjs` / `day-pass-package.mjs` / `rules.mjs`.
 - 2026-11-21: owner UI & walk-in polish: replaced `RelativeSource` DataTemplate binding in `CashierPage` (`ddf544d`); styled Upcoming shifts on `ShiftsPage` as a responsive `TableBody` matching other tables (`fcaf46a`, `6030440`); added inline past-time validation and error display in **Post a shift** (`d8e90e2`); added coach loading/error state on Cashier Day pass (`1619c73`); enabled Day pass with coach for walk-in customers without an account (`0126_walkin_coach_sessions.sql`, pushed live; `desk_book_walkin_coach_session`, nullable `training_sessions.member_id`, `walk_in_name`, `288307a`). Verified `session-checkin.mjs` (4/4), `rules.mjs` (106/106), and `dotnet test` (1216/1216).
+- 2026-11-21: Part 1 live test on the real project with the owner's admin, coach and member accounts: 37/38 live checks passed, 86/86 Part 1 unit tests. One bug, **B1** (Pay again on a replaced package, see Phase 7). Test records left live: shift #20 closed ₱0.01 short ("Counting mistake") with two "LIVE TEST" notes (append-only, stay); member payment #104 (₱1,000, pending, expires 23 Nov).
+- 2026-11-21: Part 2 live test, same accounts: 45/53 checks passed; 6 failures come from B2, B3 and Q1, 2 were mistakes in the test script. Bugs **B2** (walk-in sessions cancellable by anyone), **B3** (damage report written straight in as closed), gap **Q1** (plain packages can't book a coach); see Phase 15. Test records left live: walk-in sessions #11 and #13 (cancelled), damage reports #1 and #2 (closed by admin with a "LIVE TEST" note), one admin alert, two coach alerts "New walk-in session".
