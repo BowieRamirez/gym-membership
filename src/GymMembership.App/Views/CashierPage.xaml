@@ -192,8 +192,7 @@
                                         <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding DayPassOptions}">
                                             <BindableLayout.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:ItemOption">
-                                                    <Button Text="{Binding Name}" Style="{StaticResource FilterChip}" Margin="0,0,8,8"
-                                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:CashierViewModel}}, Path=PickDayPassOptionCommand}" CommandParameter="{Binding .}">
+                                                    <Button Text="{Binding Name}" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Clicked="OnPickDayPassOption">
                                                         <Button.Triggers>
                                                             <DataTrigger TargetType="Button" Binding="{Binding IsPicked}" Value="True">
                                                                 <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" />
