@@ -171,11 +171,9 @@
                                             <Label Text="{Binding RequestTitle}" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
                                         </HorizontalStackLayout>
                                         <Label Text="{Binding Line.Body}" />
-                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                            <Button Text="Open Time requests" Style="{StaticResource LinkButton}" Padding="0" HorizontalOptions="Start" Clicked="OnOpenRequests"
-                                                    SemanticProperties.Hint="Opens Time requests, where you answer it" />
-                                            <Label Grid.Column="1" Text="{Binding Line.SentAt, Converter={StaticResource LocalDate}, ConverterParameter='ddd d MMM, h:mm tt'}"
-                                                   Style="{StaticResource Caption}" FontSize="12" VerticalOptions="Center" />
+                                        <Grid ColumnDefinitions="*" ColumnSpacing="12">
+                                            <Label Text="{Binding Line.SentAt, Converter={StaticResource LocalDate}, ConverterParameter='ddd d MMM, h:mm tt'}"
+                                                   Style="{StaticResource Caption}" FontSize="12" VerticalOptions="Center" HorizontalOptions="End" />
                                         </Grid>
                                     </VerticalStackLayout>
                                 </Border>

@@ -71,7 +71,9 @@ public sealed partial class DemoGateway
                 RequireActive();
                 var uid = Uid;
                 var rows = new List<ChatThread>();
-                var pairs = All<CoachHire>().Where(h => h.Status is Status.Active or Status.Ended).Select(h => (h.CoachId, h.MemberId)).Union(All<ChatMessage>().Select(m => (m.CoachId, m.MemberId)))
+                var pairs = All<CoachHire>().Where(h => h.Status is Status.Active or Status.Ended).Select(h => (h.CoachId, h.MemberId))
+                    .Union(All<TrainingSession>().Where(s => s.Status is Status.Scheduled or Status.Completed && (s.HeldUntil is null || s.HeldUntil > SubscriptionNow)).Select(s => (s.CoachId, s.MemberId)))
+                    .Union(All<ChatMessage>().Select(m => (m.CoachId, m.MemberId)))
                     .Where(p => p.CoachId == uid || p.MemberId == uid).ToList();
                 foreach (var (coachId, memberId) in pairs)
                 {
@@ -84,7 +86,7 @@ public sealed partial class DemoGateway
                         WithAvatar = All<Profile>().FirstOrDefault(p => p.Id == withId)?.AvatarPath,
                         LastBody = last is null ? null : Preview(last.Body, last.AttachmentPath), LastAt = last?.SentAt, LastFromMe = last?.SenderId == uid,
                         Unread = msgs.Count(m => m.SenderId != uid && m.ReadAt is null),
-                        CanSend = CoachesMember(coachId, memberId) && ActiveMember(memberId)
+                        CanSend = CanMessageCoachMember(coachId, memberId)
                     });
                 }
                 if (Writer(uid))

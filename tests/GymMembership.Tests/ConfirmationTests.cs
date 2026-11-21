@@ -105,7 +105,6 @@ public class ConfirmationTests
         { "StaffViewModels.cs", "SessionsViewModel", "SendReschedule" },
         { "StaffViewModels.cs", "AttendanceViewModel", "CancelShift" },
         { "StaffViewModels.cs", "ShiftsViewModel", "Cancel" },
-        { "StaffViewModels.cs", "TraineesViewModel", "Remove" },
         { "StaffViewModels.cs", "CoachProfileViewModel", "ToggleVisit" },
         { "StaffViewModels.cs", "CashierViewModel", "Record" },
         // removed VerifyPaymentsViewModel entry

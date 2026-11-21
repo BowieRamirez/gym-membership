@@ -1053,18 +1053,20 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
     public Task<AppResult<IReadOnlyList<TraineeRow>>> TraineesAsync() => Safe.RunAsync<IReadOnlyList<TraineeRow>>(async () =>
     {
         var uid = gw.CurrentUserId ?? throw new Exception("not authenticated");
-        var hires = await gw.ListAsync<CoachHire>(h => h.CoachId == uid && h.Status == "active");
         var names = await Directory_.UserNamesAsync(gw);
-        var sessions = await gw.ListAsync<TrainingSession>(s => s.CoachId == uid);
         var now = DateTime.UtcNow;
-        return hires.Select(h =>
+        var sessions = (await gw.ListAsync<TrainingSession>(s => s.CoachId == uid && s.Status != Status.Cancelled && (s.HeldUntil == null || s.HeldUntil > now)))
+            .ToList();
+        return sessions.GroupBy(s => s.MemberId).Select(g =>
         {
-            var mine = sessions.Where(s => s.MemberId == h.MemberId).ToList();
-            var next = mine.Where(s => s.Status == Status.Scheduled && s.ScheduledStart > now).OrderBy(s => s.ScheduledStart).FirstOrDefault();
-            return new TraineeRow(h.Id, uid, h.MemberId, names.GetValueOrDefault(h.MemberId, "Member"),
-                next is null ? "No session booked" : $"Next: {Fmt.Range(next.ScheduledStart, next.ScheduledEnd)}",
-                mine.Count(s => s.Status == Status.Completed));
-        }).OrderBy(t => t.Name).ToList();
+            var latest = g.OrderByDescending(s => s.ScheduledStart).First();
+            var next = g.Where(s => s.Status == Status.Scheduled && s.ScheduledStart > now).OrderBy(s => s.ScheduledStart).FirstOrDefault();
+            var label = next is not null
+                ? $"Next: {Fmt.Range(next.ScheduledStart, next.ScheduledEnd)}"
+                : $"Last: {Fmt.Range(latest.ScheduledStart, latest.ScheduledEnd)}";
+            return (Row: new TraineeRow(0, uid, g.Key, names.GetValueOrDefault(g.Key, "Member"), label, g.Count(s => s.Status == Status.Completed)),
+                    Latest: latest.ScheduledStart);
+        }).OrderByDescending(x => x.Latest).Select(x => x.Row).ToList();
     });
 
     public Task<AppResult<IReadOnlyList<ShiftPost>>> MyShiftsAsync() => Safe.RunAsync<IReadOnlyList<ShiftPost>>(async () =>

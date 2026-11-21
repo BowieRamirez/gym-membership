@@ -431,10 +431,9 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
     public bool HasCode => !string.IsNullOrEmpty(MyCode);
     DateTime? _passExpires;
     [ObservableProperty] private string passLeftText = "";
-    [ObservableProperty] private string hiredCoachName = "None yet";
-    [ObservableProperty] private string hiredCoachNote = "Hire a coach on Coaches";
     [ObservableProperty] private string currentSessionText = "None scheduled";
-    [ObservableProperty] private string currentSessionNote = "Book a session on Time requests";
+    [ObservableProperty] private string currentSessionNote = "Book a coach on Sessions";
+    [ObservableProperty] private string coachIncludedNote = "";
 
     /// <summary>The page reloads every 20 seconds and calls this: it renews the pass 30 seconds before it runs out, so it never lapses between ticks, and says when it changes.</summary>
     public async Task TickPassAsync(DateTime utcNow)
@@ -485,25 +484,18 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
     async Task LoadCoachingAsync()
     {
         if (sessions is null) return;
+        var activePkgName = Memberships.FirstOrDefault(m => m.Status == Status.Active)?.PackageName;
+        var pkgsRes = activePkgName is not null ? await svc.ListPackagesAsync() : null;
+        var pkg = pkgsRes is { Ok: true, Value: { } pkgs } ? pkgs.FirstOrDefault(p => p.Name == activePkgName) : null;
+        if (pkg is not null)
+            CoachIncludedNote = pkg.IncludesCoach ? "Coach included with your package"
+                : pkg.CoachAddonPrice is { } addon ? $"Coach add-on: ₱{addon:N0} per hour"
+                : "No coach add-on on this package";
+        else
+            CoachIncludedNote = "";
+
         var res = await sessions.RequestsAsync();
         if (!res.Ok || res.Value is not { } view) return;
-
-        var hired = view.HiredCoaches;
-        if (hired.Count == 0)
-        {
-            HiredCoachName = "None yet";
-            HiredCoachNote = "Hire a coach on Coaches";
-        }
-        else if (hired.Count == 1)
-        {
-            HiredCoachName = hired[0].Name;
-            HiredCoachNote = string.IsNullOrWhiteSpace(hired[0].Coach.Specialty) ? "Active coaching" : hired[0].Coach.Specialty!;
-        }
-        else
-        {
-            HiredCoachName = string.Join(", ", hired.Select(c => c.Name));
-            HiredCoachNote = $"{hired.Count} active coaches";
-        }
 
         var now = DateTime.UtcNow;
         var active = view.ActiveSessions ?? [];
@@ -512,7 +504,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
         if (current is null)
         {
             CurrentSessionText = "None scheduled";
-            CurrentSessionNote = "Book a session on Time requests";
+            CurrentSessionNote = "Book a coach on Sessions";
             return;
         }
 
@@ -521,7 +513,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
         CurrentSessionText = current.ScheduledStart.ToUniversalTime() <= now
             ? $"Now until {end:h:mm tt}"
             : $"{start:ddd d MMM, h:mm tt}";
-        var coach = hired.FirstOrDefault(c => c.Coach.UserId == current.CoachId)?.Name;
+        var coach = view.HiredCoaches.FirstOrDefault(c => c.Coach.UserId == current.CoachId)?.Name;
         CurrentSessionNote = coach is not null ? $"with {coach}" : "Scheduled session";
     }
 

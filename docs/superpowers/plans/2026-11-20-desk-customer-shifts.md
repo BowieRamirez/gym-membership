@@ -175,7 +175,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 | 8 | Coach rate and amenity coach fee removed; amenity booking "With a coach" goes | E1, E2 | Done |
 | 9 | Packages: Coach included switch; coach add-on price per package | E3, E4 | |
 | 10 | Book a coach: day → coach → time, one-on-one, checked again on confirm; add-on paid; limits | E5, E6, E7 | |
-| 11 | Hiring and Time requests removed; messages follow sessions | E8 | |
+| 11 | Hiring and Time requests removed; messages follow sessions | E8 | Done |
 | 12 | Desk: QR, Coach is here, session status apart from payment | E9 | |
 | 13 | Damage report after a session, reviewed by admins | E10 | |
 | 14 | Coach hours report for the gym's coach pay | E11 | |
@@ -315,8 +315,8 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 **Files:** migration `01xx_end_hiring.sql` (revoke and drop `hire_coach`, `answer_hire`, `cancel_hire_request`, `request_time`, `respond_time_request` and the other time request functions; message rules: member and coach may write while a session is today or upcoming or ended in the last 7 days, or an old hire is still active; old hires end with the member's current term), app: Time requests pages and view models out of both shells, `PhoneNavigation.cs`, `IconRail.Windows.cs`, Coaches (Hire out, Hired tag out), My membership (Next coach session card), coach Trainees page → Members I've coached, demo mirror, tests.
 
-- [ ] Failing tests: hire and time request calls gone (anon and members can't call); messaging allowed with a session, refused 8 days after the last one; an active old hire still messages until the term ends.
-- [ ] Screens with `impeccable`: Coaches, My membership, Messages (member); Trainees → Members I've coached, Messages (coach); menus without Time requests on both (Android and Windows, light/dark, 1.3 font scale). Migration, push, grants, commit.
+- [x] Failing tests: hire and time request calls gone (anon and members can't call); messaging allowed with a session, refused 8 days after the last one; an active old hire still messages until the term ends.
+- [x] Screens with `impeccable`: Coaches, My membership, Messages (member); Trainees → Members I've coached, Messages (coach); menus without Time requests on both (Android and Windows, light/dark, 1.3 font scale). Migration, push, grants, commit. (`0121_end_hiring.sql` verified locally; live push pending.)
 
 ## Phase 12: Desk check-in and session status (E9)
 

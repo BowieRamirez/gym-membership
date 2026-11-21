@@ -56,7 +56,6 @@ public class PhoneNavigationTests
     [Theory]
     [InlineData("Amenities", "AmenitiesPage")]
     [InlineData("Coaches", "CoachesPage")]
-    [InlineData("Time requests", "RequestsPage")]
     [InlineData("Renew or change", "PackagesPage")]
     public void Every_more_destination_has_an_explicit_dependency_injected_page_factory(string title, string page)
     {

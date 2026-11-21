@@ -161,6 +161,7 @@ public class NewFeatureTests
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         var hire = (await gw.ListAsync<CoachHire>()).First(h => h.Status == "active");
         Assert.True((await new CoachService(gw).EndHireAsync(hire.Id)).Ok);
+        gw.OwnerAgeSessions("u-alex", 20);
         Assert.False((await svc.ThreadsAsync()).Value!.Single(t => t.Kind == "coach").CanSend); // history stays, sending stops
         Assert.NotEmpty((await svc.MessagesAsync(thread)).Value!.Bubbles);
         Assert.Equal(AppErrorKind.Unauthorized, (await svc.SendAsync(thread, "still there?")).Error);
@@ -196,7 +197,7 @@ public class NewFeatureTests
     {
         var gw = await As("coach@demo.io");
         var names = (await new CoachService(gw).TraineesAsync()).Value!.Select(t => t.Name).ToList();
-        Assert.Equal(new[] { "Alex Tan", "Bea Lim" }, names);
+        Assert.Equal(new[] { "Bea Lim", "Alex Tan" }, names);
 
         await gw.SignInAsync("kai@demo.io", DemoGateway.DemoPassword);
         Assert.Empty((await new CoachService(gw).TraineesAsync()).Value!);

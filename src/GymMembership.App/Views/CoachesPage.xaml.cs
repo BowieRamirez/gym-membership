@@ -14,8 +14,4 @@ public partial class CoachesPage : BasePage
 	protected override TimeSpan? AutoRefresh => TimeSpan.FromSeconds(20);
 
 	void OnBookCoach(object? sender, EventArgs e) => Row<CoachesViewModel>(sender, v => v.BookCoachCommand);
-	void OnHire(object? sender, EventArgs e) => Row<CoachesViewModel>(sender, v => v.HireCommand);
-	void OnMessage(object? sender, EventArgs e) => Row<CoachesViewModel>(sender, v => v.MessageCommand);
-	void OnEndHire(object? sender, EventArgs e) => Row<CoachesViewModel>(sender, v => v.EndHireCommand);
-	void OnCancelRequest(object? sender, EventArgs e) => Row<CoachesViewModel>(sender, v => v.CancelRequestCommand);
 }

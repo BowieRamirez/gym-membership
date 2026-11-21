@@ -92,11 +92,13 @@ public class ChatPhotoTests
         var thread = await CoachThread(alex);
         await alex.SendPhotoAsync(thread, "a.png", Photo, "before");
         Assert.True((await new CoachService(gw).EndHireAsync((await gw.ListAsync<CoachHire>()).First(h => h.Status == "active").Id)).Ok);
+        gw.OwnerAgeSessions("u-alex", 20);
 
         Assert.Contains((await alex.MessagesAsync(thread)).Value!.Bubbles, b => b.ShowPhoto && b.Line.Body == "before");   // history stays (ending the hire may add request messages after it)
         Assert.Equal(AppErrorKind.Unauthorized, (await alex.SendPhotoAsync(thread, "b.png", Photo, "after")).Error);
 
-        var (_, bea) = await As("bea@demo.io", gw);   // hired Lena but has no active plan
+        var (_, bea) = await As("bea@demo.io", gw);   // hired Lena but has no active plan and no recent session
+        gw.OwnerAgeSessions("u-bea", 20);
         Assert.Equal(AppErrorKind.Unauthorized, (await bea.SendPhotoAsync(await CoachThread(bea), "c.png", Photo, "")).Error);
     }
 

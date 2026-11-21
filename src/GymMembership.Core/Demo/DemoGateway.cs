@@ -100,6 +100,14 @@ public sealed partial class DemoGateway : ISupabaseGateway
     bool ActiveMember(string? userId) => All<Profile>().Any(p => p.Id == userId && p.IsActive)
         && All<MembershipTerm>().Any(t => t.MemberId == userId && t.CancelledAt is null && t.StartsAt <= SubscriptionNow && t.EndsAt > SubscriptionNow);
     bool CoachesMember(string coach, string? member) => All<CoachHire>().Any(h => h.CoachId == coach && h.MemberId == member && h.Status == Status.Active);
+    bool CanMessageCoachMember(string coach, string member) =>
+        (CoachesMember(coach, member) && ActiveMember(member))
+        || All<TrainingSession>().Any(s =>
+            s.CoachId == coach && s.MemberId == member
+            && s.Status is Status.Scheduled or Status.Completed
+            && (s.HeldUntil is null || s.HeldUntil > SubscriptionNow)
+            && (s.ScheduledStart.AddHours(8).Date >= SubscriptionNow.AddHours(8).Date
+                || s.ScheduledEnd >= SubscriptionNow.AddDays(-7)));
     bool IsCoach(string? userId) => All<Coach>().Any(c => c.UserId == userId);
     CoachVisit? OpenVisit(string coachId) => All<CoachVisit>().FirstOrDefault(v => v.CoachId == coachId && v.CheckedOutAt is null);
 
@@ -110,6 +118,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     /// <summary>The demo's stand-in for the database owner (Supabase dashboard) switching an account on or off, which 0037 still allows
     /// for a super admin when nobody in the app can.</summary>
     public void OwnerSetActive(string userId, bool active) => All<Profile>().First(p => p.Id == userId).IsActive = active;
+    public void OwnerAgeSessions(string memberId, int days) { foreach (var s in All<TrainingSession>().Where(s => s.MemberId == memberId)) { s.ScheduledStart = s.ScheduledStart.AddDays(-days); s.ScheduledEnd = s.ScheduledEnd.AddDays(-days); } }
     /// <summary>0066 (G19): the database owner, not the app, can still leave an amenity set up as a pass, as amenities sold before were.</summary>
     public void OwnerSetPassDays(int amenityId, int? days) => All<Amenity>().First(a => a.Id == amenityId).DurationDays = days;
     /// <summary>A pass bought before 0066; it keeps working until it ends.</summary>
@@ -400,7 +409,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     if (All<ShiftPost>().Any(x => x.CoachId == s.CoachId && x.Status == Status.Scheduled && x.Start < s.End && s.Start < x.End)) throw Err("overlap");
                     break;
                 case ChatMessage c:
-                    if (c.SenderId != Uid || !CoachesMember(c.CoachId, c.MemberId) || !ActiveMember(c.MemberId)) throw Err(Rls);
+                    if (c.SenderId != Uid || !CanMessageCoachMember(c.CoachId, c.MemberId)) throw Err(Rls);
                     // the table's own checks: the sender is one of the two people, there is text or a photo, and the photo is in this conversation's folder
                     var photoOk = c.AttachmentPath is null || System.Text.RegularExpressions.Regex.IsMatch(c.AttachmentPath, $"^{c.CoachId}/{c.MemberId}/{FilePart}$");
                     if (c.SenderId != c.CoachId && c.SenderId != c.MemberId || (string.IsNullOrWhiteSpace(c.Body) && c.AttachmentPath is null) || !photoOk)
@@ -559,7 +568,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         {
             var coach = c.Groups["c"].Value; var member = c.Groups["m"].Value;
             if (uid != coach && uid != member) return false;
-            return !write || (CoachesMember(coach, member) && ActiveMember(member));
+            return !write || CanMessageCoachMember(coach, member);
         }
         return false;
     }

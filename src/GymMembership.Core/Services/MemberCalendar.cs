@@ -17,7 +17,7 @@ public static class MemberMenu
     static readonly MenuItem[] Everyday =
     [
         new("Sessions", "Sessions", true), new("Book an amenity", "Book an amenity", true),
-        new("Coaches", "Coaches"), new("Time requests", "Time requests", true), new("Messages", "Messages")
+        new("Coaches", "Coaches"), new("Messages", "Messages")
     ];
     static readonly MenuItem Membership = new("My membership", "My membership"), Settings = new("Settings", "Settings");
     static readonly MenuItem Payments = new("Payments", "Payments");   // owner fixes 2026-11-19 Q8: everyone with an account; after the first three so the phone tabs stay

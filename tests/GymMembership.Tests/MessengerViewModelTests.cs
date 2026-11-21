@@ -233,7 +233,9 @@ public class MessengerViewModelTests
     [Fact]
     public async Task The_screen_has_words_for_the_open_row_the_unread_tab_the_read_only_chat_and_who_took_a_conversation()
     {
-        var (gw, _, bea) = await Open("bea@demo.io");   // Bea has Lena as a coach but no active plan: she can read, not write
+        var gwSeed = new DemoGateway();
+        gwSeed.OwnerAgeSessions("u-bea", 20);
+        var (gw, _, bea) = await Open("bea@demo.io", gwSeed);   // Bea has Lena as a coach but no active plan and no recent session: she can read, not write
         Assert.True(bea.ReadOnly);
         Assert.True(bea.Selected!.IsOpen);
 
