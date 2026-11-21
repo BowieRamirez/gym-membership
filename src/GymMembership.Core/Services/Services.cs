@@ -1155,6 +1155,8 @@ public sealed record RequestRow(TimeRequest Request, string With, string Kind, b
 public sealed record AmenityChoice(int? Id, string Name);
 public sealed record SessionRow(TrainingSession Session, string With, bool IsMine, bool CanManage, bool CanChange, int? ReservationId = null, string? Amenity = null)
 {
+    public string Title => !string.IsNullOrWhiteSpace(Session.Title) ? Session.Title
+        : string.IsNullOrEmpty(Session.MemberId) ? "Walk-in session" : "Coach session";
     // the coach running a session on an amenity can add time until it ends (extend_reservation)
     public bool CanExtend => IsMine && ReservationId is not null && Session.Status == Status.Scheduled && Session.ScheduledEnd.ToUniversalTime() > DateTime.UtcNow;
     public bool IsWaitingForPayment => Session.Status == Status.Scheduled && Session.HeldUntil is not null;

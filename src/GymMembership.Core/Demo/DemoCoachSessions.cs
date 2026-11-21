@@ -124,7 +124,7 @@ public sealed partial class DemoGateway
                 var end = start.AddHours(hours);
                 if (!All<ShiftPost>().Any(sp => sp.CoachId == coachId && sp.Status == Status.Scheduled && sp.Start <= start && sp.End >= end)) throw Err("coach_not_free");
                 if (All<TrainingSession>().Any(ts => ts.CoachId == coachId && ts.Status == Status.Scheduled && (ts.HeldUntil is null || ts.HeldUntil > now) && ts.ScheduledStart < end && start < ts.ScheduledEnd)) throw Err("coach_taken");
-                var s = Add(new TrainingSession { CoachId = coachId, MemberId = "", WalkInName = Opt("p_walk_in_name"), ScheduledStart = start, ScheduledEnd = end, Status = Status.Scheduled });
+                var s = Add(new TrainingSession { CoachId = coachId, MemberId = "", WalkInName = Opt("p_walk_in_name"), Title = "Walk-in session", ScheduledStart = start, ScheduledEnd = end, Status = Status.Scheduled });
                 result = s.Id;
                 return true;
             }

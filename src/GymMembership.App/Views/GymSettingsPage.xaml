@@ -24,7 +24,11 @@
                 <FlexLayout Wrap="Wrap" AlignItems="End">
                     <VerticalStackLayout Spacing="6" Margin="0,0,16,0" IsVisible="{Binding CanEditWalkInPrice}">
                         <Label Text="Walk-in price (₱)" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}" WidthRequest="160"><Entry Text="{Binding WalkInPrice}" Keyboard="Numeric" SemanticProperties.Description="Walk-in price" /></Border>
+                        <Border Style="{StaticResource Field}" WidthRequest="160">
+                            <Entry Text="{Binding WalkInPrice}" Keyboard="Numeric" SemanticProperties.Description="Walk-in price">
+                                <Entry.Behaviors><c:NumericOnlyBehavior /></Entry.Behaviors>
+                            </Entry>
+                        </Border>
                         <!-- 0098: the Day pass package's price wins while one is on sale -->
                         <Label Text="Used only while no Day pass package is on sale." Style="{StaticResource Caption}" WidthRequest="160" />
                     </VerticalStackLayout>
@@ -35,24 +39,44 @@
                     </VerticalStackLayout>
                     <VerticalStackLayout Spacing="6">
                         <Label Text="Opening float (₱)" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}" WidthRequest="160"><Entry Text="{Binding OpeningFloat}" Keyboard="Numeric" AutomationId="OpeningFloat" SemanticProperties.Description="Opening float, in pesos" /></Border>
+                        <Border Style="{StaticResource Field}" WidthRequest="160">
+                            <Entry Text="{Binding OpeningFloat}" Keyboard="Numeric" AutomationId="OpeningFloat" SemanticProperties.Description="Opening float, in pesos">
+                                <Entry.Behaviors><c:NumericOnlyBehavior /></Entry.Behaviors>
+                            </Entry>
+                        </Border>
                     </VerticalStackLayout>
                     <!-- G13 (0064): the part of an amenity booking paid to reserve it; the rest is paid at the desk -->
                     <VerticalStackLayout Spacing="6">
                         <Label Text="Booking down payment (%)" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}" WidthRequest="160"><Entry Text="{Binding DownPaymentPercent}" Keyboard="Numeric" AutomationId="DownPaymentPercent" SemanticProperties.Description="Down payment for amenity bookings, in percent" /></Border>
+                        <Border Style="{StaticResource Field}" WidthRequest="160">
+                            <Entry Text="{Binding DownPaymentPercent}" Keyboard="Numeric" AutomationId="DownPaymentPercent" SemanticProperties.Description="Down payment for amenity bookings, in percent">
+                                <Entry.Behaviors><c:NumericOnlyBehavior AllowDecimal="False" /></Entry.Behaviors>
+                            </Entry>
+                        </Border>
                     </VerticalStackLayout>
                     <VerticalStackLayout Spacing="6">
                         <Label Text="Coach sessions / day (member)" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}" WidthRequest="180"><Entry Text="{Binding MaxCoachSessionsPerDay}" Keyboard="Numeric" AutomationId="MaxCoachSessionsPerDay" SemanticProperties.Description="Max coach sessions per member per day" /></Border>
+                        <Border Style="{StaticResource Field}" WidthRequest="180">
+                            <Entry Text="{Binding MaxCoachSessionsPerDay}" Keyboard="Numeric" AutomationId="MaxCoachSessionsPerDay" SemanticProperties.Description="Max coach sessions per member per day">
+                                <Entry.Behaviors><c:NumericOnlyBehavior AllowDecimal="False" /></Entry.Behaviors>
+                            </Entry>
+                        </Border>
                     </VerticalStackLayout>
                     <VerticalStackLayout Spacing="6">
                         <Label Text="Upcoming coach sessions (member)" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}" WidthRequest="180"><Entry Text="{Binding MaxUpcomingCoachSessions}" Keyboard="Numeric" AutomationId="MaxUpcomingCoachSessions" SemanticProperties.Description="Max upcoming coach sessions per member" /></Border>
+                        <Border Style="{StaticResource Field}" WidthRequest="180">
+                            <Entry Text="{Binding MaxUpcomingCoachSessions}" Keyboard="Numeric" AutomationId="MaxUpcomingCoachSessions" SemanticProperties.Description="Max upcoming coach sessions per member">
+                                <Entry.Behaviors><c:NumericOnlyBehavior AllowDecimal="False" /></Entry.Behaviors>
+                            </Entry>
+                        </Border>
                     </VerticalStackLayout>
                     <VerticalStackLayout Spacing="6">
                         <Label Text="Coach daily max (hours)" Style="{StaticResource Caption}" />
-                        <Border Style="{StaticResource Field}" WidthRequest="180"><Entry Text="{Binding MaxCoachHoursPerDay}" Keyboard="Numeric" Placeholder="Unlimited" AutomationId="MaxCoachHoursPerDay" SemanticProperties.Description="Max coach hours per day" /></Border>
+                        <Border Style="{StaticResource Field}" WidthRequest="180">
+                            <Entry Text="{Binding MaxCoachHoursPerDay}" Keyboard="Numeric" Placeholder="Unlimited" AutomationId="MaxCoachHoursPerDay" SemanticProperties.Description="Max coach hours per day">
+                                <Entry.Behaviors><c:NumericOnlyBehavior AllowDecimal="False" /></Entry.Behaviors>
+                            </Entry>
+                        </Border>
                     </VerticalStackLayout>
                 </FlexLayout>
                 <Label Text="The opening float is the cash each cashier counts into their drawer when they start a shift. The booking down payment is the part of an amenity booking paid to reserve it (1 to 100); the rest is paid at the desk. Coach daily max caps how many hours a coach can be booked in a day (leave blank for unlimited)." Style="{StaticResource Caption}" />

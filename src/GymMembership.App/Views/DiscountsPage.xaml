@@ -87,11 +87,19 @@
                         </VerticalStackLayout>
                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="110">
                             <Label Text="Percent off" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}"><Entry Text="{Binding NewPercent}" Keyboard="Numeric" /></Border>
+                            <Border Style="{StaticResource Field}">
+                                <Entry Text="{Binding NewPercent}" Keyboard="Numeric">
+                                    <Entry.Behaviors><c:NumericOnlyBehavior AllowDecimal="False" /></Entry.Behaviors>
+                                </Entry>
+                            </Border>
                         </VerticalStackLayout>
                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="110">
                             <Label Text="Max uses" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}"><Entry Text="{Binding NewLimit}" Keyboard="Numeric" SemanticProperties.Description="How many times the code can be used" /></Border>
+                            <Border Style="{StaticResource Field}">
+                                <Entry Text="{Binding NewLimit}" Keyboard="Numeric" SemanticProperties.Description="How many times the code can be used">
+                                    <Entry.Behaviors><c:NumericOnlyBehavior AllowDecimal="False" /></Entry.Behaviors>
+                                </Entry>
+                            </Border>
                         </VerticalStackLayout>
                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
                             <Label Text="Last day" Style="{StaticResource Caption}" />

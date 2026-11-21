@@ -17,8 +17,6 @@
             <ContentView x:Name="Account" />
             <VerticalStackLayout x:Name="CoachSection" Spacing="12" Margin="0,8,0,0">
             <Label Text="Your coach profile" Style="{StaticResource SectionTitle}" />
-            <!-- the profile form, and beside it (above it on phones and narrow windows) check-in -->
-            <c:SideLayout x:Name="CoachColumn" SideWidth="420" Spacing="16">
             <Border Style="{StaticResource Panel}">
             <VerticalStackLayout Spacing="16">
 
@@ -47,18 +45,6 @@
             <Button Text="Save profile" Command="{Binding SaveCommand}" HorizontalOptions="Start" />
             </VerticalStackLayout>
             </Border>
-            <VerticalStackLayout Spacing="16">
-            <Border Style="{StaticResource Panel}">
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
-                    <VerticalStackLayout Spacing="8" VerticalOptions="Center">
-                        <c:CardTitle Text="At the gym" />
-                        <Label Text="{Binding VisitText}" Style="{StaticResource Caption}" />
-                    </VerticalStackLayout>
-                    <Button Grid.Column="1" Text="{Binding VisitButton}" Command="{Binding ToggleVisitCommand}" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" />
-                </Grid>
-            </Border>
-            </VerticalStackLayout>
-            </c:SideLayout>
             </VerticalStackLayout>
         </VerticalStackLayout>
     </ScrollView>

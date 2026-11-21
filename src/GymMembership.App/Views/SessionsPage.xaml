@@ -13,7 +13,7 @@
         <DataTemplate x:Key="SessionRow" x:DataType="svc:SessionRow">
             <VerticalStackLayout>
                 <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,*,230,120,120,470">
-                    <Label Text="{Binding Session.Title}" FontFamily="BarlowMedium" VerticalOptions="Center" />
+                    <Label Text="{Binding Title}" FontFamily="BarlowMedium" VerticalOptions="Center" />
                     <Label Grid.Column="1" Text="{Binding With}" VerticalOptions="Center" />
                     <Label Grid.Column="2" VerticalOptions="Center">
                         <Label.Text>
@@ -43,7 +43,7 @@
             <VerticalStackLayout>
                 <VerticalStackLayout Spacing="4" Padding="14,12">
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                        <Label Text="{Binding Session.Title}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                        <Label Text="{Binding Title}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
                         <c:StatusChip Grid.Column="1" Status="{Binding StatusText}" VerticalOptions="Center" />
                     </Grid>
                     <Label Style="{StaticResource Caption}">
@@ -206,7 +206,7 @@
                 <VerticalStackLayout Spacing="12" IsVisible="{Binding Rescheduling, Converter={StaticResource IsNotNull}}">
                     <Border Style="{StaticResource SidePanel}">
                         <VerticalStackLayout Spacing="12">
-                                <c:CardTitle Text="{Binding Rescheduling.Session.Title, StringFormat='Move “{0}” to a new time'}" />
+                                <c:CardTitle Text="{Binding Rescheduling.Title, StringFormat='Move “{0}” to a new time'}" />
                                 <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                                     <VerticalStackLayout Spacing="4">
                                         <Label Text="New date" Style="{StaticResource Caption}" />

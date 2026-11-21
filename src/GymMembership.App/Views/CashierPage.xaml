@@ -123,7 +123,11 @@
                         <FlexLayout Wrap="Wrap" AlignItems="End">
                             <VerticalStackLayout Spacing="4" Margin="0,0,14,0">
                                 <Label Text="Cash you counted (₱)" Style="{StaticResource Caption}" />
-                                <Border Style="{StaticResource Field}" WidthRequest="170"><Entry Text="{Binding CountedText}" Keyboard="Numeric" AutomationId="ShiftCounted" ReturnCommand="{Binding EndShiftCommand}" SemanticProperties.Description="Cash you counted, in pesos" /></Border>
+                                <Border Style="{StaticResource Field}" WidthRequest="170">
+                                    <Entry Text="{Binding CountedText}" Keyboard="Numeric" AutomationId="ShiftCounted" ReturnCommand="{Binding EndShiftCommand}" SemanticProperties.Description="Cash you counted, in pesos">
+                                        <Entry.Behaviors><c:NumericOnlyBehavior /></Entry.Behaviors>
+                                    </Entry>
+                                </Border>
                             </VerticalStackLayout>
                             <!-- matches in green, over or short in red; the words say which, so colour is never the only signal -->
                             <Label Text="{Binding CountText}" FontFamily="BarlowSemiBold" FontSize="18" MinimumHeightRequest="44" VerticalTextAlignment="Center"
