@@ -20,6 +20,7 @@ public partial class RevenuePage
         body.Children.Add(Period(vm));
         body.Children.Add(ChartPanel(vm));
         body.Children.Add(Section("Where it came from", Sources(vm)));
+        body.Children.Add(Section("Coach hours", CoachHoursTable(vm)));
         body.Children.Add(Section("Day by day", DayTable(vm)));
         return body;
     }
@@ -247,6 +248,38 @@ public partial class RevenuePage
             g.ColumnDefinitions = Columns();
             for (var i = 2; i <= 3; i++) ((View)g.Children[i]).IsVisible = !narrow;
         };
+        return new Border { Style = Resource<Style>("TablePanel"), Content = table };
+    }
+
+    static View CoachHoursTable(RevenueViewModel vm)
+    {
+        ColumnDefinitionCollection Columns() => [new(GridLength.Star), new(120), new(110), new(100), new(130)];
+        var head = new Grid { Style = Resource<Style>("TableHead"), ColumnDefinitions = Columns() };
+        string[] titles = ["Coach", "Completed", "Hours", "No-shows", "Cancelled"];
+        for (var i = 0; i < titles.Length; i++)
+        {
+            var t = Text(titles[i], "Caption");
+            if (i > 0) t.HorizontalOptions = LayoutOptions.End;
+            head.Add(t, i);
+        }
+        var rows = new TableBody { WideFrom = 0 };
+        rows.Items = vm.CoachHours;
+        rows.Empty = new Label { Text = "No coach sessions in this period.", Style = Resource<Style>("Muted"), Margin = new Thickness(14) };
+        rows.RowTemplate = rows.CardTemplate = new DataTemplate(() =>
+        {
+            var row = new Grid { Style = Resource<Style>("TableRow"), Padding = new Thickness(14, 10), ColumnDefinitions = Columns() };
+            var name = Text("", "BaseLabel"); name.FontFamily = "BarlowMedium";
+            name.SetBinding(Label.TextProperty, nameof(CoachHoursRow.CoachName));
+            row.Add(name);
+            row.Add(Right(nameof(CoachHoursRow.CompletedSessions), null), 1);
+            var hrs = Right(nameof(CoachHoursRow.HoursText), null); hrs.FontFamily = "BarlowSemiBold";
+            row.Add(hrs, 2);
+            row.Add(Right(nameof(CoachHoursRow.NoShows), null), 3);
+            row.Add(Right(nameof(CoachHoursRow.CoachCancelled), null), 4);
+            return new VerticalStackLayout { Children = { new BoxView { Style = Resource<Style>("Hairline") }, row } };
+        });
+        var csv = new Button { Text = "Export CSV", Style = Resource<Style>("SmallOutlineButton"), Command = vm.ExportCoachHoursCsvCommand, HorizontalOptions = LayoutOptions.Start, Margin = new Thickness(14, 10) };
+        var table = new VerticalStackLayout { Children = { head, rows, csv } };
         return new Border { Style = Resource<Style>("TablePanel"), Content = table };
     }
 

@@ -94,7 +94,7 @@ public class TransactionsLogTests
     public void Transactions_offers_the_owners_choices()
     {
         var vm = new AuditViewModel(new AdminService(new DemoGateway()));
-        Assert.Equal(["All", "Membership", "Amenity", "Day pass", "Refund", "Cash shift"], vm.Whats);
+        Assert.Equal(["All", "Membership", "Amenity", "Day pass", "Coach add-on", "Refund", "Cash shift"], vm.Whats);
         Assert.Equal(["All", "Cash", "GCash", "Maya", "QR Ph", "Card"], vm.PaidWiths);
         Assert.Equal(["All", "Pending", "Paid", "Failed", "Refunded", "Voided"], vm.Statuses);
     }

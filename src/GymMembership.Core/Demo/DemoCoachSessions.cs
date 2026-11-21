@@ -279,6 +279,33 @@ public sealed partial class DemoGateway
                 Add(new AuditEntry { ActorId = Uid, Action = "damage_report.review", Entity = "damage_reports", EntityId = rep.Id.ToString(), CreatedAt = now });
                 return true;
             }
+            case "coach_hours_report":
+            {
+                RequireActive();
+                if (!RolesOf(Uid).Any(r => r is "admin" or "subadmin")) throw Err("forbidden");
+                var from = DateOnly.Parse((string)a["p_from"]);
+                var to = DateOnly.Parse((string)a["p_to"]);
+                if (to < from) throw Err("bad_input");
+                var names = All<Profile>().ToDictionary(p => p.Id, p => p.FullName);
+                result = All<Coach>().OrderBy(c => names.GetValueOrDefault(c.UserId, "Coach")).Select(c =>
+                {
+                    var ses = All<TrainingSession>().Where(s =>
+                        s.CoachId == c.UserId
+                        && (s.HeldUntil is null || s.HeldUntil > now)
+                        && DateOnly.FromDateTime(s.ScheduledStart.AddHours(8)) >= from
+                        && DateOnly.FromDateTime(s.ScheduledStart.AddHours(8)) <= to).ToList();
+                    var completed = ses.Where(s => s.Status == Status.Completed).ToList();
+                    var hrs = completed.Sum(s => (decimal)(s.ScheduledEnd - s.ScheduledStart).TotalHours);
+                    return new CoachHoursRow(
+                        c.UserId,
+                        names.GetValueOrDefault(c.UserId, "Coach"),
+                        completed.Count,
+                        Math.Round(hrs, 2),
+                        ses.Count(s => s.Status == Status.NoShow),
+                        ses.Count(s => s.Status == Status.Cancelled));
+                }).ToList();
+                return true;
+            }
         }
         return false;
     }

@@ -326,6 +326,7 @@ public class NotifiedMember : BaseModel
 { [Column("discount_id")] public int DiscountId { get; set; } [Column("kind")] public string Kind { get; set; } = ""; [Column("item_id")] public int? ItemId { get; set; }
   public static DiscountItem Package(int? id) => new() { Kind = "package", ItemId = id };
   public static DiscountItem Amenity(int? id) => new() { Kind = "amenity", ItemId = id };
+  public static DiscountItem CoachAddon() => new() { Kind = "coach", ItemId = null };
   /// <summary>Every package and every amenity: what every code fitted before 0060.</summary>
   public static IReadOnlyList<DiscountItem> Everything => [Package(null), Amenity(null)]; }
 

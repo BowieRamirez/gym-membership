@@ -2209,6 +2209,7 @@ public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
     // G3: what the new code fits
     [ObservableProperty] private bool allPackages;
     [ObservableProperty] private bool allAmenities;
+    [ObservableProperty] private bool forCoachAddon;
     public ObservableCollection<ItemChoice> PackageChoices { get; } = new();
     public ObservableCollection<ItemChoice> AmenityChoices { get; } = new();
 
@@ -2226,7 +2227,9 @@ public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
     /// <summary>What the form says the code fits; "all" wins over single ticks.</summary>
     public IReadOnlyList<DiscountItem> ChosenItems() =>
         (AllPackages ? [DiscountItem.Package(null)] : PackageChoices.Where(c => c.IsChosen).Select(c => DiscountItem.Package(c.Id)))
-        .Concat(AllAmenities ? [DiscountItem.Amenity(null)] : AmenityChoices.Where(c => c.IsChosen).Select(c => DiscountItem.Amenity(c.Id))).ToList();
+        .Concat(AllAmenities ? [DiscountItem.Amenity(null)] : AmenityChoices.Where(c => c.IsChosen).Select(c => DiscountItem.Amenity(c.Id)))
+        .Concat(ForCoachAddon ? [DiscountItem.CoachAddon()] : [])
+        .ToList();
 
     [RelayCommand]
     private async Task AddAsync()
@@ -2237,14 +2240,14 @@ public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
         // valid through the end of the chosen day, local time
         var d = new Discount { Code = NewCode.Trim().ToUpperInvariant(), Percent = NewPercent, MaxUses = NewLimit, ExpiresAt = ValidUntil.Date.AddDays(1).ToUniversalTime(), ShowOnPackages = NewShowToMembers };
         var fits = DiscountFits.Text(AllPackages, PackageChoices.Where(c => c.IsChosen).Select(c => c.Id), AllAmenities, AmenityChoices.Where(c => c.IsChosen).Select(c => c.Id),
-            PackageChoices.ToDictionary(c => c.Id, c => c.Name), AmenityChoices.ToDictionary(c => c.Id, c => c.Name));
+            PackageChoices.ToDictionary(c => c.Id, c => c.Name), AmenityChoices.ToDictionary(c => c.Id, c => c.Name), ForCoachAddon);
         // G2: nothing can change afterwards, so the terms are read back before the code goes live
         if (!await Confirm.AskAsync($"Add code {d.Code}?",
                 $"{d.Percent}% off, up to {d.MaxUses} uses, until {ValidUntil:d MMM yyyy}.\nFor: {fits}.\n"
                 + (d.ShowOnPackages ? "Members see it." : "Hidden from members.") + "\nA code can't be changed after it's added.", "Add code")) return;
         if (!await RunAsync(() => svc.CreateDiscountAsync(d, items), _ => { })) return;
         Notice = $"Code {d.Code} is live." + (d.ShowOnPackages ? " Members can see it." : "");
-        NewCode = ""; NewShowToMembers = true; AllPackages = AllAmenities = false;
+        NewCode = ""; NewShowToMembers = true; AllPackages = AllAmenities = ForCoachAddon = false;
         await LoadAsync();
     }
 
@@ -2285,6 +2288,7 @@ public partial class RevenueViewModel(IAdminService svc, IReportFiles? files = n
 {
     public ObservableCollection<RevenueRow> Rows { get; } = new();
     public ObservableCollection<CashShift> Shifts { get; } = new();   // F2: drawer shifts opened in the same dates
+    public ObservableCollection<CoachHoursRow> CoachHours { get; } = new();   // E11: completed hours per coach
     [ObservableProperty] private DateTime from = DateTime.Today.AddDays(-29);   // 30 days with today
     [ObservableProperty] private DateTime to = DateTime.Today;
     [ObservableProperty] private string totalText = "₱0.00";
@@ -2301,8 +2305,9 @@ public partial class RevenueViewModel(IAdminService svc, IReportFiles? files = n
         Fill(Rows, rows);
         TotalText = $"₱{rows.Sum(r => r.Total):N2}";
         _loaded = (from, to, rows.Sum(r => r.Total));
-        ExportPdfCommand.NotifyCanExecuteChanged(); ExportShiftsPdfCommand.NotifyCanExecuteChanged();
+        ExportPdfCommand.NotifyCanExecuteChanged(); ExportShiftsPdfCommand.NotifyCanExecuteChanged(); ExportCoachHoursCsvCommand.NotifyCanExecuteChanged();
     }) && await RunAsync(() => svc.CashShiftsAsync(from, to), shifts => { Fill(Shifts, shifts); OnPropertyChanged(nameof(ShiftTotalsText)); })
+       && await RunAsync(() => svc.CoachHoursAsync(from, to), hours => Fill(CoachHours, hours))
        && await LoadDashboardAsync(from, to);
 
     // ---------- the Windows page (owner 2026-11-12, mockup docs/mockups/revenue.html); Android shows only the parts above ----------
@@ -2428,6 +2433,20 @@ public partial class RevenueViewModel(IAdminService svc, IReportFiles? files = n
         var name = $"cash-shifts-{shown.From:yyyy-MM-dd}-to-{shown.To:yyyy-MM-dd}.pdf";
         if (await RunAsync(() => Safe.RunAsync(async () => { await files.ShareAsync(name, CashShiftPdf.Build(shown.From, shown.To, shifts, DateTime.UtcNow, await files.FontAsync())); return true; })))
             Notice = "Cash shifts PDF created. Choose where to save or send it.";
+    }
+
+    [RelayCommand(CanExecute = nameof(CanExport))]
+    private async Task ExportCoachHoursCsvAsync()
+    {
+        if (files is null || _loaded is not { } shown) return;
+        Notice = null;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Coach,Completed sessions,Completed hours,No-shows,Coach cancellations");
+        foreach (var c in CoachHours)
+            sb.AppendLine($"{AuditCsv.Cell(c.CoachName)},{c.CompletedSessions},{c.CompletedHours:0.##},{c.NoShows},{c.CoachCancelled}");
+        var name = $"coach-hours-{shown.From:yyyy-MM-dd}-to-{shown.To:yyyy-MM-dd}.csv";
+        if (await RunAsync(() => Safe.RunAsync(async () => { await files.ShareAsync(name, System.Text.Encoding.UTF8.GetBytes(sb.ToString())); return true; })))
+            Notice = "Coach hours CSV created. Choose where to save or send it.";
     }
 
     bool CanExport() => files is not null && _loaded is not null;
@@ -2582,8 +2601,8 @@ public partial class AuditViewModel(IAdminService svc, ArchiveViewModel? archive
     bool HasPrevious => Page > 0;
     AuditFilter _applied = new();
     // owner fixes 2026-11-19 Q4 (0101): Transactions has its own filters and its own applied filter; the two tabs never mix
-    public string[] Whats { get; } = ["All", "Membership", "Amenity", "Day pass", "Refund", "Cash shift"];
-    static readonly string[] WhatKeys = ["", "membership", "amenity", "day_pass", "refund", "cash_shift"];
+    public string[] Whats { get; } = ["All", "Membership", "Amenity", "Day pass", "Coach add-on", "Refund", "Cash shift"];
+    static readonly string[] WhatKeys = ["", "membership", "amenity", "day_pass", "coach_addon", "refund", "cash_shift"];
     public string[] PaidWiths { get; } = ["All", "Cash", "GCash", "Maya", "QR Ph", "Card"];
     static readonly string[] PaidWithKeys = ["", "cash", "gcash", "paymaya", "qrph", "cards"];   // Xendit's channel codes, or the payment's method
     public string[] Statuses { get; } = ["All", "Pending", "Paid", "Failed", "Refunded", "Voided"];

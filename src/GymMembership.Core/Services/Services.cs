@@ -1800,11 +1800,11 @@ public sealed record UserRow(string UserId, string Username, bool IsActive, IRea
 public static class DiscountFits
 {
     public static string Text(bool allPackages, IEnumerable<int> packageIds, bool allAmenities, IEnumerable<int> amenityIds,
-        IReadOnlyDictionary<int, string> packageNames, IReadOnlyDictionary<int, string> amenityNames)
+        IReadOnlyDictionary<int, string> packageNames, IReadOnlyDictionary<int, string> amenityNames, bool forCoach = false)
     {
         static string? Part(bool all, string allText, IEnumerable<int> ids, IReadOnlyDictionary<int, string> names) =>
             all ? allText : ids.Select(names.GetValueOrDefault).OfType<string>().ToList() is { Count: > 0 } n ? string.Join(", ", n) : null;
-        var parts = new[] { Part(allPackages, "All packages", packageIds, packageNames), Part(allAmenities, "All amenities", amenityIds, amenityNames) }.OfType<string>().ToList();
+        var parts = new[] { Part(allPackages, "All packages", packageIds, packageNames), Part(allAmenities, "All amenities", amenityIds, amenityNames), forCoach ? "Coach add-on" : null }.OfType<string>().ToList();
         return parts.Count > 0 ? string.Join(" · ", parts) : "Nothing on sale now";
     }
 
@@ -1888,6 +1888,18 @@ public interface IAdminService
     Task<AppResult<bool>> ReopenDayAsync(DateOnly day);
     Task<AppResult<IReadOnlyList<DamageReportRow>>> DamageReportsAsync() => Task.FromResult(AppResult<IReadOnlyList<DamageReportRow>>.Success([]));
     Task<AppResult<bool>> ReviewDamageAsync(int reportId, string status, string? note = null, bool setMaintenance = false) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<IReadOnlyList<CoachHoursRow>>> CoachHoursAsync(DateOnly from, DateOnly to) => Task.FromResult(AppResult<IReadOnlyList<CoachHoursRow>>.Success([]));
+}
+
+public sealed record CoachHoursRow(
+    [property: System.Text.Json.Serialization.JsonPropertyName("coach_id")] string CoachId,
+    [property: System.Text.Json.Serialization.JsonPropertyName("coach_name")] string CoachName,
+    [property: System.Text.Json.Serialization.JsonPropertyName("completed_sessions")] int CompletedSessions,
+    [property: System.Text.Json.Serialization.JsonPropertyName("completed_hours")] decimal CompletedHours,
+    [property: System.Text.Json.Serialization.JsonPropertyName("no_shows")] int NoShows,
+    [property: System.Text.Json.Serialization.JsonPropertyName("coach_cancelled")] int CoachCancelled)
+{
+    public string HoursText => $"{CompletedHours:0.##} hrs";
 }
 
 public sealed record DamageReportRow(DamageReport Report, string ReporterName, string? CoachName, string? AmenityName)
@@ -1937,6 +1949,9 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         ["p_note"] = (string.IsNullOrWhiteSpace(note) ? null : note.Trim())!,
         ["p_set_maintenance"] = setMaintenance
     });
+
+    public Task<AppResult<IReadOnlyList<CoachHoursRow>>> CoachHoursAsync(DateOnly from, DateOnly to) => Safe.RunAsync<IReadOnlyList<CoachHoursRow>>(async () =>
+        await gw.RpcAsync<List<CoachHoursRow>>("coach_hours_report", new() { ["p_from"] = from.ToString("yyyy-MM-dd"), ["p_to"] = to.ToString("yyyy-MM-dd") }));
     public Task<AppResult<bool>> SetActiveAsync(string userId, bool active) => Rpc("set_user_active", new() { ["p_user"] = userId, ["p_active"] = active });
 
     // accounts are made by an Edge Function: it holds the service-role key, which the app never has
@@ -1988,7 +2003,7 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
             var mine = items[id].ToList();
             bool All(string kind) => mine.Any(i => i.Kind == kind && i.ItemId is null);
             IEnumerable<int> Ids(string kind) => mine.Where(i => i.Kind == kind && i.ItemId is not null).Select(i => i.ItemId!.Value);
-            return DiscountFits.Text(All("package"), Ids("package"), All("amenity"), Ids("amenity"), packages, amenities);
+            return DiscountFits.Text(All("package"), Ids("package"), All("amenity"), Ids("amenity"), packages, amenities, All("coach"));
         }
         return (await gw.ListAsync<Discount>()).OrderByDescending(d => d.ExpiresAt)
             .Select(d => new DiscountRow(d, !d.IsActive ? "inactive" : ManilaTime.Utc(d.ExpiresAt) <= now ? "expired" : "active",

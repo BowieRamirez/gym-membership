@@ -178,7 +178,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 | 11 | Hiring and Time requests removed; messages follow sessions | E8 | Done |
 | 12 | Desk: QR, Coach is here, session status apart from payment | E9 | Done |
 | 13 | Damage report after a session, reviewed by admins | E10 | Done |
-| 14 | Coach hours report for the gym's coach pay | E11 | |
+| 14 | Coach hours report for the gym's coach pay | E11 | Done |
 | 15 | Part 2 checks, review, owner hand checks | | |
 
 ## 3. Findings: coaches today
@@ -342,8 +342,8 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 **Files:** Discounts admin (a code can be set for the coach add-on, kind `coach` from Task 11), `coach_hours_report(p_from, p_to)` (admins only; per coach: completed sessions, hours, no-shows, coach cancellations; no money), Revenue page section and CSV, "Coach add-on" line in sales, demo mirror, tests.
 
-- [ ] Failing tests: counts completed sessions and hours only; no-shows counted apart; front desk can't call it.
-- [ ] Screens with `impeccable`: Revenue (Coach hours section, Coach add-on in sales), Refunds, Discounts and Logs & Archive (Transactions "Coach add-on") (Windows). Migration, push, grants, commit.
+- [x] Failing tests: counts completed sessions and hours only; no-shows counted apart; front desk can't call it.
+- [x] Screens with `impeccable`: Revenue (Coach hours section, Coach add-on in sales), Refunds, Discounts and Logs & Archive (Transactions "Coach add-on") (Windows). Migration, push, grants, commit. (`0124_coach_hours_report.sql` verified locally; live push pending.)
 
 ## Phase 15: Part 2 checks
 

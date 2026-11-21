@@ -131,6 +131,11 @@
                             </VerticalStackLayout>
                         </Border>
                     </c:CardGrid>
+                    <HorizontalStackLayout Spacing="6">
+                        <CheckBox WidthRequest="{OnPlatform WinUI=32, Default=-1}" MinimumWidthRequest="0" IsChecked="{Binding ForCoachAddon}" Color="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" VerticalOptions="Center"
+                                  AutomationId="ForCoachAddon" SemanticProperties.Description="Coach add-on" />
+                        <Label Text="Coach add-on" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
 
                     <FlexLayout Wrap="Wrap" AlignItems="Center" JustifyContent="SpaceBetween">
                         <HorizontalStackLayout Spacing="8" Margin="0,0,12,8">
