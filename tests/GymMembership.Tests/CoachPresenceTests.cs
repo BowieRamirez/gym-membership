@@ -87,7 +87,7 @@ public class CoachPresenceTests
         clock.Now = clock.Now.AddHours(11);   // 23:00 Manila, after the 22:00 closing
         var r = await svc.CheckInAsync();
         Assert.Equal(AppErrorKind.Validation, r.Error);
-        Assert.Equal("The gym is closed right now. Coaches can check in during opening hours.", ErrorText.For(r.Error, r.Message));
+        Assert.Equal("The gym is closed at that time. Check-ins work during opening hours.", ErrorText.For(r.Error, r.Message));
     }
 
     [Fact]

@@ -9,7 +9,7 @@ public class CheckInTodayTests
 {
     static async Task<(DemoGateway Gw, CheckInViewModel Vm)> Desk(string email = "employee@demo.io", DemoGateway? gw = null)
     {
-        gw ??= new DemoGateway();
+        gw ??= new DemoGateway().OpenAllDay();
         await gw.SignInAsync(email, DemoGateway.DemoPassword);
         var vm = new CheckInViewModel(new AttendanceService(gw), new CoachService(gw));
         await vm.OnAppearingAsync();
@@ -19,7 +19,7 @@ public class CheckInTodayTests
     [Fact]   // 0096: the desk asks, the System admin decides and repays, and the desk sees how it went; the check-in stays
     public async Task A_day_pass_refund_goes_from_the_desk_to_the_system_admin_and_back()
     {
-        var gw = new DemoGateway();
+        var gw = new DemoGateway().OpenAllDay();
         var (vm, _, row) = await DayPassSold("Ana Reyes", gw);
         vm.ViewDayPassCommand.Execute(row);
         vm.AskRefundCommand.Execute(null);
@@ -50,7 +50,7 @@ public class CheckInTodayTests
 
     static async Task<(CheckInViewModel Vm, DeskBookingTests.Files Files, CheckInRow Row)> DayPassSold(string? name, DemoGateway? existing = null)
     {
-        var gw = existing ?? new DemoGateway();
+        var gw = existing ?? new DemoGateway().OpenAllDay();
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         var desk = new PaymentStaffService(gw);
         var pay = (await desk.StartDeskOnlineAsync(GymMembership.Core.Models.PayKind.WalkIn, null, null, name, null)).Value!;
@@ -122,7 +122,7 @@ public class CheckInTodayTests
     [Fact]
     public async Task A_scan_check_in_appears_at_the_top()
     {
-        var gw = new DemoGateway();
+        var gw = new DemoGateway().OpenAllDay();
         var pass = await MemberQrTests.PassOf(gw, "member@demo.io");
         var (_, vm) = await Desk(gw: gw);
         await vm.ScanCommand.ExecuteAsync(pass);
@@ -156,7 +156,7 @@ public class CheckInTodayTests
     [InlineData("admin@demo.io")]
     public async Task Front_desk_admin_and_system_admin_all_see_it(string email)
     {
-        var gw = new DemoGateway();
+        var gw = new DemoGateway().OpenAllDay();
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         Assert.True((await new AttendanceService(gw).CheckInAsync("u-alex", "manual", pin: "1234")).Ok);
         var (_, vm) = await Desk(email, gw);
@@ -170,7 +170,7 @@ public class CheckInTodayTests
     {
         // the live hint reloads the list right after the desk's own reload, so "new" has to mean recent, not "since the last load"
         var clock = new Clock();
-        var gw = new DemoGateway(clock: clock);
+        var gw = new DemoGateway(clock: clock).OpenAllDay();
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         var vm = new CheckInViewModel(new AttendanceService(gw, clock), new CoachService(gw), clock: clock);
         await vm.OnAppearingAsync();

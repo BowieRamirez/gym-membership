@@ -177,7 +177,7 @@ public static class ErrorText
         "already_started" => "This booking has already started. Use End now instead.",
         "not_in_use" => "This booking is not in use right now.",
         "stale_proposal" => "Your coach changed the proposal since you opened it. The list now shows the latest one.",
-        "gym_closed" => "The gym is closed right now. Coaches can check in during opening hours.",
+        "gym_closed" => "The gym is closed at that time. Check-ins work during opening hours.",
         "day_closed" => "The gym is closed that day. See Announcements for why, and choose another day.",   // G17 (0065)
         "day_past" => "That day has passed. Choose today or a later day.",
         "coach_not_in_gym" => "This coach just left the gym. You can hire them when they are back.",

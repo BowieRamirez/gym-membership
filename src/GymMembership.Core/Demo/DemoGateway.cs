@@ -1322,6 +1322,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (reason?.Length > 500) throw Err("bad_reason");
                 if (clientRef is not null && All<GymCheckIn>().FirstOrDefault(c => c.ClientRef == clientRef) is { } again) return again.Id;
                 if (All<Member>().All(m => m.UserId != memberId)) throw Err("not_found");
+                var hours = All<GymSettings>().First();   // 0131: judged at the check-in's own time, like coach check-in (0032)
+                var tod = ((at ?? now) + TimeSpan.FromHours(8)).TimeOfDay;
+                if (tod < hours.OpensAt || tod >= hours.ClosesAt) throw Err("gym_closed");
                 if (at is { } t1
                     ? !(All<Profile>().Any(p => p.Id == memberId && p.IsActive) && All<MembershipTerm>().Any(x => x.MemberId == memberId && x.CancelledAt is null && x.StartsAt <= t1 && t1 < x.EndsAt))
                     : !ActiveMember(memberId)) throw Err("no_active_membership");

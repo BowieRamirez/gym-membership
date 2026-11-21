@@ -12,7 +12,7 @@ public class MembershipCheckingTests
     static async Task<(DemoGateway Gw, CheckInViewModel Vm)> Desk()
     {
         Confirm.Answer = (_, _, _) => Task.FromResult(true);
-        var gw = new DemoGateway();
+        var gw = new DemoGateway().OpenAllDay();
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         var vm = new CheckInViewModel(new AttendanceService(gw), new CoachService(gw));
         await vm.OnAppearingAsync();

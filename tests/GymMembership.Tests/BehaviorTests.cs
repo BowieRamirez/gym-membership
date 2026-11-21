@@ -7,7 +7,7 @@ public class BehaviorTests
 {
     static async Task<DemoGateway> As(string email, DemoGateway? gw = null)
     {
-        gw ??= new DemoGateway();
+        gw ??= new DemoGateway().OpenAllDay();
         await gw.SignInAsync(email, DemoGateway.DemoPassword);
         return gw;
     }
@@ -51,14 +51,14 @@ public class BehaviorTests
     [InlineData("admin@demo.io", AppRole.Admin)]
     public async Task Sign_in_resolves_the_role(string email, AppRole expected)
     {
-        var r = await new AuthService(new DemoGateway()).SignInAsync(email, DemoGateway.DemoPassword);
+        var r = await new AuthService(new DemoGateway().OpenAllDay()).SignInAsync(email, DemoGateway.DemoPassword);
         Assert.Equal(expected, r.Value);
     }
 
     [Fact]
     public async Task Wrong_password_is_unauthorized()
     {
-        var r = await new AuthService(new DemoGateway()).SignInAsync("member@demo.io", "nope");
+        var r = await new AuthService(new DemoGateway().OpenAllDay()).SignInAsync("member@demo.io", "nope");
         Assert.Equal(AppErrorKind.Unauthorized, r.Error);
     }
 

@@ -8,7 +8,7 @@ public class LiveRecordsTests
 {
     static async Task<DemoGateway> Desk()
     {
-        var gw = new DemoGateway();
+        var gw = new DemoGateway().OpenAllDay();
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         return gw;
     }
