@@ -16,16 +16,49 @@
                 <c:CoachCalendarView.MainFooter>
                     <VerticalStackLayout Spacing="10" BindingContext="{Binding Source={x:Reference ShiftsRoot}, Path=BindingContext}" x:DataType="vm:ShiftsViewModel">
                         <Label Text="Upcoming shifts" Style="{StaticResource SectionTitle}" Margin="0" />
-                        <c:CardGrid Columns="{OnIdiom Phone=1, Default=3}" BindableLayout.ItemsSource="{Binding Shifts}">
-                            <BindableLayout.EmptyView><Label Text="No shifts posted yet." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
-                            <BindableLayout.ItemTemplate>
-                                <DataTemplate x:DataType="m:ShiftPost">
-                                    <Border Style="{StaticResource Panel}">
-                                        <VerticalStackLayout Spacing="8">
-                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                                <VerticalStackLayout Spacing="2">
-                                                    <Label Text="{Binding Start, Converter={StaticResource LocalDate}, ConverterParameter='dddd d MMM'}" Style="{StaticResource Heading}" />
-                                                    <Label FontFamily="BarlowMedium">
+                        <Border Style="{StaticResource TablePanel}">
+                            <VerticalStackLayout>
+                                <VerticalStackLayout IsVisible="{OnIdiom Phone=False, Default=True}">
+                                    <Grid ColumnDefinitions="1.3*,1.4*,1.4*,Auto,Auto" ColumnSpacing="12" Padding="14,10">
+                                        <Label Text="DATE" Style="{StaticResource TableHead}" />
+                                        <Label Grid.Column="1" Text="HOURS" Style="{StaticResource TableHead}" />
+                                        <Label Grid.Column="2" Text="NOTE" Style="{StaticResource TableHead}" />
+                                        <Label Grid.Column="3" Text="STATUS" Style="{StaticResource TableHead}" />
+                                        <Label Grid.Column="4" Text="ACTION" Style="{StaticResource TableHead}" />
+                                    </Grid>
+                                    <BoxView Style="{StaticResource Hairline}" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Shifts}">
+                                    <BindableLayout.EmptyView>
+                                        <Label Text="No shifts posted yet." Style="{StaticResource Muted}" Padding="14,12" />
+                                    </BindableLayout.EmptyView>
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="m:ShiftPost">
+                                            <VerticalStackLayout>
+                                                <Grid ColumnDefinitions="1.3*,1.4*,1.4*,Auto,Auto" ColumnSpacing="12" Padding="14,10" IsVisible="{OnIdiom Phone=False, Default=True}">
+                                                    <Label Text="{Binding Start, Converter={StaticResource LocalDate}, ConverterParameter='dddd d MMM'}" FontFamily="BarlowSemiBold" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                                                    <Label Grid.Column="1" VerticalOptions="Center">
+                                                        <Label.Text>
+                                                            <MultiBinding StringFormat="{}{0} to {1}">
+                                                                <Binding Path="Start" Converter="{StaticResource LocalDate}" ConverterParameter="h:mm tt" />
+                                                                <Binding Path="End" Converter="{StaticResource LocalDate}" ConverterParameter="h:mm tt" />
+                                                            </MultiBinding>
+                                                        </Label.Text>
+                                                    </Label>
+                                                    <Label Grid.Column="2" Text="{Binding Note, TargetNullValue='—'}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                                                    <c:StatusChip Grid.Column="3" Status="{Binding Status}" VerticalOptions="Center" />
+                                                    <Button Grid.Column="4" Text="Cancel shift" Style="{StaticResource FilterChip}" Clicked="OnCancel" VerticalOptions="Center">
+                                                        <Button.Triggers>
+                                                            <DataTrigger TargetType="Button" Binding="{Binding Status}" Value="cancelled"><Setter Property="IsVisible" Value="False" /></DataTrigger>
+                                                        </Button.Triggers>
+                                                    </Button>
+                                                </Grid>
+                                                <VerticalStackLayout Spacing="6" Padding="14,12" IsVisible="{OnIdiom Phone=True, Default=False}">
+                                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                                        <Label Text="{Binding Start, Converter={StaticResource LocalDate}, ConverterParameter='dddd d MMM'}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                                                        <c:StatusChip Grid.Column="1" Status="{Binding Status}" VerticalOptions="Center" />
+                                                    </Grid>
+                                                    <Label Style="{StaticResource Caption}">
                                                         <Label.Text>
                                                             <MultiBinding StringFormat="{}{0} to {1}">
                                                                 <Binding Path="Start" Converter="{StaticResource LocalDate}" ConverterParameter="h:mm tt" />
@@ -34,19 +67,19 @@
                                                         </Label.Text>
                                                     </Label>
                                                     <Label Text="{Binding Note}" Style="{StaticResource Muted}" IsVisible="{Binding Note, Converter={StaticResource HasText}}" />
+                                                    <Button Text="Cancel shift" Style="{StaticResource FilterChip}" HorizontalOptions="Start" Clicked="OnCancel">
+                                                        <Button.Triggers>
+                                                            <DataTrigger TargetType="Button" Binding="{Binding Status}" Value="cancelled"><Setter Property="IsVisible" Value="False" /></DataTrigger>
+                                                        </Button.Triggers>
+                                                    </Button>
                                                 </VerticalStackLayout>
-                                                <c:StatusChip Grid.Column="1" Status="{Binding Status}" VerticalOptions="Start" />
-                                            </Grid>
-                                            <Button Text="Cancel shift" Style="{StaticResource FilterChip}" HorizontalOptions="Start" Clicked="OnCancel">
-                                                <Button.Triggers>
-                                                    <DataTrigger TargetType="Button" Binding="{Binding Status}" Value="cancelled"><Setter Property="IsVisible" Value="False" /></DataTrigger>
-                                                </Button.Triggers>
-                                            </Button>
-                                        </VerticalStackLayout>
-                                    </Border>
-                                </DataTemplate>
-                            </BindableLayout.ItemTemplate>
-                        </c:CardGrid>
+                                                <BoxView Style="{StaticResource Hairline}" />
+                                            </VerticalStackLayout>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </VerticalStackLayout>
+                            </VerticalStackLayout>
+                        </Border>
                     </VerticalStackLayout>
                 </c:CoachCalendarView.MainFooter>
                 <c:CoachCalendarView.SideFooter>
