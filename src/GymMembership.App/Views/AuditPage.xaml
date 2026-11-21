@@ -107,6 +107,11 @@
                             <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
                             <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
                         </DataTrigger>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsAuditTab}" Value="False">
+                            <Setter Property="FontFamily" Value="BarlowMedium" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                        </DataTrigger>
                     </Button.Triggers>
                 </Button>
                 <Button Text="Transactions" Command="{Binding OpenMoneyCommand}" Style="{StaticResource Segment}" AutomationId="OpenMoney">
@@ -116,6 +121,11 @@
                             <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
                             <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
                         </DataTrigger>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsMoneyTab}" Value="False">
+                            <Setter Property="FontFamily" Value="BarlowMedium" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                        </DataTrigger>
                     </Button.Triggers>
                 </Button>
                 <Button Text="Archive" Command="{Binding OpenArchiveCommand}" IsVisible="{Binding HasArchive}" Style="{StaticResource Segment}" AutomationId="OpenArchive">
@@ -124,6 +134,11 @@
                             <Setter Property="FontFamily" Value="BarlowSemiBold" />
                             <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
                             <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="Button" Binding="{Binding ShowArchive}" Value="False">
+                            <Setter Property="FontFamily" Value="BarlowMedium" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
                         </DataTrigger>
                     </Button.Triggers>
                 </Button>

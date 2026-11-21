@@ -181,19 +181,15 @@ public sealed class AdminOverviewPage : BasePage
     {
         // D12: who came in on a chosen day, and how (QR, by name, or sent later from an offline desk).
         // F8: who recorded each and why a PIN was skipped; "By name only" is the Manual check-ins list (mockup docs/mockups/desk-pin.html)
-        var bar = new Grid { Padding = new Thickness(14, 10), ColumnSpacing = 14, ColumnDefinitions = { new(GridLength.Auto), new(GridLength.Auto), new(GridLength.Star) } };
+        var bar = new Grid { Padding = new Thickness(14, 10), ColumnSpacing = 14, ColumnDefinitions = { new(GridLength.Auto), new(GridLength.Star) } };
         var day = new DatePicker { MaximumDate = DateTime.Today.AddDays(1), AutomationId = "AdminCheckInDay" };
         day.SetBinding(DatePicker.DateProperty, nameof(vm.CheckInDay));
         bar.Add(new Border { Style = Resource<Style>("Field"), Content = day });
-        var byName = new Switch { AutomationId = "AdminCheckInsByName", VerticalOptions = LayoutOptions.Center };
-        SemanticProperties.SetDescription(byName, "Show only check-ins made by name");
-        byName.SetBinding(Switch.IsToggledProperty, nameof(vm.ByNameOnly));
-        bar.Add(new HorizontalStackLayout { Spacing = 8, VerticalOptions = LayoutOptions.Center, Children = { byName, Text("By name only", "BaseLabel") } }, 1);
         var count = Text("", "Heading", "AdminCheckInCount");
         count.HorizontalOptions = LayoutOptions.End;
         count.VerticalOptions = LayoutOptions.Center;
         count.SetBinding(Label.TextProperty, nameof(vm.CheckInsText));
-        bar.Add(count, 2);
+        bar.Add(count, 1);
         var list = new TableBody { WideFrom = 0 };   // 10 rows a page, like every table
         list.Items = vm.CheckIns;
         list.RowTemplate = list.CardTemplate = (new DataTemplate(() =>
