@@ -1955,25 +1955,33 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
     [RelayCommand]
     private async Task LoadAsync()
     {
-        await RunAsync(svc.IsSuperAdminAsync, yes => CanArchive = yes);
-        if (await svc.AllPackagesAsync() is { Ok: true, Value: { } packages })
+        var adminTask = RunAsync(svc.IsSuperAdminAsync, yes => CanArchive = yes);
+        var pkgTask = svc.AllPackagesAsync();
+        var amTask = svc.AllAmenitiesAsync();
+        await Task.WhenAll(adminTask, pkgTask, amTask);
+
+        if (pkgTask.Result is { Ok: true, Value: { } packages })
         {
             var live = packages.Where(p => p.IsActive).OrderBy(p => p.Id).ToList();
-            var rows = new List<CatalogPackageRow>();
+            var entries = new List<(MembershipPackage Pkg, bool IsVersion, bool HasDraft)>();
             foreach (var p in live.Where(p => p.PublishedAt is not null))
             {
                 var version = live.FirstOrDefault(v => v.ReplacesId == p.Id && v.PublishedAt is null);
-                rows.Add(new(p, await SignedPhoto(p.ImagePath), false, version is not null));
-                if (version is not null) rows.Add(new(version, await SignedPhoto(version.ImagePath), true, false));
+                entries.Add((p, false, version is not null));
+                if (version is not null) entries.Add((version, true, false));
             }
-            foreach (var d in live.Where(d => d.PublishedAt is null && !rows.Any(r => r.Package.Id == d.Id)))
-                rows.Add(new(d, await SignedPhoto(d.ImagePath), false, false));
+            foreach (var d in live.Where(d => d.PublishedAt is null && !entries.Any(e => e.Pkg.Id == d.Id)))
+                entries.Add((d, false, false));
+
+            var photos = await Task.WhenAll(entries.Select(e => SignedPhoto(e.Pkg.ImagePath)));
+            var rows = entries.Select((e, i) => new CatalogPackageRow(e.Pkg, photos[i], e.IsVersion, e.HasDraft)).ToList();
             Fill(Packages, rows);
         }
-        if (await svc.AllAmenitiesAsync() is { Ok: true, Value: { } amenities })
+        if (amTask.Result is { Ok: true, Value: { } amenities })
         {
-            var rows = new List<CatalogAmenityRow>();
-            foreach (var a in amenities.Where(a => a.IsActive).OrderBy(a => a.PublishedAt is null).ThenBy(a => a.Id)) rows.Add(new(a, await SignedPhoto(a.ImagePath)));
+            var live = amenities.Where(a => a.IsActive).OrderBy(a => a.PublishedAt is null).ThenBy(a => a.Id).ToList();
+            var photos = await Task.WhenAll(live.Select(a => SignedPhoto(a.ImagePath)));
+            var rows = live.Select((a, i) => new CatalogAmenityRow(a, photos[i])).ToList();
             Fill(Amenities, rows);
         }
     }
@@ -2000,9 +2008,16 @@ public partial class CatalogAdminViewModel(IAdminService svc, IProofPicker? pick
             case (CatalogPackageRow r, "Edit draft"): OpenPackage(r.Package); break;
             case (CatalogPackageRow r, "Add to sale" or "Review and publish"): OpenPackage(r.Package); await MainAsync(); break;
             case (CatalogPackageRow r, "Create new version"):
-                if (!await RunAsync(() => svc.NewPackageVersionAsync(r.Package.Id), _ => { })) return;
-                await LoadAsync();
-                if (Packages.FirstOrDefault(v => v.IsVersion && v.Package.ReplacesId == r.Package.Id) is { } version) OpenPackage(version.Package);
+                var newId = 0;
+                if (!await RunAsync(() => svc.NewPackageVersionAsync(r.Package.Id), id => newId = id)) return;
+                OpenPackage(new MembershipPackage
+                {
+                    Id = newId, Name = r.Package.Name, Description = r.Package.Description, Price = r.Package.Price,
+                    DurationDays = r.Package.DurationDays, IsDayPass = r.Package.IsDayPass, IncludesCoach = r.Package.IncludesCoach,
+                    CoachAddonPrice = r.Package.CoachAddonPrice, Benefits = [.. r.Package.Benefits], ImagePath = r.Package.ImagePath,
+                    ReplacesId = r.Package.Id, IsActive = true, PublishedAt = null
+                });
+                _ = LoadAsync();
                 break;
             case (CatalogPackageRow r, "Delete draft"): await DeleteDraftAsync("plan", r.Package.Id, r.Package.Name); break;
             case (CatalogPackageRow r, "Archive"): Deleting = r.Package; break;
