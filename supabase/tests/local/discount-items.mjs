@@ -62,7 +62,7 @@ try {
   await test('create_discount refuses bad input, no items, unknown or archived items, and a taken code', async () => {
     const gone = await pkg('G Gone'); await db.query('update membership_packages set is_active=false where membership_package_id=$1', [gone]);
     for (const [code, items, opts, why] of [
-      ['G-NOITEMS', [], {}, /no_items/], ['G-BADKIND', [{ kind: 'coach', id: null }], {}, /bad_input/],
+      ['G-NOITEMS', [], {}, /no_items/], ['G-BADKIND', [{ kind: 'other', id: null }], {}, /bad_input/],
       ['G-NOSUCH', [{ kind: 'package', id: 999999 }], {}, /item_not_found/], ['G-GONE', [{ kind: 'package', id: gone }], {}, /item_not_found/],
       ['G-PCT', [{ kind: 'package', id: null }], { percent: 0 }, /bad_discount/], ['G-PCT2', [{ kind: 'package', id: null }], { percent: 101 }, /bad_discount/],
       ['G-LIMIT', [{ kind: 'package', id: null }], { limit: null }, /limit_required/], ['G-LIMIT0', [{ kind: 'package', id: null }], { limit: 0 }, /limit_required/],

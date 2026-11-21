@@ -100,19 +100,10 @@ try {
     assert.equal(b.mine, false); assert.equal(b.id, null);
     assert.ok(!JSON.stringify(g).includes(alex), 'the grid carries the member id');
   });
-  await test('a booking "with a coach" must name a real, active coach of that amenity who is free', async () => {
-    const pool = (await db.query(`insert into amenities(name,price) values('OF Pool',200) returning amenity_id id`)).rows[0].id;
-    const sneaky = (c, hm) => rows(bea, `select * from book_amenity(p_amenity=>$1, p_start=>$2, p_minutes=>60, p_method=>'qr'::payment_method, p_coach=>$3)`,
-      [court, at(hm), c]);
-    await assert.rejects(sneaky(alex, '12:00'), /coach_not_free/);            // a member named as the coach
-    await assert.rejects(sneaky(admin, '12:00'), /coach_not_free/);           // staff named as the coach
-    await assert.rejects(sneaky(coach, '09:00'), /coach_not_free|slot|busy/); // the coach is already booked then
-    await assert.rejects(sneaky(coach, '21:00'), /coach_not_free/);           // outside the coach's shift
-    await assert.rejects(rows(bea, `select * from book_amenity(p_amenity=>$1, p_start=>$2, p_minutes=>60, p_method=>'qr'::payment_method, p_coach=>$3)`,
-      [pool, at('12:00'), coach]), /coach_not_free/);                         // not a coach of that amenity
-    await db.query('update profiles set is_active=false where id=$1', [coach]);
-    try { await assert.rejects(sneaky(coach, '12:00'), /coach_not_free/); }  // an archived coach
-    finally { await db.query('update profiles set is_active=true where id=$1', [coach]); }
+  await test('E2: book_amenity ignores p_coach and never attaches a coach to an amenity reservation', async () => {
+    const r = (await rows(bea, `select * from book_amenity(p_amenity=>$1, p_start=>$2, p_minutes=>60, p_method=>'qr'::payment_method, p_coach=>$3)`,
+      [court, at('12:00'), coach]))[0];
+    assert.equal(r.coach_id, null);
   });
   await test('staff and coaches have no membership, so they cannot book for themselves', async () => {
     for (const who of [desk, coach]) await assert.rejects(book(who, '14:00'), /no_active_membership/);

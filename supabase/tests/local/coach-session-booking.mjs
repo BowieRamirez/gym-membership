@@ -74,6 +74,7 @@ try {
     // mPlain books 4-6 (2 hrs paid add-on, verified immediately via desk cash) -> total 6 hrs booked (12-2, 2-4, 4-6)
     const b3 = (await as(desk, `select desk_book_coach_session($1,$2,$3,2,'cash',null) r`, [mPlain, coach1, slot(16)]))[0].r;
     assert.equal(b3.amount, 600);
+    await assert.rejects(as(mPlain, `select desk_book_coach_session($1,$2,$3,1,'cash',null)`, [mPlain, coach1, slot(16)]), /forbidden/);
 
     // Now coach1 has 6 hrs booked -> free_coaches omits coach1 and 7th hour is refused with coach_day_full
     const free = await as(mInc, `select * from free_coaches($1::date)`, [futureDay]);

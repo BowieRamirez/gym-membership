@@ -93,15 +93,12 @@ try {
     assert.equal((await open(other)).length, 1);
     await db.query('delete from coach_visits where coach_id=$1 and checked_out_at is null', [other]);
   });
-  await test('a member can hire a coach who is not in the gym (G29); a hire survives checkout', async () => {
-    const pack = (await db.query(`insert into membership_packages(name,price,duration_days) values('P8 Monthly',1000,30) returning membership_package_id`)).rows[0].membership_package_id;
-    const pay = (await as(member, 'select * from extend_membership($1,null)', [pack]))[0];
-    await as(desk, 'select verify_payment($1,true)', [pay.payment_id]);
+  await test('a coach visit survives checkout', async () => {
     assert.equal((await open(coach)).length, 0);
-    await as(coach, 'select answer_hire($1,true)', [(await as(member, 'select hire_coach($1) id', [coach]))[0].id]);   // any time (G29); the coach accepts (G30)
     await db.query('insert into coach_visits(coach_id,checked_in_by) values($1,$1)', [coach]);
+    assert.equal((await open(coach)).length, 1);
     await db.query('update coach_visits set checked_out_at=now() where coach_id=$1 and checked_out_at is null', [coach]);
-    assert.equal((await as(member, `select status from coach_hires where coach_id=$1`, [coach]))[0].status, 'active');
+    assert.equal((await open(coach)).length, 0);
   });
 } finally {
   await db.end(); await server.stop();

@@ -74,17 +74,13 @@ try {
     await as(admin, 'select reopen_gym_day($1::date)', [later]);
   });
 
-  await test('nothing can be set up on a closed day: bookings, shifts, session requests and proposals', async () => {
+  await test('nothing can be set up on a closed day: bookings and shifts', async () => {
     const m = await member(), c = await user('coach');
     await db.query('insert into coach_visits(coach_id,checked_in_by) values($1,$1)', [c]);
-    await as(c, 'select answer_hire($1,true)', [(await as(m, 'select hire_coach($1) id', [c]))[0].id]);   // G30 (0074): the coach accepts
     await as(c, 'insert into shift_posts(coach_id,starts_at,ends_at) values($1,$2,$3)', [c, at('06:00', next), at('22:00', next)]);
-    const asked = (await as(m, 'select request_session($1,$2,$3,null,null) id', [c, at('10:00', next), at('11:00', next)]))[0].id;
     await close(admin, day);
     await assert.rejects(book(m, '10:00'), /day_closed/);
     await assert.rejects(as(c, 'insert into shift_posts(coach_id,starts_at,ends_at) values($1,$2,$3)', [c, at('06:00'), at('12:00')]), /day_closed/);
-    await assert.rejects(as(m, 'select request_session($1,$2,$3,null,null) id', [c, at('10:00'), at('11:00')]), /day_closed/);
-    await assert.rejects(as(c, 'select propose_time($1,$2,$3,null,$4)', [asked, at('10:00'), at('11:00'), 'Busy then']), /day_closed/);
     assert.ok(await book(m, '10:00', next), 'the next day is open');
     await as(admin, 'select reopen_gym_day($1::date)', [day]);
   });

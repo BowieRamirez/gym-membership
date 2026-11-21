@@ -87,8 +87,8 @@ begin
     end if;
     v_ref := case when v_kind = 'coach' then null else (v_item ->> 'id')::bigint end;
     if v_ref is not null and not (
-         (v_kind = 'package' and exists (select 1 from public.membership_packages p where p.membership_package_id = v_ref and p.is_active))
-      or (v_kind = 'amenity' and exists (select 1 from public.amenities a where a.amenity_id = v_ref and a.is_active))) then
+         (v_kind = 'package' and exists (select 1 from public.membership_packages p where p.membership_package_id = v_ref and p.is_active and p.published_at is not null))
+      or (v_kind = 'amenity' and exists (select 1 from public.amenities a where a.amenity_id = v_ref and a.is_active and a.published_at is not null))) then
       perform public.fail('item_not_found');
     end if;
     insert into public.discount_items (discount_id, kind, item_id) values (v_id, v_kind, v_ref) on conflict do nothing;

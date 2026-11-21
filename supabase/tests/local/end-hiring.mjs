@@ -33,9 +33,9 @@ async function test(name, fn) {
   catch (e) { failed++; console.error('  FAIL', name, e.message); }
 }
 
-const desk = await user('employee', 'Desk');
+const desk = await user('employee', 'Desk Staff');
 const coach = await user('coach', 'Coach Kai');
-const member = await user('member', 'Mia');
+const member = await user('member', 'Mia Santos');
 const pack = (await db.query(`insert into membership_packages(name,price,duration_days,includes_coach) values('EH Pack',1000,30,true) returning membership_package_id`)).rows[0].membership_package_id;
 
 // Give member an active membership
@@ -62,10 +62,11 @@ try {
       await assert.rejects(as(member, sql, args), /does not exist/);
       await assert.rejects(asAnon(sql, args), /does not exist/);
     }
+    await assert.rejects(as(member, 'select hire_coach($1)', [coach]), /does not exist/);
   });
 
   await test('messaging allowed with an upcoming session and within 7 days after it ends', async () => {
-    const m2 = await user('member', 'Leo');
+    const m2 = await user('member', 'Leo Cruz');
     const p2 = (await as(m2, 'select * from extend_membership($1,null)', [pack]))[0];
     await as(desk, 'select verify_payment($1,true)', [p2.payment_id]);
 
@@ -102,7 +103,7 @@ try {
   });
 
   await test('an active old hire still messages until the member term ends, then ends on expiry', async () => {
-    const m3 = await user('member', 'Nora');
+    const m3 = await user('member', 'Nora Reyes');
     const p3 = (await as(m3, 'select * from extend_membership($1,null)', [pack]))[0];
     await as(desk, 'select verify_payment($1,true)', [p3.payment_id]);
 
@@ -114,7 +115,7 @@ try {
     await as(m3, 'insert into messages(coach_id, member_id, sender_id, body) values($1,$2,$2,$3)', [coach, m3, 'Legacy hire still works']);
 
     // Expire Nora's term
-    await db.query(`update membership_terms set ends_at = now() - interval '1 hour' where member_id = $1`, [m3]);
+    await db.query(`update membership_terms set starts_at = now() - interval '2 hours', ends_at = now() - interval '1 hour' where member_id = $1`, [m3]);
     await db.query('select expire_memberships()');
 
     const hire = (await db.query(`select status, ended_at from coach_hires where coach_hire_id = $1`, [hireId])).rows[0];

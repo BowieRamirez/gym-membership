@@ -99,6 +99,7 @@ try {
     const today = (await as(desk, 'select * from today_coach_sessions()')).find(x => x.training_session_id === ses.training_session_id);
     assert.equal(today.status, 'In session');
     assert.ok(today.coach_arrived_at);
+    await assert.rejects(as(m3, 'select * from today_coach_sessions()'), /forbidden/);
 
     // Payment status untouched
     const payRow = (await db.query('select status from payments where payment_id = $1', [addonPayId])).rows[0];

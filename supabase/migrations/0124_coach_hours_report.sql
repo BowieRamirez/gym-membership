@@ -12,7 +12,7 @@ begin
     execute v_def;
   end if;
 
-  v_def := pg_get_functiondef('public.transactions_log(date,date,text,integer,integer,text,text,text,text)'::regprocedure);
+  v_def := pg_get_functiondef('public.audit_records(date,date,text,text,text,integer,integer,boolean,text,text,text,text)'::regprocedure);
   if position($q$'coach_addon'$q$ in v_def) = 0 then
     v_def := replace(v_def,
       $q$('' , 'membership', 'amenity', 'day_pass', 'refund', 'cash_shift')$q$,
