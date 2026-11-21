@@ -478,23 +478,7 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
     public async Task<AppResult<Payment>> PayAgainAsync(PaymentItem item, string? code = null)
     {
         if (item.PackageSnapshotId is { } package && item.Kind is PayKind.Membership or PayKind.Renewal)
-        {
-            var packages = await gw.ListAsync<MembershipPackage>();
-            var cur = packages.FirstOrDefault(p => p.Id == package);
-            if (cur is null || !cur.IsActive || cur.PublishedAt is null)
-            {
-                var seen = new HashSet<int> { package };
-                var curId = package;
-                while (packages.FirstOrDefault(p => p.ReplacesId == curId && !seen.Contains(p.Id)) is { } next)
-                {
-                    seen.Add(next.Id);
-                    cur = next;
-                    curId = next.Id;
-                }
-            }
-            var targetId = cur is { IsActive: true, PublishedAt: not null } ? cur.Id : package;
-            return await new SubscriptionService(gw).ExtendAsync(targetId, code);   // 0099, B1: follow replacement chain to active version
-        }
+            return await new SubscriptionService(gw).ExtendAsync(package, code);   // 0130, B1: server follows replacement chain as security definer
         if (item.ItemId is not { } id) return AppResult<Payment>.Fail(AppErrorKind.Validation, "not_found");
         return item.Kind switch
         {

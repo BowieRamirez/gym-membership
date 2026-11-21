@@ -71,6 +71,12 @@ public sealed partial class DemoGateway
         if(All<Payment>().Count(p=>p.MemberId==member && p.Kind is PayKind.Membership or PayKind.Renewal && p.CreatedAt>SubscriptionNow.AddHours(-1))>=10) throw Err("too_many_tries");   // 0102
         if(!All<Member>().Any(m=>m.UserId==member) || !All<Profile>().Any(p=>p.Id==member && p.IsActive)) throw Err("not_found");
         if(All<Payment>().Any(p=>p.MemberId==member && p.Status==Status.Pending && p.Kind is PayKind.Membership or PayKind.Renewal)) throw Err("renewal_pending");
+        var seen=new HashSet<int>{packageId};
+        while(All<MembershipPackage>().FirstOrDefault(p=>p.ReplacesId==packageId && p.PublishedAt is not null && !seen.Contains(p.Id)) is { } next)
+        {
+            seen.Add(next.Id);
+            packageId=next.Id;
+        }
         var pkg=PackageForSale(packageId);
         if(pkg.IsDayPass && All<MembershipTerm>().Any(t=>t.MemberId==member && t.CancelledAt is null && t.EndsAt>SubscriptionNow)) throw Err("already_availed");   // 0098
         var discount=Discounted(member,args,pkg.Price,"package",pkg.Id);
