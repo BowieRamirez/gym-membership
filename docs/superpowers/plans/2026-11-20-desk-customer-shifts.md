@@ -186,6 +186,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 | 13 | Damage report after a session, reviewed by admins | E10 | Done |
 | 14 | Coach hours report for the gym's coach pay | E11 | Done |
 | 15 | Part 2 checks, review, owner hand checks | | |
+| 16 | Coach access add-on on Packages (Q1) | E13 | Designed, not built (owner: don't build yet) |
 
 ## 3. Findings: coaches today
 
@@ -216,6 +217,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 | E10 | **Damage report (step 9):** after a session the coach answers "Anything broken or damaged?" No / Yes with a description (photo optional). Yes makes a `damage_reports` row (session, amenity if any, coach, description, Open / Reviewed / Closed), alerts admins and offers **Set amenity to Maintenance**. Admins review and close with a note. **Nothing is charged automatically.** The desk can file one too. | Recommended, confirm |
 | E11 | **Coach hours report** on Revenue (admins): per coach and date range, completed sessions, hours, no-shows, cancelled by the coach. No money; for the gym's own coach pay. Add-on income shows in sales as "Coach add-on". | Recommended, confirm |
 | E12 | **A coach's day:** a coach takes **many members a day, one at a time**; only overlapping times are refused. Example: Coach Ana's shift 9 am-6 pm, Member B has 12-2, so Member C's 1-3 is refused (1-2 overlaps) and C is offered 2-4, 3-5 or another coach; 9-10 and 4-6 that day don't matter. The E6 limits (1 a day, 2 upcoming) are **per member**, never per coach. **Coach daily maximum:** a coach can be booked for at most **6 hours a day** (`gym_settings.max_coach_hours_per_day`, default 6; empty = no cap, the shift is the only limit), so a long shift still leaves breaks. Recommended. | Recommended, confirm |
+| E13 | **Coach access add-on (answers Q1):** a member on a plain package (Monthly, 3 Months, **and the plain Daypass**) buys **Coach access** on Packages for the rest of their current term, then books coaches free like a Coach-included member (same limits). Admin sets a "Coach access price (full term)" on each plain package; the member pays it scaled to the days left (a Day pass pays it in full, sessions end by midnight, no card when no coach hour is left today). Online through Xendit, discount codes allowed, ends with the term, not refunded on its own, app only. Per-session paid coaching is switched off. Full design: `docs/superpowers/specs/2026-11-21-coach-access-addon-design.md`. | Owner, 2026-11-21: approach B, Day pass included; don't build yet |
 
 ## Pages that change
 
@@ -363,7 +365,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 |---|---|---|---|---|
 | B2 | **Anyone signed in can cancel a walk-in coach session, and a coach can cancel one with no reason.** `cancel_session` (0122) checks `v_s.member_id <> v_uid`; walk-in sessions (0126) have `member_id` null, so the check is null and both the "not yours" guard and the coach `reason_required` guard are skipped. | Live: the test member cancelled walk-in session #13 ("not mine"); the coach cancelled #11 with an empty reason. | Use `is distinct from` for both comparisons in `cancel_session`; a database test for walk-in sessions (member, other coach, coach without reason). | Open |
 | B3 | **A coach can write a damage report straight into the table already "Closed" with their own review note**, skipping admin review, the admin alert and the audit row. 0123 grants `insert, update` on `damage_reports` to `authenticated`, and the insert policy doesn't limit `status`, `review_note`, `reviewed_by`. | Live: coach inserted report #1 as `closed`, review note "self-closed"; no "Damage report filed" alert (report #2 through `report_damage` did alert). | Revoke direct `insert, update` on `damage_reports` (`report_damage` / `review_damage` are security definer), keep `select`. | Open |
-| Q1 | **Not a bug, a gap to decide:** the plain packages (Monthly, 3 Months, Daypass) have Coach included off and no add-on price, so their members can't book any coach (`coach_not_offered`). Since the add-on box was taken off Admin Packages (2026-11-21), there is no way to offer them one. E3/E4 still describe an add-on price on plain packages. | Live: the test member (Monthly) gets `coach_not_offered`. | Owner: bring back the add-on price box, or confirm "coach only with Coach-included packages" and update E3/E4. | Owner |
+| Q1 | **Not a bug, a gap to decide:** the plain packages (Monthly, 3 Months, Daypass) have Coach included off and no add-on price, so their members can't book any coach (`coach_not_offered`). Since the add-on box was taken off Admin Packages (2026-11-21), there is no way to offer them one. E3/E4 still describe an add-on price on plain packages. | Live: the test member (Monthly) gets `coach_not_offered`. | Owner, 2026-11-21: **Coach access add-on** (approach B): members on a plain package, the plain Daypass included, buy coach access for the rest of their current term on Packages, price scaled to days left. Design `docs/superpowers/specs/2026-11-21-coach-access-addon-design.md`; not built yet (owner: don't build). | Decided, not built |
 
 **The 8 failed checks of the Part 2 live test:**
 
@@ -379,6 +381,18 @@ Same rules as `2026-11-19-owner-fixes.md`:
 | 8 | An unrelated member cannot cancel a walk-in session (confirm run) | The member cancelled walk-in session #13 ("not mine") | B2 |
 
 Not tested live (needs a member on a Coach-included package): coach-included booking, the per-member limits, the 15-minute hold for an add-on, add-on refunds. Live `gym_settings.max_upcoming_coach_sessions` is 1 (plan default 2).
+
+## Phase 16: Coach access add-on (E13, Q1)
+
+**Not built: the owner said don't build yet.** Design: `docs/superpowers/specs/2026-11-21-coach-access-addon-design.md`.
+
+### Task 17: Buy coach access, book with it
+
+**Files:** migration `0127_coach_access_addon.sql` (`membership_terms.coach_access_at`, `coach_access_payment_id`; `coach_access_offer()`, `buy_coach_access(p_code)`; `activate_payment_target` sets access on verify; `_book_coach_session_core` treats coach access as coach included, per-session paid path off; revoke/grant), Admin Packages (Coach access price box, Daypass included), member Packages (Coach access card + Buy popup with code check and Xendit), My membership ("Coach access until"), demo mirror, tests `supabase/tests/local/coach-access.mjs`, `tests/GymMembership.Tests/CoachAccessTests.cs`.
+
+- [ ] Failing tests (the design's Checks): Monthly 15 of 30 days left at ₱400 → ₱200, pays, books free, daily limit applies; plain Daypass ₱40 → books 3-4 pm, past midnight refused, no card at 10:30 pm with no free hour; no price / Coach-included / already bought / pending → refused; unpaid expires → no access; renewal → no access until bought again.
+- [ ] Migration, push (dry run first), live grants, commit.
+- [ ] Screens with `impeccable`: Packages card and Buy popup, My membership (member, Android and Windows, light/dark, 1.3 font scale); Admin Packages (Windows). Commit.
 
 ## Session log
 
