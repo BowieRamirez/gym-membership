@@ -155,15 +155,18 @@ try {
 
     // Add a shift today with free hours (use 22:00..23:00? Wait: use today 08:00..20:00 if gym open, or future-proof: check gym_settings closes_at)
     await db.query(`update gym_settings set opens_at = '00:00', closes_at = '23:00' where id = 1`);
-    // Shift covering the next full hour today (never in the past)
-    const nextHr = (await db.query(`select (date_trunc('hour', now()) + interval '1 hour')::text s, (date_trunc('hour', now()) + interval '2 hours')::text e`)).rows[0];
-    await db.query(`insert into shift_posts(coach_id,starts_at,ends_at,status) values($1,$2,$3,'scheduled')`,
-      [coach, nextHr.s, nextHr.e]);
+    // Shift covering the next full hour today (only if at least 1 full hour remains before 23:00 Manila)
+    const hrLeft = (await db.query(`select extract(hour from now() at time zone 'Asia/Manila')::int h`)).rows[0].h;
+    if (hrLeft < 22) {
+      const nextHr = (await db.query(`select (date_trunc('hour', now()) + interval '1 hour')::text s, (date_trunc('hour', now()) + interval '2 hours')::text e`)).rows[0];
+      await db.query(`insert into shift_posts(coach_id,starts_at,ends_at,status) values($1,$2,$3,'scheduled')`,
+        [coach, nextHr.s, nextHr.e]);
 
-    const dayOffer = (await as(mDay, `select * from coach_access_offer()`))[0];
-    assert.equal(dayOffer.offered, true);
-    assert.equal(dayOffer.is_day_pass, true);
-    assert.equal(Number(dayOffer.price), 250);
+      const dayOffer = (await as(mDay, `select * from coach_access_offer()`))[0];
+      assert.equal(dayOffer.offered, true);
+      assert.equal(dayOffer.is_day_pass, true);
+      assert.equal(Number(dayOffer.price), 250);
+    }
   });
 
   await test('Refused states: no active term, coach included, no addon price, renewal creates fresh term without coach_access_at', async () => {
@@ -181,6 +184,22 @@ try {
     const renewOffer = (await as(mMonthly, `select * from coach_access_offer()`))[0];
     assert.equal(renewOffer.offered, true);
     assert.equal(Number(renewOffer.price), 1000);
+  });
+
+  await test('Old account on earlier version without addon price sees offer once newer published version sets price', async () => {
+    const mOld = await user('member', 'Old Version Member');
+    const v1 = (await as(admin, `insert into membership_packages(name,description,price,duration_days,includes_coach,coach_addon_price) values('OldPlain','v1',1000,30,false,null) returning membership_package_id id`))[0].id;
+    await as(admin, `select publish_catalog_item('plan', $1)`, [v1]);
+    await giveTerm(mOld, v1, 'OldPlain', 30, 15);
+    assert.equal((await as(mOld, `select * from coach_access_offer()`))[0].offered, false);
+
+    const v2 = (await as(admin, `select new_package_version($1) id`, [v1]))[0].id;
+    await db.query(`update membership_packages set coach_addon_price = 400 where membership_package_id = $1`, [v2]);
+    await as(admin, `select publish_catalog_item('plan', $1)`, [v2]);
+
+    const offer = (await as(mOld, `select * from coach_access_offer()`))[0];
+    assert.equal(offer.offered, true);
+    assert.equal(Number(offer.price), 200);
   });
 
   await test('Security: anon cannot call offer or buy; authenticated cannot directly update membership_terms or call activate_payment_target', async () => {

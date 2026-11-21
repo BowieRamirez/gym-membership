@@ -199,26 +199,41 @@ public sealed partial class DemoGateway
         var pkg = All<MembershipPackage>().First(p => p.Id == term.PackageId);
         if (pkg.IncludesCoach)
             return new(false, term.Id, pkg.Id, term.PackageName, null, null, null, pkg.DurationDays, term.EndsAt, pkg.IsDayPass, "already_included");
-        if (pkg.CoachAddonPrice is not > 0)
+        var addonPrice = pkg.CoachAddonPrice;
+        if (addonPrice is not > 0)
+        {
+            var curId = pkg.Id;
+            var seen = new HashSet<int> { curId };
+            MembershipPackage? newest = null;
+            while (All<MembershipPackage>().FirstOrDefault(p => p.ReplacesId == curId && p.PublishedAt is not null && !seen.Contains(p.Id)) is { } next)
+            {
+                seen.Add(next.Id);
+                newest = next;
+                curId = next.Id;
+            }
+            if (newest is { IsActive: true, IncludesCoach: false, CoachAddonPrice: > 0 })
+                addonPrice = newest.CoachAddonPrice;
+        }
+        if (addonPrice is not > 0)
             return new(false, term.Id, pkg.Id, term.PackageName, null, null, null, pkg.DurationDays, term.EndsAt, pkg.IsDayPass, "not_offered");
         if (term.CoachAccessAt is not null)
-            return new(false, term.Id, pkg.Id, term.PackageName, pkg.CoachAddonPrice, null, null, pkg.DurationDays, term.EndsAt, pkg.IsDayPass, "already_bought");
+            return new(false, term.Id, pkg.Id, term.PackageName, addonPrice, null, null, pkg.DurationDays, term.EndsAt, pkg.IsDayPass, "already_bought");
         if (All<Payment>().Any(p => p.MemberId == uid && p.Kind == PayKind.CoachAddon && p.Status == Status.Pending && p.ExpiresAt > now))
-            return new(false, term.Id, pkg.Id, term.PackageName, pkg.CoachAddonPrice, null, null, pkg.DurationDays, term.EndsAt, pkg.IsDayPass, "pending_payment");
+            return new(false, term.Id, pkg.Id, term.PackageName, addonPrice, null, null, pkg.DurationDays, term.EndsAt, pkg.IsDayPass, "pending_payment");
 
         var today = DateOnly.FromDateTime((now + Manila).Date);
         if (pkg.IsDayPass)
         {
             if (All<GymClosure>().Any(c => c.Day == today) || !HasAnyFreeCoachToday(today, now))
-                return new(false, term.Id, pkg.Id, term.PackageName, pkg.CoachAddonPrice, null, null, pkg.DurationDays, term.EndsAt, true, "no_free_coaches");
-            var dayPrice = Math.Ceiling(pkg.CoachAddonPrice.Value);
-            return new(true, term.Id, pkg.Id, term.PackageName, pkg.CoachAddonPrice, dayPrice, Math.Max(1, pkg.DurationDays), pkg.DurationDays, term.EndsAt, true, null);
+                return new(false, term.Id, pkg.Id, term.PackageName, addonPrice, null, null, pkg.DurationDays, term.EndsAt, true, "no_free_coaches");
+            var dayPrice = Math.Ceiling(addonPrice.Value);
+            return new(true, term.Id, pkg.Id, term.PackageName, addonPrice, dayPrice, Math.Max(1, pkg.DurationDays), pkg.DurationDays, term.EndsAt, true, null);
         }
 
         var endDate = DateOnly.FromDateTime((term.EndsAt.ToUniversalTime() + Manila).Date);
         var daysLeft = Math.Min(pkg.DurationDays, Math.Max(1, endDate.DayNumber - today.DayNumber));
-        var price = Math.Ceiling(pkg.CoachAddonPrice.Value * daysLeft / pkg.DurationDays);
-        return new(true, term.Id, pkg.Id, term.PackageName, pkg.CoachAddonPrice, price, daysLeft, pkg.DurationDays, term.EndsAt, false, null);
+        var price = Math.Ceiling(addonPrice.Value * daysLeft / pkg.DurationDays);
+        return new(true, term.Id, pkg.Id, term.PackageName, addonPrice, price, daysLeft, pkg.DurationDays, term.EndsAt, false, null);
     }
 
     bool HasAnyFreeCoachToday(DateOnly today, DateTime now)
