@@ -178,4 +178,63 @@ public sealed partial class DemoGateway
                 ts.Status = Status.Cancelled;
         }
     }
+
+    TodayCoachSession ToTodayCoachSession(TrainingSession s)
+    {
+        var names = All<Profile>().ToDictionary(p => p.Id, p => p.FullName);
+        var st = s.HeldUntil is not null ? "Waiting for payment"
+            : s.Status == Status.Scheduled && s.CoachArrivedAt is not null ? "In session"
+            : s.Status == Status.Scheduled && s.CheckedInAt is not null ? "Checked in"
+            : s.Status;
+        return new TodayCoachSession(s.Id, s.SessionCode ?? $"SES-{s.Id:D4}", s.MemberId, names.GetValueOrDefault(s.MemberId, "Member"),
+            s.CoachId, names.GetValueOrDefault(s.CoachId, "Coach"), s.ScheduledStart, s.ScheduledEnd, st, s.CheckedInAt, s.CoachArrivedAt, s.HeldUntil);
+    }
+
+    bool SessionCheckInCall(string fn, Dictionary<string, object> a, out object? result)
+    {
+        result = null;
+        var now = SubscriptionNow;
+        switch (fn)
+        {
+            case "scan_session":
+            {
+                RequireActive();
+                if (!IsStaff) throw Err("forbidden");
+                var code = ((string)a["p_code"]).Trim();
+                var s = All<TrainingSession>().FirstOrDefault(x => string.Equals(x.SessionCode ?? $"SES-{x.Id:D4}", code, StringComparison.OrdinalIgnoreCase))
+                    ?? throw Err("not_found");
+                if (s.Status == Status.Cancelled) throw Err("session_cancelled");
+                if (s.Status is Status.Completed or Status.NoShow) throw Err("already_processed");
+                if (s.HeldUntil is not null) throw Err("payment_required");
+                if (s.ScheduledStart.AddHours(8).Date != now.AddHours(8).Date) throw Err("wrong_day");
+                s.CheckedInAt ??= now;
+                result = new List<TodayCoachSession> { ToTodayCoachSession(s) };
+                return true;
+            }
+            case "mark_coach_arrived":
+            {
+                RequireActive();
+                if (!IsStaff) throw Err("forbidden");
+                var s = All<TrainingSession>().FirstOrDefault(x => x.Id == Convert.ToInt32(a["p_session"])) ?? throw Err("not_found");
+                if (s.Status != Status.Scheduled) throw Err("already_processed");
+                if (s.HeldUntil is not null) throw Err("payment_required");
+                if (s.CheckedInAt is null) throw Err("not_checked_in");
+                s.CoachArrivedAt ??= now;
+                return true;
+            }
+            case "today_coach_sessions":
+            {
+                RequireActive();
+                if (!IsStaff) throw Err("forbidden");
+                var today = now.AddHours(8).Date;
+                result = All<TrainingSession>()
+                    .Where(s => s.Status != Status.Cancelled && (s.HeldUntil is null || s.HeldUntil > now) && s.ScheduledStart.AddHours(8).Date == today)
+                    .OrderBy(s => s.ScheduledStart)
+                    .Select(ToTodayCoachSession)
+                    .ToList();
+                return true;
+            }
+        }
+        return false;
+    }
 }

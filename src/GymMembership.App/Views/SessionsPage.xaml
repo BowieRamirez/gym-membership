@@ -5,6 +5,7 @@
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            xmlns:zxing="clr-namespace:ZXing.Net.Maui.Controls;assembly=ZXing.Net.MAUI.Controls"
             x:Class="GymMembership.App.Views.SessionsPage" x:DataType="vm:SessionsViewModel" Title="Sessions">
 
     <v:BasePage.Resources>
@@ -25,6 +26,7 @@
                     <Label Grid.Column="3" Text="{Binding Amenity}" Style="{StaticResource Muted}" VerticalOptions="Center" />
                     <c:StatusChip Grid.Column="4" Status="{Binding StatusText}" VerticalOptions="Center" />
                     <HorizontalStackLayout Grid.Column="5" Spacing="6" VerticalOptions="Center" HorizontalOptions="End">
+                        <Button Text="QR" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding HasQr}" Clicked="OnShowQr" />
                         <Button Text="Add 30 minutes" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanExtend}" Clicked="OnExtend"
                                 SemanticProperties.Hint="Extends this session and its amenity booking by 30 minutes" />
                         <Button Text="Mark complete" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanManage}" Clicked="OnComplete" />
@@ -55,6 +57,7 @@
                     </Label>
                     <Label Text="{Binding Amenity, StringFormat='At {0}'}" Style="{StaticResource Caption}" IsVisible="{Binding Amenity, Converter={StaticResource HasText}}" />
                     <FlexLayout Wrap="Wrap" Margin="0,4,0,0">
+                        <Button Text="QR" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding HasQr}" Clicked="OnShowQr" />
                         <Button Text="Add 30 minutes" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanExtend}" Clicked="OnExtend"
                                 SemanticProperties.Hint="Extends this session and its amenity booking by 30 minutes" />
                         <Button Text="Mark complete" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanManage}" Clicked="OnComplete" />
@@ -78,6 +81,31 @@
 
             <!-- coach only (G30): Hire requests and Your members, TraineesPage's content, above the sessions -->
             <ContentView x:Name="CoachHost" />
+            <!-- member session QR popup panel -->
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding IsShowingQr}" Padding="16,14">
+                <VerticalStackLayout Spacing="10" HorizontalOptions="Center">
+                    <c:CardTitle Text="Session QR code" HorizontalOptions="Center" />
+                    <Label Text="Show this at the front desk when you arrive for your session." Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                    <Border BackgroundColor="White" StrokeThickness="0" Padding="8" WidthRequest="200" HeightRequest="200" HorizontalOptions="Center">
+                        <zxing:BarcodeGeneratorView Format="QrCode" Value="{Binding QrSession.Session.SessionCode}" HorizontalOptions="Fill" VerticalOptions="Fill"
+                                                    ForegroundColor="Black" BackgroundColor="White" />
+                    </Border>
+                    <Label Text="{Binding QrSession.Session.SessionCode}" FontFamily="BarlowSemiBold" HorizontalOptions="Center" />
+                    <Button Text="Close" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Center" Command="{Binding CloseQrCommand}" />
+                </VerticalStackLayout>
+            </Border>
+            <!-- coach cancel with reason panel -->
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding IsCancelling}" Padding="16,14">
+                <VerticalStackLayout Spacing="10">
+                    <c:CardTitle Text="Cancel session" />
+                    <Label Text="{Binding CancellingSession.With, StringFormat='Tell {0} why you are cancelling this session:'}" Style="{StaticResource Muted}" />
+                    <Border Style="{StaticResource Field}"><Entry Text="{Binding CancelReason}" Placeholder="Reason for cancelling" MaxLength="300" /></Border>
+                    <HorizontalStackLayout Spacing="8">
+                        <Button Text="Cancel session" Style="{StaticResource SmallButton}" Command="{Binding ConfirmCancelCommand}" />
+                        <Button Text="Keep session" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepSessionCommand}" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
             <!-- member (E5/E6/E7): Book a coach -->
             <VerticalStackLayout Spacing="10" IsVisible="{Binding CanShowBookCoach}">
                 <Button Text="Book a coach" Style="{StaticResource SmallButton}" HorizontalOptions="Start" Command="{Binding OpenBookCoachCommand}" />

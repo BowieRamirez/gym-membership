@@ -110,7 +110,7 @@ public class MessagingTests
         var start = DateTime.UtcNow.Date.AddDays(14).AddHours(9);
         await gw.SignInAsync("coach@demo.io", DemoGateway.DemoPassword);
         foreach (var row in (await svc.SessionsAsync()).Value!.Where(r => r.Session.MemberId == "u-alex" && r.Session.Status == Status.Scheduled))
-            Assert.True((await svc.CancelSessionAsync(row.Session.Id)).Ok);
+            Assert.True((await svc.CancelSessionAsync(row.Session.Id, "test setup")).Ok);
         Assert.True((await svc.InviteMemberAsync("u-alex", start, start.AddHours(1))).Ok);
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         var invite = (await svc.RequestsAsync()).Value!.Rows.Where(r => r.Request.RequestedBy == "coach" && r.Request.Status == "pending").MaxBy(r => r.Request.Id)!;

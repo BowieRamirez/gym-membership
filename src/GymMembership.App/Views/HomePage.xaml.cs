@@ -21,4 +21,5 @@ public partial class HomePage : BasePage
 	}
 
 	void OnCheckOutCoach(object? sender, EventArgs e) => Row<HomeViewModel>(sender, v => v.CheckOutCoachCommand);
+	void OnMarkCoachArrived(object? sender, EventArgs e) => Row<HomeViewModel>(sender, v => v.MarkCoachArrivedCommand);
 }

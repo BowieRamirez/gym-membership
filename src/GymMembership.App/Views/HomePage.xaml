@@ -30,6 +30,35 @@
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
         </DataTemplate>
+        <DataTemplate x:Key="TodaySessionRow" x:DataType="svc:TodayCoachSession">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="180,*,*,120,140" ColumnSpacing="12">
+                    <Label Text="{Binding TimeRange}" VerticalOptions="Center" />
+                    <Label Grid.Column="1" Text="{Binding MemberName}" FontFamily="BarlowMedium" VerticalOptions="Center" />
+                    <Label Grid.Column="2" Text="{Binding CoachName}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                    <c:StatusChip Grid.Column="3" Status="{Binding Status}" VerticalOptions="Center" />
+                    <Button Grid.Column="4" Text="Coach is here" Style="{StaticResource SmallButton}" HorizontalOptions="End"
+                            IsVisible="{Binding CanMarkCoachArrived}" Clicked="OnMarkCoachArrived" />
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+        <DataTemplate x:Key="TodaySessionCard" x:DataType="svc:TodayCoachSession">
+            <VerticalStackLayout>
+                <Grid Padding="14,10" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="{Binding MemberName}" FontFamily="BarlowSemiBold" />
+                        <Label Text="{Binding TimeRange}" Style="{StaticResource Caption}" />
+                        <Label Text="{Binding CoachName, StringFormat='Coach {0}'}" Style="{StaticResource Caption}" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Column="1" Spacing="6" HorizontalOptions="End" VerticalOptions="Center">
+                        <c:StatusChip Status="{Binding Status}" HorizontalOptions="End" />
+                        <Button Text="Coach is here" Style="{StaticResource SmallButton}" IsVisible="{Binding CanMarkCoachArrived}" Clicked="OnMarkCoachArrived" />
+                    </VerticalStackLayout>
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
     </v:BasePage.Resources>
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
@@ -85,6 +114,26 @@
                     <c:TableBody Items="{Binding InGym}" Header="{x:Reference CoachHead}" WideFrom="420"
                                  RowTemplate="{StaticResource CoachRow}" CardTemplate="{StaticResource CoachCard}">
                         <c:TableBody.Empty><Label Text="No coaches checked in. Check them in on the Membership checking page." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
+                    </c:TableBody>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- today's coach sessions -->
+            <Border Style="{StaticResource TablePanel}" IsVisible="{Binding HasSessions}">
+                <VerticalStackLayout>
+                    <c:CardTitle Text="Today's coach sessions" Margin="14,12,14,4" />
+                    <VerticalStackLayout x:Name="SessionHead" IsVisible="{OnIdiom Phone=False, Default=True}">
+                        <Grid Style="{StaticResource TableHead}" ColumnDefinitions="180,*,*,120,140" ColumnSpacing="12">
+                            <Label Text="Time" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="1" Text="Member" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="2" Text="Coach" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="3" Text="Status" Style="{StaticResource Caption}" />
+                        </Grid>
+                        <BoxView Style="{StaticResource Hairline}" />
+                    </VerticalStackLayout>
+                    <c:TableBody Items="{Binding TodaySessions}" Header="{x:Reference SessionHead}" WideFrom="680"
+                                 RowTemplate="{StaticResource TodaySessionRow}" CardTemplate="{StaticResource TodaySessionCard}">
+                        <c:TableBody.Empty><Label Text="No coach sessions scheduled today." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                     </c:TableBody>
                 </VerticalStackLayout>
             </Border>

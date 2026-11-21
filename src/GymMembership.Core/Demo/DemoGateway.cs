@@ -119,6 +119,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     /// for a super admin when nobody in the app can.</summary>
     public void OwnerSetActive(string userId, bool active) => All<Profile>().First(p => p.Id == userId).IsActive = active;
     public void OwnerAgeSessions(string memberId, int days) { foreach (var s in All<TrainingSession>().Where(s => s.MemberId == memberId)) { s.ScheduledStart = s.ScheduledStart.AddDays(-days); s.ScheduledEnd = s.ScheduledEnd.AddDays(-days); } }
+    public TrainingSession OwnerAddSession(TrainingSession s) => Add(s);
     /// <summary>0066 (G19): the database owner, not the app, can still leave an amenity set up as a pass, as amenities sold before were.</summary>
     public void OwnerSetPassDays(int amenityId, int? days) => All<Amenity>().First(a => a.Id == amenityId).DurationDays = days;
     /// <summary>A pass bought before 0066; it keeps working until it ends.</summary>
@@ -757,6 +758,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     {
         if (SubscriptionCall(fn, a, out var subscriptionResult)) return subscriptionResult;
         if (CoachSessionCall(fn, a, out var coachSessionResult)) return coachSessionResult;
+        if (SessionCheckInCall(fn, a, out var sessionCheckInResult)) return sessionCheckInResult;
         if (ReservationCall(fn, a, out var reservationResult)) return reservationResult;
         if (ClosureCall(fn, a, out var closureResult)) return closureResult;
         if (RequestCall(fn, a, out var requestResult)) return requestResult;
@@ -1255,6 +1257,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 var s = All<TrainingSession>().FirstOrDefault(x => x.Id == I("p_session_id") && (x.CoachId == uid || x.MemberId == uid || Has("members:read"))) ?? throw Err("not_found");
                 if (s.Status != Status.Scheduled) throw Err("already_processed");
                 if (s.ScheduledStart <= now) throw Err("already_started");
+                if (uid == s.CoachId && uid != s.MemberId && !Has("members:read") && string.IsNullOrWhiteSpace(Opt("p_reason")))
+                    throw Err("reason_required");
                 s.Status = Status.Cancelled;
                 foreach (var req in All<TimeRequest>().Where(x => x.SessionId == s.Id && x.Status == Status.Pending)) req.Status = Status.Cancelled;
                 foreach (var held in Confirmed.Where(x => x.TrainingSessionId == s.Id).ToList())   // frees the session's amenity

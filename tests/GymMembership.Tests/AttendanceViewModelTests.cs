@@ -41,7 +41,7 @@ public class AttendanceViewModelTests
         public Task<AppResult<IReadOnlyList<SessionRow>>> SessionsAsync() => throw new NotSupportedException();
         public Task<AppResult<bool>> SetSessionStatusAsync(int sessionId, string status) => throw new NotSupportedException();
         public Task<AppResult<bool>> RescheduleAsync(int sessionId, DateTime startUtc, DateTime endUtc) => throw new NotSupportedException();
-        public Task<AppResult<bool>> CancelSessionAsync(int sessionId) => throw new NotSupportedException();
+        public Task<AppResult<bool>> CancelSessionAsync(int sessionId, string? reason = null) => throw new NotSupportedException();
     }
 
     // a marking service that changes the fake server's data, like the real one changes the table

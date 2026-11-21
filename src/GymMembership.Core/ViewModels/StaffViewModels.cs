@@ -18,13 +18,15 @@ public sealed record HomeTile(string Route, string Icon, string Title, string Co
 
 /// <summary>The front desk home: the four tiles, then the payments waiting and the coaches in the gym (Phase 4b).
 /// Without the payment and coach services (older tests) it is the tiles alone.</summary>
-public partial class HomeViewModel(IDeskHomeService svc, IPaymentStaffService? payments = null, ICoachService? coaches = null) : LoadableViewModel
+public partial class HomeViewModel(IDeskHomeService svc, IPaymentStaffService? payments = null, ICoachService? coaches = null, ISessionService? sessions = null) : LoadableViewModel
 {
     public ObservableCollection<HomeTile> Tiles { get; } = new();
     /// <summary>Desk bookings waiting for their cash (cashier plan Y7); a row opens the Cashier, where it is taken.</summary>
     public ObservableCollection<PaymentRow> ToVerify { get; } = new();
     public ObservableCollection<CoachPresenceRow> InGym { get; } = new();
+    public ObservableCollection<TodayCoachSession> TodaySessions { get; } = new();
     public bool HasLists => payments is not null && coaches is not null;
+    public bool HasSessions => sessions is not null;
 
     public override Task OnAppearingAsync() => LoadAsync();
 
@@ -34,6 +36,7 @@ public partial class HomeViewModel(IDeskHomeService svc, IPaymentStaffService? p
         if (!await RunAsync(svc.SummaryAsync, s => Show(s)) || !HasLists) return;
         if (!await RunAsync(payments!.PendingAsync, ShowPayments)) return;
         await RunAsync(coaches!.PresenceAsync, ShowCoaches);
+        if (sessions is not null) await RunAsync(sessions.TodayCoachSessionsAsync, ShowTodaySessions);
     }
 
     // Quiet: the error line is never touched and a failed look leaves the numbers as they were.
@@ -47,6 +50,17 @@ public partial class HomeViewModel(IDeskHomeService svc, IPaymentStaffService? p
         if (!HasLists) return;
         if ((await payments!.PendingAsync()) is { Ok: true } p) ShowPayments(p.Value!);
         if ((await coaches!.PresenceAsync()) is { Ok: true } c) ShowCoaches(c.Value!);
+        if (sessions is not null && (await sessions.TodayCoachSessionsAsync()) is { Ok: true } ts) ShowTodaySessions(ts.Value!);
+    }
+
+    [RelayCommand]
+    private async Task MarkCoachArrivedAsync(TodayCoachSession row)
+    {
+        if (sessions is null) return;
+        Notice = null;
+        if (!await RunAsync(() => sessions.MarkCoachArrivedAsync(row.SessionId))) return;
+        Notice = $"{row.CoachName} marked arrived. Session is now In session.";
+        await RunAsync(sessions.TodayCoachSessionsAsync, ShowTodaySessions);
     }
 
     [RelayCommand]
@@ -62,6 +76,7 @@ public partial class HomeViewModel(IDeskHomeService svc, IPaymentStaffService? p
     void Show(DeskSummary s) => Sync(Tiles, Build(s), t => t.Route, (a, b) => a == b);
     void ShowPayments(IReadOnlyList<PaymentRow> rows) => Sync(ToVerify, rows, p => p.Payment.Id, (a, b) => a == b);
     void ShowCoaches(IReadOnlyList<CoachPresenceRow> rows) => Sync(InGym, rows.Where(r => r.InGym).ToList(), r => r.CoachId, (a, b) => a == b);
+    void ShowTodaySessions(IReadOnlyList<TodayCoachSession> rows) => Sync(TodaySessions, rows, r => r.SessionId, (a, b) => a == b);
 
     public static IReadOnlyList<HomeTile> Build(DeskSummary s)
     {
@@ -566,7 +581,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     }
 }
 
-public partial class CheckInViewModel(IAttendanceService svc, ICoachService coaches, OfflineDesk? offline = null, IProfileService? profile = null, TimeProvider? clock = null, IReportFiles? files = null, ISubscriptionService? refunds = null) : LoadableViewModel
+public partial class CheckInViewModel(IAttendanceService svc, ICoachService coaches, OfflineDesk? offline = null, IProfileService? profile = null, TimeProvider? clock = null, IReportFiles? files = null, ISubscriptionService? refunds = null, ISessionService? sessions = null) : LoadableViewModel
 {
     // ---- owner, 2026-11-18: View on a Day pass in Checked in today shows who and what was paid; Print opens the receipt PDF ----
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsViewingDayPass))] private CheckInRow? viewingDayPass;
@@ -605,8 +620,12 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
     [ObservableProperty] private string search = "";
     [ObservableProperty] private string scanInput = "";   // a QR scanner device types the code here and presses Enter
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasScan))] private MemberScan? scan;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasScannedSession))] private TodayCoachSession? scannedSession;
+    public ObservableCollection<TodayCoachSession> MemberTodaySessions { get; } = new();
+    [ObservableProperty] private bool hasMemberTodaySessions;
     [ObservableProperty] private bool isScanning;          // the camera is on
     public bool HasScan => Scan is not null;
+    public bool HasScannedSession => ScannedSession is not null;
 
     // D12: when the connection drops, the desk works from its saved list (OfflineDesk)
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OfflineText), nameof(CanUsePassword))] private bool isOffline;
@@ -695,13 +714,56 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
         code = (code ?? ScanInput).Trim();
         if (code.Length == 0) return;
         Notice = null; IsScanning = false; ScanInput = "";
+        if (sessions is not null && code.StartsWith("SES-", StringComparison.OrdinalIgnoreCase))
+        {
+            Scan = null; MemberTodaySessions.Clear(); HasMemberTodaySessions = false;
+            if (await RunAsync(() => sessions.ScanSessionAsync(code), s => ScannedSession = s))
+                Notice = $"{ScannedSession!.MemberName} checked in for {ScannedSession.TimeRange}.";
+            return;
+        }
+        ScannedSession = null;
+        MemberTodaySessions.Clear(); HasMemberTodaySessions = false;
         var result = await svc.ScanAsync(code);
         if (WentOffline(result)) { IsOffline = true; ErrorMessage = null; Scan = new MemberScan { Result = "saved_no_qr" }; ShowQueue(); return; }
         await RunAsync(() => Task.FromResult(result), s => { Scan = s; IsOffline = false; });
         // G10: the card shows the face, or the initials while the photo loads or when there is none
         (ScanPhoto, ScanLetters) = (null, Scan?.Name is { } n ? Initials.From(n) : "");
         if (profile is not null && Scan is { AvatarPath: { } path } shown && (await profile.AvatarUrlAsync(path)) is { Ok: true, Value: { } url } && Scan == shown) ScanPhoto = url;
+        if (sessions is not null && Scan?.Member is { } mid) await LoadMemberTodaySessionsAsync(mid);
     }
+
+    async Task LoadMemberTodaySessionsAsync(string memberId)
+    {
+        if (sessions is null) return;
+        var res = await sessions.TodayCoachSessionsAsync();
+        if (!res.Ok || res.Value is null) return;
+        Fill(MemberTodaySessions, res.Value.Where(s => s.MemberId == memberId).ToList());
+        HasMemberTodaySessions = MemberTodaySessions.Count > 0;
+    }
+
+    [RelayCommand]
+    private async Task CheckInSessionAsync(TodayCoachSession row)
+    {
+        if (sessions is null || string.IsNullOrWhiteSpace(row.SessionCode)) return;
+        Notice = null;
+        if (!await RunAsync(() => sessions.ScanSessionAsync(row.SessionCode), s => { if (ScannedSession?.SessionId == s.SessionId) ScannedSession = s; })) return;
+        Notice = $"{row.MemberName} checked in for {row.TimeRange}.";
+        if (Scan?.Member is { } mid) await LoadMemberTodaySessionsAsync(mid);
+    }
+
+    [RelayCommand]
+    private async Task MarkCoachArrivedAsync(TodayCoachSession row)
+    {
+        if (sessions is null) return;
+        Notice = null;
+        if (!await RunAsync(() => sessions.MarkCoachArrivedAsync(row.SessionId))) return;
+        Notice = $"{row.CoachName} marked arrived. Session is now In session.";
+        if (ScannedSession?.SessionId == row.SessionId)
+            ScannedSession = ScannedSession with { CoachArrivedAt = DateTime.UtcNow, Status = "In session" };
+        if (Scan?.Member is { } mid) await LoadMemberTodaySessionsAsync(mid);
+    }
+
+    [RelayCommand] private void ClearScannedSession() => ScannedSession = null;
     [ObservableProperty] private string? scanPhoto;
     [ObservableProperty] private string scanLetters = "";
 
@@ -1205,13 +1267,42 @@ public partial class SessionsViewModel(ISessionService svc, IMembershipService? 
     [RelayCommand] private Task CompleteAsync(SessionRow row) => SetAsync(row, Status.Completed);
     [RelayCommand] private Task NoShowAsync(SessionRow row) => SetAsync(row, Status.NoShow);
 
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsShowingQr))] private SessionRow? qrSession;
+    public bool IsShowingQr => QrSession is not null;
+    [RelayCommand] private void ShowQr(SessionRow row) => QrSession = QrSession == row ? null : row;
+    [RelayCommand] private void CloseQr() => QrSession = null;
+
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsCancelling))] private SessionRow? cancellingSession;
+    public bool IsCancelling => CancellingSession is not null;
+    [ObservableProperty] private string cancelReason = "";
+
     [RelayCommand]
     private async Task CancelAsync(SessionRow row)
     {
         Notice = null;
+        if (row.IsMine)
+        {
+            CancellingSession = row;
+            CancelReason = "";
+            return;
+        }
         if (!await Confirm.AskAsync("Cancel this session?", $"With {row.With}, {Fmt.Range(row.Session.ScheduledStart, row.Session.ScheduledEnd)}.\nThey will be told.", "Cancel session")) return;
         if (await RunAsync(() => svc.CancelSessionAsync(row.Session.Id))) { Notice = "Session cancelled. The other person has been told."; await LoadAsync(); }
     }
+
+    [RelayCommand]
+    private async Task ConfirmCancelAsync()
+    {
+        if (CancellingSession is not { } row) return;
+        if (string.IsNullOrWhiteSpace(CancelReason)) { ErrorMessage = "Say why you are cancelling this session."; return; }
+        Notice = null;
+        if (!await RunAsync(() => svc.CancelSessionAsync(row.Session.Id, CancelReason))) return;
+        CancellingSession = null; CancelReason = "";
+        Notice = "Session cancelled. The member has been told.";
+        await LoadAsync();
+    }
+
+    [RelayCommand] private void KeepSession() { CancellingSession = null; CancelReason = ""; }
 
     [RelayCommand]
     private async Task ExtendAsync(SessionRow row)

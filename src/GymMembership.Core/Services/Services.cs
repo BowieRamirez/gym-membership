@@ -1111,7 +1111,29 @@ public sealed record SessionRow(TrainingSession Session, string With, bool IsMin
     // the coach running a session on an amenity can add time until it ends (extend_reservation)
     public bool CanExtend => IsMine && ReservationId is not null && Session.Status == Status.Scheduled && Session.ScheduledEnd.ToUniversalTime() > DateTime.UtcNow;
     public bool IsWaitingForPayment => Session.Status == Status.Scheduled && Session.HeldUntil is not null;
-    public string StatusText => IsWaitingForPayment ? "Waiting for payment" : Session.Status;
+    public bool HasQr => Session.Status == Status.Scheduled && Session.HeldUntil is null && !string.IsNullOrWhiteSpace(Session.SessionCode);
+    public string StatusText => IsWaitingForPayment ? "Waiting for payment"
+        : Session.Status == Status.Scheduled && Session.CoachArrivedAt is not null ? "In session"
+        : Session.Status == Status.Scheduled && Session.CheckedInAt is not null ? "Checked in"
+        : Session.Status;
+}
+public sealed record TodayCoachSession(
+    [property: System.Text.Json.Serialization.JsonPropertyName("training_session_id")] int SessionId,
+    [property: System.Text.Json.Serialization.JsonPropertyName("session_code")] string? SessionCode,
+    [property: System.Text.Json.Serialization.JsonPropertyName("member_id")] string MemberId,
+    [property: System.Text.Json.Serialization.JsonPropertyName("member_name")] string MemberName,
+    [property: System.Text.Json.Serialization.JsonPropertyName("coach_id")] string CoachId,
+    [property: System.Text.Json.Serialization.JsonPropertyName("coach_name")] string CoachName,
+    [property: System.Text.Json.Serialization.JsonPropertyName("scheduled_start")] DateTime ScheduledStart,
+    [property: System.Text.Json.Serialization.JsonPropertyName("scheduled_end")] DateTime ScheduledEnd,
+    [property: System.Text.Json.Serialization.JsonPropertyName("status")] string Status,
+    [property: System.Text.Json.Serialization.JsonPropertyName("checked_in_at")] DateTime? CheckedInAt,
+    [property: System.Text.Json.Serialization.JsonPropertyName("coach_arrived_at")] DateTime? CoachArrivedAt,
+    [property: System.Text.Json.Serialization.JsonPropertyName("held_until")] DateTime? HeldUntil)
+{
+    public string TimeRange => Fmt.Range(ScheduledStart, ScheduledEnd);
+    public bool CanMarkCoachArrived => CheckedInAt is not null && CoachArrivedAt is null && Status == "Checked in";
+    public bool CanCheckIn => CheckedInAt is null && HeldUntil is null && Status == "scheduled";
 }
 public sealed record FreeCoachSlot(
     [property: System.Text.Json.Serialization.JsonPropertyName("coach_id")] string CoachId,
@@ -1155,7 +1177,7 @@ public interface ISessionService
     /// <summary>The coach marks a session done (Completed) or missed (NoShow). Recorded as attendance, which also sets the status.</summary>
     Task<AppResult<bool>> SetSessionStatusAsync(int sessionId, string status);
     Task<AppResult<bool>> RescheduleAsync(int sessionId, DateTime startUtc, DateTime endUtc);
-    Task<AppResult<bool>> CancelSessionAsync(int sessionId);
+    Task<AppResult<bool>> CancelSessionAsync(int sessionId, string? reason = null);
     /// <summary>The coach adds minutes (30-minute steps) to a session on an amenity; the session and its reservation move together.</summary>
     Task<AppResult<bool>> ExtendAsync(int reservationId, int minutes);
     /// <summary>The signed-in coach's sessions that start in [fromUtc, toUtc), oldest first, each with how it went (Mark is null until marked).</summary>
@@ -1166,6 +1188,9 @@ public interface ISessionService
     Task<AppResult<IReadOnlyList<FreeCoachSlot>>> FreeCoachesAsync(DateOnly day) => Task.FromResult(AppResult<IReadOnlyList<FreeCoachSlot>>.Success([]));
     Task<AppResult<BookCoachResult>> BookCoachAsync(string coachId, DateTime startUtc, int hours, string? code = null) => Task.FromResult(AppResult<BookCoachResult>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<BookCoachResult>> DeskBookCoachAsync(string memberId, string coachId, DateTime startUtc, int hours, string method, string? code = null) => Task.FromResult(AppResult<BookCoachResult>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<TodayCoachSession>> ScanSessionAsync(string code) => Task.FromResult(AppResult<TodayCoachSession>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<bool>> MarkCoachArrivedAsync(int sessionId) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<IReadOnlyList<TodayCoachSession>>> TodayCoachSessionsAsync() => Task.FromResult(AppResult<IReadOnlyList<TodayCoachSession>>.Success([]));
 }
 
 public sealed class SessionService(ISupabaseGateway gw) : ISessionService
@@ -1330,8 +1355,13 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
         });
     }
 
-    public Task<AppResult<bool>> CancelSessionAsync(int sessionId) => Safe.RunAsync(async () =>
-    { await gw.RpcAsync("cancel_session", new() { ["p_session_id"] = sessionId }); return true; });
+    public Task<AppResult<bool>> CancelSessionAsync(int sessionId, string? reason = null) => Safe.RunAsync(async () =>
+    {
+        var args = new Dictionary<string, object> { ["p_session_id"] = sessionId };
+        if (!string.IsNullOrWhiteSpace(reason)) args["p_reason"] = reason.Trim();
+        await gw.RpcAsync("cancel_session", args);
+        return true;
+    });
 
     public Task<AppResult<bool>> SetSessionStatusAsync(int sessionId, string status) => Safe.RunAsync(async () =>
     {
@@ -1387,6 +1417,15 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
             ["p_method"] = method,
             ["p_code"] = (string.IsNullOrWhiteSpace(code) ? null : code.Trim())!
         }));
+
+    public Task<AppResult<TodayCoachSession>> ScanSessionAsync(string code) => Safe.RunAsync(async () =>
+        (await gw.RpcAsync<List<TodayCoachSession>>("scan_session", new() { ["p_code"] = code.Trim() })).First());
+
+    public Task<AppResult<bool>> MarkCoachArrivedAsync(int sessionId) => Safe.RunAsync(async () =>
+    { await gw.RpcAsync("mark_coach_arrived", new() { ["p_session"] = sessionId }); return true; });
+
+    public Task<AppResult<IReadOnlyList<TodayCoachSession>>> TodayCoachSessionsAsync() => Safe.RunAsync<IReadOnlyList<TodayCoachSession>>(async () =>
+        await gw.RpcAsync<List<TodayCoachSession>>("today_coach_sessions"));
 }
 
 // ===================== Attendance and check-ins =====================

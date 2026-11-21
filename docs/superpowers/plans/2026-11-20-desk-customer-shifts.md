@@ -176,7 +176,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 | 9 | Packages: Coach included switch; coach add-on price per package | E3, E4 | |
 | 10 | Book a coach: day → coach → time, one-on-one, checked again on confirm; add-on paid; limits | E5, E6, E7 | |
 | 11 | Hiring and Time requests removed; messages follow sessions | E8 | Done |
-| 12 | Desk: QR, Coach is here, session status apart from payment | E9 | |
+| 12 | Desk: QR, Coach is here, session status apart from payment | E9 | Done |
 | 13 | Damage report after a session, reviewed by admins | E10 | |
 | 14 | Coach hours report for the gym's coach pay | E11 | |
 | 15 | Part 2 checks, review, owner hand checks | | |
@@ -324,8 +324,8 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 **Files:** migration (`training_sessions.session_code`, `checked_in_at`, `coach_arrived_at`; `scan_session(p_code)` reads current status and refuses with a reason; `mark_coach_arrived(p_session)`; the coach's `cancel_session` with a reason alerts the member and refunds an add-on), Membership checking (today's sessions for the scanned member, Coach is here), front desk Home (Today's coach sessions), member Sessions (QR), coach Dashboard and Sessions (Completed / No-show, cancel with reason), demo mirror, tests.
 
-- [ ] Failing tests: Review Focus 5; a scheduled session today checks in; not In session until Coach is here; payment status untouched by session changes; coach cancel → member alert, add-on refunded.
-- [ ] Screens with `impeccable`: member Sessions (QR); coach Dashboard and Sessions (Android and Windows, light/dark, 1.3 font scale); Membership checking, front desk Home (Windows). Migration, push, grants, commit.
+- [x] Failing tests: Review Focus 5; a scheduled session today checks in; not In session until Coach is here; payment status untouched by session changes; coach cancel → member alert, add-on refunded.
+- [x] Screens with `impeccable`: member Sessions (QR); coach Dashboard and Sessions (Android and Windows, light/dark, 1.3 font scale); Membership checking, front desk Home (Windows). Migration, push, grants, commit. (`0122_session_checkin_and_status.sql` verified locally; live push pending.)
 
 ## Phase 13: Damage reports (E10)
 

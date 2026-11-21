@@ -24,7 +24,7 @@ public class StructuredRequestTests
         var svc = new SessionService(gw);
         await gw.SignInAsync("coach@demo.io", DemoGateway.DemoPassword);
         foreach (var row in (await svc.SessionsAsync()).Value!.Where(r => r.Session.MemberId == "u-alex" && r.Session.Status == Status.Scheduled))
-            Assert.True((await svc.CancelSessionAsync(row.Session.Id)).Ok);              // clear Alex's seeded booking with Lena
+            Assert.True((await svc.CancelSessionAsync(row.Session.Id, "test setup")).Ok);              // clear Alex's seeded booking with Lena
         Assert.True((await new CoachService(gw).PostShiftAsync(Manila(6), Manila(22), null)).Ok);   // Lena opens the whole day
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         foreach (var row in (await svc.RequestsAsync()).Value!.Rows.Where(r => r.CanCancel))

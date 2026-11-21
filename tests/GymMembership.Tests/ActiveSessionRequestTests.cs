@@ -44,7 +44,7 @@ public class ActiveSessionRequestTests
         {
             if (status != Status.Cancelled && row.Session.ScheduledStart > clock.Now.UtcDateTime)
                 clock.Now = new DateTimeOffset(row.Session.ScheduledStart.AddMinutes(5), TimeSpan.Zero);
-            Assert.True((status == Status.Cancelled ? await svc.CancelSessionAsync(row.Session.Id) : await svc.SetSessionStatusAsync(row.Session.Id, status)).Ok);
+            Assert.True((status == Status.Cancelled ? await svc.CancelSessionAsync(row.Session.Id, "test setup") : await svc.SetSessionStatusAsync(row.Session.Id, status)).Ok);
         }
         var future = clock.Now.UtcDateTime.AddDays(3);
         var inviteStart = new DateTime(future.Year, future.Month, future.Day, 10, 0, 0, DateTimeKind.Utc);

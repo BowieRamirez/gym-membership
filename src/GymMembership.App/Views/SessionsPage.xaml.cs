@@ -42,6 +42,7 @@ public partial class SessionsPage : BasePage
 	protected override TimeSpan? AutoRefresh => CalendarSection.IsVisible ? TimeSpan.FromSeconds(60) : null;
 	protected override bool RefreshOwnViewModel => false;
 
+	void OnShowQr(object? sender, EventArgs e) => Row<SessionsViewModel>(sender, v => v.ShowQrCommand);
 	void OnExtend(object? sender, EventArgs e) => Row<SessionsViewModel>(sender, v => v.ExtendCommand);
 	void OnComplete(object? sender, EventArgs e) => Row<SessionsViewModel>(sender, v => v.CompleteCommand);
 	void OnNoShow(object? sender, EventArgs e) => Row<SessionsViewModel>(sender, v => v.NoShowCommand);
