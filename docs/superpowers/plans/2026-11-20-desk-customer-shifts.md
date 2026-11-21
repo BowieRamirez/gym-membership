@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans (owner chose native execution for the last plans) to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
 
 Created: 2026-11-20
-Last updated: 2026-11-20
+Last updated: 2026-11-22 (Part 3: Payroll planned, not built)
 Status: Part 2 (coach revamp, Phases 8-15) PLANNED, model agreed (E1-E7), E8-E12 to confirm, not built. Part 1: Phases 1-6 implemented and verified (1216 unit tests, Windows & Android builds, local DB tests, and `0117` dry-run). Phase 7: awaiting live migration push, live grants check, owner hand checks, and branch push.
 Branch: `desk-customer-shifts-2026-11-20` (cut from `origin/main` at `8c1555f`, v0.9.0 + `0116`). **Owner's rule: this branch is not merged into `main` yet.** Pushed to GitHub for the owner; no PR until the owner asks.
 
@@ -403,6 +403,115 @@ Design: `docs/superpowers/specs/2026-11-21-coach-access-addon-design.md`.
 - [x] Migration (`0129_coach_access_addon.sql`), dry-run push, pushed live to `avxcitoddadbblxuhiik`, live grants, committed (`95a6dd6`).
 - [x] Screens: Packages card and Buy popup, My membership ("Coach access until"), Admin Packages (`FormCoachAddonPrice`).
 
+# Part 3: Payroll (owner, 2026-11-22)
+
+**Not built yet.** P1-P4 answered by the owner (2026-11-22); P5-P10 recommended, to confirm. Same branch, same rules ("How to use this plan"). Migrations start at `0135`. A single new admin page, **Payroll**, for Windows only (staff page, light and dark). Nothing changes for members, coaches or the front desk.
+
+**Source:** owner, 2026-11-22: "a payroll system for the employee and coach, handled by admin, a new admin page that shows a simple payroll system, use impeccable for the UI." Answers: **fixed salary per period**; coach hours = **completed sessions**; **twice a month, simple** (manual bonus and deduction lines, no SSS / PhilHealth / Pag-IBIG / tax); **Admin and System admin** only.
+
+This brings staff pay records into the app. E1 ("how the gym pays coaches is outside the app") still holds for members: no coach rate and nothing a member sees. Paying out the money (cash, bank, GCash) still happens outside the app. The app keeps what each person is owed and marks it paid.
+
+## Phase table (Part 3)
+
+| Phase | What | Needs | Status |
+|---|---|---|---|
+| 17 | Database: salaries, pay periods, bonus and deduction lines, mark paid, audit | P1-P10 | |
+| 18 | Admin **Payroll** page (Period and Salaries tabs), PDF | P1-P10 | |
+| 19 | Part 3 checks, review, owner hand checks | | |
+
+## 5. Findings: what payroll can build on
+
+| Item | Today | Consequence |
+|---|---|---|
+| Who is staff | `user_roles` / `roles` (`admin`, `employee` = front desk, `coach`, `member`, 0002); `is_staff()`; System admin through `is_super_admin()`. | Payroll lists active **front desk** and **coach** accounts. Admins appear only once someone sets a salary for them (P2). |
+| Front desk hours | `cash_shifts` (0050, 0117): `opened_at`, `closed_at`, per cashier. | Desk hours for the period (closed shifts) are shown **for reference only** (P1). |
+| Coach hours | `coach_hours_report(p_from, p_to)` (0124): completed sessions, hours, no-shows. | Same numbers shown for reference on Payroll; that logic is reused, not copied. |
+| Coach pay rate | Removed (E1, 0118). | Not brought back. Pay is a fixed salary per period (P1). |
+| Admin-only access | `require_permission('reports:revenue')` gates Revenue and cash shift reports (0005, 0050) for Admin and System admin. | Payroll uses the same permission (P4); no new permission. |
+| PDF | `RevenuePdf` (`RevenueReport.cs`) and Revenue's **Export PDF** / **Export shifts PDF** through `IReportFiles`. | Payroll PDF reuses that path (P8). |
+| Audit | `audit()`; Logs & Archive; no IPs (0083). | Each payroll change writes an audit row (P9). |
+
+## 6. Decisions (Part 3)
+
+| # | Decision | Answer |
+|---|---|---|
+| P1 | **Fixed salary per pay period**, set by the admin for each person (`staff_salaries`: user, amount per period, updated by and when). Hours appear beside the pay **for reference only**: front desk = closed cash shift hours in the period; coach = completed session hours (the E11 report's numbers; no-shows don't count). Hours never change the pay. | Owner, 2026-11-22 |
+| P2 | **Who is on payroll:** every active front desk and coach account is listed. One with no salary set shows **No salary set** (warning chip) and is paid nothing until a salary is set. An admin or System admin appears once someone sets a salary for them. Archived or deactivated accounts drop off new periods but stay on paid ones. | Recommended, confirm |
+| P3 | **Pay periods:** **1st–15th** and **16th–end of month**, by Manila date. A period is **Draft** until it's marked **Paid**. While it's a draft, everyone's salary line follows their **current** salary, so a salary change or a new hire shows up straight away. **Mark as paid** freezes every line (salary, bonuses, deductions, net) and locks the period. Paid periods are never edited. | Owner, 2026-11-22 (twice a month); draft/paid recommended |
+| P4 | **Access:** Admin and System admin (`reports:revenue`, same as Revenue). Front desk, coaches and members can't read salaries or payroll; tables have RLS on with no grants, and are used only through functions. Staff don't see their own payslip in the app (they get the PDF). | Owner, 2026-11-22 |
+| P5 | **Bonus and deduction lines:** on a draft the admin adds **Bonus** or **Deduction** lines for a person: amount (more than ₱0) and a note (required, 1-200 characters, e.g. "Cash short, shift #20", "Holiday cover"). A line can be removed while the period is a draft. Nothing is worked out automatically: no SSS, PhilHealth, Pag-IBIG, tax, overtime or proration. | Owner, 2026-11-22 (manual only) |
+| P6 | **Joining or leaving mid-period:** no automatic proration. The admin adds a Deduction with a note (e.g. "Started 10 Nov: 9 of 15 days"). | Recommended, confirm |
+| P7 | **Mistakes after Paid:** a paid period stays as it is. Corrections go on the next draft as a Bonus or Deduction whose note names the paid period. **Net below ₱0** for anyone refuses Mark as paid (`net_below_zero`, naming the person). | Recommended, confirm |
+| P8 | **Payroll PDF:** **Export PDF** on a period: gym name, period, Draft or Paid (paid on, by), one row per person (role, reference hours, salary, bonuses, deductions, net), total, and a payslip block per person listing their lines and notes, for handing out. Reuses the Revenue PDF path. | Recommended, confirm |
+| P9 | **Audit:** `payroll.salary_set` (person, old → new amount), `payroll.line_added`, `payroll.line_removed`, `payroll.paid` (period, number of people, total). They show in Logs & Archive; no IPs. | Recommended, confirm |
+| P10 | **Payroll is not cash-drawer money and not Revenue.** Paying salaries doesn't touch `cash_shifts`, expected cash or sales totals. A cash shortage is charged to someone only if the admin adds a Deduction for it (P5). | Recommended, confirm |
+
+## The Payroll page (impeccable brief)
+
+Made with the `impeccable` skill (and `frontend-design`, per CLAUDE.md). Run `impeccable` before writing the XAML and check with it again before the commit. **Operate mode:** an admin finishing a pay run twice a month at a desk. They need to scan who gets what, spot the odd one out (no salary, a deduction, a negative net), fix it, and close the period. Craft shows in precision, not decoration. Keep the existing sage/lime look and components (`Panel`, `TableRow`, `StatusChip`, `FilterChip`, `Hairline`, the segment tabs on `AuditPage`, the side drawer on Admin Packages). No new visual style, no KPI card grid, no charts.
+
+- **Where:** `StaffShell.xaml`, `ClassId="admin"`, after Revenue: **Payroll** (icon-rail entry in `IconRail.Windows.cs`). Windows only, light and dark.
+- **Tabs:** **Pay period** (default) and **Salaries**.
+- **Pay period tab, top bar:** period stepper `‹ 1–15 Nov 2026 ›` (opens on the current period), status chip **Draft** or **Paid 16 Nov by Ana**, and on the right the period's **total net** as the biggest figure on the page. Under it, one quiet line: "12 people · 2 with no salary set" (the warning count links to Salaries).
+- **Table (one row per person, `TableRow`):** Name with a role chip (Front desk / Coach / Admin) · Hours, muted ("41 h at the desk" / "9 sessions · 11 h") · Salary · Bonuses · Deductions · **Net pay**, bold. Money is right-aligned with tabular figures, and ₱0 shows as "–". A "No salary set" row is muted and shows the warning chip instead of amounts. Rows sort by role, then name. The table follows the existing responsive `TableBody` (`WideFrom`), so it doesn't overlap at narrow widths.
+- **Row → side drawer** (same as the Admin Packages drawer): the person, their reference hours, and their lines for the period. On a draft: **Add bonus** / **Add deduction** (amount + required note, error under the box) and a remove button on each added line. The salary line says "From Salaries · change it there". On a paid period the drawer is read-only.
+- **Actions under the table:** **Export PDF** (outline) and **Mark as paid** (primary, drafts only). The confirm names it in full: "Mark 1–15 Nov 2026 as paid? 10 people, ₱182,500.00. Ana Cruz and Leo Tan have no salary set and get nothing. Paid periods can't be changed." A `net_below_zero` refusal names the person and opens their drawer.
+- **Salaries tab:** one row per active front desk and coach account (plus admins who have a salary): name, role chip, **Salary per period** or the "No salary set" chip, last changed (date, by whom), and **Set salary** (inline amount box, Save, Cancel). An admin's own salary can be set by the other admin or System admin, never by themselves (`own_salary`).
+- **States:** loading (the page's existing skeleton), error with **Try again**, no staff yet ("No front desk or coach accounts yet. Add them in Users and roles."), a future period (shown as an empty draft; Mark as paid off until the period's last day), and a paid period (read-only, no Add / Mark buttons, chip says when and by whom).
+- **Anti-goals:** no hourly maths, no automatic deductions, no charts, no per-person pages, nothing on member, coach or desk screens.
+
+## Global Constraints (Part 3)
+
+- Everything in Part 1 and Part 2's Global Constraints, plus: migrations from `0135`. Every function revokes `public, anon, authenticated` and grants `authenticated`, gated inside by `require_permission('reports:revenue')`. Check live grants after the push (`supabase-recreated-function-grants`).
+- Money is `numeric(12,2)`; periods are Manila dates; a paid period never changes.
+- Demo gateway mirrors every rule (`DemoPayroll.cs`).
+
+## Review Focus (Part 3)
+
+1. **Front desk, coach, member or anon calls any payroll function or reads the tables** → refused / no rows.
+2. **Salary changed while a period is a draft** → the draft shows the new salary; a period already paid keeps the old one.
+3. **Add or remove a line, or Mark as paid again, on a paid period** → `payroll_paid`, nothing changes.
+4. **Deductions larger than salary** → Mark as paid refused `net_below_zero`, names the person, nothing frozen.
+5. **Two admins press Mark as paid at once** → paid once (row lock), the second gets `payroll_paid`.
+6. **A coach deactivated on the 10th** → not on the 16–30 draft; still on the paid 1–15 period with their frozen lines.
+
+## Phase 17: Payroll database (P1-P10)
+
+### Task 18: Salaries, periods, lines, paid
+
+**Files:** migration `0135_payroll.sql`:
+- `staff_salaries` (`user_id` pk → profiles, `amount numeric(12,2) check (amount > 0)`, `updated_at`, `updated_by`).
+- `payroll_periods` (`period_id`, `starts_on date unique check (extract(day from starts_on) in (1,16))`, `ends_on` generated or set by the function, `paid_at`, `paid_by`).
+- `payroll_lines` (`line_id`, `period_id`, `user_id`, `kind` `salary | bonus | deduction`, `amount > 0`, `note` 1-200 characters, required for bonus and deduction, `created_by`, `created_at`). Salary lines are written only by Mark as paid.
+- RLS on and no grants for all three.
+- Functions (each `require_permission('reports:revenue')`):
+  - `set_staff_salary(p_user uuid, p_amount numeric)`: front desk, coach or admin only; `own_salary`; audit old → new.
+  - `payroll_staff()`: Salaries tab rows.
+  - `payroll_period(p_starts_on date)`: makes the period row if missing, then returns one row per person: role, reference hours (closed `cash_shifts` hours in the period; coach completed session hours by the `coach_hours_report` logic), salary (current while draft, the frozen line once paid), bonuses, deductions, net, `no_salary`, plus the period's status and total.
+  - `payroll_lines_for(p_period, p_user)`: lines for the drawer.
+  - `payroll_add_line(p_period, p_user, p_kind, p_amount, p_note)` and `payroll_remove_line(p_line)`: draft only, otherwise `payroll_paid`; audit.
+  - `payroll_mark_paid(p_period)`: `for update` on the period; refuse `payroll_paid`, `period_not_ended`, `net_below_zero` (with the person); insert the salary lines from `staff_salaries`; set `paid_at` / `paid_by`; audit with count and total.
+- App: `IAdminService` methods + `Services.cs`, `Models.cs` (`PayrollRow`, `PayrollLine`, `StaffSalary`), `Foundation.cs` sentences (`payroll_paid`, `net_below_zero`, `period_not_ended`, `own_salary`), demo mirror `DemoPayroll.cs`.
+- Tests: `supabase/tests/local/payroll.mjs`, `tests/GymMembership.Tests/PayrollTests.cs`.
+
+- [ ] Failing tests first: Review Focus 1-6; period start not the 1st or 16th refused; bonus or deduction without a note refused; a person with no salary listed with `no_salary` and skipped on Mark as paid; desk hours = closed shifts only; coach hours equal `coach_hours_report` for the same dates; Mark as paid before the period's last day → `period_not_ended`; paying payroll leaves `cash_shifts` and Revenue totals unchanged (P10).
+- [ ] Migration, dry-run push, push live, live grants checked (anon and authenticated non-admin refused), commit.
+
+## Phase 18: Payroll page
+
+### Task 19: The page
+
+**Files:** `Views/PayrollPage.xaml` (+ `.xaml.cs`, `.Windows.cs` if the table needs it), `PayrollViewModel` in `StaffViewModels.cs` (period stepper, rows, drawer, add/remove line, mark paid, salaries tab, set salary), `StaffShell.xaml` + `IconRail.Windows.cs` entry (admin), `PayrollPdf` next to `RevenuePdf` in `RevenueReport.cs` (P8), tests in `PayrollTests.cs` (stepper crosses month and year ends correctly; total = sum of nets; paid period hides the edit commands; the confirm text names the people with no salary).
+
+- [ ] `impeccable` before the XAML (the brief above); build the page; check with `impeccable` (critique and audit) in light and dark on Windows at narrow and wide widths; fix what it finds.
+- [ ] View model tests green; Windows build; `ponytail:ponytail-review` on the diff; commit.
+
+## Phase 19: Part 3 checks
+
+- [ ] Whole suite (`dotnet test`, Windows & Android builds, every `supabase/tests/local` script) green.
+- [ ] `superpowers:requesting-code-review` on the Part 3 diff; fixes committed.
+- [ ] Owner hand checks (Windows): set salaries, open the current period, add a bonus and a deduction, export the PDF, mark a past period paid, and confirm the front desk can't see Payroll.
+
 ## Session log
 
 - 2026-11-20: plan written from the owner's `docs (1).pdf`; branch `desk-customer-shifts-2026-11-20` cut from `origin/main` (`8c1555f`) and pushed. Waiting on D1-D8.
@@ -428,4 +537,5 @@ Design: `docs/superpowers/specs/2026-11-21-coach-access-addon-design.md`.
 - 2026-11-21: Fixed **B1** server-side (`0130_b1_pay_again_follow_replacement.sql` pushed live to `avxcitoddadbblxuhiik`, `extend_membership` resolves `newest_package_version`, `DemoSubscriptions.CreateExtension` mirrors `ReplacesId` walk, `PayAgainAsync` simplified); verified `pay-again-rls.mjs` (2/2 under member RLS) and `dotnet test` (1220/1220), pushed (`a9c15ef`).
 - 2026-11-21: full live test of every page for member, coach, front desk (karl) and admin (36/36 load) and a new-account story (54/54: sign up, online buy + cancel, 10% code, desk cash sale, QR check-in, amenity online + desk booking, membership and amenity refunds approved and paid, support chat, change password, deactivate/reactivate, coach shift). Found: member check-in had no gym-hours rule while coach check-in did. Owner chose to refuse it: `0131_member_check_in_gym_hours.sql` (`record_check_in` refuses `gym_closed` outside opening hours, judged at the check-in's own time so queued offline check-ins still go through; Day pass sale and Xendit walk-in check-ins untouched), demo mirror, message "The gym is closed at that time. Check-ins work during opening hours.", tests `checkin-hours.mjs` (3/3) and `CheckInHoursTests.cs`; check-in tests set all-day hours so they pass at any time (`DemoHours.OpenAllDay`, `opens_at 00:00-23:30`). `dotnet test` 1224/1224; 0131 pushed live (dry run first) and checked: a night check-in → `gym_closed`, anon denied, members forbidden. Test records: account livetest.11212219@example.com; karl's shift #18 holds ₱1,000 of test cash sales (refunds paid by GCash).
 - 2026-11-21: cleanup of Claude's live test records (owner: no real customers yet, only Claude's tests): 19 Claude test accounts archived (`@example.com` + `bowieram2006+gymtest2@gmail.com`), last open 100% test code B5FREE2783 archived (LIVE100T430/T467 already expired), Claude test chats deleted (4 support threads, 8 support messages, 14 coach messages, no photos; nothing references chats). Payments, refunds, check-ins and logs kept by design; the owner's own test accounts and karl's shift #18 untouched. Owner chose to hide archived accounts' chats: `0132_hide_archived_chats.sql` (`chat_threads` skips archived accounts in coach chats and the desk inbox; rows kept, restore brings them back), demo mirror, tests `chat-archived.mjs` (3/3), `ChatArchivedTests.cs`; `dotnet test` 1225/1225; pushed live (dry run first) and checked: coach junel no longer lists Claude test chats. Note: `hire-requests.mjs` fails 9/9 because it tests the hiring functions 0121 removed (not in the test script).
+- 2026-11-22: owner asked for a payroll system for front desk and coaches, run by admins on a new page: Part 3 added (Phases 17-19, P1-P10, Payroll page brief made with `impeccable`). Owner's answers: fixed salary per period, coach hours = completed sessions (reference only), twice a month with manual bonus and deduction lines only, Admin and System admin only. P2, P3 draft/paid, P6-P10 recommended, to confirm. Not built.
 - 2026-11-21: UI & page-load polish: fixed Cash shifts table in `RevenuePage.xaml` (`Grid` in `Shift` cell to stop overlap with `Float`, `MaxLines="2"` + `TailTruncation` + tooltip on `Reason & notes`, `WideFrom="1150"`, `332d2d4`); fixed `AuditPage.xaml` segment tabs (`Value="False"` `DataTrigger`s so only the active tab keeps its highlight) and removed `"By name only"` switch on `AdminOverviewPage.Windows.cs` (`c2d1a1d`); sped up page loads across all accounts (`BasePage.cs` non-blocking Realtime socket startup + `Task.WhenAll` parallel queries in `Services.cs`, `SubscriptionService.cs`, `MemberViewModels.cs`, `StaffViewModels.cs`, `71f5282`, verified `dotnet test` 1225/1225).
