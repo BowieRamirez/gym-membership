@@ -1334,11 +1334,37 @@ public partial class SessionsViewModel(ISessionService svc, IMembershipService? 
         { Notice = "Reschedule sent. It moves once the other person approves it in Time requests."; Rescheduling = null; }
     }
 
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsReportingDamage))] private SessionRow? reportingDamageSession;
+    public bool IsReportingDamage => ReportingDamageSession is not null;
+    [ObservableProperty] private bool damageFound;
+    [ObservableProperty] private string damageDescription = "";
+
     async Task SetAsync(SessionRow row, string status)
     {
         var (title, button) = status == Status.NoShow ? ("Mark this session as a no-show?", "Mark no-show") : ("Mark this session completed?", "Mark completed");
         if (!await Confirm.AskAsync(title, $"With {row.With}, {Fmt.Range(row.Session.ScheduledStart, row.Session.ScheduledEnd)}.", button)) return;
-        if (await RunAsync(() => svc.SetSessionStatusAsync(row.Session.Id, status))) await LoadAsync();
+        if (!await RunAsync(() => svc.SetSessionStatusAsync(row.Session.Id, status))) return;
+        await LoadAsync();
+        if (status == Status.Completed && row.IsMine)
+        {
+            ReportingDamageSession = row;
+            DamageFound = false;
+            DamageDescription = "";
+        }
+    }
+
+    [RelayCommand] private void StartDamageReport() => DamageFound = true;
+    [RelayCommand] private void DismissDamage() { ReportingDamageSession = null; DamageFound = false; DamageDescription = ""; }
+
+    [RelayCommand]
+    private async Task SubmitDamageAsync()
+    {
+        if (ReportingDamageSession is not { } row) return;
+        if (string.IsNullOrWhiteSpace(DamageDescription)) { ErrorMessage = "Describe what was broken or damaged."; return; }
+        Notice = null;
+        if (!await RunAsync(() => svc.ReportDamageAsync(row.Session.Id, null, DamageDescription), _ => { })) return;
+        ReportingDamageSession = null; DamageFound = false; DamageDescription = "";
+        Notice = "Damage report sent to admins.";
     }
 
     // ---- E5/E6/E7 (0120): Member Book a coach flow ----
@@ -3215,5 +3241,47 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
         if (payments is null || Waiting is not { PaymentId: { } pay }) return;
         if (!await RunAsync(() => payments.VerifyAsync(pay, false, "Customer left at the desk"))) return;
         Waiting = null; Notice = "Cancelled. Nothing was charged.";
+    }
+}
+
+public partial class DamageReportsViewModel(IAdminService svc) : LoadableViewModel
+{
+    readonly List<DamageReportRow> all = new();
+    public ObservableCollection<DamageReportRow> Reports { get; } = new();
+    [ObservableProperty] private string filter = "open";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsReviewing))] private DamageReportRow? reviewing;
+    public bool IsReviewing => Reviewing is not null;
+    [ObservableProperty] private string reviewNote = "";
+    [ObservableProperty] private bool setMaintenance;
+
+    public override Task OnAppearingAsync() => LoadAsync();
+
+    [RelayCommand]
+    private Task LoadAsync() => RunAsync(svc.DamageReportsAsync, rows => { all.Clear(); all.AddRange(rows); Apply(); });
+
+    [RelayCommand] private void SetFilter(string f) { Filter = f; Apply(); }
+    void Apply() => Fill(Reports, Filter == "all" ? all : all.Where(r => r.Report.Status == Filter).ToList());
+
+    [RelayCommand]
+    private void StartReview(DamageReportRow row)
+    {
+        Reviewing = row;
+        ReviewNote = row.Report.ReviewNote ?? "";
+        SetMaintenance = false;
+    }
+
+    [RelayCommand] private void CancelReview() { Reviewing = null; ReviewNote = ""; SetMaintenance = false; }
+
+    [RelayCommand] private Task MarkReviewedAsync() => SubmitReviewAsync("reviewed");
+    [RelayCommand] private Task CloseReportAsync() => SubmitReviewAsync("closed");
+
+    async Task SubmitReviewAsync(string status)
+    {
+        if (Reviewing is not { } row) return;
+        Notice = null;
+        if (!await RunAsync(() => svc.ReviewDamageAsync(row.Report.Id, status, ReviewNote, SetMaintenance && row.HasAmenity))) return;
+        Reviewing = null; ReviewNote = ""; SetMaintenance = false;
+        Notice = status == "closed" ? "Damage report closed." : "Damage report marked reviewed.";
+        await LoadAsync();
     }
 }

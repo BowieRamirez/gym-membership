@@ -234,6 +234,51 @@ public sealed partial class DemoGateway
                     .ToList();
                 return true;
             }
+            case "report_damage":
+            {
+                RequireActive();
+                var desc = a.TryGetValue("p_description", out var dv) && dv is string ds ? ds.Trim() : "";
+                if (desc.Length == 0) throw Err("bad_input");
+                int? sid = a.TryGetValue("p_session_id", out var sv) && sv is not null ? Convert.ToInt32(sv) : null;
+                int? aid = a.TryGetValue("p_amenity_id", out var av) && av is not null ? Convert.ToInt32(av) : null;
+                string? coachId = null;
+                if (sid is { } sessionId)
+                {
+                    var s = All<TrainingSession>().FirstOrDefault(x => x.Id == sessionId) ?? throw Err("not_found");
+                    if (!IsStaff && s.CoachId != Uid) throw Err("forbidden");
+                    coachId = s.CoachId;
+                }
+                else if (!IsStaff) throw Err("forbidden");
+                var rep = Add(new DamageReport
+                {
+                    TrainingSessionId = sid, AmenityId = aid, CoachId = coachId, ReportedBy = Uid,
+                    Description = desc, PhotoPath = a.TryGetValue("p_photo_path", out var pv) ? pv as string : null,
+                    CreatedAt = now
+                });
+                foreach (var adm in All<UserRole>().Where(u => RolesOf(u.UserId).Any(r => r is "admin" or "subadmin")).Select(u => u.UserId).Distinct().ToList())
+                    Notify(adm, "system", "Damage report filed", desc.Length > 120 ? desc[..120] : desc);
+                Add(new AuditEntry { ActorId = Uid, Action = "damage_report.create", Entity = "damage_reports", EntityId = rep.Id.ToString(), CreatedAt = now });
+                result = rep.Id;
+                return true;
+            }
+            case "review_damage":
+            {
+                RequireActive();
+                if (!RolesOf(Uid).Any(r => r is "admin" or "subadmin")) throw Err("forbidden");
+                var status = (string)a["p_status"];
+                if (status is not ("reviewed" or "closed")) throw Err("bad_input");
+                var rep = All<DamageReport>().FirstOrDefault(r => r.Id == Convert.ToInt32(a["p_report_id"])) ?? throw Err("not_found");
+                rep.Status = status;
+                if (a.TryGetValue("p_note", out var nv) && nv is string ns && !string.IsNullOrWhiteSpace(ns)) rep.ReviewNote = ns.Trim();
+                rep.ReviewedBy = Uid;
+                rep.ReviewedAt = now;
+                if (a.TryGetValue("p_set_maintenance", out var mv) && Convert.ToBoolean(mv) && rep.AmenityId is { } amId)
+                {
+                    CallLocked("set_amenity_status", new() { ["p_amenity_id"] = amId, ["p_status"] = "unavailable", ["p_reason"] = rep.ReviewNote ?? "Maintenance" });
+                }
+                Add(new AuditEntry { ActorId = Uid, Action = "damage_report.review", Entity = "damage_reports", EntityId = rep.Id.ToString(), CreatedAt = now });
+                return true;
+            }
         }
         return false;
     }

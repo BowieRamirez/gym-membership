@@ -373,6 +373,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             MemberCode c => c.UserId == uid,
             Discount => Has("discounts:manage"),   // members only learn a code is valid by using it
             DiscountItem => Has("discounts:manage"),
+            DamageReport d => RolesOf(uid).Any(r => r is "admin" or "subadmin") || d.ReportedBy == uid || d.CoachId == uid,
             Reservation r => r.MemberId == uid || r.CoachId == uid || staff,
             MembershipPackage k => k.State == CatalogState.Published || Has("catalog:manage"),   // G6 (0061): drafts only for catalog managers
             Amenity a => a.State == CatalogState.Published || Has("catalog:manage"),

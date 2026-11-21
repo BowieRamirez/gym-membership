@@ -177,7 +177,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 | 10 | Book a coach: day → coach → time, one-on-one, checked again on confirm; add-on paid; limits | E5, E6, E7 | |
 | 11 | Hiring and Time requests removed; messages follow sessions | E8 | Done |
 | 12 | Desk: QR, Coach is here, session status apart from payment | E9 | Done |
-| 13 | Damage report after a session, reviewed by admins | E10 | |
+| 13 | Damage report after a session, reviewed by admins | E10 | Done |
 | 14 | Coach hours report for the gym's coach pay | E11 | |
 | 15 | Part 2 checks, review, owner hand checks | | |
 
@@ -333,8 +333,8 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 **Files:** migration (`damage_reports`; RLS: the session's coach and the desk insert, admins read and update; `report_damage`, `review_damage`; audit rows; admin alert), coach's after-session prompt, admin Damage reports page (Windows), "Set amenity to Maintenance" reuse, demo mirror, tests.
 
-- [ ] Failing tests: coach reports on own completed session; another coach can't; admin closes with a note; no payment or refund row made.
-- [ ] Screens with `impeccable`: coach after-session damage prompt (Android and Windows, light/dark, 1.3 font scale); Damage reports admin page, new (Windows). Migration, push, grants, commit.
+- [x] Failing tests: coach reports on own completed session; another coach can't; admin closes with a note; no payment or refund row made.
+- [x] Screens with `impeccable`: coach after-session damage prompt (Android and Windows, light/dark, 1.3 font scale); Damage reports admin page, new (Windows). Migration, push, grants, commit. (`0123_damage_reports.sql` verified locally; live push pending.)
 
 ## Phase 14: Coach hours report (E11)
 

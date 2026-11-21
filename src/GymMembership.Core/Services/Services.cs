@@ -1191,6 +1191,7 @@ public interface ISessionService
     Task<AppResult<TodayCoachSession>> ScanSessionAsync(string code) => Task.FromResult(AppResult<TodayCoachSession>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<bool>> MarkCoachArrivedAsync(int sessionId) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<IReadOnlyList<TodayCoachSession>>> TodayCoachSessionsAsync() => Task.FromResult(AppResult<IReadOnlyList<TodayCoachSession>>.Success([]));
+    Task<AppResult<int>> ReportDamageAsync(int? sessionId, int? amenityId, string description, string? photoPath = null) => Task.FromResult(AppResult<int>.Fail(AppErrorKind.Unknown, "not_implemented"));
 }
 
 public sealed class SessionService(ISupabaseGateway gw) : ISessionService
@@ -1426,6 +1427,15 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
 
     public Task<AppResult<IReadOnlyList<TodayCoachSession>>> TodayCoachSessionsAsync() => Safe.RunAsync<IReadOnlyList<TodayCoachSession>>(async () =>
         await gw.RpcAsync<List<TodayCoachSession>>("today_coach_sessions"));
+
+    public Task<AppResult<int>> ReportDamageAsync(int? sessionId, int? amenityId, string description, string? photoPath = null) => Safe.RunAsync(() =>
+        gw.RpcAsync<int>("report_damage", new()
+        {
+            ["p_session_id"] = sessionId!,
+            ["p_amenity_id"] = amenityId!,
+            ["p_description"] = description.Trim(),
+            ["p_photo_path"] = (string.IsNullOrWhiteSpace(photoPath) ? null : photoPath.Trim())!
+        }));
 }
 
 // ===================== Attendance and check-ins =====================
@@ -1876,6 +1886,15 @@ public interface IAdminService
     Task<AppResult<ClosurePreview>> ClosurePreviewAsync(DateOnly day);
     Task<AppResult<bool>> CloseDayAsync(DateOnly day, string reason);
     Task<AppResult<bool>> ReopenDayAsync(DateOnly day);
+    Task<AppResult<IReadOnlyList<DamageReportRow>>> DamageReportsAsync() => Task.FromResult(AppResult<IReadOnlyList<DamageReportRow>>.Success([]));
+    Task<AppResult<bool>> ReviewDamageAsync(int reportId, string status, string? note = null, bool setMaintenance = false) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
+}
+
+public sealed record DamageReportRow(DamageReport Report, string ReporterName, string? CoachName, string? AmenityName)
+{
+    public bool CanReview => Report.Status != "closed";
+    public bool HasAmenity => Report.AmenityId is not null;
+    public string Subtitle => string.Join("  ·  ", new[] { AmenityName, CoachName is null ? null : $"Coach {CoachName}", $"Reported by {ReporterName}" }.OfType<string>());
 }
 
 public sealed class AdminService(ISupabaseGateway gw) : IAdminService
@@ -1898,6 +1917,26 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
 
     public Task<AppResult<bool>> AssignRoleAsync(string userId, string role) => Rpc("assign_role", new() { ["p_user"] = userId, ["p_role"] = role });
     public Task<AppResult<bool>> RevokeRoleAsync(string userId, string role) => Rpc("revoke_role", new() { ["p_user"] = userId, ["p_role"] = role });
+
+    public Task<AppResult<IReadOnlyList<DamageReportRow>>> DamageReportsAsync() => Safe.RunAsync<IReadOnlyList<DamageReportRow>>(async () =>
+    {
+        var reports = (await gw.ListAsync<DamageReport>()).OrderByDescending(r => r.CreatedAt).ToList();
+        var names = await Directory_.UserNamesAsync(gw);
+        var amenities = (await gw.ListAsync<Amenity>()).ToDictionary(a => a.Id, a => a.Name);
+        return reports.Select(r => new DamageReportRow(
+            r,
+            names.GetValueOrDefault(r.ReportedBy, "Staff"),
+            r.CoachId is null ? null : names.GetValueOrDefault(r.CoachId, "Coach"),
+            r.AmenityId is { } aid ? amenities.GetValueOrDefault(aid, "Amenity") : null)).ToList();
+    });
+
+    public Task<AppResult<bool>> ReviewDamageAsync(int reportId, string status, string? note = null, bool setMaintenance = false) => Rpc("review_damage", new()
+    {
+        ["p_report_id"] = reportId,
+        ["p_status"] = status,
+        ["p_note"] = (string.IsNullOrWhiteSpace(note) ? null : note.Trim())!,
+        ["p_set_maintenance"] = setMaintenance
+    });
     public Task<AppResult<bool>> SetActiveAsync(string userId, bool active) => Rpc("set_user_active", new() { ["p_user"] = userId, ["p_active"] = active });
 
     // accounts are made by an Edge Function: it holds the service-role key, which the app never has

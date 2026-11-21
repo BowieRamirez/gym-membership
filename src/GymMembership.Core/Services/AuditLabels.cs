@@ -25,6 +25,7 @@ public static class AuditLabels
         ["reservation.extend"] = "Booking extended",
         ["coach_session.book"] = "Coach session booked", ["coach_session.cancel"] = "Coach session cancelled",
         ["coach_session.check_in"] = "Coach session checked in", ["coach_session.coach_arrived"] = "Coach arrived for session",
+        ["damage_report.create"] = "Damage reported", ["damage_report.review"] = "Damage report reviewed",
         ["amenity.status"] = "Amenity status changed", ["amenity.runs"] = "Coach runs amenity changed",
         ["discount.create"] = "Code added", ["discount.turn_off"] = "Code turned off", ["discount.turn_on"] = "Code turned on", ["discount.delete"] = "Code deleted",
         ["catalog.archive"] = "Archived", ["catalog.restore"] = "Restored from archive",
@@ -38,7 +39,7 @@ public static class AuditLabels
     public static readonly IReadOnlyDictionary<string, string> Areas = new Dictionary<string, string>
     {
         ["user"] = "Account", ["role"] = "Role", ["payment"] = "Payment", ["check_in"] = "Check-in", ["refund"] = "Refund",
-        ["reservation"] = "Booking", ["coach_session"] = "Coach session", ["amenity"] = "Amenity", ["catalog"] = "Catalog", ["cash_shift"] = "Cash shift", ["announcement"] = "Announcement", ["discount"] = "Discount code", ["gym"] = "Gym",
+        ["reservation"] = "Booking", ["coach_session"] = "Coach session", ["amenity"] = "Amenity", ["catalog"] = "Catalog", ["cash_shift"] = "Cash shift", ["announcement"] = "Announcement", ["discount"] = "Discount code", ["gym"] = "Gym", ["damage_report"] = "Damage report",
     };
 
     /// <summary>Object type: the table the entry is about. The filter sends the key.</summary>
@@ -46,7 +47,7 @@ public static class AuditLabels
     {
         ["profiles"] = "Account", ["user_roles"] = "Role", ["payments"] = "Payment", ["refund_requests"] = "Refund request",
         ["reservations"] = "Booking", ["training_sessions"] = "Coach session", ["amenities"] = "Amenity", ["membership_packages"] = "Package", ["discounts"] = "Discount code",
-        ["cash_shifts"] = "Cash shift", ["announcements"] = "Announcement", ["gym_closures"] = "Closed day", ["gym_check_ins"] = "Check-in",
+        ["cash_shifts"] = "Cash shift", ["announcements"] = "Announcement", ["gym_closures"] = "Closed day", ["gym_check_ins"] = "Check-in", ["damage_reports"] = "Damage report",
     };
 
     public static string Action(string code) => Actions.GetValueOrDefault(code, code);

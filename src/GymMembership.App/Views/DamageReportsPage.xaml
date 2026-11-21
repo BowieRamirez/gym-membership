@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.DamageReportsPage" x:DataType="vm:DamageReportsViewModel" Title="Damage reports">
+
+    <v:BasePage.Resources>
+        <DataTemplate x:Key="ReportRow" x:DataType="svc:DamageReportRow">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="2*,*,110,120" ColumnSpacing="12">
+                    <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                        <Label Text="{Binding Report.Description}" FontFamily="BarlowSemiBold" LineBreakMode="WordWrap" />
+                        <Label Text="{Binding Subtitle}" Style="{StaticResource Caption}" />
+                        <Label Text="{Binding Report.ReviewNote, StringFormat='Note: {0}'}" Style="{StaticResource Caption}"
+                               IsVisible="{Binding Report.ReviewNote, Converter={StaticResource HasText}}" />
+                    </VerticalStackLayout>
+                    <Label Grid.Column="1" Text="{Binding Report.CreatedAt, Converter={StaticResource LocalDate}, ConverterParameter='d MMM yyyy, h:mm tt'}"
+                           Style="{StaticResource Muted}" VerticalOptions="Center" />
+                    <c:StatusChip Grid.Column="2" Status="{Binding Report.Status}" VerticalOptions="Center" />
+                    <Button Grid.Column="3" Text="Review" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="End"
+                            IsVisible="{Binding CanReview}" Clicked="OnReview" />
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+        <DataTemplate x:Key="ReportCard" x:DataType="svc:DamageReportRow">
+            <VerticalStackLayout Padding="14,12" Spacing="6">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                    <Label Text="{Binding Report.Description}" FontFamily="BarlowSemiBold" LineBreakMode="WordWrap" />
+                    <c:StatusChip Grid.Column="1" Status="{Binding Report.Status}" VerticalOptions="Start" />
+                </Grid>
+                <Label Text="{Binding Subtitle}" Style="{StaticResource Caption}" />
+                <Label Text="{Binding Report.ReviewNote, StringFormat='Note: {0}'}" Style="{StaticResource Caption}"
+                       IsVisible="{Binding Report.ReviewNote, Converter={StaticResource HasText}}" />
+                <Button Text="Review" Style="{StaticResource FilterChip}" HorizontalOptions="Start"
+                        IsVisible="{Binding CanReview}" Clicked="OnReview" />
+                <BoxView Style="{StaticResource Hairline}" Margin="0,4,0,0" />
+            </VerticalStackLayout>
+        </DataTemplate>
+    </v:BasePage.Resources>
+
+    <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
+        <VerticalStackLayout Padding="16,12,16,20" Spacing="12">
+            <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+            <FlexLayout Wrap="Wrap">
+                <Button Text="Open" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="open">
+                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="open"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
+                </Button>
+                <Button Text="Reviewed" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="reviewed">
+                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="reviewed"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
+                </Button>
+                <Button Text="Closed" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="closed">
+                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="closed"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
+                </Button>
+                <Button Text="All" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetFilterCommand}" CommandParameter="all">
+                    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Filter}" Value="all"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
+                </Button>
+            </FlexLayout>
+
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding IsReviewing}" Padding="16,14">
+                <VerticalStackLayout Spacing="10">
+                    <c:CardTitle Text="Review damage report" />
+                    <Label Text="{Binding Reviewing.Report.Description}" FontFamily="BarlowSemiBold" />
+                    <Label Text="{Binding Reviewing.Subtitle}" Style="{StaticResource Caption}" />
+                    <Border Style="{StaticResource Field}"><Entry Text="{Binding ReviewNote}" Placeholder="Review note (optional)" MaxLength="900" /></Border>
+                    <HorizontalStackLayout Spacing="8" IsVisible="{Binding Reviewing.HasAmenity}">
+                        <CheckBox IsChecked="{Binding SetMaintenance}" />
+                        <Label Text="Set amenity to Maintenance" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                    <HorizontalStackLayout Spacing="8">
+                        <Button Text="Mark reviewed" Style="{StaticResource SmallOutlineButton}" Command="{Binding MarkReviewedCommand}" />
+                        <Button Text="Close report" Style="{StaticResource SmallButton}" Command="{Binding CloseReportCommand}" />
+                        <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelReviewCommand}" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <Border Style="{StaticResource TablePanel}">
+                <VerticalStackLayout>
+                    <VerticalStackLayout x:Name="ReportsHead" IsVisible="{OnIdiom Phone=False, Default=True}">
+                        <Grid Style="{StaticResource TableHead}" ColumnDefinitions="2*,*,110,120" ColumnSpacing="12">
+                            <Label Text="Report" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="1" Text="Reported" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="2" Text="Status" Style="{StaticResource Caption}" />
+                        </Grid>
+                        <BoxView Style="{StaticResource Hairline}" />
+                    </VerticalStackLayout>
+                    <c:TableBody Items="{Binding Reports}" Header="{x:Reference ReportsHead}" WideFrom="720"
+                                 RowTemplate="{StaticResource ReportRow}" CardTemplate="{StaticResource ReportCard}">
+                        <c:TableBody.Empty><Label Text="No damage reports in this view." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
+                    </c:TableBody>
+                </VerticalStackLayout>
+            </Border>
+        </VerticalStackLayout>
+    </ScrollView>
+</v:BasePage>

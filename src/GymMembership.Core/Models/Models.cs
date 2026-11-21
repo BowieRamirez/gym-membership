@@ -275,6 +275,22 @@ public class NotifiedMember : BaseModel
 { [PrimaryKey("training_session_id")] public int SessionId { get; set; } [Column("status")] public string Status { get; set; } = "present";
   [Column("checked_in_at")] public DateTime? CheckedInAt { get; set; } [Column("notes")] public string? Notes { get; set; } }
 
+[Table("damage_reports")] public class DamageReport : BaseModel
+{
+  [PrimaryKey("damage_report_id")] public int Id { get; set; }
+  [Column("training_session_id")] public int? TrainingSessionId { get; set; }
+  [Column("amenity_id")] public int? AmenityId { get; set; }
+  [Column("coach_id")] public string? CoachId { get; set; }
+  [Column("reported_by")] public string ReportedBy { get; set; } = "";
+  [Column("description")] public string Description { get; set; } = "";
+  [Column("photo_path")] public string? PhotoPath { get; set; }
+  [Column("status")] public string Status { get; set; } = "open";
+  [Column("review_note")] public string? ReviewNote { get; set; }
+  [Column("reviewed_by")] public string? ReviewedBy { get; set; }
+  [Column("reviewed_at")] public DateTime? ReviewedAt { get; set; }
+  [Column("created_at")] public DateTime CreatedAt { get; set; }
+}
+
 [Table("gym_check_ins")] public class GymCheckIn : BaseModel
 { [Column("method", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? Method { get; set; }
   [Column("client_ref", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? ClientRef { get; set; }
