@@ -234,7 +234,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     // 0098, 0125: Day pass packages (regular vs Coach included); a picked member whose name is still in the box buys it (a term until midnight), anyone else is a walk-in
     CounterItem? dayPassPackage;
     public ObservableCollection<ItemOption> DayPassOptions { get; } = new();
-    public bool HasMultipleDayPassOptions => IsWalkIn && DayPassOptions.Count > 1;
+    public bool HasMultipleDayPassOptions => IsWalkIn && DayPassOptions.Count > 0;
     public bool DayPassWithCoach => IsWalkIn && dayPassPackage is { IncludesCoach: true };
     public ObservableCollection<FreeCoachSlot> DayPassCoaches { get; } = new();
     public ObservableCollection<SessionsViewModel.HourOption> DayPassHours { get; } = new();
