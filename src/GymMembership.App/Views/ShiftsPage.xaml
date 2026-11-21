@@ -93,7 +93,14 @@
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
                                     <Label Text="Starts" Style="{StaticResource Caption}" />
-                                    <Border Style="{StaticResource Field}"><TimePicker Time="{Binding Time}" /></Border>
+                                    <Border Style="{StaticResource Field}">
+                                        <Border.Triggers>
+                                            <DataTrigger TargetType="Border" Binding="{Binding HasPostTimeHint}" Value="True">
+                                                <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
+                                            </DataTrigger>
+                                        </Border.Triggers>
+                                        <TimePicker Time="{Binding Time}" />
+                                    </Border>
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Spacing="4" Margin="0,0,0,8">
                                     <Label Text="Hours" Style="{StaticResource Caption}" />
@@ -102,6 +109,8 @@
                                     </Border>
                                 </VerticalStackLayout>
                             </FlexLayout>
+                            <Label Text="{Binding PostTimeHint}" Style="{StaticResource FieldError}" IsVisible="{Binding HasPostTimeHint}" />
+                            <Label Text="{Binding ErrorMessage}" Style="{StaticResource FieldError}" IsVisible="{Binding ErrorMessage, Converter={StaticResource HasText}}" />
                             <VerticalStackLayout Spacing="4">
                                 <Label Text="Note (optional)" Style="{StaticResource Caption}" />
                                 <Border Style="{StaticResource Field}"><Entry Text="{Binding Note}" Placeholder="What you will be running" /></Border>

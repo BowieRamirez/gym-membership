@@ -1061,10 +1061,16 @@ public partial class ShiftsViewModel(ICoachService svc, ISessionService? session
     public ObservableCollection<ShiftPost> Shifts { get; } = new();
     public int[] HoursOptions { get; } = [2, 4, 6, 8, 10];
 
-    [ObservableProperty] private DateTime date = DateTime.Today.AddDays(1);
-    [ObservableProperty] private TimeSpan time = new(8, 0, 0);
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(PostTimeHint), nameof(HasPostTimeHint)), NotifyCanExecuteChangedFor(nameof(PostCommand))]
+    private DateTime date = DateTime.Today.AddDays(1);
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(PostTimeHint), nameof(HasPostTimeHint)), NotifyCanExecuteChangedFor(nameof(PostCommand))]
+    private TimeSpan time = new(8, 0, 0);
     [ObservableProperty] private int hours = 4;   // D10 default length
     [ObservableProperty] private string? note;
+
+    public string? PostTimeHint => (Date.Date + Time) <= DateTime.Now ? "Pick a future start time — this time has already passed." : null;
+    public bool HasPostTimeHint => PostTimeHint is not null;
+    bool CanPost() => !HasPostTimeHint;
 
     // hiring on/off lives on My coach profile ("Taking new members"); 9.6 took the duplicate Pause hiring button off this page
     public override Task OnAppearingAsync() => LoadAsync();
@@ -1076,7 +1082,7 @@ public partial class ShiftsViewModel(ICoachService svc, ISessionService? session
         if (Calendar is not null) await Calendar.OnAppearingAsync();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanPost))]
     private async Task PostAsync()
     {
         Notice = null;
