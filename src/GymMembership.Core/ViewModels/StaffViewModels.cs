@@ -1473,7 +1473,7 @@ public partial class SessionsViewModel(ISessionService svc, IMembershipService? 
     public string PackageCoachText => CurrentPackage is null
         ? "Needs an active membership covering the session."
         : CurrentPackage.IncludesCoach ? "Included in your package (free)"
-        : CurrentPackage.CoachAddonPrice is { } p ? $"Coach add-on: ₱{p * BookHours:N0} ({BookHours} hr{(BookHours == 1 ? "" : "s")})"
+        : CurrentPackage.CoachAddonPrice is { } p ? $"Buy the Coach access add-on (₱{p:N0} full term) on Packages to book a coach."
         : "Your current package doesn't include a coach or add-on.";
 
     partial void OnBookDayChanged(DateTime value) { if (IsBookingCoach) _ = LoadFreeCoachesAsync(); }

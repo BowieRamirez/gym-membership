@@ -319,6 +319,19 @@ public sealed record PaymentItem(int Id, string What, string PaymentCode, string
     };
 }
 
+public sealed record CoachAccessOffer(
+    [property: System.Text.Json.Serialization.JsonPropertyName("offered")] bool Offered,
+    [property: System.Text.Json.Serialization.JsonPropertyName("term_id")] int? TermId,
+    [property: System.Text.Json.Serialization.JsonPropertyName("package_id")] int? PackageId,
+    [property: System.Text.Json.Serialization.JsonPropertyName("package_name")] string? PackageName,
+    [property: System.Text.Json.Serialization.JsonPropertyName("full_price")] decimal? FullPrice,
+    [property: System.Text.Json.Serialization.JsonPropertyName("price")] decimal? Price,
+    [property: System.Text.Json.Serialization.JsonPropertyName("days_left")] int? DaysLeft,
+    [property: System.Text.Json.Serialization.JsonPropertyName("duration_days")] int? DurationDays,
+    [property: System.Text.Json.Serialization.JsonPropertyName("ends_at")] DateTime? EndsAt,
+    [property: System.Text.Json.Serialization.JsonPropertyName("is_day_pass")] bool IsDayPass,
+    [property: System.Text.Json.Serialization.JsonPropertyName("reason")] string? Reason);
+
 public interface IMembershipService
 {
     Task<AppResult<IReadOnlyList<MembershipPackage>>> ListPackagesAsync();
@@ -338,6 +351,10 @@ public interface IMembershipService
     Task<AppResult<bool>> CheckOnlineAsync(int paymentId);
     /// <summary>Starts a fresh payment for the same item after a rejection or expiry.</summary>
     Task<AppResult<Payment>> PayAgainAsync(PaymentItem item, string? code = null);
+    /// <summary>Phase 16 (E13): reads whether the member's active term can buy coach access and its scaled price.</summary>
+    Task<AppResult<CoachAccessOffer?>> CoachAccessOfferAsync();
+    /// <summary>Phase 16 (E13): creates a coach_addon online payment for the member's active term.</summary>
+    Task<AppResult<Payment>> BuyCoachAccessAsync(string? discountCode = null);
     Task<AppResult<GymSettings>> GymAsync();
     /// <summary>G16: closed days from today on, with their reasons.</summary>
     Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync();
@@ -486,6 +503,13 @@ public sealed class MembershipService(ISupabaseGateway gw) : IMembershipService
             _ => AppResult<Payment>.Fail(AppErrorKind.Validation, "not_found")
         };
     }
+
+    public Task<AppResult<CoachAccessOffer?>> CoachAccessOfferAsync() => Safe.RunAsync(async () =>
+        (await gw.RpcAsync<List<CoachAccessOffer>>("coach_access_offer", new()))?.FirstOrDefault());
+
+    public Task<AppResult<Payment>> BuyCoachAccessAsync(string? discountCode = null) => Safe.RunAsync(() =>
+        gw.RpcAsync<Payment>("buy_coach_access",
+            string.IsNullOrWhiteSpace(discountCode) ? new() : new() { ["p_code"] = discountCode.Trim() }));
 
     public Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync() => Safe.RunAsync(() => GymClosures.ByDayAsync(gw));
     public Task<AppResult<GymSettings>> GymAsync() => Safe.RunAsync(async () => (await gw.ListAsync<GymSettings>()).First());

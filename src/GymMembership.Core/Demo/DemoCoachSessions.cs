@@ -18,6 +18,49 @@ public sealed partial class DemoGateway
 
         switch (fn)
         {
+            case "coach_access_offer":
+            {
+                RequireActive();
+                result = new List<CoachAccessOffer> { ComputeCoachAccessOffer(uid) };
+                return true;
+            }
+            case "buy_coach_access":
+            {
+                RequireActive();
+                var offer = ComputeCoachAccessOffer(uid);
+                if (!offer.Offered)
+                {
+                    if (offer.Reason == "pending_payment") throw Err("pending_payment");
+                    if (offer.Reason == "already_bought") throw Err("already_bought");
+                    throw Err("coach_not_offered");
+                }
+                var code = Opt("p_code");
+                var disc = code is null ? (Id: (int?)null, Cut: 0m, Amount: offer.Price!.Value) : Discounted(uid, new() { ["p_discount_code"] = code }, offer.Price!.Value, "coach", 0);
+                var hrs = All<GymSettings>().First().PaymentExpiryHours;
+                var expires = offer.EndsAt!.Value < now.AddHours(hrs) ? offer.EndsAt.Value : now.AddHours(hrs);
+                var free = disc.Amount == 0m;
+                var pay = Add(new Payment
+                {
+                    PaymentCode = PaymentCode(),
+                    Kind = PayKind.CoachAddon,
+                    Method = PayMethod.Qr,
+                    Status = free ? Status.Verified : Status.Pending,
+                    Amount = disc.Amount,
+                    DiscountId = disc.Id,
+                    DiscountAmount = disc.Cut,
+                    MemberId = uid,
+                    ExpiresAt = expires,
+                    VerifiedAt = free ? now : null,
+                    ReceiptNo = free ? ReceiptNo() : null,
+                    PackageSnapshotId = offer.PackageId,
+                    PackageSnapshotName = offer.PackageName,
+                    CreatedAt = now
+                });
+                if (free) ActivateTarget(pay);
+                Audit("coach_access.buy", "payments", pay.Id.ToString());
+                result = pay;
+                return true;
+            }
             case "free_coaches" when !a.ContainsKey("p_amenity"):
             {
                 RequireActive();
@@ -116,7 +159,7 @@ public sealed partial class DemoGateway
         if (pkgId is null) throw Err("outside_membership");
 
         var pkg = All<MembershipPackage>().First(p => p.Id == pkgId.Value);
-        if (!pkg.IncludesCoach && pkg.CoachAddonPrice is null) throw Err("coach_not_offered");
+        if (!pkg.IncludesCoach && term?.CoachAccessAt is null) throw Err("coach_not_offered");
 
         var bookedHrs = All<TrainingSession>()
             .Where(ts => ts.CoachId == coachId && ts.Status is Status.Scheduled or Status.Completed
@@ -124,63 +167,86 @@ public sealed partial class DemoGateway
             .Sum(ts => (ts.ScheduledEnd - ts.ScheduledStart).TotalHours);
         if (g.MaxCoachHoursPerDay is { } maxH && bookedHrs + hours > maxH) throw Err("coach_day_full");
 
-        if (pkg.IncludesCoach)
+        if (!skipE6)
         {
-            if (!skipE6)
-            {
-                var recentNoShows = All<TrainingSession>().Where(ts => ts.MemberId == memberId && ts.Status == Status.NoShow && !ts.IsPaidAddon && ts.ScheduledStart >= now.AddDays(-30)).ToList();
-                if (recentNoShows.Count >= 2 && recentNoShows.Max(ts => ts.ScheduledStart).AddDays(7) > now)
-                    throw Err("coach_booking_blocked");
-                var cntDay = All<TrainingSession>().Count(ts => ts.MemberId == memberId && !ts.IsPaidAddon && ts.Status is Status.Scheduled or Status.Completed
-                    && DateOnly.FromDateTime((ts.ScheduledStart.ToUniversalTime() + Manila).Date) == day);
-                if (cntDay >= g.MaxCoachSessionsPerDay) throw Err("too_many_coach_sessions");
-                var cntUp = All<TrainingSession>().Count(ts => ts.MemberId == memberId && !ts.IsPaidAddon && ts.Status == Status.Scheduled && (ts.HeldUntil is null || ts.HeldUntil > now));
-                if (cntUp >= g.MaxUpcomingCoachSessions) throw Err("too_many_coach_sessions");
-            }
-            if (All<TrainingSession>().Any(ts => ts.MemberId == memberId && ts.Status == Status.Scheduled && ts.ScheduledStart < end && start < ts.ScheduledEnd)) throw Err("member_busy");
-            if (All<TrainingSession>().Any(ts => ts.CoachId == coachId && ts.Status == Status.Scheduled && ts.ScheduledStart < end && start < ts.ScheduledEnd)) throw Err("coach_taken");
-
-            var ses = Add(new TrainingSession { CoachId = coachId, MemberId = memberId, Title = "Coach session", ScheduledStart = start, ScheduledEnd = end, Status = Status.Scheduled, IsPaidAddon = false });
-            Audit("coach_session.book", "training_sessions", ses.Id.ToString());
-            return new BookCoachResult(ses.Id, null, null, 0m, null, true);
+            var recentNoShows = All<TrainingSession>().Where(ts => ts.MemberId == memberId && ts.Status == Status.NoShow && !ts.IsPaidAddon && ts.ScheduledStart >= now.AddDays(-30)).ToList();
+            if (recentNoShows.Count >= 2 && recentNoShows.Max(ts => ts.ScheduledStart).AddDays(7) > now)
+                throw Err("coach_booking_blocked");
+            var cntDay = All<TrainingSession>().Count(ts => ts.MemberId == memberId && !ts.IsPaidAddon && ts.Status is Status.Scheduled or Status.Completed
+                && DateOnly.FromDateTime((ts.ScheduledStart.ToUniversalTime() + Manila).Date) == day);
+            if (cntDay >= g.MaxCoachSessionsPerDay) throw Err("too_many_coach_sessions");
+            var cntUp = All<TrainingSession>().Count(ts => ts.MemberId == memberId && !ts.IsPaidAddon && ts.Status == Status.Scheduled && (ts.HeldUntil is null || ts.HeldUntil > now));
+            if (cntUp >= g.MaxUpcomingCoachSessions) throw Err("too_many_coach_sessions");
         }
-
-        // Paid add-on
-        var basePrice = pkg.CoachAddonPrice!.Value * hours;
-        var disc = code is null ? (Id: (int?)null, Cut: 0m, Amount: basePrice) : Discounted(memberId, new() { ["p_discount_code"] = code }, basePrice, "coach", 0);
-        var verified = method == PayMethod.Cash || disc.Amount == 0m;
-        DateTime? held = verified ? null : now.AddMinutes(15);
-
         if (All<TrainingSession>().Any(ts => ts.MemberId == memberId && ts.Status == Status.Scheduled && ts.ScheduledStart < end && start < ts.ScheduledEnd)) throw Err("member_busy");
         if (All<TrainingSession>().Any(ts => ts.CoachId == coachId && ts.Status == Status.Scheduled && ts.ScheduledStart < end && start < ts.ScheduledEnd)) throw Err("coach_taken");
 
-        var pay = Add(new Payment
+        var ses = Add(new TrainingSession { CoachId = coachId, MemberId = memberId, Title = "Coach session", ScheduledStart = start, ScheduledEnd = end, Status = Status.Scheduled, IsPaidAddon = false });
+        Audit("coach_session.book", "training_sessions", ses.Id.ToString());
+        return new BookCoachResult(ses.Id, null, null, 0m, null, true);
+    }
+
+    CoachAccessOffer ComputeCoachAccessOffer(string uid)
+    {
+        var now = SubscriptionNow;
+        var term = All<MembershipTerm>()
+            .Where(t => t.MemberId == uid && t.CancelledAt is null && t.StartsAt <= now && t.EndsAt > now)
+            .OrderByDescending(t => t.StartsAt)
+            .FirstOrDefault();
+        if (term is null)
+            return new(false, null, null, null, null, null, null, null, null, false, "no_active_term");
+
+        var pkg = All<MembershipPackage>().First(p => p.Id == term.PackageId);
+        if (pkg.IncludesCoach)
+            return new(false, term.Id, pkg.Id, term.PackageName, null, null, null, pkg.DurationDays, term.EndsAt, pkg.IsDayPass, "already_included");
+        if (pkg.CoachAddonPrice is not > 0)
+            return new(false, term.Id, pkg.Id, term.PackageName, null, null, null, pkg.DurationDays, term.EndsAt, pkg.IsDayPass, "not_offered");
+        if (term.CoachAccessAt is not null)
+            return new(false, term.Id, pkg.Id, term.PackageName, pkg.CoachAddonPrice, null, null, pkg.DurationDays, term.EndsAt, pkg.IsDayPass, "already_bought");
+        if (All<Payment>().Any(p => p.MemberId == uid && p.Kind == PayKind.CoachAddon && p.Status == Status.Pending && p.ExpiresAt > now))
+            return new(false, term.Id, pkg.Id, term.PackageName, pkg.CoachAddonPrice, null, null, pkg.DurationDays, term.EndsAt, pkg.IsDayPass, "pending_payment");
+
+        var today = DateOnly.FromDateTime((now + Manila).Date);
+        if (pkg.IsDayPass)
         {
-            PaymentCode = PaymentCode(),
-            Kind = PayKind.CoachAddon,
-            Method = method,
-            Status = verified ? Status.Verified : Status.Pending,
-            Amount = disc.Amount,
-            DiscountId = disc.Id,
-            DiscountAmount = disc.Cut,
-            MemberId = memberId,
-            ExpiresAt = held,
-            RecordedBy = recordedBy,
-            VerifiedBy = verified ? (recordedBy ?? memberId) : null,
-            VerifiedAt = verified ? now : null,
-            ReceiptNo = verified ? ReceiptNo() : null,
-            PackageSnapshotId = pkg.Id,
-            PackageSnapshotName = pkg.Name,
-            CreatedAt = now
-        });
-        var session = Add(new TrainingSession
+            if (All<GymClosure>().Any(c => c.Day == today) || !HasAnyFreeCoachToday(today, now))
+                return new(false, term.Id, pkg.Id, term.PackageName, pkg.CoachAddonPrice, null, null, pkg.DurationDays, term.EndsAt, true, "no_free_coaches");
+            var dayPrice = Math.Ceiling(pkg.CoachAddonPrice.Value);
+            return new(true, term.Id, pkg.Id, term.PackageName, pkg.CoachAddonPrice, dayPrice, Math.Max(1, pkg.DurationDays), pkg.DurationDays, term.EndsAt, true, null);
+        }
+
+        var endDate = DateOnly.FromDateTime((term.EndsAt.ToUniversalTime() + Manila).Date);
+        var daysLeft = Math.Min(pkg.DurationDays, Math.Max(1, endDate.DayNumber - today.DayNumber));
+        var price = Math.Ceiling(pkg.CoachAddonPrice.Value * daysLeft / pkg.DurationDays);
+        return new(true, term.Id, pkg.Id, term.PackageName, pkg.CoachAddonPrice, price, daysLeft, pkg.DurationDays, term.EndsAt, false, null);
+    }
+
+    bool HasAnyFreeCoachToday(DateOnly today, DateTime now)
+    {
+        var g = All<GymSettings>().First();
+        var dayStart = today.ToDateTime(TimeOnly.MinValue) - Manila + g.OpensAt;
+        var dayEnd = today.ToDateTime(TimeOnly.MinValue) - Manila + g.ClosesAt;
+        var profiles = All<Profile>().ToDictionary(p => p.Id);
+        foreach (var c in All<Coach>())
         {
-            CoachId = coachId, MemberId = memberId, Title = "Coach session",
-            ScheduledStart = start, ScheduledEnd = end, Status = Status.Scheduled,
-            PaymentId = pay.Id, HeldUntil = held, IsPaidAddon = true
-        });
-        Audit("coach_session.book", "training_sessions", session.Id.ToString());
-        return new BookCoachResult(session.Id, pay.Id, pay.PaymentCode, disc.Amount, held, false);
+            if (!profiles.TryGetValue(c.UserId, out var pr) || !pr.IsActive) continue;
+            var bookedHrs = All<TrainingSession>()
+                .Where(ts => ts.CoachId == c.UserId && ts.Status is Status.Scheduled or Status.Completed
+                    && (ts.HeldUntil is null || ts.HeldUntil > now)
+                    && DateOnly.FromDateTime((ts.ScheduledStart.ToUniversalTime() + Manila).Date) == today)
+                .Sum(ts => (ts.ScheduledEnd - ts.ScheduledStart).TotalHours);
+            if (g.MaxCoachHoursPerDay is { } mh && bookedHrs >= mh) continue;
+            for (var h = 0; h < 24; h++)
+            {
+                var slotStart = today.ToDateTime(TimeOnly.MinValue).AddHours(h) - Manila;
+                var slotEnd = slotStart.AddHours(1);
+                if (slotStart < dayStart || slotEnd > dayEnd || slotStart <= now) continue;
+                if (All<ShiftPost>().Any(sp => sp.CoachId == c.UserId && sp.Status == Status.Scheduled && sp.Start <= slotStart && sp.End >= slotEnd)
+                    && !All<TrainingSession>().Any(ts => ts.CoachId == c.UserId && ts.Status == Status.Scheduled && (ts.HeldUntil is null || ts.HeldUntil > now) && ts.ScheduledStart < slotEnd && slotStart < ts.ScheduledEnd))
+                    return true;
+            }
+        }
+        return false;
     }
 
     void ExpireCoachHolds(DateTime now)

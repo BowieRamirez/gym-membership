@@ -279,6 +279,12 @@
                                         <Label Text="Members on this package can book a coach at no extra charge." Style="{StaticResource Caption}" />
                                     </VerticalStackLayout>
                                 </Grid>
+                                <VerticalStackLayout Spacing="6" IsVisible="{Binding FormIncludesCoach, Converter={StaticResource Not}}">
+                                    <Label Text="Coach access price (full term) (₱)" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}">
+                                        <Entry Text="{Binding FormCoachAddonPrice}" Keyboard="Numeric" Placeholder="Blank = no coach add-on" AutomationId="FormCoachAddonPrice" SemanticProperties.Description="Coach access price full term" />
+                                    </Border>
+                                </VerticalStackLayout>
                             </VerticalStackLayout>
 
                             <!-- packages: benefits, one per line, shown to members -->

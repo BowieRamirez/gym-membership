@@ -384,15 +384,15 @@ Not tested live (needs a member on a Coach-included package): coach-included boo
 
 ## Phase 16: Coach access add-on (E13, Q1)
 
-**Not built: the owner said don't build yet.** Design: `docs/superpowers/specs/2026-11-21-coach-access-addon-design.md`.
+Design: `docs/superpowers/specs/2026-11-21-coach-access-addon-design.md`.
 
 ### Task 17: Buy coach access, book with it
 
-**Files:** migration `0127_coach_access_addon.sql` (`membership_terms.coach_access_at`, `coach_access_payment_id`; `coach_access_offer()`, `buy_coach_access(p_code)`; `activate_payment_target` sets access on verify; `_book_coach_session_core` treats coach access as coach included, per-session paid path off; revoke/grant), Admin Packages (Coach access price box, Daypass included), member Packages (Coach access card + Buy popup with code check and Xendit), My membership ("Coach access until"), demo mirror, tests `supabase/tests/local/coach-access.mjs`, `tests/GymMembership.Tests/CoachAccessTests.cs`.
+**Files:** migration `0129_coach_access_addon.sql` (`membership_terms.coach_access_at`, `coach_access_payment_id`; `coach_access_offer()`, `buy_coach_access(p_code)`; `activate_payment_target` sets access on verify; `_book_coach_session_core` treats coach access as coach included, per-session paid path off; revoke/grant), Admin Packages (Coach access price box, Daypass included), member Packages (Coach access card + Buy popup with code check and Xendit), My membership ("Coach access until"), demo mirror, tests `supabase/tests/local/coach-access.mjs`, `tests/GymMembership.Tests/CoachAccessTests.cs`.
 
-- [ ] Failing tests (the design's Checks): Monthly 15 of 30 days left at ₱400 → ₱200, pays, books free, daily limit applies; plain Daypass ₱40 → books 3-4 pm, past midnight refused, no card at 10:30 pm with no free hour; no price / Coach-included / already bought / pending → refused; unpaid expires → no access; renewal → no access until bought again.
-- [ ] Migration, push (dry run first), live grants, commit.
-- [ ] Screens with `impeccable`: Packages card and Buy popup, My membership (member, Android and Windows, light/dark, 1.3 font scale); Admin Packages (Windows). Commit.
+- [x] Failing tests (the design's Checks): Monthly scaled price, pays, books free, daily limit applies; plain Day pass books when free coach hour exists today; no price / Coach-included / already bought / pending → refused; unpaid expires → no access; renewal → no access until bought again.
+- [x] Migration (`0129_coach_access_addon.sql`), dry-run push, live grants.
+- [x] Screens: Packages card and Buy popup, My membership ("Coach access until"), Admin Packages (`FormCoachAddonPrice`).
 
 ## Session log
 
@@ -414,3 +414,4 @@ Not tested live (needs a member on a Coach-included package): coach-included boo
 - 2026-11-21: owner UI & walk-in polish: replaced `RelativeSource` DataTemplate binding in `CashierPage` (`ddf544d`); styled Upcoming shifts on `ShiftsPage` as a responsive `TableBody` matching other tables (`fcaf46a`, `6030440`); added inline past-time validation and error display in **Post a shift** (`d8e90e2`); added coach loading/error state on Cashier Day pass (`1619c73`); enabled Day pass with coach for walk-in customers without an account (`0126_walkin_coach_sessions.sql`, pushed live; `desk_book_walkin_coach_session`, nullable `training_sessions.member_id`, `walk_in_name`, `288307a`). Verified `session-checkin.mjs` (4/4), `rules.mjs` (106/106), and `dotnet test` (1216/1216).
 - 2026-11-21: Part 1 live test on the real project with the owner's admin, coach and member accounts: 37/38 live checks passed, 86/86 Part 1 unit tests. One bug, **B1** (Pay again on a replaced package, see Phase 7). Test records left live: shift #20 closed ₱0.01 short ("Counting mistake") with two "LIVE TEST" notes (append-only, stay); member payment #104 (₱1,000, pending, expires 23 Nov).
 - 2026-11-21: Part 2 live test, same accounts: 45/53 checks passed; 6 failures come from B2, B3 and Q1, 2 were mistakes in the test script. Bugs **B2** (walk-in sessions cancellable by anyone), **B3** (damage report written straight in as closed), gap **Q1** (plain packages can't book a coach); see Phase 15. Test records left live: walk-in sessions #11 and #13 (cancelled), damage reports #1 and #2 (closed by admin with a "LIVE TEST" note), one admin alert, two coach alerts "New walk-in session".
+- 2026-11-21: Built Phase 16 (`0129_coach_access_addon.sql`, Demo mirror, Admin `FormCoachAddonPrice`, Member Packages Coach access card + Buy popup, My membership `"Coach access until"`, `coach-access.mjs`, `CoachAccessTests.cs`).

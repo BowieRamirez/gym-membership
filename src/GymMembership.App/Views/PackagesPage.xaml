@@ -62,6 +62,19 @@
 
         <!-- the pay card is the side panel: on the right on wide windows, above the packages on phones and narrow windows; hidden, the packages take the width -->
         <ScrollView Grid.Row="1"><c:SideLayout StackedSideWidth="600"><VerticalStackLayout Spacing="10">
+            <!-- Phase 16 (E13): Coach access add-on for the member's active plain term -->
+            <Border Style="{StaticResource Panel}" Padding="16,14" IsVisible="{Binding HasCoachOffer}" AutomationId="CoachAccessCard">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                    <VerticalStackLayout Spacing="4" VerticalOptions="Center">
+                        <c:CardTitle Text="Coach access add-on" />
+                        <Label Text="{Binding CoachOfferUntilText}" Style="{StaticResource Caption}" />
+                    </VerticalStackLayout>
+                    <HorizontalStackLayout Grid.Column="1" Spacing="12" VerticalOptions="Center">
+                        <Label Text="{Binding CoachOfferPriceText}" Style="{StaticResource Numeral}" FontSize="26" VerticalOptions="Center" />
+                        <Button Text="Buy add-on" Style="{StaticResource SmallButton}" Command="{Binding OpenBuyCoachAccessCommand}" AutomationId="BuyCoachAddon" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                </Grid>
+            </Border>
             <c:CardGrid Columns="{OnIdiom Phone=1, Default=3}" MinColumnWidth="260" Padding="0,0,0,16" BindableLayout.ItemsSource="{Binding Packages}"
                      BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource PackagePhone}, Default={StaticResource PackageWide}}">
             <BindableLayout.EmptyView>
@@ -91,7 +104,7 @@
                             <Label Text="GCash or QR Ph, on Xendit's checkout page. Come back here when you're done." Style="{StaticResource Caption}" />
                         </VerticalStackLayout>
                         <Label Text="{Binding PayNow.PaymentCode, StringFormat='Payment code {0}'}" Style="{StaticResource Caption}" SemanticProperties.Description="Payment code, for the front desk if you need help" />
-                        <Button Text="Cancel this payment" Style="{StaticResource SmallOutlineButton}" Clicked="OnCancelPayment" />
+                        <Button Text="Cancel this payment" Style="{StaticResource SmallOutlineButton}" Clicked="OnCancelPayment" IsVisible="{Binding PayNow.CanCancel}" />
                     </VerticalStackLayout>
                 </Border>
                 <!-- cash plan 2026-11-17: chosen cash; the code is what the desk looks for, the deadline is the same as online -->
@@ -187,6 +200,53 @@
                         <Button Text="Buy and pay online" Style="{StaticResource SmallButton}" Command="{Binding PayCommand}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" AutomationId="BuyNext" />
                     </VerticalStackLayout>
 
+                </VerticalStackLayout>
+            </ScrollView>
+        </Border>
+    </Grid>
+
+    <!-- Phase 16 (E13): Buy coach access add-on popup -->
+    <Grid IsVisible="{Binding IsBuyingCoachAccess}">
+        <BoxView Color="#9E000000">
+            <BoxView.GestureRecognizers><TapGestureRecognizer Command="{Binding CloseBuyCoachAccessCommand}" /></BoxView.GestureRecognizers>
+        </BoxView>
+        <Border Style="{StaticResource Panel}" Padding="0" StrokeShape="{OnIdiom Phone='RoundRectangle 18,18,0,0', Default='RoundRectangle 18'}" Margin="{OnIdiom Phone=0, Default=24}"
+                WidthRequest="{OnIdiom Phone=-1, Default=520}" VerticalOptions="{OnIdiom Phone=End, Default=Center}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Center}">
+            <ScrollView>
+                <VerticalStackLayout Padding="20,16,20,20" Spacing="14">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                            <Label Text="Coach access add-on" Style="{StaticResource Heading}" />
+                            <Label Text="{Binding CoachOffer.PackageName}" Style="{StaticResource Caption}" />
+                        </VerticalStackLayout>
+                        <Grid Grid.Column="1" WidthRequest="44" HeightRequest="44" VerticalOptions="Start">
+                            <Button Style="{StaticResource SmallOutlineButton}" Padding="0" Command="{Binding CloseBuyCoachAccessCommand}" SemanticProperties.Description="Close" AutomationId="CloseBuyCoachAddon" />
+                            <c:IconView Icon="x" Size="18" ChipSize="32" HorizontalOptions="Center" VerticalOptions="Center" />
+                        </Grid>
+                    </Grid>
+                    <c:Banner Message="{Binding ErrorMessage}" />
+                    <VerticalStackLayout Spacing="14">
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="Discount code (optional)" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" WidthRequest="{OnIdiom Phone=-1, Default=240}">
+                                <Entry Text="{Binding CoachAddonDiscountCode}" Placeholder="Enter a code from the gym" Unfocused="OnCoachCodeUnfocused" SemanticProperties.Description="Coach add-on discount code" AutomationId="BuyCoachAddonCode" />
+                            </Border>
+                            <Label Text="{Binding CoachCodeCheckText}" Style="{StaticResource Caption}" LineBreakMode="WordWrap"
+                                   IsVisible="{Binding HasCoachCodeCheck}" AutomationId="BuyCoachAddonCodeFeedback">
+                                <Label.Triggers>
+                                    <DataTrigger TargetType="Label" Binding="{Binding CoachCodeWorks}" Value="True">
+                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource GoodLight}, Dark={StaticResource GoodDark}}" />
+                                    </DataTrigger>
+                                    <DataTrigger TargetType="Label" Binding="{Binding CoachCodeWorks}" Value="False">
+                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
+                                    </DataTrigger>
+                                </Label.Triggers>
+                            </Label>
+                        </VerticalStackLayout>
+                        <Label Text="{Binding CoachOfferPriceText}" Style="{StaticResource Numeral}" FontSize="40" />
+                        <Label Text="{Binding CoachOfferTerms}" Style="{StaticResource Caption}" />
+                        <Button Text="Pay online" Style="{StaticResource SmallButton}" Command="{Binding PayCoachAccessCommand}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" AutomationId="PayCoachAddon" />
+                    </VerticalStackLayout>
                 </VerticalStackLayout>
             </ScrollView>
         </Border>

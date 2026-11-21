@@ -42,6 +42,9 @@ public sealed record TermCard(MembershipTerm Term, string State, bool Activated,
     decimal RefundEstimate = 0, DateTime? LastDayToAsk = null, bool PastWindow = false)
 {
     public string Dates => $"{Term.StartsAt.AddHours(8):d MMM yyyy, h:mm tt} – {Term.EndsAt.AddHours(8):d MMM yyyy, h:mm tt} (Manila)";
+    public string? CoachAccessText => Term.CoachAccessAt is not null && State == Status.Active
+        ? $"Coach access until {Term.EndsAt.AddHours(8):d MMM yyyy}"
+        : null;
     /// <summary>Phone rows: the days only (Manila), "13 Oct – 12 Nov 2026"; the full times stay on Windows and in the refund dialog.</summary>
     public string ShortDates => $"{Term.StartsAt.AddHours(8):d MMM} – {Term.EndsAt.AddHours(8):d MMM yyyy}";
     /// <summary>Phone rows: a line only when a refund request or a cancellation exists; the chip and the refund dialog say the rest.</summary>

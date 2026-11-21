@@ -720,6 +720,18 @@ public sealed partial class DemoGateway : ISupabaseGateway
         {
             ActivateMembershipTerm(pay);
         }
+        else if (pay.Kind == PayKind.CoachAddon)
+        {
+            var term = All<MembershipTerm>()
+                .Where(t => t.MemberId == pay.MemberId && t.CancelledAt is null && t.StartsAt <= now && t.EndsAt > now)
+                .OrderByDescending(t => t.StartsAt)
+                .FirstOrDefault();
+            if (term is not null)
+            {
+                term.CoachAccessAt = now;
+                term.CoachAccessPaymentId = pay.Id;
+            }
+        }
         else if (pay.UserAmenityId is { } uaId)
         {
             var ua = All<UserAmenity>().First(a => a.Id == uaId);
@@ -836,7 +848,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (code.Length is 0 or > 50 || kind is not ("package" or "amenity" or "coach") || item < 1) throw Err("bad_input");
                 var price = kind == "package" ? PackageForSale(item).Price
                     : kind == "amenity" ? AmenityForSale(item).Price
-                    : All<MembershipPackage>().FirstOrDefault(p => p.Id == item)?.CoachAddonPrice ?? throw Err("not_found");
+                    : (ComputeCoachAccessOffer(uid) is { Offered: true, PackageId: var pid, Price: { } op } && pid == item ? op
+                        : All<MembershipPackage>().FirstOrDefault(p => p.Id == item)?.CoachAddonPrice ?? throw Err("not_found"));
                 if (!_codeChecks.TryGetValue(uid, out var hits)) _codeChecks[uid] = hits = [];
                 hits.RemoveAll(t => t < now.AddMinutes(-10));
                 if (hits.Count >= 20) throw Err("too_many_checks");

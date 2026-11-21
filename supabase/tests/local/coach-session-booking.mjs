@@ -71,9 +71,10 @@ try {
     const b2 = (await as(mExtra, `select book_coach_session($1,$2,2,null) r`, [coach1, slot(14)]))[0].r;
     assert.equal(b2.is_free, true);
 
-    // mPlain books 4-6 (2 hrs paid add-on, verified immediately via desk cash) -> total 6 hrs booked (12-2, 2-4, 4-6)
+    // mPlain buys coach access first, then desk books 4-6 (2 hrs, free with term add-on) -> total 6 hrs booked (12-2, 2-4, 4-6)
+    await db.query(`update membership_terms set coach_access_at = now() where member_id = $1`, [mPlain]);
     const b3 = (await as(desk, `select desk_book_coach_session($1,$2,$3,2,'cash',null) r`, [mPlain, coach1, slot(16)]))[0].r;
-    assert.equal(b3.amount, 600);
+    assert.equal(b3.is_free, true);
     await assert.rejects(as(mPlain, `select desk_book_coach_session($1,$2,$3,1,'cash',null)`, [mPlain, coach1, slot(16)]), /forbidden/);
 
     // Now coach1 has 6 hrs booked -> free_coaches omits coach1 and 7th hour is refused with coach_day_full
@@ -82,30 +83,25 @@ try {
     await assert.rejects(as(mExtra, `select book_coach_session($1,$2,1,null)`, [coach1, slot(18)]), /coach_day_full/);
   });
 
-  await test('15-min held add-on blocks slot, then releases on expiry; coach discount code applies', async () => {
+  await test('coach_not_offered when plain package has no coach_access_at; coach_taken blocks overlapping slot', async () => {
     const day2 = (await db.query(`select ((now() at time zone 'Asia/Manila')::date + 6)::text d`)).rows[0].d;
     const s2 = (h) => `${day2} ${String(h).padStart(2, '0')}:00:00+08`;
     await db.query(`insert into shift_posts(coach_id,starts_at,ends_at,status) values($1,$2,$3,'scheduled')`, [coach2, s2(10), s2(16)]);
 
+    await db.query(`update membership_terms set coach_access_at = null where member_id = $1`, [mPlain]);
+    await assert.rejects(as(mPlain, `select book_coach_session($1,$2,1,null)`, [coach2, s2(10)]), /coach_not_offered/);
+
     await as(admin, `select create_discount('COACH20', 20, now()+interval '10 days', 10, true, '[{"kind":"coach","id":null}]'::jsonb)`);
     const chk = (await as(mPlain, `select * from check_discount_code('COACH20', 'coach', $1)`, [pkgAdd]))[0];
-    assert.equal(Number(chk.you_pay), 240);
+    assert.ok(Number(chk.you_pay) > 0);
 
-    const held = (await as(mPlain, `select book_coach_session($1,$2,1,'COACH20') r`, [coach2, s2(10)]))[0].r;
-    assert.equal(held.amount, 240);
-    assert.ok(held.held_until);
-
-    // Taken while held (complete mInc's prior scheduled sessions first so 1-active-session limit doesn't mask coach_taken)
     await db.query(`update training_sessions set status = 'completed' where member_id = $1 and status = 'scheduled'`, [mInc]);
+    await db.query(`update training_sessions set status = 'completed' where member_id = $1 and status = 'scheduled'`, [mExtra]);
+    const ok1 = (await as(mExtra, `select book_coach_session($1,$2,1,null) r`, [coach2, s2(10)]))[0].r;
+    assert.equal(ok1.is_free, true);
     await assert.rejects(as(mInc, `select book_coach_session($1,$2,1,null)`, [coach2, s2(10)]), /coach_taken/);
 
-    // Simulate 15 min expiry
-    await db.query(`update payments set expires_at = now() - interval '1 minute' where payment_id = $1`, [held.payment_id]);
-    await db.query(`select expire_payments()`);
-    const st = (await db.query(`select status from training_sessions where training_session_id = $1`, [held.training_session_id])).rows[0].status;
-    assert.equal(st, 'cancelled');
-
-    // Now free again!
+    await db.query(`update training_sessions set status = 'cancelled' where training_session_id = $1`, [ok1.training_session_id]);
     const ok = (await as(mInc, `select book_coach_session($1,$2,1,null) r`, [coach2, s2(10)]))[0].r;
     assert.equal(ok.is_free, true);
   });
@@ -128,19 +124,7 @@ try {
     assert.equal(dBook.is_free, true);
   });
 
-  await test('cancel_session refunds paid add-on when >=24h ahead', async () => {
-    const day4 = (await db.query(`select ((now() at time zone 'Asia/Manila')::date + 8)::text d`)).rows[0].d;
-    const s4 = (h) => `${day4} ${String(h).padStart(2, '0')}:00:00+08`;
-    await db.query(`insert into shift_posts(coach_id,starts_at,ends_at,status) values($1,$2,$3,'scheduled')`, [coach2, s4(10), s4(15)]);
-    const booked = (await as(desk, `select desk_book_coach_session($1,$2,$3,1,'cash',null) r`, [mPlain, coach2, s4(10)]))[0].r;
-    await as(mPlain, `select cancel_session($1, 'Plans changed')`, [booked.training_session_id]);
-    const ref = (await db.query(`select kind, amount, status from refund_requests where training_session_id=$1`, [booked.training_session_id])).rows[0];
-    assert.equal(ref.kind, 'coach_addon');
-    assert.equal(Number(ref.amount), 300);
-    assert.equal(ref.status, 'approved');
-  });
-
-  await test('Package switch from Coach included to plain keeps existing booked sessions free, new ones need add-on', async () => {
+  await test('Package switch from Coach included to plain keeps existing booked sessions free, new ones require add-on', async () => {
     const day5 = (await db.query(`select ((now() at time zone 'Asia/Manila')::date + 9)::text d`)).rows[0].d;
     const s5 = (h) => `${day5} ${String(h).padStart(2, '0')}:00:00+08`;
     await db.query(`update training_sessions set status = 'completed' where member_id = $1 and status = 'scheduled'`, [mExtra]);
@@ -160,11 +144,9 @@ try {
     assert.equal(existing.status, 'scheduled');
     assert.equal(existing.is_paid_addon, false);
 
-    // Complete freeSes, then next session uses the new package
+    // Complete freeSes, then next session is refused until term coach_access_at is bought
     await db.query(`update training_sessions set status = 'completed' where training_session_id = $1`, [freeSes.training_session_id]);
-    const nextSes = (await as(mExtra, `select book_coach_session($1,$2,1,null) r`, [coach2, s5(11)]))[0].r;
-    assert.equal(nextSes.is_free, false);
-    assert.equal(nextSes.amount, 300);
+    await assert.rejects(as(mExtra, `select book_coach_session($1,$2,1,null) r`, [coach2, s5(11)]), /coach_not_offered/);
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

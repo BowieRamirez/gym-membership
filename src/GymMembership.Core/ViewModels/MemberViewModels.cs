@@ -247,14 +247,19 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
         try
         {
             if (!await RunAsync(svc.MyPaymentsAsync, rows =>
-                { PayNow = rows.FirstOrDefault(p => p.NeedsPayment && p.CanCancel); PayAtDesk = rows.FirstOrDefault(p => p.PaysAtDesk && p.CanCancel); })) return;
+                { PayNow = rows.FirstOrDefault(p => p.NeedsPayment && (p.CanCancel || p.Kind == PayKind.CoachAddon)); PayAtDesk = rows.FirstOrDefault(p => p.PaysAtDesk && p.CanCancel); })) return;
+            await RunAsync(svc.CoachAccessOfferAsync, o => CoachOffer = o);
             if (PayNow is not { HasCheckout: true } open) return;
             // back from Xendit's page: if its notice hasn't arrived yet, the server asks Xendit and confirms it
             var paid = false;
             Checking = true;
             try { await RunAsync(() => svc.CheckOnlineAsync(open.Id), v => paid = v); }
             finally { Checking = false; }
-            if (paid) { await BookPendingDayPassCoachAsync(); PayNow = null; nav.GoToMembership(); }   // paid: the started term is on My membership
+            if (paid)
+            {
+                if (open.Kind == PayKind.CoachAddon) { PayNow = null; Notice = "Coach access active."; await RunAsync(svc.CoachAccessOfferAsync, o => CoachOffer = o); return; }
+                await BookPendingDayPassCoachAsync(); PayNow = null; nav.GoToMembership();
+            }   // paid: the started term is on My membership
         }
         finally { _loading = false; }
     }
@@ -412,6 +417,90 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
         await LoadPayAsync();
     }
 
+    // Phase 16 (E13): Coach access add-on for the member's active term
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasCoachOffer), nameof(CoachOfferPriceText), nameof(CoachOfferUntilText), nameof(CoachOfferTerms))]
+    private CoachAccessOffer? coachOffer;
+    public bool HasCoachOffer => CoachOffer is { Offered: true };
+    public string CoachOfferPriceText => CoachOffer is { Offered: true, Price: { } p } ? $"₱{p:N0}" : "";
+    public string CoachOfferUntilText => CoachOffer is { Offered: true, EndsAt: { } e } ? $"Book coaches until {e.AddHours(8):d MMM yyyy}" : "";
+    public string CoachOfferTerms => CoachOffer is { Offered: true, Price: { } p, EndsAt: { } e }
+        ? (CoachOffer.IsDayPass ? $"₱{p:N0} for today (until midnight). Book a coach at no extra charge."
+            : $"₱{p:N0} for the {CoachOffer.DaysLeft} days left in your term (until {e.AddHours(8):d MMM yyyy}).")
+        : "";
+
+    [ObservableProperty] private bool isBuyingCoachAccess;
+    [ObservableProperty] private string? coachAddonDiscountCode;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasCoachCodeCheck))] private CodeCheck? coachCodeCheck;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasCoachCodeCheck))] private string? coachCodeCheckText;
+    [ObservableProperty] private bool coachCodeWorks;
+    public bool HasCoachCodeCheck => !string.IsNullOrWhiteSpace(CoachCodeCheckText);
+    CancellationTokenSource? _coachCodeCts;
+    string? _lastCoachCode;
+
+    partial void OnCoachAddonDiscountCodeChanged(string? value) => _ = ScheduleCoachCodeCheckAsync(value, immediate: false);
+    public Task CheckCoachCodeNowAsync() => ScheduleCoachCodeCheckAsync(CoachAddonDiscountCode, immediate: true);
+
+    async Task ScheduleCoachCodeCheckAsync(string? raw, bool immediate)
+    {
+        var code = raw?.Trim() ?? "";
+        if (immediate && _lastCoachCode == code) return;
+        _coachCodeCts?.Cancel();
+        _lastCoachCode = null;
+        CoachCodeCheck = null; CoachCodeCheckText = null; CoachCodeWorks = false;
+        if (!IsBuyingCoachAccess || CoachOffer?.PackageId is not { } pkgId || code.Length == 0) return;
+        var cts = _coachCodeCts = new CancellationTokenSource();
+        if (!immediate && CodeCheckDelay > TimeSpan.Zero)
+        {
+            try { await Task.Delay(CodeCheckDelay, cts.Token); }
+            catch (OperationCanceledException) { return; }
+        }
+        var res = await svc.CheckCodeAsync(code, "coach", pkgId);
+        if (cts.IsCancellationRequested || !IsBuyingCoachAccess) return;
+        _lastCoachCode = code;
+        if (!res.Ok)
+        {
+            CoachCodeWorks = false;
+            CoachCodeCheckText = ErrorText.For(res.Error, res.Message);
+            return;
+        }
+        CoachCodeCheck = res.Value;
+        CoachCodeWorks = res.Value!.Works;
+        CoachCodeCheckText = CodeCheckFeedback.Message(res.Value, "coach");
+    }
+
+    [RelayCommand]
+    private void OpenBuyCoachAccess()
+    {
+        if (!HasCoachOffer) return;
+        Notice = null; ErrorMessage = null;
+        _coachCodeCts?.Cancel(); _lastCoachCode = null;
+        CoachAddonDiscountCode = null; CoachCodeCheck = null; CoachCodeCheckText = null; CoachCodeWorks = false;
+        IsBuyingCoachAccess = true;
+    }
+
+    [RelayCommand]
+    private void CloseBuyCoachAccess()
+    {
+        _coachCodeCts?.Cancel(); _lastCoachCode = null;
+        CoachAddonDiscountCode = null; CoachCodeCheck = null; CoachCodeCheckText = null; CoachCodeWorks = false;
+        ErrorMessage = null;
+        IsBuyingCoachAccess = false;
+    }
+
+    [RelayCommand]
+    private async Task PayCoachAccessAsync()
+    {
+        if (!HasCoachOffer) return;
+        Notice = null;
+        Payment? created = null;
+        if (!await RunAsync(() => svc.BuyCoachAccessAsync(CoachAddonDiscountCode), p => created = p)) return;
+        CloseBuyCoachAccess();
+        Notice = created?.Status == Status.Verified
+            ? "Coach access active. You can now book a coach on Sessions."
+            : "Payment created. Pay online on this page to turn on coach access.";
+        await LoadPayAsync();
+    }
+
 }
 
 public partial class MyMembershipViewModel(IMembershipService svc, ISubscriptionService subscription, IAttendanceService? codes = null, ISessionService? sessions = null) : LoadableViewModel
@@ -493,9 +582,12 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
         var activePkgName = Memberships.FirstOrDefault(m => m.Status == Status.Active)?.PackageName;
         var pkgsRes = activePkgName is not null ? await svc.ListPackagesAsync() : null;
         var pkg = pkgsRes is { Ok: true, Value: { } pkgs } ? pkgs.FirstOrDefault(p => p.Name == activePkgName) : null;
-        if (pkg is not null)
+        var activeTerm = Terms.FirstOrDefault(t => t.State == Status.Active);
+        if (activeTerm?.Term.CoachAccessAt is not null)
+            CoachIncludedNote = $"Coach access until {activeTerm.Term.EndsAt.AddHours(8):d MMM yyyy}";
+        else if (pkg is not null)
             CoachIncludedNote = pkg.IncludesCoach ? "Coach included with your package"
-                : pkg.CoachAddonPrice is { } addon ? $"Coach add-on: ₱{addon:N0} per hour"
+                : pkg.CoachAddonPrice is { } addon ? $"Coach add-on available on Packages (₱{addon:N0} full term)"
                 : "No coach add-on on this package";
         else
             CoachIncludedNote = "";

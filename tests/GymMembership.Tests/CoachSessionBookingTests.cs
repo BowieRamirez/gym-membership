@@ -52,12 +52,23 @@ public class CoachSessionBookingTests
         var hr = vm.AvailableHours.First(h => h.Hour == 10);
         vm.BookHour = hr;
 
-        // Someone else (Bea) books 10am-11am right before Alex confirms
-        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        // Someone else (Bea) books 10am-11am right before Alex confirms (both buy coach access first)
+        await gw.SignInAsync("bea@demo.io", DemoGateway.DemoPassword);
         var beaPay = (await gw.ListAsync<Payment>(p => p.MemberId == "u-bea" && p.Status == Status.Pending)).First();
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
         await new PaymentStaffService(gw).VerifyAsync(beaPay.Id, true, null);
+        await gw.SignInAsync("bea@demo.io", DemoGateway.DemoPassword);
+        var beaCa = await memSvc.BuyCoachAccessAsync();
+        await memSvc.PayOnlineAsync(beaCa.Value!.Id);
+
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
         await sesSvc.DeskBookCoachAsync("u-bea", "u-coach1", sStart, 1, "cash", null);
+
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
+        foreach (var s in (await gw.ListAsync<TrainingSession>(x => x.MemberId == "u-alex" && x.Status == Status.Scheduled)))
+            await sesSvc.CancelSessionAsync(s.Id, "Reset for test");
+        var alexCa = await memSvc.BuyCoachAccessAsync();
+        await memSvc.PayOnlineAsync(alexCa.Value!.Id);
 
         await vm.BookCoachCommand.ExecuteAsync(null);
         Assert.NotNull(vm.ErrorMessage);
