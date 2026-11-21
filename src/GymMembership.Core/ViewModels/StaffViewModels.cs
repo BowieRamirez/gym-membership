@@ -1317,7 +1317,7 @@ public partial class SessionsViewModel(ISessionService svc, IMembershipService? 
     IReadOnlyList<SessionRow> all = [];
     /// <summary>All, Scheduled, Completed or Cancelled (which also covers no-shows). Kept across reloads.</summary>
     [ObservableProperty, NotifyPropertyChangedFor(nameof(EmptyText))] private string filter = "All";
-    public string EmptyText => Filter == "All" ? "No sessions yet. Send a time request to book one." : "No sessions with this status. Choose All to see every session.";
+    public string EmptyText => Filter == "All" ? "No sessions yet. Book a coach above." : "No sessions with this status. Choose All to see every session.";
     [ObservableProperty] private SessionRow? rescheduling;
     [ObservableProperty] private DateTime date = DateTime.Today.AddDays(1);
     [ObservableProperty] private TimeSpan time = new(9, 0, 0);
@@ -1524,6 +1524,8 @@ public partial class SessionsViewModel(ISessionService svc, IMembershipService? 
     [RelayCommand]
     private Task LoadFreeCoachesAsync() => LoadFreeCoachesAsync(SelectedFreeCoach?.CoachId);
 
+    public bool HasNoFreeCoaches => FreeCoaches.Count == 0;
+
     async Task LoadFreeCoachesAsync(string? preferCoachId)
     {
         var prevHour = BookHour?.Hour;
@@ -1531,6 +1533,7 @@ public partial class SessionsViewModel(ISessionService svc, IMembershipService? 
         var res = await svc.FreeCoachesAsync(day);
         if (!res.Ok) { ErrorMessage = ErrorText.For(res.Error, res.Message); return; }
         Fill(FreeCoaches, res.Value!);
+        OnPropertyChanged(nameof(HasNoFreeCoaches));
         SelectedFreeCoach = (preferCoachId is not null ? FreeCoaches.FirstOrDefault(c => c.CoachId == preferCoachId) : null)
             ?? FreeCoaches.FirstOrDefault();
         if (prevHour is { } ph && AvailableHours.FirstOrDefault(h => h.Hour == ph) is { } match)

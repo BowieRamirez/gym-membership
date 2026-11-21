@@ -151,12 +151,8 @@
                                 <Label Text="Time" Style="{StaticResource Caption}" />
                                 <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding AvailableHours}" ItemDisplayBinding="{Binding Label}" SelectedItem="{Binding BookHour}" Title="Pick an hour" /></Border>
                             </VerticalStackLayout>
-                            <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="160">
-                                <Label Text="Discount code" Style="{StaticResource Caption}" />
-                                <Border Style="{StaticResource Field}"><Entry Text="{Binding BookCode}" Placeholder="Optional" /></Border>
-                            </VerticalStackLayout>
                         </FlexLayout>
-                        <Label Text="No coaches have free hours on this day." Style="{StaticResource Caption}" IsVisible="{Binding FreeCoaches.Count, Converter={StaticResource Not}}" />
+                        <Label Text="No coaches have free hours on this day." Style="{StaticResource Caption}" IsVisible="{Binding HasNoFreeCoaches}" />
                         <HorizontalStackLayout Spacing="8">
                             <Button Text="Confirm booking" Style="{StaticResource SmallButton}" Command="{Binding BookCoachCommand}" />
                             <Button Text="Close" Style="{StaticResource SmallOutlineButton}" Command="{Binding OpenBookCoachCommand}" />
