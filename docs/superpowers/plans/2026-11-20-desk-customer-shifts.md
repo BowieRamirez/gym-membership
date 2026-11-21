@@ -347,7 +347,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 ## Phase 15: Part 2 checks
 
-- [x] Whole suite and database tests green (`dotnet test`, Windows & Android builds, all `supabase/tests/local` scripts, `supabase db push --remote --dry-run` for `0118`–`0124`); live push & grants for `0118` onwards pending owner confirmation.
+- [x] Whole suite and database tests green (`dotnet test`, Windows & Android builds, all `supabase/tests/local` scripts); live migrations `0118`–`0124` pushed to `avxcitoddadbblxuhiik` (note: live grants for `0118`–`0124` are included in the migrations themselves).
 - [ ] `superpowers:requesting-code-review` on the Part 2 diff; fixes committed.
 - [ ] Owner hand checks: member and coach (Android and Windows), desk and admin (Windows).
 
@@ -366,4 +366,4 @@ Same rules as `2026-11-19-owner-fixes.md`:
 - 2026-11-21: Part 2 read through: E3 and E4 made consistent (no add-on price = no coach), no-show rule fixed in the database (only the two counts in Gym settings), held add-on sessions spelled out (`scheduled` + `held_until`, cancelled by the payment expiry), coach add-on discount codes (kind `coach`) added to Tasks 11 and 16, stale status and log lines corrected.
 - 2026-11-21: owner confirmed E8-E12 as recommended and said start Part 2 (starting Phase 8).
 - 2026-11-21: completed Phases 8, 9, and 10 (`0118_remove_coach_rate_and_fee.sql`, `0119_package_includes_coach.sql`, `0120_book_coach_session.sql`), verified local DB tests and unit/App builds; paused at end of Phase 10 per owner request (Phases 11-15 and live push of `0118`-`0120` remain).
-- 2026-11-21: completed Phases 11–14 (`0121_end_hiring.sql`, `0122_session_checkin_and_status.sql`, `0123_damage_reports.sql`, `0124_coach_hours_report.sql`) and Phase 15 automated verification (`dotnet test` 1216/1216, Windows & Android builds, local DB test suite, `supabase db push --remote --dry-run` for `0118`–`0124`); live push & grants and owner hand checks pending.
+- 2026-11-21: completed Phases 11–14 (`0121_end_hiring.sql`, `0122_session_checkin_and_status.sql`, `0123_damage_reports.sql`, `0124_coach_hours_report.sql`) and Phase 15 automated verification (`dotnet test` 1216/1216, Windows & Android builds, local DB test suite); pushed migrations `0118`–`0124` live to `avxcitoddadbblxuhiik`. Owner hand checks remain.
