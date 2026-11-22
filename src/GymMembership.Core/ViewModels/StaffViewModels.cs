@@ -3416,3 +3416,335 @@ public partial class DamageReportsViewModel(IAdminService svc) : LoadableViewMod
         await LoadAsync();
     }
 }
+
+/// <summary>Phase 18 (P1-P10): Admin Payroll page — Pay period and Salaries tabs, side drawer for lines, mark paid, PDF.</summary>
+public sealed class PayrollLineItem(PayrollLine line, bool canRemove)
+{
+    public PayrollLine Line { get; } = line;
+    public int LineId => Line.LineId;
+    public string KindLabel => Line.Kind switch { "bonus" => "Bonus", "deduction" => "Deduction", "salary" => "Salary", _ => Line.Kind };
+    public string? Note => Line.Note;
+    public string AmountText => $"{(Line.Kind == "deduction" ? "-" : "+")}₱{Line.Amount:N2}";
+    public bool CanRemove { get; } = canRemove && line.Kind != "salary";
+}
+
+public sealed partial class PayrollRowItem(PayrollRow row) : ObservableObject
+{
+    public PayrollRow Row { get; } = row;
+    public string UserId => Row.UserId;
+    public string FullName => Row.FullName;
+    public string RoleLabel => Row.RoleLabel;
+    public string HoursText => Row.HoursText;
+    public bool NoSalary => Row.NoSalary;
+    public decimal Salary => Row.Salary;
+    public decimal Bonuses => Row.Bonuses;
+    public decimal Deductions => Row.Deductions;
+    public decimal Net => Row.Net;
+    public string SalaryText => NoSalary ? "–" : $"₱{Salary:N2}";
+    public string BonusesText => Bonuses == 0 ? "–" : $"₱{Bonuses:N2}";
+    public string DeductionsText => Deductions == 0 ? "–" : $"₱{Deductions:N2}";
+    public string NetText => NoSalary && Net == 0 ? "–" : $"₱{Net:N2}";
+    [ObservableProperty] private bool isSelected;
+}
+
+public sealed partial class StaffSalaryItem(StaffSalary s, Func<StaffSalaryItem, Task> save) : ObservableObject
+{
+    public StaffSalary Data { get; } = s;
+    public string UserId => Data.UserId;
+    public string FullName => Data.FullName;
+    public string RoleLabel => Data.RoleLabel;
+    public bool NoSalary => Data.NoSalary;
+    public string AmountText => Data.Amount is { } a ? $"₱{a:N2}" : "–";
+    public string UpdatedText => Data.UpdatedAt is { } at ? $"{ManilaTime.Of(at):d MMM yyyy} by {Data.UpdatedByName}" : "–";
+
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsNotEditing))] private bool isEditing;
+    public bool IsNotEditing => !IsEditing;
+    [ObservableProperty] private string amountInput = s.Amount?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+    [ObservableProperty] private string? errorText;
+
+    [RelayCommand]
+    private void BeginEdit()
+    {
+        AmountInput = Data.Amount?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+        ErrorText = null;
+        IsEditing = true;
+    }
+
+    [RelayCommand]
+    private void CancelEdit() { IsEditing = false; ErrorText = null; }
+
+    [RelayCommand]
+    private Task SaveAsync() => save(this);
+}
+
+public partial class PayrollViewModel : LoadableViewModel
+{
+    readonly IAdminService _svc;
+    readonly IReportFiles? _files;
+    string _gymName = "Slim and Shape";
+
+    public PayrollViewModel(IAdminService svc, IReportFiles? files = null)
+    {
+        _svc = svc;
+        _files = files;
+        var today = ManilaToday();
+        periodStartsOn = PeriodStartFor(today);
+    }
+
+    public static DateOnly ManilaToday() => DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8));
+    public static DateOnly PeriodStartFor(DateOnly d) => d.Day <= 15 ? new DateOnly(d.Year, d.Month, 1) : new DateOnly(d.Year, d.Month, 16);
+    public static DateOnly StepPrev(DateOnly s) => s.Day == 16 ? new DateOnly(s.Year, s.Month, 1) : new DateOnly(s.AddMonths(-1).Year, s.AddMonths(-1).Month, 16);
+    public static DateOnly StepNext(DateOnly s) => s.Day == 1 ? new DateOnly(s.Year, s.Month, 16) : new DateOnly(s.AddMonths(1).Year, s.AddMonths(1).Month, 1);
+
+    public ObservableCollection<PayrollRowItem> Rows { get; } = new();
+    public ObservableCollection<PayrollLineItem> DrawerLines { get; } = new();
+    public ObservableCollection<StaffSalaryItem> StaffSalaries { get; } = new();
+
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPeriodTab), nameof(IsSalariesTab))]
+    private string activeTab = "period";
+    public bool IsPeriodTab => ActiveTab == "period";
+    public bool IsSalariesTab => ActiveTab == "salaries";
+
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(PeriodLabel), nameof(CanMarkPaid))]
+    private DateOnly periodStartsOn;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanMarkPaid))]
+    private DateOnly periodEndsOn;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsDraft), nameof(CanMarkPaid))]
+    private bool isPaid;
+    [ObservableProperty] private int periodId;
+    [ObservableProperty] private string statusText = "Draft";
+    [ObservableProperty] private string totalNetText = "₱0.00";
+    [ObservableProperty] private string summaryText = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasNoSalary))]
+    private int noSalaryCount;
+    public bool HasNoSalary => NoSalaryCount > 0;
+    public bool IsDraft => !IsPaid;
+    public bool IsEmptyStaff => !IsBusy && Rows.Count == 0 && ErrorMessage is null;
+    public bool CanMarkPaid => !IsPaid && Rows.Count > 0 && PeriodEndsOn <= ManilaToday();
+    public string PeriodLabel => PayrollPdf.PeriodSpan(PeriodStartsOn, PeriodEndsOn == default ? PeriodStartFor(PeriodStartsOn).AddDays(14) : PeriodEndsOn);
+
+    // Side drawer state
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsDrawerOpen))]
+    private PayrollRowItem? selectedRow;
+    public bool IsDrawerOpen => SelectedRow is not null;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsBonusKind), nameof(IsDeductionKind))]
+    private string lineKind = "bonus";
+    public bool IsBonusKind => LineKind == "bonus";
+    public bool IsDeductionKind => LineKind == "deduction";
+    [ObservableProperty] private string lineAmountText = "";
+    [ObservableProperty] private string lineNote = "";
+    [ObservableProperty] private string? lineError;
+
+    public override Task OnAppearingAsync() => LoadAsync();
+
+    [RelayCommand] private void OpenPeriodTab() => ActiveTab = "period";
+    [RelayCommand] private async Task OpenSalariesTabAsync() { ActiveTab = "salaries"; await LoadSalariesAsync(); }
+
+    [RelayCommand]
+    private Task PrevPeriodAsync()
+    {
+        PeriodStartsOn = StepPrev(PeriodStartsOn);
+        CloseDrawer();
+        return LoadPeriodAsync();
+    }
+
+    [RelayCommand]
+    private Task NextPeriodAsync()
+    {
+        PeriodStartsOn = StepNext(PeriodStartsOn);
+        CloseDrawer();
+        return LoadPeriodAsync();
+    }
+
+    [RelayCommand]
+    private async Task LoadAsync()
+    {
+        var settings = await _svc.GymSettingsAsync();
+        if (settings.Ok && settings.Value is { } gs && !string.IsNullOrWhiteSpace(gs.GymName))
+            _gymName = gs.GymName;
+        await LoadPeriodAsync();
+        await LoadSalariesAsync();
+    }
+
+    async Task LoadPeriodAsync()
+    {
+        await RunAsync(() => _svc.PayrollPeriodAsync(PeriodStartsOn), ApplyPeriod);
+        OnPropertyChanged(nameof(IsEmptyStaff));
+        MarkPaidCommand.NotifyCanExecuteChanged();
+        ExportPdfCommand.NotifyCanExecuteChanged();
+    }
+
+    async Task LoadSalariesAsync()
+    {
+        await RunAsync(() => _svc.PayrollStaffAsync(), list =>
+        {
+            Fill(StaffSalaries, list.Select(s => new StaffSalaryItem(s, SaveSalaryAsync)));
+        });
+    }
+
+    void ApplyPeriod(PayrollPeriod p)
+    {
+        PeriodId = p.PeriodId;
+        PeriodStartsOn = p.StartsOn;
+        PeriodEndsOn = p.EndsOn;
+        IsPaid = p.IsPaid;
+        StatusText = p.IsPaid
+            ? $"Paid {ManilaTime.Of(p.PaidAt!.Value).ToString("d MMM", System.Globalization.CultureInfo.InvariantCulture)} by {p.PaidByName ?? "Admin"}"
+            : "Draft";
+        TotalNetText = $"₱{p.TotalNet:N2}";
+        NoSalaryCount = p.Rows.Count(r => r.NoSalary);
+        SummaryText = p.Rows.Count == 0
+            ? "No staff in this period"
+            : NoSalaryCount > 0
+                ? $"{p.Rows.Count} {(p.Rows.Count == 1 ? "person" : "people")} · {NoSalaryCount} with no salary set"
+                : $"{p.Rows.Count} {(p.Rows.Count == 1 ? "person" : "people")}";
+
+        var selectedId = SelectedRow?.UserId;
+        Fill(Rows, p.Rows.Select(r => new PayrollRowItem(r) { IsSelected = r.UserId == selectedId }));
+        if (selectedId is not null) SelectedRow = Rows.FirstOrDefault(r => r.UserId == selectedId);
+        OnPropertyChanged(nameof(IsEmptyStaff));
+        OnPropertyChanged(nameof(CanMarkPaid));
+        MarkPaidCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand]
+    private async Task OpenDrawerAsync(PayrollRowItem? row)
+    {
+        if (row is null) return;
+        foreach (var r in Rows) r.IsSelected = r.UserId == row.UserId;
+        SelectedRow = row;
+        LineError = null;
+        LineAmountText = "";
+        LineNote = "";
+        LineKind = "bonus";
+        await LoadDrawerLinesAsync();
+    }
+
+    [RelayCommand]
+    private void CloseDrawer()
+    {
+        foreach (var r in Rows) r.IsSelected = false;
+        SelectedRow = null;
+        DrawerLines.Clear();
+        LineError = null;
+    }
+
+    [RelayCommand] private void SetLineKind(string kind) { LineKind = kind == "deduction" ? "deduction" : "bonus"; LineError = null; }
+
+    async Task LoadDrawerLinesAsync()
+    {
+        if (SelectedRow is not { } row || PeriodId <= 0) return;
+        await RunAsync(() => _svc.PayrollLinesAsync(PeriodId, row.UserId), lines =>
+            Fill(DrawerLines, lines.Where(l => l.Kind != "salary").Select(l => new PayrollLineItem(l, !IsPaid))));
+    }
+
+    [RelayCommand]
+    private async Task AddLineAsync()
+    {
+        if (SelectedRow is not { } row || IsPaid) return;
+        LineError = null;
+        if (!decimal.TryParse(LineAmountText.Trim(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var amount) || amount <= 0)
+        {
+            LineError = "Enter an amount above ₱0.";
+            return;
+        }
+        var note = LineNote.Trim();
+        if (string.IsNullOrWhiteSpace(note) || note.Length > 200)
+        {
+            LineError = "Add a short note (1–200 characters).";
+            return;
+        }
+        var res = await _svc.AddPayrollLineAsync(PeriodId, row.UserId, LineKind, amount, note);
+        if (!res.Ok) { LineError = ErrorText.For(res.Error, res.Message); return; }
+        LineAmountText = "";
+        LineNote = "";
+        await LoadPeriodAsync();
+        await LoadDrawerLinesAsync();
+    }
+
+    [RelayCommand]
+    private async Task RemoveLineAsync(PayrollLineItem? item)
+    {
+        if (item is null || !item.CanRemove) return;
+        LineError = null;
+        var res = await _svc.RemovePayrollLineAsync(item.LineId);
+        if (!res.Ok) { LineError = ErrorText.For(res.Error, res.Message); return; }
+        await LoadPeriodAsync();
+        await LoadDrawerLinesAsync();
+    }
+
+    public string MarkPaidConfirmMessage()
+    {
+        var paidCount = Rows.Count(r => !r.NoSalary);
+        var noSal = Rows.Where(r => r.NoSalary).Select(r => r.FullName).ToList();
+        var msg = $"Mark {PeriodLabel} as paid? {paidCount} {(paidCount == 1 ? "person" : "people")}, {TotalNetText}.";
+        if (noSal.Count > 0)
+        {
+            var names = noSal.Count == 1 ? noSal[0] : string.Join(", ", noSal[..^1]) + " and " + noSal[^1];
+            msg += $" {names} {(noSal.Count == 1 ? "has" : "have")} no salary set and {(noSal.Count == 1 ? "gets" : "get")} nothing.";
+        }
+        return msg + " Paid periods can't be changed.";
+    }
+
+    [RelayCommand(CanExecute = nameof(CanMarkPaid))]
+    private async Task MarkPaidAsync()
+    {
+        if (!CanMarkPaid) return;
+        Notice = null;
+        if (!await Confirm.AskAsync($"Mark {PeriodLabel} as paid?", MarkPaidConfirmMessage(), "Mark as paid")) return;
+        var res = await _svc.MarkPayrollPaidAsync(PeriodId);
+        if (!res.Ok)
+        {
+            var msg = res.Message ?? "";
+            if (msg.StartsWith("net_below_zero:", StringComparison.Ordinal))
+            {
+                var who = msg["net_below_zero:".Length..];
+                var target = Rows.FirstOrDefault(r => r.FullName == who);
+                if (target is not null) await OpenDrawerAsync(target);
+                LineError = ErrorText.For(res.Error, res.Message);
+            }
+            else
+            {
+                ErrorMessage = ErrorText.For(res.Error, res.Message);
+            }
+            return;
+        }
+        ApplyPeriod(res.Value!);
+        if (SelectedRow is not null) await LoadDrawerLinesAsync();
+        Notice = $"{PeriodLabel} marked as paid.";
+    }
+
+    [RelayCommand]
+    private async Task ExportPdfAsync()
+    {
+        if (_files is null) return;
+        Notice = null;
+        PayrollPeriod? current = null;
+        if (!await RunAsync(() => _svc.PayrollPeriodAsync(PeriodStartsOn), p => current = p) || current is null) return;
+        var linesByUser = new Dictionary<string, IReadOnlyList<PayrollLine>>();
+        foreach (var r in current.Rows)
+        {
+            var res = await _svc.PayrollLinesAsync(current.PeriodId, r.UserId);
+            if (res.Ok && res.Value is not null) linesByUser[r.UserId] = res.Value;
+        }
+        var name = $"payroll-{current.StartsOn:yyyy-MM-dd}-to-{current.EndsOn:yyyy-MM-dd}.pdf";
+        if (await RunAsync(() => Safe.RunAsync(async () => { await _files.ShareAsync(name, PayrollPdf.Build(_gymName, current, linesByUser, DateTime.UtcNow, await _files.FontAsync())); return true; })))
+            Notice = "Payroll PDF created. Choose where to save or send it.";
+    }
+
+    async Task SaveSalaryAsync(StaffSalaryItem item)
+    {
+        item.ErrorText = null;
+        if (!decimal.TryParse(item.AmountInput.Trim(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var amount) || amount <= 0)
+        {
+            item.ErrorText = "Enter a salary above ₱0.";
+            return;
+        }
+        var res = await _svc.SetStaffSalaryAsync(item.UserId, amount);
+        if (!res.Ok) { item.ErrorText = ErrorText.For(res.Error, res.Message); return; }
+        item.IsEditing = false;
+        Notice = $"Salary saved for {item.FullName}.";
+        await LoadSalariesAsync();
+        await LoadPeriodAsync();
+    }
+}

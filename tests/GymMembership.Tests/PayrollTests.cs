@@ -1,6 +1,7 @@
 using GymMembership.Core.Demo;
 using GymMembership.Core.Models;
 using GymMembership.Core.Services;
+using GymMembership.Core.ViewModels;
 using Xunit;
 
 public class PayrollTests
@@ -93,5 +94,49 @@ public class PayrollTests
         var res = await admin.MarkPayrollPaidAsync(period.PeriodId);
         Assert.False(res.Ok);
         Assert.Equal("period_not_ended", res.Message);
+    }
+
+    [Fact]
+    public void Stepper_crosses_month_and_year_ends_correctly()
+    {
+        Assert.Equal(new DateOnly(2026, 12, 16), PayrollViewModel.StepPrev(new DateOnly(2027, 1, 1)));
+        Assert.Equal(new DateOnly(2026, 12, 1), PayrollViewModel.StepPrev(new DateOnly(2026, 12, 16)));
+        Assert.Equal(new DateOnly(2027, 1, 1), PayrollViewModel.StepNext(new DateOnly(2026, 12, 16)));
+        Assert.Equal(new DateOnly(2026, 12, 16), PayrollViewModel.StepNext(new DateOnly(2026, 12, 1)));
+    }
+
+    [Fact]
+    public async Task ViewModel_loads_period_calculates_total_formats_confirm_and_locks_paid_period()
+    {
+        var (gw, admin) = await SignIn("admin@demo.io");
+        var staff = (await admin.PayrollStaffAsync()).Value!;
+        var desk = staff.First(s => s.Role == "employee");
+        var coach = staff.First(s => s.Role == "coach");
+        Assert.True((await admin.SetStaffSalaryAsync(desk.UserId, 8000m)).Ok);
+
+        var vm = new PayrollViewModel(admin) { PeriodStartsOn = new DateOnly(2026, 10, 1) };
+        await vm.OnAppearingAsync();
+
+        Assert.Equal("1–15 Oct 2026", vm.PeriodLabel);
+        Assert.Equal(8000m, vm.Rows.Sum(r => r.Net));
+        Assert.Equal("₱8,000.00", vm.TotalNetText);
+        Assert.True(vm.IsDraft);
+        Assert.True(vm.CanMarkPaid);
+        var confirm = vm.MarkPaidConfirmMessage();
+        Assert.Contains(coach.FullName, confirm);
+        Assert.Contains("no salary set", confirm);
+
+        await vm.OpenDrawerCommand.ExecuteAsync(vm.Rows.First(r => r.UserId == desk.UserId));
+        vm.LineAmountText = "500";
+        vm.LineNote = "Holiday cover";
+        await vm.AddLineCommand.ExecuteAsync(null);
+        Assert.Equal("₱8,500.00", vm.TotalNetText);
+
+        var paid = (await admin.MarkPayrollPaidAsync(vm.PeriodId)).Value!;
+        await vm.OnAppearingAsync();
+        Assert.True(vm.IsPaid);
+        Assert.False(vm.IsDraft);
+        Assert.False(vm.CanMarkPaid);
+        Assert.True(paid.IsPaid);
     }
 }

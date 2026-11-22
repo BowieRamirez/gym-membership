@@ -41,12 +41,12 @@ public class AdminOverviewTests
     {
         var (vm, a, s) = Create();
         await vm.RefreshAsync();
-        Assert.Equal(new[] { "users", "catalog", "discounts", "refunds", "revenue", "damage", "announcements", "gym", "audit" }, vm.Cards.Select(c => c.Key));   // F10 added Announcements, E10 added Damage reports
+        Assert.Equal(new[] { "users", "catalog", "discounts", "refunds", "revenue", "payroll", "damage", "announcements", "gym", "audit" }, vm.Cards.Select(c => c.Key));   // F10 added Announcements, E10 added Damage reports, P4 added Payroll
         Assert.All(vm.Cards, c => Assert.False(c.IsUnavailable));
         Assert.Equal(new[] { "RefundsAsync" }, s.Calls.Select(c => c.Method));
         Assert.All(a.Calls, c => Assert.Contains(c.Method, new[] { "UsersAsync", "AllPackagesAsync", "AllAmenitiesAsync", "DiscountsAsync", "RevenueAsync", "GymSettingsAsync", "AuditPageAsync" }));
         Assert.Equal(new[] { "revenue", "users", "catalog", "discounts" }, vm.Figures.Select(c => c.Key));
-        Assert.Equal(new[] { "refunds", "damage", "announcements", "gym", "audit" }, vm.Links.Select(c => c.Key));
+        Assert.Equal(new[] { "refunds", "payroll", "damage", "announcements", "gym", "audit" }, vm.Links.Select(c => c.Key));
         Assert.False(vm.HasAttention);
     }
 
@@ -181,8 +181,8 @@ public class AdminOverviewTests
         var gateway = new GymMembership.Core.Demo.DemoGateway();
         await gateway.SignInAsync("subadmin@demo.io", GymMembership.Core.Demo.DemoGateway.DemoPassword);
         var vm = new AdminOverviewViewModel(new AdminService(gateway), new SubscriptionService(gateway)) { SuperAdmin = false };
-        Assert.Equal(["users", "catalog", "discounts", "revenue", "damage", "announcements"], vm.Shown.Select(c => c.Key));
-        Assert.Equal(["damage", "announcements"], vm.Links.Select(c => c.Key));   // F10: announcements, E10: damage reports
+        Assert.Equal(["users", "catalog", "discounts", "revenue", "payroll", "damage", "announcements"], vm.Shown.Select(c => c.Key));
+        Assert.Equal(["payroll", "damage", "announcements"], vm.Links.Select(c => c.Key));   // F10: announcements, E10: damage reports, P4: payroll
         await vm.OnAppearingAsync();
         Assert.All(vm.Shown, c => Assert.False(c.IsUnavailable, c.Title + ": " + c.Detail));
         Assert.DoesNotContain("unavailable", vm.UpdatedText);

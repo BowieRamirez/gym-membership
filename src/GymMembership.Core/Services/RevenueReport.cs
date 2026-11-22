@@ -160,3 +160,53 @@ public static class CashShiftPdf
             null, "No cash shifts in this period.", notes);
     }
 }
+
+/// <summary>Phase 18 (P8): Printable payroll summary and per-person payslip blocks.</summary>
+public static class PayrollPdf
+{
+    static readonly (string Title, double Width, bool Right)[] Columns =
+        [("Name", 130, false), ("Role", 65, false), ("Hours (ref.)", 85, false), ("Salary", 60, true), ("Bonuses", 55, true), ("Deductions", 60, true), ("Net pay", 60, true)];
+
+    public static string PeriodSpan(DateOnly startsOn, DateOnly endsOn) =>
+        $"{startsOn.Day}–{endsOn.Day} {startsOn.ToString("MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)}";
+
+    public static byte[] Build(string gymName, PayrollPeriod period, IReadOnlyDictionary<string, IReadOnlyList<PayrollLine>> linesByUser, DateTime generatedUtc, byte[] font)
+    {
+        var status = period.IsPaid
+            ? $"Paid {ManilaTime.Of(period.PaidAt!.Value).ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)} by {period.PaidByName ?? "Admin"}"
+            : "Draft (not yet paid)";
+        var span = PeriodSpan(period.StartsOn, period.EndsOn);
+        var rows = period.Rows.Select(r => new[]
+        {
+            r.FullName,
+            r.RoleLabel,
+            r.HoursText,
+            r.NoSalary ? "No salary" : RevenuePdf.Money(r.Salary),
+            r.Bonuses == 0 ? "–" : RevenuePdf.Money(r.Bonuses),
+            r.Deductions == 0 ? "–" : RevenuePdf.Money(r.Deductions),
+            RevenuePdf.Money(r.Net)
+        }).ToList();
+
+        var payslips = new List<string>();
+        foreach (var r in period.Rows)
+        {
+            var lines = linesByUser.TryGetValue(r.UserId, out var l) ? l : [];
+            var detail = lines.Count == 0
+                ? "No bonus or deduction lines."
+                : string.Join(" | ", lines.Where(x => x.Kind != "salary").Select(x => $"{(x.Kind == "bonus" ? "+" : "-")}{RevenuePdf.Money(x.Amount)} ({x.Note})"));
+            if (string.IsNullOrWhiteSpace(detail)) detail = "No bonus or deduction lines.";
+            payslips.Add($"{r.FullName} ({r.RoleLabel}) — Salary: {(r.NoSalary ? "No salary set" : RevenuePdf.Money(r.Salary))}, Bonuses: {RevenuePdf.Money(r.Bonuses)}, Deductions: {RevenuePdf.Money(r.Deductions)}, Net: {RevenuePdf.Money(r.Net)} | {detail}");
+        }
+
+        return RevenuePdf.Document(
+            $"{gymName} — Payroll",
+            $"Payroll {span}",
+            font,
+            [(span, RevenuePdf.Kind.Text), (status, RevenuePdf.Kind.Strong), ($"Generated {RevenuePdf.Manila(generatedUtc)} (Asia/Manila)", RevenuePdf.Kind.Body), ("", RevenuePdf.Kind.Gap)],
+            Columns,
+            rows,
+            ["Total", "", $"{period.Rows.Count} people", "", "", "", RevenuePdf.Money(period.TotalNet)],
+            "No staff in this pay period.",
+            payslips);
+    }
+}

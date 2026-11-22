@@ -26,6 +26,7 @@ public static class IconRail
         ["Refunds"] = "undo",
         ["Gym settings"] = "sliders-horizontal",
         ["Revenue"] = "chart-line",
+        ["Payroll"] = "banknote",
         ["Damage reports"] = "alert-circle",
         ["Announcements"] = "megaphone",
         ["Logs & Archive"] = "archive",
