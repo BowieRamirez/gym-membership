@@ -156,8 +156,8 @@ Same rules as `2026-11-19-owner-fixes.md`:
 ## Phase 7: Checks
 
 - [x] Whole test suite and database tests green; live grants checked for every migration on this branch. (1216/1216 unit tests, `desk-duplicate-sale.mjs` 3/3, `cash-shifts.mjs` 11/11, Windows & Android builds green; live grants check after live push.)
-- [ ] `superpowers:requesting-code-review` on the whole branch; fixes committed.
-- [ ] Owner hand checks on the real project (staff pages Windows; Pay again Android and Windows).
+- [x] `superpowers:requesting-code-review` on the whole branch; fixes committed.
+- [x] Owner hand checks on the real project (staff pages Windows; Pay again Android and Windows).
 - [ ] Branch pushed; merge only when the owner says so.
 
 ### Bugs found in the live test (2026-11-21)
@@ -365,8 +365,8 @@ Same rules as `2026-11-19-owner-fixes.md`:
 ## Phase 15: Part 2 checks
 
 - [x] Whole suite and database tests green (`dotnet test`, Windows & Android builds, all `supabase/tests/local` scripts); live migrations `0118`–`0126` pushed to `avxcitoddadbblxuhiik` (note: live grants for `0118`–`0126` are included in the migrations themselves).
-- [ ] `superpowers:requesting-code-review` on the Part 2 diff; fixes committed.
-- [ ] Owner hand checks: member and coach (Android and Windows), desk and admin (Windows).
+- [x] `superpowers:requesting-code-review` on the Part 2 diff; fixes committed.
+- [x] Owner hand checks: member and coach (Android and Windows), desk and admin (Windows).
 
 ### Bugs found in the live test (2026-11-21)
 
@@ -405,7 +405,7 @@ Design: `docs/superpowers/specs/2026-11-21-coach-access-addon-design.md`.
 
 # Part 3: Payroll (owner, 2026-11-22)
 
-**Not built yet.** P1-P4 answered by the owner (2026-11-22); P5-P10 recommended, to confirm. Same branch, same rules ("How to use this plan"). Migrations start at `0135`. A single new admin page, **Payroll**, for Windows only (staff page, light and dark). Nothing changes for members, coaches or the front desk.
+**Not built yet.** P1-P10 confirmed by the owner (2026-11-22); ready to build. Same branch, same rules ("How to use this plan"). Migrations start at `0136` (`0135` is `0135_walkin_session_title.sql`). A single new admin page, **Payroll**, for Windows only (staff page, light and dark). Nothing changes for members, coaches or the front desk.
 
 **Source:** owner, 2026-11-22: "a payroll system for the employee and coach, handled by admin, a new admin page that shows a simple payroll system, use impeccable for the UI." Answers: **fixed salary per period**; coach hours = **completed sessions**; **twice a month, simple** (manual bonus and deduction lines, no SSS / PhilHealth / Pag-IBIG / tax); **Admin and System admin** only.
 
@@ -436,15 +436,15 @@ This brings staff pay records into the app. E1 ("how the gym pays coaches is out
 | # | Decision | Answer |
 |---|---|---|
 | P1 | **Fixed salary per pay period**, set by the admin for each person (`staff_salaries`: user, amount per period, updated by and when). Hours appear beside the pay **for reference only**: front desk = closed cash shift hours in the period; coach = completed session hours (the E11 report's numbers; no-shows don't count). Hours never change the pay. | Owner, 2026-11-22 |
-| P2 | **Who is on payroll:** every active front desk and coach account is listed. One with no salary set shows **No salary set** (warning chip) and is paid nothing until a salary is set. An admin or System admin appears once someone sets a salary for them. Archived or deactivated accounts drop off new periods but stay on paid ones. | Recommended, confirm |
-| P3 | **Pay periods:** **1st–15th** and **16th–end of month**, by Manila date. A period is **Draft** until it's marked **Paid**. While it's a draft, everyone's salary line follows their **current** salary, so a salary change or a new hire shows up straight away. **Mark as paid** freezes every line (salary, bonuses, deductions, net) and locks the period. Paid periods are never edited. | Owner, 2026-11-22 (twice a month); draft/paid recommended |
+| P2 | **Who is on payroll:** every active front desk and coach account is listed. One with no salary set shows **No salary set** (warning chip) and is paid nothing until a salary is set. An admin or System admin appears once someone sets a salary for them. Archived or deactivated accounts drop off new periods but stay on paid ones. | Owner, 2026-11-22 (as recommended) |
+| P3 | **Pay periods:** **1st–15th** and **16th–end of month**, by Manila date. A period is **Draft** until it's marked **Paid**. While it's a draft, everyone's salary line follows their **current** salary, so a salary change or a new hire shows up straight away. **Mark as paid** freezes every line (salary, bonuses, deductions, net) and locks the period. Paid periods are never edited. | Owner, 2026-11-22 (twice a month); draft/paid as recommended |
 | P4 | **Access:** Admin and System admin (`reports:revenue`, same as Revenue). Front desk, coaches and members can't read salaries or payroll; tables have RLS on with no grants, and are used only through functions. Staff don't see their own payslip in the app (they get the PDF). | Owner, 2026-11-22 |
 | P5 | **Bonus and deduction lines:** on a draft the admin adds **Bonus** or **Deduction** lines for a person: amount (more than ₱0) and a note (required, 1-200 characters, e.g. "Cash short, shift #20", "Holiday cover"). A line can be removed while the period is a draft. Nothing is worked out automatically: no SSS, PhilHealth, Pag-IBIG, tax, overtime or proration. | Owner, 2026-11-22 (manual only) |
-| P6 | **Joining or leaving mid-period:** no automatic proration. The admin adds a Deduction with a note (e.g. "Started 10 Nov: 9 of 15 days"). | Recommended, confirm |
-| P7 | **Mistakes after Paid:** a paid period stays as it is. Corrections go on the next draft as a Bonus or Deduction whose note names the paid period. **Net below ₱0** for anyone refuses Mark as paid (`net_below_zero`, naming the person). | Recommended, confirm |
-| P8 | **Payroll PDF:** **Export PDF** on a period: gym name, period, Draft or Paid (paid on, by), one row per person (role, reference hours, salary, bonuses, deductions, net), total, and a payslip block per person listing their lines and notes, for handing out. Reuses the Revenue PDF path. | Recommended, confirm |
-| P9 | **Audit:** `payroll.salary_set` (person, old → new amount), `payroll.line_added`, `payroll.line_removed`, `payroll.paid` (period, number of people, total). They show in Logs & Archive; no IPs. | Recommended, confirm |
-| P10 | **Payroll is not cash-drawer money and not Revenue.** Paying salaries doesn't touch `cash_shifts`, expected cash or sales totals. A cash shortage is charged to someone only if the admin adds a Deduction for it (P5). | Recommended, confirm |
+| P6 | **Joining or leaving mid-period:** no automatic proration. The admin adds a Deduction with a note (e.g. "Started 10 Nov: 9 of 15 days"). | Owner, 2026-11-22 (as recommended) |
+| P7 | **Mistakes after Paid:** a paid period stays as it is. Corrections go on the next draft as a Bonus or Deduction whose note names the paid period. **Net below ₱0** for anyone refuses Mark as paid (`net_below_zero`, naming the person). | Owner, 2026-11-22 (as recommended) |
+| P8 | **Payroll PDF:** **Export PDF** on a period: gym name, period, Draft or Paid (paid on, by), one row per person (role, reference hours, salary, bonuses, deductions, net), total, and a payslip block per person listing their lines and notes, for handing out. Reuses the Revenue PDF path. | Owner, 2026-11-22 (as recommended) |
+| P9 | **Audit:** `payroll.salary_set` (person, old → new amount), `payroll.line_added`, `payroll.line_removed`, `payroll.paid` (period, number of people, total). They show in Logs & Archive; no IPs. | Owner, 2026-11-22 (as recommended) |
+| P10 | **Payroll is not cash-drawer money and not Revenue.** Paying salaries doesn't touch `cash_shifts`, expected cash or sales totals. A cash shortage is charged to someone only if the admin adds a Deduction for it (P5). | Owner, 2026-11-22 (as recommended) |
 
 ## The Payroll page (impeccable brief)
 
@@ -462,7 +462,7 @@ Made with the `impeccable` skill (and `frontend-design`, per CLAUDE.md). Run `im
 
 ## Global Constraints (Part 3)
 
-- Everything in Part 1 and Part 2's Global Constraints, plus: migrations from `0135`. Every function revokes `public, anon, authenticated` and grants `authenticated`, gated inside by `require_permission('reports:revenue')`. Check live grants after the push (`supabase-recreated-function-grants`).
+- Everything in Part 1 and Part 2's Global Constraints, plus: migrations from `0136`. Every function revokes `public, anon, authenticated` and grants `authenticated`, gated inside by `require_permission('reports:revenue')`. Check live grants after the push (`supabase-recreated-function-grants`).
 - Money is `numeric(12,2)`; periods are Manila dates; a paid period never changes.
 - Demo gateway mirrors every rule (`DemoPayroll.cs`).
 
@@ -479,7 +479,7 @@ Made with the `impeccable` skill (and `frontend-design`, per CLAUDE.md). Run `im
 
 ### Task 18: Salaries, periods, lines, paid
 
-**Files:** migration `0135_payroll.sql`:
+**Files:** migration `0136_payroll.sql`:
 - `staff_salaries` (`user_id` pk → profiles, `amount numeric(12,2) check (amount > 0)`, `updated_at`, `updated_by`).
 - `payroll_periods` (`period_id`, `starts_on date unique check (extract(day from starts_on) in (1,16))`, `ends_on` generated or set by the function, `paid_at`, `paid_by`).
 - `payroll_lines` (`line_id`, `period_id`, `user_id`, `kind` `salary | bonus | deduction`, `amount > 0`, `note` 1-200 characters, required for bonus and deduction, `created_by`, `created_at`). Salary lines are written only by Mark as paid.
@@ -540,3 +540,4 @@ Made with the `impeccable` skill (and `frontend-design`, per CLAUDE.md). Run `im
 - 2026-11-22: owner asked for a payroll system for front desk and coaches, run by admins on a new page: Part 3 added (Phases 17-19, P1-P10, Payroll page brief made with `impeccable`). Owner's answers: fixed salary per period, coach hours = completed sessions (reference only), twice a month with manual bonus and deduction lines only, Admin and System admin only. P2, P3 draft/paid, P6-P10 recommended, to confirm. Not built.
 - 2026-11-21: UI & page-load polish: fixed Cash shifts table in `RevenuePage.xaml` (`Grid` in `Shift` cell to stop overlap with `Float`, `MaxLines="2"` + `TailTruncation` + tooltip on `Reason & notes`, `WideFrom="1150"`, `332d2d4`); fixed `AuditPage.xaml` segment tabs (`Value="False"` `DataTrigger`s so only the active tab keeps its highlight) and removed `"By name only"` switch on `AdminOverviewPage.Windows.cs` (`c2d1a1d`); sped up page loads across all accounts (`BasePage.cs` non-blocking Realtime socket startup + `Task.WhenAll` parallel queries in `Services.cs`, `SubscriptionService.cs`, `MemberViewModels.cs`, `StaffViewModels.cs`, `71f5282`, verified `dotnet test` 1225/1225).
 - 2026-11-22: owner UI & input polish: fixed `PaymentsPage.xaml` table column widths (`1.1*,100,90,1.8*,105,160,90,140`, `80b8b23`) so `Item` and `Details` don't wrap vertically; added `"Walk-in session"` title for walk-in coach sessions (`0135_walkin_session_title.sql` — live push pending, `DemoCoachSessions.cs`, `SessionRow.Title` fallback in `Services.cs`, `SessionsPage.xaml`); removed self-service **"At the gym"** check-in card from coach Settings (`CoachProfilePage.xaml`, `PageLayoutTests.cs` updated; front desk checks coaches in); added `NumericOnlyBehavior` in `Controls.cs` and attached it to numeric `Entry` fields in `CashierPage.xaml` (`CountedText`), `CatalogAdminPage.xaml` (`FormPrice`, `FormDays`, `FormCoachAddonPrice`), `DiscountsPage.xaml` (`NewPercent`, `NewLimit`), and `GymSettingsPage.xaml` (`WalkInPrice`, `OpeningFloat`, `DownPaymentPercent`, `MaxCoachSessionsPerDay`, `MaxUpcomingCoachSessions`, `MaxCoachHoursPerDay`).
+- 2026-11-22: owner confirmed P2, P3 (draft/paid), P6-P10 as recommended; Part 3 ready to build (by another session). Payroll migrations start at `0136`. Part 1 and Part 2 code review and owner hand checks marked done; branch not merged.
