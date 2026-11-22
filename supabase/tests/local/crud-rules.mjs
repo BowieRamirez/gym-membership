@@ -41,6 +41,7 @@ const expected = {
   sign_in_attempts: '----',                                // owner fixes 2026-11-19 (0103): only the sign-in function (service role)
   gym_closures: 'S---',                                    // G16 (0065): read by everyone active, written only by close/reopen_gym_day
   cash_shifts: '----', cash_shift_notes: '----',           // F2 (0050), D8 (0117): server functions only
+  staff_salaries: '----', payroll_periods: '----', payroll_lines: '----', // P4 (0136): server functions only
   damage_reports: 'S---',                                  // E10, B3 (0128): written only via report_damage / review_damage
   announcements: '----', announcement_reads: '----',      // F10 (0051): posted, listed and read through server functions only
   coach_amenities: 'S---',                                 // F14 (0052): read by all; written only by set_runs_amenity
