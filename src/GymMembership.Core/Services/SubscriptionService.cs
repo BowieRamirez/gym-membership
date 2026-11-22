@@ -185,11 +185,17 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
     public Task<AppResult<IReadOnlyList<RefundCard>>> RefundsAsync() => Safe.RunAsync<IReadOnlyList<RefundCard>>(async () =>
     {
         var requests = await gw.ListAsync<RefundRequest>();
-        var terms = (await gw.ListAsync<MembershipTerm>()).Select(InUtc).ToList();
-        var names = await Directory_.UserNamesAsync(gw);
-        var bookings = requests.Any(r => r.IsBooking) ? (await gw.ListAsync<Reservation>()).ToDictionary(r => r.Id) : [];
+        if (requests.Count == 0) return [];
+        var termsTask = gw.ListAsync<MembershipTerm>();
+        var namesTask = Directory_.UserNamesAsync(gw);
+        var bookingsTask = requests.Any(r => r.IsBooking) ? gw.ListAsync<Reservation>() : Task.FromResult<IReadOnlyList<Reservation>>([]);
+        var paymentsTask = requests.Any(r => r.Kind is "online" or "day_pass") ? gw.ListAsync<Payment>() : Task.FromResult<IReadOnlyList<Payment>>([]);
+        await Task.WhenAll(termsTask, namesTask, bookingsTask, paymentsTask);
+        var terms = termsTask.Result.Select(InUtc).ToList();
+        var names = namesTask.Result;
+        var bookings = bookingsTask.Result.ToDictionary(r => r.Id);
         var amenities = bookings.Count > 0 ? (await gw.ListAsync<Amenity>()).ToDictionary(a => a.Id, a => a.Name) : [];
-        var payments = requests.Any(r => r.Kind is "online" or "day_pass") ? (await gw.ListAsync<Payment>()).ToDictionary(p => p.Id) : [];
+        var payments = paymentsTask.Result.ToDictionary(p => p.Id);
         return requests.OrderBy(r => r.Status is "paid" or "rejected").ThenBy(r => r.RequestedAt).Select(r =>
         {
             if (r.Kind is "online" or "day_pass") return RefundCard.ForOnline(r, payments.GetValueOrDefault(r.PaymentId), names.GetValueOrDefault(r.MemberId ?? ""));

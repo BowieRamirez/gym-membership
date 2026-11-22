@@ -192,7 +192,7 @@ public sealed partial class DemoGateway
                 var offset=Convert.ToInt32(a["p_offset"]);var limit=Convert.ToInt32(a["p_limit"]);
                 if(from>to||offset<0||limit is < 1 or > 1000) throw Err("bad_input");
                 string Payer(Payment p)=>All<Profile>().FirstOrDefault(x=>x.Id==p.MemberId)?.FullName??p.WalkInName??"Walk-in";
-                string Item(Payment p)=>p.Kind switch{PayKind.Membership=>"Membership",PayKind.Renewal=>"Extension",PayKind.Amenity=>"Amenity",_=>"Walk-in"};
+                string Item(Payment p)=>p.Kind switch{PayKind.Membership=>"Membership",PayKind.Renewal=>"Extension",PayKind.Amenity=>"Amenity",PayKind.CoachAddon=>"Coach add-on",_=>"Walk-in"};
                 var receipts=All<Payment>().Where(p=>p.Status==Status.Verified && p.VerifiedAt is not null)
                     .Select(p=>new RevenueLine(p.VerifiedAt!.Value,p.ReceiptNo,Payer(p),Item(p),p.Kind,p.Method,p.Amount,false,p.Id));
                 var back=All<RefundRequest>().Where(r=>r.Status is "approved" or "paid").Select(r=>(r,p:All<Payment>().First(p=>p.Id==r.PaymentId)))

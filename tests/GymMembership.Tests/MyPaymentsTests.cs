@@ -129,4 +129,20 @@ public class MyPaymentsTests
         vm.SetKindCommand.Execute("Amenity");
         Assert.Equal("No online amenity payments yet.", vm.EmptyText);
     }
+
+    [Fact]
+    public async Task Coach_addon_payment_is_labelled_Coach_addon_not_Day_pass()
+    {
+        var gw = new DemoGateway();
+        await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
+        var member = new MembershipService(gw);
+        var pay = (await member.BuyCoachAccessAsync()).Value!;
+        Assert.True((await member.PayOnlineAsync(pay.Id)).Value!.Paid);
+
+        var vm = new MyPaymentsViewModel(member, new SubscriptionService(gw));
+        await vm.OnAppearingAsync();
+        var row = vm.Rows.Single(r => r.Id == pay.Id);
+        Assert.StartsWith("Coach add-on", row.What);
+        Assert.DoesNotContain("Day pass", row.What);
+    }
 }

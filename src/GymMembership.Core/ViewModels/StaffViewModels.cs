@@ -52,9 +52,13 @@ public partial class HomeViewModel(IDeskHomeService svc, IPaymentStaffService? p
         ErrorMessage = null;   // a look that works replaces the banner a failed first load left above these numbers
         Show(result.Value!);
         if (!HasLists) return;
-        if ((await payments!.PendingAsync()) is { Ok: true } p) ShowPayments(p.Value!);
-        if ((await coaches!.PresenceAsync()) is { Ok: true } c) ShowCoaches(c.Value!);
-        if (sessions is not null && (await sessions.TodayCoachSessionsAsync()) is { Ok: true } ts) ShowTodaySessions(ts.Value!);
+        var pTask = payments!.PendingAsync();
+        var cTask = coaches!.PresenceAsync();
+        var tsTask = sessions is not null ? sessions.TodayCoachSessionsAsync() : null;
+        await (tsTask is not null ? Task.WhenAll(pTask, cTask, tsTask) : Task.WhenAll(pTask, cTask));
+        if (pTask.Result is { Ok: true } p) ShowPayments(p.Value!);
+        if (cTask.Result is { Ok: true } c) ShowCoaches(c.Value!);
+        if (tsTask?.Result is { Ok: true } ts) ShowTodaySessions(ts.Value!);
     }
 
     [RelayCommand]
@@ -301,12 +305,19 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
 
     static string KindKey(string k) => k switch { "Renewal" => PayKind.Renewal, "Amenity" => PayKind.Amenity, "Day pass" => PayKind.WalkIn, _ => PayKind.Membership };
 
-    public override async Task OnAppearingAsync()
+    public override Task OnAppearingAsync()
     {
-        await RefreshItemsAsync(); await LoadShiftAsync();
-        if (gym is not null && await gym.GymAsync() is { Ok: true, Value: { } settings }) { dayPassPrice = settings.WalkInPrice; OnPropertyChanged(nameof(TotalText)); }
+        var tasks = new List<Task> { RefreshItemsAsync(), LoadShiftAsync() };
+        if (gym is not null)
+            tasks.Add(Task.Run(async () =>
+            {
+                if (await gym.GymAsync() is { Ok: true, Value: { } settings })
+                { dayPassPrice = settings.WalkInPrice; OnPropertyChanged(nameof(TotalText)); }
+            }));
         // a desk payment still waiting for Xendit comes back with its Check payment button (leaving the page used to lose it)
-        if (Waiting is null) await RunAsync(svc.MyWaitingOnlineAsync, p => { Waiting = p; RecordCommand.NotifyCanExecuteChanged(); });
+        if (Waiting is null)
+            tasks.Add(RunAsync(svc.MyWaitingOnlineAsync, p => { Waiting = p; RecordCommand.NotifyCanExecuteChanged(); }));
+        return Task.WhenAll(tasks);
     }
 
     // owner, 2026-11-18: only a payment waiting for Xendit is refreshed; the order being typed is left alone
@@ -739,10 +750,16 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
         ShowQueue();
     }
 
-    public override async Task OnAppearingAsync()
+    public override Task OnAppearingAsync() => Task.WhenAll(
+        LoadCanSkipPinAsync(),
+        SearchAsync(),
+        LoadCoachesAsync(),
+        SendQueueAsync(),
+        LoadTodayAsync());
+
+    async Task LoadCanSkipPinAsync()
     {
         if ((await svc.CanSkipPinAsync()) is { Ok: true } skip) CanSkipPin = skip.Value;   // quiet: offline it stays as it was
-        await SearchAsync(); await LoadCoachesAsync(); await SendQueueAsync(); await LoadTodayAsync();
     }
 
     // ---- F19 (Phase 7): who came in today, newest first, with the count and a name filter; reloads after each check-in ----
@@ -1036,9 +1053,10 @@ public partial class CoachProfileViewModel(ICoachService svc) : LoadableViewMode
     [RelayCommand]
     private async Task LoadAsync()
     {
-        if (await RunAsync(svc.MyCoachAsync, c =>
-            { if (c is null) return; Bio = c.Bio; Specialty = c.Specialty; IsAvailable = c.IsAvailable; }))
-            await RunAsync(svc.MyVisitAsync, v => Visit = v);
+        var coachTask = RunAsync(svc.MyCoachAsync, c =>
+        { if (c is null) return; Bio = c.Bio; Specialty = c.Specialty; IsAvailable = c.IsAvailable; });
+        var visitTask = RunAsync(svc.MyVisitAsync, v => Visit = v);
+        await Task.WhenAll(coachTask, visitTask);
     }
 
     [RelayCommand]
@@ -1097,11 +1115,9 @@ public partial class ShiftsViewModel(ICoachService svc, ISessionService? session
     public override Task OnAppearingAsync() => LoadAsync();
 
     [RelayCommand]
-    private async Task LoadAsync()
-    {
-        if (!await RunAsync(svc.MyShiftsAsync, rows => Fill(Shifts, rows))) return;
-        if (Calendar is not null) await Calendar.OnAppearingAsync();
-    }
+    private Task LoadAsync() => Calendar is not null
+        ? Task.WhenAll(RunAsync(svc.MyShiftsAsync, rows => Fill(Shifts, rows)), Calendar.OnAppearingAsync())
+        : RunAsync(svc.MyShiftsAsync, rows => Fill(Shifts, rows));
 
     [RelayCommand(CanExecute = nameof(CanPost))]
     private async Task PostAsync()
@@ -1328,14 +1344,15 @@ public partial class SessionsViewModel(ISessionService svc, IMembershipService? 
 
     public override async Task OnAppearingAsync()
     {
-        await LoadAsync();
-        await LoadPackageCoachInfoAsync();
-        if (svc.PendingCoachId is { } cid)
+        var pending = svc.PendingCoachId;
+        if (pending is not null)
         {
             svc.PendingCoachId = null;
             IsBookingCoach = true;
-            await LoadFreeCoachesAsync(cid);
+            await Task.WhenAll(LoadAsync(), LoadPackageCoachInfoAsync(), LoadFreeCoachesAsync(pending));
+            return;
         }
+        await Task.WhenAll(LoadAsync(), LoadPackageCoachInfoAsync());
     }
 
     [RelayCommand] private Task LoadAsync() => RunAsync(svc.SessionsAsync, rows => { all = Ordered(rows); Apply(); OnPropertyChanged(nameof(HasMemberActiveSession)); });
@@ -1654,10 +1671,13 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     public override async Task OnAppearingAsync()
     {
         if (Focus == default) { Focus = Today; SelectedDay = Today; }
-        if (coach is not null && hours is null && gym is not null) { var g = await gym.GymAsync(); if (g.Ok) hours = g.Value; }
-        if (coach is not null && gym is not null && await gym.ClosedDaysAsync() is { Ok: true, Value: { } c }) closed = c;
-        if (coach is not null) await RunAsync(coach.TraineesAsync, t => TraineesText = t.Count.ToString());
-        await ReloadAsync();
+        var gymTask = coach is not null && hours is null && gym is not null ? gym.GymAsync() : null;
+        var closedTask = coach is not null && gym is not null ? gym.ClosedDaysAsync() : null;
+        var traineesTask = coach is not null ? RunAsync(coach.TraineesAsync, t => TraineesText = t.Count.ToString()) : null;
+        var reloadTask = ReloadAsync();
+        await Task.WhenAll(new[] { gymTask, closedTask, traineesTask, reloadTask }.OfType<Task>());
+        if (gymTask?.Result is { Ok: true, Value: { } g }) hours = g;
+        if (closedTask?.Result is { Ok: true, Value: { } c }) closed = c;
         Prefill();
     }
 
@@ -1835,12 +1855,12 @@ public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? a
     private async Task LoadAsync()
     {
         CanDeleteAccounts = false;
-        if (archive is not null)
-            await RunAsync(archive.CanManageAsync, allowed => CanDeleteAccounts = allowed);
-        await RunAsync(svc.IsSuperAdminAsync, yes => IsSuperAdmin = yes);
+        var deleteTask = archive is not null ? RunAsync(archive.CanManageAsync, allowed => CanDeleteAccounts = allowed) : Task.CompletedTask;
+        var superTask = RunAsync(svc.IsSuperAdminAsync, yes => IsSuperAdmin = yes);
+        var usersTask = RunAsync(svc.UsersAsync, rows => { active = rows.Where(r => r.IsActive).ToList(); ShowUsers(); Fill(Deactivated, rows.Where(r => !r.IsActive)); });
+        await Task.WhenAll(deleteTask, superTask, usersTask);
         Roles = IsSuperAdmin ? ["Member", "Coach", "Front desk", "Admin"] : ["Member", "Coach"];
         if (!Roles.Contains(NewRole)) NewRole = "Member";
-        await RunAsync(svc.UsersAsync, rows => { active = rows.Where(r => r.IsActive).ToList(); ShowUsers(); Fill(Deactivated, rows.Where(r => !r.IsActive)); });
     }
 
     [RelayCommand]
@@ -2328,13 +2348,11 @@ public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
     public override Task OnAppearingAsync() => LoadAsync();
 
     [RelayCommand]
-    private async Task LoadAsync()
-    {
-        await RunAsync(svc.IsSuperAdminAsync, yes => CanArchive = yes);
-        await RunAsync(svc.DiscountsAsync, rows => Fill(Discounts, rows.Where(r => r.Discount.IsActive && ManilaTime.Utc(r.Discount.ExpiresAt) > DateTime.UtcNow)));
-        await RunAsync(svc.AllPackagesAsync, rows => Fill(PackageChoices, rows.Where(p => p.IsActive).Select(p => new ItemChoice("package", p.Id, p.Name))));
-        await RunAsync(svc.AllAmenitiesAsync, rows => Fill(AmenityChoices, rows.Where(a => a.IsActive).Select(a => new ItemChoice("amenity", a.Id, a.Name))));
-    }
+    private Task LoadAsync() => Task.WhenAll(
+        RunAsync(svc.IsSuperAdminAsync, yes => CanArchive = yes),
+        RunAsync(svc.DiscountsAsync, rows => Fill(Discounts, rows.Where(r => r.Discount.IsActive && ManilaTime.Utc(r.Discount.ExpiresAt) > DateTime.UtcNow))),
+        RunAsync(svc.AllPackagesAsync, rows => Fill(PackageChoices, rows.Where(p => p.IsActive).Select(p => new ItemChoice("package", p.Id, p.Name)))),
+        RunAsync(svc.AllAmenitiesAsync, rows => Fill(AmenityChoices, rows.Where(a => a.IsActive).Select(a => new ItemChoice("amenity", a.Id, a.Name)))));
 
     /// <summary>What the form says the code fits; "all" wins over single ticks.</summary>
     public IReadOnlyList<DiscountItem> ChosenItems() =>
@@ -2412,15 +2430,35 @@ public partial class RevenueViewModel(IAdminService svc, IReportFiles? files = n
     [RelayCommand]
     private Task LoadAsync() => LoadRangeAsync(DateOnly.FromDateTime(From), DateOnly.FromDateTime(To));
 
-    async Task<bool> LoadRangeAsync(DateOnly from, DateOnly to) => await RunAsync(() => svc.RevenueAsync(from, to), rows =>
+    async Task<bool> LoadRangeAsync(DateOnly from, DateOnly to)
     {
-        Fill(Rows, rows);
-        TotalText = $"₱{rows.Sum(r => r.Total):N2}";
-        _loaded = (from, to, rows.Sum(r => r.Total));
-        ExportPdfCommand.NotifyCanExecuteChanged(); ExportShiftsPdfCommand.NotifyCanExecuteChanged(); ExportCoachHoursCsvCommand.NotifyCanExecuteChanged();
-    }) && await RunAsync(() => svc.CashShiftsAsync(from, to), shifts => { Fill(Shifts, shifts); OnPropertyChanged(nameof(ShiftTotalsText)); })
-       && await RunAsync(() => svc.CoachHoursAsync(from, to), hours => Fill(CoachHours, hours))
-       && await LoadDashboardAsync(from, to);
+        var revTask = RunAsync(() => svc.RevenueAsync(from, to), rows =>
+        {
+            Fill(Rows, rows);
+            TotalText = $"₱{rows.Sum(r => r.Total):N2}";
+            _loaded = (from, to, rows.Sum(r => r.Total));
+            ExportPdfCommand.NotifyCanExecuteChanged(); ExportShiftsPdfCommand.NotifyCanExecuteChanged(); ExportCoachHoursCsvCommand.NotifyCanExecuteChanged();
+        });
+        var shiftsTask = RunAsync(() => svc.CashShiftsAsync(from, to), shifts => { Fill(Shifts, shifts); OnPropertyChanged(nameof(ShiftTotalsText)); });
+        var hoursTask = RunAsync(() => svc.CoachHoursAsync(from, to), hours => Fill(CoachHours, hours));
+        var dashTask = LoadDashboardAsync(from, to);
+        await Task.WhenAll(revTask, shiftsTask, hoursTask, dashTask);
+        if (revTask.Result && dashTask.Result)
+        {
+            Fill(ByItem, RevenueDashboard.Shares(Rows.Select(r => (PayKind.Name(r.Kind), r.Total))));
+            Fill(ByMethod, RevenueDashboard.Shares(Rows.Select(r => (PayMethod.Name(r.Method), r.Total))));
+            _days = Chart.Reverse().Select(d =>
+            {
+                var that = Rows.Where(r => r.Day.Date == d.Day.Date).ToList();
+                var caption = that.Count == 0 ? "No payments"
+                    : string.Join(", ", that.Select(r => PayKind.Name(r.Kind)).Distinct()) + " · " + string.Join(", ", that.Select(r => PayMethod.Name(r.Method)).Distinct());
+                return new RevenueDayRow(d.Day, d.Payments, d.Visits, d.Refunds, d.Net, caption);
+            }).ToList();
+            _allDays = false;
+            ShowDays();
+        }
+        return revTask.Result && shiftsTask.Result && hoursTask.Result && dashTask.Result;
+    }
 
     // ---------- the Windows page (owner 2026-11-12, mockup docs/mockups/revenue.html); Android shows only the parts above ----------
     public ObservableCollection<RevenueFigure> Figures { get; } = new();
@@ -2461,27 +2499,18 @@ public partial class RevenueViewModel(IAdminService svc, IReportFiles? files = n
         var today = DateOnly.FromDateTime(DateTime.Today);
         var span = to.DayNumber - from.DayNumber + 1;
         RangeDays = to == today && span is 7 or 30 or 90 ? span : 0;
-        return await RunAsync(() => svc.RevenueDaysAsync(RevenueDashboard.FiguresFrom(today), today), days => Fill(Figures, RevenueDashboard.Figures(days, today)))
-            && await RunAsync(() => svc.RevenueDaysAsync(from, to), days =>
-            {
-                Chart = days;
-                ChartTexts();
-                Fill(ByItem, RevenueDashboard.Shares(Rows.Select(r => (PayKind.Name(r.Kind), r.Total))));
-                Fill(ByMethod, RevenueDashboard.Shares(Rows.Select(r => (PayMethod.Name(r.Method), r.Total))));
-                var payments = days.Sum(d => d.Payments); var refunds = days.Sum(d => d.Refunds); var gross = days.Sum(d => d.Net) + refunds;
-                MethodsFoot = $"{payments:N0} {(payments == 1 ? "payment" : "payments")}"
-                    + (payments > 0 ? $" · {RevenueDashboard.Peso(gross / payments)} on average" : "")
-                    + (refunds > 0 ? $" · {RevenueDashboard.Peso(refunds)} refunded" : " · no refunds");
-                _days = days.Reverse().Select(d =>
-                {
-                    var that = Rows.Where(r => r.Day.Date == d.Day.Date).ToList();
-                    var caption = that.Count == 0 ? "No payments"
-                        : string.Join(", ", that.Select(r => PayKind.Name(r.Kind)).Distinct()) + " · " + string.Join(", ", that.Select(r => PayMethod.Name(r.Method)).Distinct());
-                    return new RevenueDayRow(d.Day, d.Payments, d.Visits, d.Refunds, d.Net, caption);
-                }).ToList();
-                _allDays = false;
-                ShowDays();
-            });
+        var figTask = RunAsync(() => svc.RevenueDaysAsync(RevenueDashboard.FiguresFrom(today), today), days => Fill(Figures, RevenueDashboard.Figures(days, today)));
+        var daysTask = RunAsync(() => svc.RevenueDaysAsync(from, to), days =>
+        {
+            Chart = days;
+            ChartTexts();
+            var payments = days.Sum(d => d.Payments); var refunds = days.Sum(d => d.Refunds); var gross = days.Sum(d => d.Net) + refunds;
+            MethodsFoot = $"{payments:N0} {(payments == 1 ? "payment" : "payments")}"
+                + (payments > 0 ? $" · {RevenueDashboard.Peso(gross / payments)} on average" : "")
+                + (refunds > 0 ? $" · {RevenueDashboard.Peso(refunds)} refunded" : " · no refunds");
+        });
+        await Task.WhenAll(figTask, daysTask);
+        return figTask.Result && daysTask.Result;
     }
 
     void ChartTexts()
@@ -2603,20 +2632,21 @@ public partial class GymSettingsViewModel(IAdminService svc) : LoadableViewModel
     [ObservableProperty] private string maxCoachHoursPerDay = "6";   // E12 (0119): blank = unlimited
     GymSettings? _loaded;
 
-    public override async Task OnAppearingAsync() { await LoadAsync(); await LoadClosuresAsync(); }
+    public override Task OnAppearingAsync() => Task.WhenAll(LoadAsync(), LoadClosuresAsync());
 
     [RelayCommand]
     private async Task LoadAsync()
     {
-        await RunAsync(svc.GymSettingsAsync, g =>
+        var settingsTask = RunAsync(svc.GymSettingsAsync, g =>
         {
             _loaded = g; GymName = g.GymName; WalkInPrice = g.WalkInPrice; OpensAt = g.OpensAt; ClosesAt = g.ClosesAt; OpeningFloat = g.OpeningFloat; DownPaymentPercent = g.DownPaymentPercent;
             MaxCoachSessionsPerDay = g.MaxCoachSessionsPerDay; MaxUpcomingCoachSessions = g.MaxUpcomingCoachSessions;
             MaxCoachHoursPerDay = g.MaxCoachHoursPerDay?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
         });
-        var pkgs = await svc.AllPackagesAsync();
-        if (pkgs.Ok)
-            DayPassPackage = pkgs.Value!.FirstOrDefault(p => p.IsDayPass && p.IsActive && p.PublishedAt is not null);
+        var pkgsTask = svc.AllPackagesAsync();
+        await Task.WhenAll(settingsTask, pkgsTask);
+        if (pkgsTask.Result.Ok)
+            DayPassPackage = pkgsTask.Result.Value!.FirstOrDefault(p => p.IsDayPass && p.IsActive && p.PublishedAt is not null);
     }
 
     [RelayCommand]
@@ -3031,11 +3061,13 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
     [RelayCommand]
     private async Task LoadAsync()
     {
-        await RunAsync(svc.BoardAsync, board => Fill(Cards, board.Cards));
-        await LoadBalancesAsync(ManilaToday);
-        await LoadClaimsAsync();
-        await LoadBookedAsync();
-        if (Booking is { } b && !IsBooking && await b.ResumeWaitingAsync()) await OpenBookingAsync();   // a walk-in still paying online comes back on screen
+        var boardTask = RunAsync(svc.BoardAsync, board => Fill(Cards, board.Cards));
+        var balancesTask = LoadBalancesAsync(ManilaToday);
+        var claimsTask = LoadClaimsAsync();
+        var bookedTask = LoadBookedAsync();
+        var resumeTask = Booking is { } b && !IsBooking ? b.ResumeWaitingAsync() : Task.FromResult(false);
+        await Task.WhenAll(boardTask, balancesTask, claimsTask, bookedTask, resumeTask);
+        if (resumeTask.Result) await OpenBookingAsync();   // a walk-in still paying online comes back on screen
     }
 
     // Quiet and in place: the error line, the notice and the open form stay as they are, and only cards that changed are swapped.
@@ -3566,11 +3598,12 @@ public partial class PayrollViewModel : LoadableViewModel
     [RelayCommand]
     private async Task LoadAsync()
     {
-        var settings = await _svc.GymSettingsAsync();
-        if (settings.Ok && settings.Value is { } gs && !string.IsNullOrWhiteSpace(gs.GymName))
+        var settingsTask = _svc.GymSettingsAsync();
+        var periodTask = LoadPeriodAsync();
+        var salariesTask = LoadSalariesAsync();
+        await Task.WhenAll(settingsTask, periodTask, salariesTask);
+        if (settingsTask.Result.Ok && settingsTask.Result.Value is { } gs && !string.IsNullOrWhiteSpace(gs.GymName))
             _gymName = gs.GymName;
-        await LoadPeriodAsync();
-        await LoadSalariesAsync();
     }
 
     async Task LoadPeriodAsync()

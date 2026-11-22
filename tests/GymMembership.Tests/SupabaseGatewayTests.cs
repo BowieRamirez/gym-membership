@@ -41,6 +41,7 @@ public sealed class SupabaseGatewayTests : IDisposable
                 var seen = new Seen(ctx.Request.HttpMethod, ctx.Request.Url!.AbsolutePath, Uri.UnescapeDataString(ctx.Request.Url.Query), body, headers);
                 lock (_seen) _seen.Add(seen);
                 var (status, json) = _reply(seen);
+                if (status == 0) { ctx.Response.Abort(); continue; }
                 var bytes = Encoding.UTF8.GetBytes(json);
                 ctx.Response.StatusCode = status;
                 ctx.Response.ContentType = "application/json";
@@ -820,5 +821,55 @@ public sealed class SupabaseGatewayTests : IDisposable
         Assert.Contains(_seen, r => r.Path.EndsWith("/gym_check_ins") && r.Query.Contains("checked_in_at"));   // today's check-ins are filtered on the server
 
         Assert.True(results.All(r => r.Ok), string.Join("; ", results.Where(r => !r.Ok).Select(r => $"{r.Name}: {r.Why}")));
+    }
+
+    [Fact]
+    public async Task List_retries_transient_connection_drop_and_recovers()
+    {
+        var gw = await SignedInAsync();
+        var attempts = 0;
+        _reply = s =>
+        {
+            if (s.Path.EndsWith("/amenities") && ++attempts == 1)
+                return (0, "");   // drop the connection mid-response
+            return (200, """[{"amenity_id":1,"name":"Sauna","is_active":true}]""");
+        };
+        var rows = await gw.ListAsync<Amenity>();
+        Assert.Equal(2, attempts);
+        Assert.Single(rows);
+        Assert.Equal("Sauna", rows[0].Name);
+    }
+
+    [Fact]
+    public async Task List_does_not_retry_server_permission_errors()
+    {
+        var gw = await SignedInAsync();
+        var attempts = 0;
+        _reply = _ => { attempts++; return (403, """{"code":"42501","message":"forbidden"}"""); };
+        await Assert.ThrowsAnyAsync<Exception>(() => gw.ListAsync<Amenity>());
+        Assert.Equal(1, attempts);
+    }
+
+    [Fact]
+    public async Task Reference_table_cache_coalesces_concurrent_reads_and_invalidates_on_write()
+    {
+        var gw = await SignedInAsync();
+        var hits = 0;
+        _reply = s =>
+        {
+            if (s.Path.EndsWith("/amenities"))
+            {
+                if (s.Method == "GET") { Interlocked.Increment(ref hits); return (200, """[{"amenity_id":1,"name":"Sauna","is_active":true}]"""); }
+                return (200, "[]");
+            }
+            return (200, "[]");
+        };
+        await Task.WhenAll(gw.ListAsync<Amenity>(), gw.ListAsync<Amenity>(), gw.ListAsync<Amenity>());
+        Assert.Equal(1, hits);
+        await gw.ListAsync<Amenity>();
+        Assert.Equal(1, hits);
+        await gw.RpcAsync("touch_last_seen");
+        await gw.ListAsync<Amenity>();
+        Assert.Equal(2, hits);
     }
 }

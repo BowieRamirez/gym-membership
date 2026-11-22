@@ -185,4 +185,33 @@ public class HeaderTests
         Assert.Equal(0, vm.UnreadCount);   // the live header followed at once: no page change was needed
         Assert.Equal(before, closed.UnreadCount);   // the disposed one did not react
     }
+
+    sealed class CountingProfile(IProfileService inner) : IProfileService
+    {
+        public int MeCalls;
+        public event Action? AvatarChanged { add => inner.AvatarChanged += value; remove => inner.AvatarChanged -= value; }
+        public Task<AppResult<MyProfile>> MeAsync() { MeCalls++; return inner.MeAsync(); }
+        public Task<AppResult<string>> SetAvatarAsync(string fileName, byte[] data) => inner.SetAvatarAsync(fileName, data);
+        public Task<AppResult<string?>> AvatarUrlAsync(string? path) => inner.AvatarUrlAsync(path);
+        public Task<AppResult<bool>> TouchSeenAsync() => inner.TouchSeenAsync();
+        public Task<AppResult<bool>> AddMyLastNameAsync(string lastName) => inner.AddMyLastNameAsync(lastName);
+    }
+
+    [Fact]
+    public async Task Subsequent_refreshes_skip_reloading_the_profile_until_avatar_changes()
+    {
+        var gw = new DemoGateway();
+        await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
+        var profile = new CountingProfile(new ProfileService(gw));
+        var vm = new HeaderViewModel(profile, new NotificationService(gw), new AuthService(gw), new Nav());
+
+        await vm.RefreshAsync();
+        await vm.RefreshAsync();
+        await vm.RefreshAsync();
+        Assert.Equal(1, profile.MeCalls);
+
+        await profile.SetAvatarAsync("a.jpg", [1]);
+        await Eventually.Until(() => profile.MeCalls == 2);
+        Assert.Equal(2, profile.MeCalls);
+    }
 }

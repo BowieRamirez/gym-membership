@@ -251,10 +251,16 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
         _loading = true;
         try
         {
-            if (!await RunAsync(svc.MyPaymentsAsync, rows =>
-                { PayNow = rows.FirstOrDefault(p => p.NeedsPayment && (p.CanCancel || p.Kind == PayKind.CoachAddon)); PayAtDesk = rows.FirstOrDefault(p => p.PaysAtDesk && p.CanCancel); })) return;
-            await RunAsync(svc.CoachAccessOfferAsync, o => CoachOffer = o);
-            if (PayNow is not { HasCheckout: true } open) return;
+            var payOk = false;
+            await Task.WhenAll(
+                RunAsync(svc.MyPaymentsAsync, rows =>
+                {
+                    payOk = true;
+                    PayNow = rows.FirstOrDefault(p => p.NeedsPayment && (p.CanCancel || p.Kind == PayKind.CoachAddon));
+                    PayAtDesk = rows.FirstOrDefault(p => p.PaysAtDesk && p.CanCancel);
+                }),
+                RunAsync(svc.CoachAccessOfferAsync, o => CoachOffer = o));
+            if (!payOk || PayNow is not { HasCheckout: true } open) return;
             // back from Xendit's page: if its notice hasn't arrived yet, the server asks Xendit and confirms it
             var paid = false;
             Checking = true;
@@ -587,7 +593,11 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
     {
         if (sessions is null) return;
         var activePkgName = Memberships.FirstOrDefault(m => m.Status == Status.Active)?.PackageName;
-        var pkgsRes = activePkgName is not null ? await svc.ListPackagesAsync() : null;
+        var pkgsTask = activePkgName is not null ? svc.ListPackagesAsync() : null;
+        var reqTask = sessions.RequestsAsync();
+        await (pkgsTask is not null ? Task.WhenAll(pkgsTask, reqTask) : reqTask);
+
+        var pkgsRes = pkgsTask?.Result;
         var pkg = pkgsRes is { Ok: true, Value: { } pkgs } ? pkgs.FirstOrDefault(p => p.Name == activePkgName) : null;
         var activeTerm = Terms.FirstOrDefault(t => t.State == Status.Active);
         if (activeTerm?.Term.CoachAccessAt is not null)
@@ -599,7 +609,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
         else
             CoachIncludedNote = "";
 
-        var res = await sessions.RequestsAsync();
+        var res = reqTask.Result;
         if (!res.Ok || res.Value is not { } view) return;
 
         var now = DateTime.UtcNow;
@@ -625,14 +635,21 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
     async Task<bool> LoadPaymentsAsync()
     {
         var waiting = false;
-        if (!await RunAsync(svc.MyPaymentsAsync, rows =>
-        {
-            PaymentsWaitingText = rows.Count(p => p.Status == Status.Pending).ToString();
-            PayNow = rows.FirstOrDefault(p => p.NeedsPayment);
-            payAtDesk = rows.FirstOrDefault(p => p.PaysAtDesk);   // cash plan 2026-11-17: chosen cash, waiting for the desk
-            waiting = PayNow is not null || payAtDesk is not null || rows.Any(p => p.AwaitingReview);
-        })) return false;
-        return await RunAsync(svc.MyMembershipsAsync, rows => { Fill(Memberships, rows); UpdateHero(rows, waiting); });
+        var paysOk = false;
+        var memOk = false;
+        IReadOnlyList<MembershipRow>? memRows = null;
+        await Task.WhenAll(
+            RunAsync(svc.MyPaymentsAsync, rows =>
+            {
+                paysOk = true;
+                PaymentsWaitingText = rows.Count(p => p.Status == Status.Pending).ToString();
+                PayNow = rows.FirstOrDefault(p => p.NeedsPayment);
+                payAtDesk = rows.FirstOrDefault(p => p.PaysAtDesk);   // cash plan 2026-11-17: chosen cash, waiting for the desk
+                waiting = PayNow is not null || payAtDesk is not null || rows.Any(p => p.AwaitingReview);
+            }),
+            RunAsync(svc.MyMembershipsAsync, rows => { memOk = true; memRows = rows; }));
+        if (memOk && memRows is not null) { Fill(Memberships, memRows); UpdateHero(memRows, waiting); }
+        return paysOk && memOk;
     }
 
     void UpdateHero(IReadOnlyList<MembershipRow> rows, bool waitingOnPayment)
@@ -853,8 +870,11 @@ public partial class CoachesViewModel(ICoachService svc, IChatService messages, 
     [RelayCommand]
     private async Task LoadAsync()
     {
-        if (!await RunAsync(svc.ListCoachesAsync, rows => Fill(Cards, rows))) return;
-        await RefreshActiveSessionAsync();
+        var coachesOk = false;
+        await Task.WhenAll(
+            RunAsync(svc.ListCoachesAsync, rows => { coachesOk = true; Fill(Cards, rows); }),
+            RefreshActiveSessionAsync());
+        if (!coachesOk) return;
     }
 
     // coaches come and go as they check in and out: quiet, keeps the scroll position
@@ -1192,11 +1212,9 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         if (Selected is null || all.All(t => t.Key != Selected.Thread.Key)) Selected = IsCompact ? null : Threads.FirstOrDefault();
     }
 
-    async Task ResolveAvatarsAsync()
-    {
-        foreach (var item in Threads.Where(t => t.AvatarUrl is null && t.Thread.WithAvatar is not null).ToList())
-            item.AvatarUrl = (await profile.AvatarUrlAsync(item.Thread.WithAvatar)).Value;
-    }
+    Task ResolveAvatarsAsync() => Task.WhenAll(
+        Threads.Where(t => t.AvatarUrl is null && t.Thread.WithAvatar is not null).ToList()
+            .Select(async item => item.AvatarUrl = (await profile.AvatarUrlAsync(item.Thread.WithAvatar)).Value));
 
     // ---- one conversation. The newest request wins: a slow answer for a conversation you have left is dropped.
     async Task ShowAsync(ThreadItem item, bool markRead)
@@ -1435,14 +1453,12 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
     [ObservableProperty] private string savedName = "";
     [ObservableProperty] private string savedEmail = "";
 
-    public override async Task OnAppearingAsync()
-    {
-        await LoadAsync();
-        await RunAsync(settings.IsMemberAsync, m => IsMember = m);
-        await RunAsync(auth.MustChangePasswordAsync, m => MustChange = m);
-        await LoadPhotoAsync(names: true);
-        await LoadEmailAsync();
-    }
+    public override Task OnAppearingAsync() => Task.WhenAll(
+        LoadAsync(),
+        RunAsync(settings.IsMemberAsync, m => IsMember = m),
+        RunAsync(auth.MustChangePasswordAsync, m => MustChange = m),
+        LoadPhotoAsync(names: true),
+        LoadEmailAsync());
 
     async Task LoadPhotoAsync(bool names = false)
     {
@@ -1559,19 +1575,23 @@ public partial class HeaderViewModel : LoadableViewModel, IDisposable
     readonly INotificationService notes;
     readonly IAuthService auth;
     readonly IAppNavigator nav;
-    readonly Action onChanged;
+    readonly Action onAvatarChanged;
+    readonly Action onNotesChanged;
     int refreshTicket;
+    string? loadedProfileForUser;
+    bool profileDirty = true;
 
     public HeaderViewModel(IProfileService profile, INotificationService notes, IAuthService auth, IAppNavigator nav)
     {
         (this.profile, this.notes, this.auth, this.nav) = (profile, notes, auth, nav);
-        onChanged = () => _ = RefreshAsync();
-        profile.AvatarChanged += onChanged;   // the services outlive every header, so each header must let go (Dispose)
-        notes.Changed += onChanged;
+        onAvatarChanged = () => { profileDirty = true; _ = RefreshAsync(); };
+        onNotesChanged = () => _ = RefreshAsync();
+        profile.AvatarChanged += onAvatarChanged;   // the services outlive every header, so each header must let go (Dispose)
+        notes.Changed += onNotesChanged;
     }
 
     /// <summary>Stops listening. Called on sign-out and when the shell is torn down.</summary>
-    public void Dispose() { profile.AvatarChanged -= onChanged; notes.Changed -= onChanged; }
+    public void Dispose() { profile.AvatarChanged -= onAvatarChanged; notes.Changed -= onNotesChanged; }
 
     [ObservableProperty] private string letters = "?";
     [ObservableProperty] private string? avatarUrl;
@@ -1588,11 +1608,31 @@ public partial class HeaderViewModel : LoadableViewModel, IDisposable
     public async Task RefreshAsync()
     {
         var ticket = ++refreshTicket;
-        var me = (await profile.MeAsync()).Value;
-        var link = me is null ? null : await profile.AvatarUrlAsync(me.AvatarPath);
-        var unread = await notes.UnreadCountAsync();
+        var uid = auth.UserId;
+        var fetchProfile = profileDirty || loadedProfileForUser != uid;
+        var unreadTask = notes.UnreadCountAsync();
+        MyProfile? me = null;
+        AppResult<string?>? link = null;
+        if (fetchProfile)
+        {
+            var meTask = profile.MeAsync();
+            await Task.WhenAll(meTask, unreadTask);
+            me = meTask.Result.Value;
+            if (me is not null) link = await profile.AvatarUrlAsync(me.AvatarPath);
+        }
+        else
+        {
+            await unreadTask;
+        }
+        var unread = unreadTask.Result;
         if (ticket != refreshTicket) return;   // a newer refresh started while this one waited; its answer is the one to show
-        if (me is not null) { Letters = Initials.From(me.Name); if (link is { Ok: true }) AvatarUrl = link.Value; }
+        if (me is not null)
+        {
+            loadedProfileForUser = uid;
+            profileDirty = false;
+            Letters = Initials.From(me.Name);
+            if (link is { Ok: true }) AvatarUrl = link.Value;
+        }
         if (unread.Ok) UnreadCount = unread.Value;
     }
 

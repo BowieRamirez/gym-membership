@@ -134,7 +134,8 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
                     foreach (var r in latest) Activity.Add(new(r.ActionText, r.ActorName, When(r.Manila, today)));
                     RecentActivity = latest.Count == 0 ? "No activity yet." : "";
                     return ("Full audit log and archived records", "");
-                }));
+                }),
+                LoadCheckInsAsync());
             if (!SuperAdmin) RecentActivity = "";
             else if (Cards.Single(c => c.Key == "audit").IsUnavailable)
                 RecentActivity = "Couldn't load recent activity. Refresh to try again.";
@@ -143,7 +144,6 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
                 (failed > 0 ? $" · {failed} summar{(failed == 1 ? "y" : "ies")} unavailable" : "");
         }
         finally { IsBusy = false; }
-        await LoadCheckInsAsync();
     }
 
     async Task Load(string key, Func<Task<(string Value, string Detail)>> read)

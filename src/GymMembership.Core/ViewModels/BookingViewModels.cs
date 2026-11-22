@@ -170,9 +170,13 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
         Notice = null; ErrorMessage = null; ClearCodeCheck();
         Picked = card; Month = new(Today.Year, Today.Month, 1);
         Code = "";
-        if (await svc.DownPaymentPercentAsync() is { Ok: true } pct) Percent = pct.Value;
-        if (await svc.ClosedDaysAsync() is { Ok: true, Value: { } closed }) _closed = closed;
-        if (membership is not null && await membership.AvailableCodesAsync() is { Ok: true, Value: { } codes }) _myCodes = codes;
+        var pctTask = svc.DownPaymentPercentAsync();
+        var closedTask = svc.ClosedDaysAsync();
+        var codesTask = membership is not null ? membership.AvailableCodesAsync() : null;
+        await (codesTask is not null ? Task.WhenAll(pctTask, closedTask, codesTask) : Task.WhenAll(pctTask, closedTask));
+        if (pctTask.Result is { Ok: true } pct) Percent = pct.Value;
+        if (closedTask.Result is { Ok: true, Value: { } closed }) _closed = closed;
+        if (codesTask?.Result is { Ok: true, Value: { } codes }) _myCodes = codes;
         Fill(Codes, _myCodes.Where(c => c.AllAmenities || c.AmenityIds.Contains(card.Amenity.Id)));
         OnPropertyChanged(nameof(HasCodes));
         await PickDayAsync(Today);

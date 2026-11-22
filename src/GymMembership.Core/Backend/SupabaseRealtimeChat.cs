@@ -14,8 +14,6 @@ namespace GymMembership.Core.Backend;
 /// online is presence on one channel, "online".
 /// ponytail: the online channel is public, so anyone holding the app's public key can list the ids (UUIDs, no names) of everyone online.
 /// A private channel with a policy on realtime.messages is the upgrade if that ever matters.
-/// ponytail: the token Realtime holds is the one from sign-in; after about an hour the server may drop the row-change channel while
-/// Connected still says true, and the page then relies on its 30 second timer until the next page visit. Refresh with SetAuth if that bites.
 /// </summary>
 public sealed class SupabaseRealtimeChat(SupabaseGateway gateway) : IRealtimeChat
 {

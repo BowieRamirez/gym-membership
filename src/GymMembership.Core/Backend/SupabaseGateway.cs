@@ -1,6 +1,8 @@
+using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using GymMembership.Core.Models;
 using GymMembership.Core.Services;
 using Supabase.Gotrue;
 using Supabase.Gotrue.Exceptions;
@@ -52,10 +54,29 @@ public sealed class SupabaseGateway : ISupabaseGateway
     public SupabaseGateway(SupabaseSettings settings, ISessionStore? store = null)
     {
         _store = store;
+        var handler = new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+            PooledConnectionIdleTimeout = TimeSpan.FromSeconds(45)
+        };
+        var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
         _client = new Client(settings.Url, settings.AnonKey, new Supabase.SupabaseOptions
         {
             AutoRefreshToken = true,
             AutoConnectRealtime = false,
+            HttpClient = http,
+            StorageClientOptions = new Supabase.Storage.ClientOptions
+            {
+                HttpRequestClient = http,
+                HttpRequestTimeout = TimeSpan.FromSeconds(15)
+            },
+            GotrueRetry = new Supabase.Core.Http.RetryOptions
+            {
+                MaxRetries = 2,
+                BaseDelay = TimeSpan.FromMilliseconds(250),
+                MaxDelay = TimeSpan.FromSeconds(2),
+                UseJitter = true
+            },
             SessionHandler = new StoreSessionHandler(store)
         });
     }
@@ -66,10 +87,11 @@ public sealed class SupabaseGateway : ISupabaseGateway
     internal async Task<Client> ClientAsync() => await ReadyAsync();
     internal string? AccessToken => _client.Auth.CurrentSession?.AccessToken;
 
-    // One Realtime socket shared by chat and the live records (F4): the first user connects it, the last one to let go disconnects it,
-    // so leaving Messages never cuts the desk's live check-ins. Each holder calls RealtimeReleaseAsync once per acquire.
+    // One Realtime socket shared by chat and the live records (F4): kept connected while signed in so navigating between pages
+    // never drops and re-handshakes the WebSocket; TokenRefreshed updates SetAuth so the socket stays alive past the 1-hour JWT mark.
     readonly SemaphoreSlim _realtime = new(1, 1);
     int _realtimeHolders;
+    bool _realtimeConnected;
 
     internal async Task<Supabase.Realtime.Interfaces.IRealtimeClient<Supabase.Realtime.RealtimeSocket, Supabase.Realtime.RealtimeChannel>> RealtimeAcquireAsync()
     {
@@ -78,7 +100,11 @@ public sealed class SupabaseGateway : ISupabaseGateway
         try
         {
             if (AccessToken is { } token) rt.SetAuth(token);   // so the server filters changes by this user's row access
-            if (_realtimeHolders == 0) await rt.ConnectAsync();
+            if (!_realtimeConnected)
+            {
+                await rt.ConnectAsync();
+                _realtimeConnected = true;
+            }
             _realtimeHolders++;
             return rt;
         }
@@ -87,12 +113,24 @@ public sealed class SupabaseGateway : ISupabaseGateway
 
     internal async Task RealtimeReleaseAsync()
     {
-        var rt = (await ReadyAsync()).Realtime;
+        await ReadyAsync();
         await _realtime.WaitAsync();
         try
         {
-            if (_realtimeHolders == 0) return;
-            if (--_realtimeHolders == 0) try { rt.Disconnect(); } catch { /* already gone */ }
+            if (_realtimeHolders > 0) _realtimeHolders--;
+        }
+        finally { _realtime.Release(); }
+    }
+
+    async Task DisconnectRealtimeAsync()
+    {
+        await _realtime.WaitAsync();
+        try
+        {
+            _realtimeHolders = 0;
+            if (!_realtimeConnected) return;
+            _realtimeConnected = false;
+            try { _client.Realtime.Disconnect(); } catch { /* already gone */ }
         }
         finally { _realtime.Release(); }
     }
@@ -101,7 +139,31 @@ public sealed class SupabaseGateway : ISupabaseGateway
     {
         if (_started) return _client;
         await _startup.WaitAsync();
-        try { if (!_started) { await _client.InitializeAsync(); _started = true; } }
+        try
+        {
+            if (!_started)
+            {
+                await _client.InitializeAsync();
+                _client.Realtime.AddStateChangedHandler((_, state) =>
+                {
+                    if (state is Supabase.Realtime.Constants.SocketState.Open) _realtimeConnected = true;
+                    else if (state is Supabase.Realtime.Constants.SocketState.Close or Supabase.Realtime.Constants.SocketState.Error) _realtimeConnected = false;
+                });
+                _client.Auth.AddStateChangedListener((sender, state) =>
+                {
+                    if (state is Constants.AuthState.TokenRefreshed or Constants.AuthState.SignedIn)
+                    {
+                        if (_realtimeConnected && AccessToken is { } token)
+                            try { _client.Realtime.SetAuth(token); } catch { /* reconnect will pick up latest token */ }
+                    }
+                    else if (state == Constants.AuthState.SignedOut)
+                    {
+                        _ = DisconnectRealtimeAsync();
+                    }
+                });
+                _started = true;
+            }
+        }
         finally { _startup.Release(); }
         return _client;
     }
@@ -221,6 +283,7 @@ public sealed class SupabaseGateway : ISupabaseGateway
 
     public async Task SignOutAsync()
     {
+        ClearReadCache();
         try
         {
             var c = await ReadyAsync();
@@ -242,18 +305,66 @@ public sealed class SupabaseGateway : ISupabaseGateway
     }
 
     // ---------- tables ----------
+    // Coalesce concurrent identical unfiltered reads and briefly cache slow-changing reference/directory tables across page switches.
+    // Every write/RPC invalidates the cache immediately so the user never sees stale data after making a change.
+    static readonly TimeSpan ReferenceCacheTtl = TimeSpan.FromSeconds(10);
+    static readonly HashSet<Type> CacheableTables = [typeof(Profile), typeof(Role), typeof(GymSettings), typeof(MembershipPackage), typeof(Amenity)];
+    readonly ConcurrentDictionary<Type, (object Rows, DateTime Until)> _readCache = new();
+    readonly ConcurrentDictionary<Type, Task<object>> _inFlightReads = new();
+    long _cacheEpoch;
+
+    void ClearReadCache()
+    {
+        Interlocked.Increment(ref _cacheEpoch);
+        _readCache.Clear();
+    }
+
+    // Retry idempotent reads on transient socket/timeout drops (stale keep-alive connections, brief network blips).
+    static async Task<T> ReadWithRetryAsync<T>(Func<Task<T>> call)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try { return await call(); }
+            catch (Exception ex) when (attempt < 2 && ex is HttpRequestException or TaskCanceledException or TimeoutException)
+            {
+                await Task.Delay(attempt == 0 ? 150 : 450);
+            }
+        }
+    }
+
     // ponytail: the library doesn't quote values inside a grouped filter (a && b), so a comma starts a new condition. Filters hold only
     // ids and fixed words today; send typed text to a server function instead. QueryInjectionTests pins this.
     public async Task<IReadOnlyList<T>> ListAsync<T>(Expression<Func<T, bool>>? where = null) where T : BaseModel, new()
     {
         var c = await ReadyAsync();
-        var table = c.From<T>();
-        var response = where is null ? await table.Get() : await table.Where(where).Get();
-        return response.Models;
+        if (where is null)
+        {
+            var type = typeof(T);
+            if (CacheableTables.Contains(type) && _readCache.TryGetValue(type, out var hit) && hit.Until > DateTime.UtcNow)
+                return (IReadOnlyList<T>)hit.Rows;
+
+            var epoch = Volatile.Read(ref _cacheEpoch);
+            var task = _inFlightReads.GetOrAdd(type, _ => FetchUnfilteredAsync<T>(c, type, epoch));
+            return (IReadOnlyList<T>)await task;
+        }
+        return await ReadWithRetryAsync(async () => (IReadOnlyList<T>)(await c.From<T>().Where(where).Get()).Models);
+    }
+
+    async Task<object> FetchUnfilteredAsync<T>(Client c, Type type, long epoch) where T : BaseModel, new()
+    {
+        try
+        {
+            var rows = await ReadWithRetryAsync(async () => (IReadOnlyList<T>)(await c.From<T>().Get()).Models);
+            if (CacheableTables.Contains(type) && Volatile.Read(ref _cacheEpoch) == epoch)
+                _readCache[type] = (rows, DateTime.UtcNow + ReferenceCacheTtl);
+            return rows;
+        }
+        finally { _inFlightReads.TryRemove(type, out _); }
     }
 
     public async Task<T> InsertAsync<T>(T row) where T : BaseModel, new()
     {
+        ClearReadCache();
         var c = await ReadyAsync();
         var response = await c.From<T>().Insert(row);
         return response.Models.FirstOrDefault() ?? row;
@@ -261,12 +372,14 @@ public sealed class SupabaseGateway : ISupabaseGateway
 
     public async Task UpdateAsync<T>(T row) where T : BaseModel, new()
     {
+        ClearReadCache();
         var c = await ReadyAsync();
         await c.From<T>().Update(row);
     }
 
     public async Task UpdateWhereAsync<T, TValue>(Expression<Func<T, bool>> where, Expression<Func<T, TValue>> column, TValue value) where T : BaseModel, new()
     {
+        ClearReadCache();
         var c = await ReadyAsync();
         // the library wants the column as Func<T, object>; boxing the member access keeps the column name it reads from the expression
         var boxed = Expression.Lambda<Func<T, object>>(Expression.Convert(column.Body, typeof(object)), column.Parameters);
@@ -276,18 +389,21 @@ public sealed class SupabaseGateway : ISupabaseGateway
     // ---------- server functions ----------
     public async Task<TResult> RpcAsync<TResult>(string function, Dictionary<string, object>? args = null)
     {
+        ClearReadCache();
         var c = await ReadyAsync();
         return (await c.Rpc<TResult>(function, args))!;
     }
 
     public async Task RpcAsync(string function, Dictionary<string, object>? args = null)
     {
+        ClearReadCache();
         var c = await ReadyAsync();
         await c.Rpc(function, args);
     }
 
     public async Task<string> InvokeFunctionAsync(string name, Dictionary<string, object> body)
     {
+        ClearReadCache();
         var c = await ReadyAsync();
         // the signed-in staff member's own token goes along, and the function checks who it is (supabase/functions/_shared/admin.ts)
         try { return await c.Functions.Invoke(name, c.Auth.CurrentSession?.AccessToken, new Supabase.Functions.Client.InvokeFunctionOptions { Body = body }); }
@@ -329,7 +445,7 @@ public sealed class SupabaseGateway : ISupabaseGateway
     public async Task<string?> SignedUrlAsync(string bucket, string path)
     {
         var c = await ReadyAsync();
-        try { return await c.Storage.From(bucket).CreateSignedUrl(path, 3600); }
+        try { return await ReadWithRetryAsync(() => c.Storage.From(bucket).CreateSignedUrl(path, 3600)); }
         catch (Exception ex) when (ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase) || ex.Message.Contains("404")) { return null; }
     }
 
