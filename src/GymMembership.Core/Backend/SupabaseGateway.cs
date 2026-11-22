@@ -45,11 +45,13 @@ public interface ISessionStore
 public sealed class SupabaseGateway : ISupabaseGateway
 {
     readonly Client _client;
+    readonly ISessionStore? _store;
     readonly SemaphoreSlim _startup = new(1, 1);
     bool _started;
 
     public SupabaseGateway(SupabaseSettings settings, ISessionStore? store = null)
     {
+        _store = store;
         _client = new Client(settings.Url, settings.AnonKey, new Supabase.SupabaseOptions
         {
             AutoRefreshToken = true,
@@ -219,8 +221,17 @@ public sealed class SupabaseGateway : ISupabaseGateway
 
     public async Task SignOutAsync()
     {
-        var c = await ReadyAsync();
-        await c.Auth.SignOut();
+        try
+        {
+            var c = await ReadyAsync();
+            await c.Auth.SignOut();
+        }
+        catch (Exception ex) when (ex is GotrueException or HttpRequestException or TaskCanceledException or TimeoutException)
+        {
+            // Offline or transient network failure during logout: still clear the local session so the user can return to login.
+            _store?.Clear();
+            try { await _client.Auth.SignOut(Constants.SignOutScope.Local); } catch { }
+        }
     }
 
     public async Task<bool> RestoreSessionAsync()
