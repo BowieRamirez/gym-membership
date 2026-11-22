@@ -218,6 +218,15 @@ try {
     const newRow = draft.rows.find(r => r.user_id === newDesk);
     assert.equal(newRow.no_salary, false);
     assert.equal(Number(newRow.salary), 7800);
+
+    // Logs & Archive shows human-readable Object names for payroll entries
+    const logs = await as(admin, `select action, entity, object_name from audit_records(null, null, '', 'payroll', '', 0, 50, null, '', '', '', '')`);
+    const salLog = logs.find(l => l.entity === 'staff_salaries');
+    assert.ok(salLog && salLog.object_name && !salLog.object_name.includes('-'));
+    const roleLog = logs.find(l => l.entity === 'role_salaries');
+    assert.ok(roleLog && (roleLog.object_name === 'Front desk' || roleLog.object_name === 'Coach'));
+    const paidLog = logs.find(l => l.entity === 'payroll_periods');
+    assert.ok(paidLog && paidLog.object_name && paidLog.object_name.includes('Oct 2026'));
   });
 } finally {
   await db.end(); await server.stop();

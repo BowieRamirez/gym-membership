@@ -260,7 +260,14 @@ public sealed partial class DemoGateway
             .Select(e => (e, p: PaymentFor(e.Entity, e.EntityId),
                 rr: e.Entity == "refund_requests" ? All<RefundRequest>().FirstOrDefault(f => f.Id.ToString(CultureInfo.InvariantCulture) == e.EntityId) : null))
             .Select(x => new AuditRecord { Id = x.e.Id, CreatedAt = x.e.CreatedAt, ActorName = Name(x.e.ActorId) ?? "System", Role = x.e.Role, IpAddress = x.e.IpAddress,
-                Action = x.e.Action, Entity = x.e.Entity, EntityId = x.e.EntityId, ObjectName = x.e.Entity is "profiles" or "user_roles" ? Name(x.e.EntityId) : null, Details = x.e.Details,
+                Action = x.e.Action, Entity = x.e.Entity, EntityId = x.e.EntityId,
+                ObjectName = x.e.Entity switch
+                {
+                    "profiles" or "user_roles" or "staff_salaries" => Name(x.e.EntityId),
+                    "role_salaries" => x.e.EntityId switch { "employee" => "Front desk", "coach" => "Coach", _ => x.e.EntityId },
+                    _ => null
+                },
+                Details = x.e.Details,
                 Customer = Name(x.p?.MemberId) ?? x.p?.WalkInName, Amount = x.rr?.Amount ?? x.p?.Amount,
                 PaidWith = x.e.Details?.GetValueOrDefault("channel")?.ToString() ?? x.p?.Method })
             .Where(r => money is null || (r.Action.Split('.')[0] is "payment" or "refund" or "cash_shift") == money)
