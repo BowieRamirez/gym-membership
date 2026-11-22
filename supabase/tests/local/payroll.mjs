@@ -46,6 +46,7 @@ try {
     for (const who of [desk, coach, member]) {
       await assert.rejects(as(who, `select * from payroll_staff()`), /forbidden/);
       await assert.rejects(as(who, `select * from payroll_period('2026-10-01')`), /forbidden/);
+      await assert.rejects(as(who, `select * from payroll_lines_for(1, $1)`, [desk]), /forbidden/);
       await assert.rejects(as(who, `select * from set_staff_salary($1, 5000)`, [desk]), /forbidden/);
       await assert.rejects(as(who, `select * from staff_salaries`), /permission denied/);
       await assert.rejects(as(who, `select * from payroll_periods`), /permission denied/);
