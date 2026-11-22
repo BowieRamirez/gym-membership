@@ -11,7 +11,7 @@
         <!-- Wide table row (Period tab) -->
         <DataTemplate x:Key="PayrollRowTemplate" x:DataType="vm:PayrollRowItem">
             <VerticalStackLayout>
-                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,140,110,110,110,120,88" ColumnSpacing="12">
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,140,115,110,110,120,84" ColumnSpacing="12">
                     <Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnRowTapped" /></Grid.GestureRecognizers>
                     <Grid.Triggers>
                         <DataTrigger TargetType="Grid" Binding="{Binding IsSelected}" Value="True">
@@ -20,7 +20,7 @@
                     </Grid.Triggers>
 
                     <HorizontalStackLayout Spacing="10" VerticalOptions="Center">
-                        <Label Text="{Binding FullName}" FontFamily="BarlowSemiBold" VerticalOptions="Center">
+                        <Label Text="{Binding FullName}" FontFamily="BarlowSemiBold" VerticalOptions="Center" LineBreakMode="TailTruncation">
                             <Label.Triggers>
                                 <DataTrigger TargetType="Label" Binding="{Binding NoSalary}" Value="True">
                                     <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
@@ -33,16 +33,16 @@
                     <Label Grid.Column="1" Text="{Binding HoursText}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
 
                     <!-- Salary or warning chip -->
-                    <Label Grid.Column="2" Text="{Binding SalaryText}" Style="{StaticResource Numeral}" HorizontalOptions="End" VerticalOptions="Center"
+                    <Label Grid.Column="2" Text="{Binding SalaryText}" HorizontalOptions="End" VerticalOptions="Center" LineBreakMode="NoWrap"
                            IsVisible="{Binding NoSalary, Converter={StaticResource Not}}" />
                     <c:StatusChip Grid.Column="2" Status="No salary set" HorizontalOptions="End" VerticalOptions="Center"
                                   IsVisible="{Binding NoSalary}" />
 
-                    <Label Grid.Column="3" Text="{Binding BonusesText}" Style="{StaticResource Numeral}" HorizontalOptions="End" VerticalOptions="Center"
+                    <Label Grid.Column="3" Text="{Binding BonusesText}" HorizontalOptions="End" VerticalOptions="Center" LineBreakMode="NoWrap"
                            IsVisible="{Binding NoSalary, Converter={StaticResource Not}}" />
-                    <Label Grid.Column="4" Text="{Binding DeductionsText}" Style="{StaticResource Numeral}" HorizontalOptions="End" VerticalOptions="Center"
+                    <Label Grid.Column="4" Text="{Binding DeductionsText}" HorizontalOptions="End" VerticalOptions="Center" LineBreakMode="NoWrap"
                            IsVisible="{Binding NoSalary, Converter={StaticResource Not}}" />
-                    <Label Grid.Column="5" Text="{Binding NetText}" Style="{StaticResource Numeral}" FontFamily="BarlowBold" HorizontalOptions="End" VerticalOptions="Center"
+                    <Label Grid.Column="5" Text="{Binding NetText}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center" LineBreakMode="NoWrap"
                            IsVisible="{Binding NoSalary, Converter={StaticResource Not}}" />
 
                     <Button Grid.Column="6" Text="Lines" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="End" VerticalOptions="Center"
@@ -61,7 +61,7 @@
                         <Label Text="{Binding FullName}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
                         <c:StatusChip Status="{Binding RoleLabel}" VerticalOptions="Center" />
                     </HorizontalStackLayout>
-                    <Label Grid.Column="1" Text="{Binding NetText}" Style="{StaticResource Numeral}" FontFamily="BarlowBold" VerticalOptions="Center"
+                    <Label Grid.Column="1" Text="{Binding NetText}" FontFamily="BarlowBold" VerticalOptions="Center"
                            IsVisible="{Binding NoSalary, Converter={StaticResource Not}}" />
                     <c:StatusChip Grid.Column="1" Status="No salary set" VerticalOptions="Center" IsVisible="{Binding NoSalary}" />
 
@@ -81,17 +81,17 @@
         <!-- Wide table row (Salaries tab) -->
         <DataTemplate x:Key="SalaryRowTemplate" x:DataType="vm:StaffSalaryItem">
             <VerticalStackLayout>
-                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,160,180,220" ColumnSpacing="12">
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="1.1*,140,1.1*,230" ColumnSpacing="14">
                     <HorizontalStackLayout Spacing="10" VerticalOptions="Center">
-                        <Label Text="{Binding FullName}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                        <Label Text="{Binding FullName}" FontFamily="BarlowSemiBold" VerticalOptions="Center" LineBreakMode="TailTruncation" />
                         <c:StatusChip Status="{Binding RoleLabel}" VerticalOptions="Center" />
                     </HorizontalStackLayout>
 
-                    <Label Grid.Column="1" Text="{Binding AmountText}" Style="{StaticResource Numeral}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center"
+                    <Label Grid.Column="1" Text="{Binding AmountText}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center" LineBreakMode="NoWrap"
                            IsVisible="{Binding NoSalary, Converter={StaticResource Not}}" />
                     <c:StatusChip Grid.Column="1" Status="No salary set" HorizontalOptions="End" VerticalOptions="Center" IsVisible="{Binding NoSalary}" />
 
-                    <Label Grid.Column="2" Text="{Binding UpdatedText}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" Margin="12,0,0,0" />
+                    <Label Grid.Column="2" Text="{Binding UpdatedText}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
 
                     <Button Grid.Column="3" Text="Set salary" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="End" VerticalOptions="Center"
                             Command="{Binding BeginEditCommand}" IsVisible="{Binding IsNotEditing}" />
@@ -122,7 +122,7 @@
                             <Label Text="{Binding FullName}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
                             <c:StatusChip Status="{Binding RoleLabel}" VerticalOptions="Center" />
                         </HorizontalStackLayout>
-                        <Label Grid.Column="1" Text="{Binding AmountText}" Style="{StaticResource Numeral}" FontFamily="BarlowSemiBold" VerticalOptions="Center"
+                        <Label Grid.Column="1" Text="{Binding AmountText}" FontFamily="BarlowSemiBold" VerticalOptions="Center"
                                IsVisible="{Binding NoSalary, Converter={StaticResource Not}}" />
                         <c:StatusChip Grid.Column="1" Status="No salary set" VerticalOptions="Center" IsVisible="{Binding NoSalary}" />
                     </Grid>
@@ -220,7 +220,7 @@
                         <Border Style="{StaticResource TablePanel}">
                             <VerticalStackLayout>
                                 <VerticalStackLayout x:Name="PeriodHead">
-                                    <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,140,110,110,110,120,88" ColumnSpacing="12">
+                                    <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,140,115,110,110,120,84" ColumnSpacing="12">
                                         <Label Text="Staff member" Style="{StaticResource Caption}" />
                                         <Label Grid.Column="1" Text="Hours (ref.)" Style="{StaticResource Caption}" />
                                         <Label Grid.Column="2" Text="Salary" Style="{StaticResource Caption}" HorizontalOptions="End" />
@@ -294,10 +294,10 @@
                         <Border Style="{StaticResource TablePanel}">
                             <VerticalStackLayout>
                                 <VerticalStackLayout x:Name="SalariesHead">
-                                    <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,160,180,220" ColumnSpacing="12">
+                                    <Grid Style="{StaticResource TableHead}" ColumnDefinitions="1.1*,140,1.1*,230" ColumnSpacing="14">
                                         <Label Text="Staff member" Style="{StaticResource Caption}" />
                                         <Label Grid.Column="1" Text="Salary per period" Style="{StaticResource Caption}" HorizontalOptions="End" />
-                                        <Label Grid.Column="2" Text="Last changed" Style="{StaticResource Caption}" Margin="12,0,0,0" />
+                                        <Label Grid.Column="2" Text="Last changed" Style="{StaticResource Caption}" />
                                     </Grid>
                                     <BoxView Style="{StaticResource Hairline}" />
                                 </VerticalStackLayout>
@@ -347,7 +347,7 @@
                                     <Label Text="Salary per period" Style="{StaticResource Caption}" />
                                     <Label Text="From Salaries · change it there" Style="{StaticResource Caption}" IsVisible="{Binding IsDraft}" />
                                 </VerticalStackLayout>
-                                <Label Grid.Column="1" Text="{Binding SelectedRow.SalaryText}" Style="{StaticResource Numeral}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                                <Label Grid.Column="1" Text="{Binding SelectedRow.SalaryText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
                             </Grid>
                         </Border>
 
@@ -361,7 +361,7 @@
                                                 <Label Text="{Binding KindLabel}" FontFamily="BarlowSemiBold" />
                                                 <Label Text="{Binding Note}" Style="{StaticResource Caption}" IsVisible="{Binding Note, Converter={StaticResource IsNotNull}}" />
                                             </VerticalStackLayout>
-                                            <Label Grid.Column="1" Text="{Binding AmountText}" Style="{StaticResource Numeral}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                                            <Label Grid.Column="1" Text="{Binding AmountText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
                                             <Button Grid.Column="2" Text="Remove" Style="{StaticResource LinkButton}" Clicked="OnRemoveLineClicked"
                                                     IsVisible="{Binding CanRemove}" VerticalOptions="Center" />
                                         </Grid>
