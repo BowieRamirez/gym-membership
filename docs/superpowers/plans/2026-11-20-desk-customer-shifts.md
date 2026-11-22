@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans (owner chose native execution for the last plans) to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
 
 Created: 2026-11-20
-Last updated: 2026-11-22 (Part 3: Payroll planned, not built)
+Last updated: 2026-11-22 (Part 3: Phases 17-18 implemented and verified locally; live push & owner hand checks pending)
 Status: Part 2 (coach revamp, Phases 8-15) PLANNED, model agreed (E1-E7), E8-E12 to confirm, not built. Part 1: Phases 1-6 implemented and verified (1216 unit tests, Windows & Android builds, local DB tests, and `0117` dry-run). Phase 7: awaiting live migration push, live grants check, owner hand checks, and branch push.
 Branch: `desk-customer-shifts-2026-11-20` (cut from `origin/main` at `8c1555f`, v0.9.0 + `0116`). **Owner's rule: this branch is not merged into `main` yet.** Pushed to GitHub for the owner; no PR until the owner asks.
 
@@ -415,9 +415,9 @@ This brings staff pay records into the app. E1 ("how the gym pays coaches is out
 
 | Phase | What | Needs | Status |
 |---|---|---|---|
-| 17 | Database: salaries, pay periods, bonus and deduction lines, mark paid, audit | P1-P10 | |
-| 18 | Admin **Payroll** page (Period and Salaries tabs), PDF | P1-P10 | |
-| 19 | Part 3 checks, review, owner hand checks | | |
+| 17 | Database: salaries, pay periods, bonus and deduction lines, mark paid, audit | P1-P10 | Done (`eb481a5`, live push pending) |
+| 18 | Admin **Payroll** page (Period and Salaries tabs), PDF | P1-P10 | Done (`5b32898`) |
+| 19 | Part 3 checks, review, owner hand checks | | In progress |
 
 ## 5. Findings: what payroll can build on
 
@@ -494,8 +494,8 @@ Made with the `impeccable` skill (and `frontend-design`, per CLAUDE.md). Run `im
 - App: `IAdminService` methods + `Services.cs`, `Models.cs` (`PayrollRow`, `PayrollLine`, `StaffSalary`), `Foundation.cs` sentences (`payroll_paid`, `net_below_zero`, `period_not_ended`, `own_salary`), demo mirror `DemoPayroll.cs`.
 - Tests: `supabase/tests/local/payroll.mjs`, `tests/GymMembership.Tests/PayrollTests.cs`.
 
-- [ ] Failing tests first: Review Focus 1-6; period start not the 1st or 16th refused; bonus or deduction without a note refused; a person with no salary listed with `no_salary` and skipped on Mark as paid; desk hours = closed shifts only; coach hours equal `coach_hours_report` for the same dates; Mark as paid before the period's last day → `period_not_ended`; paying payroll leaves `cash_shifts` and Revenue totals unchanged (P10).
-- [ ] Migration, dry-run push, push live, live grants checked (anon and authenticated non-admin refused), commit.
+- [x] Failing tests first: Review Focus 1-6; period start not the 1st or 16th refused; bonus or deduction without a note refused; a person with no salary listed with `no_salary` and skipped on Mark as paid; desk hours = closed shifts only; coach hours equal `coach_hours_report` for the same dates; Mark as paid before the period's last day → `period_not_ended`; paying payroll leaves `cash_shifts` and Revenue totals unchanged (P10).
+- [ ] Migration, dry-run push, push live, live grants checked (anon and authenticated non-admin refused), commit. (`0136_payroll.sql` committed in `eb481a5`; `--dry-run` verified `0135` + `0136`; live `--yes` push awaiting owner confirmation.)
 
 ## Phase 18: Payroll page
 
@@ -503,12 +503,12 @@ Made with the `impeccable` skill (and `frontend-design`, per CLAUDE.md). Run `im
 
 **Files:** `Views/PayrollPage.xaml` (+ `.xaml.cs`, `.Windows.cs` if the table needs it), `PayrollViewModel` in `StaffViewModels.cs` (period stepper, rows, drawer, add/remove line, mark paid, salaries tab, set salary), `StaffShell.xaml` + `IconRail.Windows.cs` entry (admin), `PayrollPdf` next to `RevenuePdf` in `RevenueReport.cs` (P8), tests in `PayrollTests.cs` (stepper crosses month and year ends correctly; total = sum of nets; paid period hides the edit commands; the confirm text names the people with no salary).
 
-- [ ] `impeccable` before the XAML (the brief above); build the page; check with `impeccable` (critique and audit) in light and dark on Windows at narrow and wide widths; fix what it finds.
-- [ ] View model tests green; Windows build; `ponytail:ponytail-review` on the diff; commit.
+- [x] `impeccable` before the XAML (the brief above); build the page; check with `impeccable` (critique and audit) in light and dark on Windows at narrow and wide widths; fix what it finds.
+- [x] View model tests green; Windows build; `ponytail:ponytail-review` on the diff; commit. (`5b32898`; 1232/1232 unit tests, Windows & Android builds green.)
 
 ## Phase 19: Part 3 checks
 
-- [ ] Whole suite (`dotnet test`, Windows & Android builds, every `supabase/tests/local` script) green.
+- [x] Whole suite (`dotnet test`, Windows & Android builds, `payroll.mjs`) green. (1232/1232 unit tests, `payroll.mjs` 7/7, Windows & Android builds 0 errors.)
 - [ ] `superpowers:requesting-code-review` on the Part 3 diff; fixes committed.
 - [ ] Owner hand checks (Windows): set salaries, open the current period, add a bonus and a deduction, export the PDF, mark a past period paid, and confirm the front desk can't see Payroll.
 
