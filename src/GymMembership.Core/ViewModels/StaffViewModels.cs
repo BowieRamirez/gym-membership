@@ -3535,6 +3535,13 @@ public partial class PayrollViewModel : LoadableViewModel
     [ObservableProperty] private string lineNote = "";
     [ObservableProperty] private string? lineError;
 
+    // Role-level fixed salaries (Salaries tab)
+    [ObservableProperty] private string employeeRoleSalaryInput = "";
+    [ObservableProperty] private string coachRoleSalaryInput = "";
+    [ObservableProperty] private string employeeRoleSalaryStatus = "Not set yet";
+    [ObservableProperty] private string coachRoleSalaryStatus = "Not set yet";
+    [ObservableProperty] private string? roleSalaryError;
+
     public override Task OnAppearingAsync() => LoadAsync();
 
     [RelayCommand] private void OpenPeriodTab() => ActiveTab = "period";
@@ -3576,10 +3583,43 @@ public partial class PayrollViewModel : LoadableViewModel
 
     async Task LoadSalariesAsync()
     {
+        await RunAsync(() => _svc.PayrollRoleSalariesAsync(), roles =>
+        {
+            var emp = roles.FirstOrDefault(r => r.Role == "employee");
+            var coach = roles.FirstOrDefault(r => r.Role == "coach");
+            EmployeeRoleSalaryStatus = emp?.Amount is { } ea ? $"Current: ₱{ea:N2}" : "Not set yet";
+            CoachRoleSalaryStatus = coach?.Amount is { } ca ? $"Current: ₱{ca:N2}" : "Not set yet";
+            if (emp?.Amount is { } eVal && string.IsNullOrWhiteSpace(EmployeeRoleSalaryInput))
+                EmployeeRoleSalaryInput = eVal.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+            if (coach?.Amount is { } cVal && string.IsNullOrWhiteSpace(CoachRoleSalaryInput))
+                CoachRoleSalaryInput = cVal.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+        });
         await RunAsync(() => _svc.PayrollStaffAsync(), list =>
         {
             Fill(StaffSalaries, list.Select(s => new StaffSalaryItem(s, SaveSalaryAsync)));
         });
+    }
+
+    [RelayCommand]
+    private Task SaveEmployeeRoleSalaryAsync() => SaveRoleSalaryAsync("employee", EmployeeRoleSalaryInput);
+
+    [RelayCommand]
+    private Task SaveCoachRoleSalaryAsync() => SaveRoleSalaryAsync("coach", CoachRoleSalaryInput);
+
+    async Task SaveRoleSalaryAsync(string role, string input)
+    {
+        RoleSalaryError = null;
+        if (!decimal.TryParse(input.Trim(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var amount) || amount <= 0)
+        {
+            RoleSalaryError = "Enter a salary above ₱0.";
+            return;
+        }
+        var res = await _svc.SetRoleSalaryAsync(role, amount);
+        if (!res.Ok) { RoleSalaryError = ErrorText.For(res.Error, res.Message); return; }
+        var label = role == "coach" ? "Coach" : "Front desk";
+        Notice = $"₱{amount:N2} applied to all {label} staff.";
+        await LoadSalariesAsync();
+        await LoadPeriodAsync();
     }
 
     void ApplyPeriod(PayrollPeriod p)

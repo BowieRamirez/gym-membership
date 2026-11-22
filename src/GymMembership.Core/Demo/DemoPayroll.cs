@@ -9,6 +9,10 @@ public sealed partial class DemoGateway
     {
         public string UserId = ""; public decimal Amount; public DateTime UpdatedAt; public string UpdatedBy = "";
     }
+    sealed class DemoRoleSalary
+    {
+        public string Role = ""; public decimal Amount; public DateTime UpdatedAt; public string UpdatedBy = "";
+    }
     sealed class DemoPayrollPeriod
     {
         public int Id; public DateOnly StartsOn; public DateOnly EndsOn; public DateTime? PaidAt; public string? PaidBy;
@@ -20,6 +24,7 @@ public sealed partial class DemoGateway
     }
 
     readonly List<DemoStaffSalary> _staffSalaries = new();
+    readonly List<DemoRoleSalary> _roleSalaries = new();
     readonly List<DemoPayrollPeriod> _payrollPeriods = new();
     readonly List<DemoPayrollLine> _payrollLines = new();
 
@@ -87,8 +92,9 @@ public sealed partial class DemoGateway
             if (per.PaidAt is null)
             {
                 var ss = _staffSalaries.FirstOrDefault(s => s.UserId == p.Id);
-                salary = ss?.Amount ?? 0m;
-                noSalary = ss is null;
+                var rs = _roleSalaries.FirstOrDefault(r => r.Role == role);
+                salary = ss?.Amount ?? rs?.Amount ?? 0m;
+                noSalary = ss is null && rs is null;
             }
             else
             {
@@ -154,6 +160,49 @@ public sealed partial class DemoGateway
                 Audit("payroll.salary_set", "staff_salaries", userId);
                 result = null; return true;
             }
+            case "set_role_salary":
+            {
+                Require("reports:revenue");
+                var role = Str("p_role") ?? throw Err("bad_input");
+                var amount = Money("p_amount");
+                if (role is not ("employee" or "coach") || amount is <= 0 or > 10_000_000) throw Err("bad_input");
+                var rounded = Math.Round(amount, 2);
+                var existingRole = _roleSalaries.FirstOrDefault(r => r.Role == role);
+                if (existingRole is null)
+                    _roleSalaries.Add(new DemoRoleSalary { Role = role, Amount = rounded, UpdatedAt = SubscriptionNow, UpdatedBy = Uid });
+                else
+                {
+                    existingRole.Amount = rounded; existingRole.UpdatedAt = SubscriptionNow; existingRole.UpdatedBy = Uid;
+                }
+                foreach (var p in All<Profile>().Where(p => p.IsActive && p.DeletedAt is null && p.Id != Uid && PrimaryPayrollRole(p.Id) == role))
+                {
+                    var s = _staffSalaries.FirstOrDefault(x => x.UserId == p.Id);
+                    if (s is null)
+                        _staffSalaries.Add(new DemoStaffSalary { UserId = p.Id, Amount = rounded, UpdatedAt = SubscriptionNow, UpdatedBy = Uid });
+                    else
+                    {
+                        s.Amount = rounded; s.UpdatedAt = SubscriptionNow; s.UpdatedBy = Uid;
+                    }
+                }
+                Audit("payroll.role_salary_set", "role_salaries", role);
+                result = null; return true;
+            }
+            case "payroll_role_salaries":
+            {
+                Require("reports:revenue");
+                result = new[] { "employee", "coach" }.Select(role =>
+                {
+                    var rs = _roleSalaries.FirstOrDefault(r => r.Role == role);
+                    return new RoleSalary
+                    {
+                        Role = role,
+                        Amount = rs?.Amount,
+                        UpdatedAt = rs?.UpdatedAt,
+                        UpdatedByName = rs is null ? null : StaffDisplayName(All<Profile>().First(u => u.Id == rs.UpdatedBy))
+                    };
+                }).ToList();
+                return true;
+            }
             case "payroll_staff":
             {
                 Require("reports:revenue");
@@ -163,14 +212,21 @@ public sealed partial class DemoGateway
                     .Where(x => x.Role is "employee" or "coach" || (x.Role is "subadmin" or "admin" && x.Salary is not null))
                     .OrderBy(x => RoleOrder(x.Role!))
                     .ThenBy(x => StaffDisplayName(x.Profile))
-                    .Select(x => new StaffSalary
+                    .Select(x =>
                     {
-                        UserId = x.Profile.Id,
-                        FullName = StaffDisplayName(x.Profile),
-                        Role = x.Role!,
-                        Amount = x.Salary?.Amount,
-                        UpdatedAt = x.Salary?.UpdatedAt,
-                        UpdatedByName = x.Salary is null ? null : StaffDisplayName(All<Profile>().First(u => u.Id == x.Salary.UpdatedBy))
+                        var rs = _roleSalaries.FirstOrDefault(r => r.Role == x.Role);
+                        var amount = x.Salary?.Amount ?? rs?.Amount;
+                        var updatedAt = x.Salary?.UpdatedAt ?? rs?.UpdatedAt;
+                        var updatedById = x.Salary?.UpdatedBy ?? rs?.UpdatedBy;
+                        return new StaffSalary
+                        {
+                            UserId = x.Profile.Id,
+                            FullName = StaffDisplayName(x.Profile),
+                            Role = x.Role!,
+                            Amount = amount,
+                            UpdatedAt = updatedAt,
+                            UpdatedByName = updatedById is null ? null : StaffDisplayName(All<Profile>().First(u => u.Id == updatedById))
+                        };
                     }).ToList();
                 result = list; return true;
             }

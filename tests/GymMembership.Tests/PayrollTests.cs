@@ -139,4 +139,25 @@ public class PayrollTests
         Assert.False(vm.CanMarkPaid);
         Assert.True(paid.IsPaid);
     }
+
+    [Fact]
+    public async Task Role_salary_applies_to_all_front_desk_and_coaches_in_ViewModel()
+    {
+        var (_, admin) = await SignIn("admin@demo.io");
+        var vm = new PayrollViewModel(admin) { PeriodStartsOn = new DateOnly(2026, 11, 1) };
+        await vm.OnAppearingAsync();
+
+        vm.EmployeeRoleSalaryInput = "7800";
+        await vm.SaveEmployeeRoleSalaryCommand.ExecuteAsync(null);
+        vm.CoachRoleSalaryInput = "11000";
+        await vm.SaveCoachRoleSalaryCommand.ExecuteAsync(null);
+
+        Assert.Null(vm.RoleSalaryError);
+        Assert.Equal("Current: ₱7,800.00", vm.EmployeeRoleSalaryStatus);
+        Assert.Equal("Current: ₱11,000.00", vm.CoachRoleSalaryStatus);
+        Assert.All(vm.StaffSalaries.Where(s => s.Data.Role == "employee"), s => Assert.Equal(7800m, s.Data.Amount));
+        Assert.All(vm.StaffSalaries.Where(s => s.Data.Role == "coach"), s => Assert.Equal(11000m, s.Data.Amount));
+        Assert.All(vm.Rows.Where(r => r.Row.Role == "employee"), r => Assert.Equal(7800m, r.Salary));
+        Assert.All(vm.Rows.Where(r => r.Row.Role == "coach"), r => Assert.Equal(11000m, r.Salary));
+    }
 }

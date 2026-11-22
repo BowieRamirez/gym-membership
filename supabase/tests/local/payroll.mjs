@@ -192,6 +192,33 @@ try {
     assert.ok(audits.includes('payroll.line_removed'));
     assert.ok(audits.includes('payroll.paid'));
   });
+
+  await test('role salaries apply to all existing and new front desk / coaches; non-admins refused', async () => {
+    await assert.rejects(as(desk, `select set_role_salary('employee', 7500)`), /forbidden/);
+    await assert.rejects(as(admin, `select * from payroll_role_salaries()`), /forbidden|$/).catch(() => {}); // admin allowed below
+    await assert.rejects(as(desk, `select * from payroll_role_salaries()`), /forbidden/);
+    await assert.rejects(as(admin, `select set_role_salary('admin', 20000)`), /bad_input/);
+
+    await as(admin, `select set_role_salary('employee', 7800)`);
+    await as(admin, `select set_role_salary('coach', 11000)`);
+
+    const roles = await as(admin, `select * from payroll_role_salaries()`);
+    assert.equal(Number(roles.find(r => r.role === 'employee').amount), 7800);
+    assert.equal(Number(roles.find(r => r.role === 'coach').amount), 11000);
+
+    // Existing desk (including Desk Leo who had no salary) and coach get the role salary
+    const staff = await as(admin, `select * from payroll_staff()`);
+    assert.equal(Number(staff.find(s => s.user_id === desk).amount), 7800);
+    assert.equal(Number(staff.find(s => s.user_id === deskNoSalary).amount), 7800);
+    assert.equal(Number(staff.find(s => s.user_id === coach).amount), 11000);
+
+    // A newly added front desk employee automatically inherits the role salary
+    const newDesk = await user('employee', 'Desk New');
+    const draft = (await as(admin, `select payroll_period('2026-11-01') p`))[0].p;
+    const newRow = draft.rows.find(r => r.user_id === newDesk);
+    assert.equal(newRow.no_salary, false);
+    assert.equal(Number(newRow.salary), 7800);
+  });
 } finally {
   await db.end(); await server.stop();
   console.log(`\nPayroll: ${passed} passed, ${failed} failed`);

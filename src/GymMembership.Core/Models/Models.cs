@@ -522,6 +522,16 @@ public sealed class StaffSalary
     [System.Text.Json.Serialization.JsonIgnore] public string RoleLabel => Role switch { "employee" => "Front desk", "coach" => "Coach", "subadmin" => "Admin", "admin" => "System admin", _ => Role };
 }
 
+/// <summary>Phase 19 (0137): role-level fixed salary for Front desk (employee) or Coach.</summary>
+public sealed class RoleSalary
+{
+    [System.Text.Json.Serialization.JsonPropertyName("role")] public string Role { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("amount")] public decimal? Amount { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("updated_by_name")] public string? UpdatedByName { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore] public string RoleLabel => Role == "coach" ? "Coach" : "Front desk";
+}
+
 /// <summary>Phase 17 (0136): one staff member's row inside a payroll period.</summary>
 public sealed class PayrollRow
 {

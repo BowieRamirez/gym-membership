@@ -1951,6 +1951,8 @@ public interface IAdminService
     Task<AppResult<bool>> ReviewDamageAsync(int reportId, string status, string? note = null, bool setMaintenance = false) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<IReadOnlyList<CoachHoursRow>>> CoachHoursAsync(DateOnly from, DateOnly to) => Task.FromResult(AppResult<IReadOnlyList<CoachHoursRow>>.Success([]));
     Task<AppResult<IReadOnlyList<StaffSalary>>> PayrollStaffAsync() => Task.FromResult(AppResult<IReadOnlyList<StaffSalary>>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<IReadOnlyList<RoleSalary>>> PayrollRoleSalariesAsync() => Task.FromResult(AppResult<IReadOnlyList<RoleSalary>>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<bool>> SetRoleSalaryAsync(string role, decimal amount) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<bool>> SetStaffSalaryAsync(string userId, decimal amount) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<PayrollPeriod>> PayrollPeriodAsync(DateOnly startsOn) => Task.FromResult(AppResult<PayrollPeriod>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<IReadOnlyList<PayrollLine>>> PayrollLinesAsync(int periodId, string userId) => Task.FromResult(AppResult<IReadOnlyList<PayrollLine>>.Fail(AppErrorKind.Unknown, "not_implemented"));
@@ -2023,6 +2025,12 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
 
     public Task<AppResult<IReadOnlyList<StaffSalary>>> PayrollStaffAsync() => Safe.RunAsync<IReadOnlyList<StaffSalary>>(async () =>
         await gw.RpcAsync<List<StaffSalary>>("payroll_staff", new()) ?? []);
+
+    public Task<AppResult<IReadOnlyList<RoleSalary>>> PayrollRoleSalariesAsync() => Safe.RunAsync<IReadOnlyList<RoleSalary>>(async () =>
+        await gw.RpcAsync<List<RoleSalary>>("payroll_role_salaries", new()) ?? []);
+
+    public Task<AppResult<bool>> SetRoleSalaryAsync(string role, decimal amount) =>
+        Rpc("set_role_salary", new() { ["p_role"] = role, ["p_amount"] = amount });
 
     public Task<AppResult<bool>> SetStaffSalaryAsync(string userId, decimal amount) =>
         Rpc("set_staff_salary", new() { ["p_user"] = userId, ["p_amount"] = amount });

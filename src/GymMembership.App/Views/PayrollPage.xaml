@@ -250,6 +250,47 @@
                     <VerticalStackLayout Spacing="14" IsVisible="{Binding IsSalariesTab}">
                         <Label Text="Fixed salary per half-month pay period (1st–15th and 16th–end). Draft periods update immediately when a salary changes; paid periods stay locked."
                                Style="{StaticResource Muted}" />
+
+                        <!-- Role-level fixed salaries -->
+                        <Border Style="{StaticResource Panel}">
+                            <VerticalStackLayout Spacing="10">
+                                <Label Text="Set fixed salary by role" Style="{StaticResource SectionTitle}" />
+                                <Label Text="Applies to every active account in that role (and any new ones added later)." Style="{StaticResource Caption}" />
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
+                                    <VerticalStackLayout Spacing="6">
+                                        <HorizontalStackLayout Spacing="8">
+                                            <c:StatusChip Status="Front desk" />
+                                            <Label Text="{Binding EmployeeRoleSalaryStatus}" Style="{StaticResource Caption}" VerticalOptions="Center" />
+                                        </HorizontalStackLayout>
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                            <Border Style="{StaticResource Field}" Padding="10,4">
+                                                <Entry Text="{Binding EmployeeRoleSalaryInput}" Keyboard="Numeric" Placeholder="₱0.00" AutomationId="EmployeeRoleSalary" SemanticProperties.Description="Front desk fixed salary">
+                                                    <Entry.Behaviors><c:NumericOnlyBehavior /></Entry.Behaviors>
+                                                </Entry>
+                                            </Border>
+                                            <Button Grid.Column="1" Text="Apply to all" Style="{StaticResource SmallButton}" Command="{Binding SaveEmployeeRoleSalaryCommand}" AutomationId="SaveEmployeeRoleSalary" />
+                                        </Grid>
+                                    </VerticalStackLayout>
+
+                                    <VerticalStackLayout Grid.Column="1" Spacing="6">
+                                        <HorizontalStackLayout Spacing="8">
+                                            <c:StatusChip Status="Coach" />
+                                            <Label Text="{Binding CoachRoleSalaryStatus}" Style="{StaticResource Caption}" VerticalOptions="Center" />
+                                        </HorizontalStackLayout>
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                            <Border Style="{StaticResource Field}" Padding="10,4">
+                                                <Entry Text="{Binding CoachRoleSalaryInput}" Keyboard="Numeric" Placeholder="₱0.00" AutomationId="CoachRoleSalary" SemanticProperties.Description="Coach fixed salary">
+                                                    <Entry.Behaviors><c:NumericOnlyBehavior /></Entry.Behaviors>
+                                                </Entry>
+                                            </Border>
+                                            <Button Grid.Column="1" Text="Apply to all" Style="{StaticResource SmallButton}" Command="{Binding SaveCoachRoleSalaryCommand}" AutomationId="SaveCoachRoleSalary" />
+                                        </Grid>
+                                    </VerticalStackLayout>
+                                </Grid>
+                                <Label Text="{Binding RoleSalaryError}" Style="{StaticResource FieldError}" IsVisible="{Binding RoleSalaryError, Converter={StaticResource IsNotNull}}" />
+                            </VerticalStackLayout>
+                        </Border>
+
                         <Border Style="{StaticResource TablePanel}">
                             <VerticalStackLayout>
                                 <VerticalStackLayout x:Name="SalariesHead">
