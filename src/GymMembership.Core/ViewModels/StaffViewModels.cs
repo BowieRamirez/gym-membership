@@ -878,8 +878,8 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
         await RunAsync(() => Task.FromResult(result), rows => { Fill(Hits, Listed(rows)); IsOffline = false; });
     }
 
-    /// <summary>While the PIN step is open it stands in for that member's row, so the member isn't listed twice.</summary>
-    IEnumerable<MemberHit> Listed(IEnumerable<MemberHit> rows) => rows.Where(h => h.MemberId != PinFor?.MemberId);
+    /// <summary>Hides deactivated accounts and the member whose PIN step is open (so they aren't listed twice).</summary>
+    IEnumerable<MemberHit> Listed(IEnumerable<MemberHit> rows) => rows.Where(h => h.Status != "inactive" && h.MemberId != PinFor?.MemberId);
 
     async Task LoadCoachesAsync()
     {
