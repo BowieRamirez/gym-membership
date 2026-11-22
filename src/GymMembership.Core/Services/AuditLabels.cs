@@ -32,6 +32,7 @@ public static class AuditLabels
         ["catalog.archive"] = "Archived", ["catalog.restore"] = "Restored from archive",
         ["catalog.publish"] = "Published", ["catalog.new_version"] = "New version drafted", ["catalog.delete"] = "Deleted draft",
         ["cash_shift.open"] = "Cash shift started", ["cash_shift.close"] = "Cash shift ended", ["cash_shift.note"] = "Cash shift note added",
+        ["payroll.salary_set"] = "Staff salary set", ["payroll.line_added"] = "Payroll line added", ["payroll.line_removed"] = "Payroll line removed", ["payroll.paid"] = "Payroll marked as paid",
         ["announcement.post"] = "Announcement posted",
         ["gym.close"] = "Gym closed for a day", ["gym.reopen"] = "Gym opened again",   // G16 (0065)
     };
@@ -40,7 +41,7 @@ public static class AuditLabels
     public static readonly IReadOnlyDictionary<string, string> Areas = new Dictionary<string, string>
     {
         ["user"] = "Account", ["role"] = "Role", ["payment"] = "Payment", ["check_in"] = "Check-in", ["refund"] = "Refund",
-        ["reservation"] = "Booking", ["coach_session"] = "Coach session", ["coach_access"] = "Coach access", ["amenity"] = "Amenity", ["catalog"] = "Catalog", ["cash_shift"] = "Cash shift", ["announcement"] = "Announcement", ["discount"] = "Discount code", ["gym"] = "Gym", ["damage_report"] = "Damage report",
+        ["reservation"] = "Booking", ["coach_session"] = "Coach session", ["coach_access"] = "Coach access", ["amenity"] = "Amenity", ["catalog"] = "Catalog", ["cash_shift"] = "Cash shift", ["payroll"] = "Payroll", ["announcement"] = "Announcement", ["discount"] = "Discount code", ["gym"] = "Gym", ["damage_report"] = "Damage report",
     };
 
     /// <summary>Object type: the table the entry is about. The filter sends the key.</summary>
@@ -48,7 +49,7 @@ public static class AuditLabels
     {
         ["profiles"] = "Account", ["user_roles"] = "Role", ["payments"] = "Payment", ["refund_requests"] = "Refund request",
         ["reservations"] = "Booking", ["training_sessions"] = "Coach session", ["amenities"] = "Amenity", ["membership_packages"] = "Package", ["discounts"] = "Discount code",
-        ["cash_shifts"] = "Cash shift", ["announcements"] = "Announcement", ["gym_closures"] = "Closed day", ["gym_check_ins"] = "Check-in", ["damage_reports"] = "Damage report",
+        ["cash_shifts"] = "Cash shift", ["staff_salaries"] = "Staff salary", ["payroll_periods"] = "Pay period", ["payroll_lines"] = "Payroll line", ["announcements"] = "Announcement", ["gym_closures"] = "Closed day", ["gym_check_ins"] = "Check-in", ["damage_reports"] = "Damage report",
     };
 
     public static string Action(string code) => Actions.GetValueOrDefault(code, code);

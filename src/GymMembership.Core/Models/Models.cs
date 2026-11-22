@@ -508,3 +508,62 @@ public record RevenueRow(DateTime Day, string Kind, string Method, long Payments
     /// <summary>"Membership · QR · 1 payment" (9.8: was "membership · qr · 1 payment(s)").</summary>
     public string Summary => $"{PayKind.Name(Kind)} · {PayMethod.Name(Method)} · {Payments} {(Payments == 1 ? "payment" : "payments")}";
 }
+
+/// <summary>Phase 17 (0136): staff salary row for the Salaries tab.</summary>
+public sealed class StaffSalary
+{
+    [System.Text.Json.Serialization.JsonPropertyName("user_id")] public string UserId { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("full_name")] public string FullName { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("role")] public string Role { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("amount")] public decimal? Amount { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("updated_by_name")] public string? UpdatedByName { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore] public bool NoSalary => Amount is null;
+    [System.Text.Json.Serialization.JsonIgnore] public string RoleLabel => Role switch { "employee" => "Front desk", "coach" => "Coach", "subadmin" => "Admin", "admin" => "System admin", _ => Role };
+}
+
+/// <summary>Phase 17 (0136): one staff member's row inside a payroll period.</summary>
+public sealed class PayrollRow
+{
+    [System.Text.Json.Serialization.JsonPropertyName("user_id")] public string UserId { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("full_name")] public string FullName { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("role")] public string Role { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("sessions_count")] public int SessionsCount { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("hours")] public decimal Hours { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("salary")] public decimal Salary { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("bonuses")] public decimal Bonuses { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("deductions")] public decimal Deductions { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("net")] public decimal Net { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("no_salary")] public bool NoSalary { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore] public string RoleLabel => Role switch { "employee" => "Front desk", "coach" => "Coach", "subadmin" => "Admin", "admin" => "System admin", _ => Role };
+    [System.Text.Json.Serialization.JsonIgnore] public string HoursText => Role switch
+    {
+        "coach" => $"{SessionsCount} {(SessionsCount == 1 ? "session" : "sessions")} · {Hours:0.##} h",
+        "employee" => $"{Hours:0.##} h at the desk",
+        _ => "–"
+    };
+}
+
+/// <summary>Phase 17 (0136): a twice-monthly payroll period (1st-15th or 16th-end) and its rows.</summary>
+public sealed class PayrollPeriod
+{
+    [System.Text.Json.Serialization.JsonPropertyName("period_id")] public int PeriodId { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("starts_on")] public DateOnly StartsOn { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("ends_on")] public DateOnly EndsOn { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("paid_at")] public DateTime? PaidAt { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("paid_by_name")] public string? PaidByName { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("total_net")] public decimal TotalNet { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("rows")] public List<PayrollRow> Rows { get; set; } = new();
+    [System.Text.Json.Serialization.JsonIgnore] public bool IsPaid => PaidAt is not null;
+}
+
+/// <summary>Phase 17 (0136): one salary, bonus or deduction line in a payroll period.</summary>
+public sealed class PayrollLine
+{
+    [System.Text.Json.Serialization.JsonPropertyName("line_id")] public int LineId { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("kind")] public string Kind { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("amount")] public decimal Amount { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("note")] public string? Note { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("created_by_name")] public string? CreatedByName { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("created_at")] public DateTime CreatedAt { get; set; }
+}

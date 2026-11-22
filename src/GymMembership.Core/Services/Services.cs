@@ -1950,6 +1950,13 @@ public interface IAdminService
     Task<AppResult<IReadOnlyList<DamageReportRow>>> DamageReportsAsync() => Task.FromResult(AppResult<IReadOnlyList<DamageReportRow>>.Success([]));
     Task<AppResult<bool>> ReviewDamageAsync(int reportId, string status, string? note = null, bool setMaintenance = false) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<IReadOnlyList<CoachHoursRow>>> CoachHoursAsync(DateOnly from, DateOnly to) => Task.FromResult(AppResult<IReadOnlyList<CoachHoursRow>>.Success([]));
+    Task<AppResult<IReadOnlyList<StaffSalary>>> PayrollStaffAsync() => Task.FromResult(AppResult<IReadOnlyList<StaffSalary>>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<bool>> SetStaffSalaryAsync(string userId, decimal amount) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<PayrollPeriod>> PayrollPeriodAsync(DateOnly startsOn) => Task.FromResult(AppResult<PayrollPeriod>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<IReadOnlyList<PayrollLine>>> PayrollLinesAsync(int periodId, string userId) => Task.FromResult(AppResult<IReadOnlyList<PayrollLine>>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<PayrollLine>> AddPayrollLineAsync(int periodId, string userId, string kind, decimal amount, string note) => Task.FromResult(AppResult<PayrollLine>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<bool>> RemovePayrollLineAsync(int lineId) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<PayrollPeriod>> MarkPayrollPaidAsync(int periodId) => Task.FromResult(AppResult<PayrollPeriod>.Fail(AppErrorKind.Unknown, "not_implemented"));
 }
 
 public sealed record CoachHoursRow(
@@ -2013,6 +2020,27 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
 
     public Task<AppResult<IReadOnlyList<CoachHoursRow>>> CoachHoursAsync(DateOnly from, DateOnly to) => Safe.RunAsync<IReadOnlyList<CoachHoursRow>>(async () =>
         await gw.RpcAsync<List<CoachHoursRow>>("coach_hours_report", new() { ["p_from"] = from.ToString("yyyy-MM-dd"), ["p_to"] = to.ToString("yyyy-MM-dd") }));
+
+    public Task<AppResult<IReadOnlyList<StaffSalary>>> PayrollStaffAsync() => Safe.RunAsync<IReadOnlyList<StaffSalary>>(async () =>
+        await gw.RpcAsync<List<StaffSalary>>("payroll_staff", new()) ?? []);
+
+    public Task<AppResult<bool>> SetStaffSalaryAsync(string userId, decimal amount) =>
+        Rpc("set_staff_salary", new() { ["p_user"] = userId, ["p_amount"] = amount });
+
+    public Task<AppResult<PayrollPeriod>> PayrollPeriodAsync(DateOnly startsOn) => Safe.RunAsync(async () =>
+        await gw.RpcAsync<PayrollPeriod>("payroll_period", new() { ["p_starts_on"] = startsOn.ToString("yyyy-MM-dd") }));
+
+    public Task<AppResult<IReadOnlyList<PayrollLine>>> PayrollLinesAsync(int periodId, string userId) => Safe.RunAsync<IReadOnlyList<PayrollLine>>(async () =>
+        await gw.RpcAsync<List<PayrollLine>>("payroll_lines_for", new() { ["p_period"] = periodId, ["p_user"] = userId }) ?? []);
+
+    public Task<AppResult<PayrollLine>> AddPayrollLineAsync(int periodId, string userId, string kind, decimal amount, string note) => Safe.RunAsync(() =>
+        gw.RpcAsync<PayrollLine>("payroll_add_line", new() { ["p_period"] = periodId, ["p_user"] = userId, ["p_kind"] = kind, ["p_amount"] = amount, ["p_note"] = note.Trim() }));
+
+    public Task<AppResult<bool>> RemovePayrollLineAsync(int lineId) =>
+        Rpc("payroll_remove_line", new() { ["p_line"] = lineId });
+
+    public Task<AppResult<PayrollPeriod>> MarkPayrollPaidAsync(int periodId) => Safe.RunAsync(() =>
+        gw.RpcAsync<PayrollPeriod>("payroll_mark_paid", new() { ["p_period"] = periodId }));
     public Task<AppResult<bool>> SetActiveAsync(string userId, bool active) => Rpc("set_user_active", new() { ["p_user"] = userId, ["p_active"] = active });
 
     // accounts are made by an Edge Function: it holds the service-role key, which the app never has
