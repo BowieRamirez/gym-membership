@@ -36,7 +36,7 @@ public class MessengerViewModelTests
         vm.IsCoach = true;                              // F9: coaches have the Gym tab too, so the first tab is theirs, "Trainees"
         Assert.Empty(vm.Threads);
         Assert.Equal("Trainees", vm.CoachTabText);
-        Assert.Equal("No trainees yet. Members who hire you appear here.", vm.EmptyListText);
+        Assert.Equal("No trainees yet. Members who book a session with you appear here.", vm.EmptyListText);
     }
 
     [Fact]
@@ -82,6 +82,21 @@ public class MessengerViewModelTests
         Assert.Single(desk.Threads);
         await desk.OpenCommand.ExecuteAsync(desk.Threads.Single());
         Assert.True(desk.CanReopen);
+    }
+
+    [Fact]
+    public async Task A_filter_that_hides_the_open_chat_closes_it()
+    {
+        // UI test 2026-11-23: Mine said "No conversations here" while the last chat stayed open beside it
+        var (gw, _, bea) = await Open("bea@demo.io");
+        await bea.ShowTabCommand.ExecuteAsync("support");
+        bea.Draft = "hello"; await bea.SendCommand.ExecuteAsync(null);
+        var (_, _, desk) = await Open("employee@demo.io", gw);
+        await desk.OpenCommand.ExecuteAsync(desk.Threads.Single());
+        await desk.ShowFilterCommand.ExecuteAsync("mine");   // not taken, so not mine
+        Assert.Empty(desk.Threads);
+        Assert.Null(desk.Selected);
+        Assert.Empty(desk.Bubbles);
     }
 
     // a chat service whose message pages the test releases by hand, to make two conversations answer out of order

@@ -152,7 +152,7 @@
                             <Label Text="Amenity" Style="{StaticResource Caption}" />
                             <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Amenities}" ItemDisplayBinding="{Binding Name, x:DataType=svc:GridAmenity}" SelectedItem="{Binding Amenity}" SemanticProperties.Description="Amenity" AutomationId="DeskBookAmenity" /></Border>
                         </VerticalStackLayout>
-                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="170">
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
                             <Label Text="Day" Style="{StaticResource Caption}" />
                             <Border Style="{StaticResource Field}"><DatePicker Date="{Binding Day}" SemanticProperties.Description="Day" /></Border>
                         </VerticalStackLayout>

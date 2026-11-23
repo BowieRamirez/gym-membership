@@ -37,8 +37,8 @@
                         <Label Text="{Binding DayPassPriceText}" Style="{StaticResource Heading}" />
                         <Label Text="{Binding DayPassPackageNote}" Style="{StaticResource Caption}" WidthRequest="180" />
                     </VerticalStackLayout>
-                    <VerticalStackLayout Spacing="6">
-                        <Label Text="Opening float (₱)" Style="{StaticResource Caption}" />
+                    <VerticalStackLayout Spacing="6" Margin="0,0,16,0">
+                        <Label Text="Opening float (₱)" Style="{StaticResource Caption}" WidthRequest="160" />
                         <Border Style="{StaticResource Field}" WidthRequest="160">
                             <Entry Text="{Binding OpeningFloat}" Keyboard="Numeric" AutomationId="OpeningFloat" SemanticProperties.Description="Opening float, in pesos">
                                 <Entry.Behaviors><c:NumericOnlyBehavior /></Entry.Behaviors>
@@ -46,32 +46,32 @@
                         </Border>
                     </VerticalStackLayout>
                     <!-- G13 (0064): the part of an amenity booking paid to reserve it; the rest is paid at the desk -->
-                    <VerticalStackLayout Spacing="6">
-                        <Label Text="Booking down payment (%)" Style="{StaticResource Caption}" />
+                    <VerticalStackLayout Spacing="6" Margin="0,0,16,0">
+                        <Label Text="Booking down payment (%)" Style="{StaticResource Caption}" WidthRequest="160" />
                         <Border Style="{StaticResource Field}" WidthRequest="160">
                             <Entry Text="{Binding DownPaymentPercent}" Keyboard="Numeric" AutomationId="DownPaymentPercent" SemanticProperties.Description="Down payment for amenity bookings, in percent">
                                 <Entry.Behaviors><c:NumericOnlyBehavior AllowDecimal="False" /></Entry.Behaviors>
                             </Entry>
                         </Border>
                     </VerticalStackLayout>
-                    <VerticalStackLayout Spacing="6">
-                        <Label Text="Coach sessions / day (member)" Style="{StaticResource Caption}" />
+                    <VerticalStackLayout Spacing="6" Margin="0,0,16,0">
+                        <Label Text="Coach sessions / day (member)" Style="{StaticResource Caption}" WidthRequest="180" />
                         <Border Style="{StaticResource Field}" WidthRequest="180">
                             <Entry Text="{Binding MaxCoachSessionsPerDay}" Keyboard="Numeric" AutomationId="MaxCoachSessionsPerDay" SemanticProperties.Description="Max coach sessions per member per day">
                                 <Entry.Behaviors><c:NumericOnlyBehavior AllowDecimal="False" /></Entry.Behaviors>
                             </Entry>
                         </Border>
                     </VerticalStackLayout>
-                    <VerticalStackLayout Spacing="6">
-                        <Label Text="Upcoming coach sessions (member)" Style="{StaticResource Caption}" />
+                    <VerticalStackLayout Spacing="6" Margin="0,0,16,0">
+                        <Label Text="Upcoming coach sessions (member)" Style="{StaticResource Caption}" WidthRequest="180" />
                         <Border Style="{StaticResource Field}" WidthRequest="180">
                             <Entry Text="{Binding MaxUpcomingCoachSessions}" Keyboard="Numeric" AutomationId="MaxUpcomingCoachSessions" SemanticProperties.Description="Max upcoming coach sessions per member">
                                 <Entry.Behaviors><c:NumericOnlyBehavior AllowDecimal="False" /></Entry.Behaviors>
                             </Entry>
                         </Border>
                     </VerticalStackLayout>
-                    <VerticalStackLayout Spacing="6">
-                        <Label Text="Coach daily max (hours)" Style="{StaticResource Caption}" />
+                    <VerticalStackLayout Spacing="6" Margin="0,0,16,0">
+                        <Label Text="Coach daily max (hours)" Style="{StaticResource Caption}" WidthRequest="180" />
                         <Border Style="{StaticResource Field}" WidthRequest="180">
                             <Entry Text="{Binding MaxCoachHoursPerDay}" Keyboard="Numeric" Placeholder="Unlimited" AutomationId="MaxCoachHoursPerDay" SemanticProperties.Description="Max coach hours per day">
                                 <Entry.Behaviors><c:NumericOnlyBehavior AllowDecimal="False" /></Entry.Behaviors>

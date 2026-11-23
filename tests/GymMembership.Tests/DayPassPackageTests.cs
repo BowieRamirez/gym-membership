@@ -132,4 +132,22 @@ public class DayPassPackageTests
         Assert.True(vm.CanEditWalkInPrice);
         Assert.False(vm.HasDayPassPackage);
     }
+
+    [Fact]
+    public async Task Gym_settings_shows_the_plain_day_pass_price_not_the_coach_included_one()
+    {
+        // UI test 2026-11-23: showed the Daypass (With coach included) price while walk-ins pay the plain Day pass
+        var gw = new DemoGateway();
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var vm = new GymMembership.Core.ViewModels.GymSettingsViewModel(new AdminService(gw));
+        await vm.OnAppearingAsync();
+        await gw.RpcAsync("archive_catalog_record", new() { ["p_type"] = "plan", ["p_id"] = vm.DayPassPackage!.Id, ["p_reason"] = "Reorder" });
+        // the coach-included one comes first in the list, as on the live project
+        var coached = await gw.InsertAsync(new MembershipPackage { Name = "Day pass + coach", Description = "x", Price = 999, DurationDays = 1, IsDayPass = true, IncludesCoach = true, IsActive = true });
+        await gw.RpcAsync("publish_catalog_item", new() { ["p_kind"] = "plan", ["p_id"] = coached.Id });
+        var plain = await gw.InsertAsync(new MembershipPackage { Name = "Day pass", Description = "x", Price = 60, DurationDays = 1, IsDayPass = true, IsActive = true });
+        await gw.RpcAsync("publish_catalog_item", new() { ["p_kind"] = "plan", ["p_id"] = plain.Id });
+        await vm.OnAppearingAsync();
+        Assert.Equal(plain.Id, vm.DayPassPackage!.Id);
+    }
 }

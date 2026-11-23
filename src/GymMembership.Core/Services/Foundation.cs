@@ -252,7 +252,7 @@ public static class ErrorText
         "no_active_membership" => "You need an active membership for that. Buy a package and wait for the payment to be verified.",
         "outside_membership" => "Your membership doesn't cover that time. Pick a time within it, or buy or renew a package first.",   // 0098
         "already_processed" => "That was already handled. Refresh the page and try again.",
-        "no_active_hire" => "You can only message a coach you have hired, or a trainee who is hired to you.",
+        "no_active_hire" => "You can message a coach or trainee while a session is active or within 7 days of it.",
         "empty_message" => "Type a message first.",
         "end must be after start" => "The end time must be after the start time.",
         // the app is newer than the database: a migration was not pushed, so the server cannot find a function, table or column it asks for

@@ -433,10 +433,10 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
     private CoachAccessOffer? coachOffer;
     public bool HasCoachOffer => CoachOffer is { Offered: true };
     public string CoachOfferPriceText => CoachOffer is { Offered: true, Price: { } p } ? $"₱{p:N0}" : "";
-    public string CoachOfferUntilText => CoachOffer is { Offered: true, EndsAt: { } e } ? $"Book coaches until {e.AddHours(8):d MMM yyyy}" : "";
+    public string CoachOfferUntilText => CoachOffer is { Offered: true, EndsAt: { } e } ? $"Book coaches until {ManilaTime.Of(e):d MMM yyyy}" : "";   // ManilaTime.Of: EndsAt may arrive as local time (UI test 2026-11-23: showed 24 Dec for a 23 Dec end)
     public string CoachOfferTerms => CoachOffer is { Offered: true, Price: { } p, EndsAt: { } e }
         ? (CoachOffer.IsDayPass ? $"₱{p:N0} for today (until midnight). Book a coach at no extra charge."
-            : $"₱{p:N0} for the {CoachOffer.DaysLeft} days left in your term (until {e.AddHours(8):d MMM yyyy}).")
+            : $"₱{p:N0} for the {CoachOffer.DaysLeft} days left in your term (until {ManilaTime.Of(e):d MMM yyyy}).")
         : "";
 
     [ObservableProperty] private bool isBuyingCoachAccess;
@@ -1017,7 +1017,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     public bool CanClose => HasFilters && Selected?.Thread is { IsSupport: true, Status: "open" };
     public bool CanReopen => HasFilters && Selected?.Thread is { IsSupport: true, Status: "closed" };
     public string EmptyListText => HasFilters ? "No conversations here."
-        : Tab == "coach" && HasTabs ? (IsCoach ? "No trainees yet. Members who hire you appear here." : "You have no coach yet. Hire one from the Coaches page to start a conversation.")
+        : Tab == "coach" && HasTabs ? (IsCoach ? "No trainees yet. Members who book a session with you appear here." : "No coach chats yet. Book a coach on Sessions; you can message them while a session is active or within 7 days.")
         : "No conversations yet.";
 
     // ---- live updates. Every Realtime event is a hint; the answer always comes from the server through AutoRefreshAsync.
@@ -1314,7 +1314,14 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         if (!IsCompact && Threads.FirstOrDefault() is { } first) await OpenAsync(first);
     }
 
-    [RelayCommand] private Task ShowFilterAsync(string filter) { Filter = filter; Rebuild(); return Task.CompletedTask; }
+    [RelayCommand] private Task ShowFilterAsync(string filter)
+    {
+        Filter = filter; Rebuild();
+        // UI test 2026-11-23: "Mine" said "No conversations here" while the last chat stayed open beside it
+        if (Selected is { } open && Pinned?.Thread.Key != open.Thread.Key && Threads.All(t => t.Thread.Key != open.Thread.Key))
+        { Selected = null; Bubbles.Clear(); HasMore = false; }
+        return Task.CompletedTask;
+    }
 
     partial void OnSearchTextChanged(string value)
     {

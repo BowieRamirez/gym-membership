@@ -1024,7 +1024,7 @@ public partial class CheckInViewModel(IAttendanceService svc, ICoachService coac
     {
         Notice = null;
         if (!await (row.InGym ? Confirm.AskAsync($"Check {row.Name} out?", "Members will no longer see them as in the gym.", "Check out")
-                              : Confirm.AskAsync($"Check {row.Name} in?", "Members will see they are here and can hire them.", "Check in"))) return;
+                              : Confirm.AskAsync($"Check {row.Name} in?", "Members will see they are here.", "Check in"))) return;
         var ok = await RunAsync(() => row.InGym ? coaches.CheckOutAsync(row.CoachId) : coaches.CheckInAsync(row.CoachId));
         if (!ok) return;
         Notice = row.InGym ? $"{row.Name} is checked out." : $"{row.Name} is checked in.";
@@ -1041,7 +1041,7 @@ public partial class CoachProfileViewModel(ICoachService svc) : LoadableViewMode
     [ObservableProperty, NotifyPropertyChangedFor(nameof(InGym), nameof(VisitText), nameof(VisitButton))] private CoachVisit? visit;
 
     public bool InGym => Visit is not null;
-    public string VisitText => Visit is { } v ? $"You are checked in since {Fmt.Time(v.CheckedInAt)}. Members can find you and hire you." : "You are not checked in. Members won't see you in the coach list until you are.";
+    public string VisitText => Visit is { } v ? $"You are checked in since {Fmt.Time(v.CheckedInAt)}. Members can see you are here." : "You are not checked in. Members won't see you in the coach list until you are.";
     public string VisitButton => InGym ? "Check out" : "Check in";
     public string HiringText => IsAvailable ? "On" : "Off";
 
@@ -1065,7 +1065,7 @@ public partial class CoachProfileViewModel(ICoachService svc) : LoadableViewMode
         Notice = null;
         var wasIn = InGym;
         if (!await (wasIn ? Confirm.AskAsync("Check out of the gym?", "Members will no longer see you as in the gym.", "Check out")
-                          : Confirm.AskAsync("Check in to the gym?", "Members will see you are here and can hire you.", "Check in"))) return;
+                          : Confirm.AskAsync("Check in to the gym?", "Members will see you are here.", "Check in"))) return;
         if (!await RunAsync(() => wasIn ? svc.CheckOutAsync() : svc.CheckInAsync())) return;
         await RunAsync(svc.MyVisitAsync, v => Visit = v);
         Notice = wasIn ? "You are checked out." : "You are checked in.";
@@ -2646,7 +2646,8 @@ public partial class GymSettingsViewModel(IAdminService svc) : LoadableViewModel
         var pkgsTask = svc.AllPackagesAsync();
         await Task.WhenAll(settingsTask, pkgsTask);
         if (pkgsTask.Result.Ok)
-            DayPassPackage = pkgsTask.Result.Value!.FirstOrDefault(p => p.IsDayPass && p.IsActive && p.PublishedAt is not null);
+            DayPassPackage = pkgsTask.Result.Value!.OrderBy(p => p.IncludesCoach)   // the plain Day pass is the walk-in price (UI test 2026-11-23)
+                .FirstOrDefault(p => p.IsDayPass && p.IsActive && p.PublishedAt is not null);
     }
 
     [RelayCommand]

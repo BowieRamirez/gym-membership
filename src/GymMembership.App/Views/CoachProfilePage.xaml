@@ -40,7 +40,7 @@
                     </Label.FormattedText>
                 </Label>
             </HorizontalStackLayout>
-            <Label Text="Separate from checking in: Off keeps you listed while you are in the gym, but members can't hire you." Style="{StaticResource Caption}" />
+            <Label Text="Separate from checking in: Off keeps you listed while you are in the gym, but members can't book you." Style="{StaticResource Caption}" />
 
             <Button Text="Save profile" Command="{Binding SaveCommand}" HorizontalOptions="Start" />
             </VerticalStackLayout>

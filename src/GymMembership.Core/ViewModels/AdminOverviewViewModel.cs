@@ -117,6 +117,14 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
                     var monthly = Require(await admin.RevenueAsync(month, today));
                     return (Money(daily.Sum(r => r.Total)), $"{Money(monthly.Sum(r => r.Total))} this month");
                 }),
+                // UI test 2026-11-23: both cards were listed but never loaded, so they said "Loading…" forever
+                // no figure: opening a pay period creates it, and the overview only reads
+                Load("payroll", () => Task.FromResult(("Salaries and pay periods, twice a month", ""))),
+                Load("damage", async () =>
+                {
+                    var open = Require(await admin.DamageReportsAsync()).Count(r => r.Report.Status == "open");
+                    return (open switch { 0 => "Nothing open", 1 => "1 report open", _ => $"{open} reports open" }, "");
+                }),
                 Load("announcements", async () =>
                 {
                     if (announcements is null) return ("Write to members and coaches", "");
