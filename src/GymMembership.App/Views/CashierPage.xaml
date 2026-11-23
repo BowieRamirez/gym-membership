@@ -5,9 +5,11 @@
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
             x:Class="GymMembership.App.Views.CashierPage" x:DataType="vm:CashierViewModel" Title="Cashier">
 
     <v:BasePage.Resources>
+        <toolkit:IntToBoolConverter x:Key="Any" />
         <!-- owner, 2026-11-16: the search results are a table (as the app's other lists), 10 to a page; the contact column tells
              two people with the same name apart; Choose is the row's one action -->
         <DataTemplate x:Key="HitRow" x:DataType="svc:MemberHit">
@@ -181,13 +183,190 @@
                                     <Button Text="Renewal" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Renewal">
                                         <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="Renewal"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="SemanticProperties.Description" Value="Renewal, selected" /></DataTrigger></Button.Triggers>
                                     </Button>
-                                    <Button Text="Amenity" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Amenity">
-                                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="Amenity"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="SemanticProperties.Description" Value="Amenity, selected" /></DataTrigger></Button.Triggers>
+                                    <Button Text="Amenity booking" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Amenity booking">
+                                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="Amenity booking"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="SemanticProperties.Description" Value="Amenity booking, selected" /></DataTrigger></Button.Triggers>
+                                    </Button>
+                                    <Button Text="Coach session" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Coach session">
+                                        <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="Coach session"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="SemanticProperties.Description" Value="Coach session, selected" /></DataTrigger></Button.Triggers>
                                     </Button>
                                     <Button Text="Day pass" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding PickKindCommand}" CommandParameter="Day pass">
                                         <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding Kind}" Value="Day pass"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="SemanticProperties.Description" Value="Day pass, selected" /></DataTrigger></Button.Triggers>
                                     </Button>
                                 </FlexLayout>
+
+                                <!-- owner, 2026-11-23: bookings take money, so they moved here from Amenity status -->
+                    <ContentView IsVisible="{Binding IsAmenityBooking}">
+                    <Border Style="{StaticResource Panel}" BindingContext="{Binding Booking}">
+                        <VerticalStackLayout Spacing="14" x:DataType="vm:DeskBookingViewModel">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <VerticalStackLayout Spacing="2">
+                                    <c:CardTitle Text="Book an amenity" />
+                                    <Label Text="Same slots and rules as the app. The full price is paid now: in cash into your drawer, or online through Xendit for a walk-in." Style="{StaticResource Caption}" />
+                                </VerticalStackLayout>
+                            </Grid>
+                            <c:Banner Message="{Binding ErrorMessage}" />
+                            <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+                            <!-- 1. who -->
+                            <VerticalStackLayout Spacing="4">
+                                <FlexLayout Wrap="Wrap" AlignItems="End">
+                                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="300">
+                                        <Label Text="Customer" Style="{StaticResource Caption}" />
+                                        <Border Style="{StaticResource Field}"><Entry Text="{Binding Search}" Placeholder="Name, email or phone" ReturnCommand="{Binding PickTopSuggestionCommand}" SemanticProperties.Description="Search members by name, email or phone" AutomationId="DeskBookSearch" /></Border>
+                                    </VerticalStackLayout>
+                                    <Button Text="Book for a walk-in" Style="{StaticResource SmallOutlineButton}" Margin="0,0,12,8" Command="{Binding StartWalkInCommand}" AutomationId="DeskBookWalkIn" />
+                                </FlexLayout>
+                                <Border Style="{StaticResource TablePanel}" IsVisible="{Binding HasSuggestions}" MaximumWidthRequest="480" HorizontalOptions="Start" AutomationId="DeskBookSuggestions">
+                                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Suggestions}">
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="svc:MemberHit">
+                                                <VerticalStackLayout>
+                                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="12,8" SemanticProperties.Description="{Binding Username, StringFormat='Choose {0}'}">
+                                                        <Grid.GestureRecognizers>
+                                                            <TapGestureRecognizer Tapped="OnPickCustomer" />
+                                                        </Grid.GestureRecognizers>
+                                                        <VerticalStackLayout Spacing="1" VerticalOptions="Center">
+                                                            <Label Text="{Binding Username}" FontFamily="BarlowSemiBold" LineBreakMode="TailTruncation" />
+                                                            <Label Text="{Binding ContactText}" Style="{StaticResource Caption}" LineBreakMode="TailTruncation" />
+                                                        </VerticalStackLayout>
+                                                        <c:StatusChip Grid.Column="1" Status="{Binding PlanStatus}" VerticalOptions="Center" />
+                                                    </Grid>
+                                                    <BoxView Style="{StaticResource Hairline}" />
+                                                </VerticalStackLayout>
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
+                                    </VerticalStackLayout>
+                                </Border>
+                            </VerticalStackLayout>
+                            <Label Text="No member found. Check the spelling, or try their email or phone. No account? Book for a walk-in." Style="{StaticResource Muted}" IsVisible="{Binding NoMatch}" />
+                            <!-- 0091 (owner): someone with no account is booked by name; they photograph the receipt shown after booking -->
+                            <VerticalStackLayout Spacing="4" IsVisible="{Binding IsWalkIn}" WidthRequest="300" HorizontalOptions="Start">
+                                <Label Text="Walk-in's name" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><Entry Text="{Binding WalkInName}" MaxLength="100" Placeholder="Full name" SemanticProperties.Description="Walk-in's name" AutomationId="DeskBookWalkInName" /></Border>
+                                <Label Text="No account needed. They get a receipt number to photograph." Style="{StaticResource Caption}" />
+                            </VerticalStackLayout>
+                            <Label Text="{Binding Member.Username, StringFormat='Booking for {0}'}" FontFamily="BarlowSemiBold" IsVisible="{Binding Member, Converter={StaticResource IsNotNull}}" />
+
+                            <!-- 2. what and when: only times the grid can take are offered -->
+                            <FlexLayout Wrap="Wrap" AlignItems="End">
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="200">
+                                    <Label Text="Amenity" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Amenities}" ItemDisplayBinding="{Binding Name, x:DataType=svc:GridAmenity}" SelectedItem="{Binding Amenity}" SemanticProperties.Description="Amenity" AutomationId="DeskBookAmenity" /></Border>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                                    <Label Text="Day" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><DatePicker Date="{Binding Day}" SemanticProperties.Description="Day" /></Border>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="150">
+                                    <Label Text="Starts" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Starts}" ItemDisplayBinding="{Binding Label, x:DataType=vm:DeskBookingViewModel+SlotOption}" SelectedItem="{Binding Start}" SemanticProperties.Description="Start time" AutomationId="DeskBookStart" /></Border>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="130">
+                                    <Label Text="How long" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Lengths}" ItemDisplayBinding="{Binding Text, x:DataType=vm:PickChip}" SelectedItem="{Binding Length}" SemanticProperties.Description="How long" AutomationId="DeskBookMinutes" /></Border>
+                                </VerticalStackLayout>
+                                <Button Text="Book and take cash" Style="{StaticResource SmallButton}" Margin="0,0,12,8" Command="{Binding BookCommand}" AutomationId="DeskBook" />
+                                <!-- 0092 (owner): a walk-in may pay online through Xendit instead -->
+                                <Button Text="Pay online (Xendit)" Style="{StaticResource SmallOutlineButton}" Margin="0,0,0,8" Command="{Binding PayOnlineCommand}"
+                                        IsVisible="{Binding IsWalkIn}" AutomationId="DeskBookOnline" />
+                            </FlexLayout>
+
+                            <!-- waiting for Xendit: the checkout is open on this PC; the slot is theirs once Check payment says paid -->
+                            <Border Style="{StaticResource Panel}" IsVisible="{Binding IsWaiting}" MaximumWidthRequest="640" HorizontalOptions="Start" AutomationId="DeskBookWaiting">
+                                <VerticalStackLayout Spacing="8">
+                                    <Label Text="{Binding Waiting.WalkInName, StringFormat='Waiting for {0} to pay online'}" FontFamily="BarlowSemiBold" />
+                                    <Label Text="{Binding Waiting.TotalPrice, StringFormat='₱{0:N2} through Xendit (GCash, Maya or a bank app via QR Ph). The checkout closes in 30 minutes.'}" Style="{StaticResource Caption}" />
+                                    <HorizontalStackLayout Spacing="8">
+                                        <Button Text="Check payment" Style="{StaticResource SmallButton}" Command="{Binding CheckPaymentCommand}" AutomationId="DeskBookCheck" />
+                                        <Button Text="Open checkout again" Style="{StaticResource SmallOutlineButton}" Command="{Binding OpenCheckoutCommand}" />
+                                        <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding StopWaitingCommand}" />
+                                    </HorizontalStackLayout>
+                                </VerticalStackLayout>
+                            </Border>
+
+                            <!-- 3. the receipt: a walk-in photographs it; a member also has it in their Front desk chat -->
+                            <Border Style="{StaticResource Panel}" IsVisible="{Binding Receipt, Converter={StaticResource IsNotNull}}" MaximumWidthRequest="480" HorizontalOptions="Start" AutomationId="DeskBookReceipt">
+                                <VerticalStackLayout Spacing="6">
+                                    <Label Text="Booked and paid" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding Receipt.ReceiptNo, StringFormat='Receipt {0}'}" FontFamily="BarlowSemiBold" FontSize="24" />
+                                    <Label Text="{Binding Receipt.Customer}" FontFamily="BarlowSemiBold" />
+                                    <Label Text="{Binding Receipt.Amenity}" />
+                                    <Label Text="{Binding Receipt.When}" />
+                                    <Label Text="{Binding Receipt.Paid, StringFormat='Paid {0}'}" />
+                                    <Label Text="{Binding Receipt.Note}" Style="{StaticResource Muted}" Margin="0,4,0,0" />
+                                </VerticalStackLayout>
+                            </Border>
+                        </VerticalStackLayout>
+                    </Border>
+                    </ContentView>
+                    <Border Style="{StaticResource Panel}" IsVisible="{Binding IsCoachSession}">
+                        <ContentView BindingContext="{Binding CoachBooking}">
+                        <VerticalStackLayout x:DataType="vm:DeskCoachBookingViewModel">
+                        <VerticalStackLayout Spacing="12">
+                            <VerticalStackLayout Spacing="2">
+                                <c:CardTitle Text="Book a coach for a member" />
+                                <Label Text="One-on-one, 1 or 2 hours inside the coach's shift. Free with a coach-included package or coach access; otherwise the add-on is paid in cash or online." Style="{StaticResource Caption}" />
+                            </VerticalStackLayout>
+                            <c:Banner Message="{Binding ErrorMessage}" />
+                            <c:Banner Kind="notice" Message="{Binding Notice}" />
+                            <VerticalStackLayout Spacing="4" WidthRequest="300" HorizontalOptions="Start">
+                                <Label Text="Member" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><Entry Text="{Binding CoachCustomerSearch}" Placeholder="Name, email or phone" /></Border>
+                            </VerticalStackLayout>
+                            <Border Style="{StaticResource TablePanel}" IsVisible="{Binding CoachCustomerHits.Count, Converter={StaticResource Any}}" MaximumWidthRequest="480" HorizontalOptions="Start">
+                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding CoachCustomerHits}">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="svc:MemberHit">
+                                            <VerticalStackLayout>
+                                                <Grid ColumnDefinitions="*,Auto" Padding="12,8">
+                                                    <Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnPickCoachCustomer" /></Grid.GestureRecognizers>
+                                                    <Label Text="{Binding Username}" FontFamily="BarlowSemiBold" />
+                                                    <c:StatusChip Grid.Column="1" Status="{Binding PlanStatus}" />
+                                                </Grid>
+                                                <BoxView Style="{StaticResource Hairline}" />
+                                            </VerticalStackLayout>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </VerticalStackLayout>
+                            </Border>
+                            <Label Text="{Binding CoachCustomer.Username, StringFormat='Booking for {0}'}" FontFamily="BarlowSemiBold" IsVisible="{Binding CoachCustomer, Converter={StaticResource IsNotNull}}" />
+                            <FlexLayout Wrap="Wrap" AlignItems="End">
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                                    <Label Text="Day" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><DatePicker Date="{Binding CoachBookDay}" MinimumDate="{x:Static x:DateTime.Today}" /></Border>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                                    <Label Text="Length" Style="{StaticResource Caption}" />
+                                    <HorizontalStackLayout Spacing="6">
+                                        <Button Text="1 hour" Style="{StaticResource FilterChip}" Command="{Binding SetDeskCoachHoursCommand}" CommandParameter="1" />
+                                        <Button Text="2 hours" Style="{StaticResource FilterChip}" Command="{Binding SetDeskCoachHoursCommand}" CommandParameter="2" />
+                                    </HorizontalStackLayout>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="200">
+                                    <Label Text="Coach" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding DeskFreeCoaches}" ItemDisplayBinding="{Binding FullName}" SelectedItem="{Binding SelectedDeskCoach}" Title="Coach" /></Border>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="180">
+                                    <Label Text="Hour" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding DeskCoachHours}" ItemDisplayBinding="{Binding Label}" SelectedItem="{Binding SelectedDeskCoachHour}" Title="Hour" /></Border>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                                    <Label Text="Method" Style="{StaticResource Caption}" />
+                                    <HorizontalStackLayout Spacing="6">
+                                        <Button Text="Cash" Style="{StaticResource FilterChip}" Command="{Binding PickDeskCoachMethodCommand}" CommandParameter="Cash" />
+                                        <Button Text="Online" Style="{StaticResource FilterChip}" Command="{Binding PickDeskCoachMethodCommand}" CommandParameter="Online" />
+                                    </HorizontalStackLayout>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="160">
+                                    <Label Text="Discount code" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><Entry Text="{Binding DeskCoachCode}" Placeholder="Optional" /></Border>
+                                </VerticalStackLayout>
+                            </FlexLayout>
+                            <Button Text="Book coach session" Style="{StaticResource SmallButton}" HorizontalOptions="Start" Command="{Binding DeskBookCoachCommand}" />
+                        </VerticalStackLayout>
+                        </VerticalStackLayout>
+                        </ContentView>
+                    </Border>
 
                                 <!-- cashier plan Y3: a Day pass needs no account; a name is optional, or find the member below -->
                                 <VerticalStackLayout Spacing="10" IsVisible="{Binding IsWalkIn}">
@@ -225,7 +404,7 @@
                                     </VerticalStackLayout>
                                 </VerticalStackLayout>
 
-                                <VerticalStackLayout Spacing="12">
+                                <VerticalStackLayout Spacing="12" IsVisible="{Binding ShowsOrder}">
                                     <!-- D1 (2026-11-20): typing 2+ letters shows up to 8 suggestions under the box; Enter picks the top one -->
                                     <VerticalStackLayout Spacing="4">
                                         <FlexLayout Wrap="Wrap" AlignItems="End">
@@ -328,6 +507,11 @@
                 <!-- side: the order, always in view while choosing (D5: customer header at the top) -->
                 <Border Style="{StaticResource SidePanel}">
                                 <VerticalStackLayout Spacing="12">
+                                <VerticalStackLayout Spacing="6" IsVisible="{Binding ShowsOrder, Converter={StaticResource Not}}">
+                                    <c:CardTitle Text="Paid in the booking" />
+                                    <Label Text="Bookings are paid with the buttons in the form: cash goes into your drawer, online goes through Xendit." Style="{StaticResource Caption}" LineBreakMode="WordWrap" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="12" IsVisible="{Binding ShowsOrder}">
                                     <VerticalStackLayout Spacing="4" IsVisible="{Binding HasChosenMember}">
                                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                             <Label Text="{Binding Member.Username}" FontFamily="BarlowBold" FontSize="22" LineBreakMode="WordWrap" VerticalOptions="Center" />
@@ -391,6 +575,7 @@
                                             <Button Text="Customer left" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding StopWaitingCommand}" />
                                         </FlexLayout>
                                     </VerticalStackLayout>
+                                </VerticalStackLayout>
                                 </VerticalStackLayout>
                             </Border>
             </c:SideLayout>

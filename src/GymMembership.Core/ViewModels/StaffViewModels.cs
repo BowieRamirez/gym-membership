@@ -141,9 +141,18 @@ public partial class ItemOption(CounterItem item) : ObservableObject
     [ObservableProperty] private bool isPicked;
 }
 
-public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceService members, IUrlOpener? opener = null, IMembershipService? gym = null, ISessionService? sessions = null) : LoadableViewModel
+public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceService members, IUrlOpener? opener = null, IMembershipService? gym = null, ISessionService? sessions = null,
+    DeskBookingViewModel? booking = null, DeskCoachBookingViewModel? coachBooking = null) : LoadableViewModel
 {
-    public string[] Kinds { get; } = ["Membership", "Renewal", "Amenity", "Day pass"];   // cashier plan Y3: a walk-in buys a Day pass
+    // owner, 2026-11-23: amenity and coach bookings take money, so they moved here from Amenity status; the time-less "Amenity" sale went
+    public string[] Kinds { get; } = ["Membership", "Renewal", "Amenity booking", "Coach session", "Day pass"];   // cashier plan Y3: a walk-in buys a Day pass
+    public const string AmenityBooking = "Amenity booking", CoachSession = "Coach session";
+    public DeskBookingViewModel? Booking { get; } = booking;
+    public DeskCoachBookingViewModel? CoachBooking { get; } = coachBooking;
+    public bool IsAmenityBooking => Kind == AmenityBooking;
+    public bool IsCoachSession => Kind == CoachSession;
+    /// <summary>False while a booking form is shown: it has its own customer box and pay buttons, so the order panel steps aside.</summary>
+    public bool ShowsOrder => !IsAmenityBooking && !IsCoachSession;
     /// <summary>Cashier plan Y6: e-wallets at the desk go through Xendit's checkout (GCash, Maya or any bank app by QR Ph).</summary>
     public const string Online = "GCash / QR Ph";
     public string[] Methods { get; } = ["Cash", Online];   // owner, 2026-11-11: no bank transfer (0054)
@@ -154,7 +163,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     public ObservableCollection<ItemOption> Options { get; } = new();
     int itemsTicket;
 
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWalkIn), nameof(NeedsMember), nameof(CanUseCode), nameof(OrderWho), nameof(OrderWhat), nameof(OrderHow), nameof(TotalText), nameof(TotalNote), nameof(ItemsEmptyText), nameof(HasMultipleDayPassOptions), nameof(DayPassWithCoach), nameof(OrderIneligibleText), nameof(HasOrderIneligible)), NotifyCanExecuteChangedFor(nameof(RecordCommand))]
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWalkIn), nameof(NeedsMember), nameof(IsAmenityBooking), nameof(IsCoachSession), nameof(ShowsOrder), nameof(CanUseCode), nameof(OrderWho), nameof(OrderWhat), nameof(OrderHow), nameof(TotalText), nameof(TotalNote), nameof(ItemsEmptyText), nameof(HasMultipleDayPassOptions), nameof(DayPassWithCoach), nameof(OrderIneligibleText), nameof(HasOrderIneligible)), NotifyCanExecuteChangedFor(nameof(RecordCommand))]
     private string kind = "Membership";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderHow), nameof(CashNeedsShift)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string method = "Cash";
     [ObservableProperty] private string search = "";
@@ -224,7 +233,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     public bool CashNeedsShift => Method == "Cash" && Shift is null;
 
     public bool IsWalkIn => Kind == "Day pass";
-    public bool NeedsMember => !IsWalkIn;
+    public bool NeedsMember => !IsWalkIn && ShowsOrder;
     public bool CanUseCode => !IsWalkIn || DayPassMember is { HasActiveMembership: false };
     // cashier plan Y6: no reference to type; Xendit confirms an e-wallet payment
 
@@ -235,7 +244,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     public string? OrderWhoStatus => Member?.DeskStatusText;
     public string? OrderWhoContact => Member?.ContactText;
     public bool HasChosenMember => Member is not null;
-    public bool ShowChooseCustomerEmpty => !IsWalkIn && Member is null;
+    public bool ShowChooseCustomerEmpty => !IsWalkIn && ShowsOrder && Member is null;
     string? DayPassName => string.IsNullOrWhiteSpace(WalkInName) ? null : WalkInName.Trim();
     public string OrderWhat => Item?.Label ?? (IsWalkIn ? dayPassPackage?.Label ?? "Day pass" : "Choose what they are paying for");
     decimal? dayPassPrice;   // the server charges it, this is what the desk reads out
@@ -317,13 +326,18 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         // a desk payment still waiting for Xendit comes back with its Check payment button (leaving the page used to lose it)
         if (Waiting is null)
             tasks.Add(RunAsync(svc.MyWaitingOnlineAsync, p => { Waiting = p; RecordCommand.NotifyCanExecuteChanged(); }));
+        if (Booking is { IsWaiting: false } b) tasks.Add(ResumeBookingAsync(b));
         return Task.WhenAll(tasks);
     }
+
+    // a walk-in still paying online for a booking comes back on screen (awaited here, so Kind changes on the page's thread)
+    async Task ResumeBookingAsync(DeskBookingViewModel b) { if (await b.ResumeWaitingAsync()) Kind = AmenityBooking; }
 
     // owner, 2026-11-18: only a payment waiting for Xendit is refreshed; the order being typed is left alone
     bool polling;
     public override async Task AutoRefreshAsync()
     {
+        if (Booking is { IsWaiting: true } b) await b.PollWaitingAsync();
         if (polling || IsBusy || Waiting is not { } pay) return;
         polling = true;
         try
@@ -377,6 +391,8 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     bool _refreshingStatus;
     partial void OnKindChanged(string value)
     {
+        if (value == AmenityBooking && Booking is { } b) _ = b.OnAppearingAsync();
+        if (value == CoachSession && CoachBooking is { } cb) _ = cb.OnAppearingAsync();
         _ = ScheduleCodeCheckAsync(false); Item = null;
         if (IsWalkIn && Member is { } m && string.IsNullOrWhiteSpace(WalkInName)) WalkInName = m.Username;
         ApplyFilter(hasQuery: (Search?.Trim().Length ?? 0) >= 2, err: null);
@@ -408,6 +424,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         var ticket = ++itemsTicket;   // the newest request wins: a slow answer for a kind you have left is dropped
         // Cards listed for another kind or member must not stay tappable while the right ones load: a tap would send their item id with the new kind.
         Options.Clear(); Item = null; ErrorMessage = null;
+        if (!ShowsOrder) { LoadingItems = false; return; }   // a booking form lists its own amenities and coaches
         if (IsWalkIn)
         {
             LoadingItems = false;
@@ -2830,8 +2847,7 @@ public sealed record StatusChoice(string Value, string Label);
 
 /// <summary>Front desk and admin: mark an amenity available, in use or unavailable, and see who was alerted.</summary>
 public partial class AmenityStatusViewModel(IAmenityService svc, IReservationService? reservations = null, IPaymentStaffService? payments = null,
-    DeskBookingViewModel? booking = null, IReportFiles? files = null, ISubscriptionService? refunds = null,
-    ISessionService? sessions = null, IAttendanceService? members = null) : LoadableViewModel
+    IReportFiles? files = null, ISubscriptionService? refunds = null) : LoadableViewModel
 {
     // ---- owner, 2026-11-17: the Booked card on the right: confirmed bookings not yet ended; View shows the details, Print opens the receipt PDF ----
     public ObservableCollection<BookedRow> Booked { get; } = new();
@@ -2847,7 +2863,6 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
         OnPropertyChanged(nameof(HasBooked));
         if (Viewing is { } v) Viewing = Booked.FirstOrDefault(b => b.Booking.Id == v.Booking.Id);
     }
-    void OnDeskBooked() => _ = LoadBookedAsync();
     [RelayCommand] private void View(BookedRow row) { Viewing = row; IsAskingRefund = false; }
     [RelayCommand] private void CloseView() { Viewing = null; IsAskingRefund = false; }
 
@@ -2875,117 +2890,6 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
         Notice = null;
         if (await RunAsync(() => Safe.RunAsync(async () => { await files.OpenAsync($"receipt-booking-{row.Booking.Id}.pdf", BookingReceiptPdf.Build(row, DateTime.UtcNow, await files.FontAsync())); return true; })))
             Notice = "Receipt opened. Print it from the PDF viewer (Ctrl+P).";
-    }
-
-    // ---- plan 2026-11-17 Z1, Z2: book a slot for a customer at the desk (its own view model, shown on demand) ----
-    public DeskBookingViewModel? Booking { get; } = booking;
-    public bool HasBooking => Booking is not null;
-    [ObservableProperty] private bool isBooking;
-    [RelayCommand]
-    private async Task ToggleBookingAsync()
-    {
-        if (IsBooking || Booking is null) IsBooking = false;
-        else await OpenBookingAsync();
-    }
-    async Task OpenBookingAsync()
-    {
-        IsBooking = true; IsBookingCoach = false;
-        Booking!.Booked -= OnDeskBooked; Booking.Booked += OnDeskBooked;   // a new booking shows on the Booked card
-        await Booking.OnAppearingAsync();
-    }
-
-    // ---- E5/E6/E7 (0120): Book a coach for a customer at the counter ----
-    public bool HasCoachBooking => sessions is not null && members is not null;
-    [ObservableProperty] private bool isBookingCoach;
-    [ObservableProperty] private string coachCustomerSearch = "";
-    [ObservableProperty] private MemberHit? coachCustomer;
-    [ObservableProperty] private DateTime coachBookDay = DateTime.Today;
-    [ObservableProperty] private int coachBookHours = 1;
-    [ObservableProperty] private FreeCoachSlot? selectedDeskCoach;
-    [ObservableProperty] private SessionsViewModel.HourOption? selectedDeskCoachHour;
-    [ObservableProperty] private string deskCoachMethod = "Cash";
-    [ObservableProperty] private string deskCoachCode = "";
-    public ObservableCollection<MemberHit> CoachCustomerHits { get; } = new();
-    public ObservableCollection<FreeCoachSlot> DeskFreeCoaches { get; } = new();
-    public ObservableCollection<SessionsViewModel.HourOption> DeskCoachHours { get; } = new();
-
-    partial void OnCoachCustomerSearchChanged(string value) => _ = SearchCoachCustomerAsync(value);
-    partial void OnCoachBookDayChanged(DateTime value) { if (IsBookingCoach) _ = LoadDeskCoachesAsync(); }
-    partial void OnSelectedDeskCoachChanged(FreeCoachSlot? value) => RefreshDeskCoachHours();
-
-    async Task SearchCoachCustomerAsync(string q)
-    {
-        if (members is null || string.IsNullOrWhiteSpace(q)) { CoachCustomerHits.Clear(); return; }
-        var res = await members.FindMembersAsync(q.Trim());
-        if (res.Ok) Fill(CoachCustomerHits, res.Value!.Take(6).ToList());
-    }
-
-    void RefreshDeskCoachHours()
-    {
-        DeskCoachHours.Clear();
-        if (SelectedDeskCoach is not { } c) { SelectedDeskCoachHour = null; return; }
-        foreach (var h in c.FreeHours)
-        {
-            if (CoachBookHours == 2 && !c.FreeHours.Contains(h + 1)) continue;
-            DeskCoachHours.Add(new SessionsViewModel.HourOption(h, $"{DateTime.Today.AddHours(h):h tt} – {DateTime.Today.AddHours(h + CoachBookHours):h tt}"));
-        }
-        SelectedDeskCoachHour = DeskCoachHours.FirstOrDefault();
-    }
-
-    [RelayCommand]
-    private void SetDeskCoachHours(object? hours)
-    {
-        CoachBookHours = int.TryParse(hours?.ToString(), out var parsed) && parsed == 2 ? 2 : 1;
-        RefreshDeskCoachHours();
-    }
-
-    [RelayCommand]
-    private void PickDeskCoachMethod(string m) => DeskCoachMethod = m;
-
-    [RelayCommand]
-    private void ChooseCoachCustomer(MemberHit hit) { CoachCustomer = hit; CoachCustomerHits.Clear(); }
-
-    [RelayCommand]
-    private async Task ToggleCoachBookingAsync()
-    {
-        IsBookingCoach = !IsBookingCoach;
-        if (IsBookingCoach) { IsBooking = false; await LoadDeskCoachesAsync(); }
-    }
-
-    async Task LoadDeskCoachesAsync()
-    {
-        if (sessions is null) return;
-        var res = await sessions.FreeCoachesAsync(DateOnly.FromDateTime(CoachBookDay.Date));
-        if (!res.Ok) { ErrorMessage = ErrorText.For(res.Error, res.Message); return; }
-        Fill(DeskFreeCoaches, res.Value!);
-        SelectedDeskCoach = DeskFreeCoaches.FirstOrDefault();
-    }
-
-    [RelayCommand]
-    private async Task DeskBookCoachAsync()
-    {
-        ErrorMessage = Notice = null;
-        if (sessions is null || CoachCustomer is not { } m || SelectedDeskCoach is not { } c || SelectedDeskCoachHour is not { } hr)
-        {
-            ErrorMessage = "Choose a member, coach, and available hour.";
-            return;
-        }
-        var startUtc = new DateTimeOffset(CoachBookDay.Date.AddHours(hr.Hour), TimeSpan.FromHours(8)).UtcDateTime;
-        var method = DeskCoachMethod == "Cash" ? "cash" : "qr";
-        var res = await sessions.DeskBookCoachAsync(m.MemberId, c.CoachId, startUtc, CoachBookHours, method, string.IsNullOrWhiteSpace(DeskCoachCode) ? null : DeskCoachCode.Trim());
-        if (!res.Ok)
-        {
-            ErrorMessage = ErrorText.For(res.Error, res.Message);
-            if (res.Error == AppErrorKind.Conflict) await LoadDeskCoachesAsync();
-            return;
-        }
-        var r = res.Value!;
-        Notice = r.IsFree
-            ? $"Booked {c.FullName} for {m.Username} on {CoachBookDay:ddd d MMM} at {hr.Label} (included)."
-            : method == "cash"
-                ? $"Booked {c.FullName} for {m.Username} at {hr.Label} — ₱{r.Amount:N2} cash recorded ({r.PaymentCode})."
-                : $"Held {c.FullName} for {m.Username} for 15 minutes (code {r.PaymentCode}, ₱{r.Amount:N2}).";
-        IsBookingCoach = false;
     }
 
     // ---- F13 booking refund claims ("I didn't use it"), decided by the desk with a reason; moved here from Payments to verify (cashier plan Y7) ----
@@ -3068,16 +2972,13 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
         var balancesTask = LoadBalancesAsync(ManilaToday);
         var claimsTask = LoadClaimsAsync();
         var bookedTask = LoadBookedAsync();
-        var resumeTask = Booking is { } b && !IsBooking ? b.ResumeWaitingAsync() : Task.FromResult(false);
-        await Task.WhenAll(boardTask, balancesTask, claimsTask, bookedTask, resumeTask);
-        if (resumeTask.Result) await OpenBookingAsync();   // a walk-in still paying online comes back on screen
+        await Task.WhenAll(boardTask, balancesTask, claimsTask, bookedTask);
     }
 
     // Quiet and in place: the error line, the notice and the open form stay as they are, and only cards that changed are swapped.
     public override async Task AutoRefreshAsync()
     {
         if (IsBusy) return;
-        if (Booking is { } b) await b.PollWaitingAsync();
         await LoadBookedAsync();
         var board = await svc.BoardAsync();
         if (!board.Ok) return;
@@ -3165,6 +3066,101 @@ public partial class AnnouncementsViewModel(IAnnouncementService svc) : Loadable
 /// <summary>Plan 2026-11-17 Z1, Z2 (0087): on Amenity status the desk books a slot for a customer: find a member, or (0091, owner) book a
 /// walk-in by name with no account; pick the amenity, day, time and length, and take the full price in cash into the open drawer.
 /// The receipt shows on screen for a walk-in to photograph; a member also gets it in their Front desk chat.</summary>
+/// <summary>
+/// E5/E6/E7 (0120): book a coach session for a member at the counter. Moved from Amenity status to the Cashier's "Coach session"
+/// (owner, 2026-11-23: bookings take money, so they sit with every other sale).
+/// </summary>
+public partial class DeskCoachBookingViewModel(ISessionService sessions, IAttendanceService members) : LoadableViewModel
+{
+    [ObservableProperty] private string coachCustomerSearch = "";
+    [ObservableProperty] private MemberHit? coachCustomer;
+    [ObservableProperty] private DateTime coachBookDay = DateTime.Today;
+    [ObservableProperty] private int coachBookHours = 1;
+    [ObservableProperty] private FreeCoachSlot? selectedDeskCoach;
+    [ObservableProperty] private SessionsViewModel.HourOption? selectedDeskCoachHour;
+    [ObservableProperty] private string deskCoachMethod = "Cash";
+    [ObservableProperty] private string deskCoachCode = "";
+    public ObservableCollection<MemberHit> CoachCustomerHits { get; } = new();
+    public ObservableCollection<FreeCoachSlot> DeskFreeCoaches { get; } = new();
+    public ObservableCollection<SessionsViewModel.HourOption> DeskCoachHours { get; } = new();
+
+    partial void OnCoachCustomerSearchChanged(string value) => _ = SearchCoachCustomerAsync(value);
+    partial void OnCoachBookDayChanged(DateTime value) => _ = LoadDeskCoachesAsync();
+    partial void OnSelectedDeskCoachChanged(FreeCoachSlot? value) => RefreshDeskCoachHours();
+
+    async Task SearchCoachCustomerAsync(string q)
+    {
+        if (string.IsNullOrWhiteSpace(q)) { CoachCustomerHits.Clear(); return; }
+        var res = await members.FindMembersAsync(q.Trim());
+        if (res.Ok) Fill(CoachCustomerHits, res.Value!.Take(6).ToList());
+    }
+
+    void RefreshDeskCoachHours()
+    {
+        DeskCoachHours.Clear();
+        if (SelectedDeskCoach is not { } c) { SelectedDeskCoachHour = null; return; }
+        foreach (var h in c.FreeHours)
+        {
+            if (CoachBookHours == 2 && !c.FreeHours.Contains(h + 1)) continue;
+            DeskCoachHours.Add(new SessionsViewModel.HourOption(h, $"{DateTime.Today.AddHours(h):h tt} – {DateTime.Today.AddHours(h + CoachBookHours):h tt}"));
+        }
+        SelectedDeskCoachHour = DeskCoachHours.FirstOrDefault();
+    }
+
+    [RelayCommand]
+    private void SetDeskCoachHours(object? hours)
+    {
+        CoachBookHours = int.TryParse(hours?.ToString(), out var parsed) && parsed == 2 ? 2 : 1;
+        RefreshDeskCoachHours();
+    }
+
+    [RelayCommand]
+    private void PickDeskCoachMethod(string m) => DeskCoachMethod = m;
+
+    [RelayCommand]
+    private void ChooseCoachCustomer(MemberHit hit) { CoachCustomer = hit; CoachCustomerHits.Clear(); }
+
+    public override Task OnAppearingAsync() => LoadDeskCoachesAsync();
+
+    async Task LoadDeskCoachesAsync()
+    {
+        if (sessions is null) return;
+        var res = await sessions.FreeCoachesAsync(DateOnly.FromDateTime(CoachBookDay.Date));
+        if (!res.Ok) { ErrorMessage = ErrorText.For(res.Error, res.Message); return; }
+        Fill(DeskFreeCoaches, res.Value!);
+        SelectedDeskCoach = DeskFreeCoaches.FirstOrDefault();
+    }
+
+    [RelayCommand]
+    private async Task DeskBookCoachAsync()
+    {
+        ErrorMessage = Notice = null;
+        if (sessions is null || CoachCustomer is not { } m || SelectedDeskCoach is not { } c || SelectedDeskCoachHour is not { } hr)
+        {
+            ErrorMessage = "Choose a member, coach, and available hour.";
+            return;
+        }
+        var startUtc = new DateTimeOffset(CoachBookDay.Date.AddHours(hr.Hour), TimeSpan.FromHours(8)).UtcDateTime;
+        var method = DeskCoachMethod == "Cash" ? "cash" : "qr";
+        var res = await sessions.DeskBookCoachAsync(m.MemberId, c.CoachId, startUtc, CoachBookHours, method, string.IsNullOrWhiteSpace(DeskCoachCode) ? null : DeskCoachCode.Trim());
+        if (!res.Ok)
+        {
+            ErrorMessage = ErrorText.For(res.Error, res.Message);
+            if (res.Error == AppErrorKind.Conflict) await LoadDeskCoachesAsync();
+            return;
+        }
+        var r = res.Value!;
+        Notice = r.IsFree
+            ? $"Booked {c.FullName} for {m.Username} on {CoachBookDay:ddd d MMM} at {hr.Label} (included)."
+            : method == "cash"
+                ? $"Booked {c.FullName} for {m.Username} at {hr.Label} — ₱{r.Amount:N2} cash recorded ({r.PaymentCode})."
+                : $"Held {c.FullName} for {m.Username} for 15 minutes (code {r.PaymentCode}, ₱{r.Amount:N2}).";
+        CoachCustomer = null; CoachCustomerSearch = "";   // ready for the next customer
+        await LoadDeskCoachesAsync();
+    }
+
+}
+
 public partial class DeskBookingViewModel(IAttendanceService members, IReservationService reservations, IPaymentStaffService? payments = null, IUrlOpener? opener = null) : LoadableViewModel
 {
     public sealed record SlotOption(DateTime Utc, string Label);
