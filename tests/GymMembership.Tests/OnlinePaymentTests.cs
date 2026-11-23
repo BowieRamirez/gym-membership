@@ -107,7 +107,7 @@ public class OnlinePaymentTests
     sealed class Opener : IUrlOpener { public string? Opened; public Task OpenAsync(string url) { Opened = url; return Task.CompletedTask; } }
 
     /// <summary>The real service, but Xendit's answers are scripted: a link that isn't paid yet, and a check that says paid.</summary>
-    sealed class ScriptedXendit(IMembershipService real, bool paidOnCheck = false) : IMembershipService
+    internal sealed class ScriptedXendit(IMembershipService real, bool paidOnCheck = false) : IMembershipService
     {
         public int Checks;
         public Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId) => Task.FromResult(AppResult<OnlineCheckout>.Success(new("https://checkout.test/ps-1", false)));

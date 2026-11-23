@@ -157,6 +157,16 @@ public partial class BookAmenityViewModel(IReservationService svc, IAmenityServi
     {
         await RunAsync(svc.MyBookingsAsync, rows => Fill(Bookings, rows));
         OnPropertyChanged(nameof(HasBookings));
+        // owner, 2026-11-23: back from Xendit's page the booking stayed "awaiting payment" when Xendit's notice was late or lost.
+        // As Packages and My membership do, ask Xendit about each booking still waiting on an online payment (check creates nothing).
+        if (membership is null) return;
+        var paid = false;
+        foreach (var pay in Bookings.Where(r => r.Booking.Status == "awaiting_payment").Select(r => r.Payment)
+                     .OfType<Payment>().Where(p => p.Status == Status.Pending && p.Method == PayMethod.Qr).ToList())
+            if (await membership.CheckOnlineAsync(pay.Id) is { Ok: true, Value: true }) paid = true;
+        if (!paid) return;
+        await RunAsync(svc.MyBookingsAsync, rows => Fill(Bookings, rows));
+        Notice = "Payment received. Your booking is confirmed.";
     }
 
     [RelayCommand]

@@ -61,6 +61,21 @@ public class DownPaymentTests
         Assert.Equal("Book and pay ₱250.00", vm.BookText);
     }
 
+    [Fact]   // owner, 2026-11-23: paid on Xendit but the booking stayed "awaiting payment"; the page now asks Xendit like Packages does
+    public async Task Back_from_xendit_the_booking_page_finds_the_down_payment_paid()
+    {
+        var (gw, _) = await Member();
+        var xendit = new OnlinePaymentTests.ScriptedXendit(new MembershipService(gw), paidOnCheck: true);
+        var vm = new BookAmenityViewModel(new ReservationService(gw), new AmenityService(gw), new ConfirmationTests.Nav(), xendit);
+        await vm.LoadCommand.ExecuteAsync(null);
+        await Pick(vm, "Group classes", "10:00");
+        await vm.BookCommand.ExecuteAsync(null);   // Xendit's notice never comes; only the page's own check confirms it
+
+        await vm.AutoRefreshAsync();
+        Assert.True(xendit.Checks > 0);
+        Assert.Equal("confirmed", vm.Bookings.Single(b => b.Amenity == "Group classes").Booking.Status);
+    }
+
     [Fact]   // 0118 (E2): amenity bookings cost amenity price only and book no coach
     public async Task Amenity_booking_charges_amenity_price_only_with_down_payment()
     {

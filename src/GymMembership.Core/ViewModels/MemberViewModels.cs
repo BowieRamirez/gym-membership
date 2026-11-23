@@ -816,7 +816,13 @@ public partial class MyPaymentsViewModel(IMembershipService svc, ISubscriptionSe
             return;
         }
         var res = await svc.MyPaymentsAsync();
-        if (res.Ok) { all = res.Value!; Show(Page); }
+        if (!res.Ok) return;
+        all = res.Value!; Show(Page);
+        // owner, 2026-11-23: a payment started on Packages or Book an amenity stayed "pending" here when Xendit's notice was late or lost
+        var paid = false;
+        foreach (var p in all.Where(p => p.Status == Status.Pending && p.HasCheckout).ToList())
+            if (await svc.CheckOnlineAsync(p.Id) is { Ok: true, Value: true }) paid = true;
+        if (paid) { Notice = "Payment received."; await LoadAsync(); }
     }
 
     public async Task CancelPaymentAsync(PaymentItem item)
