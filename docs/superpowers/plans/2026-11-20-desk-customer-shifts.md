@@ -4,7 +4,7 @@
 
 Created: 2026-11-20
 Last updated: 2026-11-22 (Part 3: Phases 17-18 implemented and verified locally; live push & owner hand checks pending)
-Status: Part 2 (coach revamp, Phases 8-15) PLANNED, model agreed (E1-E7), E8-E12 to confirm, not built. Part 1: Phases 1-6 implemented and verified (1216 unit tests, Windows & Android builds, local DB tests, and `0117` dry-run). Phase 7: awaiting live migration push, live grants check, owner hand checks, and branch push.
+Status (2026-11-23): Parts 1 and 2 (Phases 1-16) built, live, reviewed and owner-checked. Part 3 (Payroll, Phases 17-18) built and live; Phase 19 left (code review, live grants check for `0136`-`0139`, owner hand checks). All migrations `0001`-`0139` are on the live project; branch pushed and in sync with `origin`; not merged to `main`.
 Branch: `desk-customer-shifts-2026-11-20` (cut from `origin/main` at `8c1555f`, v0.9.0 + `0116`). **Owner's rule: this branch is not merged into `main` yet.** Pushed to GitHub for the owner; no PR until the owner asks.
 
 **Goal:** The owner's list of 2026-11-20 (`docs (1).pdf`): Pay again goes straight to paying and takes a discount code; staff pick a customer by typing (suggestions, no Find button) on the Cashier and on Book for a customer; the bug where a customer can't be chosen on Book for a customer is fixed; the Cashier's payment screen makes the customer obvious; a picked customer's status is re-read from the server; the Cashier's table hides people who already have a membership or Day pass, the amenity booking doesn't; a cash shift's shortage or overage is shown apart from sales, needs a reason, and supervisors can add investigation notes with an audit trail.
@@ -38,7 +38,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 | 4 | Cashier payment screen: the customer is obvious | D5 | Done (`0f5dcdc`) |
 | 5 | Pay again: straight to paying, with a discount code | D6 | Done (`e93eac3`) |
 | 6 | Cash shift: shortage / overage, reason, supervisor notes, audit | D7, D8 | Done (`25c3a8f`) |
-| 7 | Whole-branch checks, review, owner hand checks | | In progress |
+| 7 | Whole-branch checks, review, owner hand checks | | Done (merge to `main` waits on the owner) |
 
 ## 1. Findings (2026-11-20)
 
@@ -158,7 +158,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 - [x] Whole test suite and database tests green; live grants checked for every migration on this branch. (1216/1216 unit tests, `desk-duplicate-sale.mjs` 3/3, `cash-shifts.mjs` 11/11, Windows & Android builds green; live grants check after live push.)
 - [x] `superpowers:requesting-code-review` on the whole branch; fixes committed.
 - [x] Owner hand checks on the real project (staff pages Windows; Pay again Android and Windows).
-- [ ] Branch pushed; merge only when the owner says so.
+- [x] Branch pushed; merge only when the owner says so. (Pushed, in sync with `origin` on 2026-11-23; not merged.)
 
 ### Bugs found in the live test (2026-11-21)
 
@@ -179,7 +179,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 
 # Part 2: Coach revamp (owner, 2026-11-20)
 
-**Not built yet.** Model agreed with the owner (2026-11-20, E1-E7; 2026-11-21, E8-E12 confirmed as recommended). Same branch, same rules ("How to use this plan"). Migrations start at `0118`. Member and coach screens get Android and Windows (light, dark, 1.3 font scale, real phone layouts); front desk and admin screens are Windows only.
+**Built and live** (Phases 8-16, `0118`-`0134`). Model agreed with the owner (2026-11-20, E1-E7; 2026-11-21, E8-E12 confirmed as recommended). Same branch, same rules ("How to use this plan"). Migrations start at `0118`. Member and coach screens get Android and Windows (light, dark, 1.3 font scale, real phone layouts); front desk and admin screens are Windows only.
 
 **Source:** owner's messages 2026-11-20: coaches are staff; **no coach rate**; the gym pays its coaches; **coaches are booked per session** (no more hiring); a member picks the coach they want for a day in the app; when creating a package the admin switches **Coach included** on or off; a package with it off (the Day pass included) gets a coach as an **add-on, an extra fee**; one-on-one; coach sessions kept separate from amenity bookings; the 10-step coach flow pasted in chat (available coaches only, checked again on confirm, QR check-in with the coach's arrival confirmed, session status apart from payment, damage report reviewed by management, payment closed once verified).
 
@@ -188,14 +188,14 @@ Same rules as `2026-11-19-owner-fixes.md`:
 | Phase | What | Needs | Status |
 |---|---|---|---|
 | 8 | Coach rate and amenity coach fee removed; amenity booking "With a coach" goes | E1, E2 | Done |
-| 9 | Packages: Coach included switch; coach add-on price per package | E3, E4 | |
-| 10 | Book a coach: day → coach → time, one-on-one, checked again on confirm; add-on paid; limits | E5, E6, E7 | |
+| 9 | Packages: Coach included switch; coach add-on price per package | E3, E4 | Done (`0119`) |
+| 10 | Book a coach: day → coach → time, one-on-one, checked again on confirm; add-on paid; limits | E5, E6, E7 | Done (`0120`) |
 | 11 | Hiring and Time requests removed; messages follow sessions | E8 | Done |
 | 12 | Desk: QR, Coach is here, session status apart from payment | E9 | Done |
 | 13 | Damage report after a session, reviewed by admins | E10 | Done |
 | 14 | Coach hours report for the gym's coach pay | E11 | Done |
-| 15 | Part 2 checks, review, owner hand checks | | |
-| 16 | Coach access add-on on Packages (Q1) | E13 | Designed, not built (owner: don't build yet) |
+| 15 | Part 2 checks, review, owner hand checks | | Done (B2, B3 fixed in `0128`) |
+| 16 | Coach access add-on on Packages (Q1) | E13 | Done (`0129`, follow-ups `0133`, `0134`) |
 
 ## 3. Findings: coaches today
 
@@ -374,7 +374,7 @@ Same rules as `2026-11-19-owner-fixes.md`:
 |---|---|---|---|---|
 | B2 | **Anyone signed in can cancel a walk-in coach session, and a coach can cancel one with no reason.** `cancel_session` (0122) checks `v_s.member_id <> v_uid`; walk-in sessions (0126) have `member_id` null, so the check is null and both the "not yours" guard and the coach `reason_required` guard are skipped. | Live: the test member cancelled walk-in session #13 ("not mine"); the coach cancelled #11 with an empty reason. | Use `is distinct from` for both comparisons in `cancel_session`; a database test for walk-in sessions (member, other coach, coach without reason). | Fixed (`0128_fix_b2_b3_session_and_damage_rls.sql`, `session-checkin.mjs`) |
 | B3 | **A coach can write a damage report straight into the table already "Closed" with their own review note**, skipping admin review, the admin alert and the audit row. 0123 grants `insert, update` on `damage_reports` to `authenticated`, and the insert policy doesn't limit `status`, `review_note`, `reviewed_by`. | Live: coach inserted report #1 as `closed`, review note "self-closed"; no "Damage report filed" alert (report #2 through `report_damage` did alert). | Revoke direct `insert, update` on `damage_reports` (`report_damage` / `review_damage` are security definer), keep `select`. | Fixed (`0128_fix_b2_b3_session_and_damage_rls.sql`, `damage-reports.mjs`, `crud-rules.mjs`) |
-| Q1 | **Not a bug, a gap to decide:** the plain packages (Monthly, 3 Months, Daypass) have Coach included off and no add-on price, so their members can't book any coach (`coach_not_offered`). Since the add-on box was taken off Admin Packages (2026-11-21), there is no way to offer them one. E3/E4 still describe an add-on price on plain packages. | Live: the test member (Monthly) gets `coach_not_offered`. | Owner, 2026-11-21: **Coach access add-on** (approach B): members on a plain package, the plain Daypass included, buy coach access for the rest of their current term on Packages, price scaled to days left. Design `docs/superpowers/specs/2026-11-21-coach-access-addon-design.md`; not built yet (owner: don't build). | Decided, not built |
+| Q1 | **Not a bug, a gap to decide:** the plain packages (Monthly, 3 Months, Daypass) have Coach included off and no add-on price, so their members can't book any coach (`coach_not_offered`). Since the add-on box was taken off Admin Packages (2026-11-21), there is no way to offer them one. E3/E4 still describe an add-on price on plain packages. | Live: the test member (Monthly) gets `coach_not_offered`. | Owner, 2026-11-21: **Coach access add-on** (approach B): members on a plain package, the plain Daypass included, buy coach access for the rest of their current term on Packages, price scaled to days left. Design `docs/superpowers/specs/2026-11-21-coach-access-addon-design.md`; built later as Phase 16. | Done (Phase 16, `0129`) |
 
 **The 8 failed checks of the Part 2 live test:**
 
@@ -405,7 +405,7 @@ Design: `docs/superpowers/specs/2026-11-21-coach-access-addon-design.md`.
 
 # Part 3: Payroll (owner, 2026-11-22)
 
-**Not built yet.** P1-P10 confirmed by the owner (2026-11-22); ready to build. Same branch, same rules ("How to use this plan"). Migrations start at `0136` (`0135` is `0135_walkin_session_title.sql`). A single new admin page, **Payroll**, for Windows only (staff page, light and dark). Nothing changes for members, coaches or the front desk.
+**Built and live** (Phases 17-18, `0136`-`0139`); Phase 19 checks left. P1-P10 confirmed by the owner (2026-11-22). Same branch, same rules ("How to use this plan"). Migrations start at `0136` (`0135` is `0135_walkin_session_title.sql`). A single new admin page, **Payroll**, for Windows only (staff page, light and dark). Nothing changes for members, coaches or the front desk.
 
 **Source:** owner, 2026-11-22: "a payroll system for the employee and coach, handled by admin, a new admin page that shows a simple payroll system, use impeccable for the UI." Answers: **fixed salary per period**; coach hours = **completed sessions**; **twice a month, simple** (manual bonus and deduction lines, no SSS / PhilHealth / Pag-IBIG / tax); **Admin and System admin** only.
 
@@ -415,7 +415,7 @@ This brings staff pay records into the app. E1 ("how the gym pays coaches is out
 
 | Phase | What | Needs | Status |
 |---|---|---|---|
-| 17 | Database: salaries, pay periods, bonus and deduction lines, mark paid, audit | P1-P10 | Done (`eb481a5`, live push pending) |
+| 17 | Database: salaries, pay periods, bonus and deduction lines, mark paid, audit | P1-P10 | Done (`eb481a5`; role salaries `0137`, audit names `0138`; all live) |
 | 18 | Admin **Payroll** page (Period and Salaries tabs), PDF | P1-P10 | Done (`5b32898`) |
 | 19 | Part 3 checks, review, owner hand checks | | In progress |
 
@@ -495,7 +495,7 @@ Made with the `impeccable` skill (and `frontend-design`, per CLAUDE.md). Run `im
 - Tests: `supabase/tests/local/payroll.mjs`, `tests/GymMembership.Tests/PayrollTests.cs`.
 
 - [x] Failing tests first: Review Focus 1-6; period start not the 1st or 16th refused; bonus or deduction without a note refused; a person with no salary listed with `no_salary` and skipped on Mark as paid; desk hours = closed shifts only; coach hours equal `coach_hours_report` for the same dates; Mark as paid before the period's last day → `period_not_ended`; paying payroll leaves `cash_shifts` and Revenue totals unchanged (P10).
-- [ ] Migration, dry-run push, push live, live grants checked (anon and authenticated non-admin refused), commit. (`0136_payroll.sql` committed in `eb481a5`; `--dry-run` verified `0135` + `0136`; live `--yes` push awaiting owner confirmation.)
+- [ ] Migration, dry-run push, push live, live grants checked (anon and authenticated non-admin refused), commit. (`0136_payroll.sql` committed in `eb481a5`; `--dry-run` verified `0135` + `0136`; live `--yes` push awaiting owner confirmation. 2026-11-23: `0135`-`0139` confirmed on the live project by `supabase migration list --remote`; live grants check still to do.)
 
 ## Phase 18: Payroll page
 
@@ -541,3 +541,5 @@ Made with the `impeccable` skill (and `frontend-design`, per CLAUDE.md). Run `im
 - 2026-11-21: UI & page-load polish: fixed Cash shifts table in `RevenuePage.xaml` (`Grid` in `Shift` cell to stop overlap with `Float`, `MaxLines="2"` + `TailTruncation` + tooltip on `Reason & notes`, `WideFrom="1150"`, `332d2d4`); fixed `AuditPage.xaml` segment tabs (`Value="False"` `DataTrigger`s so only the active tab keeps its highlight) and removed `"By name only"` switch on `AdminOverviewPage.Windows.cs` (`c2d1a1d`); sped up page loads across all accounts (`BasePage.cs` non-blocking Realtime socket startup + `Task.WhenAll` parallel queries in `Services.cs`, `SubscriptionService.cs`, `MemberViewModels.cs`, `StaffViewModels.cs`, `71f5282`, verified `dotnet test` 1225/1225).
 - 2026-11-22: owner UI & input polish: fixed `PaymentsPage.xaml` table column widths (`1.1*,100,90,1.8*,105,160,90,140`, `80b8b23`) so `Item` and `Details` don't wrap vertically; added `"Walk-in session"` title for walk-in coach sessions (`0135_walkin_session_title.sql` — live push pending, `DemoCoachSessions.cs`, `SessionRow.Title` fallback in `Services.cs`, `SessionsPage.xaml`); removed self-service **"At the gym"** check-in card from coach Settings (`CoachProfilePage.xaml`, `PageLayoutTests.cs` updated; front desk checks coaches in); added `NumericOnlyBehavior` in `Controls.cs` and attached it to numeric `Entry` fields in `CashierPage.xaml` (`CountedText`), `CatalogAdminPage.xaml` (`FormPrice`, `FormDays`, `FormCoachAddonPrice`), `DiscountsPage.xaml` (`NewPercent`, `NewLimit`), and `GymSettingsPage.xaml` (`WalkInPrice`, `OpeningFloat`, `DownPaymentPercent`, `MaxCoachSessionsPerDay`, `MaxUpcomingCoachSessions`, `MaxCoachHoursPerDay`).
 - 2026-11-22: owner confirmed P2, P3 (draft/paid), P6-P10 as recommended; Part 3 ready to build (by another session). Payroll migrations start at `0136`. Part 1 and Part 2 code review and owner hand checks marked done; branch not merged.
+- 2026-11-22/23 (other sessions, recorded here): after Phase 18, role-level fixed salaries (`a6c53b5`, `0137_payroll_role_salaries.sql`), readable payroll Object names in Logs & Archive (`d73ba42`, `0138_audit_payroll_object_names.sql`), payroll table sizing (`d0124a2`), Payroll nav icon (`28f2310`), sign-out on network error (`06b8768`), deactivated accounts hidden from Membership checking (`cb12ca7`), Supabase connection and page-load speedups with `0139_performance_indexes.sql` and coach add-on payment labels (`026422e`), `catalog-lifecycle` test updated for `0130` (`86c6919`).
+- 2026-11-23: checked the live project: `supabase migration list --remote` shows `0001`-`0139` all applied (so `0135`-`0139` are live), no Edge Function changes on this branch, branch in sync with `origin`. Nothing to push. Left: Phase 19 (Part 3 code review, live grants check for `0136`-`0139`, owner hand checks), remove `hire-requests.mjs` (tests hiring functions `0121` removed), then merge to `main` when the owner says so.
