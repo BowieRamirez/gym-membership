@@ -85,10 +85,9 @@ public class CashierTests
     {
         var (gw, vm) = await Open();
         vm.PickItemCommand.Execute(vm.Options[0]);
-        vm.PickKindCommand.Execute("Amenity");
+        vm.PickKindCommand.Execute(CashierViewModel.AmenityBooking);   // 2026-11-23: the time-less Amenity sale became a booking form
         Assert.Null(vm.Item);
-        var amenities = await gw.ListAsync<Amenity>(a => a.IsActive == true);
-        Assert.Equal(amenities.Select(a => a.Name), vm.Options.Select(o => o.Name));
+        Assert.Empty(vm.Options);   // the booking form lists its own amenities
         Assert.Equal(Peso(0), vm.TotalText);
     }
 
