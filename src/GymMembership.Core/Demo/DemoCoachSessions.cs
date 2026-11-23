@@ -341,6 +341,8 @@ public sealed partial class DemoGateway
                 {
                     var s = All<TrainingSession>().FirstOrDefault(x => x.Id == sessionId) ?? throw Err("not_found");
                     if (!IsStaff && s.CoachId != Uid) throw Err("forbidden");
+                    if (s.Status == Status.Cancelled) throw Err("session_cancelled");   // 0140
+                    if (s.ScheduledStart > SubscriptionNow) throw Err("session_not_started");
                     coachId = s.CoachId;
                 }
                 else if (!IsStaff) throw Err("forbidden");

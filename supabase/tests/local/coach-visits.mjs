@@ -1,4 +1,4 @@
-// Phase 8 (D9): physical coach visits. The coach or the front desk checks a coach in/out, each change keeps its actor,
+// Phase 8 (D9): physical coach visits. The front desk checks a coach in/out (0140: no longer the coach themselves), each change keeps its actor,
 // one open visit per coach, check-in/out twice is harmless, the closing-time job closes forgotten visits,
 // and a new hire needs the coach in the gym while existing hires are untouched.
 import { start } from './harness.mjs';
@@ -35,23 +35,25 @@ const closedNow = () => minute >= 60 ? db.query(`update gym_settings set opens_a
 try {
   await test('check-in is refused while the gym is closed', async () => {
     await closedNow();
-    await assert.rejects(as(coach, 'select coach_check_in()'), /gym_closed/);
+    await assert.rejects(as(desk, 'select coach_check_in($1)', [coach]), /gym_closed/);
     assert.equal((await open(coach)).length, 0);
   });
   if (minute < 23 * 60 + 30) {
-    await test('a coach checks in once; a second check-in returns the same visit', async () => {
+    await test('the desk checks a coach in once; a second check-in returns the same visit', async () => {
       await openNow();
-      const a = (await as(coach, 'select coach_check_in() id'))[0].id;
-      const b = (await as(coach, 'select coach_check_in() id'))[0].id;
+      const a = (await as(desk, 'select coach_check_in($1) id', [coach]))[0].id;
+      const b = (await as(desk, 'select coach_check_in($1) id', [coach]))[0].id;
       assert.equal(a, b);
       const v = await open(coach);
-      assert.equal(v.length, 1); assert.equal(v[0].checked_in_by, coach);
+      assert.equal(v.length, 1); assert.equal(v[0].checked_in_by, desk);
     });
-    await test('the coach checks out once; a second checkout is harmless', async () => {
-      assert.equal((await as(coach, 'select coach_check_out() ok'))[0].ok, true);
-      assert.equal((await as(coach, 'select coach_check_out() ok'))[0].ok, false);
+    await test('0140: the coach cannot check themselves out; the desk checks out once, a second checkout is harmless', async () => {
+      await assert.rejects(as(coach, 'select coach_check_out()'), /forbidden/);
+      assert.equal((await as(desk, 'select coach_check_out($1) ok', [coach]))[0].ok, true);
+      assert.equal((await as(desk, 'select coach_check_out($1) ok', [coach]))[0].ok, false);
       const v = (await db.query('select * from coach_visits where coach_id=$1', [coach])).rows[0];
-      assert.equal(v.checked_out_by, coach); assert.equal(v.auto_closed, false);
+      assert.equal(v.checked_out_by, desk); assert.equal(v.auto_closed, false);
+      await assert.rejects(as(coach, 'select coach_check_in()'), /forbidden/);
     });
     await test('the front desk checks a coach in and out and is recorded as the actor', async () => {
       await as(desk, 'select coach_check_in($1)', [other]);
@@ -64,7 +66,7 @@ try {
     await openNow();
     await assert.rejects(as(member, 'select coach_check_in($1)', [coach]), /forbidden/);
     await assert.rejects(as(other, 'select coach_check_out($1)', [coach]), /forbidden/);
-    await assert.rejects(as(member, 'select coach_check_in()'), /not_found/);   // not a coach
+    await assert.rejects(as(member, 'select coach_check_in()'), /forbidden/);   // 0140: nobody checks themselves in
     await assert.rejects(as(coach, 'insert into coach_visits(coach_id,checked_in_by) values($1,$1)', [coach]), /permission denied|42501/);
     await assert.rejects(as(desk, 'select close_coach_visits()'), /permission denied|42501/);
   });

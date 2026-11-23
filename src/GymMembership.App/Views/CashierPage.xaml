@@ -221,7 +221,7 @@
                                     </FlexLayout>
                                     <VerticalStackLayout Spacing="4" WidthRequest="300" HorizontalOptions="Start">
                                         <Label Text="Name (optional)" Style="{StaticResource Caption}" />
-                                        <Border Style="{StaticResource Field}"><Entry Text="{Binding WalkInName}" Placeholder="Leave blank to keep it anonymous" SemanticProperties.Description="Day pass name, optional" /></Border>
+                                        <Border Style="{StaticResource Field}"><Entry Text="{Binding WalkInName}" MaxLength="100" Placeholder="Leave blank to keep it anonymous" SemanticProperties.Description="Day pass name, optional" /></Border>
                                     </VerticalStackLayout>
                                 </VerticalStackLayout>
 

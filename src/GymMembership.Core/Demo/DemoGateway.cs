@@ -340,6 +340,16 @@ public sealed partial class DemoGateway : ISupabaseGateway
     }
 
     // ---------- table access (RLS-shaped, plan 6) ----------
+    bool SeesName(Profile p)
+    {
+        var uid = CurrentUserId;
+        if (uid is null) return false;
+        if (p.Id == uid) return true;
+        return IsActiveUser && (IsStaff || IsCoach(p.Id)
+            || All<CoachHire>().Any(h => (h.CoachId == uid && h.MemberId == p.Id) || (h.MemberId == uid && h.CoachId == p.Id))
+            || All<TrainingSession>().Any(s => (s.CoachId == uid && s.MemberId == p.Id) || (s.MemberId == uid && s.CoachId == p.Id)));
+    }
+
     bool Allowed(object row)
     {
         var uid = CurrentUserId;
@@ -348,8 +358,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         var staff = IsStaff;
         return row switch
         {
-            Profile p => p.Id == uid || staff || IsCoach(p.Id)
-                || All<CoachHire>().Any(h => (h.CoachId == uid && h.MemberId == p.Id) || (h.MemberId == uid && h.CoachId == p.Id)),
+            Profile p => p.Id == uid || staff,   // 0140: full rows are your own and staff's; names come from public_profiles
             Member m => m.UserId == uid || staff || All<CoachHire>().Any(h => h.CoachId == uid && h.MemberId == m.UserId),
             Payment p => p.MemberId == uid || staff,
             MembershipTerm t => t.MemberId == uid || staff,
@@ -387,7 +396,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
     public Task<IReadOnlyList<T>> ListAsync<T>(Expression<Func<T, bool>>? where = null) where T : BaseModel, new()
     {
         if (FailWith is not null) return Task.FromException<IReadOnlyList<T>>(FailWith);
-        IEnumerable<T> rows = All<T>().Where(r => Allowed(r!));
+        IEnumerable<T> rows = typeof(T) == typeof(PublicProfile)
+            ? All<Profile>().Where(SeesName).Select(PublicProfile.Of).Cast<T>()   // 0140: the view's row rule (0121), names and photos only
+            : All<T>().Where(r => Allowed(r!));
         if (where is not null) rows = rows.Where(where.Compile());
         return Task.FromResult<IReadOnlyList<T>>(rows.Select(Clone).ToList());
     }
@@ -1088,11 +1099,11 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 h.Status = Status.Cancelled; h.EndedAt = now;
                 return null;
             }
-            // 0032: the coach themselves, or check_ins:record for any coach; twice in a row is harmless
+            // 0032: check_ins:record for any coach (0140: no longer the coach themselves); twice in a row is harmless
             case "coach_check_in" or "coach_check_out":
             {
                 var coachId = Opt("p_coach") ?? uid;
-                if (coachId == uid) RequireActive(); else Require("check_ins:record");
+                Require("check_ins:record");
                 if (!IsCoach(coachId) || !(All<Profile>().FirstOrDefault(p => p.Id == coachId)?.IsActive ?? false)) throw Err("not_found");
                 var open = OpenVisit(coachId);
                 if (fn == "coach_check_out")

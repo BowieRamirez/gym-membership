@@ -26,7 +26,7 @@ static class Directory_
 {
     /// <summary>Every profile the caller may read, by id. The full name, or the username if none was given.</summary>
     public static async Task<Dictionary<string, string>> UserNamesAsync(ISupabaseGateway gw) =>
-        (await gw.ListAsync<Profile>()).ToDictionary(p => p.Id, p => string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName);
+        (await gw.ListAsync<PublicProfile>()).ToDictionary(p => p.Id, p => p.FullName);   // 0140: names only; emails stay with staff
 }
 
 // ===================== Auth =====================
@@ -314,7 +314,7 @@ public sealed record PaymentItem(int Id, string What, string PaymentCode, string
     /// <summary>Cash plan 2026-11-17: the member chose cash; it waits on the desk's Payments to verify.</summary>
     public bool PaysAtDesk => Status == Models.Status.Pending && Method == PayMethod.Cash && NotExpired;
     /// <summary>A membership or extension payment nobody has verified yet: the member can still withdraw it.</summary>
-    public bool CanCancel => Status == Models.Status.Pending && Kind is PayKind.Membership or PayKind.Renewal;
+    public bool CanCancel => Status == Models.Status.Pending && Kind is PayKind.Membership or PayKind.Renewal or PayKind.CoachAddon;   // 0140: coach access too
     /// <summary>Owner fixes 2026-11-19 Q8: how it was paid and its status, in the member's words.</summary>
     public string MethodText => Method switch { PayMethod.Qr => "Online", PayMethod.Cash => "Cash", PayMethod.Gcash => "GCash", _ => Method };
     public string StatusText => PaymentStatus.Text(Status, Refunded);
@@ -1070,7 +1070,7 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
         var uid = gw.CurrentUserId;
         var now = DateTime.UtcNow;
         var coachesTask = gw.ListAsync<Coach>();   // paused coaches stay listed, shown as closed
-        var profilesTask = gw.ListAsync<Profile>();
+        var profilesTask = gw.ListAsync<PublicProfile>();
         var hiresTask = gw.ListAsync<CoachHire>(h => h.MemberId == uid && h.Status == "active");
         var askedTask = gw.ListAsync<CoachHire>(h => h.MemberId == uid && h.Status == "pending");
         var shiftsTask = gw.ListAsync<ShiftPost>(s => s.Status == "scheduled" && s.End > now);
@@ -1092,7 +1092,7 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
         return await Task.WhenAll(shown.Select(async c =>
         {
             var p = profiles.GetValueOrDefault(c.UserId);
-            var name = p is null ? "Coach" : string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName;
+            var name = string.IsNullOrWhiteSpace(p?.FullName) ? "Coach" : p.FullName;
             var photo = (await Safe.RunAsync(() => photos.UrlAsync(p?.AvatarPath))).Value;
             return new CoachCard(c, name, hires.Any(h => h.CoachId == c.UserId), hires.FirstOrDefault(h => h.CoachId == c.UserId)?.Id,
                 shifts.Where(s => s.CoachId == c.UserId).OrderBy(s => s.Start).ToList(), photo, inGym.Contains(c.UserId),
@@ -1111,11 +1111,11 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
 
     public Task<AppResult<IReadOnlyList<CoachPresenceRow>>> PresenceAsync() => Safe.RunAsync<IReadOnlyList<CoachPresenceRow>>(async () =>
     {
-        var activeTask = gw.ListAsync<Profile>(p => p.IsActive == true);
+        var activeTask = gw.ListAsync<PublicProfile>(p => p.IsActive == true);
         var openTask = gw.ListAsync<CoachVisit>(v => v.CheckedOutAt == null);
         var coachesTask = gw.ListAsync<Coach>();
         await Task.WhenAll(activeTask, openTask, coachesTask);
-        var active = activeTask.Result.ToDictionary(p => p.Id, p => string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName);
+        var active = activeTask.Result.ToDictionary(p => p.Id, p => p.FullName);
         var open = openTask.Result.ToDictionary(v => v.CoachId, v => v.CheckedInAt);
         return coachesTask.Result.Where(c => active.ContainsKey(c.UserId))
             .Select(c => new CoachPresenceRow(c.UserId, active[c.UserId], open.TryGetValue(c.UserId, out var t) ? t : null))
@@ -1139,7 +1139,7 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
         var uid = gw.CurrentUserId;
         var asks = await gw.ListAsync<CoachHire>(h => h.CoachId == uid && h.Status == "pending");
         if (asks.Count == 0) return [];
-        var profiles = (await gw.ListAsync<Profile>()).ToDictionary(p => p.Id);
+        var profiles = (await gw.ListAsync<PublicProfile>()).ToDictionary(p => p.Id);
         return await Task.WhenAll(asks.OrderBy(h => h.HiredAt).Select(async h =>
         {
             var p = profiles.GetValueOrDefault(h.MemberId);
@@ -1365,7 +1365,7 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
         if (iAmCoach)
         {
             var mineTask = gw.ListAsync<CoachHire>(h => h.CoachId == uid && h.Status == "active");
-            var profilesTask = gw.ListAsync<Profile>(p => p.IsActive == true);
+            var profilesTask = gw.ListAsync<PublicProfile>(p => p.IsActive == true);
             await Task.WhenAll(mineTask, profilesTask);
             var mine = mineTask.Result;
             trainees = profilesTask.Result.Where(p => mine.Any(h => h.MemberId == p.Id))

@@ -120,7 +120,7 @@ public sealed partial class DemoGateway
             case "cancel_pending_payment":
             {
                 RequireActive();
-                var p=All<Payment>().FirstOrDefault(p=>p.Id==I("p_payment_id") && p.MemberId==Uid && p.Kind is PayKind.Membership or PayKind.Renewal)??throw Err("not_found");
+                var p=All<Payment>().FirstOrDefault(p=>p.Id==I("p_payment_id") && p.MemberId==Uid && p.Kind is PayKind.Membership or PayKind.Renewal or PayKind.CoachAddon)??throw Err("not_found");
                 if(p.Status!=Status.Pending) throw Err("already_processed");
                 p.Status=Status.Rejected;p.RejectedReason="Cancelled by member";CancelTarget(p);
                 Audit("payment.cancel","payments",p.Id.ToString());return true;

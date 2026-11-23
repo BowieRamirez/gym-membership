@@ -93,8 +93,9 @@ await test('every function the app calls has a test that tries to break it', asy
     new RegExp(`(?<![a-z_])${fn}(?![a-z_0-9])`).test(l) && refused.test(l + ' ' + (lines[i + 1] ?? ''))));
   assert.deepEqual(untried, [], `no break attempt for: ${untried.join(', ')}`);
 });
-await test('a member sees only themself, plus coaches', async () => {
-  const r = await run(alex, 'select id from profiles');
+await test('a member sees only their own full profile, plus coaches by name (0140)', async () => {
+  assert.deepEqual((await run(alex, 'select id from profiles')).rows.map(x => x.id), [alex]);
+  const r = await run(alex, 'select id from public_profiles');
   assert.deepEqual(r.rows.map(x => x.id).sort(), [alex, coach].sort());
 });
 await test('staff see everyone', async () => assert.equal((await run(desk, 'select id from profiles')).rowCount, 5 + 1));
@@ -248,8 +249,8 @@ await test('an active member books a coach session; a guest cannot', async () =>
 await test('the coach sees the member and the member sees the session, nobody else does', async () => {
   assert.equal((await run(coach, `select * from training_sessions`)).rowCount, 1);
   assert.equal((await run(eve, `select * from training_sessions`)).rowCount, 0);
-  assert.ok((await run(coach, `select id from profiles`)).rows.some(r => r.id === alex));
-  assert.ok(!(await run(eve, `select id from profiles`)).rows.some(r => r.id === alex));
+  assert.ok((await run(coach, `select id from public_profiles`)).rows.some(r => r.id === alex));
+  assert.ok(!(await run(eve, `select id from public_profiles`)).rows.some(r => r.id === alex));
 });
 await test('chat works for the session pair and stays private', async () => {
   await run(alex, `insert into messages (coach_id, member_id, sender_id, body) values ($1,$2,$2,'Hi coach')`, [coach, alex]);

@@ -313,7 +313,7 @@ public sealed class SupabaseGateway : ISupabaseGateway
     // Coalesce concurrent identical unfiltered reads and briefly cache slow-changing reference/directory tables across page switches.
     // Every write/RPC invalidates the cache immediately so the user never sees stale data after making a change.
     static readonly TimeSpan ReferenceCacheTtl = TimeSpan.FromSeconds(10);
-    static readonly HashSet<Type> CacheableTables = [typeof(Profile), typeof(Role), typeof(GymSettings), typeof(MembershipPackage), typeof(Amenity)];
+    static readonly HashSet<Type> CacheableTables = [typeof(Profile), typeof(PublicProfile), typeof(Role), typeof(GymSettings), typeof(MembershipPackage), typeof(Amenity)];
     readonly ConcurrentDictionary<Type, (object Rows, DateTime Until)> _readCache = new();
     readonly ConcurrentDictionary<Type, Task<object>> _inFlightReads = new();
     long _cacheEpoch;

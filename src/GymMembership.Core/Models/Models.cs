@@ -42,6 +42,14 @@ public static class PayMethod
   // the sign-in email this person proved with a code; written only by confirm_my_email
   [Column("confirmed_email", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? ConfirmedEmail { get; set; } }
 
+// 0140: the name and photo of anyone the caller may see (same rows as profiles used to give), without email, phone or account fields.
+// Full profile rows are only the caller's own and staff's.
+[Table("public_profiles")] public class PublicProfile : BaseModel
+{ [PrimaryKey("id")] public string Id { get; set; } = ""; [Column("full_name")] public string FullName { get; set; } = "";
+  [Column("first_name")] public string FirstName { get; set; } = ""; [Column("last_name")] public string LastName { get; set; } = "";
+  [Column("avatar_path")] public string? AvatarPath { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true;
+  public static PublicProfile Of(Profile p) => new() { Id = p.Id, FullName = p.FullName, FirstName = p.FirstName, LastName = p.LastName, AvatarPath = p.AvatarPath, IsActive = p.IsActive }; }
+
 [Table("roles")] public class Role : BaseModel
 { [PrimaryKey("role_id")] public int RoleId { get; set; } [Column("name")] public string Name { get; set; } = ""; }
 
