@@ -15,6 +15,21 @@ public class AmenityViewModelTests
         return (gw, vm);
     }
 
+    [Fact]   // owner, 2026-11-23: a draft sauna showed on Amenity status; staff can read drafts, the board must not show them
+    public async Task A_draft_amenity_stays_off_the_board_until_it_is_published()
+    {
+        var gw = new DemoGateway();
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var draft = await gw.InsertAsync(new GymMembership.Core.Models.Amenity { Name = "Draft sauna", Description = "x", Price = 80, IsActive = true });
+        var vm = new AmenityStatusViewModel(new AmenityService(gw));
+        await vm.OnAppearingAsync();
+        Assert.DoesNotContain(vm.Cards, c => c.Amenity.Id == draft.Id);
+
+        await gw.RpcAsync("publish_catalog_item", new() { ["p_kind"] = "amenity", ["p_id"] = draft.Id });
+        await vm.OnAppearingAsync();
+        Assert.Contains(vm.Cards, c => c.Amenity.Id == draft.Id);
+    }
+
     [Fact]
     public async Task The_board_loads_and_a_member_can_save_an_amenity_from_it()
     {

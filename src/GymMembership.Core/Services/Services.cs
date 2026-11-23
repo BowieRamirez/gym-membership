@@ -871,7 +871,8 @@ public sealed class AmenityService(ISupabaseGateway gw) : IAmenityService
         var visitsTask = gw.ListAsync<CoachVisit>(v => v.CheckedOutAt == null);
         await Task.WhenAll(amenitiesTask, savedTask, memberTask, coachTask, runsTask, visitsTask);
 
-        var amenities = amenitiesTask.Result.OrderBy(a => a.Name).ToList();
+        // owner, 2026-11-23: a draft is only for Admin Packages; staff can read drafts, so the board must not show them
+        var amenities = amenitiesTask.Result.Where(a => a.State == CatalogState.Published).OrderBy(a => a.Name).ToList();
         var saved = savedTask.Result.Select(f => f.AmenityId).ToHashSet();
         var isMember = memberTask.Result.Count > 0;
         var isCoach = coachTask.Result.Count > 0;

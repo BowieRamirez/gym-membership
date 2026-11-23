@@ -711,8 +711,8 @@ public sealed class SupabaseGatewayTests : IDisposable
         _reply = s => s.Path.StartsWith("/storage/") ? (500, """{"error":"boom"}""")
             : s.Path.EndsWith("/coaches") ? (200, """[{"user_id":"c-1","is_available":true}]""")
             : s.Path.EndsWith("/coach_visits") ? (200, """[{"coach_visit_id":1,"coach_id":"c-1","checked_in_at":"2026-10-23T02:00:00Z","checked_in_by":"c-1"}]""")
-            : s.Path.EndsWith("/profiles") ? (200, """[{"id":"c-1","full_name":"Coach One","avatar_path":"c-1/a.png"}]""")
-            : s.Path.EndsWith("/amenities") ? (200, """[{"amenity_id":7,"name":"Pool","image_path":"pool.png","is_active":true}]""") : (200, "[]");
+            : s.Path.EndsWith("profiles") ? (200, """[{"id":"c-1","full_name":"Coach One","avatar_path":"c-1/a.png"}]""")   // profiles or public_profiles (0140)
+            : s.Path.EndsWith("/amenities") ? (200, """[{"amenity_id":7,"name":"Pool","image_path":"pool.png","is_active":true,"published_at":"2026-10-01T00:00:00Z"}]""") : (200, "[]");
         if (coach)
         {
             var result = await new CoachService(gw).ListCoachesAsync();
