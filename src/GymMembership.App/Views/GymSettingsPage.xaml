@@ -12,7 +12,8 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <Border Style="{StaticResource Panel}">
+            <Label Text="Loading settings…" Style="{StaticResource Muted}" IsVisible="{Binding SettingsLoaded, Converter={StaticResource Not}}" />
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding SettingsLoaded}">
             <VerticalStackLayout Spacing="16">
             <VerticalStackLayout Spacing="6">
                 <Label Text="Gym name" Style="{StaticResource Caption}" />

@@ -134,6 +134,20 @@ public class DayPassPackageTests
     }
 
     [Fact]
+    public async Task Gym_settings_cannot_be_saved_before_they_have_loaded()
+    {
+        // UI test 2026-11-23: on a slow line the form showed defaults for seconds; Save now waits for the real values
+        var gw = new DemoGateway();
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var vm = new GymMembership.Core.ViewModels.GymSettingsViewModel(new AdminService(gw));
+        Assert.False(vm.SettingsLoaded);
+        Assert.False(vm.SaveCommand.CanExecute(null));
+        await vm.OnAppearingAsync();
+        Assert.True(vm.SettingsLoaded);
+        Assert.True(vm.SaveCommand.CanExecute(null));
+    }
+
+    [Fact]
     public async Task Gym_settings_shows_the_plain_day_pass_price_not_the_coach_included_one()
     {
         // UI test 2026-11-23: showed the Daypass (With coach included) price while walk-ins pay the plain Day pass

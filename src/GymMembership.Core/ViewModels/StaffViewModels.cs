@@ -2631,6 +2631,8 @@ public partial class GymSettingsViewModel(IAdminService svc) : LoadableViewModel
     [ObservableProperty] private int maxUpcomingCoachSessions = 2;   // E12 (0119)
     [ObservableProperty] private string maxCoachHoursPerDay = "6";   // E12 (0119): blank = unlimited
     GymSettings? _loaded;
+    // UI test 2026-11-23: on a slow line the form showed default values (walk-in 0, down payment 50%) for seconds; it now waits
+    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(SaveCommand))] private bool settingsLoaded;
 
     public override Task OnAppearingAsync() => Task.WhenAll(LoadAsync(), LoadClosuresAsync());
 
@@ -2639,7 +2641,7 @@ public partial class GymSettingsViewModel(IAdminService svc) : LoadableViewModel
     {
         var settingsTask = RunAsync(svc.GymSettingsAsync, g =>
         {
-            _loaded = g; GymName = g.GymName; WalkInPrice = g.WalkInPrice; OpensAt = g.OpensAt; ClosesAt = g.ClosesAt; OpeningFloat = g.OpeningFloat; DownPaymentPercent = g.DownPaymentPercent;
+            _loaded = g; SettingsLoaded = true; GymName = g.GymName; WalkInPrice = g.WalkInPrice; OpensAt = g.OpensAt; ClosesAt = g.ClosesAt; OpeningFloat = g.OpeningFloat; DownPaymentPercent = g.DownPaymentPercent;
             MaxCoachSessionsPerDay = g.MaxCoachSessionsPerDay; MaxUpcomingCoachSessions = g.MaxUpcomingCoachSessions;
             MaxCoachHoursPerDay = g.MaxCoachHoursPerDay?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
         });
@@ -2650,7 +2652,7 @@ public partial class GymSettingsViewModel(IAdminService svc) : LoadableViewModel
                 .FirstOrDefault(p => p.IsDayPass && p.IsActive && p.PublishedAt is not null);
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(SettingsLoaded))]
     private async Task SaveAsync()
     {
         Notice = null;
