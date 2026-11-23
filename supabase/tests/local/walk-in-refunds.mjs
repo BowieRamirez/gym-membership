@@ -23,7 +23,7 @@ async function test(name, fn) {
 try {
   const admin = await user('admin'), sub = await user('subadmin'), desk = await user('employee');
   await openCashShifts(db);
-  await db.query(`update gym_settings set opens_at='00:00',closes_at='23:30' where id=1`);
+  await db.query(`update gym_settings set opens_at='00:00',closes_at='24:00' where id=1`);
   const court = (await db.query(`insert into amenities(name,price) values('WR Court',200) returning amenity_id id`)).rows[0].id;
   const dayAt = async n => (await db.query(`select ((now() at time zone 'Asia/Manila')::date + $1::int)::text d`, [n])).rows[0].d;
   const d3 = await dayAt(3), d5 = await dayAt(5);

@@ -25,7 +25,7 @@ async function test(name, fn) {
 }
 const admin = await user('admin'), sub = await user('subadmin'), desk = await user('employee');
 await openCashShifts(db);
-await db.query(`update gym_settings set opens_at='00:00',closes_at='23:30',payment_expiry_hours=24 where id=1`);
+await db.query(`update gym_settings set opens_at='00:00',closes_at='24:00',payment_expiry_hours=24 where id=1`);
 const pack = (await db.query(`insert into membership_packages(name,price,duration_days) values('GC Monthly',1000,30) returning membership_package_id id`)).rows[0].id;
 const amenity = (await db.query(`insert into amenities(name,price) values('GC Court',200) returning amenity_id id`)).rows[0].id;
 async function member() {

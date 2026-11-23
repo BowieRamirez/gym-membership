@@ -28,9 +28,9 @@ const desk = await user('employee'), coach = await user('coach'), other = await 
 const open = async c => (await db.query('select * from coach_visits where coach_id=$1 and checked_out_at is null', [c])).rows;
 // gym hours that include / exclude "now" (Manila); the gym cannot be open between 23:30 and midnight
 const minute = (await db.query(`select extract(hour from now() at time zone 'Asia/Manila')*60 + extract(minute from now() at time zone 'Asia/Manila') m`)).rows[0].m;
-const openNow = () => db.query(`update gym_settings set opens_at='00:00', closes_at='23:30'`);
+const openNow = () => db.query(`update gym_settings set opens_at='00:00', closes_at='24:00'`);
 const closedNow = () => minute >= 60 ? db.query(`update gym_settings set opens_at='00:00', closes_at='00:30'`)
-                                     : db.query(`update gym_settings set opens_at='01:00', closes_at='23:30'`);
+                                     : db.query(`update gym_settings set opens_at='01:00', closes_at='24:00'`);
 
 try {
   await test('check-in is refused while the gym is closed', async () => {

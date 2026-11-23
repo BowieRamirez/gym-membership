@@ -96,7 +96,7 @@ try {
   await test('a booking starting in the next slot needs a coach in the gym now', async () => {
     const hour = (await db.query(`select extract(hour from now() at time zone 'Asia/Manila')::int h`)).rows[0].h;
     if (hour >= 22) return;   // the next slot would run past the day's closing time
-    await db.query(`update gym_settings set opens_at='00:00',closes_at='23:30' where id=1`);
+    await db.query(`update gym_settings set opens_at='00:00',closes_at='24:00' where id=1`);
     const uid = await member(), a = await amenity('S Next', 30);
     await oldPass(db, uid, a);
     const next = new Date(Math.ceil((Date.now() + 1000) / 1800000) * 1800000).toISOString();

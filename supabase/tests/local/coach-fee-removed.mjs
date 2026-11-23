@@ -24,7 +24,7 @@ try {
   const coach = await user('coach');
   const member = await user(null);
   await openCashShifts(db);
-  await db.query(`update gym_settings set opens_at='00:00',closes_at='23:30' where id=1`);
+  await db.query(`update gym_settings set opens_at='00:00',closes_at='24:00' where id=1`);
   const monthly = (await db.query(`insert into membership_packages(name,price,duration_days) values('CFR Monthly',1000,30) returning membership_package_id id`)).rows[0].id;
   await as(desk, `select * from record_counter_payment('membership'::payment_kind,'cash'::payment_method,$1,$2,null,null,null)`, [member, monthly]);
   const court = (await db.query(`insert into amenities(name,price) values('CFR Court',200) returning amenity_id id`)).rows[0].id;

@@ -23,7 +23,7 @@ async function test(name, fn) {
 try {
   const desk = await user('employee');
   await openCashShifts(db);
-  await db.query(`update gym_settings set opens_at='00:00',closes_at='23:30',walk_in_price=150 where id=1`);
+  await db.query(`update gym_settings set opens_at='00:00',closes_at='24:00',walk_in_price=150 where id=1`);
   const monthly = (await db.query(`insert into membership_packages(name,price,duration_days) values('DP Monthly',1000,30) returning membership_package_id id`)).rows[0].id;
   const dayPass = (await db.query(`insert into membership_packages(name,price,duration_days,is_day_pass) values('Day pass',120,1,true) returning membership_package_id id`)).rows[0].id;
   const court = (await db.query(`insert into amenities(name,price) values('DP Court',300) returning amenity_id id`)).rows[0].id;

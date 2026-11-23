@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import pg from 'pg';
 
 const { server, client: db } = await start();
-await db.query(`update gym_settings set opens_at='00:00', closes_at='23:30' where id=1`);   // 0131: check-ins follow gym hours; tests run at any time
+await db.query(`update gym_settings set opens_at='00:00', closes_at='24:00' where id=1`);   // 0131: check-ins follow gym hours; tests run at any time
 let passed = 0, failed = 0, serial = 0;
 async function as(uid, sql, args = [], client = db) {
   await client.query('begin');

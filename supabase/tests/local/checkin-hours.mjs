@@ -34,7 +34,7 @@ async function paid() {
 // opening hours that do / don't include the current Manila time (whole half hours, as the table requires)
 const manilaMinutes = Math.floor(((Date.now() / 60000) + 8 * 60) % 1440);
 const hhmm = m => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-async function openNow() { await db.query(`update gym_settings set opens_at='00:00', closes_at='23:30' where id=1`); }
+async function openNow() { await db.query(`update gym_settings set opens_at='00:00', closes_at='24:00' where id=1`); }
 async function closedNow() {
   // a 1-hour window that ends at least 30 minutes before now, or starts after now when it's early in the day
   const start = manilaMinutes >= 120 ? Math.floor((manilaMinutes - 90) / 30) * 30 - 30 : Math.ceil((manilaMinutes + 60) / 30) * 30;

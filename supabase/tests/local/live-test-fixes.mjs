@@ -21,7 +21,7 @@ async function test(name, fn) {
   try { await fn(); passed++; console.log('  ok  ', name); }
   catch (e) { failed++; console.log('  FAIL', name, e.message); }
 }
-await db.query(`update gym_settings set opens_at='00:00', closes_at='23:30'`);   // check-ins at any hour the test runs
+await db.query(`update gym_settings set opens_at='00:00', closes_at='24:00'`);   // check-ins at any hour the test runs
 const admin = await user('admin', 'Sys Admin'), desk = await user('employee', 'Desk Dana'), coach = await user('coach', 'Coach Kai');
 const member = await user('member', 'Mia Member'), other = await user('member', 'Otto Other');
 await db.query(`update profiles set phone='09171234567' where id=$1`, [coach]);

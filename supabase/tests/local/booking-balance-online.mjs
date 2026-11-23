@@ -28,7 +28,7 @@ async function test(name, fn) {
 }
 const desk = await user('employee');
 await openCashShifts(db);
-await db.query(`update gym_settings set opens_at='00:00',closes_at='23:30',payment_expiry_hours=24,down_payment_percent=50 where id=1`);
+await db.query(`update gym_settings set opens_at='00:00',closes_at='24:00',payment_expiry_hours=24,down_payment_percent=50 where id=1`);
 const pack = (await db.query(`insert into membership_packages(name,price,duration_days) values('BB Monthly',1000,30) returning membership_package_id id`)).rows[0].id;
 const amenity = (await db.query(`insert into amenities(name,price) values('BB Ring',100) returning amenity_id id`)).rows[0].id;
 const day = (await db.query(`select ((now() at time zone 'Asia/Manila')::date + 3)::text d`)).rows[0].d;

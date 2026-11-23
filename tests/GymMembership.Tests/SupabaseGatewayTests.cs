@@ -41,7 +41,13 @@ public sealed class SupabaseGatewayTests : IDisposable
                 var seen = new Seen(ctx.Request.HttpMethod, ctx.Request.Url!.AbsolutePath, Uri.UnescapeDataString(ctx.Request.Url.Query), body, headers);
                 lock (_seen) _seen.Add(seen);
                 var (status, json) = _reply(seen);
-                if (status == 0) { ctx.Response.Abort(); continue; }
+                if (status == 0)
+                {
+                    // drop mid-response: promise a body, send part of it, cut. Abort() alone sends an empty 200 on Linux (managed
+                    // HttpListener closes the stream), which a client reads as a good, empty answer (CI, 2026-11-23).
+                    try { ctx.Response.ContentLength64 = 1000; ctx.Response.OutputStream.Write("[{"u8); ctx.Response.Abort(); } catch { }
+                    continue;
+                }
                 var bytes = Encoding.UTF8.GetBytes(json);
                 ctx.Response.StatusCode = status;
                 ctx.Response.ContentType = "application/json";
