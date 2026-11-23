@@ -41,10 +41,11 @@ public class MemberSuggestTests
     {
         var att = new FakeAttendance((q, _) => Task.FromResult(AppResult<IReadOnlyList<MemberHit>>.Success(new[] { Hit("1", "Lilian") })));
         var vm = Cashier(att);
+        vm.SearchDelay = TimeSpan.FromMilliseconds(300);   // well past the 10 ms between keys, even on a slow CI machine
         vm.Search = "li";
         await Task.Delay(10);
         vm.Search = "lil";
-        await Task.Delay(100);
+        await Eventually.Until(() => vm.Suggestions.Count == 1);
         Assert.Equal(new[] { "lil" }, att.Queries);
         Assert.Single(vm.Suggestions);
     }
@@ -60,9 +61,9 @@ public class MemberSuggestTests
         vm.SearchDelay = TimeSpan.FromMilliseconds(15);
 
         vm.Search = "li";
-        await Task.Delay(40);   // "li" is now in flight
+        await Eventually.Until(() => att.Queries.Contains("li"));   // "li" is now in flight
         vm.Search = "lilian";
-        await Task.Delay(40);   // "lilian" completed
+        await Eventually.Until(() => vm.Suggestions.Count == 1);    // "lilian" completed
         Assert.Equal("Lilian Sabado", Assert.Single(vm.Suggestions).Username);
 
         liGate.SetResult(AppResult<IReadOnlyList<MemberHit>>.Success(new[] { Hit("1", "Liam Old") }));
@@ -76,8 +77,7 @@ public class MemberSuggestTests
         var att = new FakeAttendance((_, _) => Task.FromResult(AppResult<IReadOnlyList<MemberHit>>.Success(new[] { Hit("1", "Carlo Diaz"), Hit("2", "Carla Cruz") })));
         var vm = Booking(att);
         vm.Search = "car";
-        await Task.Delay(80);
-        Assert.Equal(2, vm.Suggestions.Count);
+        await Eventually.Until(() => vm.Suggestions.Count == 2);
 
         var first = vm.Suggestions[0];
         vm.ChooseSuggestionCommand.Execute(first);
@@ -95,7 +95,7 @@ public class MemberSuggestTests
         var att = new FakeAttendance((_, _) => Task.FromResult(AppResult<IReadOnlyList<MemberHit>>.Success(new[] { Hit("1", "Carlo Diaz"), Hit("2", "Carla Cruz") })));
         var vm = Cashier(att);
         vm.Search = "car";
-        await Task.Delay(80);
+        await Eventually.Until(() => vm.Suggestions.Count == 2);
 
         await vm.PickTopSuggestionCommand.ExecuteAsync(null);
         Assert.Equal("Carlo Diaz", vm.Member?.Username);
@@ -110,8 +110,7 @@ public class MemberSuggestTests
         var att = new FakeAttendance((_, _) => Task.FromResult(AppResult<IReadOnlyList<MemberHit>>.Success(many)));
         var vm = Cashier(att);
         vm.Search = "zed";
-        await Task.Delay(80);
-        Assert.Equal(8, vm.Suggestions.Count);
+        await Eventually.Until(() => vm.Suggestions.Count == 8);
         Assert.Equal(12, vm.Hits.Count);
     }
 }

@@ -39,6 +39,10 @@ jobs:
           restore-keys: nuget-${{ runner.os }}-tests-
 
       - name: Run unit tests
+        # the app runs on Manila PCs and tests take "today" from the machine; on UTC runners it is the day before between
+        # 00:00 and 08:00 Manila, which failed date tests on 2026-11-24
+        env:
+          TZ: Asia/Manila
         run: dotnet test tests/GymMembership.Tests -c Release --logger "trx;LogFileName=results.trx"
 
       - uses: actions/upload-artifact@v7
