@@ -2590,7 +2590,7 @@ public partial class RevenueViewModel(IAdminService svc, IReportFiles? files = n
         OnPropertyChanged(nameof(ShiftTotalsText));
         var name = $"cash-shifts-{shown.From:yyyy-MM-dd}-to-{shown.To:yyyy-MM-dd}.pdf";
         if (await RunAsync(() => Safe.RunAsync(async () => { await files.ShareAsync(name, CashShiftPdf.Build(shown.From, shown.To, shifts, DateTime.UtcNow, await files.FontAsync())); return true; })))
-            Notice = "Cash shifts PDF created. Choose where to save or send it.";
+            Notice = "Cash shifts PDF saved to your Downloads folder and opened.";
     }
 
     [RelayCommand(CanExecute = nameof(CanExport))]
@@ -2604,7 +2604,7 @@ public partial class RevenueViewModel(IAdminService svc, IReportFiles? files = n
             sb.AppendLine($"{AuditCsv.Cell(c.CoachName)},{c.CompletedSessions},{c.CompletedHours:0.##},{c.NoShows},{c.CoachCancelled}");
         var name = $"coach-hours-{shown.From:yyyy-MM-dd}-to-{shown.To:yyyy-MM-dd}.csv";
         if (await RunAsync(() => Safe.RunAsync(async () => { await files.ShareAsync(name, System.Text.Encoding.UTF8.GetBytes(sb.ToString())); return true; })))
-            Notice = "Coach hours CSV created. Choose where to save or send it.";
+            Notice = "Coach hours CSV saved to your Downloads folder and opened.";
     }
 
     bool CanExport() => files is not null && _loaded is not null;
@@ -2624,7 +2624,7 @@ public partial class RevenueViewModel(IAdminService svc, IReportFiles? files = n
         }
         var name = $"revenue-{shown.From:yyyy-MM-dd}-to-{shown.To:yyyy-MM-dd}.pdf";
         if (await RunAsync(() => Safe.RunAsync(async () => { await files.ShareAsync(name, RevenuePdf.Build(shown.From, shown.To, lines, DateTime.UtcNow, await files.FontAsync())); return true; })))
-            Notice = "Revenue PDF created. Choose where to save or send it.";
+            Notice = "Revenue PDF saved to your Downloads folder and opened.";
     }
 }
 
@@ -3801,7 +3801,7 @@ public partial class PayrollViewModel : LoadableViewModel
         }
         var name = $"payroll-{current.StartsOn:yyyy-MM-dd}-to-{current.EndsOn:yyyy-MM-dd}.pdf";
         if (await RunAsync(() => Safe.RunAsync(async () => { await _files.ShareAsync(name, PayrollPdf.Build(_gymName, current, linesByUser, DateTime.UtcNow, await _files.FontAsync())); return true; })))
-            Notice = "Payroll PDF created. Choose where to save or send it.";
+            Notice = "Payroll PDF saved to your Downloads folder and opened.";
     }
 
     async Task SaveSalaryAsync(StaffSalaryItem item)
