@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 
 const { server, client: db } = await start();
+await db.query(`update gym_settings set opens_at='00:00', closes_at='24:00' where id=1`);   // 0131: check-ins follow gym hours; tests run at any time
 let passed = 0, failed = 0, serial = 0;
 async function as(uid, sql, args = []) {
   await db.query('begin');

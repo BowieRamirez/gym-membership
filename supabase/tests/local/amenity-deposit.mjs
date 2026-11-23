@@ -25,9 +25,9 @@ async function test(name, fn) {
 }
 const admin = await user('admin'), desk = await user('employee'), coach = await user('coach'), coach2 = await user('coach');
 await openCashShifts(db);
-await db.query(`update gym_settings set opens_at='00:00',closes_at='23:30',payment_expiry_hours=24 where id=1`);
+await db.query(`update gym_settings set opens_at='00:00',closes_at='24:00',payment_expiry_hours=24 where id=1`);
 const pack = (await db.query(`insert into membership_packages(name,price,duration_days) values('D Monthly',1000,30) returning membership_package_id id`)).rows[0].id;
-const amenity = async (name, fee = 0) => (await db.query('insert into amenities(name,price,coach_fee) values($1,200,$2) returning amenity_id id', [name, fee])).rows[0].id;
+const amenity = async (name) => (await db.query('insert into amenities(name,price) values($1,200) returning amenity_id id', [name])).rows[0].id;
 async function member() {
   const uid = await user();
   const p = (await as(uid, 'select * from extend_membership($1,null)', [pack]))[0];
@@ -133,24 +133,19 @@ try {
     const other = await amenity('D Other');
     assert.deepEqual(await free(uid, other, '09:00'), []);              // runs nothing there
   });
-  await test('G14: with a coach costs the price plus the amenity\'s coach fee; a coach who isn\'t free is refused', async () => {
-    const one = await member(), two = await member(), a = await amenity('D Coached', 150);
+  await test('G14: E2 removes amenity coach fee; p_coach on book_amenity is ignored', async () => {
+    const one = await member(), a = await amenity('D Coached', 150);
     await shiftFor(coach, a, '06:00', '22:00');
     const r = await book(one, a, '10:00', { coach });
-    assert.deepEqual([Number(r.total_price), Number(r.down_payment), r.coach_id], [350, 175, coach]);
-    await approve(r);
-    assert.deepEqual(await free(two, a, '10:00'), []);                    // booked now
-    await assert.rejects(book(two, a, '10:00', { coach }), /coach_not_free/);
-    await assert.rejects(book(two, a, '20:00', { coach: coach2 }), /coach_not_free/);   // no shift, runs nothing
+    assert.deepEqual([Number(r.total_price), Number(r.down_payment), r.coach_id], [200, 100, null]);
   });
-  await test('G14: two paid requests for one coach: the first verified wins, the other is refunded', async () => {
+  await test('G14: E2 allows two solo amenity bookings even if both passed p_coach', async () => {
     const one = await member(), two = await member();
     const a = await amenity('D Coach Race A', 100), b = await amenity('D Coach Race B', 100);
     await shiftFor(coach2, a, '06:00', '22:00'); await shiftFor(coach2, b, '06:00', '22:00');
     const r1 = await book(one, a, '18:00', { coach: coach2 }), r2 = await book(two, b, '18:00', { coach: coach2 });
     await approve(r1); await approve(r2);
-    assert.deepEqual([(await res(r2.reservation_id)).status, (await res(r2.reservation_id)).cancel_reason], ['cancelled', 'Coach not free']);
-    assert.equal((await refundOf(r2.reservation_id)).status, 'approved');
+    assert.deepEqual([(await res(r2.reservation_id)).status, (await res(r2.reservation_id)).coach_id], ['confirmed', null]);
   });
   await test('G4: a code that fits the amenity takes its percent off the price before the down payment', async () => {
     const uid = await member(), a = await amenity('D Code');
@@ -162,17 +157,15 @@ try {
     const other = await amenity('D Not Coded');
     await assert.rejects(book(await member(), other, '10:00', { code: 'DEP20' }), /code_not_for_item/);
   });
-  await test('a pass holder still books solo straight away; with a coach, the coach fee is the balance at the desk', async () => {
-    const uid = await member(), a = (await db.query(`insert into amenities(name,price,duration_days,coach_fee) values('D Pass',300,30,120) returning amenity_id id`)).rows[0].id;
+  await test('a pass holder still books straight away with no coach fee balance', async () => {
+    const uid = await member(), a = (await db.query(`insert into amenities(name,price,duration_days) values('D Pass',300,30) returning amenity_id id`)).rows[0].id;
     await oldPass(db, uid, a);   // 0066: bought before passes stopped selling
     const solo = await book(uid, a, '09:00');
     assert.deepEqual([solo.status, Number(solo.total_price ?? 0)], ['confirmed', 0]);
     const own = await user('coach');
     await shiftFor(own, a, '06:00', '22:00');
     const coached = await book(uid, a, '15:00', { coach: own });
-    assert.deepEqual([coached.status, Number(coached.total_price), Number(coached.down_payment), coached.coach_id], ['confirmed', 120, 0, own]);
-    const p = (await as(desk, `select * from record_booking_balance($1,'cash'::payment_method)`, [coached.reservation_id]))[0];
-    assert.equal(Number(p.amount), 120);
+    assert.deepEqual([coached.status, Number(coached.total_price ?? 0), Number(coached.down_payment), coached.coach_id], ['confirmed', 0, 0, null]);
   });
   await test('the new functions are closed to anon; free_coaches and record_booking_balance need the right people', async () => {
     for (const fn of ['free_coaches(bigint,timestamptz,timestamptz)', 'record_booking_balance(bigint,payment_method,text)',

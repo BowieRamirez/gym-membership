@@ -235,7 +235,6 @@ public sealed partial class DemoGateway
                         .Select(i => new Dictionary<string, object> { ["amenity"] = amenityId, ["start"] = start.AddMinutes(30 * i).ToString("yyyy-MM-ddTHH:mm:ssZ") }).ToList();
                     ReservationCall("book_slots", new() { ["p_slots"] = slots }, out var made);
                     var booked = All<Reservation>().First(x => x.Id == ((IEnumerable<Reservation>)made!).First().Id);
-                    if (coach is not null) { booked.CoachId = coach; booked.TotalPrice = amenity.CoachFee * (minutes / 60); booked.DownPayment = 0; booked.UserAmenityId ??= heldPass.Id; }   // the fee at the desk
                     result = Clone(booked);
                     return true;
                 }
@@ -251,15 +250,15 @@ public sealed partial class DemoGateway
                 if (All<TrainingSession>().Any(t => t.MemberId == who && t.Status == Status.Scheduled && t.ScheduledStart < end && start < t.ScheduledEnd)) throw Err("member_busy");
                 if (Confirmed.Any(x => x.AmenityId == amenityId && x.StartsAt < end + Cooldown && start < x.EndsAt + Cooldown)) throw Err("slot_taken");
                 if (Confirmed.Any(x => x.MemberId == who && x.StartsAt < end && start < x.EndsAt)) throw Err("member_busy");
-                // G13 (0064): no slot is held; the down payment is the percent of price + coach fee - code (G4)
-                var total = (am.Price + (coach is null ? 0 : am.CoachFee)) * (minutes / 60);   // 0090: per hour
+                // 0118 (E2): amenity bookings cost amenity price only, with no coach attached
+                var total = am.Price * (minutes / 60);   // 0090: per hour
                 var d = Discounted(who, new() { ["p_discount_code"] = a.GetValueOrDefault("p_code")! }, total, "amenity", amenityId);
                 var down = desk ? d.Amount : Math.Round(d.Amount * g.DownPaymentPercent / 100m, 2);
                 if (desk) OpenShiftOf(Uid);   // 0050: no open shift, nothing is booked
                 var ua = Add(new UserAmenity { MemberId = who, AmenityId = amenityId, Status = Status.Pending, AvailedAt = now, IsSession = SessionOnly(am) });
                 var pay = Add(new Payment { PaymentCode = PaymentCode(), Kind = PayKind.Amenity, Method = method, Status = Status.Pending, Amount = down, DiscountId = d.Id, DiscountAmount = d.Cut,
                     MemberId = who, RecordedBy = desk ? Uid : null, UserAmenityId = ua.Id, CreatedAt = now, ExpiresAt = new[] { now.AddHours(g.PaymentExpiryHours), start.AddHours(-1) }.Min() });
-                var r = Add(new Reservation { MemberId = who, AmenityId = amenityId, CoachId = coach, StartsAt = start, EndsAt = end, UserAmenityId = ua.Id, PaymentId = pay.Id,
+                var r = Add(new Reservation { MemberId = who, AmenityId = amenityId, CoachId = null, StartsAt = start, EndsAt = end, UserAmenityId = ua.Id, PaymentId = pay.Id,
                     Status = AwaitingPayment, TotalPrice = d.Amount, DownPayment = down });
                 Audit("reservation.request", "reservations", r.Id.ToString());
                 if (desk) Call("verify_payment", new() { ["p_payment_id"] = pay.Id, ["p_approve"] = true });   // confirms it and sends the receipt (0094)
@@ -388,6 +387,19 @@ public sealed partial class DemoGateway
                     .OrderBy(c => c.Name).ToList();
                 return true;
             }
+            case "start_booking_balance_online":   // 0141: the rest, online through Xendit on the desk PC
+            {
+                Require("payments:record");
+                var r = All<Reservation>().FirstOrDefault(x => x.Id == I("p_reservation_id")) ?? throw Err("not_found");
+                if (r.Status != "confirmed") throw Err("not_confirmed");
+                if (r.BalancePaymentId is not null || r.Balance <= 0) throw Err("already_processed");
+                var open = All<Payment>().FirstOrDefault(p => p.BalanceReservationId == r.Id && p.Status == Status.Pending && p.ExpiresAt > now);
+                var pay = open ?? Add(new Payment { PaymentCode = PaymentCode(), Kind = PayKind.Amenity, Method = PayMethod.Qr, Status = Status.Pending, Amount = r.Balance,
+                    MemberId = r.MemberId, WalkInName = r.WalkInName, RecordedBy = Uid, CreatedAt = now, ExpiresAt = now.AddMinutes(30), BalanceReservationId = r.Id });
+                if (open is null) Audit("reservation.balance_online", "reservations", r.Id.ToString());
+                result = Clone(pay);
+                return true;
+            }
             case "record_booking_balance":   // G13 (0064): the rest, at the desk
             {
                 Require("payments:record");
@@ -396,6 +408,7 @@ public sealed partial class DemoGateway
                 if (method is not (PayMethod.Cash or PayMethod.Gcash) || (method == PayMethod.Gcash && string.IsNullOrEmpty(reference))) throw Err("bad_input");
                 var r = All<Reservation>().FirstOrDefault(x => x.Id == I("p_reservation_id")) ?? throw Err("not_found");
                 if (r.Status != "confirmed") throw Err("not_confirmed");
+                if (All<Payment>().Any(p => p.BalanceReservationId == r.Id && p.Status == Status.Pending && p.ExpiresAt > now)) throw Err("balance_online_pending");   // 0141
                 if (r.BalancePaymentId is not null || r.Balance <= 0 || r.UserAmenityId is null) throw Err("already_processed");
                 int? shift = method == PayMethod.Cash ? OpenShiftOf(Uid!) : null;
                 var pay = Add(new Payment { PaymentCode = PaymentCode(), Kind = PayKind.Amenity, Method = method, Status = Status.Verified, Amount = r.Balance, MemberId = r.MemberId,

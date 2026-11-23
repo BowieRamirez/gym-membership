@@ -41,6 +41,13 @@ public sealed class SupabaseGatewayTests : IDisposable
                 var seen = new Seen(ctx.Request.HttpMethod, ctx.Request.Url!.AbsolutePath, Uri.UnescapeDataString(ctx.Request.Url.Query), body, headers);
                 lock (_seen) _seen.Add(seen);
                 var (status, json) = _reply(seen);
+                if (status == 0)
+                {
+                    // drop mid-response: promise a body, send part of it, cut. Abort() alone sends an empty 200 on Linux (managed
+                    // HttpListener closes the stream), which a client reads as a good, empty answer (CI, 2026-11-23).
+                    try { ctx.Response.ContentLength64 = 1000; ctx.Response.OutputStream.Write("[{"u8); ctx.Response.Abort(); } catch { }
+                    continue;
+                }
                 var bytes = Encoding.UTF8.GetBytes(json);
                 ctx.Response.StatusCode = status;
                 ctx.Response.ContentType = "application/json";
@@ -475,11 +482,11 @@ public sealed class SupabaseGatewayTests : IDisposable
     }
 
     [Fact]
-    public async Task A_coach_profile_update_sends_the_four_editable_fields_and_filters_on_their_own_id()
+    public async Task A_coach_profile_update_sends_the_three_editable_fields_and_filters_on_their_own_id()
     {
         var gw = await SignedInAsync();
-        await gw.UpdateAsync(new Coach { UserId = "u-1", Bio = "b", Specialty = "s", HourlyRate = 800, IsAvailable = true });
-        Assert.Equal(new[] { "bio", "hourly_rate", "is_available", "specialty" }, Columns(Last.Body).Order());
+        await gw.UpdateAsync(new Coach { UserId = "u-1", Bio = "b", Specialty = "s", IsAvailable = true });
+        Assert.Equal(new[] { "bio", "is_available", "specialty" }, Columns(Last.Body).Order());
         Assert.Contains("user_id=eq.u-1", Last.Query);
         Assert.DoesNotContain("user_id", Columns(Last.Body));   // coaches may not change their own key column
     }
@@ -555,7 +562,7 @@ public sealed class SupabaseGatewayTests : IDisposable
         _reply = _ => (200, """{"shift_id":7,"cashier_id":"u-emp","opened_at":"2026-11-09T01:00:00+00:00","opening_float":5000.00,"open_note":null,"closed_at":"2026-11-09T09:00:00+00:00","cash_in":150.00,"cash_out":0,"expected":5150.00,"counted":5100.00,"close_note":"Gave change twice"}""");
         var closed = (await new PaymentStaffService(gw).CloseShiftAsync(5100, "Gave change twice")).Value!;
         Assert.Equal((5150m, -50m), (closed.Expected, closed.Difference));
-        Assert.Equal(new[] { "p_counted", "p_note" }, Columns(Last.Body).Order());
+        Assert.Equal(new[] { "p_counted", "p_note", "p_reason" }, Columns(Last.Body).Order());
     }
 
     [Fact]
@@ -710,8 +717,8 @@ public sealed class SupabaseGatewayTests : IDisposable
         _reply = s => s.Path.StartsWith("/storage/") ? (500, """{"error":"boom"}""")
             : s.Path.EndsWith("/coaches") ? (200, """[{"user_id":"c-1","is_available":true}]""")
             : s.Path.EndsWith("/coach_visits") ? (200, """[{"coach_visit_id":1,"coach_id":"c-1","checked_in_at":"2026-10-23T02:00:00Z","checked_in_by":"c-1"}]""")
-            : s.Path.EndsWith("/profiles") ? (200, """[{"id":"c-1","full_name":"Coach One","avatar_path":"c-1/a.png"}]""")
-            : s.Path.EndsWith("/amenities") ? (200, """[{"amenity_id":7,"name":"Pool","image_path":"pool.png","is_active":true}]""") : (200, "[]");
+            : s.Path.EndsWith("profiles") ? (200, """[{"id":"c-1","full_name":"Coach One","avatar_path":"c-1/a.png"}]""")   // profiles or public_profiles (0140)
+            : s.Path.EndsWith("/amenities") ? (200, """[{"amenity_id":7,"name":"Pool","image_path":"pool.png","is_active":true,"published_at":"2026-10-01T00:00:00Z"}]""") : (200, "[]");
         if (coach)
         {
             var result = await new CoachService(gw).ListCoachesAsync();
@@ -820,5 +827,55 @@ public sealed class SupabaseGatewayTests : IDisposable
         Assert.Contains(_seen, r => r.Path.EndsWith("/gym_check_ins") && r.Query.Contains("checked_in_at"));   // today's check-ins are filtered on the server
 
         Assert.True(results.All(r => r.Ok), string.Join("; ", results.Where(r => !r.Ok).Select(r => $"{r.Name}: {r.Why}")));
+    }
+
+    [Fact]
+    public async Task List_retries_transient_connection_drop_and_recovers()
+    {
+        var gw = await SignedInAsync();
+        var attempts = 0;
+        _reply = s =>
+        {
+            if (s.Path.EndsWith("/amenities") && ++attempts == 1)
+                return (0, "");   // drop the connection mid-response
+            return (200, """[{"amenity_id":1,"name":"Sauna","is_active":true}]""");
+        };
+        var rows = await gw.ListAsync<Amenity>();
+        Assert.Equal(2, attempts);
+        Assert.Single(rows);
+        Assert.Equal("Sauna", rows[0].Name);
+    }
+
+    [Fact]
+    public async Task List_does_not_retry_server_permission_errors()
+    {
+        var gw = await SignedInAsync();
+        var attempts = 0;
+        _reply = _ => { attempts++; return (403, """{"code":"42501","message":"forbidden"}"""); };
+        await Assert.ThrowsAnyAsync<Exception>(() => gw.ListAsync<Amenity>());
+        Assert.Equal(1, attempts);
+    }
+
+    [Fact]
+    public async Task Reference_table_cache_coalesces_concurrent_reads_and_invalidates_on_write()
+    {
+        var gw = await SignedInAsync();
+        var hits = 0;
+        _reply = s =>
+        {
+            if (s.Path.EndsWith("/amenities"))
+            {
+                if (s.Method == "GET") { Interlocked.Increment(ref hits); return (200, """[{"amenity_id":1,"name":"Sauna","is_active":true}]"""); }
+                return (200, "[]");
+            }
+            return (200, "[]");
+        };
+        await Task.WhenAll(gw.ListAsync<Amenity>(), gw.ListAsync<Amenity>(), gw.ListAsync<Amenity>());
+        Assert.Equal(1, hits);
+        await gw.ListAsync<Amenity>();
+        Assert.Equal(1, hits);
+        await gw.RpcAsync("touch_last_seen");
+        await gw.ListAsync<Amenity>();
+        Assert.Equal(2, hits);
     }
 }

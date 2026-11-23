@@ -87,13 +87,6 @@ try {
     await post('16:00', '18:00');
     await assert.rejects(post('17:00', '19:00'), /shift_posts_no_overlap/);
   });
-  await test('an hourly rate must be above zero; empty stays allowed', async () => {
-    await assert.rejects(as(coach, `update coaches set hourly_rate=0 where user_id=$1`, [coach]), /coaches_rate_positive/);
-    await assert.rejects(as(coach, `update coaches set hourly_rate=-5 where user_id=$1`, [coach]), /check/);
-    await as(coach, `update coaches set hourly_rate=30.5 where user_id=$1`, [coach]);
-    assert.equal((await db.query('select hourly_rate::text r from coaches where user_id=$1', [coach])).rows[0].r, '30.50');
-    await as(coach, `update coaches set hourly_rate=null where user_id=$1`, [coach]);
-  });
 } finally {
   await db.end(); await server.stop();
 }

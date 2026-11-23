@@ -83,7 +83,9 @@ public class CodeCheckTests
         public Task<AppResult<Payment>> RenewAsync(int membershipId, string? discountCode = null, string method = PayMethod.Qr) => inner.RenewAsync(membershipId, discountCode, method);
         public Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId) => inner.PayOnlineAsync(paymentId);
         public Task<AppResult<bool>> CheckOnlineAsync(int paymentId) => inner.CheckOnlineAsync(paymentId);
-        public Task<AppResult<Payment>> PayAgainAsync(PaymentItem item) => inner.PayAgainAsync(item);
+        public Task<AppResult<Payment>> PayAgainAsync(PaymentItem item, string? code = null) => inner.PayAgainAsync(item, code);
+        public Task<AppResult<CoachAccessOffer?>> CoachAccessOfferAsync() => inner.CoachAccessOfferAsync();
+        public Task<AppResult<Payment>> BuyCoachAccessAsync(string? discountCode = null) => inner.BuyCoachAccessAsync(discountCode);
         public Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync() => inner.ClosedDaysAsync();
         public Task<AppResult<GymSettings>> GymAsync() => inner.GymAsync();
     }

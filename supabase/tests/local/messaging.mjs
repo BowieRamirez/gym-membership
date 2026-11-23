@@ -111,59 +111,6 @@ try {
     assert.ok(!(await as(coach, `select * from chat_messages('announcements',$1)`, [coach])).some(l => l.sender_name === 'For you'));
   });
 
-  // F11
-  const desk2 = await user('employee');
-  const pack2 = (await db.query(`insert into membership_packages(name,price,duration_days) values('Msg Two',1000,30) returning membership_package_id`)).rows[0].membership_package_id;
-  const pool = (await db.query(`insert into amenities(name,price,duration_days) values('Pool',300,30) returning amenity_id`)).rows[0].amenity_id;
-  const day = (await db.query(`select ((now() at time zone 'Asia/Manila')::date + 3)::text d`)).rows[0].d;
-  const at = hm => new Date(`${day}T${hm}:00+08:00`).toISOString();
-  async function pair() {
-    const c = await user('coach', 'Coach Lena'), m = await user('member', 'Ana Reyes');
-    const pay = (await as(m, 'select * from extend_membership($1,null)', [pack2]))[0];
-    await as(desk2, 'select verify_payment($1,true)', [pay.payment_id]);
-    await db.query('insert into coach_visits(coach_id,checked_in_by) values($1,$1)', [c]);
-    await as(c, 'select answer_hire($1,true)', [(await as(m, 'select hire_coach($1) id', [c]))[0].id]);   // G30 (0074): the coach accepts
-    await as(c, 'insert into shift_posts(coach_id,starts_at,ends_at) values($1,$2,$3)', [c, at('06:00'), at('22:00')]);
-    return { c, m };
-  }
-  const chat = async p => (await db.query(`select sender_id, body, kind, time_request_id from messages where coach_id=$1 and member_id=$2 order by message_id`, [p.c, p.m])).rows;
-  await test('a member request makes exactly one message in the chat, in the member\'s name, with the amenity and note', async () => {
-    const p = await pair();
-    const id = (await as(p.m, `select request_session($1,$2,$3,$4,'First session, please') id`, [p.c, at('09:00'), at('10:00'), pool]))[0].id;
-    const msgs = await chat(p);
-    assert.equal(msgs.length, 1);
-    assert.equal(msgs[0].sender_id, p.m); assert.equal(msgs[0].kind, 'request'); assert.equal(String(msgs[0].time_request_id), String(id));
-    assert.match(msgs[0].body, /^I would like to request a training session: \w{3} \d{1,2} \w{3}, 9:00 AM to 10:00 AM, at Pool\. Note: First session, please$/);
-    assert.ok(!(await alerts(p.c)).some(a => a.title === 'New message'));   // the request sends its own alert, not a chat one
-    const line = (await as(p.c, `select * from chat_messages('coach',$1,$2)`, [p.m, p.c]))[0];
-    assert.equal(line.kind, 'request'); assert.equal(String(line.time_request_id), String(id));
-  });
-  await test('the coach\'s answers appear in the coach\'s name: propose, decline with the reason', async () => {
-    const p = await pair();
-    const id = (await as(p.m, `select request_session($1,$2,$3,null,null) id`, [p.c, at('09:00'), at('10:00')]))[0].id;
-    await as(p.c, 'select propose_time($1,$2,$3,null,$4)', [id, at('11:00'), at('12:00'), 'Morning is full']);
-    await as(p.m, 'select request_another_time($1,$2,$3,null,null)', [id, at('13:00'), at('14:00')]);
-    await as(p.c, `select decline_time_request($1,'Away that day')`, [id]);
-    const msgs = await chat(p);
-    assert.deepEqual(msgs.map(m => m.sender_id), [p.m, p.c, p.m, p.c]);
-    assert.match(msgs[1].body, /^Could we do another time\? .*11:00 AM to 12:00 PM\. Reason: Morning is full$/);
-    assert.match(msgs[2].body, /^Could we do this time instead\? .*1:00 PM to 2:00 PM\.$/);
-    assert.match(msgs[3].body, /^I declined the training session on .*\. Reason: Away that day$/);
-  });
-  await test('accepting and invitations post too; a request with an error posts nothing', async () => {
-    const p = await pair();
-    const id = (await as(p.m, `select request_session($1,$2,$3,null,null) id`, [p.c, at('15:00'), at('16:00')]))[0].id;
-    await as(p.c, 'select respond_time_request($1,true)', [id]);
-    let msgs = await chat(p);
-    assert.equal(msgs.length, 2); assert.match(msgs[1].body, /^I accepted the training session: .*3:00 PM to 4:00 PM\.$/);
-    await assert.rejects(as(p.m, `select request_session($1,$2,$3,null,null)`, [p.c, at('09:15'), at('10:00')]));   // refused: rolled back
-    assert.equal((await chat(p)).length, 2);
-    const q = await pair();
-    await as(q.c, 'select request_member_time($1,$2,$3)', [q.m, at('17:00'), at('18:00')]);
-    msgs = await chat(q);
-    assert.equal(msgs.length, 1); assert.equal(msgs[0].sender_id, q.c); assert.match(msgs[0].body, /^I would like to invite you to a training session: .*5:00 PM to 6:00 PM\.$/);
-    await assert.rejects(as(q.m, `insert into messages(coach_id,member_id,sender_id,body,kind) values($1,$2,$2,'fake','request')`, [q.c, q.m]), /permission denied/);
-  });
 } finally {
   await db.end(); await server.stop();
   console.log(`\nMessaging: ${passed} passed, ${failed} failed`);

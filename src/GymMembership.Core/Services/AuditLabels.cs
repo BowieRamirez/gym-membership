@@ -22,12 +22,17 @@ public static class AuditLabels
         ["check_in.id"] = "Checked in by ID",
         ["refund.request"] = "Refund requested", ["refund.decide"] = "Refund decided", ["refund.paid"] = "Refund repaid",
         ["reservation.book"] = "Booking made", ["reservation.desk_walk_in"] = "Walk-in booked at the desk", ["reservation.desk_walk_in_online"] = "Walk-in booked at the desk, paying online", ["reservation.hold"] = "Booking held for payment", ["reservation.request"] = "Booking requested", ["reservation.balance"] = "Booking balance taken", ["reservation.request"] = "Booking requested", ["reservation.balance"] = "Booking balance taken", ["reservation.cancel"] = "Booking cancelled", ["reservation.end"] = "Booking ended",
-        ["reservation.extend"] = "Booking extended",
+        ["reservation.extend"] = "Booking extended", ["reservation.balance_online"] = "Booking balance started online at the desk",   // 0141
+        ["coach_session.book"] = "Coach session booked", ["coach_session.cancel"] = "Coach session cancelled",
+        ["coach_access.buy"] = "Coach access add-on bought",
+        ["coach_session.check_in"] = "Coach session checked in", ["coach_session.coach_arrived"] = "Coach arrived for session", ["coach_session.desk_walkin"] = "Walk-in coach session booked at the desk",
+        ["damage_report.create"] = "Damage reported", ["damage_report.review"] = "Damage report reviewed",
         ["amenity.status"] = "Amenity status changed", ["amenity.runs"] = "Coach runs amenity changed",
         ["discount.create"] = "Code added", ["discount.turn_off"] = "Code turned off", ["discount.turn_on"] = "Code turned on", ["discount.delete"] = "Code deleted",
         ["catalog.archive"] = "Archived", ["catalog.restore"] = "Restored from archive",
         ["catalog.publish"] = "Published", ["catalog.new_version"] = "New version drafted", ["catalog.delete"] = "Deleted draft",
-        ["cash_shift.open"] = "Cash shift started", ["cash_shift.close"] = "Cash shift ended",
+        ["cash_shift.open"] = "Cash shift started", ["cash_shift.close"] = "Cash shift ended", ["cash_shift.note"] = "Cash shift note added",
+        ["payroll.salary_set"] = "Staff salary set", ["payroll.role_salary_set"] = "Role salary set", ["payroll.line_added"] = "Payroll line added", ["payroll.line_removed"] = "Payroll line removed", ["payroll.paid"] = "Payroll marked as paid",
         ["announcement.post"] = "Announcement posted",
         ["gym.close"] = "Gym closed for a day", ["gym.reopen"] = "Gym opened again",   // G16 (0065)
     };
@@ -36,15 +41,15 @@ public static class AuditLabels
     public static readonly IReadOnlyDictionary<string, string> Areas = new Dictionary<string, string>
     {
         ["user"] = "Account", ["role"] = "Role", ["payment"] = "Payment", ["check_in"] = "Check-in", ["refund"] = "Refund",
-        ["reservation"] = "Booking", ["amenity"] = "Amenity", ["catalog"] = "Catalog", ["cash_shift"] = "Cash shift", ["announcement"] = "Announcement", ["discount"] = "Discount code", ["gym"] = "Gym",
+        ["reservation"] = "Booking", ["coach_session"] = "Coach session", ["coach_access"] = "Coach access", ["amenity"] = "Amenity", ["catalog"] = "Catalog", ["cash_shift"] = "Cash shift", ["payroll"] = "Payroll", ["announcement"] = "Announcement", ["discount"] = "Discount code", ["gym"] = "Gym", ["damage_report"] = "Damage report",
     };
 
     /// <summary>Object type: the table the entry is about. The filter sends the key.</summary>
     public static readonly IReadOnlyDictionary<string, string> Objects = new Dictionary<string, string>
     {
         ["profiles"] = "Account", ["user_roles"] = "Role", ["payments"] = "Payment", ["refund_requests"] = "Refund request",
-        ["reservations"] = "Booking", ["amenities"] = "Amenity", ["membership_packages"] = "Package", ["discounts"] = "Discount code",
-        ["cash_shifts"] = "Cash shift", ["announcements"] = "Announcement", ["gym_closures"] = "Closed day", ["gym_check_ins"] = "Check-in",
+        ["reservations"] = "Booking", ["training_sessions"] = "Coach session", ["amenities"] = "Amenity", ["membership_packages"] = "Package", ["discounts"] = "Discount code",
+        ["cash_shifts"] = "Cash shift", ["staff_salaries"] = "Staff salary", ["role_salaries"] = "Role salary", ["payroll_periods"] = "Pay period", ["payroll_lines"] = "Payroll line", ["announcements"] = "Announcement", ["gym_closures"] = "Closed day", ["gym_check_ins"] = "Check-in", ["damage_reports"] = "Damage report",
     };
 
     public static string Action(string code) => Actions.GetValueOrDefault(code, code);

@@ -176,9 +176,9 @@ public class CrudTests
     {
         var gw = await As("coach@demo.io");
         var coaches = new CoachService(gw);
-        Assert.True((await coaches.UpdateProfileAsync("New bio", "Strength", 500, true)).Ok);
+        Assert.True((await coaches.UpdateProfileAsync("New bio", "Strength", true)).Ok);
         var me = (await coaches.MyCoachAsync()).Value!;
-        Assert.Equal(("New bio", "Strength", 500m), (me.Bio, me.Specialty, me.HourlyRate));
+        Assert.Equal(("New bio", "Strength"), (me.Bio, me.Specialty));
     }
 
     [Fact]

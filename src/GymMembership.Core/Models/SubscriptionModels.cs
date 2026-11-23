@@ -20,6 +20,8 @@ public class MembershipTerm : BaseModel
     [Column("cancelled_at")] public DateTime? CancelledAt { get; set; }
     [Column("cancelled_by")] public string? CancelledBy { get; set; }
     [Column("cancellation_reason")] public string? CancellationReason { get; set; }
+    [Column("coach_access_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? CoachAccessAt { get; set; }
+    [Column("coach_access_payment_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? CoachAccessPaymentId { get; set; }
     [Column("created_at")] public DateTime CreatedAt { get; set; }
 }
 

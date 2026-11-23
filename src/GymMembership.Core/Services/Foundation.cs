@@ -33,8 +33,8 @@ public static class ErrorMapper
     {
         var m = message.ToLowerInvariant();
         if (Has(m, "forbidden", "42501", "jwt", "row-level security", "invalid login", "invalid_credentials", "not authenticated")) return AppErrorKind.Unauthorized;
-        if (Has(m, "item_not_for_sale", "already_published", "package_published", "package_archived", "name_taken", "draft_exists", "not_published", "published_archive_instead", "account_has_commitments", "account_archived", "record_archived", "record_not_restorable", "code_limit_reached", "code_taken", "discount_used", "name_complete", "shift_has_sessions", "slot_taken", "member_busy", "stale_proposal", "coach_unavailable", "coach_busy", "already_started", "not_in_use", "amenity_unavailable", "not_archived", "already_processed", "already_availed", "renewal_pending", "already_requested", "refund_in_progress", "not_refundable", "pending_session_request", "active_coaching_session", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
-        if (Has(m, "account_inactive", "no_open_shift", "shift_open", "note_required", "bad_archive_reason", "bad_correction_reason", "discount_fixed", "discount_locked", "wrong_pin", "has_desk_pin", "bad_down_payment", "coach_not_free", "not_confirmed", "balance_paid", "wrong_member_password", "proof_invalid", "auth_unavailable", "pin_locked", "no_desk_pin", "pin_required", "scan_required", "bad_pin", "refund_reason_required", "no_coach_present", "self_archive", "last_active_admin", "no_active_membership", "self_verify", "self_decision", "not_renewable", "wrong_member", "not_found", "23514",
+        if (Has(m, "item_not_for_sale", "already_published", "package_published", "package_archived", "name_taken", "draft_exists", "not_published", "published_archive_instead", "account_has_commitments", "account_archived", "record_archived", "record_not_restorable", "code_limit_reached", "code_taken", "discount_used", "name_complete", "shift_has_sessions", "slot_taken", "member_busy", "stale_proposal", "coach_unavailable", "coach_busy", "coach_taken", "too_many_coach_sessions", "coach_booking_blocked", "coach_not_free", "coach_day_full", "coach_not_offered", "already_started", "not_in_use", "amenity_unavailable", "not_archived", "already_processed", "already_availed", "renewal_pending", "already_requested", "refund_in_progress", "not_refundable", "pending_session_request", "active_coaching_session", "payroll_paid", "overlap", "in_use", "23505", "23p01", "23503", "p0002", "duplicate key", "foreign key")) return AppErrorKind.Conflict;
+        if (Has(m, "account_inactive", "no_open_shift", "shift_open", "note_required", "reason_required", "bad_archive_reason", "bad_correction_reason", "discount_fixed", "discount_locked", "wrong_pin", "has_desk_pin", "bad_down_payment", "coach_not_free", "not_confirmed", "balance_paid", "wrong_member_password", "proof_invalid", "auth_unavailable", "pin_locked", "no_desk_pin", "pin_required", "scan_required", "bad_pin", "refund_reason_required", "no_coach_present", "self_archive", "last_active_admin", "no_active_membership", "self_verify", "self_decision", "not_renewable", "wrong_member", "not_found", "session_cancelled", "balance_online_pending", "payment_required", "wrong_day", "not_checked_in", "own_salary", "net_below_zero", "session_not_started", "period_not_ended", "23514",
                    "missing_fields", "not_on_the_hour", "refund_window_closed", "refund_week_passed", "nothing_to_refund", "terms_required", "too_soon", "too_late_to_cancel", "not_ended", "claim_window_closed", "payment_expired", "gym_closed", "day_closed", "day_past", "coach_not_in_gym", "hire_already_requested", "bad_rate", "invite_member_inactive", "invalid_code", "code_already_used", "code_not_for_item", "no_items", "item_not_found", "limit_required", "bad_hours", "off_grid", "outside_gym_hours", "too_long", "past_slot", "too_far_ahead", "no_pass", "limit_below_used", "22023", "bad_input", "bad_image", "bad_reason", "bad_back_at", "bad_status", "bad_discount", "email_taken", "no_active_hire", "empty_message", "message_too_long", "wrong_password", "email_confirmation_required", "super_admin_protected", "bad_code", "code_not_verified", "resend_wait", "same_password", "weak_password", "outside_membership", "online_only", "too_many_tries", "account_locked", "too_many_checks", "code_expired", "end must be after start")) return AppErrorKind.Validation;
         return AppErrorKind.Unknown;
     }
@@ -137,6 +137,17 @@ public static class ErrorText
         "online_only" => "Pay online here. To pay cash, go to the front desk and they'll record it for you.",   // 0099
         "shift_open" => "Your shift is already open. End it before starting a new one.",
         "note_required" => "Add a note: the amount differs from what's expected.",
+        "reason_required" => "Choose why the count differs from what's expected.",
+        "payroll_paid" => "This pay period is already marked as paid and can't be changed.",
+        "period_not_ended" => "Wait until the last day of the pay period before marking it as paid.",
+        "own_salary" => "Ask another admin or System admin to set your own salary.",
+        string s when s.StartsWith("net_below_zero:", StringComparison.Ordinal) => $"{s["net_below_zero:".Length..]} has a net pay below ₱0.00. Adjust their lines before marking as paid.",
+        "net_below_zero" => "Someone's net pay is below ₱0.00. Adjust their lines before marking as paid.",
+        "session_cancelled" => "This session has been cancelled.",
+        "session_not_started" => "Damage can be reported once the session has started.",   // 0140
+        "payment_required" => "The coach add-on payment has not been verified yet.",
+        "wrong_day" => "This session is not scheduled for today.",
+        "not_checked_in" => "Check the member in first before marking the coach as arrived.",
         "scan_required" => "Scan the member's QR code again, then check them in.",
         "bad_pin" => "Choose 4 digits for your desk PIN.",
         "self_archive" => "You can't delete your own account.",
@@ -155,6 +166,11 @@ public static class ErrorText
         "slot_taken" => "One of those slots was just taken, or would run into another booking's cooldown. Nothing was booked; the grid now shows what is free.",
         "member_busy" => "You already have a booking or session at that time. Nothing was booked.",
         "coach_busy" => "The coach is already booked at that time.",
+        "coach_taken" => "That coach was just booked for that hour. Nothing was booked; the list now shows what is free.",
+        "too_many_coach_sessions" => "You already have an active coach session. Cancel or finish it before booking another.",
+        "coach_booking_blocked" => "Free coach bookings are paused for 7 days after two missed sessions in 30 days.",
+        "coach_day_full" => "This coach has reached their daily hour limit. Pick another coach or another day.",
+        "coach_not_offered" => "Your current package doesn't include a coach or a coach add-on.",
         "too_long" => "A booking can be at most 2 hours (four touching slots).",
         "past_slot" => "That time has already started. Pick a later slot.",
         "too_far_ahead" => "You can book up to 14 days ahead.",
@@ -167,7 +183,7 @@ public static class ErrorText
         "already_started" => "This booking has already started. Use End now instead.",
         "not_in_use" => "This booking is not in use right now.",
         "stale_proposal" => "Your coach changed the proposal since you opened it. The list now shows the latest one.",
-        "gym_closed" => "The gym is closed right now. Coaches can check in during opening hours.",
+        "gym_closed" => "The gym is closed at that time. Check-ins work during opening hours.",
         "day_closed" => "The gym is closed that day. See Announcements for why, and choose another day.",   // G17 (0065)
         "day_past" => "That day has passed. Choose today or a later day.",
         "coach_not_in_gym" => "This coach just left the gym. You can hire them when they are back.",
@@ -187,6 +203,7 @@ public static class ErrorText
         "bad_down_payment" => "The down payment is a percent from 1 to 100.",
         "coach_not_free" => "That coach isn't free for the whole time any more. Pick another coach or another time.",
         "not_confirmed" => "This booking isn't confirmed yet: its down payment hasn't been verified.",
+        "balance_online_pending" => "An online payment for this balance is still open on Xendit. Wait for it, or cancel it, before taking cash.",   // 0141
         "balance_paid" => "The balance is already paid at the desk, so the booking can't be cancelled here. The desk can void that payment first.",
         "zero_amount" => "A payment of ₱0 can't be recorded. Ask an administrator to set a price above ₱0.",
         "bad_input" => "Fill in every field, then try again.",
@@ -236,7 +253,7 @@ public static class ErrorText
         "no_active_membership" => "You need an active membership for that. Buy a package and wait for the payment to be verified.",
         "outside_membership" => "Your membership doesn't cover that time. Pick a time within it, or buy or renew a package first.",   // 0098
         "already_processed" => "That was already handled. Refresh the page and try again.",
-        "no_active_hire" => "You can only message a coach you have hired, or a trainee who is hired to you.",
+        "no_active_hire" => "You can message a coach or trainee while a session is active or within 7 days of it.",
         "empty_message" => "Type a message first.",
         "end must be after start" => "The end time must be after the start time.",
         // the app is newer than the database: a migration was not pushed, so the server cannot find a function, table or column it asks for
@@ -300,6 +317,7 @@ public interface IAppNavigator
     /// <summary>Time requests, for a member or a coach (F11: a request message links there).</summary>
     void GoToRequests();
     void GoToMembership();
+    void GoToSessions() { }
     /// <summary>Book an amenity, for a member (F15: a booking on the Calendar opens it).</summary>
     void GoToBookings() { }
     void ApplyTheme(string theme);

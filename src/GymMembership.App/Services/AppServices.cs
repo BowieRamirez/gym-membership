@@ -38,12 +38,13 @@ public sealed class AppNavigator(IServiceProvider sp) : IAppNavigator
     }
 
     public void GoToMembership() => MainThread.BeginInvokeOnMainThread(async () => await GymMembership.App.Controls.PhoneNavigation.GoToAsync(Shell.Current, "//memberships"));
+    public void GoToSessions() => MainThread.BeginInvokeOnMainThread(async () => await GymMembership.App.Controls.PhoneNavigation.GoToAsync(Shell.Current, "//sessions"));
 
     public void GoToMessages() => MainThread.BeginInvokeOnMainThread(async () => await GymMembership.App.Controls.PhoneNavigation.GoToAsync(Shell.Current, "//messages"));
 
     public void GoToBookings() => MainThread.BeginInvokeOnMainThread(async () => await GymMembership.App.Controls.PhoneNavigation.GoToAsync(Shell.Current, "//bookings"));
 
-    public void GoToRequests() => MainThread.BeginInvokeOnMainThread(async () => await GymMembership.App.Controls.PhoneNavigation.GoToAsync(Shell.Current, "//requests"));
+    public void GoToRequests() => MainThread.BeginInvokeOnMainThread(async () => await GymMembership.App.Controls.PhoneNavigation.GoToAsync(Shell.Current, "//sessions"));
 
     public void ApplyTheme(string theme) => MainThread.BeginInvokeOnMainThread(() =>
         Application.Current!.UserAppTheme = theme switch { "dark" => AppTheme.Dark, "light" => AppTheme.Light, _ => AppTheme.Unspecified });
@@ -108,9 +109,21 @@ public sealed class MauiReportFiles : IReportFiles
 
     public async Task ShareAsync(string fileName, byte[] pdf)
     {
+        var type = Path.GetExtension(fileName).Equals(".csv", StringComparison.OrdinalIgnoreCase) ? "text/csv" : "application/pdf";
+#if WINDOWS
+        // owner, 2026-11-23: on the desk PC Export saves to Downloads and opens the file; the Share panel is for phones
+        var downloads = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+        Directory.CreateDirectory(downloads);
+        var path = Path.Combine(downloads, fileName);
+        for (var n = 2; File.Exists(path); n++)   // never overwrite an earlier export
+            path = Path.Combine(downloads, $"{Path.GetFileNameWithoutExtension(fileName)} ({n}){Path.GetExtension(fileName)}");
+        await File.WriteAllBytesAsync(path, pdf);
+        await Launcher.Default.OpenAsync(new OpenFileRequest(fileName, new ReadOnlyFile(path, type)));
+#else
         var path = Path.Combine(FileSystem.Current.CacheDirectory, fileName);
         await File.WriteAllBytesAsync(path, pdf);
-        await Share.Default.RequestAsync(new ShareFileRequest { Title = "Revenue report", File = new ShareFile(path, "application/pdf") });
+        await Share.Default.RequestAsync(new ShareFileRequest { Title = fileName, File = new ShareFile(path, type) });
+#endif
     }
 
     public async Task OpenAsync(string fileName, byte[] pdf)

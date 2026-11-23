@@ -10,6 +10,7 @@ public partial class PaymentsPage : BasePage
     protected override TimeSpan? AutoRefresh => TimeSpan.FromSeconds(20);
     protected override bool LiveRecords => true;
     void OnPayAgain(object? sender, EventArgs e) => Row<MyPaymentsViewModel>(sender, v => v.PayAgainCommand);
+    void OnPayAgainCodeUnfocused(object? sender, FocusEventArgs e) { if (BindingContext is MyPaymentsViewModel vm) _ = vm.CheckPayAgainCodeNowAsync(); }
     async void OnCancelPayment(object? sender, EventArgs e)
     {
         if (BindingContext is not MyPaymentsViewModel vm || vm.IsBusy || vm.DialogOpen

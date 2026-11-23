@@ -41,7 +41,7 @@ public class AttendanceViewModelTests
         public Task<AppResult<IReadOnlyList<SessionRow>>> SessionsAsync() => throw new NotSupportedException();
         public Task<AppResult<bool>> SetSessionStatusAsync(int sessionId, string status) => throw new NotSupportedException();
         public Task<AppResult<bool>> RescheduleAsync(int sessionId, DateTime startUtc, DateTime endUtc) => throw new NotSupportedException();
-        public Task<AppResult<bool>> CancelSessionAsync(int sessionId) => throw new NotSupportedException();
+        public Task<AppResult<bool>> CancelSessionAsync(int sessionId, string? reason = null) => throw new NotSupportedException();
     }
 
     // a marking service that changes the fake server's data, like the real one changes the table
@@ -60,6 +60,7 @@ public class AttendanceViewModelTests
         public Task<AppResult<bool>> CheckInAsync(string memberId, string? method = null, string? pin = null, string? reason = null, string? proof = null, string? idType = null) => throw new NotSupportedException();
         public Task<AppResult<string>> VerifyPasswordAsync(string memberId, string password) => throw new NotSupportedException();
         public Task<AppResult<bool>> CanSkipPinAsync() => throw new NotSupportedException();
+        public Task<AppResult<MemberHit?>> MemberStatusAsync(string memberId) => throw new NotSupportedException();
         public Task<AppResult<MemberPass>> MyPassAsync() => throw new NotSupportedException();
         public Task<AppResult<MemberScan>> ScanAsync(string code) => throw new NotSupportedException();
         public Task<AppResult<IReadOnlyList<CheckInRow>>> CheckInsOnAsync(DateOnly manilaDay) => throw new NotSupportedException();

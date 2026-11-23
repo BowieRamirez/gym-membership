@@ -12,7 +12,7 @@ public class SessionRequestRulesTests
         await SignIn(gw, "coach@demo.io");
         var svc = new SessionService(gw);
         foreach (var row in (await svc.SessionsAsync()).Value!.Where(r => r.Session.MemberId == "u-alex" && r.Session.Status == Status.Scheduled))
-            Assert.True((await svc.CancelSessionAsync(row.Session.Id)).Ok);
+            Assert.True((await svc.CancelSessionAsync(row.Session.Id, "test setup")).Ok);
     }
 
     static async Task ClearMine(SessionService svc)

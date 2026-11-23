@@ -16,7 +16,10 @@ public partial class SessionsPage : BasePage
 	protected override void OnAppearing()
 	{
 		if (CoachHost.Content is null && Shell.Current is CoachShell)
+		{
 			HostBelow(CoachHost, _services.GetRequiredService<TraineesPage>());   // G30: requests and members, moved from My shifts
+			BookCoachSection.IsVisible = false;   // UI test 2026-11-23: members book coaches; a coach saw the member's form
+		}
 		if (CalendarHost.Content is null && Shell.Current is MemberShell)
 		{
 			HostBelow(CalendarHost, _services.GetRequiredService<MemberCalendarPage>());
@@ -42,6 +45,7 @@ public partial class SessionsPage : BasePage
 	protected override TimeSpan? AutoRefresh => CalendarSection.IsVisible ? TimeSpan.FromSeconds(60) : null;
 	protected override bool RefreshOwnViewModel => false;
 
+	void OnShowQr(object? sender, EventArgs e) => Row<SessionsViewModel>(sender, v => v.ShowQrCommand);
 	void OnExtend(object? sender, EventArgs e) => Row<SessionsViewModel>(sender, v => v.ExtendCommand);
 	void OnComplete(object? sender, EventArgs e) => Row<SessionsViewModel>(sender, v => v.CompleteCommand);
 	void OnNoShow(object? sender, EventArgs e) => Row<SessionsViewModel>(sender, v => v.NoShowCommand);

@@ -39,7 +39,7 @@ public class WalkInProcessTests
     {
         var (gw, vm) = await Open();
         vm.PickKindCommand.Execute("Day pass");
-        vm.Search = "carlo"; await vm.FindCommand.ExecuteAsync(null);
+        vm.Search = "carlo"; await vm.SuggestNowAsync();
         vm.PickMemberCommand.Execute(vm.Hits.Single());
         Assert.Equal("Carlo Diaz", vm.OrderWho);
         await vm.RecordCommand.ExecuteAsync(null);
@@ -50,7 +50,7 @@ public class WalkInProcessTests
     public async Task After_a_sale_the_next_Day_pass_starts_anonymous()
     {
         var (gw, vm) = await Open();
-        vm.Search = "carlo"; await vm.FindCommand.ExecuteAsync(null);
+        vm.Search = "carlo"; await vm.SuggestNowAsync();
         vm.PickMemberCommand.Execute(vm.Hits.Single());
         vm.PickItemCommand.Execute(vm.Options[0]);
         await vm.RecordCommand.ExecuteAsync(null);
@@ -90,13 +90,13 @@ public class WalkInProcessTests
     public async Task Find_and_register_show_one_at_a_time()
     {
         var (_, vm) = await Open();
-        vm.Search = "a"; await vm.FindCommand.ExecuteAsync(null);
+        vm.Search = "bea"; await vm.SuggestNowAsync();
         Assert.Equal((true, false), (vm.ShowHits, vm.IsRegistering));
         vm.StartRegisterCommand.Execute(null);
         Assert.Equal((false, true, false), (vm.ShowHits, vm.IsRegistering, vm.ShowNoMatch));
-        await vm.FindCommand.ExecuteAsync(null);
+        await vm.SuggestNowAsync();
         Assert.Equal((true, false), (vm.ShowHits, vm.IsRegistering));
-        vm.Search = "zzz"; await vm.FindCommand.ExecuteAsync(null);
+        vm.Search = "zzz"; await vm.SuggestNowAsync();
         Assert.True(vm.ShowNoMatch);
         vm.StartRegisterCommand.Execute(null);
         Assert.False(vm.ShowNoMatch);
@@ -106,7 +106,7 @@ public class WalkInProcessTests
     public async Task Nobody_found_then_register_them_as_a_member_and_they_are_chosen()
     {
         var (gw, vm) = await Open();
-        vm.Search = "nora"; await vm.FindCommand.ExecuteAsync(null);
+        vm.Search = "nora"; await vm.SuggestNowAsync();
         Assert.True(vm.NoMatch);
         vm.StartRegisterCommand.Execute(null);
         Assert.True(vm.IsRegistering);

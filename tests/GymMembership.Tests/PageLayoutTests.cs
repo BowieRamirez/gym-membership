@@ -146,7 +146,7 @@ public class PageLayoutTests
     {
         var xaml = File.ReadAllText(AppFile("Views", "CoachProfilePage.xaml"));
         Assert.DoesNotContain("c:CardGrid", xaml);   // the form no longer sits alone in half a row
-        Assert.Contains("<c:SideLayout x:Name=\"CoachColumn\"", xaml);   // form, with check-in beside it
+        Assert.DoesNotContain("ToggleVisitCommand", xaml);   // coaches are checked in by the front desk
         Assert.DoesNotContain("CoachPhoto", xaml);   // owner, 2026-11-11: one picture button, Account's "Change picture"
         // owner's sketch, 2026-11-11: Account first, then the coach profile under name and email, Theme and password in the right column
         var settings = File.ReadAllText(AppFile("Views", "SettingsPage.xaml"));

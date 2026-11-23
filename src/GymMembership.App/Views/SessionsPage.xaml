@@ -5,6 +5,7 @@
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            xmlns:zxing="clr-namespace:ZXing.Net.Maui.Controls;assembly=ZXing.Net.MAUI.Controls"
             x:Class="GymMembership.App.Views.SessionsPage" x:DataType="vm:SessionsViewModel" Title="Sessions">
 
     <v:BasePage.Resources>
@@ -12,7 +13,7 @@
         <DataTemplate x:Key="SessionRow" x:DataType="svc:SessionRow">
             <VerticalStackLayout>
                 <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,*,230,120,120,470">
-                    <Label Text="{Binding Session.Title}" FontFamily="BarlowMedium" VerticalOptions="Center" />
+                    <Label Text="{Binding Title}" FontFamily="BarlowMedium" VerticalOptions="Center" />
                     <Label Grid.Column="1" Text="{Binding With}" VerticalOptions="Center" />
                     <Label Grid.Column="2" VerticalOptions="Center">
                         <Label.Text>
@@ -23,8 +24,9 @@
                         </Label.Text>
                     </Label>
                     <Label Grid.Column="3" Text="{Binding Amenity}" Style="{StaticResource Muted}" VerticalOptions="Center" />
-                    <c:StatusChip Grid.Column="4" Status="{Binding Session.Status}" VerticalOptions="Center" />
+                    <c:StatusChip Grid.Column="4" Status="{Binding StatusText}" VerticalOptions="Center" />
                     <HorizontalStackLayout Grid.Column="5" Spacing="6" VerticalOptions="Center" HorizontalOptions="End">
+                        <Button Text="QR" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding HasQr}" Clicked="OnShowQr" />
                         <Button Text="Add 30 minutes" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanExtend}" Clicked="OnExtend"
                                 SemanticProperties.Hint="Extends this session and its amenity booking by 30 minutes" />
                         <Button Text="Mark complete" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanManage}" Clicked="OnComplete" />
@@ -41,8 +43,8 @@
             <VerticalStackLayout>
                 <VerticalStackLayout Spacing="4" Padding="14,12">
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                        <Label Text="{Binding Session.Title}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
-                        <c:StatusChip Grid.Column="1" Status="{Binding Session.Status}" VerticalOptions="Center" />
+                        <Label Text="{Binding Title}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                        <c:StatusChip Grid.Column="1" Status="{Binding StatusText}" VerticalOptions="Center" />
                     </Grid>
                     <Label Style="{StaticResource Caption}">
                         <Label.Text>
@@ -55,6 +57,7 @@
                     </Label>
                     <Label Text="{Binding Amenity, StringFormat='At {0}'}" Style="{StaticResource Caption}" IsVisible="{Binding Amenity, Converter={StaticResource HasText}}" />
                     <FlexLayout Wrap="Wrap" Margin="0,4,0,0">
+                        <Button Text="QR" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding HasQr}" Clicked="OnShowQr" />
                         <Button Text="Add 30 minutes" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanExtend}" Clicked="OnExtend"
                                 SemanticProperties.Hint="Extends this session and its amenity booking by 30 minutes" />
                         <Button Text="Mark complete" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanManage}" Clicked="OnComplete" />
@@ -78,6 +81,88 @@
 
             <!-- coach only (G30): Hire requests and Your members, TraineesPage's content, above the sessions -->
             <ContentView x:Name="CoachHost" />
+            <!-- member session QR popup panel -->
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding IsShowingQr}" Padding="16,14">
+                <VerticalStackLayout Spacing="10" HorizontalOptions="Center">
+                    <c:CardTitle Text="Session QR code" HorizontalOptions="Center" />
+                    <Label Text="Show this at the front desk when you arrive for your session." Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                    <Border BackgroundColor="White" StrokeThickness="0" Padding="8" WidthRequest="200" HeightRequest="200" HorizontalOptions="Center">
+                        <zxing:BarcodeGeneratorView Format="QrCode" Value="{Binding QrSession.Session.SessionCode}" HorizontalOptions="Fill" VerticalOptions="Fill"
+                                                    ForegroundColor="Black" BackgroundColor="White" />
+                    </Border>
+                    <Label Text="{Binding QrSession.Session.SessionCode}" FontFamily="BarlowSemiBold" HorizontalOptions="Center" />
+                    <Button Text="Close" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Center" Command="{Binding CloseQrCommand}" />
+                </VerticalStackLayout>
+            </Border>
+            <!-- coach cancel with reason panel -->
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding IsCancelling}" Padding="16,14">
+                <VerticalStackLayout Spacing="10">
+                    <c:CardTitle Text="Cancel session" />
+                    <Label Text="{Binding CancellingSession.With, StringFormat='Tell {0} why you are cancelling this session:'}" Style="{StaticResource Muted}" />
+                    <Border Style="{StaticResource Field}"><Entry Text="{Binding CancelReason}" Placeholder="Reason for cancelling" MaxLength="300" /></Border>
+                    <HorizontalStackLayout Spacing="8">
+                        <Button Text="Cancel session" Style="{StaticResource SmallButton}" Command="{Binding ConfirmCancelCommand}" />
+                        <Button Text="Keep session" Style="{StaticResource SmallOutlineButton}" Command="{Binding KeepSessionCommand}" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+            <!-- coach after-session damage prompt -->
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding IsReportingDamage}" Padding="16,14">
+                <VerticalStackLayout Spacing="10">
+                    <c:CardTitle Text="Anything broken or damaged?" />
+                    <Label Text="{Binding ReportingDamageSession.With, StringFormat='Session with {0} completed.'}" Style="{StaticResource Muted}" />
+                    <HorizontalStackLayout Spacing="8" IsVisible="{Binding DamageFound, Converter={StaticResource Not}}">
+                        <Button Text="No, everything is fine" Style="{StaticResource SmallOutlineButton}" Command="{Binding DismissDamageCommand}" />
+                        <Button Text="Yes, report damage" Style="{StaticResource SmallButton}" Command="{Binding StartDamageReportCommand}" />
+                    </HorizontalStackLayout>
+                    <VerticalStackLayout Spacing="8" IsVisible="{Binding DamageFound}">
+                        <Border Style="{StaticResource Field}"><Entry Text="{Binding DamageDescription}" Placeholder="Describe what was broken or damaged" MaxLength="900" /></Border>
+                        <HorizontalStackLayout Spacing="8">
+                            <Button Text="Submit damage report" Style="{StaticResource SmallButton}" Command="{Binding SubmitDamageCommand}" />
+                            <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding DismissDamageCommand}" />
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+            <!-- member (E5/E6/E7): Book a coach -->
+            <VerticalStackLayout x:Name="BookCoachSection" Spacing="10" IsVisible="{Binding CanShowBookCoach}">
+                <Button Text="Book a coach" Style="{StaticResource SmallButton}" HorizontalOptions="Start" Command="{Binding OpenBookCoachCommand}"
+                        IsEnabled="{Binding HasMemberActiveSession, Converter={StaticResource Not}}" />
+                <Label Text="You already have an active coach session. Cancel or finish it before booking another." Style="{StaticResource Caption}"
+                       IsVisible="{Binding HasMemberActiveSession}" />
+                <Border Style="{StaticResource Panel}" IsVisible="{Binding IsBookingCoach}" Padding="16,14">
+                    <VerticalStackLayout Spacing="12">
+                        <c:CardTitle Text="Book a coach" />
+                        <Label Text="{Binding PackageCoachText}" Style="{StaticResource Muted}" />
+                        <FlexLayout Wrap="Wrap" AlignItems="End">
+                            <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                                <Label Text="Day" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><DatePicker Date="{Binding BookDay}" MinimumDate="{x:Static x:DateTime.Today}" /></Border>
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                                <Label Text="Length" Style="{StaticResource Caption}" />
+                                <HorizontalStackLayout Spacing="6">
+                                    <Button Text="1 hour" Style="{StaticResource FilterChip}" Command="{Binding SetBookHoursCommand}" CommandParameter="1" />
+                                    <Button Text="2 hours" Style="{StaticResource FilterChip}" Command="{Binding SetBookHoursCommand}" CommandParameter="2" />
+                                </HorizontalStackLayout>
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="220">
+                                <Label Text="Coach" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding FreeCoaches}" ItemDisplayBinding="{Binding FullName}" SelectedItem="{Binding SelectedFreeCoach}" Title="Pick a coach" /></Border>
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="190">
+                                <Label Text="Time" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding AvailableHours}" ItemDisplayBinding="{Binding Label}" SelectedItem="{Binding BookHour}" Title="Pick an hour" /></Border>
+                            </VerticalStackLayout>
+                        </FlexLayout>
+                        <Label Text="No coaches have free hours on this day." Style="{StaticResource Caption}" IsVisible="{Binding HasNoFreeCoaches}" />
+                        <HorizontalStackLayout Spacing="8">
+                            <Button Text="Confirm booking" Style="{StaticResource SmallButton}" Command="{Binding BookCoachCommand}" />
+                            <Button Text="Close" Style="{StaticResource SmallOutlineButton}" Command="{Binding OpenBookCoachCommand}" />
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
             <c:SideLayout>
                 <VerticalStackLayout Spacing="4">
                 <!-- status filter chips; they wrap onto a second line on a narrow phone; the yellow one is in use -->
@@ -121,7 +206,7 @@
                 <VerticalStackLayout Spacing="12" IsVisible="{Binding Rescheduling, Converter={StaticResource IsNotNull}}">
                     <Border Style="{StaticResource SidePanel}">
                         <VerticalStackLayout Spacing="12">
-                                <c:CardTitle Text="{Binding Rescheduling.Session.Title, StringFormat='Move “{0}” to a new time'}" />
+                                <c:CardTitle Text="{Binding Rescheduling.Title, StringFormat='Move “{0}” to a new time'}" />
                                 <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                                     <VerticalStackLayout Spacing="4">
                                         <Label Text="New date" Style="{StaticResource Caption}" />

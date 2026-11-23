@@ -13,7 +13,7 @@
         <!-- Windows: one row a payment -->
         <DataTemplate x:Key="PaymentRow" x:DataType="svc:PaymentItem">
             <VerticalStackLayout>
-                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,110,100,*,130,170,120,200">
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="1.1*,100,90,1.8*,105,160,90,140">
                     <Label Text="{Binding What}" FontFamily="BarlowMedium" VerticalOptions="Center" />
                     <c:StatusChip Grid.Column="1" Status="{Binding StatusText}" VerticalOptions="Center" />
                     <Label Grid.Column="2" Text="{Binding MethodText}" VerticalOptions="Center" />
@@ -68,6 +68,34 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
+            <!-- D6 (2026-11-20): Pay again popup with optional discount code, then straight to Xendit checkout -->
+            <Border Style="{StaticResource Panel}" IsVisible="{Binding IsPayingAgain}" MaximumWidthRequest="480" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}" AutomationId="PayAgainPanel">
+                <VerticalStackLayout Spacing="12">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <VerticalStackLayout Spacing="2">
+                            <c:CardTitle Text="{Binding PayAgainTitle}" />
+                            <Label Text="{Binding PayAgainPriceText}" Style="{StaticResource Heading}" />
+                        </VerticalStackLayout>
+                        <Button Grid.Column="1" Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding ClosePayAgainCommand}" VerticalOptions="Start" />
+                    </Grid>
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Discount code (optional)" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}"><Entry Text="{Binding PayAgainCode}" Unfocused="OnPayAgainCodeUnfocused" Placeholder="Enter code" SemanticProperties.Description="Discount code" AutomationId="PayAgainCode" /></Border>
+                        <Label Text="{Binding PayAgainCodeText}" Style="{StaticResource Caption}" LineBreakMode="WordWrap" IsVisible="{Binding HasPayAgainCodeCheck}">
+                            <Label.Triggers>
+                                <DataTrigger TargetType="Label" Binding="{Binding PayAgainCodeWorks}" Value="True">
+                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource GoodLight}, Dark={StaticResource GoodDark}}" />
+                                </DataTrigger>
+                                <DataTrigger TargetType="Label" Binding="{Binding PayAgainCodeWorks}" Value="False">
+                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
+                                </DataTrigger>
+                            </Label.Triggers>
+                        </Label>
+                    </VerticalStackLayout>
+                    <Button Text="Pay online" Command="{Binding ConfirmPayAgainCommand}" MinimumHeightRequest="48" AutomationId="PayAgainConfirm" />
+                </VerticalStackLayout>
+            </Border>
+
             <!-- what was bought + how it was paid; the chosen chip is filled, as on the other member pages -->
             <FlexLayout Wrap="Wrap" AlignItems="Center">
                 <Button Text="All" Style="{StaticResource FilterChip}" Margin="0,0,8,8" Command="{Binding SetKindCommand}" CommandParameter="All">
@@ -88,7 +116,7 @@
             <Border Style="{StaticResource TablePanel}">
                 <VerticalStackLayout>
                     <VerticalStackLayout x:Name="PaymentsHead" IsVisible="{OnIdiom Phone=False, Default=True}">
-                        <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,110,100,*,130,170,120,200">
+                        <Grid Style="{StaticResource TableHead}" ColumnDefinitions="1.1*,100,90,1.8*,105,160,90,140">
                             <Label Text="Item" Style="{StaticResource Caption}" />
                             <Label Grid.Column="1" Text="Status" Style="{StaticResource Caption}" />
                             <Label Grid.Column="2" Text="Paid with" Style="{StaticResource Caption}" />

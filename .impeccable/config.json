@@ -1,0 +1,53 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "low-contrast",
+        "value": "*",
+        "files": [
+          ".superpowers/brainstorm/1903-1794142461/content/merged-pages.html"
+        ],
+        "createdAt": "2026-11-08T12:55:22.781Z",
+        "reason": "Claude: throwaway brainstorm mockup; its Before panel shows the current low-contrast booking boxes on purpose"
+      },
+      {
+        "rule": "tiny-text",
+        "value": "*",
+        "files": [
+          ".superpowers/brainstorm/1903-1794142461/content/merged-pages.html"
+        ],
+        "createdAt": "2026-11-08T12:55:22.858Z",
+        "reason": "Claude: throwaway brainstorm mockup drawn at reduced scale; not shipped UI"
+      },
+      {
+        "rule": "undersized-ui-text",
+        "value": "*",
+        "files": [
+          ".superpowers/brainstorm/1903-1794142461/content/merged-pages.html"
+        ],
+        "createdAt": "2026-11-08T12:55:36.185Z",
+        "reason": "Claude: throwaway brainstorm mockup drawn at reduced scale; not shipped UI"
+      },
+      {
+        "rule": "radial-halo",
+        "value": "*",
+        "files": [
+          "docs/mockups/desk-pin.html"
+        ],
+        "createdAt": "2026-11-09T11:55:57.824Z",
+        "reason": "Claude, Phase 2 mockup: the radial gradients draw a stand-in member photo (face silhouette) in the PIN step, not a decorative glow"
+      },
+      {
+        "rule": "undersized-ui-text",
+        "value": "*",
+        "files": [
+          "docs/mockups/phone-light-yellow.html"
+        ],
+        "createdAt": "2026-11-11T16:58:57.839Z",
+        "reason": "Claude: phones drawn at about 70% scale so five fit side by side for comparison; not shipped UI, the app keeps its own sizes"
+      }
+    ]
+  }
+}

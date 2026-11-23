@@ -7,6 +7,7 @@ public partial class MemberShell : Shell
 {
 	readonly IServiceProvider _sp;
 	readonly Access _access;
+	DateTime _lastAccessCheckUtc = DateTime.UtcNow;
 
 	// Guests (no active plan) see every page in the menu, but the members-only ones open a "get a membership" notice instead.
 	public MemberShell(IServiceProvider sp, Access access)
@@ -36,6 +37,8 @@ public partial class MemberShell : Shell
 	// If the plan was approved (or expired) while the app was open, rebuild the menu so it matches.
 	async Task RecheckAsync()
 	{
+		if (_access.Active && DateTime.UtcNow - _lastAccessCheckUtc < TimeSpan.FromSeconds(30)) return;
+		_lastAccessCheckUtc = DateTime.UtcNow;
 		var now = await _sp.GetRequiredService<IMembershipService>().AccessAsync();
 		if (now.Ok && now.Value != _access) _sp.GetRequiredService<IAppNavigator>().GoTo(AppRole.Member);
 	}

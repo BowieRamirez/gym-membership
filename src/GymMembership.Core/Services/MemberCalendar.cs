@@ -17,7 +17,7 @@ public static class MemberMenu
     static readonly MenuItem[] Everyday =
     [
         new("Sessions", "Sessions", true), new("Book an amenity", "Book an amenity", true),
-        new("Coaches", "Coaches"), new("Time requests", "Time requests", true), new("Messages", "Messages")
+        new("Coaches", "Coaches"), new("Messages", "Messages")
     ];
     static readonly MenuItem Membership = new("My membership", "My membership"), Settings = new("Settings", "Settings");
     static readonly MenuItem Payments = new("Payments", "Payments");   // owner fixes 2026-11-19 Q8: everyone with an account; after the first three so the phone tabs stay
@@ -102,26 +102,38 @@ public sealed class MemberCalendarService(ISupabaseGateway gw) : IMemberCalendar
     {
         var uid = gw.CurrentUserId;
         bool In(DateTime t) => t.ToUniversalTime() >= fromUtc && t.ToUniversalTime() < toUtc;
-        var names = await Directory_.UserNamesAsync(gw);
+        var namesTask = Directory_.UserNamesAsync(gw);
+        var coachesTask = gw.ListAsync<CoachHire>(h => h.MemberId == uid && h.Status == "active");
+        var amenitiesTask = gw.ListAsync<Amenity>();
+        var sessionsTask = gw.ListAsync<TrainingSession>(s => s.MemberId == uid);
+        var resTask = gw.ListAsync<Reservation>(r => r.MemberId == uid);
+        var gymTask = gw.ListAsync<GymSettings>();
+        var closuresTask = GymClosures.ByDayAsync(gw);
+        await Task.WhenAll(namesTask, coachesTask, amenitiesTask, sessionsTask, resTask, gymTask, closuresTask);
+
+        var names = namesTask.Result;
         string Coach(string id) => AttendanceCalendar.ShortName(names.GetValueOrDefault(id, "your coach"));
-        var coaches = (await gw.ListAsync<CoachHire>(h => h.MemberId == uid && h.Status == "active")).Select(h => h.CoachId).ToHashSet();
-        var amenities = (await gw.ListAsync<Amenity>()).ToDictionary(a => a.Id, a => a.Name);
+        var coaches = coachesTask.Result.Select(h => h.CoachId).ToHashSet();
+        var amenities = amenitiesTask.Result.ToDictionary(a => a.Id, a => a.Name);
         var entries = new List<CalendarEntry>();
-        entries.AddRange((await gw.ListAsync<TrainingSession>(s => s.MemberId == uid)).Where(s => s.Status != Status.Cancelled && In(s.ScheduledStart))
+        entries.AddRange(sessionsTask.Result.Where(s => s.Status != Status.Cancelled && In(s.ScheduledStart))
             .Select(s => new CalendarEntry(s.ScheduledStart.ToUniversalTime(), s.ScheduledEnd.ToUniversalTime(), "session", $"Session with {Coach(s.CoachId)}", s.CoachId)));
         // a booking made for a coaching session is that session; only the member's own bookings show on their own
-        entries.AddRange((await gw.ListAsync<Reservation>(r => r.MemberId == uid)).Where(r => r.Status is "confirmed" or "awaiting_payment" && r.TrainingSessionId is null && In(r.StartsAt))
+        entries.AddRange(resTask.Result.Where(r => r.Status is "confirmed" or "awaiting_payment" && r.TrainingSessionId is null && In(r.StartsAt))
             .Select(r => new CalendarEntry(r.StartsAt.ToUniversalTime(), r.EndsAt.ToUniversalTime(), "booking", amenities.GetValueOrDefault(r.AmenityId, "Amenity"))));
         if (coaches.Count > 0)
         {
-            entries.AddRange((await gw.ListAsync<ShiftPost>()).Where(p => coaches.Contains(p.CoachId) && p.Status == Status.Scheduled && In(p.Start))
+            var shiftsTask = gw.ListAsync<ShiftPost>();
+            var openTask = gw.ListAsync<TimeRequest>(r => r.Status == "pending");
+            await Task.WhenAll(shiftsTask, openTask);
+            entries.AddRange(shiftsTask.Result.Where(p => coaches.Contains(p.CoachId) && p.Status == Status.Scheduled && In(p.Start))
                 .Select(p => new CalendarEntry(p.Start.ToUniversalTime(), p.End.ToUniversalTime(), "shift", $"{Coach(p.CoachId)} on the floor", p.CoachId)));
-            entries.AddRange((await gw.ListAsync<TimeRequest>(r => r.Status == "pending")).Where(r => r.MemberId is null && coaches.Contains(r.CoachId) && In(r.RequestedStart))
+            entries.AddRange(openTask.Result.Where(r => r.MemberId is null && coaches.Contains(r.CoachId) && In(r.RequestedStart))
                 .Select(r => new CalendarEntry(r.RequestedStart.ToUniversalTime(), r.RequestedEnd.ToUniversalTime(), "open", $"Open with {Coach(r.CoachId)}", r.CoachId)));
         }
-        var gym = (await gw.ListAsync<GymSettings>()).First();
+        var gym = gymTask.Result.First();
         // G16 (0065): a closed day is one entry over the gym's hours, with its reason
-        foreach (var (day, why) in await GymClosures.ByDayAsync(gw))
+        foreach (var (day, why) in closuresTask.Result)
         {
             var opens = DateTime.SpecifyKind(day.ToDateTime(TimeOnly.MinValue) + gym.OpensAt - TimeSpan.FromHours(8), DateTimeKind.Utc);
             if (In(opens)) entries.Add(new CalendarEntry(opens, opens - gym.OpensAt + gym.ClosesAt, "closed", $"Gym closed: {why}"));

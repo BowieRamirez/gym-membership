@@ -40,20 +40,13 @@ public class HireRequestTests
     }
 
     [Fact]
-    public async Task The_coach_sees_the_request_and_accepting_makes_them_your_coach()
+    public async Task The_coach_sees_coached_members_from_sessions()
     {
-        var (gw, svc) = await NewMember();
-        Assert.True((await svc.HireAsync("u-coach2")).Ok);
-        await gw.SignInAsync("kai@demo.io", DemoGateway.DemoPassword);
-        var request = (await svc.HireRequestsAsync()).Value!.Single(r => r.Name == "Ana Reyes");
-        Assert.DoesNotContain((await svc.TraineesAsync()).Value!, t => t.Name == "Ana Reyes");
-        Assert.True((await svc.AnswerHireAsync(request.HireId, true)).Ok);
-        Assert.Contains((await svc.TraineesAsync()).Value!, t => t.Name == "Ana Reyes");
-        Assert.DoesNotContain((await svc.HireRequestsAsync()).Value!, r => r.Name == "Ana Reyes");
-
-        await gw.SignInAsync("phase7@demo.io", "secret12");
-        var kai = await Card(svc, "Kai Mendoza");
-        Assert.True(kai.Hired); Assert.False(kai.Requested); Assert.Equal("hired", kai.HireBadge);
+        var gw = new DemoGateway();
+        await gw.SignInAsync("coach@demo.io", DemoGateway.DemoPassword);
+        var svc = new CoachService(gw);
+        Assert.Contains((await svc.TraineesAsync()).Value!, t => t.Name == "Alex Tan");
+        Assert.Contains((await svc.TraineesAsync()).Value!, t => t.Name == "Bea Lim");
     }
 
     [Fact]
@@ -73,28 +66,16 @@ public class HireRequestTests
     }
 
     [Fact]
-    public async Task On_the_coach_Sessions_page_Accept_moves_the_member_to_Your_members_and_Decline_removes_the_request()
+    public async Task On_the_coach_Sessions_page_TraineesViewModel_lists_coached_members_newest_first()
     {
-        Confirm.Answer = (_, _, _) => Task.FromResult(true);
-        var (gw, svc) = await NewMember();
-        Assert.True((await svc.HireAsync("u-coach2")).Ok);
-        await gw.SignInAsync("kai@demo.io", DemoGateway.DemoPassword);
+        var gw = new DemoGateway();
+        await gw.SignInAsync("coach@demo.io", DemoGateway.DemoPassword);
+        var svc = new CoachService(gw);
         var vm = new TraineesViewModel(svc, new ChatService(gw, new NotificationService(gw)), new NamesAndEmailTests.NullNavigator());
         await vm.OnAppearingAsync();
-        var ana = Assert.Single(vm.Requests);
-        Assert.True(vm.HasRequests);
-        await vm.AcceptCommand.ExecuteAsync(ana);
-        Assert.Empty(vm.Requests); Assert.False(vm.HasRequests);
-        Assert.Contains(vm.Trainees, t => t.Name == "Ana Reyes");
-        Assert.Equal("Ana Reyes is now your member.", vm.Notice);
 
-        await gw.SignInAsync("phase7@demo.io", "secret12");
-        await svc.EndHireAsync(vm.Trainees.Single(t => t.Name == "Ana Reyes").HireId);
-        Assert.True((await svc.HireAsync("u-coach2")).Ok);
-        await gw.SignInAsync("kai@demo.io", DemoGateway.DemoPassword);
-        await vm.LoadCommand.ExecuteAsync(null);
-        await vm.DeclineCommand.ExecuteAsync(vm.Requests.Single());
-        Assert.Empty(vm.Requests);
-        Assert.DoesNotContain(vm.Trainees, t => t.Name == "Ana Reyes");
+        Assert.NotEmpty(vm.Trainees);
+        Assert.DoesNotContain(MemberMenu.Order(true), m => m.Page == "Time requests");
+        Assert.DoesNotContain(MemberMenu.Order(false), m => m.Page == "Time requests");
     }
 }

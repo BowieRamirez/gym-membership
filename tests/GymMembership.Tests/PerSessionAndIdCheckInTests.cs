@@ -18,7 +18,7 @@ public class PerSessionAndIdCheckInTests
 
     static async Task<DemoGateway> As(string email, DemoGateway? gw = null)
     {
-        gw ??= new DemoGateway();
+        gw ??= new DemoGateway().OpenAllDay();
         await gw.SignInAsync(email, DemoGateway.DemoPassword);
         return gw;
     }

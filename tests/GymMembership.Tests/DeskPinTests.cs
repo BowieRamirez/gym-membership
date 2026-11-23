@@ -11,7 +11,7 @@ public class DeskPinTests
     static async Task<(DemoGateway Gw, CheckInViewModel Vm)> Desk(string email = "employee@demo.io")
     {
         Confirm.Answer = (_, _, _) => Task.FromResult(true);
-        var gw = new DemoGateway();
+        var gw = new DemoGateway().OpenAllDay();
         await gw.SignInAsync(email, DemoGateway.DemoPassword);
         var vm = new CheckInViewModel(new AttendanceService(gw), new CoachService(gw));
         await vm.OnAppearingAsync();
@@ -66,7 +66,7 @@ public class DeskPinTests
     [Fact]
     public async Task The_PIN_step_shows_the_members_photo_when_there_is_one()
     {
-        var gw = new DemoGateway();
+        var gw = new DemoGateway().OpenAllDay();
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         Assert.True((await new ProfileService(gw).SetAvatarAsync("me.png", [137, 80, 78, 71, 13, 10, 26, 10, 1])).Ok);
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
@@ -164,7 +164,7 @@ public class DeskPinTests
     [Fact]
     public async Task A_member_sets_a_4_digit_PIN_in_Settings_and_staff_have_no_PIN_section()
     {
-        var gw = new DemoGateway();
+        var gw = new DemoGateway().OpenAllDay();
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         var vm = new SettingsViewModel(new SettingsService(gw), new AuthService(gw), new ConfirmationTests.Nav(), new ProfileService(gw), new NoPicker());
         await vm.OnAppearingAsync();

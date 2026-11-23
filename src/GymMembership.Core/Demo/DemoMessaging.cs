@@ -63,6 +63,7 @@ public sealed partial class DemoGateway
         string S(string k) => (string)a[k];
         bool B(string k) => Convert.ToBoolean(a[k]);
         string? Opt(string k) => a.TryGetValue(k, out var v) && v is string s && !string.IsNullOrWhiteSpace(s) ? s.Trim() : null;
+        bool Archived(string id) => All<Profile>().FirstOrDefault(p => p.Id == id)?.DeletedAt is not null;
         string NameOf(string id) => All<Profile>().FirstOrDefault(p => p.Id == id)?.FullName ?? "Unknown";
         switch (fn)
         {
@@ -71,8 +72,11 @@ public sealed partial class DemoGateway
                 RequireActive();
                 var uid = Uid;
                 var rows = new List<ChatThread>();
-                var pairs = All<CoachHire>().Where(h => h.Status is Status.Active or Status.Ended).Select(h => (h.CoachId, h.MemberId)).Union(All<ChatMessage>().Select(m => (m.CoachId, m.MemberId)))
-                    .Where(p => p.CoachId == uid || p.MemberId == uid).ToList();
+                var pairs = All<CoachHire>().Where(h => h.Status is Status.Active or Status.Ended).Select(h => (h.CoachId, h.MemberId))
+                    .Union(All<TrainingSession>().Where(s => s.Status is Status.Scheduled or Status.Completed && (s.HeldUntil is null || s.HeldUntil > SubscriptionNow)).Select(s => (s.CoachId, s.MemberId)))
+                    .Union(All<ChatMessage>().Select(m => (m.CoachId, m.MemberId)))
+                    .Where(p => p.CoachId == uid || p.MemberId == uid)
+                    .Where(p => !Archived(p.CoachId == uid ? p.MemberId : p.CoachId)).ToList();   // 0132: archived accounts leave the list
                 foreach (var (coachId, memberId) in pairs)
                 {
                     var withId = coachId == uid ? memberId : coachId;
@@ -84,7 +88,7 @@ public sealed partial class DemoGateway
                         WithAvatar = All<Profile>().FirstOrDefault(p => p.Id == withId)?.AvatarPath,
                         LastBody = last is null ? null : Preview(last.Body, last.AttachmentPath), LastAt = last?.SentAt, LastFromMe = last?.SenderId == uid,
                         Unread = msgs.Count(m => m.SenderId != uid && m.ReadAt is null),
-                        CanSend = CoachesMember(coachId, memberId) && ActiveMember(memberId)
+                        CanSend = CanMessageCoachMember(coachId, memberId)
                     });
                 }
                 if (Writer(uid))
@@ -111,7 +115,7 @@ public sealed partial class DemoGateway
                     });
                 }
                 // the inbox: threads in the queues you answer
-                foreach (var t in All<SupportThread>().Where(t => t.MemberId != uid && CanAnswer(t.Queue)).OrderByDescending(t => t.LastMessageAt).Take(500))
+                foreach (var t in All<SupportThread>().Where(t => t.MemberId != uid && CanAnswer(t.Queue) && !Archived(t.MemberId)).OrderByDescending(t => t.LastMessageAt).Take(500))
                 {
                     var msgs = All<SupportMessage>().Where(m => m.MemberId == t.MemberId && m.Queue == t.Queue).OrderBy(m => m.Id).ToList();
                     var last = msgs.LastOrDefault();

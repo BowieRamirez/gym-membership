@@ -12,34 +12,6 @@ public class CoachDashboardTests
     static readonly DateOnly Day = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8)).AddDays(3);
     static DateTime At(DateOnly d, int h, int m = 0) => DateTime.SpecifyKind(d.ToDateTime(new TimeOnly(h, m)).AddHours(-8), DateTimeKind.Utc);
 
-    [Theory]
-    [InlineData("350", 350.00)]
-    [InlineData(" 350.5 ", 350.50)]
-    [InlineData("350,50", 350.50)]
-    public void A_rate_is_read_without_the_device_separator(string text, double expected)
-    {
-        Assert.True(CoachRate.TryParse(text, out var rate));
-        Assert.Equal((decimal)expected, rate);
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData("0")]
-    [InlineData("-5")]
-    [InlineData("350.505")]
-    [InlineData("1,000.00")]
-    [InlineData("abc")]
-    public void Bad_rates_are_refused(string text) => Assert.False(CoachRate.TryParse(text, out _));
-
-    [Fact]
-    public void Rates_show_as_pesos_with_two_decimals_or_not_set()
-    {
-        Assert.Equal("₱1,250.50 per hour", CoachRate.Text(1250.5m));
-        Assert.Equal("Rate not set", CoachRate.Text(null));
-        Assert.Equal("Rate not set", CoachRate.Text(0));
-        Assert.Equal("30.00", CoachRate.Input(30));
-    }
-
     [Fact]
     public void The_default_start_is_opening_or_the_next_half_hour_today_and_the_end_stops_at_closing()
     {
@@ -101,26 +73,17 @@ public class CoachDashboardTests
     }
 
     [Fact]
-    public async Task The_profile_needs_a_valid_rate_keeps_what_was_typed_and_shows_On_or_Off()
+    public async Task The_profile_saves_bio_specialty_and_shows_On_or_Off()
     {
         var gw = new DemoGateway();
         await gw.SignInAsync("coach@demo.io", DemoGateway.DemoPassword);
         var vm = new CoachProfileViewModel(new CoachService(gw));
         await vm.OnAppearingAsync();
-        Assert.Equal("800.00", vm.RateInput);
         Assert.Equal("On", vm.HiringText);
 
-        vm.RateInput = "0";
-        await vm.SaveCommand.ExecuteAsync(null);
-        Assert.Equal("Enter an hourly rate above ₱0 with at most two decimals, for example 350 or 350.50.", vm.ErrorMessage);
-        Assert.Equal("0", vm.RateInput);
-        Assert.Null(vm.Notice);
-
-        vm.RateInput = "950,5"; vm.IsAvailable = false;
+        vm.IsAvailable = false;
         await vm.SaveCommand.ExecuteAsync(null);
         Assert.Equal("Profile saved.", vm.Notice);
-        Assert.Equal("950.50", vm.RateInput);
         Assert.Equal("Off", vm.HiringText);
-        Assert.Equal(950.5m, (await gw.ListAsync<Coach>(c => c.UserId == "u-coach1")).Single().HourlyRate);
     }
 }

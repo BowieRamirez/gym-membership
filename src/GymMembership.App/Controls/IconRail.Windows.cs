@@ -26,6 +26,8 @@ public static class IconRail
         ["Refunds"] = "undo",
         ["Gym settings"] = "sliders-horizontal",
         ["Revenue"] = "chart-line",
+        ["Payroll"] = "wallet",
+        ["Damage reports"] = "alert-circle",
         ["Announcements"] = "megaphone",
         ["Logs & Archive"] = "archive",
         ["Messages"] = "message-square",
@@ -36,7 +38,6 @@ public static class IconRail
         ["Book an amenity"] = "calendar-plus",
         ["Coaches"] = "dumbbell",
         ["Sessions"] = "calendar-days",
-        ["Time requests"] = "clock",
         ["Dashboard"] = "layout-dashboard",
         ["My shifts"] = "calendar-clock",
     };

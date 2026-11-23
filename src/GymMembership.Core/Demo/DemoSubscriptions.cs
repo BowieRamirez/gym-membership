@@ -71,6 +71,12 @@ public sealed partial class DemoGateway
         if(All<Payment>().Count(p=>p.MemberId==member && p.Kind is PayKind.Membership or PayKind.Renewal && p.CreatedAt>SubscriptionNow.AddHours(-1))>=10) throw Err("too_many_tries");   // 0102
         if(!All<Member>().Any(m=>m.UserId==member) || !All<Profile>().Any(p=>p.Id==member && p.IsActive)) throw Err("not_found");
         if(All<Payment>().Any(p=>p.MemberId==member && p.Status==Status.Pending && p.Kind is PayKind.Membership or PayKind.Renewal)) throw Err("renewal_pending");
+        var seen=new HashSet<int>{packageId};
+        while(All<MembershipPackage>().FirstOrDefault(p=>p.ReplacesId==packageId && p.PublishedAt is not null && !seen.Contains(p.Id)) is { } next)
+        {
+            seen.Add(next.Id);
+            packageId=next.Id;
+        }
         var pkg=PackageForSale(packageId);
         if(pkg.IsDayPass && All<MembershipTerm>().Any(t=>t.MemberId==member && t.CancelledAt is null && t.EndsAt>SubscriptionNow)) throw Err("already_availed");   // 0098
         var discount=Discounted(member,args,pkg.Price,"package",pkg.Id);
@@ -114,7 +120,7 @@ public sealed partial class DemoGateway
             case "cancel_pending_payment":
             {
                 RequireActive();
-                var p=All<Payment>().FirstOrDefault(p=>p.Id==I("p_payment_id") && p.MemberId==Uid && p.Kind is PayKind.Membership or PayKind.Renewal)??throw Err("not_found");
+                var p=All<Payment>().FirstOrDefault(p=>p.Id==I("p_payment_id") && p.MemberId==Uid && p.Kind is PayKind.Membership or PayKind.Renewal or PayKind.CoachAddon)??throw Err("not_found");
                 if(p.Status!=Status.Pending) throw Err("already_processed");
                 p.Status=Status.Rejected;p.RejectedReason="Cancelled by member";CancelTarget(p);
                 Audit("payment.cancel","payments",p.Id.ToString());return true;
@@ -186,7 +192,7 @@ public sealed partial class DemoGateway
                 var offset=Convert.ToInt32(a["p_offset"]);var limit=Convert.ToInt32(a["p_limit"]);
                 if(from>to||offset<0||limit is < 1 or > 1000) throw Err("bad_input");
                 string Payer(Payment p)=>All<Profile>().FirstOrDefault(x=>x.Id==p.MemberId)?.FullName??p.WalkInName??"Walk-in";
-                string Item(Payment p)=>p.Kind switch{PayKind.Membership=>"Membership",PayKind.Renewal=>"Extension",PayKind.Amenity=>"Amenity",_=>"Walk-in"};
+                string Item(Payment p)=>p.Kind switch{PayKind.Membership=>"Membership",PayKind.Renewal=>"Extension",PayKind.Amenity=>"Amenity",PayKind.CoachAddon=>"Coach add-on",_=>"Walk-in"};
                 var receipts=All<Payment>().Where(p=>p.Status==Status.Verified && p.VerifiedAt is not null)
                     .Select(p=>new RevenueLine(p.VerifiedAt!.Value,p.ReceiptNo,Payer(p),Item(p),p.Kind,p.Method,p.Amount,false,p.Id));
                 var back=All<RefundRequest>().Where(r=>r.Status is "approved" or "paid").Select(r=>(r,p:All<Payment>().First(p=>p.Id==r.PaymentId)))

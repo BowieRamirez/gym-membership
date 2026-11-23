@@ -31,6 +31,5 @@ public partial class MessagesPage : BasePage
 
 	void OnOpen(object? sender, TappedEventArgs e) => Row<MessengerViewModel>(sender, v => v.OpenCommand);
 	void OnOpenPinned(object? sender, TappedEventArgs e) { if (BindingContext is MessengerViewModel { Pinned: { } item } vm) vm.OpenCommand.Execute(item); }
-	void OnOpenRequests(object? sender, EventArgs e) => (BindingContext as MessengerViewModel)?.OpenRequestsCommand.Execute(null);
 	void OnOpenHit(object? sender, TappedEventArgs e) => Row<MessengerViewModel>(sender, v => v.OpenHitCommand);
 }

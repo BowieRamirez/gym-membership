@@ -29,7 +29,7 @@ const monthly = (await db.query(`insert into membership_packages(name,price,dura
 await db.query(`update gym_settings set walk_in_price=150 where id=1`);
 const walkIn = who => as(who, `select * from record_counter_payment('walk_in','cash',null,null,'Juan Walk',null,null)`);
 const open = (who, float, note = null) => as(who, 'select * from open_cash_shift($1,$2)', [float, note]);
-const close = (who, counted, note = null) => as(who, 'select * from close_cash_shift($1,$2)', [counted, note]);
+const close = (who, counted, note = null, reason = null) => as(who, 'select * from close_cash_shift($1,$2,$3)', [counted, note, reason]);
 const mine = who => as(who, 'select * from my_cash_shift()');
 
 try {
@@ -90,11 +90,13 @@ try {
     await db.query(`update payments set status='voided',voided_by=$1,voided_at=now(),void_reason='Mistake' where payment_id=$2`, [admin, p.payment_id]);
     assert.equal(Number((await mine(desk))[0].expected), 5150);
   });
-  await test('closing: a count that differs needs a note; the closed shift keeps expected, count and difference', async () => {
-    await assert.rejects(close(desk, 5100), /note_required/);
-    await assert.rejects(close(desk, -5, 'x'), /bad_input/);
-    const c = (await close(desk, 5100, 'Gave change twice'))[0];
-    assert.equal(Number(c.expected), 5150); assert.equal(Number(c.counted), 5100); assert.equal(Number(c.cash_in), 150); assert.ok(c.closed_at);
+  await test('closing: a count that differs needs a reason (and note for Other); shortage/overage stored', async () => {
+    await assert.rejects(close(desk, 5149.99), /reason_required/);   // Review Focus 5: off by 0.01
+    await assert.rejects(close(desk, 5100, null, 'other'), /note_required/);
+    await assert.rejects(close(desk, -5, 'x', 'other'), /bad_input/);
+    const c = (await close(desk, 5100, 'Gave change twice', 'wrong_change'))[0];
+    assert.equal(Number(c.expected), 5150); assert.equal(Number(c.counted), 5100); assert.equal(Number(c.cash_in), 150);
+    assert.equal(c.close_reason, 'wrong_change'); assert.ok(c.closed_at);
     assert.deepEqual(await mine(desk), []);
   });
   await test('a closed shift never changes: no second close, no direct edit, new cash refused until a new shift', async () => {
@@ -105,14 +107,27 @@ try {
     const again = (await open(desk, 5000))[0];
     assert.notEqual(again.shift_id, shift.shift_id);
   });
-  await test('Admin and System admin list every shift with the cashier and difference; front desk and members cannot', async () => {
+  await test('Admin and System admin list every shift with shortage/overage and add append-only investigation notes', async () => {
     const today = (await db.query(`select (now() at time zone 'Asia/Manila')::date d`)).rows[0].d;
+    await assert.rejects(as(desk, 'select * from add_cash_shift_note($1,$2,$3)', [shift.shift_id, 'Desk try', false]), /forbidden/);
+    await as(admin, 'select * from add_cash_shift_note($1,$2,$3)', [shift.shift_id, 'Checked receipt tape', false]);
+    await as(sub, 'select * from add_cash_shift_note($1,$2,$3)', [shift.shift_id, 'Confirmed change error', true]);
+    await assert.rejects(as(admin, `update cash_shift_notes set note='edited' where shift_id=$1`, [shift.shift_id]), /permission denied/);
+    await assert.rejects(as(admin, `delete from cash_shift_notes where shift_id=$1`, [shift.shift_id]), /permission denied/);
+    const audits = (await db.query(`select action from audit_log where entity='cash_shifts' and entity_id=$1`, [String(shift.shift_id)])).rows;
+    assert.equal(audits.filter(a => a.action === 'cash_shift.note').length, 2);
+
     for (const who of [admin, sub]) {
       const rows = await as(who, 'select * from cash_shifts_list($1,$1)', [today]);
       const r = rows.find(x => x.shift_id === shift.shift_id);
-      assert.equal(r.cashier, 'Desk Dana'); assert.equal(Number(r.difference), -50); assert.equal(r.close_note, 'Gave change twice');
+      assert.equal(r.cashier, 'Desk Dana'); assert.equal(Number(r.difference), -50);
+      assert.equal(Number(r.shortage), 50); assert.equal(Number(r.overage), 0);
+      assert.equal(r.close_reason, 'wrong_change'); assert.equal(r.close_note, 'Gave change twice');
+      assert.ok(r.resolved_at); assert.equal(r.notes.length, 2);
       assert.ok(rows.some(x => x.closed_at === null && x.cashier === 'Desk Dana'));   // the open one too, live totals
     }
+    const rev = await as(admin, 'select * from revenue_summary($1,$1)', [today]);
+    assert.equal(rev.filter(r => r.method === 'cash').reduce((s, r) => s + Number(r.total), 0), 150);   // only the PHP 150 cash walk-in sale, not the -50 shortage
     await assert.rejects(as(desk, 'select * from cash_shifts_list($1,$1)', [today]), /forbidden/);
     await assert.rejects(as(desk, 'select * from cash_shifts'), /permission denied/);
   });

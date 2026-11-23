@@ -585,3 +585,41 @@ public class PartSwitch : ContentView
         }
     }
 }
+
+/// <summary>Strips non-numeric characters on Entry text changes (digits only, or digits and a single decimal point).</summary>
+public class NumericOnlyBehavior : Behavior<Entry>
+{
+    public bool AllowDecimal { get; set; } = true;
+
+    protected override void OnAttachedTo(Entry entry)
+    {
+        base.OnAttachedTo(entry);
+        entry.TextChanged += OnTextChanged;
+    }
+
+    protected override void OnDetachingFrom(Entry entry)
+    {
+        entry.TextChanged -= OnTextChanged;
+        base.OnDetachingFrom(entry);
+    }
+
+    void OnTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (sender is not Entry entry) return;
+        var text = e.NewTextValue ?? "";
+        var seenDot = false;
+        var chars = new char[text.Length];
+        var len = 0;
+        foreach (var ch in text)
+        {
+            if (char.IsAsciiDigit(ch)) chars[len++] = ch;
+            else if (AllowDecimal && ch == '.' && !seenDot) { seenDot = true; chars[len++] = ch; }
+        }
+        var filtered = new string(chars, 0, len);
+        if (filtered != text)
+        {
+            entry.Text = filtered;
+            entry.CursorPosition = filtered.Length;
+        }
+    }
+}

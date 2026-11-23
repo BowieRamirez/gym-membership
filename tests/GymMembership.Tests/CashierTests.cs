@@ -51,7 +51,7 @@ public class CashierTests
 
     static async Task ChooseMember(CashierViewModel vm, string name)
     {
-        vm.Search = name; await vm.FindCommand.ExecuteAsync(null);
+        vm.Search = name; await vm.SuggestNowAsync();
         vm.Member = vm.Hits.Single();
     }
 
@@ -85,10 +85,9 @@ public class CashierTests
     {
         var (gw, vm) = await Open();
         vm.PickItemCommand.Execute(vm.Options[0]);
-        vm.PickKindCommand.Execute("Amenity");
+        vm.PickKindCommand.Execute(CashierViewModel.AmenityBooking);   // 2026-11-23: the time-less Amenity sale became a booking form
         Assert.Null(vm.Item);
-        var amenities = await gw.ListAsync<Amenity>(a => a.IsActive == true);
-        Assert.Equal(amenities.Select(a => a.Name), vm.Options.Select(o => o.Name));
+        Assert.Empty(vm.Options);   // the booking form lists its own amenities
         Assert.Equal(Peso(0), vm.TotalText);
     }
 
@@ -105,6 +104,7 @@ public class CashierTests
         vm.PickItemCommand.Execute(vm.Options[0]);
         Assert.NotNull(vm.Item);
 
+        vm.PickKindCommand.Execute("Amenity");
         await ChooseMember(vm, "Bea");      // a different member: the renewal belonged to Alex
         Assert.Null(vm.Item);
     }
@@ -200,7 +200,7 @@ public class CashierTests
         public Task<AppResult<Payment>> RecordCounterAsync(string kind, string method, string? memberId, int? itemId, string? walkInName, string? referenceNo, string? discountCode) => throw new NotSupportedException();
                 public Task<AppResult<(CashShift? Open, decimal DefaultFloat)>> ShiftAsync() => Task.FromResult(AppResult<(CashShift?, decimal)>.Success((null, 5000m)));
         public Task<AppResult<CashShift>> OpenShiftAsync(decimal openingFloat, string? note) => throw new NotSupportedException();
-        public Task<AppResult<CashShift>> CloseShiftAsync(decimal counted, string? note) => throw new NotSupportedException();
+        public Task<AppResult<CashShift>> CloseShiftAsync(decimal counted, string? note, string? reason = null) => throw new NotSupportedException();
     }
 
     [Fact]
@@ -343,7 +343,9 @@ public class CashierTests
         vm.PickKindCommand.Execute("Day pass");
         Assert.False(vm.CanUseCode);   // walk-in without a member cannot use a code
 
+        vm.PickKindCommand.Execute("Amenity");
         await ChooseMember(vm, "Alex");   // Alex has an active membership
+        vm.PickKindCommand.Execute("Day pass");
         Assert.False(vm.CanUseCode);
 
         await ChooseMember(vm, "Carlo");   // Carlo has no active membership

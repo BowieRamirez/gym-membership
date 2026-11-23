@@ -11,41 +11,9 @@
          BasePage.HostBelow), moved from My shifts. Hire requests show only while some are waiting; tables, folded to short
          cards on a phone, as the owner asked for Refunds. -->
     <v:BasePage.Resources>
-        <DataTemplate x:Key="RequestRow" x:DataType="svc:HireRequestRow">
-            <VerticalStackLayout>
-                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="2*,*,210" ColumnSpacing="12">
-                    <HorizontalStackLayout Spacing="12" VerticalOptions="Center">
-                        <c:Avatar Letters="{Binding Letters}" Url="{Binding PhotoUrl}" Diameter="34" />
-                        <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
-                    </HorizontalStackLayout>
-                    <Label Grid.Column="1" Text="{Binding AskedDate}" Style="{StaticResource Muted}" VerticalOptions="Center" />
-                    <HorizontalStackLayout Grid.Column="2" Spacing="8" VerticalOptions="Center" HorizontalOptions="End">
-                        <Button Text="Accept" Style="{StaticResource SmallButton}" Clicked="OnAccept" SemanticProperties.Description="{Binding Name, StringFormat='Accept {0}'}" />
-                        <Button Text="Decline" Style="{StaticResource SmallOutlineButton}" Clicked="OnDecline" SemanticProperties.Description="{Binding Name, StringFormat='Decline {0}'}" />
-                    </HorizontalStackLayout>
-                </Grid>
-                <BoxView Style="{StaticResource Hairline}" />
-            </VerticalStackLayout>
-        </DataTemplate>
-        <DataTemplate x:Key="RequestCard" x:DataType="svc:HireRequestRow">
-            <VerticalStackLayout Padding="14,12" Spacing="10">
-                <HorizontalStackLayout Spacing="12">
-                    <c:Avatar Letters="{Binding Letters}" Url="{Binding PhotoUrl}" Diameter="40" />
-                    <VerticalStackLayout VerticalOptions="Center">
-                        <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" />
-                        <Label Text="{Binding AskedText}" Style="{StaticResource Caption}" />
-                    </VerticalStackLayout>
-                </HorizontalStackLayout>
-                <HorizontalStackLayout Spacing="8">
-                    <Button Text="Accept" Style="{StaticResource SmallButton}" Clicked="OnAccept" SemanticProperties.Description="{Binding Name, StringFormat='Accept {0}'}" />
-                    <Button Text="Decline" Style="{StaticResource SmallOutlineButton}" Clicked="OnDecline" SemanticProperties.Description="{Binding Name, StringFormat='Decline {0}'}" />
-                </HorizontalStackLayout>
-                <BoxView Style="{StaticResource Hairline}" Margin="0,4,0,0" />
-            </VerticalStackLayout>
-        </DataTemplate>
         <DataTemplate x:Key="MemberRow" x:DataType="svc:TraineeRow">
             <VerticalStackLayout>
-                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="1.4*,1.6*,*,200" ColumnSpacing="12">
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="1.4*,1.6*,*,120" ColumnSpacing="12">
                     <HorizontalStackLayout Spacing="12" VerticalOptions="Center">
                         <c:Avatar Letters="{Binding Letters}" Diameter="34" />
                         <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
@@ -54,7 +22,6 @@
                     <Label Grid.Column="2" Text="{Binding CompletedText}" Style="{StaticResource Muted}" VerticalOptions="Center" />
                     <HorizontalStackLayout Grid.Column="3" Spacing="8" VerticalOptions="Center" HorizontalOptions="End">
                         <Button Text="Message" Style="{StaticResource FilterChip}" Clicked="OnMessage" SemanticProperties.Description="{Binding Name, StringFormat='Message {0}'}" />
-                        <Button Text="Remove" Style="{StaticResource FilterChip}" Clicked="OnRemove" SemanticProperties.Description="{Binding Name, StringFormat='Remove {0}'}" />
                     </HorizontalStackLayout>
                 </Grid>
                 <BoxView Style="{StaticResource Hairline}" />
@@ -72,7 +39,6 @@
                 </HorizontalStackLayout>
                 <HorizontalStackLayout Spacing="8">
                     <Button Text="Message" Style="{StaticResource FilterChip}" Clicked="OnMessage" SemanticProperties.Description="{Binding Name, StringFormat='Message {0}'}" />
-                    <Button Text="Remove" Style="{StaticResource FilterChip}" Clicked="OnRemove" SemanticProperties.Description="{Binding Name, StringFormat='Remove {0}'}" />
                 </HorizontalStackLayout>
                 <BoxView Style="{StaticResource Hairline}" Margin="0,4,0,0" />
             </VerticalStackLayout>
@@ -83,44 +49,21 @@
         <c:Banner Message="{Binding ErrorMessage}" />
         <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-        <VerticalStackLayout Spacing="10" IsVisible="{Binding HasRequests}" Margin="0,0,0,14">
-            <HorizontalStackLayout Spacing="10">
-                <Label Text="Hire requests" Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" SemanticProperties.HeadingLevel="Level2" />
-                <Border BackgroundColor="{StaticResource Signal}" StrokeThickness="0" StrokeShape="RoundRectangle 10" Padding="8,1" VerticalOptions="Center">
-                    <Label Text="{Binding Requests.Count}" TextColor="{StaticResource Black}" FontFamily="BarlowSemiBold" FontSize="13" />
-                </Border>
-            </HorizontalStackLayout>
-            <Label Text="Members who asked you to coach them. Accept to start messaging and booking sessions together." Style="{StaticResource Muted}" />
-            <Border Style="{StaticResource TablePanel}">
-                <VerticalStackLayout>
-                    <VerticalStackLayout x:Name="RequestsHead" IsVisible="{OnIdiom Phone=False, Default=True}">
-                        <Grid Style="{StaticResource TableHead}" ColumnDefinitions="2*,*,210" ColumnSpacing="12">
-                            <Label Text="Member" Style="{StaticResource Caption}" />
-                            <Label Grid.Column="1" Text="Asked" Style="{StaticResource Caption}" />
-                        </Grid>
-                        <BoxView Style="{StaticResource Hairline}" />
-                    </VerticalStackLayout>
-                    <c:TableBody Items="{Binding Requests}" Header="{x:Reference RequestsHead}" WideFrom="700"
-                                 RowTemplate="{StaticResource RequestRow}" CardTemplate="{StaticResource RequestCard}" />
-                </VerticalStackLayout>
-            </Border>
-        </VerticalStackLayout>
-
-        <Label Text="Your members" Style="{StaticResource SectionTitle}" Margin="0" SemanticProperties.HeadingLevel="Level2" />
-        <Label Text="Members you coach. Message them, or remove them when you stop training together." Style="{StaticResource Muted}" />
+        <Label Text="Members I've coached" Style="{StaticResource SectionTitle}" Margin="0" SemanticProperties.HeadingLevel="Level2" />
+        <Label Text="Members you have coached, newest session first. Message them while a session is active or within 7 days." Style="{StaticResource Muted}" />
         <Border Style="{StaticResource TablePanel}">
             <VerticalStackLayout>
                 <VerticalStackLayout x:Name="MembersHead" IsVisible="{OnIdiom Phone=False, Default=True}">
-                    <Grid Style="{StaticResource TableHead}" ColumnDefinitions="1.4*,1.6*,*,200" ColumnSpacing="12">
+                    <Grid Style="{StaticResource TableHead}" ColumnDefinitions="1.4*,1.6*,*,120" ColumnSpacing="12">
                         <Label Text="Member" Style="{StaticResource Caption}" />
-                        <Label Grid.Column="1" Text="Next session" Style="{StaticResource Caption}" />
+                        <Label Grid.Column="1" Text="Latest / next session" Style="{StaticResource Caption}" />
                         <Label Grid.Column="2" Text="Completed" Style="{StaticResource Caption}" />
                     </Grid>
                     <BoxView Style="{StaticResource Hairline}" />
                 </VerticalStackLayout>
                 <c:TableBody Items="{Binding Trainees}" Header="{x:Reference MembersHead}" WideFrom="900"
                              RowTemplate="{StaticResource MemberRow}" CardTemplate="{StaticResource MemberCard}">
-                    <c:TableBody.Empty><Label Text="No members yet. Members can ask you while Taking new members is on in Settings." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
+                    <c:TableBody.Empty><Label Text="No coached members yet. Members appear here once they book a session with you." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                 </c:TableBody>
             </VerticalStackLayout>
         </Border>

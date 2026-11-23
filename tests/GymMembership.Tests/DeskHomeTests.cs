@@ -8,7 +8,7 @@ public class DeskHomeTests
 {
     static async Task<(DemoGateway Gw, ChatService Chat, DeskHomeService Svc)> As(string email, DemoGateway? gw = null)
     {
-        gw ??= new DemoGateway();
+        gw ??= new DemoGateway().OpenAllDay();
         if (gw.CurrentUserId is not null) await gw.SignOutAsync();
         await gw.SignInAsync(email, DemoGateway.DemoPassword);
         var chat = new ChatService(gw, new NotificationService(gw));

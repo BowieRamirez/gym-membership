@@ -100,6 +100,14 @@ public sealed partial class DemoGateway : ISupabaseGateway
     bool ActiveMember(string? userId) => All<Profile>().Any(p => p.Id == userId && p.IsActive)
         && All<MembershipTerm>().Any(t => t.MemberId == userId && t.CancelledAt is null && t.StartsAt <= SubscriptionNow && t.EndsAt > SubscriptionNow);
     bool CoachesMember(string coach, string? member) => All<CoachHire>().Any(h => h.CoachId == coach && h.MemberId == member && h.Status == Status.Active);
+    bool CanMessageCoachMember(string coach, string member) =>
+        (CoachesMember(coach, member) && ActiveMember(member))
+        || All<TrainingSession>().Any(s =>
+            s.CoachId == coach && s.MemberId == member
+            && s.Status is Status.Scheduled or Status.Completed
+            && (s.HeldUntil is null || s.HeldUntil > SubscriptionNow)
+            && (s.ScheduledStart.AddHours(8).Date >= SubscriptionNow.AddHours(8).Date
+                || s.ScheduledEnd >= SubscriptionNow.AddDays(-7)));
     bool IsCoach(string? userId) => All<Coach>().Any(c => c.UserId == userId);
     CoachVisit? OpenVisit(string coachId) => All<CoachVisit>().FirstOrDefault(v => v.CoachId == coachId && v.CheckedOutAt is null);
 
@@ -110,6 +118,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
     /// <summary>The demo's stand-in for the database owner (Supabase dashboard) switching an account on or off, which 0037 still allows
     /// for a super admin when nobody in the app can.</summary>
     public void OwnerSetActive(string userId, bool active) => All<Profile>().First(p => p.Id == userId).IsActive = active;
+    public void OwnerAgeSessions(string memberId, int days) { foreach (var s in All<TrainingSession>().Where(s => s.MemberId == memberId)) { s.ScheduledStart = s.ScheduledStart.AddDays(-days); s.ScheduledEnd = s.ScheduledEnd.AddDays(-days); } }
+    public TrainingSession OwnerAddSession(TrainingSession s) => Add(s);
     /// <summary>0066 (G19): the database owner, not the app, can still leave an amenity set up as a pass, as amenities sold before were.</summary>
     public void OwnerSetPassDays(int amenityId, int? days) => All<Amenity>().First(a => a.Id == amenityId).DurationDays = days;
     /// <summary>A pass bought before 0066; it keeps working until it ends.</summary>
@@ -303,7 +313,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
         pay.XenditId ??= $"ps-demo-{pay.Id}";
         pay.Status = Status.Verified; pay.VerifiedAt = now; pay.ReceiptNo = ReceiptNo();
         pay.ReferenceNo = pay.XenditId; pay.OnlineChannel = "GCASH";
-        if (pay.Kind == PayKind.WalkIn) Add(new GymCheckIn { PaymentId = pay.Id, CheckedInAt = now });
+        if (pay.BalanceReservationId is { } balanceOf)   // 0141: pays the booking's balance, as the trigger does
+        { if (All<Reservation>().FirstOrDefault(r => r.Id == balanceOf) is { BalancePaymentId: null } r) r.BalancePaymentId = pay.Id; }
+        else if (pay.Kind == PayKind.WalkIn) Add(new GymCheckIn { PaymentId = pay.Id, CheckedInAt = now });
         else { ActivateTarget(pay); Notify(pay.MemberId, "payment", "Payment received", pay.PaymentCode); }
         Audit("payment.online", "payments", pay.Id.ToString());
         return "{\"paid\":true}";
@@ -330,6 +342,16 @@ public sealed partial class DemoGateway : ISupabaseGateway
     }
 
     // ---------- table access (RLS-shaped, plan 6) ----------
+    bool SeesName(Profile p)
+    {
+        var uid = CurrentUserId;
+        if (uid is null) return false;
+        if (p.Id == uid) return true;
+        return IsActiveUser && (IsStaff || IsCoach(p.Id)
+            || All<CoachHire>().Any(h => (h.CoachId == uid && h.MemberId == p.Id) || (h.MemberId == uid && h.CoachId == p.Id))
+            || All<TrainingSession>().Any(s => (s.CoachId == uid && s.MemberId == p.Id) || (s.MemberId == uid && s.CoachId == p.Id)));
+    }
+
     bool Allowed(object row)
     {
         var uid = CurrentUserId;
@@ -338,8 +360,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         var staff = IsStaff;
         return row switch
         {
-            Profile p => p.Id == uid || staff || IsCoach(p.Id)
-                || All<CoachHire>().Any(h => (h.CoachId == uid && h.MemberId == p.Id) || (h.MemberId == uid && h.CoachId == p.Id)),
+            Profile p => p.Id == uid || staff,   // 0140: full rows are your own and staff's; names come from public_profiles
             Member m => m.UserId == uid || staff || All<CoachHire>().Any(h => h.CoachId == uid && h.MemberId == m.UserId),
             Payment p => p.MemberId == uid || staff,
             MembershipTerm t => t.MemberId == uid || staff,
@@ -363,6 +384,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             MemberCode c => c.UserId == uid,
             Discount => Has("discounts:manage"),   // members only learn a code is valid by using it
             DiscountItem => Has("discounts:manage"),
+            DamageReport d => RolesOf(uid).Any(r => r is "admin" or "subadmin") || d.ReportedBy == uid || d.CoachId == uid,
             Reservation r => r.MemberId == uid || r.CoachId == uid || staff,
             MembershipPackage k => k.State == CatalogState.Published || Has("catalog:manage"),   // G6 (0061): drafts only for catalog managers
             Amenity a => a.State == CatalogState.Published || Has("catalog:manage"),
@@ -376,7 +398,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
     public Task<IReadOnlyList<T>> ListAsync<T>(Expression<Func<T, bool>>? where = null) where T : BaseModel, new()
     {
         if (FailWith is not null) return Task.FromException<IReadOnlyList<T>>(FailWith);
-        IEnumerable<T> rows = All<T>().Where(r => Allowed(r!));
+        IEnumerable<T> rows = typeof(T) == typeof(PublicProfile)
+            ? All<Profile>().Where(SeesName).Select(PublicProfile.Of).Cast<T>()   // 0140: the view's row rule (0121), names and photos only
+            : All<T>().Where(r => Allowed(r!));
         if (where is not null) rows = rows.Where(where.Compile());
         return Task.FromResult<IReadOnlyList<T>>(rows.Select(Clone).ToList());
     }
@@ -400,7 +424,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     if (All<ShiftPost>().Any(x => x.CoachId == s.CoachId && x.Status == Status.Scheduled && x.Start < s.End && s.Start < x.End)) throw Err("overlap");
                     break;
                 case ChatMessage c:
-                    if (c.SenderId != Uid || !CoachesMember(c.CoachId, c.MemberId) || !ActiveMember(c.MemberId)) throw Err(Rls);
+                    if (c.SenderId != Uid || !CanMessageCoachMember(c.CoachId, c.MemberId)) throw Err(Rls);
                     // the table's own checks: the sender is one of the two people, there is text or a photo, and the photo is in this conversation's folder
                     var photoOk = c.AttachmentPath is null || System.Text.RegularExpressions.Regex.IsMatch(c.AttachmentPath, $"^{c.CoachId}/{c.MemberId}/{FilePart}$");
                     if (c.SenderId != c.CoachId && c.SenderId != c.MemberId || (string.IsNullOrWhiteSpace(c.Body) && c.AttachmentPath is null) || !photoOk)
@@ -462,8 +486,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 case (MembershipPackage p, MembershipPackage old):
                     if (!Has("catalog:manage")) throw Err(Rls);
                     // G9 (0061): a published package changes only by being archived
-                    if (old.PublishedAt is not null && ((p.Name, p.Description, p.Price, p.DurationDays, p.IsDayPass) != (old.Name, old.Description, old.Price, old.DurationDays, old.IsDayPass) || !p.Benefits.SequenceEqual(old.Benefits)))   // 0105: IsDayPass too
+                    if (old.PublishedAt is not null && ((p.Name, p.Description, p.Price, p.DurationDays, p.IsDayPass, p.IncludesCoach, p.CoachAddonPrice) != (old.Name, old.Description, old.Price, old.DurationDays, old.IsDayPass, old.IncludesCoach, old.CoachAddonPrice) || !p.Benefits.SequenceEqual(old.Benefits)))   // 0105, 0119
                         throw Err("package_published");
+                    if (p.IncludesCoach && p.CoachAddonPrice is not null || p.CoachAddonPrice is <= 0) throw Err("bad_input");
                     var kept = Clone(p); kept.PublishedAt = old.PublishedAt; kept.ReplacesId = old.ReplacesId; kept.ImagePath = old.ImagePath;
                     list[index] = kept;
                     break;
@@ -480,11 +505,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     GuardShift(old, s);
                     old.Start = s.Start; old.End = s.End; old.Note = s.Note; old.Status = s.Status;
                     break;
-                case (Coach c, Coach old):           // bio, specialty, rate, availability
+                case (Coach c, Coach old):           // bio, specialty, availability
                     if (old.UserId != Uid && !RolesOf(Uid).Contains("admin")) throw Err(Rls);
                     if (!All<Profile>().Any(p => p.Id == old.UserId && p.IsActive)) throw Err("record_archived");
-                    if (c.HourlyRate is <= 0) throw Err("new row violates check constraint \"coaches_rate_positive\"");   // 0033
-                    old.Bio = c.Bio; old.Specialty = c.Specialty; old.HourlyRate = c.HourlyRate; old.IsAvailable = c.IsAvailable;
+                    old.Bio = c.Bio; old.Specialty = c.Specialty; old.IsAvailable = c.IsAvailable;
                     break;
                 case (UserSettings s, UserSettings old):
                     if (old.UserId != Uid) throw Err(Rls);
@@ -559,7 +583,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         {
             var coach = c.Groups["c"].Value; var member = c.Groups["m"].Value;
             if (uid != coach && uid != member) return false;
-            return !write || (CoachesMember(coach, member) && ActiveMember(member));
+            return !write || CanMessageCoachMember(coach, member);
         }
         return false;
     }
@@ -709,6 +733,18 @@ public sealed partial class DemoGateway : ISupabaseGateway
         {
             ActivateMembershipTerm(pay);
         }
+        else if (pay.Kind == PayKind.CoachAddon)
+        {
+            var term = All<MembershipTerm>()
+                .Where(t => t.MemberId == pay.MemberId && t.CancelledAt is null && t.StartsAt <= now && t.EndsAt > now)
+                .OrderByDescending(t => t.StartsAt)
+                .FirstOrDefault();
+            if (term is not null)
+            {
+                term.CoachAccessAt = now;
+                term.CoachAccessPaymentId = pay.Id;
+            }
+        }
         else if (pay.UserAmenityId is { } uaId)
         {
             var ua = All<UserAmenity>().First(a => a.Id == uaId);
@@ -747,10 +783,13 @@ public sealed partial class DemoGateway : ISupabaseGateway
     object? CallLocked(string fn, Dictionary<string, object> a)
     {
         if (SubscriptionCall(fn, a, out var subscriptionResult)) return subscriptionResult;
+        if (CoachSessionCall(fn, a, out var coachSessionResult)) return coachSessionResult;
+        if (SessionCheckInCall(fn, a, out var sessionCheckInResult)) return sessionCheckInResult;
         if (ReservationCall(fn, a, out var reservationResult)) return reservationResult;
         if (ClosureCall(fn, a, out var closureResult)) return closureResult;
         if (RequestCall(fn, a, out var requestResult)) return requestResult;
         if (CashShiftCall(fn, a, out var shiftResult)) return shiftResult;
+        if (PayrollCall(fn, a, out var payrollResult)) return payrollResult;
         if (MessengerCall(fn, a, out var chatResult)) return chatResult;
         var now = SubscriptionNow;
         int I(string k) => Convert.ToInt32(a[k]);
@@ -790,9 +829,11 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 var code = (a.GetValueOrDefault("p_code") as string)?.Trim() ?? "";
                 var kind = a.GetValueOrDefault("p_kind") as string ?? "";
                 var item = I("p_item");
-                if (code.Length is 0 or > 50 || kind is not ("package" or "amenity" or "renewal") || item < 1) throw Err("bad_input");
+                if (code.Length is 0 or > 50 || kind is not ("package" or "amenity" or "renewal" or "coach") || item < 1) throw Err("bad_input");
                 if (All<Member>().All(x => x.UserId != who)) throw Err("not_found");
-                var price = kind == "package" ? PackageForSale(item).Price : kind == "amenity" ? AmenityForSale(item).Price : Convert.ToDecimal(a.GetValueOrDefault("p_price") ?? 0m);
+                var price = kind == "package" ? PackageForSale(item).Price : kind == "amenity" ? AmenityForSale(item).Price
+                    : kind == "coach" ? (Convert.ToDecimal(a.GetValueOrDefault("p_price") ?? 0m) is var cp && cp > 0 ? cp : All<MembershipPackage>().FirstOrDefault(p => p.Id == item)?.CoachAddonPrice ?? 0m)
+                    : Convert.ToDecimal(a.GetValueOrDefault("p_price") ?? 0m);
                 if (price <= 0) throw Err("not_found");
                 if (!_codeChecks.TryGetValue(uid, out var hits)) _codeChecks[uid] = hits = [];
                 hits.RemoveAll(t => t < now.AddMinutes(-10));
@@ -818,8 +859,11 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 var code = (a.GetValueOrDefault("p_code") as string)?.Trim() ?? "";
                 var kind = a.GetValueOrDefault("p_kind") as string ?? "";
                 var item = I("p_item");
-                if (code.Length is 0 or > 50 || kind is not ("package" or "amenity") || item < 1) throw Err("bad_input");
-                var price = kind == "package" ? PackageForSale(item).Price : AmenityForSale(item).Price;
+                if (code.Length is 0 or > 50 || kind is not ("package" or "amenity" or "coach") || item < 1) throw Err("bad_input");
+                var price = kind == "package" ? PackageForSale(item).Price
+                    : kind == "amenity" ? AmenityForSale(item).Price
+                    : (ComputeCoachAccessOffer(uid) is { Offered: true, PackageId: var pid, Price: { } op } && pid == item ? op
+                        : All<MembershipPackage>().FirstOrDefault(p => p.Id == item)?.CoachAddonPrice ?? throw Err("not_found"));
                 if (!_codeChecks.TryGetValue(uid, out var hits)) _codeChecks[uid] = hits = [];
                 hits.RemoveAll(t => t < now.AddMinutes(-10));
                 if (hits.Count >= 20) throw Err("too_many_checks");
@@ -851,7 +895,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     var i = (IDictionary<string, object?>)o;
                     var kind = i.TryGetValue("kind", out var k) ? k as string : null;
                     int? id = i.TryGetValue("id", out var v) && v is not null ? Convert.ToInt32(v) : null;
-                    if (kind is not ("package" or "amenity")) throw Err("bad_input");
+                    if (kind is not ("package" or "amenity" or "coach")) throw Err("bad_input");
+                    if (kind == "coach") id = null;
                     if (id is { } x && !(kind == "package" ? All<MembershipPackage>().Any(p => p.Id == x && p.State == CatalogState.Published) : All<Amenity>().Any(m => m.Id == x && m.State == CatalogState.Published))) throw Err("item_not_found");
                     return (kind, id);   // kind is checked above
                 }).Distinct().ToList();
@@ -1056,11 +1101,11 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 h.Status = Status.Cancelled; h.EndedAt = now;
                 return null;
             }
-            // 0032: the coach themselves, or check_ins:record for any coach; twice in a row is harmless
+            // 0032: check_ins:record for any coach (0140: no longer the coach themselves); twice in a row is harmless
             case "coach_check_in" or "coach_check_out":
             {
                 var coachId = Opt("p_coach") ?? uid;
-                if (coachId == uid) RequireActive(); else Require("check_ins:record");
+                Require("check_ins:record");
                 if (!IsCoach(coachId) || !(All<Profile>().FirstOrDefault(p => p.Id == coachId)?.IsActive ?? false)) throw Err("not_found");
                 var open = OpenVisit(coachId);
                 if (fn == "coach_check_out")
@@ -1237,12 +1282,24 @@ public sealed partial class DemoGateway : ISupabaseGateway
             case "cancel_session":
             {
                 RequireActive();
-                var s = All<TrainingSession>().FirstOrDefault(x => x.Id == I("p_session_id") && (x.CoachId == uid || x.MemberId == uid)) ?? throw Err("not_found");
+                var s = All<TrainingSession>().FirstOrDefault(x => x.Id == I("p_session_id") && (x.CoachId == uid || x.MemberId == uid || Has("members:read"))) ?? throw Err("not_found");
                 if (s.Status != Status.Scheduled) throw Err("already_processed");
+                if (s.ScheduledStart <= now) throw Err("already_started");
+                if (uid == s.CoachId && uid != s.MemberId && !Has("members:read") && string.IsNullOrWhiteSpace(Opt("p_reason")))
+                    throw Err("reason_required");
                 s.Status = Status.Cancelled;
                 foreach (var req in All<TimeRequest>().Where(x => x.SessionId == s.Id && x.Status == Status.Pending)) req.Status = Status.Cancelled;
                 foreach (var held in Confirmed.Where(x => x.TrainingSessionId == s.Id).ToList())   // frees the session's amenity
                 { held.Status = "cancelled"; held.CancelledAt = now; held.CancelledBy = uid; held.CancelReason = Opt("p_reason") ?? "Session cancelled"; }
+                if (s.PaymentId is { } pid && All<Payment>().FirstOrDefault(p => p.Id == pid) is { } pay)
+                {
+                    if (pay.Status == Status.Pending) { pay.Status = Status.Rejected; pay.RejectedReason = "Session cancelled"; }
+                    else if (pay.Status == Status.Verified && pay.Amount > 0 && (s.MemberId != uid || s.ScheduledStart - TimeSpan.FromHours(24) >= now))
+                    {
+                        Add(new RefundRequest { Kind = "coach_addon", PaymentId = pay.Id, MemberId = s.MemberId, Amount = pay.Amount,
+                            Reason = Opt("p_reason") ?? "Coach session cancelled", Status = "approved", DecidedBy = uid, DecidedAt = now });
+                    }
+                }
                 Notify(uid == s.CoachId ? s.MemberId : s.CoachId, "system", "A training session was cancelled", Opt("p_reason"));
                 return null;
             }
@@ -1279,6 +1336,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 if (reason?.Length > 500) throw Err("bad_reason");
                 if (clientRef is not null && All<GymCheckIn>().FirstOrDefault(c => c.ClientRef == clientRef) is { } again) return again.Id;
                 if (All<Member>().All(m => m.UserId != memberId)) throw Err("not_found");
+                var hours = All<GymSettings>().First();   // 0131: judged at the check-in's own time, like coach check-in (0032)
+                var tod = ((at ?? now) + TimeSpan.FromHours(8)).TimeOfDay;
+                if (tod < hours.OpensAt || tod >= hours.ClosesAt) throw Err("gym_closed");
                 if (at is { } t1
                     ? !(All<Profile>().Any(p => p.Id == memberId && p.IsActive) && All<MembershipTerm>().Any(x => x.MemberId == memberId && x.CancelledAt is null && x.StartsAt <= t1 && t1 < x.EndsAt))
                     : !ActiveMember(memberId)) throw Err("no_active_membership");
@@ -1503,17 +1563,17 @@ public sealed partial class DemoGateway : ISupabaseGateway
         AddUser("u-carlo", "Carlo Diaz", "carlo@demo.io", "member");
         AddUser("u-joy", "Joy", "joy@demo.io", "member", "Joy", "");   // item 3: an old one-word account, no last name to guess
 
-        var lena = All<Coach>().First(c => c.UserId == "u-coach1"); lena.Specialty = "Strength and conditioning"; lena.HourlyRate = 800;
+        var lena = All<Coach>().First(c => c.UserId == "u-coach1"); lena.Specialty = "Strength and conditioning";
         lena.Bio = "Ten years coaching powerlifting and general strength. Works with beginners and returning lifters.";
-        var kai = All<Coach>().First(c => c.UserId == "u-coach2"); kai.Specialty = "Boxing and mobility"; kai.HourlyRate = 700;
+        var kai = All<Coach>().First(c => c.UserId == "u-coach2"); kai.Specialty = "Boxing and mobility";
         kai.Bio = "Former amateur boxer. Sessions focus on footwork, conditioning and joint mobility.";
         // both coaches start in the gym so the coach list has someone to hire (0032); the demo has no closing-time job
         foreach (var c in new[] { "u-coach1", "u-coach2" }) Add(new CoachVisit { CoachId = c, CheckedInBy = c, CheckedInAt = now });
 
-        var monthly = Add(new MembershipPackage { Name = "Monthly", Description = "Full gym floor access for 30 days.", Price = 1500, DurationDays = 30 });
-        var quarterly = Add(new MembershipPackage { Name = "Quarterly", Description = "90 days of access at a lower monthly rate.", Price = 4000, DurationDays = 90 });
-        Add(new MembershipPackage { Name = "Annual", Description = "A full year, best value for regulars.", Price = 14000, DurationDays = 365 });
-        Add(new MembershipPackage { Name = "Day pass", Description = "The gym floor and amenity bookings for today, until midnight.", Price = 150, DurationDays = 1, IsDayPass = true });   // 0098
+        var monthly = Add(new MembershipPackage { Name = "Monthly", Description = "Full gym floor access for 30 days.", Price = 1500, DurationDays = 30, CoachAddonPrice = 250 });
+        var quarterly = Add(new MembershipPackage { Name = "Quarterly", Description = "90 days of access at a lower monthly rate.", Price = 4000, DurationDays = 90, CoachAddonPrice = 200 });
+        Add(new MembershipPackage { Name = "Annual", Description = "A full year, best value for regulars.", Price = 14000, DurationDays = 365, IncludesCoach = true });
+        Add(new MembershipPackage { Name = "Day pass", Description = "The gym floor and amenity bookings for today, until midnight.", Price = 150, DurationDays = 1, IsDayPass = true, CoachAddonPrice = 250 });   // 0098, 0119
 
         var pool = Add(new Amenity { Name = "Pool", Description = "25 m lap pool, open 6:00 to 21:00.", Price = 300 });
         var sauna = Add(new Amenity { Name = "Sauna", Description = "Dry sauna next to the locker rooms.", Price = 200,
@@ -1590,7 +1650,6 @@ public sealed partial class DemoGateway : ISupabaseGateway
         Add(new ShiftPost { CoachId = "u-coach1", Start = At(1, 6), End = At(1, 14), Note = "Strength floor, squat rack priority" });
         // G14 (0064): Lena runs Group classes, which has a coach fee, so With a coach has someone to offer tomorrow morning
         Add(new CoachAmenity { CoachId = "u-coach1", AmenityId = All<Amenity>().First(x => x.Name == "Group classes").Id });
-        All<Amenity>().First(x => x.Name == "Group classes").CoachFee = 100;
         Add(new ShiftPost { CoachId = "u-coach1", Start = At(3, 14), End = At(3, 20) });
         Add(new ShiftPost { CoachId = "u-coach2", Start = At(1, 14), End = At(1, 22), Note = "Heavy bags and pad work" });
 

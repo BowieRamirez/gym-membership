@@ -10,7 +10,7 @@ public class MemberQrTests
 {
     static async Task<(DemoGateway Gw, AttendanceService Svc)> As(string email, DemoGateway? gw = null)
     {
-        gw ??= new DemoGateway();
+        gw ??= new DemoGateway().OpenAllDay();
         await gw.SignInAsync(email, DemoGateway.DemoPassword);
         return (gw, new AttendanceService(gw));
     }
@@ -71,7 +71,7 @@ public class MemberQrTests
     [Fact]
     public async Task The_front_desk_sees_live_status_for_each_pass()
     {
-        var gw = new DemoGateway();
+        var gw = new DemoGateway().OpenAllDay();
         string alex = await PassOf(gw, "member@demo.io"), bea = await PassOf(gw, "bea@demo.io"), carlo = await PassOf(gw, "carlo@demo.io");
         var (_, svc) = await As("employee@demo.io", gw);
 
@@ -90,7 +90,7 @@ public class MemberQrTests
     [Fact]
     public async Task F6_a_screenshot_an_expired_pass_and_the_old_permanent_code_are_refused()
     {
-        var gw = new DemoGateway();
+        var gw = new DemoGateway().OpenAllDay();
         var first = await PassOf(gw, "member@demo.io");
         var permanent = (await gw.ListAsync<MemberCode>(c => c.UserId == "u-alex")).Single().Code;
         var replaced = await PassOf(gw, "member@demo.io");
@@ -109,7 +109,7 @@ public class MemberQrTests
     [Fact]
     public async Task An_archived_member_scans_as_inactive()
     {
-        var gw = new DemoGateway();
+        var gw = new DemoGateway().OpenAllDay();
         var pass = await PassOf(gw, "carlo@demo.io");   // Carlo has no coach, sessions or pending payments, so he can be deleted (archived)
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
         var archive = new AccountArchiveService(gw);
@@ -121,7 +121,7 @@ public class MemberQrTests
     [Fact]
     public async Task Members_and_coaches_cannot_scan()
     {
-        var gw = new DemoGateway();
+        var gw = new DemoGateway().OpenAllDay();
         var pass = await PassOf(gw, "bea@demo.io");
         var (_, svc) = await As("member@demo.io", gw);
         Assert.Equal(AppErrorKind.Unauthorized, (await svc.ScanAsync(pass)).Error);
@@ -132,7 +132,7 @@ public class MemberQrTests
     [Fact]
     public async Task A_scan_shows_the_member_and_Check_in_records_it_once_tapped()
     {
-        var gw = new DemoGateway();
+        var gw = new DemoGateway().OpenAllDay();
         var pass = await PassOf(gw, "member@demo.io");
         var (_, svc) = await As("employee@demo.io", gw);
         var vm = new CheckInViewModel(svc, new CoachService(gw));
@@ -154,7 +154,7 @@ public class MemberQrTests
     [Fact]
     public async Task F6_a_QR_check_in_needs_a_pass_this_desk_just_scanned_and_uses_it_once()
     {
-        var gw = new DemoGateway();
+        var gw = new DemoGateway().OpenAllDay();
         var (_, svc) = await As("employee@demo.io", gw);
         var refused = await svc.CheckInAsync("u-alex", "qr");
         Assert.Equal("scan_required", refused.Message);
@@ -171,7 +171,7 @@ public class MemberQrTests
     [Fact]
     public async Task The_admin_overview_lists_a_days_check_ins_with_who_recorded_them()
     {
-        var gw = new DemoGateway();
+        var gw = new DemoGateway().OpenAllDay();
         var (_, svc) = await As("employee@demo.io", gw);
         Assert.True((await svc.CheckInAsync("u-alex", "manual", pin: "1234")).Ok);
         // F8: a reason only for a member with no desk PIN: Carlo buys a month at the counter and never set one

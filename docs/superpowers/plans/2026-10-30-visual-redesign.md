@@ -338,3 +338,4 @@ git commit -m "style: every page on the new palette in light and dark"
 **Left out on purpose:** a custom Windows title bar (it would change every signed-in screen), a terms checkbox (there are no terms yet), removing the repeat-password boxes (tests rely on the "don't match" check).
 
 **Android emulator on this PC:** `"C:/Program Files (x86)/Android/android-sdk/emulator/emulator.exe" -avd pixel_7_-_api_36_0`, then `dotnet build src/GymMembership.App -f net10.0-android -t:Run`.
+

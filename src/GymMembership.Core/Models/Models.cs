@@ -17,9 +17,9 @@ public static class Status
 
 public static class PayKind
 {
-    public const string Membership = "membership", Renewal = "renewal", Amenity = "amenity", WalkIn = "walk_in";
+    public const string Membership = "membership", Renewal = "renewal", Amenity = "amenity", WalkIn = "walk_in", CoachAddon = "coach_addon";
     /// <summary>What a kind is called on screen (9.8: Revenue showed the codes). Extension, as the payment lists say for a renewal.</summary>
-    public static string Name(string k) => k switch { Membership => "Membership", Renewal => "Extension", Amenity => "Amenity", WalkIn => "Day pass", _ => k };   // cashier plan Y3
+    public static string Name(string k) => k switch { Membership => "Membership", Renewal => "Extension", Amenity => "Amenity", WalkIn => "Day pass", CoachAddon => "Coach add-on", _ => k };   // cashier plan Y3
 }
 public static class PayMethod
 {
@@ -42,6 +42,14 @@ public static class PayMethod
   // the sign-in email this person proved with a code; written only by confirm_my_email
   [Column("confirmed_email", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? ConfirmedEmail { get; set; } }
 
+// 0140: the name and photo of anyone the caller may see (same rows as profiles used to give), without email, phone or account fields.
+// Full profile rows are only the caller's own and staff's.
+[Table("public_profiles")] public class PublicProfile : BaseModel
+{ [PrimaryKey("id")] public string Id { get; set; } = ""; [Column("full_name")] public string FullName { get; set; } = "";
+  [Column("first_name")] public string FirstName { get; set; } = ""; [Column("last_name")] public string LastName { get; set; } = "";
+  [Column("avatar_path")] public string? AvatarPath { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true;
+  public static PublicProfile Of(Profile p) => new() { Id = p.Id, FullName = p.FullName, FirstName = p.FirstName, LastName = p.LastName, AvatarPath = p.AvatarPath, IsActive = p.IsActive }; }
+
 [Table("roles")] public class Role : BaseModel
 { [PrimaryKey("role_id")] public int RoleId { get; set; } [Column("name")] public string Name { get; set; } = ""; }
 
@@ -60,7 +68,10 @@ public static class PayMethod
   // one opening and closing time for every day, Manila wall-clock (0028)
   [Column("opens_at")] public TimeSpan OpensAt { get; set; } = TimeSpan.FromHours(6); [Column("closes_at")] public TimeSpan ClosesAt { get; set; } = TimeSpan.FromHours(22);
   [Column("opening_float")] public decimal OpeningFloat { get; set; } = 5000;
-  [Column("down_payment_percent")] public int DownPaymentPercent { get; set; } = 50; }   // G13 (0064): of an amenity booking's price   // F2 (0050): the drawer float a cashier starts a shift with
+  [Column("down_payment_percent")] public int DownPaymentPercent { get; set; } = 50;
+  [Column("max_coach_sessions_per_day")] public int MaxCoachSessionsPerDay { get; set; } = 1;
+  [Column("max_upcoming_coach_sessions")] public int MaxUpcomingCoachSessions { get; set; } = 1;
+  [Column("max_coach_hours_per_day")] public int? MaxCoachHoursPerDay { get; set; } = 6; }   // G13 (0064): of an amenity booking's price   // F2 (0050): the drawer float a cashier starts a shift with
 
 /// <summary>G16 (0065): a whole Manila day the gym is closed; written only by close_gym_day and reopen_gym_day.</summary>
 [Table("gym_closures")] public class GymClosure : BaseModel
@@ -72,7 +83,10 @@ public static class PayMethod
 { [PrimaryKey("membership_package_id")] public int Id { get; set; } [Column("name")] public string Name { get; set; } = ""; [Column("description")] public string? Description { get; set; }
   [Column("price")] public decimal Price { get; set; } [Column("duration_days")] public int DurationDays { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true;
   [Column("is_day_pass")] public bool IsDayPass { get; set; }   // 0098: its term ends at midnight in Manila on the day it is paid
+  [Column("includes_coach")] public bool IncludesCoach { get; set; }   // 0119: E3
+  [Column("coach_addon_price")] public decimal? CoachAddonPrice { get; set; }   // 0119: E4
   [System.Text.Json.Serialization.JsonIgnore] public string LengthText => IsDayPass ? "Today only, until midnight" : $"{DurationDays} days of access";
+  [System.Text.Json.Serialization.JsonIgnore] public string CoachText => IncludesCoach ? "Coach included" : CoachAddonPrice is { } p ? $"Add a coach: \u20B1{p:N0}" : "";
   // G6/G9 (0061): null = a draft; set only by publish_catalog_item. A version points at the package it replaces.
   [Column("published_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? PublishedAt { get; set; }
   [Column("replaces_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? ReplacesId { get; set; }
@@ -119,6 +133,8 @@ public static class PackageChanges
   [Column("method")] public string Method { get; set; } = PayMethod.Qr; [Column("status")] public string Status { get; set; } = "pending"; [Column("amount")] public decimal Amount { get; set; }
   [Column("discount_id")] public int? DiscountId { get; set; } [Column("discount_amount")] public decimal DiscountAmount { get; set; }
   [Column("member_id")] public string? MemberId { get; set; } [Column("walk_in_name")] public string? WalkInName { get; set; }
+  // 0141: an online payment for a booking's balance, started at the front desk; written only by start_booking_balance_online
+  [Column("balance_reservation_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? BalanceReservationId { get; set; }
   [Column("user_membership_package_id")] public int? UserMembershipPackageId { get; set; } [Column("renewal_id")] public int? RenewalId { get; set; } [Column("user_amenity_id")] public int? UserAmenityId { get; set; }
   [Column("reference_no")] public string? ReferenceNo { get; set; } [Column("proof_path")] public string? ProofPath { get; set; } [Column("expires_at")] public DateTime? ExpiresAt { get; set; }
   [Column("recorded_by")] public string? RecordedBy { get; set; } [Column("verified_by")] public string? VerifiedBy { get; set; } [Column("verified_at")] public DateTime? VerifiedAt { get; set; }
@@ -133,20 +149,62 @@ public static class PackageChanges
   [Column("cash_shift_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? CashShiftId { get; set; }   // F2 (0050): the drawer that took this cash
   [Column("created_at")] public DateTime CreatedAt { get; set; } }
 
+/// <summary>D8 (0117): append-only supervisor investigation note on a closed cash shift.</summary>
+public sealed class CashShiftNote
+{
+    [System.Text.Json.Serialization.JsonPropertyName("note_id")] public int Id { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("author")] public string Author { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("note")] public string Note { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("resolved")] public bool Resolved { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("created_at")] public DateTime CreatedAt { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore] public string Summary => $"{Author} ({CreatedAt.ToLocalTime():d MMM, h:mm tt}): {Note}" + (Resolved ? " [Resolved]" : "");
+}
+
 /// <summary>F2 (0050): a cash-drawer shift. my_cash_shift() fills the open one; cash_shifts_list() adds the cashier, count and difference.</summary>
 public sealed class CashShift : BaseModel
 { [Column("shift_id")] public int Id { get; set; } [Column("cashier")] public string? Cashier { get; set; }
   [Column("opened_at")] public DateTime OpenedAt { get; set; } [Column("closed_at")] public DateTime? ClosedAt { get; set; }
   [Column("opening_float")] public decimal OpeningFloat { get; set; } [Column("cash_in")] public decimal CashIn { get; set; } [Column("cash_out")] public decimal CashOut { get; set; }
   [Column("expected")] public decimal Expected { get; set; } [Column("counted")] public decimal? Counted { get; set; } [Column("difference")] public decimal? Difference { get; set; }
+  [Column("shortage")] public decimal Shortage { get; set; } [Column("overage")] public decimal Overage { get; set; }
   [Column("open_note")] public string? OpenNote { get; set; } [Column("close_note")] public string? CloseNote { get; set; }
+  [Column("close_reason")] public string? CloseReason { get; set; } [Column("resolved_at")] public DateTime? ResolvedAt { get; set; }
+  [Column("notes")] public List<CashShiftNote> Notes { get; set; } = new();
   // the Revenue table's words
   [System.Text.Json.Serialization.JsonIgnore] public bool IsOpen => ClosedAt is null;
   [System.Text.Json.Serialization.JsonIgnore] public bool IsOff => Difference is { } d && d != 0;
+  [System.Text.Json.Serialization.JsonIgnore] public bool HasShortage => Shortage > 0;
+  [System.Text.Json.Serialization.JsonIgnore] public bool HasOverage => Overage > 0;
+  [System.Text.Json.Serialization.JsonIgnore] public bool IsResolved => ResolvedAt is not null;
   [System.Text.Json.Serialization.JsonIgnore] public string SpanText => $"{OpenedAt.ToLocalTime():ddd d MMM, h:mm tt}" + (ClosedAt is { } c ? $" to {c.ToLocalTime():h:mm tt}" : "");
   [System.Text.Json.Serialization.JsonIgnore] public string DifferenceText => Difference is { } d ? d == 0 ? "Matches" : CashCount.Words(d) : "–";
-  [System.Text.Json.Serialization.JsonIgnore] public string NoteText =>
-      string.Join(" · ", new[] { CloseNote, OpenNote is null ? null : "Opened: " + OpenNote }.Where(n => n is not null)) is { Length: > 0 } t ? t : "–"; }
+  [System.Text.Json.Serialization.JsonIgnore] public string ShortageText => Shortage > 0 ? $"₱{Shortage:N2}" : "–";
+  [System.Text.Json.Serialization.JsonIgnore] public string OverageText => Overage > 0 ? $"₱{Overage:N2}" : "–";
+  [System.Text.Json.Serialization.JsonIgnore] public string CloseReasonText => ReasonLabel(CloseReason);
+  [System.Text.Json.Serialization.JsonIgnore] public string NoteText
+  {
+      get
+      {
+          var parts = new List<string>();
+          if (!string.IsNullOrWhiteSpace(CloseReasonText)) parts.Add(CloseReasonText);
+          if (!string.IsNullOrWhiteSpace(CloseNote)) parts.Add(CloseNote);
+          if (!string.IsNullOrWhiteSpace(OpenNote)) parts.Add("Opened: " + OpenNote);
+          if (Notes.Count > 0) parts.Add(string.Join(" | ", Notes.Select(n => n.Summary)));
+          if (IsResolved) parts.Add("Resolved");
+          return parts.Count > 0 ? string.Join(" · ", parts) : "–";
+      }
+  }
+
+  public static string ReasonLabel(string? code) => code switch
+  {
+      "wrong_change" => "Wrong change given",
+      "unrecorded_sale" => "Sale not recorded",
+      "counting_mistake" => "Counting mistake",
+      "float_wrong" => "Float was wrong",
+      "other" => "Other",
+      _ => ""
+  };
+}
 
 public static class CashCount
 {
@@ -159,7 +217,6 @@ public static class CashCount
 { [PrimaryKey("amenity_id")] public int Id { get; set; } [Column("name")] public string Name { get; set; } = ""; [Column("description")] public string? Description { get; set; }
   [Column("price")] public decimal Price { get; set; } [Column("duration_days")] public int? DurationDays { get; set; } [Column("is_active")] public bool IsActive { get; set; } = true;
   [Column("image_path", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? ImagePath { get; set; }
-  [Column("coach_fee")] public decimal CoachFee { get; set; }   // G14 (0064): added when a member books With a coach
   [Column("published_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? PublishedAt { get; set; }   // G6/G7 (0061): null = a draft
   [System.Text.Json.Serialization.JsonIgnore] public CatalogState State => Catalog.StateOf(IsActive, PublishedAt);
   // live status: written only by set_amenity_status, so a catalog edit never sends these
@@ -193,7 +250,7 @@ public class NotifiedMember : BaseModel
 // keyed by the coach's Auth uuid. A coach edits bio, specialty, rate and availability only
 [Table("coaches")] public class Coach : BaseModel
 { [PrimaryKey("user_id")] public string UserId { get; set; } = ""; [Column("bio")] public string? Bio { get; set; }
-  [Column("specialty")] public string? Specialty { get; set; } [Column("hourly_rate")] public decimal? HourlyRate { get; set; } [Column("is_available")] public bool IsAvailable { get; set; } = true; }
+  [Column("specialty")] public string? Specialty { get; set; } [Column("is_available")] public bool IsAvailable { get; set; } = true; }
 
 [Table("members")] public class Member : BaseModel
 { [PrimaryKey("user_id")] public string UserId { get; set; } = ""; [Column("goals")] public string? Goals { get; set; } }
@@ -216,11 +273,34 @@ public class NotifiedMember : BaseModel
 [Table("training_sessions")] public class TrainingSession : BaseModel
 { [PrimaryKey("training_session_id")] public int Id { get; set; } [Column("coach_id")] public string CoachId { get; set; } = ""; [Column("member_id")] public string MemberId { get; set; } = "";
   [Column("title")] public string? Title { get; set; } [Column("scheduled_start")] public DateTime ScheduledStart { get; set; } [Column("scheduled_end")] public DateTime ScheduledEnd { get; set; }
-  [Column("status")] public string Status { get; set; } = "scheduled"; }
+  [Column("status")] public string Status { get; set; } = "scheduled";
+  [Column("payment_id")] public int? PaymentId { get; set; }
+  [Column("held_until")] public DateTime? HeldUntil { get; set; }
+  [Column("is_paid_addon")] public bool IsPaidAddon { get; set; }
+  [Column("session_code")] public string? SessionCode { get; set; }
+  [Column("walk_in_name")] public string? WalkInName { get; set; }
+  [Column("checked_in_at")] public DateTime? CheckedInAt { get; set; }
+  [Column("coach_arrived_at")] public DateTime? CoachArrivedAt { get; set; } }
 
 [Table("session_attendance")] public class SessionAttendance : BaseModel
 { [PrimaryKey("training_session_id")] public int SessionId { get; set; } [Column("status")] public string Status { get; set; } = "present";
   [Column("checked_in_at")] public DateTime? CheckedInAt { get; set; } [Column("notes")] public string? Notes { get; set; } }
+
+[Table("damage_reports")] public class DamageReport : BaseModel
+{
+  [PrimaryKey("damage_report_id")] public int Id { get; set; }
+  [Column("training_session_id")] public int? TrainingSessionId { get; set; }
+  [Column("amenity_id")] public int? AmenityId { get; set; }
+  [Column("coach_id")] public string? CoachId { get; set; }
+  [Column("reported_by")] public string ReportedBy { get; set; } = "";
+  [Column("description")] public string Description { get; set; } = "";
+  [Column("photo_path")] public string? PhotoPath { get; set; }
+  [Column("status")] public string Status { get; set; } = "open";
+  [Column("review_note")] public string? ReviewNote { get; set; }
+  [Column("reviewed_by")] public string? ReviewedBy { get; set; }
+  [Column("reviewed_at")] public DateTime? ReviewedAt { get; set; }
+  [Column("created_at")] public DateTime CreatedAt { get; set; }
+}
 
 [Table("gym_check_ins")] public class GymCheckIn : BaseModel
 { [Column("method", ignoreOnInsert: true, ignoreOnUpdate: true)] public string? Method { get; set; }
@@ -257,6 +337,7 @@ public class NotifiedMember : BaseModel
 { [Column("discount_id")] public int DiscountId { get; set; } [Column("kind")] public string Kind { get; set; } = ""; [Column("item_id")] public int? ItemId { get; set; }
   public static DiscountItem Package(int? id) => new() { Kind = "package", ItemId = id };
   public static DiscountItem Amenity(int? id) => new() { Kind = "amenity", ItemId = id };
+  public static DiscountItem CoachAddon() => new() { Kind = "coach", ItemId = null };
   /// <summary>Every package and every amenity: what every code fitted before 0060.</summary>
   public static IReadOnlyList<DiscountItem> Everything => [Package(null), Amenity(null)]; }
 
@@ -436,4 +517,73 @@ public record RevenueRow(DateTime Day, string Kind, string Method, long Payments
 {
     /// <summary>"Membership · QR · 1 payment" (9.8: was "membership · qr · 1 payment(s)").</summary>
     public string Summary => $"{PayKind.Name(Kind)} · {PayMethod.Name(Method)} · {Payments} {(Payments == 1 ? "payment" : "payments")}";
+}
+
+/// <summary>Phase 17 (0136): staff salary row for the Salaries tab.</summary>
+public sealed class StaffSalary
+{
+    [System.Text.Json.Serialization.JsonPropertyName("user_id")] public string UserId { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("full_name")] public string FullName { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("role")] public string Role { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("amount")] public decimal? Amount { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("updated_by_name")] public string? UpdatedByName { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore] public bool NoSalary => Amount is null;
+    [System.Text.Json.Serialization.JsonIgnore] public string RoleLabel => Role switch { "employee" => "Front desk", "coach" => "Coach", "subadmin" => "Admin", "admin" => "System admin", _ => Role };
+}
+
+/// <summary>Phase 19 (0137): role-level fixed salary for Front desk (employee) or Coach.</summary>
+public sealed class RoleSalary
+{
+    [System.Text.Json.Serialization.JsonPropertyName("role")] public string Role { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("amount")] public decimal? Amount { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("updated_at")] public DateTime? UpdatedAt { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("updated_by_name")] public string? UpdatedByName { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore] public string RoleLabel => Role == "coach" ? "Coach" : "Front desk";
+}
+
+/// <summary>Phase 17 (0136): one staff member's row inside a payroll period.</summary>
+public sealed class PayrollRow
+{
+    [System.Text.Json.Serialization.JsonPropertyName("user_id")] public string UserId { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("full_name")] public string FullName { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("role")] public string Role { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("sessions_count")] public int SessionsCount { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("hours")] public decimal Hours { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("salary")] public decimal Salary { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("bonuses")] public decimal Bonuses { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("deductions")] public decimal Deductions { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("net")] public decimal Net { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("no_salary")] public bool NoSalary { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore] public string RoleLabel => Role switch { "employee" => "Front desk", "coach" => "Coach", "subadmin" => "Admin", "admin" => "System admin", _ => Role };
+    [System.Text.Json.Serialization.JsonIgnore] public string HoursText => Role switch
+    {
+        "coach" => $"{SessionsCount} {(SessionsCount == 1 ? "session" : "sessions")} · {Hours:0.##} h",
+        "employee" => $"{Hours:0.##} h at the desk",
+        _ => "–"
+    };
+}
+
+/// <summary>Phase 17 (0136): a twice-monthly payroll period (1st-15th or 16th-end) and its rows.</summary>
+public sealed class PayrollPeriod
+{
+    [System.Text.Json.Serialization.JsonPropertyName("period_id")] public int PeriodId { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("starts_on")] public DateOnly StartsOn { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("ends_on")] public DateOnly EndsOn { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("paid_at")] public DateTime? PaidAt { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("paid_by_name")] public string? PaidByName { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("total_net")] public decimal TotalNet { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("rows")] public List<PayrollRow> Rows { get; set; } = new();
+    [System.Text.Json.Serialization.JsonIgnore] public bool IsPaid => PaidAt is not null;
+}
+
+/// <summary>Phase 17 (0136): one salary, bonus or deduction line in a payroll period.</summary>
+public sealed class PayrollLine
+{
+    [System.Text.Json.Serialization.JsonPropertyName("line_id")] public int LineId { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("kind")] public string Kind { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("amount")] public decimal Amount { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("note")] public string? Note { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("created_by_name")] public string? CreatedByName { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("created_at")] public DateTime CreatedAt { get; set; }
 }

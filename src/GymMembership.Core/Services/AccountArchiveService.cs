@@ -14,11 +14,13 @@ public sealed class AccountArchiveService(ISupabaseGateway gw) : IAccountArchive
     public Task<AppResult<bool>> CanManageAsync() => Safe.RunAsync(async () =>
     {
         if (gw.CurrentUserId is not { } uid) return false;
-        var profile = (await gw.ListAsync<Profile>(p => p.Id == uid)).FirstOrDefault();
-        if (profile?.IsActive != true) return false;
-        var roles = await gw.ListAsync<Role>();
-        var links = await gw.ListAsync<UserRole>(r => r.UserId == uid);
-        return links.Any(l => roles.Any(r => r.RoleId == l.RoleId && r.Name == "admin"));
+        var profileTask = gw.ListAsync<Profile>(p => p.Id == uid);
+        var rolesTask = gw.ListAsync<Role>();
+        var linksTask = gw.ListAsync<UserRole>(r => r.UserId == uid);
+        await Task.WhenAll(profileTask, rolesTask, linksTask);
+        if (profileTask.Result.FirstOrDefault()?.IsActive != true) return false;
+        var roles = rolesTask.Result;
+        return linksTask.Result.Any(l => roles.Any(r => r.RoleId == l.RoleId && r.Name == "admin"));
     });
 
     public Task<AppResult<bool>> DeleteAsync(string userId, string reason)

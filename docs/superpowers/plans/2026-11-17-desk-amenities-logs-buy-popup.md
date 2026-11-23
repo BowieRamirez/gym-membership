@@ -111,7 +111,7 @@ Same rules as `2026-11-16-cashier-walkin-logs.md`:
 ## Phase 3: Logs (Z4, Z5, Z6)
 
 ### Task 4: The log page function (0086)
-
+cla
 **Files:** `supabase/migrations/0086_transactions_log.sql` (drop and recreate `audit_log_page` and the export function with `p_money boolean default false`: true lists only `payment.*`, `refund.*`, `cash_shift.*`, false only the rest; each row also returns `customer`, `amount`, `paid_with` from the row's payment, or the reservation's member), `supabase/tests/local/audit-log.mjs` (extend).
 
 - [x] Failing tests: a cash payment row has the member's name, amount and `cash`; a Day pass row has its typed name; a Xendit row has `paid_with` = its channel; `p_money` true lists no role change, false lists no payment; a member or anon can't call it.

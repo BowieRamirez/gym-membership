@@ -134,7 +134,9 @@ try {
     assert.equal((await pkgRow(p)).is_active, false);
     assert.ok((await pkgRow(v)).published_at);
     assert.deepEqual((await db.query('select * from membership_terms where member_id=$1', [m])).rows, terms);
-    await assert.rejects(buyPackage(await user(), p), /not_found|item_not_for_sale/);
+    await assert.rejects(as(await user(), 'select * from avail_membership($1)', [p]), /not_found|item_not_for_sale/);
+    const swapped = await buyPackage(await user(), p);   // 0130: extend_membership follows replacement chain to v
+    assert.deepEqual([Number(swapped.amount), String(swapped.membership_package_snapshot_id)], [1500, String(v)]);
   });
   await test('renewing an old version renews into the newest version at its price, in the app and at the desk', async () => {
     const p = await publishedPackage('L Renew', { price: 1000, days: 30 });

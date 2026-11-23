@@ -12,7 +12,7 @@ public class MembershipCheckingTests
     static async Task<(DemoGateway Gw, CheckInViewModel Vm)> Desk()
     {
         Confirm.Answer = (_, _, _) => Task.FromResult(true);
-        var gw = new DemoGateway();
+        var gw = new DemoGateway().OpenAllDay();
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         var vm = new CheckInViewModel(new AttendanceService(gw), new CoachService(gw));
         await vm.OnAppearingAsync();
@@ -123,5 +123,19 @@ public class MembershipCheckingTests
         vm.Password = "typed";
         vm.CancelPinCommand.Execute(null);
         Assert.Equal(("", false), (vm.Password, vm.IsPasswordMode));
+    }
+
+    [Fact]
+    public async Task Deactivated_accounts_are_hidden_from_the_members_list()
+    {
+        var (gw, vm) = await Desk();
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        Assert.True((await new AdminService(gw).SetActiveAsync("u-carlo", false)).Ok);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+
+        vm.Search = "";
+        await vm.SearchCommand.ExecuteAsync(null);
+        Assert.DoesNotContain(vm.Hits, h => h.MemberId == "u-carlo");
+        Assert.All(vm.Hits, h => Assert.NotEqual("inactive", h.Status));
     }
 }

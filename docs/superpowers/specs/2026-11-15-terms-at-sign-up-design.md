@@ -37,7 +37,7 @@ balance at the desk, cancellation refunds as now); coaches and messages; gym clo
 data the app keeps (name, email, phone, photo, check-ins, payments, messages), why, who sees it (staff), and how to ask for it to be
 corrected or removed. Marked **draft, to be checked by the owner or someone qualified** (Data Privacy Act); no claims the app can't
 back up.
-
+c
 ## Builder's calls (owner can correct)
 - Server: migration `0069`. `profiles` gains `terms_version text` and `terms_accepted_at timestamptz`, filled from sign-up metadata.
   A **self sign-up** (no role in app metadata) without `terms_version` is refused (`terms_required`), like the last-name check (0059).

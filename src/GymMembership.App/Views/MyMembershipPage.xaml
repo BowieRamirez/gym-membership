@@ -16,6 +16,7 @@
                     <Label Text="{Binding Term.PackageName}" FontFamily="BarlowMedium" VerticalOptions="Center" />
                     <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
                         <Label Text="{Binding ShortDates}" />
+                        <Label Text="{Binding CoachAccessText}" Style="{StaticResource Caption}" TextColor="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" IsVisible="{Binding CoachAccessText, Converter={StaticResource IsNotNull}}" />
                         <Label Text="{Binding RefundText}" Style="{StaticResource Caption}" />
                         <Label Text="{Binding Refund.DecisionReason}" Style="{StaticResource Caption}" IsVisible="{Binding Refund.DecisionReason, Converter={StaticResource IsNotNull}}" />
                     </VerticalStackLayout>
@@ -44,6 +45,7 @@
                             </MultiBinding>
                         </Label.Text>
                     </Label>
+                    <Label Text="{Binding CoachAccessText}" Style="{StaticResource Caption}" TextColor="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" IsVisible="{Binding CoachAccessText, Converter={StaticResource IsNotNull}}" />
                     <Label Text="{Binding RefundNote}" Style="{StaticResource Caption}" IsVisible="{Binding RefundNote, Converter={StaticResource IsNotNull}}" />
                     <Label Text="{Binding Refund.DecisionReason}" Style="{StaticResource Caption}" IsVisible="{Binding Refund.DecisionReason, Converter={StaticResource IsNotNull}}" />
                     <Button Text="Cancel &amp; request refund" Style="{StaticResource FilterChip}" HorizontalOptions="Start" Margin="0,6,0,0"
@@ -173,17 +175,11 @@
 
                     <Border Style="{StaticResource SidePanel}">
                         <VerticalStackLayout Spacing="6">
-                            <c:CardTitle Text="Hired coach" />
-                            <Label Text="{Binding HiredCoachName}" Style="{StaticResource Heading}" FontSize="22" LineBreakMode="WordWrap" />
-                            <Label Text="{Binding HiredCoachNote}" Style="{StaticResource Caption}" LineBreakMode="WordWrap" />
-                        </VerticalStackLayout>
-                    </Border>
-
-                    <Border Style="{StaticResource SidePanel}">
-                        <VerticalStackLayout Spacing="6">
-                            <c:CardTitle Text="Current session" />
+                            <c:CardTitle Text="Next coach session" />
                             <Label Text="{Binding CurrentSessionText}" Style="{StaticResource Heading}" FontSize="22" LineBreakMode="WordWrap" />
                             <Label Text="{Binding CurrentSessionNote}" Style="{StaticResource Caption}" LineBreakMode="WordWrap" />
+                            <Label Text="{Binding CoachIncludedNote}" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold"
+                                   IsVisible="{Binding CoachIncludedNote, Converter={StaticResource HasText}}" LineBreakMode="WordWrap" />
                         </VerticalStackLayout>
                     </Border>
                 </VerticalStackLayout>

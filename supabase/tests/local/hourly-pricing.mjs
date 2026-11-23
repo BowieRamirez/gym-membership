@@ -25,7 +25,7 @@ try {
   await db.query(`update gym_settings set opens_at='06:00',closes_at='22:00',down_payment_percent=50 where id=1`);
   const pack = (await db.query(`insert into membership_packages(name,price,duration_days) values('H Monthly',1000,30) returning membership_package_id id`)).rows[0].id;
   const member = async () => { const m = await user(null); const p = (await as(m, 'select * from extend_membership($1,null)', [pack]))[0]; await as(desk, 'select verify_payment($1,true)', [p.payment_id]); return m; };
-  const ring = (await db.query(`insert into amenities(name,price,coach_fee) values('H Ring',100,50) returning amenity_id id`)).rows[0].id;
+  const ring = (await db.query(`insert into amenities(name,price) values('H Ring',100) returning amenity_id id`)).rows[0].id;
   const day = (await db.query(`select ((now() at time zone 'Asia/Manila')::date + 2)::text d`)).rows[0].d;
   const at = (hm) => new Date(`${day}T${hm}:00+08:00`).toISOString();
   const book = (uid, hm, minutes, coachId = null) => as(uid, 'select * from book_amenity(p_amenity=>$1, p_start=>$2, p_minutes=>$3, p_method=>$4::payment_method, p_coach=>$5)',
@@ -38,9 +38,9 @@ try {
     assert.deepEqual([Number(r.total_price), Number(r.down_payment)], [200, 100]);
   });
 
-  await test('the coach fee is per hour too', async () => {
+  await test('passing a coach still costs amenity price only and books no coach (0118)', async () => {
     const r = await book(await member(), '12:00', 120, coach);
-    assert.deepEqual([Number(r.total_price), r.coach_id], [300, coach]);
+    assert.deepEqual([Number(r.total_price), r.coach_id], [200, null]);
   });
 
   await test('longer than 2 hours is fine within gym hours; past closing is refused', async () => {

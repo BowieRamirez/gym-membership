@@ -45,7 +45,7 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
     public IReadOnlyList<AdminOverviewCard> Cards { get; } = [
         new("users", "Users and roles", "Accounts"), new("catalog", "Packages and amenities", "Packages"),
         new("discounts", "Discounts", "Discount codes"), new("refunds", "Refunds"),
-        new("revenue", "Revenue", "Revenue today"), new("announcements", "Announcements"),
+        new("revenue", "Revenue", "Revenue today"), new("payroll", "Payroll"), new("damage", "Damage reports"), new("announcements", "Announcements"),
         new("gym", "Gym settings"), new("audit", "Logs & Archive")];
     /// <summary>The number strip, in the order shown; every role on the overview has these four pages.</summary>
     public IEnumerable<AdminOverviewCard> Figures => new[] { "revenue", "users", "catalog", "discounts" }.Select(k => Cards.Single(c => c.Key == k));
@@ -117,6 +117,14 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
                     var monthly = Require(await admin.RevenueAsync(month, today));
                     return (Money(daily.Sum(r => r.Total)), $"{Money(monthly.Sum(r => r.Total))} this month");
                 }),
+                // UI test 2026-11-23: both cards were listed but never loaded, so they said "Loading…" forever
+                // no figure: opening a pay period creates it, and the overview only reads
+                Load("payroll", () => Task.FromResult(("Salaries and pay periods, twice a month", ""))),
+                Load("damage", async () =>
+                {
+                    var open = Require(await admin.DamageReportsAsync()).Count(r => r.Report.Status == "open");
+                    return (open switch { 0 => "Nothing open", 1 => "1 report open", _ => $"{open} reports open" }, "");
+                }),
                 Load("announcements", async () =>
                 {
                     if (announcements is null) return ("Write to members and coaches", "");
@@ -134,7 +142,8 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
                     foreach (var r in latest) Activity.Add(new(r.ActionText, r.ActorName, When(r.Manila, today)));
                     RecentActivity = latest.Count == 0 ? "No activity yet." : "";
                     return ("Full audit log and archived records", "");
-                }));
+                }),
+                LoadCheckInsAsync());
             if (!SuperAdmin) RecentActivity = "";
             else if (Cards.Single(c => c.Key == "audit").IsUnavailable)
                 RecentActivity = "Couldn't load recent activity. Refresh to try again.";
@@ -143,7 +152,6 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
                 (failed > 0 ? $" · {failed} summar{(failed == 1 ? "y" : "ies")} unavailable" : "");
         }
         finally { IsBusy = false; }
-        await LoadCheckInsAsync();
     }
 
     async Task Load(string key, Func<Task<(string Value, string Detail)>> read)

@@ -25,7 +25,7 @@ const shiftTotal = async (uid) => Number((await db.query(
 
 try {
   const desk = await user('employee'), desk2 = await user('employee');
-  await db.query(`update gym_settings set opens_at='00:00',closes_at='23:30' where id=1`);
+  await db.query(`update gym_settings set opens_at='00:00',closes_at='24:00' where id=1`);
   const court = (await db.query(`insert into amenities(name,price) values('Court',300) returning amenity_id id`)).rows[0].id;
   const day = (await db.query(`select ((now() at time zone 'Asia/Manila')::date + 2)::text d`)).rows[0].d;
   const at = (hm) => new Date(`${day}T${hm}:00+08:00`).toISOString();

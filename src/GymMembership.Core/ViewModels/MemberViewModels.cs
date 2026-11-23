@@ -207,7 +207,7 @@ public partial class RegisterViewModel(IAuthService auth, IAppNavigator nav) : L
     [RelayCommand] private void BackToSignIn() => nav.GoToLogin();
 }
 
-public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav, ISubscriptionService subscription, IUrlOpener? opener = null) : LoadableViewModel
+public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav, ISubscriptionService subscription, IUrlOpener? opener = null, ISessionService? sessions = null) : LoadableViewModel
 {
     public ObservableCollection<MembershipPackage> Packages { get; } = new();
     /// <summary>G4 (0060): shown codes this member can still use that fit a package, newest first. The section hides when there are none.</summary>
@@ -234,10 +234,15 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
     private async Task LoadAsync()
     {
         var member = false;   // 0098: someone with a membership can't buy a Day pass, so it isn't offered
-        await RunAsync(svc.AccessAsync, a => member = a.Active);
-        if (!await RunAsync(svc.ListPackagesAsync, rows => Fill(Packages, rows.Where(p => !(member && p.IsDayPass))))) return;
-        await RunAsync(svc.AvailableCodesAsync, rows => { Fill(Codes, rows.Where(c => c.FitsAnyPackage)); HasCodes = Codes.Count > 0; });
-        await LoadPayAsync();
+        IReadOnlyList<MembershipPackage>? allPackages = null;
+        await Task.WhenAll(
+            RunAsync(svc.AccessAsync, a => member = a.Active),
+            RunAsync(svc.ListPackagesAsync, rows => allPackages = rows),
+            RunAsync(svc.AvailableCodesAsync, rows => { Fill(Codes, rows.Where(c => c.FitsAnyPackage)); HasCodes = Codes.Count > 0; }),
+            LoadPayAsync()
+        );
+        if (allPackages is not null)
+            Fill(Packages, allPackages.Where(p => !(member && p.IsDayPass)));
     }
 
     async Task LoadPayAsync()
@@ -246,15 +251,26 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
         _loading = true;
         try
         {
-            if (!await RunAsync(svc.MyPaymentsAsync, rows =>
-                { PayNow = rows.FirstOrDefault(p => p.NeedsPayment && p.CanCancel); PayAtDesk = rows.FirstOrDefault(p => p.PaysAtDesk && p.CanCancel); })) return;
-            if (PayNow is not { HasCheckout: true } open) return;
+            var payOk = false;
+            await Task.WhenAll(
+                RunAsync(svc.MyPaymentsAsync, rows =>
+                {
+                    payOk = true;
+                    PayNow = rows.FirstOrDefault(p => p.NeedsPayment && (p.CanCancel || p.Kind == PayKind.CoachAddon));
+                    PayAtDesk = rows.FirstOrDefault(p => p.PaysAtDesk && p.CanCancel);
+                }),
+                RunAsync(svc.CoachAccessOfferAsync, o => CoachOffer = o));
+            if (!payOk || PayNow is not { HasCheckout: true } open) return;
             // back from Xendit's page: if its notice hasn't arrived yet, the server asks Xendit and confirms it
             var paid = false;
             Checking = true;
             try { await RunAsync(() => svc.CheckOnlineAsync(open.Id), v => paid = v); }
             finally { Checking = false; }
-            if (paid) { PayNow = null; nav.GoToMembership(); }   // paid: the started term is on My membership
+            if (paid)
+            {
+                if (open.Kind == PayKind.CoachAddon) { PayNow = null; Notice = "Coach access active."; await RunAsync(svc.CoachAccessOfferAsync, o => CoachOffer = o); return; }
+                await BookPendingDayPassCoachAsync(); PayNow = null; nav.GoToMembership();
+            }   // paid: the started term is on My membership
         }
         finally { _loading = false; }
     }
@@ -323,6 +339,40 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
         Notice = null; ErrorMessage = null; ClearCodeCheck(); DiscountCode = null;
         Fill(BuyCodes, Codes.Where(c => c.AllPackages || c.PackageIds.Contains(package.Id)));
         Buying = package;
+        HasDayPassCoach = false; AddDayPassCoach = false; DayPassCoaches.Clear(); DayPassHours.Clear(); SelectedDayPassCoach = null; SelectedDayPassHour = null;
+        if (package.IsDayPass && (package.IncludesCoach || package.CoachAddonPrice is > 0) && sessions is not null)
+        {
+            if (package.IncludesCoach) AddDayPassCoach = true;
+            _ = LoadDayPassCoachesAsync(package);
+        }
+    }
+
+    [ObservableProperty] private bool hasDayPassCoach;
+    [ObservableProperty] private bool addDayPassCoach;
+    [ObservableProperty] private FreeCoachSlot? selectedDayPassCoach;
+    [ObservableProperty] private SessionsViewModel.HourOption? selectedDayPassHour;
+    public ObservableCollection<FreeCoachSlot> DayPassCoaches { get; } = new();
+    public ObservableCollection<SessionsViewModel.HourOption> DayPassHours { get; } = new();
+    (string CoachId, int Hour)? _pendingDayPassCoach;
+
+    partial void OnSelectedDayPassCoachChanged(FreeCoachSlot? value)
+    {
+        DayPassHours.Clear();
+        if (value is null) { SelectedDayPassHour = null; return; }
+        foreach (var h in value.FreeHours)
+            DayPassHours.Add(new SessionsViewModel.HourOption(h, $"{DateTime.Today.AddHours(h):h tt} – {DateTime.Today.AddHours(h + 1):h tt}"));
+        SelectedDayPassHour = DayPassHours.FirstOrDefault();
+    }
+
+    async Task LoadDayPassCoachesAsync(MembershipPackage package)
+    {
+        if (sessions is null) return;
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8));
+        var res = await sessions.FreeCoachesAsync(today);
+        if (!res.Ok || Buying?.Id != package.Id) return;
+        Fill(DayPassCoaches, res.Value!);
+        HasDayPassCoach = DayPassCoaches.Count > 0;
+        SelectedDayPassCoach = DayPassCoaches.FirstOrDefault();
     }
     [RelayCommand] private void CloseBuy() { ClearCodeCheck(); Buying = null; DiscountCode = null; ErrorMessage = null; }
 
@@ -332,13 +382,24 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
     {
         if (Buying is not { } package) return;
         Notice = null;
+        _pendingDayPassCoach = AddDayPassCoach && SelectedDayPassCoach is { } dc && SelectedDayPassHour is { } dh ? (dc.CoachId, dh.Hour) : null;
         Payment? created = null;
         if (!await RunAsync(() => subscription.ExtendAsync(package.Id, DiscountCode), p => created = p)) return;
+        if (created?.Status == Status.Verified) await BookPendingDayPassCoachAsync();
         Notice = created?.Status == Status.Verified
             ? "Membership started."
             : "Payment created. Pay online on this page to start it.";
         CloseBuy();
         await LoadPayAsync();
+    }
+
+    async Task BookPendingDayPassCoachAsync()
+    {
+        if (_pendingDayPassCoach is not { } pc || sessions is null) return;
+        _pendingDayPassCoach = null;
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8));
+        var startUtc = new DateTimeOffset(today.ToDateTime(TimeOnly.MinValue).AddHours(pc.Hour), TimeSpan.FromHours(8)).UtcDateTime;
+        await sessions.BookCoachAsync(pc.CoachId, startUtc, 1, null);
     }
 
     // Xendit's checkout opens in the browser; the 20 s tick checks it on return. Demo mode is paid at once.
@@ -350,7 +411,7 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
         if (!await Confirm.AskAsync($"Pay ₱{pay.Amount:N2} online?", $"{pay.What}\nYou pay on Xendit's page by GCash or QR Ph, then come back here.", "Pay online")) return;
         OnlineCheckout? checkout = null;
         if (!await RunAsync(() => svc.PayOnlineAsync(pay.Id), c => checkout = c)) return;
-        if (checkout!.Paid) { PayNow = null; nav.GoToMembership(); return; }
+        if (checkout!.Paid) { await BookPendingDayPassCoachAsync(); PayNow = null; nav.GoToMembership(); return; }
         if (checkout.Url is { } url && opener is not null)
         {
             await opener.OpenAsync(url);
@@ -364,6 +425,90 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
         Notice = null;
         if (!await RunAsync(() => subscription.CancelPendingPaymentAsync(item.Id))) return;
         Notice = "Payment cancelled. Nothing was charged; you can choose a package again.";
+        await LoadPayAsync();
+    }
+
+    // Phase 16 (E13): Coach access add-on for the member's active term
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasCoachOffer), nameof(CoachOfferPriceText), nameof(CoachOfferUntilText), nameof(CoachOfferTerms))]
+    private CoachAccessOffer? coachOffer;
+    public bool HasCoachOffer => CoachOffer is { Offered: true };
+    public string CoachOfferPriceText => CoachOffer is { Offered: true, Price: { } p } ? $"₱{p:N0}" : "";
+    public string CoachOfferUntilText => CoachOffer is { Offered: true, EndsAt: { } e } ? $"Book coaches until {ManilaTime.Of(e):d MMM yyyy}" : "";   // ManilaTime.Of: EndsAt may arrive as local time (UI test 2026-11-23: showed 24 Dec for a 23 Dec end)
+    public string CoachOfferTerms => CoachOffer is { Offered: true, Price: { } p, EndsAt: { } e }
+        ? (CoachOffer.IsDayPass ? $"₱{p:N0} for today (until midnight). Book a coach at no extra charge."
+            : $"₱{p:N0} for the {CoachOffer.DaysLeft} days left in your term (until {ManilaTime.Of(e):d MMM yyyy}).")
+        : "";
+
+    [ObservableProperty] private bool isBuyingCoachAccess;
+    [ObservableProperty] private string? coachAddonDiscountCode;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasCoachCodeCheck))] private CodeCheck? coachCodeCheck;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasCoachCodeCheck))] private string? coachCodeCheckText;
+    [ObservableProperty] private bool coachCodeWorks;
+    public bool HasCoachCodeCheck => !string.IsNullOrWhiteSpace(CoachCodeCheckText);
+    CancellationTokenSource? _coachCodeCts;
+    string? _lastCoachCode;
+
+    partial void OnCoachAddonDiscountCodeChanged(string? value) => _ = ScheduleCoachCodeCheckAsync(value, immediate: false);
+    public Task CheckCoachCodeNowAsync() => ScheduleCoachCodeCheckAsync(CoachAddonDiscountCode, immediate: true);
+
+    async Task ScheduleCoachCodeCheckAsync(string? raw, bool immediate)
+    {
+        var code = raw?.Trim() ?? "";
+        if (immediate && _lastCoachCode == code) return;
+        _coachCodeCts?.Cancel();
+        _lastCoachCode = null;
+        CoachCodeCheck = null; CoachCodeCheckText = null; CoachCodeWorks = false;
+        if (!IsBuyingCoachAccess || CoachOffer?.PackageId is not { } pkgId || code.Length == 0) return;
+        var cts = _coachCodeCts = new CancellationTokenSource();
+        if (!immediate && CodeCheckDelay > TimeSpan.Zero)
+        {
+            try { await Task.Delay(CodeCheckDelay, cts.Token); }
+            catch (OperationCanceledException) { return; }
+        }
+        var res = await svc.CheckCodeAsync(code, "coach", pkgId);
+        if (cts.IsCancellationRequested || !IsBuyingCoachAccess) return;
+        _lastCoachCode = code;
+        if (!res.Ok)
+        {
+            CoachCodeWorks = false;
+            CoachCodeCheckText = ErrorText.For(res.Error, res.Message);
+            return;
+        }
+        CoachCodeCheck = res.Value;
+        CoachCodeWorks = res.Value!.Works;
+        CoachCodeCheckText = CodeCheckFeedback.Message(res.Value, "coach");
+    }
+
+    [RelayCommand]
+    private void OpenBuyCoachAccess()
+    {
+        if (!HasCoachOffer) return;
+        Notice = null; ErrorMessage = null;
+        _coachCodeCts?.Cancel(); _lastCoachCode = null;
+        CoachAddonDiscountCode = null; CoachCodeCheck = null; CoachCodeCheckText = null; CoachCodeWorks = false;
+        IsBuyingCoachAccess = true;
+    }
+
+    [RelayCommand]
+    private void CloseBuyCoachAccess()
+    {
+        _coachCodeCts?.Cancel(); _lastCoachCode = null;
+        CoachAddonDiscountCode = null; CoachCodeCheck = null; CoachCodeCheckText = null; CoachCodeWorks = false;
+        ErrorMessage = null;
+        IsBuyingCoachAccess = false;
+    }
+
+    [RelayCommand]
+    private async Task PayCoachAccessAsync()
+    {
+        if (!HasCoachOffer) return;
+        Notice = null;
+        Payment? created = null;
+        if (!await RunAsync(() => svc.BuyCoachAccessAsync(CoachAddonDiscountCode), p => created = p)) return;
+        CloseBuyCoachAccess();
+        Notice = created?.Status == Status.Verified
+            ? "Coach access active. You can now book a coach on Sessions."
+            : "Payment created. Pay online on this page to turn on coach access.";
         await LoadPayAsync();
     }
 
@@ -392,10 +537,9 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
     public bool HasCode => !string.IsNullOrEmpty(MyCode);
     DateTime? _passExpires;
     [ObservableProperty] private string passLeftText = "";
-    [ObservableProperty] private string hiredCoachName = "None yet";
-    [ObservableProperty] private string hiredCoachNote = "Hire a coach on Coaches";
     [ObservableProperty] private string currentSessionText = "None scheduled";
-    [ObservableProperty] private string currentSessionNote = "Book a session on Time requests";
+    [ObservableProperty] private string currentSessionNote = "Book a coach on Sessions";
+    [ObservableProperty] private string coachIncludedNote = "";
 
     /// <summary>The page reloads every 20 seconds and calls this: it renews the pass 30 seconds before it runs out, so it never lapses between ticks, and says when it changes.</summary>
     public async Task TickPassAsync(DateTime utcNow)
@@ -420,14 +564,16 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
         _loading = true;
         try
         {
-            await TickPassAsync(DateTime.UtcNow);
-            if (!await RunAsync(subscription.TermsAsync, rows =>
-            {
-                Fill(Terms, rows);
-                TermEndsText = rows.FirstOrDefault(t => t.State == Status.Active) is { } t ? $"{t.Term.EndsAt.AddHours(8):d MMM yyyy}" : "No active term";   // Manila, as the terms table
-            })) return;
-            if (!await LoadPaymentsAsync()) return;
-            await LoadCoachingAsync();
+            await Task.WhenAll(
+                TickPassAsync(DateTime.UtcNow),
+                RunAsync(subscription.TermsAsync, rows =>
+                {
+                    Fill(Terms, rows);
+                    TermEndsText = rows.FirstOrDefault(t => t.State == Status.Active) is { } t ? $"{t.Term.EndsAt.AddHours(8):d MMM yyyy}" : "No active term";   // Manila, as the terms table
+                }),
+                LoadPaymentsAsync(),
+                LoadCoachingAsync()
+            );
             if (PayNow is { HasCheckout: true } open)
             {
                 // back from Xendit's page: if its notice hasn't arrived yet, the server asks Xendit and confirms it
@@ -446,25 +592,25 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
     async Task LoadCoachingAsync()
     {
         if (sessions is null) return;
-        var res = await sessions.RequestsAsync();
-        if (!res.Ok || res.Value is not { } view) return;
+        var activePkgName = Memberships.FirstOrDefault(m => m.Status == Status.Active)?.PackageName;
+        var pkgsTask = activePkgName is not null ? svc.ListPackagesAsync() : null;
+        var reqTask = sessions.RequestsAsync();
+        await (pkgsTask is not null ? Task.WhenAll(pkgsTask, reqTask) : reqTask);
 
-        var hired = view.HiredCoaches;
-        if (hired.Count == 0)
-        {
-            HiredCoachName = "None yet";
-            HiredCoachNote = "Hire a coach on Coaches";
-        }
-        else if (hired.Count == 1)
-        {
-            HiredCoachName = hired[0].Name;
-            HiredCoachNote = string.IsNullOrWhiteSpace(hired[0].Coach.Specialty) ? "Active coaching" : hired[0].Coach.Specialty!;
-        }
+        var pkgsRes = pkgsTask?.Result;
+        var pkg = pkgsRes is { Ok: true, Value: { } pkgs } ? pkgs.FirstOrDefault(p => p.Name == activePkgName) : null;
+        var activeTerm = Terms.FirstOrDefault(t => t.State == Status.Active);
+        if (activeTerm?.Term.CoachAccessAt is not null)
+            CoachIncludedNote = $"Coach access until {activeTerm.Term.EndsAt.AddHours(8):d MMM yyyy}";
+        else if (pkg is not null)
+            CoachIncludedNote = pkg.IncludesCoach ? "Coach included with your package"
+                : pkg.CoachAddonPrice is { } addon ? $"Coach add-on available on Packages (₱{addon:N0} full term)"
+                : "No coach add-on on this package";
         else
-        {
-            HiredCoachName = string.Join(", ", hired.Select(c => c.Name));
-            HiredCoachNote = $"{hired.Count} active coaches";
-        }
+            CoachIncludedNote = "";
+
+        var res = reqTask.Result;
+        if (!res.Ok || res.Value is not { } view) return;
 
         var now = DateTime.UtcNow;
         var active = view.ActiveSessions ?? [];
@@ -473,7 +619,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
         if (current is null)
         {
             CurrentSessionText = "None scheduled";
-            CurrentSessionNote = "Book a session on Time requests";
+            CurrentSessionNote = "Book a coach on Sessions";
             return;
         }
 
@@ -482,21 +628,28 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
         CurrentSessionText = current.ScheduledStart.ToUniversalTime() <= now
             ? $"Now until {end:h:mm tt}"
             : $"{start:ddd d MMM, h:mm tt}";
-        var coach = hired.FirstOrDefault(c => c.Coach.UserId == current.CoachId)?.Name;
+        var coach = view.HiredCoaches.FirstOrDefault(c => c.Coach.UserId == current.CoachId)?.Name;
         CurrentSessionNote = coach is not null ? $"with {coach}" : "Scheduled session";
     }
 
     async Task<bool> LoadPaymentsAsync()
     {
         var waiting = false;
-        if (!await RunAsync(svc.MyPaymentsAsync, rows =>
-        {
-            PaymentsWaitingText = rows.Count(p => p.Status == Status.Pending).ToString();
-            PayNow = rows.FirstOrDefault(p => p.NeedsPayment);
-            payAtDesk = rows.FirstOrDefault(p => p.PaysAtDesk);   // cash plan 2026-11-17: chosen cash, waiting for the desk
-            waiting = PayNow is not null || payAtDesk is not null || rows.Any(p => p.AwaitingReview);
-        })) return false;
-        return await RunAsync(svc.MyMembershipsAsync, rows => { Fill(Memberships, rows); UpdateHero(rows, waiting); });
+        var paysOk = false;
+        var memOk = false;
+        IReadOnlyList<MembershipRow>? memRows = null;
+        await Task.WhenAll(
+            RunAsync(svc.MyPaymentsAsync, rows =>
+            {
+                paysOk = true;
+                PaymentsWaitingText = rows.Count(p => p.Status == Status.Pending).ToString();
+                PayNow = rows.FirstOrDefault(p => p.NeedsPayment);
+                payAtDesk = rows.FirstOrDefault(p => p.PaysAtDesk);   // cash plan 2026-11-17: chosen cash, waiting for the desk
+                waiting = PayNow is not null || payAtDesk is not null || rows.Any(p => p.AwaitingReview);
+            }),
+            RunAsync(svc.MyMembershipsAsync, rows => { memOk = true; memRows = rows; }));
+        if (memOk && memRows is not null) { Fill(Memberships, memRows); UpdateHero(memRows, waiting); }
+        return paysOk && memOk;
     }
 
     void UpdateHero(IReadOnlyList<MembershipRow> rows, bool waitingOnPayment)
@@ -525,7 +678,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
 }
 
 /// <summary>Owner fixes 2026-11-19 Q8: the member's own payments, newest first, 10 a page, by what they bought. Moved here from My membership.</summary>
-public partial class MyPaymentsViewModel(IMembershipService svc, ISubscriptionService subscription) : LoadableViewModel
+public partial class MyPaymentsViewModel(IMembershipService svc, ISubscriptionService subscription, IUrlOpener? opener = null, IAppNavigator? nav = null) : LoadableViewModel
 {
     const int PageSize = 10;
     public ObservableCollection<PaymentItem> Rows { get; } = new();
@@ -575,14 +728,101 @@ public partial class MyPaymentsViewModel(IMembershipService svc, ISubscriptionSe
         IsEmpty = Rows.Count == 0;
     }
 
-    [RelayCommand]
-    private async Task PayAgainAsync(PaymentItem item)
+    // ---- D6 (2026-11-20): Pay again popup: optional discount code with live check, then straight to Xendit checkout ----
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPayingAgain), nameof(PayAgainTitle), nameof(PayAgainPriceText))] private PaymentItem? payingAgain;
+    [ObservableProperty] private string payAgainCode = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPayAgainCodeCheck))] private string? payAgainCodeText;
+    [ObservableProperty] private bool payAgainCodeWorks;
+    public bool IsPayingAgain => PayingAgain is not null;
+    public string PayAgainTitle => PayingAgain?.What ?? "";
+    public string PayAgainPriceText => PayingAgain is { } p ? $"₱{p.Amount:N2}" : "";
+    public bool HasPayAgainCodeCheck => !string.IsNullOrWhiteSpace(PayAgainCodeText);
+    public TimeSpan CodeCheckDelay { get; set; } = TimeSpan.FromMilliseconds(500);
+    CancellationTokenSource? _codeCheck;
+    int? _waitingOnlineId;
+
+    partial void OnPayAgainCodeChanged(string value) => _ = SchedulePayAgainCodeAsync(false);
+    public Task CheckPayAgainCodeNowAsync() => SchedulePayAgainCodeAsync(true);
+
+    void ClearPayAgainCode() { _codeCheck?.Cancel(); PayAgainCodeText = null; PayAgainCodeWorks = false; }
+
+    async Task SchedulePayAgainCodeAsync(bool immediate)
     {
-        Notice = null;
-        if (!await Confirm.AskAsync("Create a new payment?", $"{item.What}\n₱{item.Amount:N2}\nThe expired one stays in your history.", "Create payment")) return;
-        if (!await RunAsync(() => svc.PayAgainAsync(item), _ => { })) return;
-        Notice = "New payment created. Pay it online on Packages.";
+        _codeCheck?.Cancel();
+        PayAgainCodeText = null; PayAgainCodeWorks = false;
+        var code = PayAgainCode?.Trim() ?? "";
+        if (PayingAgain is not { } item || code.Length == 0) return;
+        var (kind, itemId) = item.PackageSnapshotId is { } pkgId ? ("package", pkgId)
+            : item.Kind == PayKind.Renewal && item.ItemId is { } renId ? ("renewal", renId)
+            : item.ItemId is { } id ? ("package", id) : ((string, int)?)null ?? ("", 0);
+        if (itemId == 0) return;
+        var cts = _codeCheck = new CancellationTokenSource();
+        if (!immediate && CodeCheckDelay > TimeSpan.Zero)
+        {
+            try { await Task.Delay(CodeCheckDelay, cts.Token); } catch (OperationCanceledException) { return; }
+        }
+        var res = await svc.CheckCodeAsync(code, kind, itemId);
+        if (cts.IsCancellationRequested || PayingAgain?.Id != item.Id) return;
+        if (!res.Ok) { PayAgainCodeText = ErrorText.For(res.Error, res.Message); return; }
+        PayAgainCodeWorks = res.Value!.Works;
+        PayAgainCodeText = CodeCheckFeedback.Message(res.Value, "package");
+    }
+
+    [RelayCommand]
+    private void PayAgain(PaymentItem item)
+    {
+        Notice = null; ErrorMessage = null;
+        PayAgainCode = ""; ClearPayAgainCode();
+        PayingAgain = item;
+    }
+
+    [RelayCommand]
+    private void ClosePayAgain() { ClearPayAgainCode(); PayAgainCode = ""; PayingAgain = null; }
+
+    [RelayCommand]
+    private async Task ConfirmPayAgainAsync()
+    {
+        if (PayingAgain is not { } item) return;
+        Notice = null; ErrorMessage = null;
+        if (!string.IsNullOrWhiteSpace(PayAgainCode) && PayAgainCodeText is null) await SchedulePayAgainCodeAsync(true);
+        var code = PayAgainCodeWorks ? PayAgainCode.Trim() : null;
+        Payment? made = null;
+        if (!await RunAsync(() => svc.PayAgainAsync(item, code), p => made = p)) return;
+        PayingAgain = null; PayAgainCode = ""; ClearPayAgainCode();
+
+        OnlineCheckout? checkout = null;
+        if (!await RunAsync(() => svc.PayOnlineAsync(made!.Id), c => checkout = c)) { await LoadAsync(); return; }
+        if (checkout!.Paid)
+        {
+            Notice = "Membership activated.";
+            await LoadAsync();
+            nav?.GoToMembership();
+            return;
+        }
+        _waitingOnlineId = made!.Id;
+        if (checkout.Url is { } url && opener is not null) await opener.OpenAsync(url);
+        Notice = "Finish paying on Xendit's page, then come back here.";
         await LoadAsync();
+    }
+
+    public override async Task AutoRefreshAsync()
+    {
+        if (IsBusy) return;
+        if (_waitingOnlineId is { } id && await svc.CheckOnlineAsync(id) is { Ok: true, Value: true })
+        {
+            _waitingOnlineId = null;
+            Notice = "Payment confirmed. Membership activated.";
+            await LoadAsync();
+            return;
+        }
+        var res = await svc.MyPaymentsAsync();
+        if (!res.Ok) return;
+        all = res.Value!; Show(Page);
+        // owner, 2026-11-23: a payment started on Packages or Book an amenity stayed "pending" here when Xendit's notice was late or lost
+        var paid = false;
+        foreach (var p in all.Where(p => p.Status == Status.Pending && p.HasCheckout).ToList())
+            if (await svc.CheckOnlineAsync(p.Id) is { Ok: true, Value: true }) paid = true;
+        if (paid) { Notice = "Payment received."; await LoadAsync(); }
     }
 
     public async Task CancelPaymentAsync(PaymentItem item)
@@ -626,13 +866,22 @@ public partial class AmenityBoardViewModel(IAmenityService svc) : LoadableViewMo
     { Notice = null; if (await RunAsync(() => svc.SetRunsAsync(card.Amenity.Id, !card.RunsThis))) await LoadAsync(); }
 }
 
-public partial class CoachesViewModel(ICoachService svc, IChatService messages, IAppNavigator nav) : LoadableViewModel
+public partial class CoachesViewModel(ICoachService svc, IChatService messages, IAppNavigator nav, ISessionService? sessions = null) : LoadableViewModel
 {
     public ObservableCollection<CoachCard> Cards { get; } = new();
+    [ObservableProperty] private bool hasActiveSession;
 
     public override Task OnAppearingAsync() => LoadAsync();
 
-    [RelayCommand] private Task LoadAsync() => RunAsync(svc.ListCoachesAsync, rows => Fill(Cards, rows));
+    [RelayCommand]
+    private async Task LoadAsync()
+    {
+        var coachesOk = false;
+        await Task.WhenAll(
+            RunAsync(svc.ListCoachesAsync, rows => { coachesOk = true; Fill(Cards, rows); }),
+            RefreshActiveSessionAsync());
+        if (!coachesOk) return;
+    }
 
     // coaches come and go as they check in and out: quiet, keeps the scroll position
     public override async Task AutoRefreshAsync()
@@ -640,6 +889,15 @@ public partial class CoachesViewModel(ICoachService svc, IChatService messages, 
         if (IsBusy) return;
         var rows = await svc.ListCoachesAsync();
         if (rows.Ok) Sync(Cards, rows.Value!, c => c.Coach.UserId, (a, b) => a.SameAs(b));
+        await RefreshActiveSessionAsync();
+    }
+
+    async Task RefreshActiveSessionAsync()
+    {
+        if (sessions is null) return;
+        var res = await sessions.SessionsAsync();
+        if (res.Ok)
+            HasActiveSession = res.Value!.Any(r => !r.IsMine && r.Session.Status == Status.Scheduled && (r.Session.HeldUntil is null || r.Session.HeldUntil > DateTime.UtcNow));
     }
 
     [RelayCommand]
@@ -666,6 +924,18 @@ public partial class CoachesViewModel(ICoachService svc, IChatService messages, 
 
     [RelayCommand]
     private void Message(CoachCard card) { messages.Pending = (card.Coach.UserId, null); nav.GoToMessages(); }
+
+    [RelayCommand]
+    private void BookCoach(CoachCard card)
+    {
+        if (HasActiveSession)
+        {
+            ErrorMessage = "You already have an active coach session. Cancel or finish it before booking another.";
+            return;
+        }
+        if (sessions is not null) sessions.PendingCoachId = card.Coach.UserId;
+        nav.GoToSessions();
+    }
 }
 
 /// <summary>A conversation row: the thread plus its picture, which is looked up after the list is shown.</summary>
@@ -753,7 +1023,7 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
     public bool CanClose => HasFilters && Selected?.Thread is { IsSupport: true, Status: "open" };
     public bool CanReopen => HasFilters && Selected?.Thread is { IsSupport: true, Status: "closed" };
     public string EmptyListText => HasFilters ? "No conversations here."
-        : Tab == "coach" && HasTabs ? (IsCoach ? "No trainees yet. Members who hire you appear here." : "You have no coach yet. Hire one from the Coaches page to start a conversation.")
+        : Tab == "coach" && HasTabs ? (IsCoach ? "No trainees yet. Members who book a session with you appear here." : "No coach chats yet. Book a coach on Sessions; you can message them while a session is active or within 7 days.")
         : "No conversations yet.";
 
     // ---- live updates. Every Realtime event is a hint; the answer always comes from the server through AutoRefreshAsync.
@@ -948,11 +1218,9 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         if (Selected is null || all.All(t => t.Key != Selected.Thread.Key)) Selected = IsCompact ? null : Threads.FirstOrDefault();
     }
 
-    async Task ResolveAvatarsAsync()
-    {
-        foreach (var item in Threads.Where(t => t.AvatarUrl is null && t.Thread.WithAvatar is not null).ToList())
-            item.AvatarUrl = (await profile.AvatarUrlAsync(item.Thread.WithAvatar)).Value;
-    }
+    Task ResolveAvatarsAsync() => Task.WhenAll(
+        Threads.Where(t => t.AvatarUrl is null && t.Thread.WithAvatar is not null).ToList()
+            .Select(async item => item.AvatarUrl = (await profile.AvatarUrlAsync(item.Thread.WithAvatar)).Value));
 
     // ---- one conversation. The newest request wins: a slow answer for a conversation you have left is dropped.
     async Task ShowAsync(ThreadItem item, bool markRead)
@@ -1052,7 +1320,14 @@ public partial class MessengerViewModel(IChatService chat, IProfileService profi
         if (!IsCompact && Threads.FirstOrDefault() is { } first) await OpenAsync(first);
     }
 
-    [RelayCommand] private Task ShowFilterAsync(string filter) { Filter = filter; Rebuild(); return Task.CompletedTask; }
+    [RelayCommand] private Task ShowFilterAsync(string filter)
+    {
+        Filter = filter; Rebuild();
+        // UI test 2026-11-23: "Mine" said "No conversations here" while the last chat stayed open beside it
+        if (Selected is { } open && Pinned?.Thread.Key != open.Thread.Key && Threads.All(t => t.Thread.Key != open.Thread.Key))
+        { Selected = null; Bubbles.Clear(); HasMore = false; }
+        return Task.CompletedTask;
+    }
 
     partial void OnSearchTextChanged(string value)
     {
@@ -1191,14 +1466,12 @@ public partial class SettingsViewModel(ISettingsService settings, IAuthService a
     [ObservableProperty] private string savedName = "";
     [ObservableProperty] private string savedEmail = "";
 
-    public override async Task OnAppearingAsync()
-    {
-        await LoadAsync();
-        await RunAsync(settings.IsMemberAsync, m => IsMember = m);
-        await RunAsync(auth.MustChangePasswordAsync, m => MustChange = m);
-        await LoadPhotoAsync(names: true);
-        await LoadEmailAsync();
-    }
+    public override Task OnAppearingAsync() => Task.WhenAll(
+        LoadAsync(),
+        RunAsync(settings.IsMemberAsync, m => IsMember = m),
+        RunAsync(auth.MustChangePasswordAsync, m => MustChange = m),
+        LoadPhotoAsync(names: true),
+        LoadEmailAsync());
 
     async Task LoadPhotoAsync(bool names = false)
     {
@@ -1315,19 +1588,23 @@ public partial class HeaderViewModel : LoadableViewModel, IDisposable
     readonly INotificationService notes;
     readonly IAuthService auth;
     readonly IAppNavigator nav;
-    readonly Action onChanged;
+    readonly Action onAvatarChanged;
+    readonly Action onNotesChanged;
     int refreshTicket;
+    string? loadedProfileForUser;
+    bool profileDirty = true;
 
     public HeaderViewModel(IProfileService profile, INotificationService notes, IAuthService auth, IAppNavigator nav)
     {
         (this.profile, this.notes, this.auth, this.nav) = (profile, notes, auth, nav);
-        onChanged = () => _ = RefreshAsync();
-        profile.AvatarChanged += onChanged;   // the services outlive every header, so each header must let go (Dispose)
-        notes.Changed += onChanged;
+        onAvatarChanged = () => { profileDirty = true; _ = RefreshAsync(); };
+        onNotesChanged = () => _ = RefreshAsync();
+        profile.AvatarChanged += onAvatarChanged;   // the services outlive every header, so each header must let go (Dispose)
+        notes.Changed += onNotesChanged;
     }
 
     /// <summary>Stops listening. Called on sign-out and when the shell is torn down.</summary>
-    public void Dispose() { profile.AvatarChanged -= onChanged; notes.Changed -= onChanged; }
+    public void Dispose() { profile.AvatarChanged -= onAvatarChanged; notes.Changed -= onNotesChanged; }
 
     [ObservableProperty] private string letters = "?";
     [ObservableProperty] private string? avatarUrl;
@@ -1344,11 +1621,31 @@ public partial class HeaderViewModel : LoadableViewModel, IDisposable
     public async Task RefreshAsync()
     {
         var ticket = ++refreshTicket;
-        var me = (await profile.MeAsync()).Value;
-        var link = me is null ? null : await profile.AvatarUrlAsync(me.AvatarPath);
-        var unread = await notes.UnreadCountAsync();
+        var uid = auth.UserId;
+        var fetchProfile = profileDirty || loadedProfileForUser != uid;
+        var unreadTask = notes.UnreadCountAsync();
+        MyProfile? me = null;
+        AppResult<string?>? link = null;
+        if (fetchProfile)
+        {
+            var meTask = profile.MeAsync();
+            await Task.WhenAll(meTask, unreadTask);
+            me = meTask.Result.Value;
+            if (me is not null) link = await profile.AvatarUrlAsync(me.AvatarPath);
+        }
+        else
+        {
+            await unreadTask;
+        }
+        var unread = unreadTask.Result;
         if (ticket != refreshTicket) return;   // a newer refresh started while this one waited; its answer is the one to show
-        if (me is not null) { Letters = Initials.From(me.Name); if (link is { Ok: true }) AvatarUrl = link.Value; }
+        if (me is not null)
+        {
+            loadedProfileForUser = uid;
+            profileDirty = false;
+            Letters = Initials.From(me.Name);
+            if (link is { Ok: true }) AvatarUrl = link.Value;
+        }
         if (unread.Ok) UnreadCount = unread.Value;
     }
 

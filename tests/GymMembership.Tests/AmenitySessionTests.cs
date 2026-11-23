@@ -39,8 +39,8 @@ public class AmenitySessionTests
 
     static async Task CoachIn(DemoGateway gw)
     {
-        await gw.SignInAsync("coach@demo.io", DemoGateway.DemoPassword);
-        Assert.True((await new CoachService(gw).CheckInAsync()).Ok);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);   // 0140: the front desk checks the coach in
+        Assert.True((await new CoachService(gw).CheckInAsync("u-coach1")).Ok);
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
     }
 

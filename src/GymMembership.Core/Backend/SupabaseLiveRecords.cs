@@ -8,8 +8,6 @@ namespace GymMembership.Core.Backend;
 /// <summary>
 /// F4 (Phase 7): Supabase Realtime on payments, check-ins and membership terms (0053), on the socket chat also uses. The server sends a
 /// change only to someone whose row rules let them read the row. A hint only: pages ask the server again and keep their timers.
-/// ponytail: like chat, the socket keeps the sign-in token; after about an hour the server may drop the channel and pages fall back to
-/// their timers until the next sign-in. Refresh with SetAuth on token refresh if that bites.
 /// </summary>
 public sealed class SupabaseLiveRecords(SupabaseGateway gateway) : ILiveRecords
 {

@@ -35,7 +35,7 @@ public partial class RefundsViewModel(ISubscriptionService subscription) : Loada
 {
     List<RefundCard> _all = [];
     public ObservableCollection<RefundCard> Requests { get; } = new();
-    public string[] ItemTypes { get; } = ["All items", "Membership", "Day pass", "Amenity"];
+    public string[] ItemTypes { get; } = ["All items", "Membership", "Day pass", "Amenity", "Coach add-on"];
     /// <summary>The request open in the side panel; each reload swaps in its fresh row, so the panel never shows a stale status.</summary>
     [ObservableProperty] private RefundCard? selected;
     [ObservableProperty] private string statusFilter = "All";
@@ -68,6 +68,7 @@ public partial class RefundsViewModel(ISubscriptionService subscription) : Loada
                 1 => r.Request.Kind == "membership",
                 2 => r.Request.Kind == "day_pass",
                 3 => r.Request.ReservationId is not null || r.Request.Kind is "cancel" or "no_show" or "walk_in_booking",
+                4 => r.Request.Kind == "coach_addon",
                 _ => true
             }
             && (q.Length == 0 || r.Member.Contains(q, StringComparison.OrdinalIgnoreCase) || r.PackageName.Contains(q, StringComparison.OrdinalIgnoreCase)));

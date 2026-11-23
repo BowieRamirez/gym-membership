@@ -29,6 +29,7 @@ public class AdminOverviewTests
         Set(a, "RevenueAsync", (IReadOnlyList<RevenueRow>)[]);
         Set(a, "AuditPageAsync", new AuditPage([], false));
         Set(a, "GymSettingsAsync", new GymSettings { GymName = "Test gym" });
+        Set(a, "DamageReportsAsync", (IReadOnlyList<DamageReportRow>)[new(new DamageReport { Status = "open" }, "Coach", null, null), new(new DamageReport { Status = "closed" }, "Coach", null, null)]);
         Set(s, "RefundsAsync", (IReadOnlyList<RefundCard>)[]);
         return (new AdminOverviewViewModel(admin, subs) { Clock = () => DateTimeOffset.Parse("2026-10-31T16:30:00Z") }, a, s);
     }
@@ -41,12 +42,15 @@ public class AdminOverviewTests
     {
         var (vm, a, s) = Create();
         await vm.RefreshAsync();
-        Assert.Equal(new[] { "users", "catalog", "discounts", "refunds", "revenue", "announcements", "gym", "audit" }, vm.Cards.Select(c => c.Key));   // F10 added Announcements
+        Assert.Equal(new[] { "users", "catalog", "discounts", "refunds", "revenue", "payroll", "damage", "announcements", "gym", "audit" }, vm.Cards.Select(c => c.Key));   // F10 added Announcements, E10 added Damage reports, P4 added Payroll
         Assert.All(vm.Cards, c => Assert.False(c.IsUnavailable));
         Assert.Equal(new[] { "RefundsAsync" }, s.Calls.Select(c => c.Method));
-        Assert.All(a.Calls, c => Assert.Contains(c.Method, new[] { "UsersAsync", "AllPackagesAsync", "AllAmenitiesAsync", "DiscountsAsync", "RevenueAsync", "GymSettingsAsync", "AuditPageAsync" }));
+        Assert.All(a.Calls, c => Assert.Contains(c.Method, new[] { "UsersAsync", "AllPackagesAsync", "AllAmenitiesAsync", "DiscountsAsync", "RevenueAsync", "GymSettingsAsync", "AuditPageAsync", "DamageReportsAsync" }));
         Assert.Equal(new[] { "revenue", "users", "catalog", "discounts" }, vm.Figures.Select(c => c.Key));
-        Assert.Equal(new[] { "refunds", "announcements", "gym", "audit" }, vm.Links.Select(c => c.Key));
+        Assert.Equal(new[] { "refunds", "payroll", "damage", "announcements", "gym", "audit" }, vm.Links.Select(c => c.Key));
+        // UI test 2026-11-23: these two said "Loading…" forever
+        Assert.Equal("1 report open", vm.Cards.Single(c => c.Key == "damage").Value);
+        Assert.Equal("Salaries and pay periods, twice a month", vm.Cards.Single(c => c.Key == "payroll").Value);
         Assert.False(vm.HasAttention);
     }
 
@@ -181,8 +185,8 @@ public class AdminOverviewTests
         var gateway = new GymMembership.Core.Demo.DemoGateway();
         await gateway.SignInAsync("subadmin@demo.io", GymMembership.Core.Demo.DemoGateway.DemoPassword);
         var vm = new AdminOverviewViewModel(new AdminService(gateway), new SubscriptionService(gateway)) { SuperAdmin = false };
-        Assert.Equal(["users", "catalog", "discounts", "revenue", "announcements"], vm.Shown.Select(c => c.Key));
-        Assert.Equal(["announcements"], vm.Links.Select(c => c.Key));   // F10: the sub-admin posts announcements too
+        Assert.Equal(["users", "catalog", "discounts", "revenue", "payroll", "damage", "announcements"], vm.Shown.Select(c => c.Key));
+        Assert.Equal(["payroll", "damage", "announcements"], vm.Links.Select(c => c.Key));   // F10: announcements, E10: damage reports, P4: payroll
         await vm.OnAppearingAsync();
         Assert.All(vm.Shown, c => Assert.False(c.IsUnavailable, c.Title + ": " + c.Detail));
         Assert.DoesNotContain("unavailable", vm.UpdatedText);

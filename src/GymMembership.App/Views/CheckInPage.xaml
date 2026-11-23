@@ -54,6 +54,44 @@
                                         <Button Text="{Binding Scan.NextStepText}" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Clicked="OnScanNextStep" IsVisible="{Binding Scan.HasNextStep}" AutomationId="ScanNextStep" />
                                         <Button Text="Done" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding ClearScanCommand}" />
                                     </FlexLayout>
+                                    <VerticalStackLayout Spacing="6" IsVisible="{Binding HasMemberTodaySessions}" Margin="0,6,0,0">
+                                        <Label Text="Today's coach sessions" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold" />
+                                        <VerticalStackLayout Spacing="6" BindableLayout.ItemsSource="{Binding MemberTodaySessions}">
+                                            <BindableLayout.ItemTemplate>
+                                                <DataTemplate x:DataType="svc:TodayCoachSession">
+                                                    <Border Style="{StaticResource Row}" Padding="10,8">
+                                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                                            <VerticalStackLayout Spacing="2">
+                                                                <Label Text="{Binding TimeRange}" FontFamily="BarlowSemiBold" />
+                                                                <Label Text="{Binding CoachName, StringFormat='Coach {0}'}" Style="{StaticResource Caption}" />
+                                                            </VerticalStackLayout>
+                                                            <HorizontalStackLayout Grid.Column="1" Spacing="6" VerticalOptions="Center">
+                                                                <c:StatusChip Status="{Binding Status}" />
+                                                                <Button Text="Check in" Style="{StaticResource SmallButton}" IsVisible="{Binding CanCheckIn}" Clicked="OnCheckInSession" />
+                                                                <Button Text="Coach is here" Style="{StaticResource SmallButton}" IsVisible="{Binding CanMarkCoachArrived}" Clicked="OnMarkCoachArrived" />
+                                                            </HorizontalStackLayout>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </BindableLayout.ItemTemplate>
+                                        </VerticalStackLayout>
+                                    </VerticalStackLayout>
+                                </VerticalStackLayout>
+                            </Border>
+                            <!-- scanned session QR card -->
+                            <Border Style="{StaticResource Row}" Padding="16,12" IsVisible="{Binding HasScannedSession}">
+                                <VerticalStackLayout Spacing="6">
+                                    <c:CardTitle Text="Coach session" />
+                                    <Label Text="{Binding ScannedSession.MemberName}" Style="{StaticResource Heading}" />
+                                    <Label Text="{Binding ScannedSession.TimeRange}" FontFamily="BarlowSemiBold" />
+                                    <Label Text="{Binding ScannedSession.CoachName, StringFormat='Coach {0}'}" Style="{StaticResource Caption}" />
+                                    <c:StatusChip Status="{Binding ScannedSession.Status}" HorizontalOptions="Start" />
+                                    <FlexLayout Wrap="Wrap" Margin="0,6,0,0">
+                                        <Button Text="Coach is here" Style="{StaticResource SmallButton}" Margin="0,0,8,8"
+                                                Command="{Binding MarkCoachArrivedCommand}" CommandParameter="{Binding ScannedSession}"
+                                                IsVisible="{Binding ScannedSession.CanMarkCoachArrived}" />
+                                        <Button Text="Done" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding ClearScannedSessionCommand}" />
+                                    </FlexLayout>
                                 </VerticalStackLayout>
                             </Border>
                             </VerticalStackLayout>

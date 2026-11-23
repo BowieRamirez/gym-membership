@@ -42,6 +42,9 @@ public sealed record TermCard(MembershipTerm Term, string State, bool Activated,
     decimal RefundEstimate = 0, DateTime? LastDayToAsk = null, bool PastWindow = false)
 {
     public string Dates => $"{Term.StartsAt.AddHours(8):d MMM yyyy, h:mm tt} – {Term.EndsAt.AddHours(8):d MMM yyyy, h:mm tt} (Manila)";
+    public string? CoachAccessText => Term.CoachAccessAt is not null && State == Status.Active
+        ? $"Coach access until {Term.EndsAt.AddHours(8):d MMM yyyy}"
+        : null;
     /// <summary>Phone rows: the days only (Manila), "13 Oct – 12 Nov 2026"; the full times stay on Windows and in the refund dialog.</summary>
     public string ShortDates => $"{Term.StartsAt.AddHours(8):d MMM} – {Term.EndsAt.AddHours(8):d MMM yyyy}";
     /// <summary>Phone rows: a line only when a refund request or a cancellation exists; the chip and the refund dialog say the rest.</summary>
@@ -146,10 +149,15 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
     public Task<AppResult<IReadOnlyList<TermCard>>> TermsAsync() => Safe.RunAsync<IReadOnlyList<TermCard>>(async () =>
     {
         var uid = gw.CurrentUserId;
-        var terms = await gw.ListAsync<MembershipTerm>(t => t.MemberId == uid);
-        var payments = await gw.ListAsync<Payment>(p => p.MemberId == uid);
-        var refunds = await gw.ListAsync<RefundRequest>(r => r.MemberId == uid);
-        var checkIns = await gw.ListAsync<GymCheckIn>(c => c.MemberId == uid);
+        var termsTask = gw.ListAsync<MembershipTerm>(t => t.MemberId == uid);
+        var payTask = gw.ListAsync<Payment>(p => p.MemberId == uid);
+        var refTask = gw.ListAsync<RefundRequest>(r => r.MemberId == uid);
+        var ciTask = gw.ListAsync<GymCheckIn>(c => c.MemberId == uid);
+        await Task.WhenAll(termsTask, payTask, refTask, ciTask);
+        var terms = termsTask.Result;
+        var payments = payTask.Result;
+        var refunds = refTask.Result;
+        var checkIns = ciTask.Result;
         var now = clock.GetUtcNow().UtcDateTime;
         return terms.Select(InUtc).OrderBy(t => t.CancelledAt is not null || t.EndsAt <= now).ThenBy(t => t.StartsAt).Select(t =>
         {
@@ -177,11 +185,17 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
     public Task<AppResult<IReadOnlyList<RefundCard>>> RefundsAsync() => Safe.RunAsync<IReadOnlyList<RefundCard>>(async () =>
     {
         var requests = await gw.ListAsync<RefundRequest>();
-        var terms = (await gw.ListAsync<MembershipTerm>()).Select(InUtc).ToList();
-        var names = await Directory_.UserNamesAsync(gw);
-        var bookings = requests.Any(r => r.IsBooking) ? (await gw.ListAsync<Reservation>()).ToDictionary(r => r.Id) : [];
+        if (requests.Count == 0) return [];
+        var termsTask = gw.ListAsync<MembershipTerm>();
+        var namesTask = Directory_.UserNamesAsync(gw);
+        var bookingsTask = requests.Any(r => r.IsBooking) ? gw.ListAsync<Reservation>() : Task.FromResult<IReadOnlyList<Reservation>>([]);
+        var paymentsTask = requests.Any(r => r.Kind is "online" or "day_pass") ? gw.ListAsync<Payment>() : Task.FromResult<IReadOnlyList<Payment>>([]);
+        await Task.WhenAll(termsTask, namesTask, bookingsTask, paymentsTask);
+        var terms = termsTask.Result.Select(InUtc).ToList();
+        var names = namesTask.Result;
+        var bookings = bookingsTask.Result.ToDictionary(r => r.Id);
         var amenities = bookings.Count > 0 ? (await gw.ListAsync<Amenity>()).ToDictionary(a => a.Id, a => a.Name) : [];
-        var payments = requests.Any(r => r.Kind is "online" or "day_pass") ? (await gw.ListAsync<Payment>()).ToDictionary(p => p.Id) : [];
+        var payments = paymentsTask.Result.ToDictionary(p => p.Id);
         return requests.OrderBy(r => r.Status is "paid" or "rejected").ThenBy(r => r.RequestedAt).Select(r =>
         {
             if (r.Kind is "online" or "day_pass") return RefundCard.ForOnline(r, payments.GetValueOrDefault(r.PaymentId), names.GetValueOrDefault(r.MemberId ?? ""));

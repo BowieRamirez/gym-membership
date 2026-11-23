@@ -251,12 +251,20 @@
                             <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
                                 <VerticalStackLayout Spacing="4">
                                     <Label Text="{Binding PriceLabel}" Style="{StaticResource Caption}" />
-                                    <Border Style="{StaticResource Field}"><Entry Text="{Binding FormPrice}" Keyboard="Numeric" AutomationId="FormPrice" SemanticProperties.Description="{Binding PriceLabel}" /></Border>
+                                    <Border Style="{StaticResource Field}">
+                                        <Entry Text="{Binding FormPrice}" Keyboard="Numeric" AutomationId="FormPrice" SemanticProperties.Description="{Binding PriceLabel}">
+                                            <Entry.Behaviors><c:NumericOnlyBehavior /></Entry.Behaviors>
+                                        </Entry>
+                                    </Border>
                                     <Label Text="Set a price above ₱0." Style="{StaticResource FieldError}" IsVisible="{Binding PriceMissing}" />
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Grid.Column="1" Spacing="4" IsVisible="{Binding IsPackagePanel}">
                                     <Label Text="Days of access" Style="{StaticResource Caption}" />
-                                    <Border Style="{StaticResource Field}"><Entry Text="{Binding FormDays}" Keyboard="Numeric" AutomationId="FormDays" SemanticProperties.Description="Days of access" /></Border>
+                                    <Border Style="{StaticResource Field}">
+                                        <Entry Text="{Binding FormDays}" Keyboard="Numeric" AutomationId="FormDays" SemanticProperties.Description="Days of access">
+                                            <Entry.Behaviors><c:NumericOnlyBehavior AllowDecimal="False" /></Entry.Behaviors>
+                                        </Entry>
+                                    </Border>
                                     <Label Text="Days must be more than zero." Style="{StaticResource FieldError}" IsVisible="{Binding DaysMissing}" />
                                 </VerticalStackLayout>
                             </Grid>
@@ -266,15 +274,27 @@
                                 <CheckBox IsChecked="{Binding FormDayPass}" VerticalOptions="Center" AutomationId="FormDayPass" SemanticProperties.Description="This package is the Day pass" />
                                 <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
                                     <Label Text="This is the Day pass" FontFamily="BarlowSemiBold" />
-                                    <Label Text="It lasts until midnight on the day it's paid, whatever the days say. Only one Day pass can be on sale. The front desk sells it to walk-ins too." Style="{StaticResource Caption}" />
+                                    <Label Text="It lasts until midnight on the day it's paid, whatever the days say. You can have one regular Day pass and one with Coach included. The front desk sells it to walk-ins too." Style="{StaticResource Caption}" />
                                 </VerticalStackLayout>
                             </Grid>
 
-                            <!-- G14 (0064): amenities: what With a coach adds; ₱0 means a coach costs nothing extra -->
-                            <VerticalStackLayout Spacing="4" IsVisible="{Binding IsPackagePanel, Converter={StaticResource Not}}">
-                                <Label Text="Coach fee per hour" Style="{StaticResource Caption}" />
-                                <Border Style="{StaticResource Field}" WidthRequest="200" HorizontalOptions="Start"><Entry Text="{Binding FormCoachFee}" Keyboard="Numeric" AutomationId="FormCoachFee" SemanticProperties.Description="Coach fee per session" /></Border>
-                                <Label Text="Added when a member books With a coach." Style="{StaticResource Caption}" />
+                            <!-- E3 (0119): coach included -->
+                            <VerticalStackLayout Spacing="8" IsVisible="{Binding IsPackagePanel}">
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                    <CheckBox IsChecked="{Binding FormIncludesCoach}" VerticalOptions="Center" AutomationId="FormIncludesCoach" SemanticProperties.Description="Coach included" />
+                                    <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                        <Label Text="Coach included" FontFamily="BarlowSemiBold" />
+                                        <Label Text="Members on this package can book a coach at no extra charge." Style="{StaticResource Caption}" />
+                                    </VerticalStackLayout>
+                                </Grid>
+                                <VerticalStackLayout Spacing="6" IsVisible="{Binding FormIncludesCoach, Converter={StaticResource Not}}">
+                                    <Label Text="Coach access price (full term) (₱)" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}">
+                                        <Entry Text="{Binding FormCoachAddonPrice}" Keyboard="Numeric" Placeholder="Blank = no coach add-on" AutomationId="FormCoachAddonPrice" SemanticProperties.Description="Coach access price full term">
+                                            <Entry.Behaviors><c:NumericOnlyBehavior /></Entry.Behaviors>
+                                        </Entry>
+                                    </Border>
+                                </VerticalStackLayout>
                             </VerticalStackLayout>
 
                             <!-- packages: benefits, one per line, shown to members -->

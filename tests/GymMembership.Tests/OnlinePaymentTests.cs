@@ -107,7 +107,7 @@ public class OnlinePaymentTests
     sealed class Opener : IUrlOpener { public string? Opened; public Task OpenAsync(string url) { Opened = url; return Task.CompletedTask; } }
 
     /// <summary>The real service, but Xendit's answers are scripted: a link that isn't paid yet, and a check that says paid.</summary>
-    sealed class ScriptedXendit(IMembershipService real, bool paidOnCheck = false) : IMembershipService
+    internal sealed class ScriptedXendit(IMembershipService real, bool paidOnCheck = false) : IMembershipService
     {
         public int Checks;
         public Task<AppResult<OnlineCheckout>> PayOnlineAsync(int paymentId) => Task.FromResult(AppResult<OnlineCheckout>.Success(new("https://checkout.test/ps-1", false)));
@@ -124,7 +124,9 @@ public class OnlinePaymentTests
         public Task<AppResult<Access>> AccessAsync() => real.AccessAsync();
         public Task<AppResult<Payment>> AvailAsync(int packageId, string? discountCode = null, string method = PayMethod.Qr) => real.AvailAsync(packageId, discountCode, method);
         public Task<AppResult<Payment>> RenewAsync(int membershipId, string? discountCode = null, string method = PayMethod.Qr) => real.RenewAsync(membershipId, discountCode, method);
-        public Task<AppResult<Payment>> PayAgainAsync(PaymentItem item) => real.PayAgainAsync(item);
+        public Task<AppResult<Payment>> PayAgainAsync(PaymentItem item, string? code = null) => real.PayAgainAsync(item, code);
+        public Task<AppResult<CoachAccessOffer?>> CoachAccessOfferAsync() => real.CoachAccessOfferAsync();
+        public Task<AppResult<Payment>> BuyCoachAccessAsync(string? discountCode = null) => real.BuyCoachAccessAsync(discountCode);
         public Task<AppResult<GymSettings>> GymAsync() => real.GymAsync();
         public Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync() => real.ClosedDaysAsync();
     }

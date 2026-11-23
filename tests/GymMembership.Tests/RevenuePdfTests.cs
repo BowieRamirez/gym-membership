@@ -99,7 +99,7 @@ public class RevenuePdfTests
         var gw = new DemoGateway(); await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         var desk = new PaymentStaffService(gw);
         await desk.OpenShiftAsync(4000, "Short float"); await desk.RecordCounterAsync(PayKind.WalkIn, PayMethod.Cash, null, null, "Pedro Ramos", null, null);
-        await desk.CloseShiftAsync(4100, "Gave change twice");
+        await desk.CloseShiftAsync(4100, "Gave change twice", "wrong_change");
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
         var files = new Files();
         var vm = new RevenueViewModel(new AdminService(gw), files) { From = DateTime.Today.AddDays(-1), To = DateTime.Today.AddDays(1) };

@@ -40,7 +40,7 @@ public partial class MemberCalendarViewModel(IMemberCalendarService svc, ISessio
         {
             _entries = data.Entries; HasCoach = data.HasCoach;
             HoursText = $"The gym is open {DateTime.Today.Add(data.Opens).ToString("h:mm tt", En)} to {DateTime.Today.Add(data.Closes).ToString("h:mm tt", En)}."
-                + (data.HasCoach ? "" : " Hire a coach to see their shifts and open times here.");
+                + (data.HasCoach ? "" : " Book a coach on Sessions to see their shifts here.");
             Build();
         });
     }

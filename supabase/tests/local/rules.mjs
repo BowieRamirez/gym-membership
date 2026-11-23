@@ -93,8 +93,9 @@ await test('every function the app calls has a test that tries to break it', asy
     new RegExp(`(?<![a-z_])${fn}(?![a-z_0-9])`).test(l) && refused.test(l + ' ' + (lines[i + 1] ?? ''))));
   assert.deepEqual(untried, [], `no break attempt for: ${untried.join(', ')}`);
 });
-await test('a member sees only themself, plus coaches', async () => {
-  const r = await run(alex, 'select id from profiles');
+await test('a member sees only their own full profile, plus coaches by name (0140)', async () => {
+  assert.deepEqual((await run(alex, 'select id from profiles')).rows.map(x => x.id), [alex]);
+  const r = await run(alex, 'select id from public_profiles');
   assert.deepEqual(r.rows.map(x => x.id).sort(), [alex, coach].sort());
 });
 await test('staff see everyone', async () => assert.equal((await run(desk, 'select id from profiles')).rowCount, 5 + 1));
@@ -124,9 +125,8 @@ await test('a guest avails a package and gets a pending QR payment with a code',
 });
 await test('a second pending membership is refused', async () =>
   assert.match(await code(run(alex, `select * from avail_membership($1)`, [monthly])), /already_availed/));
-await test('a guest cannot avail an amenity or message a coach yet', async () => {
+await test('a guest cannot avail an amenity yet', async () => {
   assert.match(await code(run(alex, `select * from avail_amenity(1)`)), /no_active_membership/);
-  assert.match(await code(run(alex, `select hire_coach($1)`, [coach])), /no_active_membership/);
 });
 await test('a member cannot verify their own payment, and cannot even call verify', async () =>
   assert.match(await code(run(alex, `select verify_payment($1, true)`, [pay.payment_id])), /forbidden/));
@@ -236,64 +236,32 @@ await test('renewing an active plan extends from its end date', async () => {
 });
 
 console.log('\ncoaching');
-await db.query(`update coaches set specialty='Boxing', hourly_rate=500 where user_id=$1`, [coach]);
-await db.query('insert into coach_visits(coach_id,checked_in_by) values($1,$1)', [coach]);   // a new hire needs the coach in the gym (0032)
-let hire;
-await test('an active member hires a coach; a guest cannot', async () => {
-  hire = (await run(alex, `select hire_coach($1) id`, [coach])).rows[0].id;
-  await run(coach, `select answer_hire($1,true)`, [hire]);   // G30 (0074): the coach accepts
-  assert.match(await code(run(bea, `select hire_coach($1)`, [coach])), /no_active_membership/);
-  assert.match(await code(run(alex, `select hire_coach($1)`, [coach])), /hire_already_requested/);
+await db.query(`update coaches set specialty='Boxing' where user_id=$1`, [coach]);
+await db.query('insert into coach_visits(coach_id,checked_in_by) values($1,$1)', [coach]);
+const ahead = new Date(Date.now() + 2 * 864e5 + 8 * 36e5);
+const t0 = new Date(Date.UTC(ahead.getUTCFullYear(), ahead.getUTCMonth(), ahead.getUTCDate())), t1 = new Date(t0.getTime() + 36e5), t2 = new Date(t0.getTime() + 72e5), t3 = new Date(t0.getTime() + 108e5);
+await db.query(`insert into shift_posts(coach_id,starts_at,ends_at) values($1,$2,$3)`, [coach, t0, t3]);
+await db.query(`update membership_packages set includes_coach=true where membership_package_id=$1`, [monthly]);
+await test('an active member books a coach session; a guest cannot', async () => {
+  await run(alex, `select * from book_coach_session($1,$2,1,null)`, [coach, t0]);
+  assert.match(await code(run(bea, `select * from book_coach_session($1,$2,1,null)`, [coach, t1])), /no_active_membership|outside_membership/);
 });
-await test('the coach sees the trainee and the trainee sees the coach, nobody else does', async () => {
-  assert.equal((await run(coach, `select * from coach_hires`)).rowCount, 1);
-  assert.equal((await run(eve, `select * from coach_hires`)).rowCount, 0);
-  assert.ok((await run(coach, `select id from profiles`)).rows.some(r => r.id === alex));
-  assert.ok(!(await run(eve, `select id from profiles`)).rows.some(r => r.id === alex));
+await test('the coach sees the member and the member sees the session, nobody else does', async () => {
+  assert.equal((await run(coach, `select * from training_sessions`)).rowCount, 1);
+  assert.equal((await run(eve, `select * from training_sessions`)).rowCount, 0);
+  assert.ok((await run(coach, `select id from public_profiles`)).rows.some(r => r.id === alex));
+  assert.ok(!(await run(eve, `select id from public_profiles`)).rows.some(r => r.id === alex));
 });
-await test('chat works for the hired pair and stays private', async () => {
+await test('chat works for the session pair and stays private', async () => {
   await run(alex, `insert into messages (coach_id, member_id, sender_id, body) values ($1,$2,$2,'Hi coach')`, [coach, alex]);
   await run(coach, `insert into messages (coach_id, member_id, sender_id, body) values ($1,$2,$1,'Hello')`, [coach, alex]);
   assert.equal((await run(alex, `select * from messages`)).rowCount, 2);
   assert.equal((await run(eve, `select * from messages`)).rowCount, 0);
   assert.equal((await run(alex, `select * from user_notifications where type='message'`)).rowCount, 1);
 });
-await test('you cannot send as someone else or to a coach you have not hired', async () => {
+await test('you cannot send as someone else or to a coach without a session', async () => {
   assert.match(await code(run(alex, `insert into messages (coach_id, member_id, sender_id, body) values ($1,$2,$1,'spoof')`, [coach, alex])), /42501/);
   assert.match(await code(run(eve, `insert into messages (coach_id, member_id, sender_id, body) values ($1,$2,$2,'hey')`, [coach, eve])), /42501/);
-});
-// 08:00 Manila (00:00 UTC) two days ahead: shifts must sit on the half-hour grid inside gym hours (0028)
-const ahead = new Date(Date.now() + 2 * 864e5 + 8 * 36e5);
-const t0 = new Date(Date.UTC(ahead.getUTCFullYear(), ahead.getUTCMonth(), ahead.getUTCDate())), t1 = new Date(t0.getTime() + 36e5), t2 = new Date(t0.getTime() + 72e5), t3 = new Date(t0.getTime() + 108e5);
-let reqId;
-await test('a member requests a time; the coach approves and a session is created', async () => {
-  reqId = (await run(alex, `select request_time($1,$2,$3,'Leg day') id`, [coach, t0, t1])).rows[0].id;
-  assert.match(await code(run(alex, `select respond_time_request($1,true)`, [reqId])), /forbidden/);
-  await run(coach, `select respond_time_request($1,true)`, [reqId]);
-  assert.equal((await run(coach, `select * from training_sessions where status='scheduled'`)).rowCount, 1);
-  assert.match(await code(run(coach, `select respond_time_request($1,true)`, [reqId])), /already_processed/);
-});
-const overlapCoach = await user('overlap-coach@t.io', 'coach', 'Coach Other');
-await db.query('insert into coach_visits(coach_id,checked_in_by) values($1,$1)', [overlapCoach]);
-await run(overlapCoach, 'select answer_hire($1,true)', [(await run(alex, 'select hire_coach($1) id', [overlapCoach])).rows[0].id]);   // G30 (0074): the coach accepts
-await test('overlapping sessions are refused', async () => {
-  const r2 = (await run(alex, `select request_time($1,$2,$3) id`, [overlapCoach, new Date(t0.getTime() + 18e5), t2])).rows[0].id;
-  assert.match(await code(run(overlapCoach, `select respond_time_request($1,true)`, [r2])), /23P01/);
-  await run(alex, `select cancel_time_request($1)`, [r2]); // release the one-pending-request slot before the next test
-});
-await test('reschedule moves the same session once the other side approves', async () => {
-  const s = (await run(alex, `select training_session_id id from training_sessions`)).rows[0].id;
-  const rr = (await run(alex, `select request_reschedule($1,$2,$3) id`, [s, t2, t3])).rows[0].id;
-  assert.match(await code(run(alex, `select request_reschedule($1,$2,$3)`, [s, t2, t3])), /already_processed/);
-  await run(coach, `select respond_time_request($1,true)`, [rr]);
-  const r = await run(alex, `select count(*)::int n, min(scheduled_start) st from training_sessions where status='scheduled'`);
-  assert.equal(r.rows[0].n, 1); assert.equal(new Date(r.rows[0].st).getTime(), t2.getTime());
-});
-await test('a pending request can be withdrawn only by whoever made it', async () => {
-  const r = (await run(alex, `select request_time($1,$2,$3) id`, [overlapCoach, new Date(t0.getTime() + 5 * 864e5), new Date(t0.getTime() + 5 * 864e5 + 36e5)])).rows[0].id;
-  assert.match(await code(run(coach, `select cancel_time_request($1)`, [r])), /forbidden/);
-  await run(alex, `select cancel_time_request($1)`, [r]);
-  assert.match(await code(run(alex, `select cancel_time_request($1)`, [r])), /already_processed/);
 });
 await test('attendance is the coach only and sets the session status', async () => {
   const s = (await run(alex, `select training_session_id id from training_sessions`)).rows[0].id;
@@ -306,17 +274,13 @@ await test('attendance is the coach only and sets the session status', async () 
 await test('a third person cannot post into another pair’s conversation', async () => {
   assert.match(await code(run(eve, `insert into messages (coach_id, member_id, sender_id, body) values ($1,$2,$3,'hello')`, [coach, alex, eve])), /42501|23514/);
 });
-await test('a coach posts a shift, trainees are told, overlap is refused', async () => {
-  await run(coach, `insert into shift_posts (coach_id, starts_at, ends_at, note) values ($1,$2,$3,'Floor')`, [coach, t0, t1]);
-  assert.match(await code(run(coach, `insert into shift_posts (coach_id, starts_at, ends_at) values ($1,$2,$3)`, [coach, t0, t1])), /23P01/);
-  assert.equal((await run(alex, `select * from shift_posts`)).rowCount, 1);
-  assert.equal((await run(eve, `select * from shift_posts`)).rowCount, 1);   // G29 (0072): every member sees coaches' shifts
-  assert.match(await code(run(alex, `insert into shift_posts (coach_id, starts_at, ends_at) values ($1,$2,$3)`, [coach, t2, t3])), /42501/);
-});
-await test('ending a hire closes chat for new messages but keeps history', async () => {
-  await run(alex, `select end_hire($1)`, [hire]);
-  assert.match(await code(run(alex, `insert into messages (coach_id, member_id, sender_id, body) values ($1,$2,$2,'still there?')`, [coach, alex])), /42501/);
-  assert.equal((await run(alex, `select * from messages where kind = 'text'`)).rowCount, 2);   // F11 (0051) adds request messages beside these
+await test('a coach posts a shift, overlap is refused', async () => {
+  const s1 = new Date(t3.getTime() + 36e5), s2 = new Date(s1.getTime() + 36e5);
+  await run(coach, `insert into shift_posts (coach_id, starts_at, ends_at, note) values ($1,$2,$3,'Floor')`, [coach, s1, s2]);
+  assert.match(await code(run(coach, `insert into shift_posts (coach_id, starts_at, ends_at) values ($1,$2,$3)`, [coach, s1, s2])), /23P01/);
+  assert.equal((await run(alex, `select * from shift_posts`)).rowCount, 2);
+  assert.equal((await run(eve, `select * from shift_posts`)).rowCount, 2);   // G29 (0072): every member sees coaches' shifts
+  assert.match(await code(run(alex, `insert into shift_posts (coach_id, starts_at, ends_at) values ($1,$2,$3)`, [coach, s1, s2])), /42501/);
 });
 
 console.log('\naccounts and admin');
@@ -819,8 +783,9 @@ await test('a profile read does not expose last seen', async () => {
   const cols = (await run(desk, `select * from profiles limit 1`)).fields.map(f => f.name);
   assert.ok(!cols.includes('last_seen_at') && !cols.includes('seen_at'));
 });
-await test('coach and member with a current hire see each other\'s last seen; nobody else does', async () => {
+await test('coach and member with a current session or hire see each other\'s last seen; nobody else does', async () => {
   await run(coach, `select touch_last_seen()`);
+  await db.query(`insert into training_sessions (coach_id, member_id, scheduled_start, scheduled_end, status) values ($1, $2, now() + interval '1 day', now() + interval '1 day 1 hour', 'scheduled')`, [coach, gus]);
   await db.query(`insert into messages (coach_id, member_id, sender_id, body) values ($1, $2, $2, 'hi')`, [coach, gus]);
   const mine = (await threads(gus)).find(r => r.kind === 'coach');
   const theirs = (await threads(coach)).find(r => r.kind === 'coach' && r.member_id === gus);
@@ -829,8 +794,9 @@ await test('coach and member with a current hire see each other\'s last seen; no
   assert.equal((await threads(desk)).filter(r => r.kind === 'coach').length, 0);                 // front desk is not in coach chats
   assert.equal((await threads(alex)).filter(r => r.kind === 'coach' && r.member_id === gus).length, 0);   // a stranger sees no such thread
 });
-await test('an ended hire shows no last seen', async () => {
+await test('an ended session and hire shows no last seen', async () => {
   await db.query(`update coach_hires set status = 'ended', ended_at = now() where member_id = $1 and status = 'active'`, [gus]);
+  await db.query(`update training_sessions set status = 'cancelled' where member_id = $1`, [gus]);
   assert.equal((await threads(gus)).find(r => r.kind === 'coach').with_last_seen, null);
   assert.equal((await threads(coach)).find(r => r.kind === 'coach' && r.member_id === gus).with_last_seen, null);
   await db.query(`insert into coach_hires (coach_id, member_id) values ($1, $2)`, [coach, gus]);   // hired again for the next check

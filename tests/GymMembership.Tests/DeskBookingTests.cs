@@ -25,8 +25,8 @@ public class DeskBookingTests
 
     static async Task Pick(DeskBookingViewModel vm, string who)
     {
-        vm.Search = who; await vm.FindCommand.ExecuteAsync(null);
-        vm.PickMemberCommand.Execute(vm.Hits.First());
+        vm.Search = who; await vm.SuggestNowAsync();
+        vm.ChooseSuggestionCommand.Execute(vm.Suggestions.First());
         vm.Amenity = vm.Amenities.First(a => a.Name == "Pool");
         vm.Start = vm.Starts.First();
         vm.Length = vm.Lengths.First();
@@ -125,19 +125,19 @@ public class DeskBookingTests
         Assert.Contains("chat", vm.Receipt.Note);
     }
 
-    [Fact]   // owner, 2026-11-17: Find and Book for a walk-in show one at a time
+    [Fact]   // owner, 2026-11-17: Suggestions and Book for a walk-in show one at a time
     public async Task Find_and_walk_in_hide_each_other()
     {
         var (_, vm) = await Open();
-        vm.Search = "carlo"; await vm.FindCommand.ExecuteAsync(null);
-        vm.PickMemberCommand.Execute(vm.Hits.First());
+        vm.Search = "carlo"; await vm.SuggestNowAsync();
+        vm.PickMemberCommand.Execute(vm.Suggestions.First());
         vm.StartWalkInCommand.Execute(null);
         Assert.True(vm.IsWalkIn);
-        Assert.False(vm.HasHits);
+        Assert.False(vm.HasSuggestions);
         Assert.Null(vm.Member);
-        await vm.FindCommand.ExecuteAsync(null);
+        await vm.SuggestNowAsync();
         Assert.False(vm.IsWalkIn);
-        Assert.True(vm.HasHits);
+        Assert.True(vm.HasSuggestions);
     }
 
     [Fact]   // final review: a new search drops the customer picked before, so Book can't go to the wrong person
@@ -145,7 +145,7 @@ public class DeskBookingTests
     {
         var (_, vm) = await Open();
         await Pick(vm, "carlo");
-        vm.Search = "alex"; await vm.FindCommand.ExecuteAsync(null);
+        vm.Search = "alex"; await vm.SuggestNowAsync();
         Assert.Null(vm.Member);
         Assert.False(vm.BookCommand.CanExecute(null));
     }
@@ -163,8 +163,7 @@ public class DeskBookingTests
     {
         var (gw, vm) = await Open();
         var files = new Files();
-        var page = new AmenityStatusViewModel(new AmenityService(gw), new ReservationService(gw), new PaymentStaffService(gw), vm, files);
-        await page.ToggleBookingCommand.ExecuteAsync(null);
+        var page = new AmenityStatusViewModel(new AmenityService(gw), new ReservationService(gw), new PaymentStaffService(gw), files);
         vm.StartWalkInCommand.Execute(null);
         vm.WalkInName = "Ana Reyes";
         vm.Amenity = vm.Amenities.First(a => a.Name == "Pool");
@@ -205,7 +204,7 @@ public class DeskBookingTests
     public async Task A_walk_in_booking_refund_is_asked_at_the_desk_and_approving_cancels_it()
     {
         var (gw, vm) = await Open();
-        var page = new AmenityStatusViewModel(new AmenityService(gw), new ReservationService(gw), new PaymentStaffService(gw), vm, refunds: new SubscriptionService(gw));
+        var page = new AmenityStatusViewModel(new AmenityService(gw), new ReservationService(gw), new PaymentStaffService(gw), refunds: new SubscriptionService(gw));
         vm.StartWalkInCommand.Execute(null); vm.WalkInName = "Ana Reyes";
         vm.Amenity = vm.Amenities.First(a => a.Name == "Pool"); vm.Start = vm.Starts.First(); vm.Length = vm.Lengths.First();
         await vm.BookCommand.ExecuteAsync(null);
@@ -266,22 +265,23 @@ public class DeskBookingTests
         }
     }
 
-    static AmenityStatusViewModel Screen(DemoGateway gw, IPaymentStaffService svc)
+    // owner, 2026-11-23: the desk books amenities on the Cashier ("Amenity booking"), no longer on Amenity status
+    static CashierViewModel Screen(DemoGateway gw, IPaymentStaffService svc)
     {
-        var reservations = new ReservationService(gw);
-        var booking = new DeskBookingViewModel(new AttendanceService(gw), reservations, svc) { Day = DateTime.Today.AddDays(2) };
-        return new AmenityStatusViewModel(new AmenityService(gw), reservations, svc, booking);
+        var booking = new DeskBookingViewModel(new AttendanceService(gw), new ReservationService(gw), svc) { Day = DateTime.Today.AddDays(2) };
+        return new CashierViewModel(svc, new AttendanceService(gw), booking: booking);
     }
 
-    static async Task<(DemoGateway Gw, AmenityStatusViewModel Vm, ScriptedDesk Xendit, IPaymentStaffService Svc)> WaitingForXendit()
+    static async Task<(DemoGateway Gw, CashierViewModel Vm, ScriptedDesk Xendit, IPaymentStaffService Svc)> WaitingForXendit()
     {
         Confirm.Answer = (_, _, _) => Task.FromResult(true);
         var gw = new DemoGateway(); await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
         var (svc, xendit) = ScriptedDesk.Over(new PaymentStaffService(gw));
         var vm = Screen(gw, svc);
-        await vm.LoadCommand.ExecuteAsync(null);
-        await vm.ToggleBookingCommand.ExecuteAsync(null);
+        await vm.OnAppearingAsync();
+        vm.PickKindCommand.Execute(CashierViewModel.AmenityBooking);
         var b = vm.Booking!;
+        await b.OnAppearingAsync();
         b.StartWalkInCommand.Execute(null); b.WalkInName = "Lin";
         b.Amenity = b.Amenities.First(a => a.Name == "Pool"); b.Start = b.Starts.First(); b.Length = b.Lengths.First();
         await b.PayOnlineCommand.ExecuteAsync(null);
@@ -296,13 +296,11 @@ public class DeskBookingTests
         await vm.AutoRefreshAsync();
         Assert.Equal(1, xendit.Checks);
         Assert.True(vm.Booking!.IsWaiting);
-        Assert.Empty(vm.Booked);
 
         xendit.Paid = true;
         await vm.AutoRefreshAsync();
         Assert.False(vm.Booking.IsWaiting);
         Assert.Equal("Lin", vm.Booking.Receipt!.Customer);
-        Assert.Equal("Lin (walk-in)", Assert.Single(vm.Booked).Who);
     }
 
     [Fact]
@@ -315,13 +313,13 @@ public class DeskBookingTests
         Assert.Contains("not booked", vm.Booking.Notice);
     }
 
-    [Fact]   // pages are rebuilt: leaving Amenity status or restarting the app must not lose a customer who is paying
+    [Fact]   // pages are rebuilt: leaving the Cashier or restarting the app must not lose a customer who is paying
     public async Task Coming_back_to_the_page_picks_up_the_walk_in_still_paying()
     {
         var (gw, _, xendit, svc) = await WaitingForXendit();
         var again = Screen(gw, svc);
-        await again.LoadCommand.ExecuteAsync(null);
-        Assert.True(again.IsBooking);
+        await again.OnAppearingAsync();
+        Assert.True(again.IsAmenityBooking);
         Assert.Equal("Lin", again.Booking!.Waiting!.WalkInName);
         xendit.Paid = true;
         await again.AutoRefreshAsync();
@@ -379,5 +377,44 @@ public class DeskBookingTests
         Assert.Equal("cancelled", (await gw.ListAsync<Reservation>(x => x.Id == r.Id)).Single().Status);
         await vm.BookCommand.ExecuteAsync(null);   // the slot is free again for someone else
         Assert.Null(vm.ErrorMessage);
+    }
+
+    [Fact]   // owner, 2026-11-23: amenity and coach bookings moved from Amenity status to the Cashier; the time-less "Amenity" sale went
+    public async Task Cashier_shows_the_booking_forms_instead_of_the_order()
+    {
+        var (gw, booking) = await Open();
+        var coach = new DeskCoachBookingViewModel(new SessionService(gw), new AttendanceService(gw));
+        var cashier = new CashierViewModel(new PaymentStaffService(gw), new AttendanceService(gw), booking: booking, coachBooking: coach);
+        await cashier.OnAppearingAsync();
+        Assert.Equal(new[] { "Membership", "Renewal", "Amenity booking", "Coach session", "Day pass" }, cashier.Kinds);
+        Assert.True(cashier.ShowsOrder);
+
+        cashier.PickKindCommand.Execute(CashierViewModel.AmenityBooking);
+        Assert.True(cashier.IsAmenityBooking);
+        Assert.False(cashier.ShowsOrder); Assert.False(cashier.NeedsMember);   // the form has its own customer box and pay buttons
+        Assert.Empty(cashier.Options);
+        await booking.OnAppearingAsync();
+        Assert.NotEmpty(booking.Amenities);
+
+        cashier.PickKindCommand.Execute(CashierViewModel.CoachSession);
+        Assert.True(cashier.IsCoachSession); Assert.False(cashier.ShowsOrder);
+
+        cashier.PickKindCommand.Execute("Membership");
+        Assert.True(cashier.ShowsOrder);
+    }
+
+    [Fact]   // Phase 1: picking a customer for an amenity booking survives the page's auto refresh (now the Cashier's)
+    public async Task Picked_customer_stays_through_status_refresh()
+    {
+        var (gw, booking) = await Open();
+        var status = new CashierViewModel(new PaymentStaffService(gw), new AttendanceService(gw), booking: booking);
+        await status.OnAppearingAsync();
+        status.PickKindCommand.Execute(CashierViewModel.AmenityBooking);
+        booking.Search = "carlo";
+        await booking.SuggestNowAsync();
+        var hit = booking.Suggestions.First();
+        booking.ChooseSuggestionCommand.Execute(hit);
+        await status.AutoRefreshAsync();
+        Assert.Same(hit, booking.Member);
     }
 }

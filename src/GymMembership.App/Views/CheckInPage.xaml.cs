@@ -47,6 +47,8 @@ public partial class CheckInPage : BasePage
 	void OnCheckIn(object? sender, EventArgs e) => Row<CheckInViewModel>(sender, v => v.CheckInCommand);
 	void OnToggleCoach(object? sender, EventArgs e) => Row<CheckInViewModel>(sender, v => v.ToggleCoachCommand);
 	void OnViewDayPass(object? sender, EventArgs e) => Row<CheckInViewModel>(sender, v => v.ViewDayPassCommand);
+	void OnCheckInSession(object? sender, EventArgs e) => Row<CheckInViewModel>(sender, v => v.CheckInSessionCommand);
+	void OnMarkCoachArrived(object? sender, EventArgs e) => Row<CheckInViewModel>(sender, v => v.MarkCoachArrivedCommand);
 
 	// G11: the desk's next step for someone who can't check in: the Cashier (to renew, or to pay what is waiting)
 	async void OnHitNextStep(object? sender, EventArgs e)

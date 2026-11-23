@@ -146,7 +146,8 @@ public static class BookingReceiptPdf
 public sealed record BalanceRow(Reservation Booking, string Member, string Amenity, string? Coach)
 {
     static DateTime Manila(DateTime utc) => utc.ToUniversalTime().AddHours(8);
-    public string When => $"{Manila(Booking.StartsAt).ToString("h:mm tt", CultureInfo.InvariantCulture)} to {Manila(Booking.EndsAt).ToString("h:mm tt", CultureInfo.InvariantCulture)}";
+    // 2026-11-23: the list now covers upcoming days too, so the day is part of it
+    public string When => $"{Manila(Booking.StartsAt).ToString("ddd d MMM, h:mm tt", CultureInfo.InvariantCulture)} to {Manila(Booking.EndsAt).ToString("h:mm tt", CultureInfo.InvariantCulture)}";
     public string CoachText => Coach ?? "Solo";
     public string PaidText => Booking.DownPayment > 0 ? $"₱{Booking.DownPayment:N2} down" : "With a pass";
     public string BalanceText => $"₱{Booking.Balance:N2}";
@@ -247,8 +248,11 @@ public interface IReservationService
     /// <summary>G16: closed days from today on, with their reasons.</summary>
     Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync();
     /// <summary>G13, the desk: one Manila day's confirmed bookings with a balance still to pay.</summary>
+    /// <summary>Confirmed bookings from this Manila day on whose balance is still to pay (owner, 2026-11-23: not only today's).</summary>
     Task<AppResult<IReadOnlyList<BalanceRow>>> BalancesAsync(DateOnly manilaDay);
     Task<AppResult<Payment>> TakeBalanceAsync(int reservationId, string method, string? reference);
+    /// <summary>0141: a pending online payment for the balance; Xendit's checkout is opened by the desk and confirming it pays the balance.</summary>
+    Task<AppResult<Payment>> StartBalanceOnlineAsync(int reservationId) => Task.FromResult(AppResult<Payment>.Fail(AppErrorKind.Unknown, "not_implemented"));
     /// <summary>Upcoming bookings soonest first, then ones that ended in the last day or have a refund still open.</summary>
     Task<AppResult<IReadOnlyList<BookingRow>>> MyBookingsAsync();
     Task<AppResult<bool>> CancelAsync(int reservationId);
@@ -307,10 +311,15 @@ public sealed class ReservationService(ISupabaseGateway gw) : IReservationServic
         var rows = (await gw.ListAsync<Reservation>(r => r.Status == "confirmed" && r.EndsAt > now)).OrderBy(r => r.StartsAt).ToList();
         if (rows.Count == 0) return [];
         var ids = rows.SelectMany(r => new[] { r.PaymentId, r.BalancePaymentId }).OfType<int>().ToList();
-        var pays = (await gw.ListAsync<Payment>(p => ids.Contains(p.Id))).Where(p => p.Status == Status.Verified).ToDictionary(p => p.Id);
-        var names = await Directory_.UserNamesAsync(gw);
-        var amenities = (await gw.ListAsync<Amenity>()).ToDictionary(a => a.Id, a => a.Name);
-        var asked = await gw.ListAsync<RefundRequest>(f => f.Kind == "walk_in_booking");
+        var paysTask = gw.ListAsync<Payment>(p => ids.Contains(p.Id));
+        var namesTask = Directory_.UserNamesAsync(gw);
+        var amenitiesTask = gw.ListAsync<Amenity>();
+        var askedTask = gw.ListAsync<RefundRequest>(f => f.Kind == "walk_in_booking");
+        await Task.WhenAll(paysTask, namesTask, amenitiesTask, askedTask);
+        var pays = paysTask.Result.Where(p => p.Status == Status.Verified).ToDictionary(p => p.Id);
+        var names = namesTask.Result;
+        var amenities = amenitiesTask.Result.ToDictionary(a => a.Id, a => a.Name);
+        var asked = askedTask.Result;
         return rows.Select(r => (r, f: asked.FirstOrDefault(x => x.ReservationId == r.Id))).Select(x => new BookedRow(x.r, x.r.WalkInName ?? names.GetValueOrDefault(x.r.MemberId ?? "", "Member"), amenities.GetValueOrDefault(x.r.AmenityId, "Amenity"),
             x.r.CoachId is { } c ? names.GetValueOrDefault(c) : null,
             new[] { x.r.PaymentId, x.r.BalancePaymentId }.OfType<int>().Select(pays.GetValueOrDefault).OfType<Payment>().ToList(), x.f?.Status, x.f?.DecisionReason)).ToList();
@@ -334,12 +343,14 @@ public sealed class ReservationService(ISupabaseGateway gw) : IReservationServic
     public Task<AppResult<IReadOnlyList<BalanceRow>>> BalancesAsync(DateOnly manilaDay) => Safe.RunAsync<IReadOnlyList<BalanceRow>>(async () =>
     {
         var from = DateTime.SpecifyKind(manilaDay.ToDateTime(TimeOnly.MinValue).AddHours(-8), DateTimeKind.Utc);   // Manila has no daylight saving
-        var to = from.AddDays(1);
-        var due = (await gw.ListAsync<Reservation>(r => r.Status == "confirmed" && r.StartsAt >= from && r.StartsAt < to))
+        var due = (await gw.ListAsync<Reservation>(r => r.Status == "confirmed" && r.StartsAt >= from))
             .Where(r => r.Balance > 0 && r.BalancePaymentId is null).OrderBy(r => r.StartsAt).ToList();
         if (due.Count == 0) return [];
-        var names = await Directory_.UserNamesAsync(gw);
-        var amenities = (await gw.ListAsync<Amenity>()).ToDictionary(a => a.Id, a => a.Name);
+        var namesTask = Directory_.UserNamesAsync(gw);
+        var amenitiesTask = gw.ListAsync<Amenity>();
+        await Task.WhenAll(namesTask, amenitiesTask);
+        var names = namesTask.Result;
+        var amenities = amenitiesTask.Result.ToDictionary(a => a.Id, a => a.Name);
         return due.Select(r => new BalanceRow(r, names.GetValueOrDefault(r.MemberId, "Member"), amenities.GetValueOrDefault(r.AmenityId, "Amenity"),
             r.CoachId is { } c ? names.GetValueOrDefault(c) : null)).ToList();
     });
@@ -351,13 +362,21 @@ public sealed class ReservationService(ISupabaseGateway gw) : IReservationServic
         return await gw.RpcAsync<Payment>("record_booking_balance", args);
     });
 
+    public Task<AppResult<Payment>> StartBalanceOnlineAsync(int reservationId) => Safe.RunAsync(() =>
+        gw.RpcAsync<Payment>("start_booking_balance_online", new() { ["p_reservation_id"] = reservationId }));
+
     public Task<AppResult<IReadOnlyList<BookingRow>>> MyBookingsAsync() => Safe.RunAsync<IReadOnlyList<BookingRow>>(async () =>
     {
         var uid = gw.CurrentUserId; var now = DateTime.UtcNow;
-        var mine = await gw.ListAsync<Reservation>(r => r.MemberId == uid);
-        var pays = (await gw.ListAsync<Payment>(p => p.MemberId == uid)).ToDictionary(p => p.Id);
-        var refunds = (await gw.ListAsync<RefundRequest>(r => r.MemberId == uid)).Where(r => r.ReservationId is not null).ToDictionary(r => r.ReservationId!.Value);
-        var names = (await gw.ListAsync<Amenity>()).ToDictionary(a => a.Id, a => a.Name);
+        var mineTask = gw.ListAsync<Reservation>(r => r.MemberId == uid);
+        var paysTask = gw.ListAsync<Payment>(p => p.MemberId == uid);
+        var refundsTask = gw.ListAsync<RefundRequest>(r => r.MemberId == uid);
+        var namesTask = gw.ListAsync<Amenity>();
+        await Task.WhenAll(mineTask, paysTask, refundsTask, namesTask);
+        var mine = mineTask.Result;
+        var pays = paysTask.Result.ToDictionary(p => p.Id);
+        var refunds = refundsTask.Result.Where(r => r.ReservationId is not null).ToDictionary(r => r.ReservationId!.Value);
+        var names = namesTask.Result.ToDictionary(a => a.Id, a => a.Name);
         var rows = mine.Select(r => new BookingRow(r, names.GetValueOrDefault(r.AmenityId, "Amenity"), now,
             r.PaymentId is { } p ? pays.GetValueOrDefault(p) : null, refunds.GetValueOrDefault(r.Id))).ToList();
         bool Show(BookingRow b) => b.Refund is { } f

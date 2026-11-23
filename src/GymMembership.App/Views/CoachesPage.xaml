@@ -10,18 +10,16 @@
     <!-- F12 reverses D30: amenities moved to Book an amenity, so this page is coaches only again -->
     <Grid RowDefinitions="Auto,*" Padding="{OnIdiom Phone='16,12,16,0', Default='16,12,16,0'}" MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Spacing="10" Padding="0,0,0,10">
-            <Label Text="Hire a coach to request one-to-one sessions. Needs an active membership." Style="{StaticResource Muted}" IsVisible="{OnIdiom Phone=False, Default=True}" />
+            <Label Text="Book a one-to-one session with a coach who has a posted shift. Needs an active membership." Style="{StaticResource Muted}" IsVisible="{OnIdiom Phone=False, Default=True}" />
             <c:Banner Message="{Binding ErrorMessage}" />
+            <c:Banner Kind="notice" Message="You already have an active coach session. Cancel or finish it before booking another." IsVisible="{Binding HasActiveSession}" />
         </VerticalStackLayout>
 
         <ScrollView Grid.Row="1"><c:CardGrid Columns="{OnIdiom Phone=1, Default=4}" Padding="0,0,0,16" BindableLayout.ItemsSource="{Binding Cards}">
-            <BindableLayout.EmptyView><Label Text="No coaches are in the gym right now. This list updates by itself." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
+            <BindableLayout.EmptyView><Label Text="No coaches are available right now. This list updates by itself." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
             <BindableLayout.ItemTemplate>
                 <DataTemplate x:DataType="svc:CoachCard">
                     <Border Style="{StaticResource Panel}">
-                        <Border.Triggers>
-                            <DataTrigger TargetType="Border" Binding="{Binding Closed}" Value="True"><Setter Property="Opacity" Value="0.55" /></DataTrigger>
-                        </Border.Triggers>
                         <VerticalStackLayout Spacing="12">
                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
                                 <c:Avatar Letters="{Binding Letters}" Url="{Binding PhotoUrl}" Diameter="{OnIdiom Phone=56, Default=72}"
@@ -29,10 +27,6 @@
                                 <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
                                     <Label Text="{Binding Name}" Style="{StaticResource Heading}" />
                                     <Label Text="{Binding Coach.Specialty}" FontFamily="BarlowMedium" />
-                                    <Label Text="Not taking new members right now." Style="{StaticResource Caption}" IsVisible="{Binding Closed}" />
-                                    <c:StatusChip Status="{Binding HireBadge}" IsVisible="{Binding HireBadge, Converter={StaticResource HasText}}" Margin="0,2" />
-                                    <Label Text="Your coach" Style="{StaticResource Caption}" IsVisible="{Binding Hired}" />
-                                    <Label Text="{Binding WaitingText}" Style="{StaticResource Caption}" IsVisible="{Binding Requested}" />
                                     <Label Text="In the gym now" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold" IsVisible="{Binding InGym}" />
                                     <Label Text="Not in the gym right now." Style="{StaticResource Caption}" IsVisible="{Binding InGym, Converter={StaticResource Not}}" />
                                 </VerticalStackLayout>
@@ -42,13 +36,8 @@
                                 <Label Text="On the floor" Style="{StaticResource Caption}" FontFamily="BarlowSemiBold" />
                                 <Label Text="{Binding ShiftsText}" Style="{StaticResource Caption}" />
                             </VerticalStackLayout>
-                            <Label Text="{Binding RateText}" FontFamily="BarlowSemiBold" />
                             <FlexLayout Wrap="Wrap">
-                                <Button Text="Hire" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8"
-                                        IsVisible="{Binding ShowHire}" IsEnabled="{Binding CanHire}" Clicked="OnHire" />
-                                <Button Text="Cancel request" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding Requested}" Clicked="OnCancelRequest" />
-                                <Button Text="Message" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding Hired}" Clicked="OnMessage" />
-                                <Button Text="End hire" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding Hired}" Clicked="OnEndHire" />
+                                <Button Text="Book this coach" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Clicked="OnBookCoach" />
                             </FlexLayout>
                         </VerticalStackLayout>
                     </Border>
