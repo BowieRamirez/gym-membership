@@ -2922,10 +2922,10 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
         Notice = DecideApprove ? $"Refund approved. Admin repays {row.Member} from Refunds." : $"Declined. {row.Member} is told why.";
     }
 
-    // ---- G13 (0064): today's confirmed bookings with a balance; the desk takes it once, cash into the drawer or GCash with a reference ----
+    // ---- G13 (0064): confirmed bookings with a balance (2026-11-23: upcoming too); the desk takes it once: cash into the drawer,
+    //      or GCash / QR Ph through Xendit (0141; the typed GCash reference went, as on the Cashier) ----
     public ObservableCollection<BalanceRow> Balances { get; } = new();
     public bool HasBalances => Balances.Count > 0;
-    [ObservableProperty] private string balanceReference = "";
 
     public async Task LoadBalancesAsync(DateOnly manilaDay)
     {
@@ -2935,17 +2935,13 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
     }
     static DateOnly ManilaToday => DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8));
 
-    [RelayCommand] private Task TakeBalance(BalanceRow row) => TakeAsync(row, PayMethod.Cash);
-    [RelayCommand] private Task TakeBalanceGcash(BalanceRow row) => TakeAsync(row, PayMethod.Gcash);
-
-    async Task TakeAsync(BalanceRow row, string method)
+    [RelayCommand]
+    private async Task TakeBalance(BalanceRow row)
     {
         if (reservations is null) return;
         Notice = null;
-        if (method == PayMethod.Gcash && string.IsNullOrWhiteSpace(BalanceReference)) { ErrorMessage = "Type the GCash reference first."; return; }
-        if (!await Confirm.AskAsync($"Take {row.Member}'s balance?", $"{row.BalanceText} for {row.Amenity}, {row.When}, {(method == PayMethod.Cash ? "in cash into your drawer" : "by GCash")}.", "Take balance")) return;
-        if (!await RunAsync(() => reservations.TakeBalanceAsync(row.Booking.Id, method, method == PayMethod.Gcash ? BalanceReference : null), _ => { })) return;
-        BalanceReference = "";
+        if (!await Confirm.AskAsync($"Take {row.Member}'s balance?", $"{row.BalanceText} for {row.Amenity}, {row.When}, in cash into your drawer.", "Take balance")) return;
+        if (!await RunAsync(() => reservations.TakeBalanceAsync(row.Booking.Id, PayMethod.Cash, null), _ => { })) return;
         Notice = $"{row.Member}'s balance is paid.";
         Balances.Remove(row); OnPropertyChanged(nameof(HasBalances));
     }
@@ -2985,7 +2981,7 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
         if (payments is null || _waitingBalancePayment is not { } pay) return;
         if (!await RunAsync(() => payments.VerifyAsync(pay, false, "Customer paid another way"))) return;
         WaitingBalance = null; _waitingBalancePayment = null;
-        Notice = "Online payment cancelled. Take the balance in cash or GCash instead.";
+        Notice = "Online payment cancelled. Take the balance in cash instead, or start it online again.";
     }
 
     async Task BalancePaidAsync()

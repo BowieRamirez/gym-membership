@@ -203,7 +203,7 @@ public static class ErrorText
         "bad_down_payment" => "The down payment is a percent from 1 to 100.",
         "coach_not_free" => "That coach isn't free for the whole time any more. Pick another coach or another time.",
         "not_confirmed" => "This booking isn't confirmed yet: its down payment hasn't been verified.",
-        "balance_online_pending" => "An online payment for this balance is still open on Xendit. Wait for it, or cancel it, before taking cash or GCash.",   // 0141
+        "balance_online_pending" => "An online payment for this balance is still open on Xendit. Wait for it, or cancel it, before taking cash.",   // 0141
         "balance_paid" => "The balance is already paid at the desk, so the booking can't be cancelled here. The desk can void that payment first.",
         "zero_amount" => "A payment of ₱0 can't be recorded. Ask an administrator to set a price above ₱0.",
         "bad_input" => "Fill in every field, then try again.",
