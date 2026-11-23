@@ -54,12 +54,17 @@ public sealed class SupabaseGateway : ISupabaseGateway
     public SupabaseGateway(SupabaseSettings settings, ISessionStore? store = null)
     {
         _store = store;
+        // HTTP/2 over one long-lived connection: on a lossy line (2026-11-23: 10-20% loss to Supabase) every new connection risks
+        // 1-8 s handshake retries, so a page firing 15 requests over 15 fresh HTTP/1.1 connections stalled for up to 20 s.
         var handler = new SocketsHttpHandler
         {
-            PooledConnectionLifetime = TimeSpan.FromMinutes(2),
-            PooledConnectionIdleTimeout = TimeSpan.FromSeconds(45)
+            PooledConnectionLifetime = TimeSpan.FromMinutes(15),
+            PooledConnectionIdleTimeout = TimeSpan.FromMinutes(5),
+            KeepAlivePingDelay = TimeSpan.FromSeconds(30),
+            KeepAlivePingTimeout = TimeSpan.FromSeconds(10),
+            KeepAlivePingPolicy = HttpKeepAlivePingPolicy.Always
         };
-        var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
+        var http = new HttpClient(new Http2(handler)) { Timeout = TimeSpan.FromSeconds(20) };
         _client = new Client(settings.Url, settings.AnonKey, new Supabase.SupabaseOptions
         {
             AutoRefreshToken = true,
@@ -447,6 +452,17 @@ public sealed class SupabaseGateway : ISupabaseGateway
         var c = await ReadyAsync();
         try { return await ReadWithRetryAsync(() => c.Storage.From(bucket).CreateSignedUrl(path, 3600)); }
         catch (Exception ex) when (ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase) || ex.Message.Contains("404")) { return null; }
+    }
+
+    // the Supabase library builds its own HttpRequestMessage (HTTP/1.1 by default), so HttpClient.DefaultRequestVersion never reaches it
+    sealed class Http2(HttpMessageHandler inner) : DelegatingHandler(inner)
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            request.Version = System.Net.HttpVersion.Version20;
+            request.VersionPolicy = HttpVersionPolicy.RequestVersionOrLower;
+            return base.SendAsync(request, ct);
+        }
     }
 
     /// <summary>Saves the session through the app's store, so a member stays signed in after closing the app.</summary>
