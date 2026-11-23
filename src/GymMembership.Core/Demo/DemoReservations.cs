@@ -387,6 +387,19 @@ public sealed partial class DemoGateway
                     .OrderBy(c => c.Name).ToList();
                 return true;
             }
+            case "start_booking_balance_online":   // 0141: the rest, online through Xendit on the desk PC
+            {
+                Require("payments:record");
+                var r = All<Reservation>().FirstOrDefault(x => x.Id == I("p_reservation_id")) ?? throw Err("not_found");
+                if (r.Status != "confirmed") throw Err("not_confirmed");
+                if (r.BalancePaymentId is not null || r.Balance <= 0) throw Err("already_processed");
+                var open = All<Payment>().FirstOrDefault(p => p.BalanceReservationId == r.Id && p.Status == Status.Pending && p.ExpiresAt > now);
+                var pay = open ?? Add(new Payment { PaymentCode = PaymentCode(), Kind = PayKind.Amenity, Method = PayMethod.Qr, Status = Status.Pending, Amount = r.Balance,
+                    MemberId = r.MemberId, WalkInName = r.WalkInName, RecordedBy = Uid, CreatedAt = now, ExpiresAt = now.AddMinutes(30), BalanceReservationId = r.Id });
+                if (open is null) Audit("reservation.balance_online", "reservations", r.Id.ToString());
+                result = Clone(pay);
+                return true;
+            }
             case "record_booking_balance":   // G13 (0064): the rest, at the desk
             {
                 Require("payments:record");
@@ -395,6 +408,7 @@ public sealed partial class DemoGateway
                 if (method is not (PayMethod.Cash or PayMethod.Gcash) || (method == PayMethod.Gcash && string.IsNullOrEmpty(reference))) throw Err("bad_input");
                 var r = All<Reservation>().FirstOrDefault(x => x.Id == I("p_reservation_id")) ?? throw Err("not_found");
                 if (r.Status != "confirmed") throw Err("not_confirmed");
+                if (All<Payment>().Any(p => p.BalanceReservationId == r.Id && p.Status == Status.Pending && p.ExpiresAt > now)) throw Err("balance_online_pending");   // 0141
                 if (r.BalancePaymentId is not null || r.Balance <= 0 || r.UserAmenityId is null) throw Err("already_processed");
                 int? shift = method == PayMethod.Cash ? OpenShiftOf(Uid!) : null;
                 var pay = Add(new Payment { PaymentCode = PaymentCode(), Kind = PayKind.Amenity, Method = method, Status = Status.Verified, Amount = r.Balance, MemberId = r.MemberId,

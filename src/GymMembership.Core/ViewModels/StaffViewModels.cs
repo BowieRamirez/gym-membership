@@ -2847,7 +2847,7 @@ public sealed record StatusChoice(string Value, string Label);
 
 /// <summary>Front desk and admin: mark an amenity available, in use or unavailable, and see who was alerted.</summary>
 public partial class AmenityStatusViewModel(IAmenityService svc, IReservationService? reservations = null, IPaymentStaffService? payments = null,
-    IReportFiles? files = null, ISubscriptionService? refunds = null) : LoadableViewModel
+    IReportFiles? files = null, ISubscriptionService? refunds = null, IUrlOpener? opener = null) : LoadableViewModel
 {
     // ---- owner, 2026-11-17: the Booked card on the right: confirmed bookings not yet ended; View shows the details, Print opens the receipt PDF ----
     public ObservableCollection<BookedRow> Booked { get; } = new();
@@ -2950,6 +2950,52 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
         Balances.Remove(row); OnPropertyChanged(nameof(HasBalances));
     }
 
+    // ---- 0141 (owner, 2026-11-23): the balance paid online too. Xendit's checkout opens on this PC; the page notices the payment by itself ----
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasWaitingBalance), nameof(WaitingBalanceText))] private BalanceRow? waitingBalance;
+    int? _waitingBalancePayment;
+    public bool HasWaitingBalance => WaitingBalance is not null;
+    public string WaitingBalanceText => WaitingBalance is { } w ? $"Waiting for {w.Member} to pay {w.BalanceText} online for {w.Amenity}, {w.When}." : "";
+
+    [RelayCommand]
+    private async Task TakeBalanceOnlineAsync(BalanceRow row)
+    {
+        if (reservations is null || payments is null) return;
+        Notice = null;
+        if (!await Confirm.AskAsync($"Take {row.Member}'s balance online?", $"{row.BalanceText} for {row.Amenity}, {row.When}.\nXendit's checkout opens on this PC for the customer to pay within 30 minutes.", "Pay online")) return;
+        Payment? started = null;
+        if (!await RunAsync(() => reservations.StartBalanceOnlineAsync(row.Booking.Id), p => started = p)) return;
+        WaitingBalance = row; _waitingBalancePayment = started!.Id;
+        await OpenBalanceCheckoutAsync();
+    }
+
+    [RelayCommand]
+    private async Task OpenBalanceCheckoutAsync()
+    {
+        if (payments is null || _waitingBalancePayment is not { } pay) return;
+        OnlineCheckout? checkout = null;
+        if (!await RunAsync(() => payments.PayOnlineAsync(pay), c => checkout = c)) return;
+        if (checkout!.Paid) { await BalancePaidAsync(); return; }
+        if (checkout.Url is { } url && opener is not null) await opener.OpenAsync(url);
+        Notice = "Xendit's checkout is open on this PC. Let the customer scan the QR Ph code with GCash, Maya or their bank app. This screen updates by itself once they have paid.";
+    }
+
+    [RelayCommand]
+    private async Task StopBalanceOnlineAsync()
+    {
+        if (payments is null || _waitingBalancePayment is not { } pay) return;
+        if (!await RunAsync(() => payments.VerifyAsync(pay, false, "Customer paid another way"))) return;
+        WaitingBalance = null; _waitingBalancePayment = null;
+        Notice = "Online payment cancelled. Take the balance in cash or GCash instead.";
+    }
+
+    async Task BalancePaidAsync()
+    {
+        var who = WaitingBalance?.Member ?? "The customer";
+        WaitingBalance = null; _waitingBalancePayment = null;
+        Notice = $"{who}'s balance is paid online.";
+        await LoadBalancesAsync(ManilaToday);
+    }
+
     public ObservableCollection<AmenityCard> Cards { get; } = new();
     public StatusChoice[] Choices { get; } = [new("available", "Available"), new("in_use", "In use"), new("unavailable", "Unavailable")];
 
@@ -2979,6 +3025,7 @@ public partial class AmenityStatusViewModel(IAmenityService svc, IReservationSer
     public override async Task AutoRefreshAsync()
     {
         if (IsBusy) return;
+        if (payments is not null && _waitingBalancePayment is { } pay && await payments.CheckOnlineAsync(pay) is { Ok: true, Value: true }) await BalancePaidAsync();
         await LoadBookedAsync();
         var board = await svc.BoardAsync();
         if (!board.Ok) return;

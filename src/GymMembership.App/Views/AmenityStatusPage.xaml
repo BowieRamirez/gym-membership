@@ -18,14 +18,15 @@
 
             <!-- G13 (approved mockup docs/mockups/amenity-down-payment.html): today's bookings with a balance still to pay at the desk -->
             <VerticalStackLayout Spacing="8" IsVisible="{Binding HasBalances}">
-                <Label Text="Today's bookings with a balance" Style="{StaticResource SectionTitle}" />
+                <Label Text="Bookings with a balance" Style="{StaticResource SectionTitle}" />
+                <Label Text="The rest of the price after the online down payment. Take it on the day, or earlier if they're here." Style="{StaticResource Caption}" />
                 <Border Style="{StaticResource Panel}">
                     <VerticalStackLayout Spacing="8">
                         <VerticalStackLayout Spacing="0" BindableLayout.ItemsSource="{Binding Balances}">
                             <BindableLayout.ItemTemplate>
                                 <DataTemplate x:DataType="svc:BalanceRow">
                                     <VerticalStackLayout>
-                                        <Grid ColumnDefinitions="140,*,*,120,Auto" ColumnSpacing="12" Padding="0,8">
+                                        <Grid ColumnDefinitions="190,*,*,110,Auto" ColumnSpacing="12" Padding="0,8">
                                             <Label Text="{Binding When}" VerticalOptions="Center" />
                                             <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
                                                 <Label Text="{Binding Member}" FontFamily="BarlowSemiBold" />
@@ -41,6 +42,9 @@
                                                         SemanticProperties.Description="{Binding Member, StringFormat='Take the balance of {0} in cash'}" />
                                                 <Button Text="GCash" Style="{StaticResource SmallOutlineButton}" Clicked="OnTakeGcash"
                                                         SemanticProperties.Description="{Binding Member, StringFormat='Take the balance of {0} by GCash'}" />
+                                                <!-- 0141 (owner, 2026-11-23): or online through Xendit, on this PC -->
+                                                <Button Text="Online" Style="{StaticResource SmallOutlineButton}" Clicked="OnTakeOnline"
+                                                        SemanticProperties.Description="{Binding Member, StringFormat='Take the balance of {0} online through Xendit'}" />
                                             </HorizontalStackLayout>
                                         </Grid>
                                         <BoxView Style="{StaticResource Hairline}" />
@@ -48,6 +52,16 @@
                                 </DataTemplate>
                             </BindableLayout.ItemTemplate>
                         </VerticalStackLayout>
+                        <Border Style="{StaticResource Panel}" IsVisible="{Binding HasWaitingBalance}" MaximumWidthRequest="640" HorizontalOptions="Start">
+                            <VerticalStackLayout Spacing="8">
+                                <Label Text="{Binding WaitingBalanceText}" FontFamily="BarlowSemiBold" LineBreakMode="WordWrap" />
+                                <Label Text="GCash, Maya or a bank app by QR Ph on Xendit's page. The checkout closes in 30 minutes." Style="{StaticResource Caption}" />
+                                <HorizontalStackLayout Spacing="8">
+                                    <Button Text="Open checkout again" Style="{StaticResource SmallOutlineButton}" Command="{Binding OpenBalanceCheckoutCommand}" />
+                                    <Button Text="Cancel online payment" Style="{StaticResource SmallOutlineButton}" Command="{Binding StopBalanceOnlineCommand}" />
+                                </HorizontalStackLayout>
+                            </VerticalStackLayout>
+                        </Border>
                         <VerticalStackLayout Spacing="4" WidthRequest="260" HorizontalOptions="Start">
                             <Label Text="GCash reference (for GCash only)" Style="{StaticResource Caption}" />
                             <Border Style="{StaticResource Field}"><Entry Text="{Binding BalanceReference}" SemanticProperties.Description="GCash reference for the balance" /></Border>

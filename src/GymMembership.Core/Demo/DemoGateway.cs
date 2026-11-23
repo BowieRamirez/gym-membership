@@ -313,7 +313,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
         pay.XenditId ??= $"ps-demo-{pay.Id}";
         pay.Status = Status.Verified; pay.VerifiedAt = now; pay.ReceiptNo = ReceiptNo();
         pay.ReferenceNo = pay.XenditId; pay.OnlineChannel = "GCASH";
-        if (pay.Kind == PayKind.WalkIn) Add(new GymCheckIn { PaymentId = pay.Id, CheckedInAt = now });
+        if (pay.BalanceReservationId is { } balanceOf)   // 0141: pays the booking's balance, as the trigger does
+        { if (All<Reservation>().FirstOrDefault(r => r.Id == balanceOf) is { BalancePaymentId: null } r) r.BalancePaymentId = pay.Id; }
+        else if (pay.Kind == PayKind.WalkIn) Add(new GymCheckIn { PaymentId = pay.Id, CheckedInAt = now });
         else { ActivateTarget(pay); Notify(pay.MemberId, "payment", "Payment received", pay.PaymentCode); }
         Audit("payment.online", "payments", pay.Id.ToString());
         return "{\"paid\":true}";

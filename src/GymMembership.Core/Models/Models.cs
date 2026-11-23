@@ -133,6 +133,8 @@ public static class PackageChanges
   [Column("method")] public string Method { get; set; } = PayMethod.Qr; [Column("status")] public string Status { get; set; } = "pending"; [Column("amount")] public decimal Amount { get; set; }
   [Column("discount_id")] public int? DiscountId { get; set; } [Column("discount_amount")] public decimal DiscountAmount { get; set; }
   [Column("member_id")] public string? MemberId { get; set; } [Column("walk_in_name")] public string? WalkInName { get; set; }
+  // 0141: an online payment for a booking's balance, started at the front desk; written only by start_booking_balance_online
+  [Column("balance_reservation_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? BalanceReservationId { get; set; }
   [Column("user_membership_package_id")] public int? UserMembershipPackageId { get; set; } [Column("renewal_id")] public int? RenewalId { get; set; } [Column("user_amenity_id")] public int? UserAmenityId { get; set; }
   [Column("reference_no")] public string? ReferenceNo { get; set; } [Column("proof_path")] public string? ProofPath { get; set; } [Column("expires_at")] public DateTime? ExpiresAt { get; set; }
   [Column("recorded_by")] public string? RecordedBy { get; set; } [Column("verified_by")] public string? VerifiedBy { get; set; } [Column("verified_at")] public DateTime? VerifiedAt { get; set; }

@@ -143,6 +143,29 @@ public class DownPaymentTests
         Assert.Equal("already_processed", (await new ReservationService(gw).TakeBalanceAsync(booking.Id, PayMethod.Cash, null)).Message);
     }
 
+    [Fact]   // 0141 (owner, 2026-11-23): tomorrow's balance is listed today (not only the day's) and the desk can take it online too
+    public async Task The_desk_takes_tomorrows_balance_online_from_Amenity_status()
+    {
+        var (gw, vm) = await Member();
+        await Pick(vm, "Group classes", "10:00");
+        await vm.BookCommand.ExecuteAsync(null);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        var down = (await gw.ListAsync<Payment>(p => p.Status == Status.Pending && p.Kind == PayKind.Amenity)).Single();
+        Assert.True((await new PaymentStaffService(gw).VerifyAsync(down.Id, true)).Ok);
+
+        var status = new AmenityStatusViewModel(new AmenityService(gw), new ReservationService(gw), new PaymentStaffService(gw));
+        await status.LoadCommand.ExecuteAsync(null);   // today's list
+        var due = Assert.Single(status.Balances);       // ...shows tomorrow's booking
+        Assert.Contains(Tomorrow.ToString("d MMM", System.Globalization.CultureInfo.InvariantCulture), due.When);
+        await status.TakeBalanceOnlineCommand.ExecuteAsync(due);   // demo: Xendit is paid at once
+        Assert.Null(status.ErrorMessage);
+        Assert.Empty(status.Balances);
+        Assert.False(status.HasWaitingBalance);
+        var booking = (await gw.ListAsync<Reservation>(r => r.MemberId == "u-alex")).Single(r => r.TotalPrice == 500);
+        var balance = (await gw.ListAsync<Payment>(p => p.Id == booking.BalancePaymentId)).Single();
+        Assert.Equal((PayMethod.Qr, Status.Verified, 250m, (int?)booking.Id), (balance.Method, balance.Status, balance.Amount, balance.BalanceReservationId));
+    }
+
     [Fact]
     public async Task Cancelling_within_24_hours_says_the_down_payment_is_kept()
     {
