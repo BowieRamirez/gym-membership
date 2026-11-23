@@ -197,13 +197,13 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         {
             try { await Task.Delay(CodeCheckDelay, cts.Token); } catch (OperationCanceledException) { return; }
         }
-        var kind = k.Kind == "Amenity" ? "amenity" : k.Kind == "Renewal" ? "renewal" : "package";
+        var kind = k.Kind == "Renewal" ? "renewal" : "package";
         var res = await svc.CheckCodeAsync(k.Member, k.Code, kind, k.Item, k.Kind == "Renewal" ? Item?.Price : null);
         if (cts.IsCancellationRequested) return;
         _checked = k;
         if (!res.Ok) { CodeCheckText = ErrorText.For(res.Error, res.Message); return; }
         CodeCheck = res.Value; CodeWorks = res.Value!.Works;
-        CodeCheckText = CodeCheckFeedback.Message(res.Value, kind == "amenity" ? "amenity" : "package");
+        CodeCheckText = CodeCheckFeedback.Message(res.Value, "package");
     }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ItemsEmptyText))] private bool loadingItems;
 
@@ -312,7 +312,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     /// <summary>The kind and the way of paying in words, so the order reads the same to someone who cannot see which button is filled.</summary>
     public string OrderHow => $"{Kind}, paid with {Method}";
 
-    static string KindKey(string k) => k switch { "Renewal" => PayKind.Renewal, "Amenity" => PayKind.Amenity, "Day pass" => PayKind.WalkIn, _ => PayKind.Membership };
+    static string KindKey(string k) => k switch { "Renewal" => PayKind.Renewal, "Day pass" => PayKind.WalkIn, _ => PayKind.Membership };
 
     public override Task OnAppearingAsync()
     {
