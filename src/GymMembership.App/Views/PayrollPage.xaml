@@ -101,7 +101,7 @@
         <!-- Wide table row (Salaries tab) -->
         <DataTemplate x:Key="SalaryRowTemplate" x:DataType="vm:StaffSalaryItem">
             <VerticalStackLayout>
-                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="1.1*,190,1*,360" ColumnSpacing="14">
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="1.1*,190,1*,360" RowDefinitions="Auto,Auto" ColumnSpacing="14">
                     <HorizontalStackLayout Spacing="10" VerticalOptions="Center">
                         <Label Text="{Binding FullName}" FontFamily="BarlowSemiBold" VerticalOptions="Center" LineBreakMode="TailTruncation" />
                         <c:StatusChip Status="{Binding RoleLabel}" VerticalOptions="Center" />
@@ -122,22 +122,26 @@
                             <Button Text="Change" Style="{StaticResource LinkButton}" Command="{Binding BeginDeductionsCommand}" VerticalOptions="Center"
                                     SemanticProperties.Description="{Binding FullName, StringFormat='Change government deductions for {0}'}" />
                         </HorizontalStackLayout>
-                        <VerticalStackLayout Spacing="4" IsVisible="{Binding IsEditingDeductions}">
-                            <HorizontalStackLayout Spacing="14">
+                    </VerticalStackLayout>
+
+                    <!-- the switches editor gets its own full-width line under the row (was squeezed into the Last changed column) -->
+                    <VerticalStackLayout Grid.Row="1" Grid.ColumnSpan="4" Spacing="6" Margin="0,10,0,0" MaximumWidthRequest="680" HorizontalOptions="Start"
+                                         IsVisible="{Binding IsEditingDeductions}">
+                            <Label Text="Government deductions" Style="{StaticResource Caption}" />
+                            <HorizontalStackLayout Spacing="20">
                                 <HorizontalStackLayout Spacing="4"><CheckBox IsChecked="{Binding ContributionsInput}" VerticalOptions="Center" SemanticProperties.Description="SSS, PhilHealth and Pag-IBIG" />
                                     <Label Text="SSS, PhilHealth, Pag-IBIG" Style="{StaticResource Caption}" VerticalOptions="Center" /></HorizontalStackLayout>
                                 <HorizontalStackLayout Spacing="4"><CheckBox IsChecked="{Binding TaxInput}" VerticalOptions="Center" SemanticProperties.Description="Withholding tax" />
                                     <Label Text="Withholding tax" Style="{StaticResource Caption}" VerticalOptions="Center" /></HorizontalStackLayout>
                             </HorizontalStackLayout>
                             <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
-                                <Border Style="{StaticResource Field}" Padding="8,2">
+                                <Border Style="{StaticResource Field}" Padding="8,2" WidthRequest="340">
                                     <Entry Text="{Binding DeductionsReasonInput}" MaxLength="60" Placeholder="Why off (optional), e.g. Minimum wage earner" SemanticProperties.Description="Reason" />
                                 </Border>
                                 <Button Grid.Column="1" Text="Save" Style="{StaticResource SmallButton}" Command="{Binding SaveDeductionsCommand}" />
                                 <Button Grid.Column="2" Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelDeductionsCommand}" />
                             </Grid>
                             <Label Text="{Binding ErrorText}" Style="{StaticResource FieldError}" IsVisible="{Binding ErrorText, Converter={StaticResource IsNotNull}}" />
-                        </VerticalStackLayout>
                     </VerticalStackLayout>
 
                     <HorizontalStackLayout Grid.Column="3" Spacing="8" HorizontalOptions="End" VerticalOptions="Center" IsVisible="{Binding IsNotEditing}">

@@ -1846,6 +1846,11 @@ public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? a
     }
     /// <summary>Switched off but not deleted: they can be switched back on here.</summary>
     public ObservableCollection<UserRow> Deactivated { get; } = new();
+    // Active | Deactivated tabs (owner, 2026-11-25; was two tables one under the other)
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsActiveTab))] private bool isDeactivatedTab;
+    public bool IsActiveTab => !IsDeactivatedTab;
+    [RelayCommand] void OpenActiveTab() => IsDeactivatedTab = false;
+    [RelayCommand] void OpenDeactivatedTab() => IsDeactivatedTab = true;
     /// <summary>What can be added: a sub-admin adds members and coaches only (D15).</summary>
     [ObservableProperty] private string[] roles = ["Member", "Coach"];
     [ObservableProperty, NotifyPropertyChangedFor(nameof(AddTitle))] private bool isSuperAdmin;
@@ -2436,6 +2441,11 @@ public partial class RevenueViewModel(IAdminService svc, IReportFiles? files = n
     public ObservableCollection<RevenueRow> Rows { get; } = new();
     public ObservableCollection<CashShift> Shifts { get; } = new();   // F2: drawer shifts opened in the same dates
     public ObservableCollection<CoachHoursRow> CoachHours { get; } = new();   // E11: completed hours per coach
+    // Revenue | Cash shifts tabs (owner, 2026-11-25; the shifts table was under the charts)
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsRevenueTab))] private bool isShiftsTab;
+    public bool IsRevenueTab => !IsShiftsTab;
+    [RelayCommand] void OpenRevenueTab() => IsShiftsTab = false;
+    [RelayCommand] void OpenShiftsTab() => IsShiftsTab = true;
     [ObservableProperty] private DateTime from = DateTime.Today.AddDays(-29);   // 30 days with today
     [ObservableProperty] private DateTime to = DateTime.Today;
     [ObservableProperty] private string totalText = "₱0.00";

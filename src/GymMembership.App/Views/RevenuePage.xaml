@@ -84,10 +84,35 @@
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='20,16,20,24', Default='16,12,16,20'}" Spacing="14">
-            <!-- 9.8: one sentence (was five); the cash-drawer timing is said on the Cashier page, where the drawer is -->
-            <Label Text="Verified payments minus refunds (counted on the day they were approved), by Manila day, item and method; voided payments are left out." Style="{StaticResource Muted}" />
+            <!-- Revenue | Cash shifts tabs (owner, 2026-11-25), the Payroll segment control -->
+            <Border Style="{StaticResource SegmentTrack}">
+                <HorizontalStackLayout Spacing="2">
+                    <Button Text="Revenue" Command="{Binding OpenRevenueTabCommand}" Style="{StaticResource Segment}" AutomationId="RevenueTab">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button" Binding="{Binding IsRevenueTab}" Value="True">
+                                <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                            </DataTrigger>
+                        </Button.Triggers>
+                    </Button>
+                    <Button Text="Cash shifts" Command="{Binding OpenShiftsTabCommand}" Style="{StaticResource Segment}" AutomationId="CashShiftsTab">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button" Binding="{Binding IsShiftsTab}" Value="True">
+                                <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                            </DataTrigger>
+                        </Button.Triggers>
+                    </Button>
+                </HorizontalStackLayout>
+            </Border>
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
+
+            <VerticalStackLayout Spacing="14" IsVisible="{Binding IsRevenueTab}">
+            <!-- 9.8: one sentence (was five); the cash-drawer timing is said on the Cashier page, where the drawer is -->
+            <Label Text="Verified payments minus refunds (counted on the day they were approved), by Manila day, item and method; voided payments are left out." Style="{StaticResource Muted}" />
 
             <!-- Windows: the detailed page (RevenuePage.Windows.cs, mockup docs/mockups/revenue.html) -->
             <ContentView x:Name="Dashboard" IsVisible="{OnPlatform WinUI=True, Default=False}" />
@@ -138,12 +163,14 @@
             </c:TableBody>
             </Border>
             </VerticalStackLayout>
+            </VerticalStackLayout>
 
             <!-- F2 (0050), D8 (2026-11-20): every cashier's drawer shift opened in the same dates, newest first; shortages and overages kept apart from sales -->
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="0,8,0,0">
+            <VerticalStackLayout Spacing="14" IsVisible="{Binding IsShiftsTab}">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                 <VerticalStackLayout Spacing="2" VerticalOptions="Center">
-                    <Label Text="Cash shifts" Style="{StaticResource SectionTitle}" Margin="0" />
-                    <Label Text="{Binding ShiftTotalsText}" Style="{StaticResource Caption}" />
+                    <Label Text="{Binding ShiftTotalsText}" FontFamily="BarlowSemiBold" />
+                    <Label Text="Shifts opened in the dates chosen on the Revenue tab, newest first." Style="{StaticResource Caption}" />
                 </VerticalStackLayout>
                 <Button Grid.Column="1" Text="Export shifts PDF" Style="{StaticResource SmallOutlineButton}" Command="{Binding ExportShiftsPdfCommand}"
                         SemanticProperties.Hint="Creates a PDF of the cash shifts shown and opens the share sheet" />
@@ -185,6 +212,7 @@
                     </c:TableBody>
                 </VerticalStackLayout>
             </Border>
+            </VerticalStackLayout>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>
