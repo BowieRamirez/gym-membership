@@ -129,6 +129,19 @@ public class PayrollHourlyViewModelTests
     }
 
     [Fact]
+    public async Task Period_heading_updates_when_stepping_from_the_16th_back_to_the_1st()
+    {
+        var gw = new DemoGateway();
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var vm = new PayrollViewModel(new AdminService(gw)) { PeriodStartsOn = new DateOnly(2026, 10, 16) };
+        await vm.OnAppearingAsync();
+        string? shown = null;
+        vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(PayrollViewModel.PeriodLabel)) shown = vm.PeriodLabel; };
+        await vm.PrevPeriodCommand.ExecuteAsync(null);
+        Assert.Equal("1–15 Oct 2026", shown);   // the screen showed "1–31 Oct 2026": the end date changed without telling the heading
+    }
+
+    [Fact]
     public void Payslip_shows_the_basis_corrections_categories_gross_and_net()
     {
         var row = new PayrollRow

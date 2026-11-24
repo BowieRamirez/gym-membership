@@ -534,8 +534,8 @@
                                 <Button Text="Bonus" Style="{StaticResource SmallOutlineButton}" Command="{Binding SetLineKindCommand}" CommandParameter="bonus">
                                     <Button.Triggers>
                                         <DataTrigger TargetType="Button" Binding="{Binding IsBonusKind}" Value="True">
-                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
-                                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+                                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PageDark}}" />
                                         </DataTrigger>
                                         <DataTrigger TargetType="Button" Binding="{Binding IsBonusKind}" Value="False">
                                             <Setter Property="BackgroundColor" Value="Transparent" />
@@ -546,8 +546,8 @@
                                 <Button Text="Deduction" Style="{StaticResource SmallOutlineButton}" Command="{Binding SetLineKindCommand}" CommandParameter="deduction">
                                     <Button.Triggers>
                                         <DataTrigger TargetType="Button" Binding="{Binding IsDeductionKind}" Value="True">
-                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
-                                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+                                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PageDark}}" />
                                         </DataTrigger>
                                         <DataTrigger TargetType="Button" Binding="{Binding IsDeductionKind}" Value="False">
                                             <Setter Property="BackgroundColor" Value="Transparent" />

@@ -3673,7 +3673,7 @@ public partial class PayrollViewModel : LoadableViewModel
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(PeriodLabel), nameof(CanMarkPaid))]
     private DateOnly periodStartsOn;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanMarkPaid))]
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(PeriodLabel), nameof(CanMarkPaid))]
     private DateOnly periodEndsOn;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsDraft), nameof(CanMarkPaid))]
     private bool isPaid;
