@@ -4,7 +4,7 @@
 
 Created: 2026-11-24
 Last updated: 2026-11-24
-Status (2026-11-24): plan written; U1-U12 recommended, **waiting on the owner to confirm**. Not built.
+Status (2026-11-24): U1-U12 confirmed (as recommended); Phases 1-2 built, reviewed and fixed; `0145` live once pushed (see Session log); owner hand checks left. Not merged.
 Branch: `hourly-payroll-2026-11-24` (same branch as `2026-11-24-hourly-payroll.md` and `2026-11-24-payroll-deductions.md`). **Owner's rule: not merged into `main` yet.** No PR until the owner asks.
 
 **Goal:** Close the four gaps the owner's payroll rules showed against what was built (2026-11-24 comparison):
@@ -25,9 +25,9 @@ Same rules as `2026-11-24-payroll-deductions.md`: decisions first (nothing built
 
 | Phase | What | Needs | Status |
 |---|---|---|---|
-| 1 | Database: two switches, non-taxable categories with the yearly ₱90,000, retro category, Approve / Reopen / Paid out | U1-U12 | Not started |
-| 2 | Payroll page: two switches, new categories, Approve / Reopen / Mark as paid out, statuses, payslip | U1-U12 | Not started |
-| 3 | Checks, review, owner hand checks | | Not started |
+| 1 | Database: two switches, non-taxable categories with the yearly ₱90,000, retro category, Approve / Reopen / Paid out | U1-U12 | Done (`2bf837f` + review fixes) |
+| 2 | Payroll page: two switches, new categories, Approve / Reopen / Mark as paid out, statuses, payslip | U1-U12 | Done (`2bf837f` + review fixes) |
+| 3 | Checks, review, owner hand checks | | Review done and fixed; owner hand checks left |
 
 ## 1. Findings (2026-11-24)
 
@@ -89,7 +89,7 @@ Operate mode, same page and components; run `impeccable` before the XAML and bef
 
 **Files:** migration `0145_payroll_exemptions_reopen.sql`: `payroll_no_deductions` → add `contributions_off boolean`, `tax_off boolean`, `reason text` (existing rows both true; a row with both false is deleted); `payroll_deduction_rates.thirteenth_month_exempt`; categories + `thirteenth_month / de_minimis / retro`; `payroll_basis` (switches, U4-U6); `payroll_periods.paid_out_at / paid_out_by` (backfill = `paid_at`/`paid_by`); `payroll_reopen(p_period, p_reason)`, `payroll_mark_paid_out(p_period)`; `set_payroll_deductions(p_user, p_contributions, p_tax, p_reason)` (old 2-argument call kept as a wrapper for the released app); `payroll_staff` / `payroll_period` new fields (`contributions_on`, `tax_on`, `deductions_reason`, `nontaxable`, `status`, `paid_out_at`, `paid_out_by_name`); `payroll_mark_paid` unchanged in meaning (approve). App: services, models, `Foundation.cs` sentences (`second_half_approved`, `not_approved`, `paid_out`), demo mirror. Tests: `supabase/tests/local/payroll-exemptions.mjs`, `tests/GymMembership.Tests/PayrollExemptionsTests.cs`.
 
-- [ ] Failing tests first: Review Focus 1-7.
+- [x] Failing tests first: Review Focus 1-7.
 - [ ] Migration, dry-run push, push live, live grants checked, `ponytail:ponytail-review`, commit, push branch.
 
 ## Phase 2: Payroll page
@@ -98,15 +98,17 @@ Operate mode, same page and components; run `impeccable` before the XAML and bef
 
 **Files:** `PayrollPage.xaml`, `PayrollViewModel` and items in `StaffViewModels.cs`, `PayrollPdf`, tests (two switches and reason; category hints incl. "₱x used this year"; status chip and buttons per status; Reopen reason required; paid-out confirm text; payslip status line).
 
-- [ ] `impeccable` before the XAML; build; Windows light and dark, narrow and wide; fix findings.
-- [ ] View model tests green; Windows build; `ponytail:ponytail-review`; commit, push branch.
+- [x] `impeccable` before the XAML; build; Windows light and dark, narrow and wide; fix findings.
+- [x] View model tests green; Windows build; `ponytail:ponytail-review`; commit, push branch.
 
 ## Phase 3: Checks
 
-- [ ] Whole suite (`dotnet test`, Windows & Android builds, DB suite) green.
-- [ ] `superpowers:requesting-code-review` on the branch diff; fixes committed.
+- [x] Whole suite (`dotnet test`, Windows & Android builds, DB suite) green.
+- [x] `superpowers:requesting-code-review` on the branch diff; fixes committed.
 - [ ] Owner hand checks (Windows): set one person "tax off, minimum wage earner"; add a 13th month bonus over ₱90,000 across two periods; add a de minimis and a retro line; Approve, Reopen with a reason, change something, Approve again, Mark as paid out; confirm the payslip and that a paid-out period can't be reopened.
 
 ## Session log
 
 - 2026-11-24: owner compared the built payroll with their payroll rules; gaps: one all-or-nothing switch (minimum wage earners), no non-taxable pay (13th month ₱90,000, de minimis), no reopen before payout, no retro category. Owner: "yes plan 1-4". Plan written; U1-U12 recommended, waiting on the owner. Not built. Next migration `0145`.
+- 2026-11-24: owner: U1-U12 as recommended, start building. Built `0145_payroll_exemptions_reopen.sql` and the app (`2bf837f`): two switches with a reason, 13th month (₱90,000 a year) / de minimis / retro categories, contribution base without 13th month and de minimis, Approve → Reopen (reason) → Mark as paid out, status chip and buttons, category hints, payslip status line. Checked in a demo copy (no live data): two switches ("Contributions on · Tax off (Minimum wage earner)"), Approve confirm wording, first_half_unpaid refusal, Approved panel with Reopen and Mark as paid out.
+- 2026-11-24: fresh review, no Critical. Fixed in `0145` before it went live: a Retro deduction now lowers taxable pay and the SSS / Pag-IBIG base; the ₱90,000 13th-month cap counts every other approved period of the year, so approving out of order or reopening can't beat it; Reopen locks the month's 16th–end row against a simultaneous Approve; switches log real changes only; the 13th month hint follows the open person's numbers; the unused one-click switch was removed; first_half_unpaid says "Approve … first". Noted, not changed: an approved period's panel shows today's non-taxable figure (frozen amounts never change); the released 0.10.0 app's single switch overwrites a "tax off only" setting; Reopen has no confirm dialog (the required reason stands in). Next migration `0146`.

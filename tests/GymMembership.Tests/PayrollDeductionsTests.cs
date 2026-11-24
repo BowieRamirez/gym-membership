@@ -101,7 +101,9 @@ public class PayrollDeductionsTests
 
         var item = vm.StaffSalaries.First(s => s.UserId == desk.UserId);
         Assert.True(item.DeductionsOn);
-        await item.ToggleDeductionsCommand.ExecuteAsync(null);
+        item.BeginDeductionsCommand.Execute(null);
+        item.ContributionsInput = false; item.TaxInput = false;
+        await item.SaveDeductionsCommand.ExecuteAsync(null);
         Assert.False(vm.StaffSalaries.First(s => s.UserId == desk.UserId).DeductionsOn);
     }
 

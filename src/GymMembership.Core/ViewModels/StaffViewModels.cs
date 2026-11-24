@@ -3600,14 +3600,12 @@ public sealed class PayrollAdjustmentItem(PayrollHourAdjustment adj, string unit
 }
 
 public sealed partial class StaffSalaryItem(StaffSalary s, Func<StaffSalaryItem, Task> save, Func<StaffSalaryItem, Task>? useRoleDefault = null,
-    Func<StaffSalaryItem, Task>? toggleDeductions = null, Func<StaffSalaryItem, Task>? saveDeductions = null) : ObservableObject
+    Func<StaffSalaryItem, Task>? saveDeductions = null) : ObservableObject
 {
     // 0144 (T4) / 0145 (U1, U2): contributions and withholding tax on/off, with an optional reason
     public bool DeductionsOn => Data.DeductionsOn;
     public string DeductionsText => $"Contributions {(Data.ContributionsOn ? "on" : "off")} · Tax {(Data.TaxOn ? "on" : "off")}"
         + (string.IsNullOrWhiteSpace(Data.DeductionsReason) ? "" : $" ({Data.DeductionsReason})");
-    public string ToggleDeductionsText => DeductionsOn ? "Turn off" : "Turn on";
-    [RelayCommand] private Task ToggleDeductionsAsync() => toggleDeductions?.Invoke(this) ?? Task.CompletedTask;
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsNotEditingDeductions))] private bool isEditingDeductions;
     public bool IsNotEditingDeductions => !IsEditingDeductions;
@@ -3707,6 +3705,7 @@ public partial class PayrollViewModel : LoadableViewModel
         _ => ""
     };
     partial void OnLineCategoryChanged(string value) => OnPropertyChanged(nameof(LineCategoryHint));
+    partial void OnSelectedRowChanged(PayrollRowItem? value) => OnPropertyChanged(nameof(LineCategoryHint));   // its "used this year" changes with the row
 
     // 0145 (U7-U10): Draft -> Approve -> Reopen (with a reason) or Mark as paid out
     string _status = "draft";
@@ -3863,7 +3862,7 @@ public partial class PayrollViewModel : LoadableViewModel
         });
         await RunAsync(() => _svc.PayrollStaffAsync(), list =>
         {
-            Fill(StaffSalaries, list.Select(s => new StaffSalaryItem(s, SaveSalaryAsync, UseRoleDefaultAsync, ToggleDeductionsAsync, SaveDeductionsAsync)));
+            Fill(StaffSalaries, list.Select(s => new StaffSalaryItem(s, SaveSalaryAsync, UseRoleDefaultAsync, SaveDeductionsAsync)));
         });
     }
 
@@ -4212,16 +4211,6 @@ public partial class PayrollViewModel : LoadableViewModel
         if (!res.Ok) { item.ErrorText = ErrorText.For(res.Error, res.Message); return; }
         item.IsEditingDeductions = false;
         Notice = $"Deductions saved for {item.FullName}.";
-        await LoadSalariesAsync();
-        await LoadPeriodAsync();
-    }
-
-    async Task ToggleDeductionsAsync(StaffSalaryItem item)
-    {
-        item.ErrorText = null;
-        var res = await _svc.SetPayrollDeductionsAsync(item.UserId, !item.DeductionsOn);
-        if (!res.Ok) { item.ErrorText = ErrorText.For(res.Error, res.Message); return; }
-        Notice = item.DeductionsOn ? $"Government deductions turned off for {item.FullName}." : $"Government deductions turned on for {item.FullName}.";
         await LoadSalariesAsync();
         await LoadPeriodAsync();
     }

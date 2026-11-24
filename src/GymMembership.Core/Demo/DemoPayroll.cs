@@ -207,15 +207,17 @@ public sealed partial class DemoGateway
             bool cOn = !r.NoSalary && !off.ContributionsOff, tOn = !r.NoSalary && !off.TaxOff;
             var f = first.FirstOrDefault(x => x.UserId == r.UserId);
             decimal m13 = Bonus(per.Id, r.UserId, "thirteenth_month"), dm = Bonus(per.Id, r.UserId, "de_minimis");
-            decimal half1Out = half1 is null ? 0 : Bonus(half1.Id, r.UserId, "thirteenth_month") + Bonus(half1.Id, r.UserId, "de_minimis");
-            var m13Before = _payrollPeriods.Where(pp => pp.PaidAt is not null && pp.StartsOn < per.StartsOn && pp.StartsOn.Year == per.StartsOn.Year)
+            decimal Retro(int periodId) => _payrollLines.Where(l => l.PeriodId == periodId && l.UserId == r.UserId && l.Kind == "deduction" && l.Category == "retro").Sum(l => l.Amount);
+            var rd = Retro(per.Id);
+            decimal half1Out = half1 is null ? 0 : Bonus(half1.Id, r.UserId, "thirteenth_month") + Bonus(half1.Id, r.UserId, "de_minimis") + Retro(half1.Id);
+            var m13Before = _payrollPeriods.Where(pp => pp.PaidAt is not null && pp.Id != per.Id && pp.StartsOn.Year == per.StartsOn.Year)
                 .Sum(pp => Bonus(pp.Id, r.UserId, "thirteenth_month"));
             var nontax = Math.Min(m13, Math.Max(0, 90000 - m13Before)) + dm;
-            var mGross = r.Gross + (f?.Gross ?? 0) - m13 - dm - half1Out; var mBase = r.BasePay + (f?.BasePay ?? 0);
+            var mGross = Math.Max(0, r.Gross + (f?.Gross ?? 0) - m13 - dm - rd - half1Out); var mBase = r.BasePay + (f?.BasePay ?? 0);
             var due = cOn && secondHalf && mGross > 0;   // no pay all month: nothing is due (0144 review fix)
             decimal ws = due ? PayrollDeductions.Sss(mGross) : 0, wp = due ? PayrollDeductions.PhilHealth(mBase) : 0,
                     wi = due ? PayrollDeductions.PagIbig(mGross) : 0;
-            var taxable = Math.Max(0, r.Gross - nontax - ws - wp - wi);
+            var taxable = Math.Max(0, r.Gross - nontax - rd - ws - wp - wi);
             var wt = tOn ? PayrollDeductions.Tax(taxable) : 0;
             var on = cOn || tOn;
             r.ContributionsOn = cOn; r.TaxOn = tOn; r.DeductionsReason = off.Reason; r.Nontaxable = nontax; r.ThirteenthUsed = m13Before + m13;
@@ -233,7 +235,7 @@ public sealed partial class DemoGateway
             var gov = s + p + i + t;
             r.DeductionsOn = on; r.ManualDeductions = r.Deductions; r.Sss = s; r.PhilHealth = p; r.PagIbig = i; r.Tax = t; r.GovTotal = gov;
             r.GovCut = per.PaidAt is null && gov < ws + wp + wi + wt;
-            r.MonthGross = secondHalf ? mGross : r.Gross - m13 - dm; r.MonthBase = secondHalf ? mBase : r.BasePay; r.Taxable = taxable;
+            r.MonthGross = secondHalf ? mGross : Math.Max(0, r.Gross - m13 - dm - rd); r.MonthBase = secondHalf ? mBase : r.BasePay; r.Taxable = taxable;
             r.Msc = PayrollDeductions.Msc(mGross); r.PagIbigBase = Math.Min(Math.Max(mGross, 0), 10000);
             r.Deductions += gov; r.Net -= gov;
         }
@@ -381,8 +383,10 @@ public sealed partial class DemoGateway
                 if (PrimaryPayrollRole(userId) is null || reason?.Length > 60
                     || !All<Profile>().Any(p => p.Id == userId && p.IsActive && p.DeletedAt is null)) throw Err("bad_input");
                 if (userId == Uid) throw Err("own_salary");
+                var before = _noDeductions.TryGetValue(userId, out var was) ? was : (false, false, null);
                 if (contributions && tax) _noDeductions.Remove(userId); else _noDeductions[userId] = (!contributions, !tax, reason);
-                Audit("payroll.deductions_set", "staff_salaries", userId);
+                var after = _noDeductions.TryGetValue(userId, out var now) ? now : (false, false, null);
+                if (before != after) Audit("payroll.deductions_set", "staff_salaries", userId);   // real changes only
                 return true;
             }
             case "payroll_reopen":

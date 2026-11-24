@@ -69,6 +69,39 @@ public class PayrollExemptionsTests
         Assert.Contains("can't be reopened", ErrorText.For(AppErrorKind.Validation, "paid_out"));
     }
 
+    [Fact]   // review fixes: retro deductions lower taxable pay; the 90,000 cap holds in any approval order
+    public async Task Retro_deductions_lower_taxable_pay_and_the_cap_holds_in_any_order()
+    {
+        var (admin, desk) = await Setup();
+        var jul = (await admin.PayrollPeriodAsync(new DateOnly(2026, 7, 1))).Value!.PeriodId;
+        await admin.AddPayrollLineAsync(jul, desk.UserId, "deduction", 1000m, "Overpaid in June", "retro");
+        var r = (await admin.PayrollPeriodAsync(new DateOnly(2026, 7, 1))).Value!.Rows.First(x => x.UserId == desk.UserId);
+        Assert.Equal((12000m, 237.45m), (r.Taxable, r.Tax));
+
+        var dec = (await admin.PayrollPeriodAsync(new DateOnly(2024, 12, 1))).Value!.PeriodId;
+        await admin.AddPayrollLineAsync(dec, desk.UserId, "bonus", 40000m, "December first", "thirteenth_month");
+        await admin.MarkPayrollPaidAsync(dec);
+        var jun = (await admin.PayrollPeriodAsync(new DateOnly(2024, 6, 1))).Value!.PeriodId;
+        await admin.AddPayrollLineAsync(jun, desk.UserId, "bonus", 60000m, "June later", "thirteenth_month");
+        Assert.Equal(50000m, (await admin.PayrollPeriodAsync(new DateOnly(2024, 6, 1))).Value!.Rows.First(x => x.UserId == desk.UserId).Nontaxable);
+    }
+
+    [Fact]   // review fix: the 13th month hint follows the open person's numbers (here: after adding a 13th month line)
+    public async Task Thirteenth_month_hint_updates_when_the_open_persons_numbers_change()
+    {
+        var (admin, desk) = await Setup();
+        var vm = new PayrollViewModel(admin) { PeriodStartsOn = new DateOnly(2026, 9, 1) };
+        await vm.OnAppearingAsync();
+        await vm.OpenDrawerCommand.ExecuteAsync(vm.Rows.First(r => r.UserId == desk.UserId));
+        vm.LineCategory = "13th month / other benefits";
+        string? seen = null;
+        vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(PayrollViewModel.LineCategoryHint)) seen = vm.LineCategoryHint; };
+        vm.LineAmountText = "5000";
+        vm.LineNote = "13th month advance";
+        await vm.AddLineCommand.ExecuteAsync(null);
+        Assert.Equal("Tax-free up to ₱90,000.00 a year; ₱5,000.00 used this year.", seen);
+    }
+
     [Fact]
     public void Payslip_says_draft_approved_or_paid_out()
     {

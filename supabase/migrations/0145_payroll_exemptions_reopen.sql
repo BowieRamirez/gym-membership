@@ -38,13 +38,14 @@ language sql stable set search_path = '' as $$
             where extract(day from per.starts_on) = 16 and f.starts_on = date_trunc('month', per.starts_on)::date),
   core as (select * from public.payroll_basis_core(p_period)),
   fh as (select * from public.payroll_basis_core((select period_id from half1))),
-  -- 13th month and de minimis lines per person, this period and its first half
+  -- 13th month and de minimis bonuses, and retro deductions (pay taken back), per person: this period and its first half
   cat as (
     select pl.period_id, pl.user_id,
-           coalesce(sum(pl.amount) filter (where pl.category = 'thirteenth_month'), 0) as m13,
-           coalesce(sum(pl.amount) filter (where pl.category = 'de_minimis'), 0) as dm
+           coalesce(sum(pl.amount) filter (where pl.kind = 'bonus' and pl.category = 'thirteenth_month'), 0) as m13,
+           coalesce(sum(pl.amount) filter (where pl.kind = 'bonus' and pl.category = 'de_minimis'), 0) as dm,
+           coalesce(sum(pl.amount) filter (where pl.kind = 'deduction' and pl.category = 'retro'), 0) as rd
     from public.payroll_lines pl
-    where pl.kind = 'bonus' and pl.period_id in (p_period, coalesce((select period_id from half1), -1))
+    where pl.period_id in (p_period, coalesce((select period_id from half1), -1))
     group by pl.period_id, pl.user_id),
   frozen as (
     select pl.user_id,
@@ -57,13 +58,14 @@ language sql stable set search_path = '' as $$
            not c.no_salary and coalesce(not nd.contributions_off, true) as c_on,
            not c.no_salary and coalesce(not nd.tax_off, true) as t_on,
            extract(day from per.starts_on) = 16 as second_half,
-           coalesce(ct.m13, 0) as m13, coalesce(ct.dm, 0) as dm,
-           -- U4: 13th month in approved periods earlier this calendar year
+           coalesce(ct.m13, 0) as m13, coalesce(ct.dm, 0) as dm, coalesce(ct.rd, 0) as rd,
+           -- U4: 13th month in the other approved periods of this calendar year, whatever order they were approved in
            coalesce((select sum(pl.amount) from public.payroll_lines pl join public.payroll_periods pp on pp.period_id = pl.period_id
                      where pl.user_id = c.user_id and pl.kind = 'bonus' and pl.category = 'thirteenth_month' and pp.paid_at is not null
-                       and pp.starts_on < per.starts_on and extract(year from pp.starts_on) = extract(year from per.starts_on)), 0) as m13_before,
-           -- U6: the contribution base leaves out 13th month and de minimis (both halves)
-           (c.gross + coalesce(f.gross, 0) - coalesce(ct.m13, 0) - coalesce(ct.dm, 0) - coalesce(cf.m13, 0) - coalesce(cf.dm, 0))::numeric(12,2) as m_gross,
+                       and pp.period_id <> per.period_id and extract(year from pp.starts_on) = extract(year from per.starts_on)), 0) as m13_before,
+           -- U6: the contribution base leaves out 13th month and de minimis and takes off retro deductions (both halves)
+           greatest(0, c.gross + coalesce(f.gross, 0) - coalesce(ct.m13, 0) - coalesce(ct.dm, 0) - coalesce(cf.m13, 0) - coalesce(cf.dm, 0)
+                       - coalesce(ct.rd, 0) - coalesce(cf.rd, 0))::numeric(12,2) as m_gross,
            (c.base_pay + coalesce(f.base_pay, 0))::numeric(12,2) as m_base
     from core c cross join per
     left join fh f on f.user_id = c.user_id
@@ -81,8 +83,8 @@ language sql stable set search_path = '' as $$
            case when r.c_on and r.second_half and r.m_gross > 0 then public.payroll_pagibig(r.m_gross) else 0 end as w_pi
     from exempt r),
   wanted2 as (
-    select w.*, greatest(0, w.gross - w.nontax - w.w_sss - w.w_ph - w.w_pi)::numeric(12,2) as w_taxable,
-           case when w.t_on then public.payroll_tax(greatest(0, w.gross - w.nontax - w.w_sss - w.w_ph - w.w_pi)) else 0 end as w_tax,
+    select w.*, greatest(0, w.gross - w.nontax - w.rd - w.w_sss - w.w_ph - w.w_pi)::numeric(12,2) as w_taxable,
+           case when w.t_on then public.payroll_tax(greatest(0, w.gross - w.nontax - w.rd - w.w_sss - w.w_ph - w.w_pi)) else 0 end as w_tax,
            greatest(0, w.gross - w.deductions) as room
     from wanted w),
   -- T8: taken in this order, each only up to what is left after the manual deductions
@@ -98,7 +100,7 @@ language sql stable set search_path = '' as $$
          (t.gross - t.deductions - t.t_sss - t.t_ph - t.t_pi - t.t_tax)::numeric(12,2), t.pending, t.flagged,
          t.c_on or t.t_on, t.deductions, t.t_sss, t.t_ph, t.t_pi, t.t_tax, (t.t_sss + t.t_ph + t.t_pi + t.t_tax)::numeric(12,2),
          not t.paid and (t.t_sss + t.t_ph + t.t_pi + t.t_tax) < (t.w_sss + t.w_ph + t.w_pi + t.w_tax),
-         case when t.second_half then t.m_gross else t.gross - t.m13 - t.dm end, case when t.second_half then t.m_base else t.base_pay end, t.w_taxable,
+         case when t.second_half then t.m_gross else greatest(0, t.gross - t.m13 - t.dm - t.rd) end, case when t.second_half then t.m_base else t.base_pay end, t.w_taxable,
          (select least(r.sss_msc_max, greatest(r.sss_msc_min, r.sss_msc_step * round(t.m_gross / r.sss_msc_step))) from public.payroll_deduction_rates r)::numeric(12,2),
          (select least(greatest(t.m_gross, 0), r.pagibig_cap) from public.payroll_deduction_rates r)::numeric(12,2),
          t.c_on, t.t_on, t.off_reason, t.nontax, (t.m13_before + t.m13)::numeric(12,2)
@@ -127,9 +129,13 @@ begin
     on conflict (user_id) do update set contributions_off = excluded.contributions_off, tax_off = excluded.tax_off,
                                         reason = excluded.reason, set_by = excluded.set_by, set_at = now();
   end if;
-  perform public.audit('payroll.deductions_set', 'staff_salaries', p_user::text, jsonb_build_object(
-    'old_contributions', coalesce(not v_old.contributions_off, true), 'old_tax', coalesce(not v_old.tax_off, true),
-    'contributions', p_contributions, 'tax', p_tax, 'reason', v_reason));
+  -- log real changes only
+  if coalesce(not v_old.contributions_off, true) <> p_contributions or coalesce(not v_old.tax_off, true) <> p_tax
+     or (not (p_contributions and p_tax) and v_old.reason is distinct from v_reason) then
+    perform public.audit('payroll.deductions_set', 'staff_salaries', p_user::text, jsonb_build_object(
+      'old_contributions', coalesce(not v_old.contributions_off, true), 'old_tax', coalesce(not v_old.tax_off, true),
+      'contributions', p_contributions, 'tax', p_tax, 'reason', v_reason));
+  end if;
 end $$;
 
 create or replace function public.set_payroll_deductions(p_user uuid, p_on boolean) returns void
@@ -212,6 +218,8 @@ begin
   if not found then perform public.fail('bad_input', '22023'); end if;
   if v_per.paid_out_at is not null then perform public.fail('paid_out', 'P0002'); end if;
   if v_per.paid_at is null then perform public.fail('not_approved', '22023'); end if;
+  -- lock the month's 16th-end too, so an Approve of it can't slip in while this reopens (it waits, then sees this as a draft)
+  perform 1 from public.payroll_periods s where s.starts_on = v_per.starts_on + 15 for update;
   if extract(day from v_per.starts_on) = 1 and exists (
        select 1 from public.payroll_periods s where s.starts_on = v_per.starts_on + 15 and s.paid_at is not null) then
     perform public.fail('second_half_approved', '22023');

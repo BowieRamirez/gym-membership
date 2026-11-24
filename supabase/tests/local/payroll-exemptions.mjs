@@ -100,6 +100,32 @@ try {
     await line(o2, dm, 'deduction', 100, 'Overpaid in September', 'retro');
   });
 
+  await test('review fix: a retro deduction lowers taxable pay and the SSS / Pag-IBIG base', async () => {
+    const rd = await user('employee', 'Desk Retro');
+    await as(admin, `select set_staff_salary($1, 13000, 'fixed')`, [rd]);
+    await line((await period('2026-07-01')).period_id, rd, 'deduction', 1000, 'Overpaid in June', 'retro');
+    const a = await row('2026-07-01', rd);
+    assert.equal(n(a.taxable), 12000); assert.equal(n(a.tax), 237.45);
+    const b = await row('2026-07-16', rd);
+    assert.equal(n(b.month_gross), 25000); assert.equal(n(b.msc), 25000);
+  });
+
+  await test('review fix: the 90,000 cap holds whatever order periods are approved in', async () => {
+    const ooo = await user('employee', 'Desk Order');
+    await as(admin, `select set_staff_salary($1, 13000, 'fixed')`, [ooo]);
+    await line((await period('2024-12-01')).period_id, ooo, 'bonus', 40000, 'December first', 'thirteenth_month');
+    await approve('2024-12-01');
+    await line((await period('2024-06-01')).period_id, ooo, 'bonus', 60000, 'June later', 'thirteenth_month');
+    assert.equal(n((await row('2024-06-01', ooo)).nontaxable), 50000);   // 90,000 − 40,000 already tax-free in December
+  });
+
+  await test('review fix: saving the switches without a change writes no log entry', async () => {
+    const count = async () => (await db.query(`select count(*)::int c from audit_log where action = 'payroll.deductions_set' and entity_id = $1::text`, [mwe])).rows[0].c;
+    const before = await count();
+    await as(admin, `select set_payroll_deductions($1, true, false, 'Minimum wage earner')`, [mwe]);
+    assert.equal(await count(), before);
+  });
+
   await test('Review Focus 4: Approve, Reopen with a reason, Approve again: fresh frozen lines, no duplicates', async () => {
     const sep = (await period('2026-09-01')).period_id;
     await line(sep, dm, 'bonus', 300, 'Holiday cover', 'holiday');
