@@ -526,9 +526,12 @@ public sealed class StaffSalary
     [System.Text.Json.Serialization.JsonPropertyName("full_name")] public string FullName { get; set; } = "";
     [System.Text.Json.Serialization.JsonPropertyName("role")] public string Role { get; set; } = "";
     [System.Text.Json.Serialization.JsonPropertyName("amount")] public decimal? Amount { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("pay_type")] public string PayType { get; set; } = "fixed";
+    [System.Text.Json.Serialization.JsonPropertyName("personal")] public bool Personal { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("updated_at")] public DateTime? UpdatedAt { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("updated_by_name")] public string? UpdatedByName { get; set; }
     [System.Text.Json.Serialization.JsonIgnore] public bool NoSalary => Amount is null;
+    [System.Text.Json.Serialization.JsonIgnore] public string AmountText => Amount is { } a ? PayTypes.RateText(PayType, a) : "No salary set";
     [System.Text.Json.Serialization.JsonIgnore] public string RoleLabel => Role switch { "employee" => "Front desk", "coach" => "Coach", "subadmin" => "Admin", "admin" => "System admin", _ => Role };
 }
 
@@ -539,6 +542,7 @@ public sealed class RoleSalary
     [System.Text.Json.Serialization.JsonPropertyName("amount")] public decimal? Amount { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("updated_at")] public DateTime? UpdatedAt { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("updated_by_name")] public string? UpdatedByName { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("pay_type")] public string PayType { get; set; } = "fixed";
     [System.Text.Json.Serialization.JsonIgnore] public string RoleLabel => Role == "coach" ? "Coach" : "Front desk";
 }
 
@@ -555,7 +559,20 @@ public sealed class PayrollRow
     [System.Text.Json.Serialization.JsonPropertyName("deductions")] public decimal Deductions { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("net")] public decimal Net { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("no_salary")] public bool NoSalary { get; set; }
+    // 0142 (H1-H17): how the pay is worked out
+    [System.Text.Json.Serialization.JsonPropertyName("pay_type")] public string PayType { get; set; } = "fixed";
+    [System.Text.Json.Serialization.JsonPropertyName("rate")] public decimal Rate { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("personal")] public bool Personal { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("logged")] public decimal Logged { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("adjustment")] public decimal Adjustment { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("payable")] public decimal Payable { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("base_pay")] public decimal BasePay { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("gross")] public decimal Gross { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("pending")] public int Pending { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("flagged")] public int Flagged { get; set; }
     [System.Text.Json.Serialization.JsonIgnore] public string RoleLabel => Role switch { "employee" => "Front desk", "coach" => "Coach", "subadmin" => "Admin", "admin" => "System admin", _ => Role };
+    /// <summary>"41.5 h × ₱80.00", "12 sessions × ₱150.00" or "Fixed".</summary>
+    [System.Text.Json.Serialization.JsonIgnore] public string BasisText => PayTypes.BasisText(PayType, Payable, Rate);
     [System.Text.Json.Serialization.JsonIgnore] public string HoursText => Role switch
     {
         "coach" => $"{SessionsCount} {(SessionsCount == 1 ? "session" : "sessions")} · {Hours:0.##} h",
@@ -573,6 +590,7 @@ public sealed class PayrollPeriod
     [System.Text.Json.Serialization.JsonPropertyName("paid_at")] public DateTime? PaidAt { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("paid_by_name")] public string? PaidByName { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("total_net")] public decimal TotalNet { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("total_gross")] public decimal TotalGross { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("rows")] public List<PayrollRow> Rows { get; set; } = new();
     [System.Text.Json.Serialization.JsonIgnore] public bool IsPaid => PaidAt is not null;
 }
@@ -584,6 +602,69 @@ public sealed class PayrollLine
     [System.Text.Json.Serialization.JsonPropertyName("kind")] public string Kind { get; set; } = "";
     [System.Text.Json.Serialization.JsonPropertyName("amount")] public decimal Amount { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("note")] public string? Note { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("category")] public string? Category { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("pay_type")] public string? PayType { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("quantity")] public decimal? Quantity { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("rate")] public decimal? Rate { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("created_by_name")] public string? CreatedByName { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("created_at")] public DateTime CreatedAt { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore] public string CategoryLabel => PayTypes.CategoryLabel(Category);
+}
+
+/// <summary>0142 (H12): a shift, coach check-in or session that can pay someone, with its review status.</summary>
+public sealed class PayrollTimeRecord
+{
+    [System.Text.Json.Serialization.JsonPropertyName("source")] public string Source { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("source_id")] public long SourceId { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("starts_at")] public DateTime StartsAt { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("ends_at")] public DateTime? EndsAt { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("hours")] public decimal Hours { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("label")] public string Label { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("status")] public string Status { get; set; } = "pending";
+    [System.Text.Json.Serialization.JsonPropertyName("reason")] public string? Reason { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("flags")] public List<string> Flags { get; set; } = new();
+}
+
+/// <summary>0142 (H5): +/- hours (or sessions) for one person in one period, with a note.</summary>
+public sealed class PayrollHourAdjustment
+{
+    [System.Text.Json.Serialization.JsonPropertyName("adjustment_id")] public int AdjustmentId { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("quantity")] public decimal Quantity { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("note")] public string Note { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("created_by_name")] public string? CreatedByName { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("created_at")] public DateTime CreatedAt { get; set; }
+}
+
+/// <summary>0142: words for pay types, rates and line categories.</summary>
+public static class PayTypes
+{
+    public static string Money(decimal v) => "₱" + v.ToString("#,##0.00", System.Globalization.CultureInfo.InvariantCulture);
+    public static string Label(string payType) => payType switch { "hourly" => "Hourly", "per_session" => "Per session", _ => "Fixed" };
+    public static string RateText(string payType, decimal rate) => payType switch
+    {
+        "hourly" => $"{Money(rate)} per hour",
+        "per_session" => $"{Money(rate)} per session",
+        _ => $"{Money(rate)} per period"
+    };
+    public static string BasisText(string payType, decimal quantity, decimal rate) => payType switch
+    {
+        "hourly" => $"{quantity.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} h × {Money(rate)}",
+        "per_session" => $"{quantity.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} {(quantity == 1 ? "session" : "sessions")} × {Money(rate)}",
+        _ => "Fixed"
+    };
+    /// <summary>"Approved 40.5 h · corrections +1 h · payable 41.5 h × ₱80.00 = ₱3,320.00".</summary>
+    public static string BasisSentence(PayrollRow r)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        if (r.PayType == "fixed") return r.NoSalary ? "No salary set" : $"Fixed {RateText("fixed", r.Rate)}";
+        string Q(decimal q) => r.PayType == "hourly" ? $"{q.ToString("0.##", inv)} h" : $"{q.ToString("0.##", inv)} {(Math.Abs(q) == 1 ? "session" : "sessions")}";
+        var corr = r.Adjustment == 0 ? "" : $" · corrections {(r.Adjustment > 0 ? "+" : "")}{Q(r.Adjustment)}";
+        return $"Approved {Q(r.Logged)}{corr} · payable {Q(r.Payable)} × {Money(r.Rate)} = {Money(r.BasePay)}";
+    }
+
+    public static string CategoryLabel(string? category) => category switch
+    {
+        "regular_bonus" => "Regular bonus", "overtime" => "Overtime adjustment", "holiday" => "Holiday pay adjustment",
+        "other" => "Other adjustment", _ => ""
+    };
 }

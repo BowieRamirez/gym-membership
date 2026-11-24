@@ -32,7 +32,7 @@ public static class AuditLabels
         ["catalog.archive"] = "Archived", ["catalog.restore"] = "Restored from archive",
         ["catalog.publish"] = "Published", ["catalog.new_version"] = "New version drafted", ["catalog.delete"] = "Deleted draft",
         ["cash_shift.open"] = "Cash shift started", ["cash_shift.close"] = "Cash shift ended", ["cash_shift.note"] = "Cash shift note added",
-        ["payroll.salary_set"] = "Staff salary set", ["payroll.role_salary_set"] = "Role salary set", ["payroll.line_added"] = "Payroll line added", ["payroll.line_removed"] = "Payroll line removed", ["payroll.paid"] = "Payroll marked as paid",
+        ["payroll.salary_set"] = "Staff salary set", ["payroll.role_salary_set"] = "Role salary set", ["payroll.line_added"] = "Payroll line added", ["payroll.line_removed"] = "Payroll line removed", ["payroll.paid"] = "Payroll marked as paid", ["payroll.time_approved"] = "Shift or session approved", ["payroll.time_rejected"] = "Shift or session rejected", ["payroll.time_reopened"] = "Shift or session back to pending", ["payroll.hours_adjusted"] = "Payroll hours corrected", ["payroll.hours_adjustment_removed"] = "Payroll hours correction removed",
         ["announcement.post"] = "Announcement posted",
         ["gym.close"] = "Gym closed for a day", ["gym.reopen"] = "Gym opened again",   // G16 (0065)
     };
@@ -49,7 +49,7 @@ public static class AuditLabels
     {
         ["profiles"] = "Account", ["user_roles"] = "Role", ["payments"] = "Payment", ["refund_requests"] = "Refund request",
         ["reservations"] = "Booking", ["training_sessions"] = "Coach session", ["amenities"] = "Amenity", ["membership_packages"] = "Package", ["discounts"] = "Discount code",
-        ["cash_shifts"] = "Cash shift", ["staff_salaries"] = "Staff salary", ["role_salaries"] = "Role salary", ["payroll_periods"] = "Pay period", ["payroll_lines"] = "Payroll line", ["announcements"] = "Announcement", ["gym_closures"] = "Closed day", ["gym_check_ins"] = "Check-in", ["damage_reports"] = "Damage report",
+        ["cash_shifts"] = "Cash shift", ["staff_salaries"] = "Staff salary", ["role_salaries"] = "Role salary", ["payroll_periods"] = "Pay period", ["payroll_lines"] = "Payroll line", ["payroll_time_reviews"] = "Payroll approval", ["payroll_hour_adjustments"] = "Payroll hours correction", ["announcements"] = "Announcement", ["gym_closures"] = "Closed day", ["gym_check_ins"] = "Check-in", ["damage_reports"] = "Damage report",
     };
 
     public static string Action(string code) => Actions.GetValueOrDefault(code, code);

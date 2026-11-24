@@ -2060,11 +2060,18 @@ public interface IAdminService
     Task<AppResult<IReadOnlyList<CoachHoursRow>>> CoachHoursAsync(DateOnly from, DateOnly to) => Task.FromResult(AppResult<IReadOnlyList<CoachHoursRow>>.Success([]));
     Task<AppResult<IReadOnlyList<StaffSalary>>> PayrollStaffAsync() => Task.FromResult(AppResult<IReadOnlyList<StaffSalary>>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<IReadOnlyList<RoleSalary>>> PayrollRoleSalariesAsync() => Task.FromResult(AppResult<IReadOnlyList<RoleSalary>>.Fail(AppErrorKind.Unknown, "not_implemented"));
-    Task<AppResult<bool>> SetRoleSalaryAsync(string role, decimal amount) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
-    Task<AppResult<bool>> SetStaffSalaryAsync(string userId, decimal amount) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<bool>> SetRoleSalaryAsync(string role, decimal amount, string? payType = null) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<bool>> SetStaffSalaryAsync(string userId, decimal amount, string? payType = null) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<bool>> UseRoleSalaryAsync(string userId) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<PayrollPeriod>> PayrollPeriodAsync(DateOnly startsOn) => Task.FromResult(AppResult<PayrollPeriod>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<IReadOnlyList<PayrollLine>>> PayrollLinesAsync(int periodId, string userId) => Task.FromResult(AppResult<IReadOnlyList<PayrollLine>>.Fail(AppErrorKind.Unknown, "not_implemented"));
-    Task<AppResult<PayrollLine>> AddPayrollLineAsync(int periodId, string userId, string kind, decimal amount, string note) => Task.FromResult(AppResult<PayrollLine>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<PayrollLine>> AddPayrollLineAsync(int periodId, string userId, string kind, decimal amount, string note, string category = "other") => Task.FromResult(AppResult<PayrollLine>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<IReadOnlyList<PayrollTimeRecord>>> PayrollRecordsAsync(int periodId, string userId) => Task.FromResult(AppResult<IReadOnlyList<PayrollTimeRecord>>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<bool>> ReviewPayrollTimeAsync(int periodId, string source, long sourceId, string status, string? reason = null) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<int>> ApproveAllPayrollTimeAsync(int periodId, string? userId) => Task.FromResult(AppResult<int>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<IReadOnlyList<PayrollHourAdjustment>>> PayrollAdjustmentsAsync(int periodId, string userId) => Task.FromResult(AppResult<IReadOnlyList<PayrollHourAdjustment>>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<PayrollHourAdjustment>> AddPayrollHoursAsync(int periodId, string userId, decimal quantity, string note) => Task.FromResult(AppResult<PayrollHourAdjustment>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<bool>> RemovePayrollHoursAsync(int adjustmentId) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<bool>> RemovePayrollLineAsync(int lineId) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<PayrollPeriod>> MarkPayrollPaidAsync(int periodId) => Task.FromResult(AppResult<PayrollPeriod>.Fail(AppErrorKind.Unknown, "not_implemented"));
 }
@@ -2147,11 +2154,30 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
     public Task<AppResult<IReadOnlyList<RoleSalary>>> PayrollRoleSalariesAsync() => Safe.RunAsync<IReadOnlyList<RoleSalary>>(async () =>
         await gw.RpcAsync<List<RoleSalary>>("payroll_role_salaries", new()) ?? []);
 
-    public Task<AppResult<bool>> SetRoleSalaryAsync(string role, decimal amount) =>
-        Rpc("set_role_salary", new() { ["p_role"] = role, ["p_amount"] = amount });
+    public Task<AppResult<bool>> SetRoleSalaryAsync(string role, decimal amount, string? payType = null) =>
+        Rpc("set_role_salary", new() { ["p_role"] = role, ["p_amount"] = amount, ["p_pay_type"] = payType! });
 
-    public Task<AppResult<bool>> SetStaffSalaryAsync(string userId, decimal amount) =>
-        Rpc("set_staff_salary", new() { ["p_user"] = userId, ["p_amount"] = amount });
+    public Task<AppResult<bool>> SetStaffSalaryAsync(string userId, decimal amount, string? payType = null) =>
+        Rpc("set_staff_salary", new() { ["p_user"] = userId, ["p_amount"] = amount, ["p_pay_type"] = payType! });
+
+    public Task<AppResult<bool>> UseRoleSalaryAsync(string userId) => Rpc("use_role_salary", new() { ["p_user"] = userId });
+
+    public Task<AppResult<IReadOnlyList<PayrollTimeRecord>>> PayrollRecordsAsync(int periodId, string userId) => Safe.RunAsync<IReadOnlyList<PayrollTimeRecord>>(async () =>
+        await gw.RpcAsync<List<PayrollTimeRecord>>("payroll_records_for", new() { ["p_period"] = periodId, ["p_user"] = userId }) ?? []);
+
+    public Task<AppResult<bool>> ReviewPayrollTimeAsync(int periodId, string source, long sourceId, string status, string? reason = null) =>
+        Rpc("payroll_review_time", new() { ["p_period"] = periodId, ["p_source"] = source, ["p_source_id"] = sourceId, ["p_status"] = status, ["p_reason"] = reason?.Trim()! });
+
+    public Task<AppResult<int>> ApproveAllPayrollTimeAsync(int periodId, string? userId) => Safe.RunAsync(() =>
+        gw.RpcAsync<int>("payroll_approve_all", new() { ["p_period"] = periodId, ["p_user"] = userId! }));
+
+    public Task<AppResult<IReadOnlyList<PayrollHourAdjustment>>> PayrollAdjustmentsAsync(int periodId, string userId) => Safe.RunAsync<IReadOnlyList<PayrollHourAdjustment>>(async () =>
+        await gw.RpcAsync<List<PayrollHourAdjustment>>("payroll_adjustments_for", new() { ["p_period"] = periodId, ["p_user"] = userId }) ?? []);
+
+    public Task<AppResult<PayrollHourAdjustment>> AddPayrollHoursAsync(int periodId, string userId, decimal quantity, string note) => Safe.RunAsync(() =>
+        gw.RpcAsync<PayrollHourAdjustment>("payroll_add_hours", new() { ["p_period"] = periodId, ["p_user"] = userId, ["p_quantity"] = quantity, ["p_note"] = note.Trim() }));
+
+    public Task<AppResult<bool>> RemovePayrollHoursAsync(int adjustmentId) => Rpc("payroll_remove_hours", new() { ["p_adjustment"] = adjustmentId });
 
     public Task<AppResult<PayrollPeriod>> PayrollPeriodAsync(DateOnly startsOn) => Safe.RunAsync(async () =>
         await gw.RpcAsync<PayrollPeriod>("payroll_period", new() { ["p_starts_on"] = startsOn.ToString("yyyy-MM-dd") }));
@@ -2159,8 +2185,8 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
     public Task<AppResult<IReadOnlyList<PayrollLine>>> PayrollLinesAsync(int periodId, string userId) => Safe.RunAsync<IReadOnlyList<PayrollLine>>(async () =>
         await gw.RpcAsync<List<PayrollLine>>("payroll_lines_for", new() { ["p_period"] = periodId, ["p_user"] = userId }) ?? []);
 
-    public Task<AppResult<PayrollLine>> AddPayrollLineAsync(int periodId, string userId, string kind, decimal amount, string note) => Safe.RunAsync(() =>
-        gw.RpcAsync<PayrollLine>("payroll_add_line", new() { ["p_period"] = periodId, ["p_user"] = userId, ["p_kind"] = kind, ["p_amount"] = amount, ["p_note"] = note.Trim() }));
+    public Task<AppResult<PayrollLine>> AddPayrollLineAsync(int periodId, string userId, string kind, decimal amount, string note, string category = "other") => Safe.RunAsync(() =>
+        gw.RpcAsync<PayrollLine>("payroll_add_line", new() { ["p_period"] = periodId, ["p_user"] = userId, ["p_kind"] = kind, ["p_amount"] = amount, ["p_note"] = note.Trim(), ["p_category"] = category }));
 
     public Task<AppResult<bool>> RemovePayrollLineAsync(int lineId) =>
         Rpc("payroll_remove_line", new() { ["p_line"] = lineId });

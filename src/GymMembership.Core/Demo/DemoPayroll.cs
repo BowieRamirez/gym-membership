@@ -2,16 +2,17 @@ using GymMembership.Core.Models;
 
 namespace GymMembership.Core.Demo;
 
-// 0136_payroll.sql in memory (P1-P10): fixed salaries per period, 1st-15th / 16th-end periods, manual bonus/deduction lines, mark paid.
+// 0136/0137/0142 in memory: pay type per person or role (fixed / hourly / per session), 1st-15th / 16th-end periods,
+// approved shifts / check-ins / sessions (overlaps counted once), hour corrections, categorised bonus/deduction lines, mark paid.
 public sealed partial class DemoGateway
 {
     sealed class DemoStaffSalary
     {
-        public string UserId = ""; public decimal Amount; public DateTime UpdatedAt; public string UpdatedBy = "";
+        public string UserId = ""; public decimal Amount; public string PayType = "fixed"; public DateTime UpdatedAt; public string UpdatedBy = "";
     }
     sealed class DemoRoleSalary
     {
-        public string Role = ""; public decimal Amount; public DateTime UpdatedAt; public string UpdatedBy = "";
+        public string Role = ""; public decimal Amount; public string PayType = "fixed"; public DateTime UpdatedAt; public string UpdatedBy = "";
     }
     sealed class DemoPayrollPeriod
     {
@@ -20,13 +21,30 @@ public sealed partial class DemoGateway
     sealed class DemoPayrollLine
     {
         public int Id; public int PeriodId; public string UserId = ""; public string Kind = "";
-        public decimal Amount; public string? Note; public string CreatedBy = ""; public DateTime CreatedAt;
+        public decimal Amount; public string? Note; public string? Category; public string? PayType; public decimal? Quantity; public decimal? Rate;
+        public string CreatedBy = ""; public DateTime CreatedAt;
+    }
+    sealed class DemoHourAdjustment
+    {
+        public int Id; public int PeriodId; public string UserId = ""; public decimal Quantity; public string Note = ""; public string CreatedBy = ""; public DateTime CreatedAt;
     }
 
     readonly List<DemoStaffSalary> _staffSalaries = new();
     readonly List<DemoRoleSalary> _roleSalaries = new();
     readonly List<DemoPayrollPeriod> _payrollPeriods = new();
     readonly List<DemoPayrollLine> _payrollLines = new();
+    readonly List<DemoHourAdjustment> _hourAdjustments = new();
+    readonly Dictionary<(string Source, long Id), (string Status, string? Reason)> _timeReviews = new();
+
+    static readonly string[] Categories = ["regular_bonus", "overtime", "holiday", "other"];
+
+    /// <summary>Tests: a closed (or open) cash shift at given times; returns its id.</summary>
+    public int OwnerAddShift(string cashierId, DateTime openedAt, DateTime? closedAt)
+    {
+        var s = new DemoShift { Id = _shifts.Select(x => x.Id).DefaultIfEmpty(0).Max() + 1, Cashier = cashierId, OpenedAt = openedAt, ClosedAt = closedAt, Counted = closedAt is null ? null : 0 };
+        _shifts.Add(s);
+        return s.Id;
+    }
 
     static DateOnly PayrollPeriodEnd(DateOnly startsOn) => startsOn.Day switch
     {
@@ -48,95 +66,163 @@ public sealed partial class DemoGateway
     }
 
     string StaffDisplayName(Profile p) => string.IsNullOrWhiteSpace(p.FullName) ? p.Username : p.FullName.Trim();
+    string NameOf(string userId) => StaffDisplayName(All<Profile>().First(u => u.Id == userId));
+
+    sealed record PayInfo(Profile Person, string Role, string PayType, decimal Rate, bool NoSalary, bool Personal);
+
+    // payroll_pay: who is on the period and how they are paid (current pay while a draft, the frozen line once paid)
+    List<PayInfo> PayrollPay(DemoPayrollPeriod per) => All<Profile>().Where(p =>
+        {
+            if (per.PaidAt is not null) return _payrollLines.Any(l => l.PeriodId == per.Id && l.UserId == p.Id);
+            if (!p.IsActive || p.DeletedAt is not null) return false;
+            return PrimaryPayrollRole(p.Id) is "employee" or "coach"
+                || _staffSalaries.Any(s => s.UserId == p.Id)
+                || _payrollLines.Any(l => l.PeriodId == per.Id && l.UserId == p.Id);
+        })
+        .Select(p =>
+        {
+            var role = PrimaryPayrollRole(p.Id) ?? "employee";
+            var ss = _staffSalaries.FirstOrDefault(s => s.UserId == p.Id);
+            if (per.PaidAt is not null)
+            {
+                var sl = _payrollLines.Where(l => l.PeriodId == per.Id && l.UserId == p.Id && l.Kind == "salary").OrderBy(l => l.Id).FirstOrDefault();
+                return new PayInfo(p, role, sl?.PayType ?? "fixed", sl?.Rate ?? sl?.Amount ?? 0m, sl is null, ss is not null);
+            }
+            var rs = _roleSalaries.FirstOrDefault(r => r.Role == role);
+            return new PayInfo(p, role, ss?.PayType ?? rs?.PayType ?? "fixed", ss?.Amount ?? rs?.Amount ?? 0m, ss is null && rs is null, ss is not null);
+        }).ToList();
+
+    // payroll_records: every shift / check-in / session that can pay someone in the period, with review status and flags
+    List<(string UserId, PayrollTimeRecord Rec)> PayrollRecords(DemoPayrollPeriod per)
+    {
+        bool InPeriod(DateTime t) => ManilaDay(t) >= per.StartsOn && ManilaDay(t) <= per.EndsOn;
+        var raw = new List<(string UserId, string Source, long Id, DateTime Start, DateTime? End, string Label, bool Auto)>();
+        foreach (var pay in PayrollPay(per))
+        {
+            if (pay.PayType == "hourly" && pay.Role != "coach")
+                raw.AddRange(_shifts.Where(s => s.Cashier == pay.Person.Id && InPeriod(s.OpenedAt))
+                    .Select(s => (pay.Person.Id, "cash_shift", (long)s.Id, s.OpenedAt, s.ClosedAt, $"Cash shift #{s.Id}", false)));
+            else if (pay.PayType == "hourly")
+                raw.AddRange(All<CoachVisit>().Where(v => v.CoachId == pay.Person.Id && InPeriod(v.CheckedInAt))
+                    .Select(v => (pay.Person.Id, "coach_visit", (long)v.Id, v.CheckedInAt, v.CheckedOutAt, "Check-in", v.AutoClosed)));
+            else if (pay.PayType == "per_session")
+                raw.AddRange(All<TrainingSession>().Where(ts => ts.CoachId == pay.Person.Id && ts.Status == "completed"
+                        && (ts.HeldUntil is null || ts.HeldUntil > SubscriptionNow) && InPeriod(ts.ScheduledStart))
+                    .Select(ts => (pay.Person.Id, "training_session", (long)ts.Id, ts.ScheduledStart, (DateTime?)ts.ScheduledEnd,
+                        All<Profile>().FirstOrDefault(m => m.Id == ts.MemberId) is { } m ? StaffDisplayName(m) : ts.WalkInName ?? "Walk-in", false)));
+        }
+        return raw.Select(r =>
+        {
+            var review = _timeReviews.TryGetValue((r.Source, r.Id), out var rv) ? rv : ("pending", (string?)null);
+            var flags = new List<string>();
+            if (r.End is null) flags.Add("open");
+            if (r.Auto) flags.Add("auto_closed");
+            if (r.End - r.Start > TimeSpan.FromHours(12)) flags.Add("long");
+            if (r.Source != "training_session" && r.End is not null && raw.Any(o => o.UserId == r.UserId && o.Source == r.Source && o.Id != r.Id
+                    && o.End is not null && o.Start < r.End && r.Start < o.End))
+                flags.Add("overlap");
+            return (r.UserId, new PayrollTimeRecord
+            {
+                Source = r.Source, SourceId = r.Id, StartsAt = r.Start, EndsAt = r.End, Label = r.Label,
+                Hours = r.End is null ? 0 : Math.Round((decimal)(r.End.Value - r.Start).TotalHours, 2),
+                Status = review.Item1, Reason = review.Item2, Flags = flags
+            });
+        }).OrderBy(x => x.Item2.StartsAt).ThenBy(x => x.Item2.SourceId).ToList();
+    }
+
+    static decimal MergedHours(IEnumerable<PayrollTimeRecord> recs)
+    {
+        double total = 0; DateTime? curStart = null, curEnd = null;
+        foreach (var r in recs.OrderBy(r => r.StartsAt))
+        {
+            if (curEnd is null || r.StartsAt > curEnd) { if (curEnd is not null) total += (curEnd.Value - curStart!.Value).TotalHours; curStart = r.StartsAt; curEnd = r.EndsAt; }
+            else if (r.EndsAt > curEnd) curEnd = r.EndsAt;
+        }
+        if (curEnd is not null) total += (curEnd.Value - curStart!.Value).TotalHours;
+        return Math.Round((decimal)total, 2);
+    }
+
+    // payroll_basis: the pay maths in one place
+    List<PayrollRow> PayrollBasis(DemoPayrollPeriod per)
+    {
+        var recs = PayrollRecords(per);
+        return PayrollPay(per).Select(pay =>
+        {
+            var id = pay.Person.Id;
+            var mine = recs.Where(r => r.UserId == id).Select(r => r.Rec).ToList();
+            var approved = mine.Where(r => r.Status == "approved" && r.EndsAt is not null).ToList();
+            var logged = pay.PayType switch { "hourly" => MergedHours(approved), "per_session" => approved.Count, _ => 0m };
+            var adjustment = _hourAdjustments.Where(a => a.PeriodId == per.Id && a.UserId == id).Sum(a => a.Quantity);
+            decimal payable, basePay;
+            if (per.PaidAt is not null)
+            {
+                var sl = _payrollLines.Where(l => l.PeriodId == per.Id && l.UserId == id && l.Kind == "salary").OrderBy(l => l.Id).FirstOrDefault();
+                payable = sl?.Quantity ?? (pay.PayType == "fixed" ? 1 : 0);
+                basePay = sl?.Amount ?? 0;
+            }
+            else if (pay.PayType == "fixed") { payable = 1; basePay = pay.Rate; }
+            else { payable = Math.Max(0, logged + adjustment); basePay = Math.Round(payable * pay.Rate, 2, MidpointRounding.AwayFromZero); }
+            var bonuses = _payrollLines.Where(l => l.PeriodId == per.Id && l.UserId == id && l.Kind == "bonus").Sum(l => l.Amount);
+            var deductions = _payrollLines.Where(l => l.PeriodId == per.Id && l.UserId == id && l.Kind == "deduction").Sum(l => l.Amount);
+
+            // reference numbers from Part 3 (closed shifts, completed sessions)
+            var sessions = pay.Role == "coach" ? All<TrainingSession>().Where(ts => ts.CoachId == id && ts.Status == "completed"
+                && (ts.HeldUntil is null || ts.HeldUntil > SubscriptionNow)
+                && ManilaDay(ts.ScheduledStart) >= per.StartsOn && ManilaDay(ts.ScheduledStart) <= per.EndsOn).ToList() : [];
+            var hours = pay.Role switch
+            {
+                "coach" => Math.Round((decimal)sessions.Sum(ts => (ts.ScheduledEnd - ts.ScheduledStart).TotalHours), 2),
+                "employee" => Math.Round((decimal)_shifts.Where(s => s.Cashier == id && s.ClosedAt is not null
+                    && ManilaDay(s.OpenedAt) >= per.StartsOn && ManilaDay(s.OpenedAt) <= per.EndsOn).Sum(s => (s.ClosedAt!.Value - s.OpenedAt).TotalHours), 2),
+                _ => 0m
+            };
+            return new PayrollRow
+            {
+                UserId = id, FullName = StaffDisplayName(pay.Person), Role = pay.Role, SessionsCount = sessions.Count, Hours = hours,
+                PayType = pay.PayType, Rate = pay.Rate, Personal = pay.Personal, NoSalary = pay.NoSalary,
+                Logged = logged, Adjustment = adjustment, Payable = payable, BasePay = basePay, Salary = basePay,
+                Bonuses = bonuses, Deductions = deductions, Gross = basePay + bonuses, Net = basePay + bonuses - deductions,
+                Pending = mine.Count(r => r.Status == "pending" && r.EndsAt is not null), Flagged = mine.Count(r => r.Flags.Count > 0)
+            };
+        }).OrderBy(r => RoleOrder(r.Role)).ThenBy(r => r.FullName).ToList();
+    }
 
     PayrollPeriod BuildPayrollPeriod(DemoPayrollPeriod per)
     {
-        var paidByName = per.PaidBy is null ? null : StaffDisplayName(All<Profile>().First(p => p.Id == per.PaidBy));
-        var roster = All<Profile>().Where(p =>
-        {
-            if (per.PaidAt is not null)
-                return _payrollLines.Any(l => l.PeriodId == per.Id && l.UserId == p.Id);
-            if (!p.IsActive || p.DeletedAt is not null) return false;
-            var role = PrimaryPayrollRole(p.Id);
-            return role is "employee" or "coach"
-                || _staffSalaries.Any(s => s.UserId == p.Id)
-                || _payrollLines.Any(l => l.PeriodId == per.Id && l.UserId == p.Id);
-        });
-
-        var rows = roster.Select(p =>
-        {
-            var role = PrimaryPayrollRole(p.Id) ?? "employee";
-            var sessionsCount = 0;
-            decimal hours = 0m;
-            if (role == "coach")
-            {
-                var sessions = All<TrainingSession>().Where(ts =>
-                    ts.CoachId == p.Id && ts.Status == "completed"
-                    && (ts.HeldUntil is null || ts.HeldUntil > SubscriptionNow)
-                    && DateOnly.FromDateTime(ts.ScheduledStart.AddHours(8)) >= per.StartsOn
-                    && DateOnly.FromDateTime(ts.ScheduledStart.AddHours(8)) <= per.EndsOn).ToList();
-                sessionsCount = sessions.Count;
-                hours = Math.Round((decimal)sessions.Sum(ts => (ts.ScheduledEnd - ts.ScheduledStart).TotalHours), 2);
-            }
-            else if (role == "employee")
-            {
-                hours = Math.Round((decimal)_shifts.Where(s =>
-                    s.Cashier == p.Id && s.ClosedAt is not null
-                    && DateOnly.FromDateTime(s.OpenedAt.AddHours(8)) >= per.StartsOn
-                    && DateOnly.FromDateTime(s.OpenedAt.AddHours(8)) <= per.EndsOn)
-                    .Sum(s => (s.ClosedAt!.Value - s.OpenedAt).TotalHours), 2);
-            }
-
-            decimal salary;
-            bool noSalary;
-            if (per.PaidAt is null)
-            {
-                var ss = _staffSalaries.FirstOrDefault(s => s.UserId == p.Id);
-                var rs = _roleSalaries.FirstOrDefault(r => r.Role == role);
-                salary = ss?.Amount ?? rs?.Amount ?? 0m;
-                noSalary = ss is null && rs is null;
-            }
-            else
-            {
-                var salLines = _payrollLines.Where(l => l.PeriodId == per.Id && l.UserId == p.Id && l.Kind == "salary").ToList();
-                salary = salLines.Sum(l => l.Amount);
-                noSalary = salLines.Count == 0;
-            }
-
-            var bonuses = _payrollLines.Where(l => l.PeriodId == per.Id && l.UserId == p.Id && l.Kind == "bonus").Sum(l => l.Amount);
-            var deductions = _payrollLines.Where(l => l.PeriodId == per.Id && l.UserId == p.Id && l.Kind == "deduction").Sum(l => l.Amount);
-            return new PayrollRow
-            {
-                UserId = p.Id,
-                FullName = StaffDisplayName(p),
-                Role = role,
-                SessionsCount = sessionsCount,
-                Hours = hours,
-                Salary = salary,
-                Bonuses = bonuses,
-                Deductions = deductions,
-                Net = salary + bonuses - deductions,
-                NoSalary = noSalary
-            };
-        }).OrderBy(r => RoleOrder(r.Role)).ThenBy(r => r.FullName).ToList();
-
+        var rows = PayrollBasis(per);
         return new PayrollPeriod
         {
-            PeriodId = per.Id,
-            StartsOn = per.StartsOn,
-            EndsOn = per.EndsOn,
-            PaidAt = per.PaidAt,
-            PaidByName = paidByName,
-            TotalNet = rows.Sum(r => r.Net),
-            Rows = rows
+            PeriodId = per.Id, StartsOn = per.StartsOn, EndsOn = per.EndsOn, PaidAt = per.PaidAt,
+            PaidByName = per.PaidBy is null ? null : NameOf(per.PaidBy),
+            TotalNet = rows.Sum(r => r.Net), TotalGross = rows.Sum(r => r.Gross), Rows = rows
         };
     }
+
+    DemoPayrollPeriod PayrollDraft(int periodId)
+    {
+        var per = _payrollPeriods.FirstOrDefault(x => x.Id == periodId) ?? throw Err("bad_input");
+        if (per.PaidAt is not null) throw Err("payroll_paid");
+        return per;
+    }
+
+    PayrollLine ToLine(DemoPayrollLine l) => new()
+    {
+        LineId = l.Id, Kind = l.Kind, Amount = l.Amount, Note = l.Note, Category = l.Category, PayType = l.PayType,
+        Quantity = l.Quantity, Rate = l.Rate, CreatedByName = NameOf(l.CreatedBy), CreatedAt = l.CreatedAt
+    };
 
     bool PayrollCall(string fn, Dictionary<string, object> a, out object? result)
     {
         result = null;
         decimal Money(string k) => a.TryGetValue(k, out var v) && v is not null ? Convert.ToDecimal(v) : throw Err("bad_input");
         string? Str(string k) => a.TryGetValue(k, out var v) && v is string s && !string.IsNullOrWhiteSpace(s) ? s.Trim() : null;
+        int Int(string k) => a.TryGetValue(k, out var v) && v is not null ? Convert.ToInt32(v) : throw Err("bad_input");
+        string? PayTypeArg()
+        {
+            var t = Str("p_pay_type");
+            if (t is not null and not ("fixed" or "hourly" or "per_session")) throw Err("bad_input");
+            return t;
+        }
         switch (fn)
         {
             case "set_staff_salary":
@@ -144,48 +230,43 @@ public sealed partial class DemoGateway
                 Require("reports:revenue");
                 var userId = Str("p_user") ?? throw Err("bad_input");
                 var amount = Money("p_amount");
+                var type = PayTypeArg();
                 if (amount is <= 0 or > 10_000_000) throw Err("bad_input");
                 if (userId == Uid) throw Err("own_salary");
                 var p = All<Profile>().FirstOrDefault(x => x.Id == userId && x.IsActive && x.DeletedAt is null) ?? throw Err("bad_input");
-                if (PrimaryPayrollRole(p.Id) is null) throw Err("bad_input");
-                var rounded = Math.Round(amount, 2);
+                var role = PrimaryPayrollRole(p.Id) ?? throw Err("bad_input");
                 var existing = _staffSalaries.FirstOrDefault(s => s.UserId == userId);
-                var old = existing?.Amount;
-                if (existing is null)
-                    _staffSalaries.Add(new DemoStaffSalary { UserId = userId, Amount = rounded, UpdatedAt = SubscriptionNow, UpdatedBy = Uid });
-                else
-                {
-                    existing.Amount = rounded; existing.UpdatedAt = SubscriptionNow; existing.UpdatedBy = Uid;
-                }
+                type ??= existing?.PayType ?? _roleSalaries.FirstOrDefault(r => r.Role == role)?.PayType ?? "fixed";
+                if (type == "per_session" && role != "coach") throw Err("per_session_coach_only");
+                existing ??= AddReturn(_staffSalaries, new DemoStaffSalary { UserId = userId });
+                existing.Amount = Math.Round(amount, 2); existing.PayType = type; existing.UpdatedAt = SubscriptionNow; existing.UpdatedBy = Uid;
                 Audit("payroll.salary_set", "staff_salaries", userId);
-                result = null; return true;
+                return true;
+            }
+            case "use_role_salary":
+            {
+                Require("reports:revenue");
+                var userId = Str("p_user") ?? throw Err("bad_input");
+                if (PrimaryPayrollRole(userId) is not ("employee" or "coach")) throw Err("bad_input");
+                if (userId == Uid) throw Err("own_salary");
+                _staffSalaries.RemoveAll(s => s.UserId == userId);
+                Audit("payroll.salary_set", "staff_salaries", userId);
+                return true;
             }
             case "set_role_salary":
             {
                 Require("reports:revenue");
                 var role = Str("p_role") ?? throw Err("bad_input");
                 var amount = Money("p_amount");
+                var type = PayTypeArg();
                 if (role is not ("employee" or "coach") || amount is <= 0 or > 10_000_000) throw Err("bad_input");
-                var rounded = Math.Round(amount, 2);
-                var existingRole = _roleSalaries.FirstOrDefault(r => r.Role == role);
-                if (existingRole is null)
-                    _roleSalaries.Add(new DemoRoleSalary { Role = role, Amount = rounded, UpdatedAt = SubscriptionNow, UpdatedBy = Uid });
-                else
-                {
-                    existingRole.Amount = rounded; existingRole.UpdatedAt = SubscriptionNow; existingRole.UpdatedBy = Uid;
-                }
-                foreach (var p in All<Profile>().Where(p => p.IsActive && p.DeletedAt is null && p.Id != Uid && PrimaryPayrollRole(p.Id) == role))
-                {
-                    var s = _staffSalaries.FirstOrDefault(x => x.UserId == p.Id);
-                    if (s is null)
-                        _staffSalaries.Add(new DemoStaffSalary { UserId = p.Id, Amount = rounded, UpdatedAt = SubscriptionNow, UpdatedBy = Uid });
-                    else
-                    {
-                        s.Amount = rounded; s.UpdatedAt = SubscriptionNow; s.UpdatedBy = Uid;
-                    }
-                }
+                var existing = _roleSalaries.FirstOrDefault(r => r.Role == role);
+                type ??= existing?.PayType ?? "fixed";
+                if (type == "per_session" && role != "coach") throw Err("per_session_coach_only");
+                existing ??= AddReturn(_roleSalaries, new DemoRoleSalary { Role = role });
+                existing.Amount = Math.Round(amount, 2); existing.PayType = type; existing.UpdatedAt = SubscriptionNow; existing.UpdatedBy = Uid;
                 Audit("payroll.role_salary_set", "role_salaries", role);
-                result = null; return true;
+                return true;
             }
             case "payroll_role_salaries":
             {
@@ -193,139 +274,182 @@ public sealed partial class DemoGateway
                 result = new[] { "employee", "coach" }.Select(role =>
                 {
                     var rs = _roleSalaries.FirstOrDefault(r => r.Role == role);
-                    return new RoleSalary
-                    {
-                        Role = role,
-                        Amount = rs?.Amount,
-                        UpdatedAt = rs?.UpdatedAt,
-                        UpdatedByName = rs is null ? null : StaffDisplayName(All<Profile>().First(u => u.Id == rs.UpdatedBy))
-                    };
+                    return new RoleSalary { Role = role, Amount = rs?.Amount, PayType = rs?.PayType ?? "fixed", UpdatedAt = rs?.UpdatedAt,
+                                            UpdatedByName = rs is null ? null : NameOf(rs.UpdatedBy) };
                 }).ToList();
                 return true;
             }
             case "payroll_staff":
             {
                 Require("reports:revenue");
-                var list = All<Profile>()
+                result = All<Profile>()
                     .Where(p => p.IsActive && p.DeletedAt is null)
                     .Select(p => (Profile: p, Role: PrimaryPayrollRole(p.Id), Salary: _staffSalaries.FirstOrDefault(s => s.UserId == p.Id)))
                     .Where(x => x.Role is "employee" or "coach" || (x.Role is "subadmin" or "admin" && x.Salary is not null))
-                    .OrderBy(x => RoleOrder(x.Role!))
-                    .ThenBy(x => StaffDisplayName(x.Profile))
+                    .OrderBy(x => RoleOrder(x.Role!)).ThenBy(x => StaffDisplayName(x.Profile))
                     .Select(x =>
                     {
                         var rs = _roleSalaries.FirstOrDefault(r => r.Role == x.Role);
-                        var amount = x.Salary?.Amount ?? rs?.Amount;
-                        var updatedAt = x.Salary?.UpdatedAt ?? rs?.UpdatedAt;
-                        var updatedById = x.Salary?.UpdatedBy ?? rs?.UpdatedBy;
+                        var by = x.Salary?.UpdatedBy ?? rs?.UpdatedBy;
                         return new StaffSalary
                         {
-                            UserId = x.Profile.Id,
-                            FullName = StaffDisplayName(x.Profile),
-                            Role = x.Role!,
-                            Amount = amount,
-                            UpdatedAt = updatedAt,
-                            UpdatedByName = updatedById is null ? null : StaffDisplayName(All<Profile>().First(u => u.Id == updatedById))
+                            UserId = x.Profile.Id, FullName = StaffDisplayName(x.Profile), Role = x.Role!,
+                            Amount = x.Salary?.Amount ?? rs?.Amount, PayType = x.Salary?.PayType ?? rs?.PayType ?? "fixed", Personal = x.Salary is not null,
+                            UpdatedAt = x.Salary?.UpdatedAt ?? rs?.UpdatedAt, UpdatedByName = by is null ? null : NameOf(by)
                         };
                     }).ToList();
-                result = list; return true;
+                return true;
             }
             case "payroll_period":
             {
                 Require("reports:revenue");
                 var startsOn = DateOnly.Parse(Str("p_starts_on") ?? throw Err("bad_input"));
                 var endsOn = PayrollPeriodEnd(startsOn);
-                var per = _payrollPeriods.FirstOrDefault(x => x.StartsOn == startsOn);
-                if (per is null)
-                {
-                    per = new DemoPayrollPeriod { Id = _payrollPeriods.Count + 1, StartsOn = startsOn, EndsOn = endsOn };
-                    _payrollPeriods.Add(per);
-                }
+                var per = _payrollPeriods.FirstOrDefault(x => x.StartsOn == startsOn)
+                          ?? AddReturn(_payrollPeriods, new DemoPayrollPeriod { Id = _payrollPeriods.Count + 1, StartsOn = startsOn, EndsOn = endsOn });
                 result = BuildPayrollPeriod(per); return true;
+            }
+            case "payroll_records_for":
+            {
+                Require("reports:revenue");
+                var per = _payrollPeriods.FirstOrDefault(x => x.Id == Int("p_period")) ?? throw Err("bad_input");
+                var userId = Str("p_user") ?? throw Err("bad_input");
+                result = PayrollRecords(per).Where(r => r.UserId == userId).Select(r => r.Rec).ToList();
+                return true;
+            }
+            case "payroll_review_time":
+            {
+                Require("reports:revenue");
+                var periodId = Int("p_period");
+                var source = Str("p_source") ?? throw Err("bad_input");
+                var sourceId = a.TryGetValue("p_source_id", out var sv) && sv is not null ? Convert.ToInt64(sv) : throw Err("bad_input");
+                var status = Str("p_status");
+                var reason = Str("p_reason");
+                if (status is not ("approved" or "rejected" or "pending") || (status == "rejected" && (reason is null || reason.Length > 200)))
+                    throw Err("bad_input");
+                var per = PayrollDraft(periodId);
+                var rec = PayrollRecords(per).FirstOrDefault(r => r.Rec.Source == source && r.Rec.SourceId == sourceId).Rec ?? throw Err("not_found");
+                if (rec.EndsAt is null) throw Err("record_open");
+                if (status == "pending") _timeReviews.Remove((source, sourceId));
+                else _timeReviews[(source, sourceId)] = (status, status == "rejected" ? reason : null);
+                Audit(status switch { "approved" => "payroll.time_approved", "rejected" => "payroll.time_rejected", _ => "payroll.time_reopened" },
+                    "payroll_time_reviews", $"{source}:{sourceId}");
+                return true;
+            }
+            case "payroll_approve_all":
+            {
+                Require("reports:revenue");
+                var per = PayrollDraft(Int("p_period"));
+                var userId = Str("p_user");
+                var todo = PayrollRecords(per).Where(r => (userId is null || r.UserId == userId) && r.Rec.Status == "pending"
+                    && r.Rec.EndsAt is not null && r.Rec.Flags.Count == 0).ToList();
+                foreach (var r in todo) _timeReviews[(r.Rec.Source, r.Rec.SourceId)] = ("approved", null);
+                if (todo.Count > 0) Audit("payroll.time_approved", "payroll_time_reviews", $"all:{per.Id}");
+                result = todo.Count; return true;
+            }
+            case "payroll_adjustments_for":
+            {
+                Require("reports:revenue");
+                var periodId = Int("p_period");
+                var userId = Str("p_user") ?? throw Err("bad_input");
+                result = _hourAdjustments.Where(x => x.PeriodId == periodId && x.UserId == userId).OrderBy(x => x.CreatedAt).ThenBy(x => x.Id)
+                    .Select(x => new PayrollHourAdjustment { AdjustmentId = x.Id, Quantity = x.Quantity, Note = x.Note, CreatedByName = NameOf(x.CreatedBy), CreatedAt = x.CreatedAt })
+                    .ToList();
+                return true;
+            }
+            case "payroll_add_hours":
+            {
+                Require("reports:revenue");
+                var periodId = Int("p_period");
+                var userId = Str("p_user") ?? throw Err("bad_input");
+                var quantity = Math.Round(Money("p_quantity"), 2);
+                var note = Str("p_note");
+                if (quantity == 0 || Math.Abs(quantity) > 1000 || note is null || note.Length > 200) throw Err("bad_input");
+                var per = PayrollDraft(periodId);
+                if (!PayrollPay(per).Any(p => p.Person.Id == userId && p.PayType is "hourly" or "per_session")) throw Err("bad_input");
+                var adj = AddReturn(_hourAdjustments, new DemoHourAdjustment
+                {
+                    Id = _hourAdjustments.Select(x => x.Id).DefaultIfEmpty(0).Max() + 1, PeriodId = periodId, UserId = userId,
+                    Quantity = quantity, Note = note, CreatedBy = Uid, CreatedAt = SubscriptionNow
+                });
+                Audit("payroll.hours_adjusted", "payroll_hour_adjustments", adj.Id.ToString());
+                result = new PayrollHourAdjustment { AdjustmentId = adj.Id, Quantity = adj.Quantity, Note = adj.Note, CreatedByName = NameOf(Uid), CreatedAt = adj.CreatedAt };
+                return true;
+            }
+            case "payroll_remove_hours":
+            {
+                Require("reports:revenue");
+                var adj = _hourAdjustments.FirstOrDefault(x => x.Id == Int("p_adjustment")) ?? throw Err("not_found");
+                PayrollDraft(adj.PeriodId);
+                _hourAdjustments.Remove(adj);
+                Audit("payroll.hours_adjustment_removed", "payroll_hour_adjustments", adj.Id.ToString());
+                return true;
             }
             case "payroll_lines_for":
             {
                 Require("reports:revenue");
-                var periodId = Convert.ToInt32(a["p_period"]);
+                var periodId = Int("p_period");
                 var userId = Str("p_user") ?? throw Err("bad_input");
                 result = _payrollLines.Where(l => l.PeriodId == periodId && l.UserId == userId)
-                    .OrderBy(l => l.CreatedAt).ThenBy(l => l.Id)
-                    .Select(l => new PayrollLine
-                    {
-                        LineId = l.Id, Kind = l.Kind, Amount = l.Amount, Note = l.Note,
-                        CreatedByName = StaffDisplayName(All<Profile>().First(u => u.Id == l.CreatedBy)),
-                        CreatedAt = l.CreatedAt
-                    }).ToList();
+                    .OrderBy(l => l.CreatedAt).ThenBy(l => l.Id).Select(ToLine).ToList();
                 return true;
             }
             case "payroll_add_line":
             {
                 Require("reports:revenue");
-                var periodId = Convert.ToInt32(a["p_period"]);
+                var periodId = Int("p_period");
                 var userId = Str("p_user") ?? throw Err("bad_input");
                 var kind = Str("p_kind") ?? throw Err("bad_input");
                 var amount = Money("p_amount");
                 var note = Str("p_note");
-                if (kind is not ("bonus" or "deduction") || amount is <= 0 or > 10_000_000 || note is null || note.Length > 200)
+                var category = a.ContainsKey("p_category") ? Str("p_category") : "other";
+                if (kind is not ("bonus" or "deduction") || amount is <= 0 or > 10_000_000 || note is null || note.Length > 200
+                    || category is null || !Categories.Contains(category))
                     throw Err("bad_input");
-                var per = _payrollPeriods.FirstOrDefault(x => x.Id == periodId) ?? throw Err("bad_input");
-                if (per.PaidAt is not null) throw Err("payroll_paid");
+                PayrollDraft(periodId);
                 var p = All<Profile>().FirstOrDefault(x => x.Id == userId && x.IsActive && x.DeletedAt is null) ?? throw Err("bad_input");
                 if (PrimaryPayrollRole(p.Id) is null) throw Err("bad_input");
-                var line = new DemoPayrollLine
+                var line = AddReturn(_payrollLines, new DemoPayrollLine
                 {
                     Id = _payrollLines.Count + 1, PeriodId = periodId, UserId = userId, Kind = kind,
-                    Amount = Math.Round(amount, 2), Note = note, CreatedBy = Uid, CreatedAt = SubscriptionNow
-                };
-                _payrollLines.Add(line);
+                    Amount = Math.Round(amount, 2), Note = note, Category = category, CreatedBy = Uid, CreatedAt = SubscriptionNow
+                });
                 Audit("payroll.line_added", "payroll_lines", line.Id.ToString());
-                result = new PayrollLine
-                {
-                    LineId = line.Id, Kind = line.Kind, Amount = line.Amount, Note = line.Note,
-                    CreatedByName = StaffDisplayName(All<Profile>().First(u => u.Id == Uid)),
-                    CreatedAt = line.CreatedAt
-                };
+                result = ToLine(line);
                 return true;
             }
             case "payroll_remove_line":
             {
                 Require("reports:revenue");
-                var lineId = Convert.ToInt32(a["p_line"]);
-                var line = _payrollLines.FirstOrDefault(l => l.Id == lineId) ?? throw Err("not_found");
+                var line = _payrollLines.FirstOrDefault(l => l.Id == Int("p_line")) ?? throw Err("not_found");
                 if (line.Kind == "salary") throw Err("bad_input");
-                var per = _payrollPeriods.First(x => x.Id == line.PeriodId);
-                if (per.PaidAt is not null) throw Err("payroll_paid");
+                PayrollDraft(line.PeriodId);
                 _payrollLines.Remove(line);
-                Audit("payroll.line_removed", "payroll_lines", lineId.ToString());
-                result = null; return true;
+                Audit("payroll.line_removed", "payroll_lines", line.Id.ToString());
+                return true;
             }
             case "payroll_mark_paid":
             {
                 Require("reports:revenue");
-                var periodId = Convert.ToInt32(a["p_period"]);
-                var per = _payrollPeriods.FirstOrDefault(x => x.Id == periodId) ?? throw Err("bad_input");
-                if (per.PaidAt is not null) throw Err("payroll_paid");
-                var manilaToday = DateOnly.FromDateTime(SubscriptionNow.AddHours(8));
-                if (manilaToday < per.EndsOn) throw Err("period_not_ended");
-
-                var preview = BuildPayrollPeriod(per);
-                var neg = preview.Rows.FirstOrDefault(r => r.Net < 0);
-                if (neg is not null) throw Err($"net_below_zero:{neg.FullName}");
-
-                foreach (var row in preview.Rows.Where(r => !r.NoSalary && r.Salary > 0))
-                {
+                var per = PayrollDraft(Int("p_period"));
+                if (ManilaDay(SubscriptionNow) < per.EndsOn) throw Err("period_not_ended");
+                var rows = PayrollBasis(per);
+                if (rows.Where(r => r.Pending > 0).OrderBy(r => r.FullName).FirstOrDefault() is { } waiting) throw Err($"time_pending:{waiting.FullName}");
+                if (rows.Where(r => r.Net < 0).OrderBy(r => r.FullName).FirstOrDefault() is { } neg) throw Err($"net_below_zero:{neg.FullName}");
+                foreach (var row in rows.Where(r => !r.NoSalary && (r.BasePay > 0 || r.PayType != "fixed")))
                     _payrollLines.Add(new DemoPayrollLine
                     {
-                        Id = _payrollLines.Count + 1, PeriodId = periodId, UserId = row.UserId,
-                        Kind = "salary", Amount = row.Salary, Note = null, CreatedBy = Uid, CreatedAt = SubscriptionNow
+                        Id = _payrollLines.Count + 1, PeriodId = per.Id, UserId = row.UserId, Kind = "salary", Amount = row.BasePay,
+                        PayType = row.PayType, Quantity = row.Payable, Rate = row.Rate, CreatedBy = Uid, CreatedAt = SubscriptionNow
                     });
-                }
                 per.PaidAt = SubscriptionNow;
                 per.PaidBy = Uid;
-                Audit("payroll.paid", "payroll_periods", periodId.ToString());
+                Audit("payroll.paid", "payroll_periods", per.Id.ToString());
                 result = BuildPayrollPeriod(per); return true;
             }
             default: return false;
         }
     }
+
+    static T AddReturn<T>(List<T> list, T item) { list.Add(item); return item; }
 }
