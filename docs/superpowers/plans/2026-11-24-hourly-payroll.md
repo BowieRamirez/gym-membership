@@ -4,7 +4,7 @@
 
 Created: 2026-11-24
 Last updated: 2026-11-25
-Status (2026-11-25): H1-H17 confirmed by the owner (as recommended). Phases 1-2 built, reviewed, live-tested and fixed. The branch also carries the follow-ups listed under "Everything on this branch" below, including a live test of the whole system (2026-11-25) and its fixes. Migrations `0142`-`0150` all live; Xendit webhook confirmed working in Test mode; branch pushed (in sync with `origin`). Left: owner hand checks, reject TEST shift 35 in karl's 16-30 Nov payroll, a new app release. **Not merged.** Next migration `0151`.
+Status (2026-11-25): H1-H17 confirmed by the owner (as recommended). Phases 1-2 built, reviewed, live-tested and fixed. The branch also carries the follow-ups listed under "Everything on this branch" below, including a live test of the whole system (2026-11-25) and its fixes. Migrations `0142`-`0150` all live; Xendit webhook confirmed working in Test mode; branch pushed (in sync with `origin`). Left: owner hand checks and a new app release (TEST shift 35 rejected by the owner). **Not merged.** Next migration `0151`.
 
 ## Everything on this branch (2026-11-24 to 2026-11-25)
 
@@ -25,7 +25,7 @@ Status (2026-11-25): H1-H17 confirmed by the owner (as recommended). Phases 1-2 
 
 ## Before merging (owner)
 
-- [ ] Reject TEST shift 35 (karl, 25 Nov) in the 16-30 Nov payroll, reason "TEST shift from the live test".
+- [x] Reject TEST shift 35 (karl, 25 Nov) in the 16-30 Nov payroll, reason "TEST shift from the live test".
 - [x] Reschedule requests: removed (0149).
 - [x] Coach access in a membership refund: unused days refunded too (0150).
 - [ ] Hand checks on Windows: Payroll (Phase 3 list below), the Revenue / Cash shifts tabs, the Users Active / Deactivated tabs, the Salaries deductions editor at narrow width, a booking held for 15 minutes; light and dark.
@@ -37,7 +37,7 @@ Status (2026-11-25): H1-H17 confirmed by the owner (as recommended). Phases 1-2 
 
 - ~~Reschedule requests can't be answered~~ **Done (0149)**: owner chose to remove it. The Reschedule button and panel are gone from Sessions and `request_reschedule` is dropped; a session's time changes by cancelling and booking again (the new coach booking, 0120). Old app versions still show the button; it now gives an error instead of sending a request nobody can answer.
 - ~~Coach access paid before a membership refund~~ **Done (0150)**: owner chose to refund the unused coach access days too.
-- **TEST records on live** from the live test: accounts `claude.test*.20261125@example.com`, payments 148-161, refunds 39-43 (paid by GCash reference), discount `TESTCLAUDE6534`, closed shift 35, payroll period 144 (16-31 Jan 2025) paid out. Owner to reject TEST shift 35 in karl's 16-30 Nov payroll.
+- **TEST records on live** from the live test: accounts `claude.test*.20261125@example.com`, payments 148-161, refunds 39-43 (paid by GCash reference), discount `TESTCLAUDE6534`, closed shift 35, payroll period 144 (16-31 Jan 2025) paid out. TEST shift 35 rejected by the owner on 2026-11-25.
 - **Xendit Live mode**: when switching to live keys, set the same webhook URL on "Payment Session Completed" in Live mode and Live mode's own `XENDIT_WEBHOOK_TOKEN`.
 - **Checked and left as they are (by design)**: a member cancelling their own booking needs no reason (staff must give one; the app sends none for members, so requiring it would block cancelling); a refund reason category is required only when the member checked in during that term; the sign-up message without accepting the terms can't be changed server-side (Supabase Auth hides it) and the app already blocks it.
 - Not live-tested: gym and coach check-ins (the test ran after closing time; only their refusals were checked); creating or publishing packages, amenity status, announcements and damage reports (they would reach real members).
