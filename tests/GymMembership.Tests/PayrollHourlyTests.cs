@@ -45,6 +45,29 @@ public class PayrollHourlyTests
         Assert.Equal("Opened by mistake", (await admin.PayrollRecordsAsync(period.PeriodId, desk.UserId)).Value!.First(r => r.SourceId == s2).Reason);
     }
 
+    sealed class Clock(DateTimeOffset now) : TimeProvider { public override DateTimeOffset GetUtcNow() => now; }
+
+    [Fact]
+    public async Task Hourly_periods_are_paid_from_the_day_after_and_paid_periods_show_nothing_pending()
+    {
+        var gw = new DemoGateway(clock: new Clock(new DateTimeOffset(2026, 8, 15, 2, 0, 0, TimeSpan.Zero)));   // 10 am Manila, last day of 1-15 Aug
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var admin = new AdminService(gw);
+        var desk = (await admin.PayrollStaffAsync()).Value!.First(s => s.Role == "employee");
+        await admin.SetStaffSalaryAsync(desk.UserId, 80m, "hourly");
+        var pid = (await admin.PayrollPeriodAsync(Aug)).Value!.PeriodId;
+        Assert.Equal("period_not_ended", (await admin.MarkPayrollPaidAsync(pid)).Message);
+
+        var later = new DemoGateway(clock: new Clock(new DateTimeOffset(2026, 8, 16, 2, 0, 0, TimeSpan.Zero)));
+        await later.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var admin2 = new AdminService(later);
+        await admin2.SetStaffSalaryAsync(desk.UserId, 80m, "hourly");
+        pid = (await admin2.PayrollPeriodAsync(Aug)).Value!.PeriodId;
+        Assert.True((await admin2.MarkPayrollPaidAsync(pid)).Ok);
+        later.OwnerAddShift(desk.UserId, Manila(15, 18), Manila(15, 21));   // closed after paying
+        Assert.Equal(0, (await admin2.PayrollPeriodAsync(Aug)).Value!.Rows.First(r => r.UserId == desk.UserId).Pending);
+    }
+
     [Fact]
     public async Task Overlapping_approved_shifts_count_once_and_approve_all_skips_flagged()
     {

@@ -139,7 +139,7 @@ public static class ErrorText
         "note_required" => "Add a note: the amount differs from what's expected.",
         "reason_required" => "Choose why the count differs from what's expected.",
         "payroll_paid" => "This pay period is already marked as paid and can't be changed.",
-        "period_not_ended" => "Wait until the last day of the pay period before marking it as paid.",
+        "period_not_ended" => "This pay period isn't over yet. Fixed pay can be marked paid on its last day; hourly and per-session pay from the next day.",
         "own_salary" => "Ask another admin or System admin to set your own salary.",
         string s when s.StartsWith("net_below_zero:", StringComparison.Ordinal) => $"{s["net_below_zero:".Length..]} has a net pay below ₱0.00. Adjust their lines before marking as paid.",
         "net_below_zero" => "Someone's net pay is below ₱0.00. Adjust their lines before marking as paid.",

@@ -149,7 +149,9 @@ language sql stable set search_path = '' as $$
              when 'per_session' then (select count(*) from recs rc where rc.user_id = pay.user_id and rc.status = 'approved')
              else 0 end::numeric(8,2) as logged,
            coalesce((select sum(a.quantity) from public.payroll_hour_adjustments a where a.period_id = p_period and a.user_id = pay.user_id), 0)::numeric(8,2) as adjustment,
-           (select count(*) from recs rc where rc.user_id = pay.user_id and rc.status = 'pending' and rc.ends_at is not null)::int as pending,
+           -- a paid period can't be decided any more, so nothing in it is pending (a shift closed after paying stays out)
+           case when (select paid_at from per) is not null then 0
+                else (select count(*) from recs rc where rc.user_id = pay.user_id and rc.status = 'pending' and rc.ends_at is not null) end::int as pending,
            (select count(*) from recs rc where rc.user_id = pay.user_id and cardinality(rc.flags) > 0)::int as flagged,
            coalesce((select sum(pl.amount) from public.payroll_lines pl where pl.period_id = p_period and pl.user_id = pay.user_id and pl.kind = 'bonus'), 0)::numeric(12,2) as bonuses,
            coalesce((select sum(pl.amount) from public.payroll_lines pl where pl.period_id = p_period and pl.user_id = pay.user_id and pl.kind = 'deduction'), 0)::numeric(12,2) as deductions,
@@ -525,6 +527,12 @@ begin
   if p_period is null then perform public.fail('bad_input', '22023'); end if;
   v_per := public.payroll_draft(p_period);
   if (now() at time zone 'Asia/Manila')::date < v_per.ends_on then perform public.fail('period_not_ended', '22023'); end if;
+  -- hourly / per-session pay: a shift or session later on the last day would belong to a locked period and never be paid,
+  -- so such periods are paid from the next day (fixed-only periods keep Part 3's "on the last day")
+  if (now() at time zone 'Asia/Manila')::date = v_per.ends_on
+     and exists (select 1 from public.payroll_basis(p_period) b where b.pay_type <> 'fixed' and not b.no_salary) then
+    perform public.fail('period_not_ended', '22023');
+  end if;
 
   select b.full_name into v_name from public.payroll_basis(p_period) b where b.pending > 0 order by b.full_name limit 1;
   if v_name is not null then perform public.fail('time_pending:' || v_name, '22023'); end if;

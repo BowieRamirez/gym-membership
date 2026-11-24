@@ -182,7 +182,7 @@ public sealed partial class DemoGateway
                 PayType = pay.PayType, Rate = pay.Rate, Personal = pay.Personal, NoSalary = pay.NoSalary,
                 Logged = logged, Adjustment = adjustment, Payable = payable, BasePay = basePay, Salary = basePay,
                 Bonuses = bonuses, Deductions = deductions, Gross = basePay + bonuses, Net = basePay + bonuses - deductions,
-                Pending = mine.Count(r => r.Status == "pending" && r.EndsAt is not null), Flagged = mine.Count(r => r.Flags.Count > 0)
+                Pending = per.PaidAt is not null ? 0 : mine.Count(r => r.Status == "pending" && r.EndsAt is not null), Flagged = mine.Count(r => r.Flags.Count > 0)
             };
         }).OrderBy(r => RoleOrder(r.Role)).ThenBy(r => r.FullName).ToList();
     }
@@ -434,6 +434,8 @@ public sealed partial class DemoGateway
                 var per = PayrollDraft(Int("p_period"));
                 if (ManilaDay(SubscriptionNow) < per.EndsOn) throw Err("period_not_ended");
                 var rows = PayrollBasis(per);
+                // hourly / per-session periods are paid from the day after (later shifts that day would be lost)
+                if (ManilaDay(SubscriptionNow) == per.EndsOn && rows.Any(r => r.PayType != "fixed" && !r.NoSalary)) throw Err("period_not_ended");
                 if (rows.Where(r => r.Pending > 0).OrderBy(r => r.FullName).FirstOrDefault() is { } waiting) throw Err($"time_pending:{waiting.FullName}");
                 if (rows.Where(r => r.Net < 0).OrderBy(r => r.FullName).FirstOrDefault() is { } neg) throw Err($"net_below_zero:{neg.FullName}");
                 foreach (var row in rows.Where(r => !r.NoSalary && (r.BasePay > 0 || r.PayType != "fixed")))

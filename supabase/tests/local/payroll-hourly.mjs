@@ -257,6 +257,19 @@ try {
     await assert.rejects(review(aug, 'cash_shift', s1, 'approved'), /not_found/);
   });
 
+  await test('review fix: a paid period never shows pending records that can no longer be decided', async () => {
+    await shift(desk, '2026-09-05T08:00:00+08:00', '2026-09-05T10:00:00+08:00');   // closed after Sep 1-15 was paid
+    assert.equal((await row('2026-09-01', desk)).pending, 0);
+  });
+
+  await test('review fix: with hourly or per-session people, Mark as paid waits until the day after the period ends', async () => {
+    const today = (await db.query(`select (now() at time zone 'Asia/Manila')::date d`)).rows[0].d;
+    // a period that ends today (inserted directly: the real one may end later this half-month)
+    const pid = (await db.query(`insert into payroll_periods(starts_on, ends_on) values ('2000-01-01', $1) returning period_id`,
+      [today])).rows[0].period_id;
+    await assert.rejects(as(admin, `select payroll_mark_paid($1)`, [pid]), /period_not_ended/);
+  });
+
   await test('RF7: a Part 3 paid line (no type, quantity or rate) reads as Fixed', async () => {
     const pid = (await db.query(`insert into payroll_periods(starts_on, ends_on, paid_at, paid_by) values ('2025-06-01','2025-06-15',now(),$1) returning period_id`, [admin])).rows[0].period_id;
     await db.query(`insert into payroll_lines(period_id,user_id,kind,amount,created_by) values ($1,$2,'salary',8000,$3)`, [pid, desk, admin]);

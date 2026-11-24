@@ -3691,7 +3691,9 @@ public partial class PayrollViewModel : LoadableViewModel
     public bool HasNoSalary => NoSalaryCount > 0;
     public bool IsDraft => !IsPaid;
     public bool IsEmptyStaff => !IsBusy && Rows.Count == 0 && ErrorMessage is null;
-    public bool CanMarkPaid => !IsPaid && Rows.Count > 0 && PendingTotal == 0 && PeriodEndsOn <= ManilaToday();
+    // hourly / per-session periods are paid from the day after the period ends (same rule as payroll_mark_paid)
+    public bool CanMarkPaid => !IsPaid && Rows.Count > 0 && PendingTotal == 0
+        && (PeriodEndsOn < ManilaToday() || (PeriodEndsOn == ManilaToday() && Rows.All(r => r.Row.PayType == "fixed" || r.NoSalary)));
     public string PeriodLabel => PayrollPdf.PeriodSpan(PeriodStartsOn, PeriodEndsOn == default ? PeriodStartFor(PeriodStartsOn).AddDays(14) : PeriodEndsOn);
 
     // Side drawer state
