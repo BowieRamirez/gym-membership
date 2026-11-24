@@ -72,9 +72,9 @@ public class PayrollDeductionsTests
         Assert.False((await admin.PayrollStaffAsync()).Value!.First(s => s.UserId == desk.UserId).DeductionsOn);
         var r = (await admin.PayrollPeriodAsync(Oct16)).Value!.Rows.First(x => x.UserId == desk.UserId);
         Assert.Equal((0m, 13000m), (r.GovTotal, r.Net));
-        await admin.SetStaffSalaryAsync(coach.UserId, 100m, "hourly");   // no hours: nothing to take from
+        await admin.SetStaffSalaryAsync(coach.UserId, 100m, "hourly");   // no pay all month: nothing is due, so no "cut" warning (review fix)
         var c = (await admin.PayrollPeriodAsync(Oct16)).Value!.Rows.First(x => x.UserId == coach.UserId);
-        Assert.Equal((0m, 0m, true), (c.GovTotal, c.Net, c.GovCut));
+        Assert.Equal((0m, 0m, false), (c.GovTotal, c.Net, c.GovCut));
     }
 
     [Fact]
@@ -117,6 +117,42 @@ public class PayrollDeductionsTests
         };
         var slip = PayrollPdf.Payslip(row, lines, []);
         Assert.True(slip.IndexOf("Gross pay") < slip.IndexOf("-₱1,300.00 SSS") && slip.IndexOf("-₱1,300.00 SSS") < slip.IndexOf("Net pay"));
-        Assert.Contains("-₱64.95 Withholding tax: Withholding tax, 16–31 Oct 2026", slip);
+        Assert.Contains("-₱64.95 Withholding tax, 16–31 Oct 2026", slip);   // the note already names it: no "Withholding tax: Withholding tax"
+        Assert.DoesNotContain("Withholding tax: Withholding tax", slip);
+    }
+
+    [Fact]   // review fix: a draft has no frozen lines yet, so its payslip lists the amounts the period shows
+    public void Draft_payslip_lists_government_deductions_from_the_row()
+    {
+        var row = new PayrollRow { FullName = "Ana", Role = "employee", PayType = "fixed", Rate = 13000, Payable = 1, BasePay = 13000, Gross = 13000,
+                                   Sss = 1300, PhilHealth = 650, PagIbig = 200, Tax = 64.95m, GovTotal = 2214.95m, Deductions = 2214.95m, Net = 10785.05m };
+        var slip = PayrollPdf.Payslip(row, [], []);
+        foreach (var part in new[] { "-₱1,300.00 SSS", "-₱650.00 PhilHealth", "-₱200.00 Pag-IBIG", "-₱64.95 Withholding tax" })
+            Assert.Contains(part, slip);
+        Assert.True(slip.IndexOf("Gross pay") < slip.IndexOf("-₱1,300.00 SSS"));
+    }
+
+    [Fact]   // review fixes: a paid period lists its frozen government lines once; idle staff get no "cut" warning; no salary is said as such
+    public async Task Paid_panel_lists_government_lines_once_and_idle_or_unpaid_people_read_right()
+    {
+        var (admin, desk, coach) = await Setup();
+        await admin.SetStaffSalaryAsync(coach.UserId, 100m, "hourly");   // no hours all month
+        Assert.False((await admin.PayrollPeriodAsync(Oct16)).Value!.Rows.First(r => r.UserId == coach.UserId).GovCut);
+        await admin.MarkPayrollPaidAsync((await admin.PayrollPeriodAsync(Oct1)).Value!.PeriodId);
+        await admin.MarkPayrollPaidAsync((await admin.PayrollPeriodAsync(Oct16)).Value!.PeriodId);
+
+        var vm = new PayrollViewModel(admin) { PeriodStartsOn = Oct16 };
+        await vm.OnAppearingAsync();
+        await vm.OpenDrawerCommand.ExecuteAsync(vm.Rows.First(r => r.UserId == desk.UserId));
+        Assert.DoesNotContain(vm.DrawerLines, l => PayTypes.IsGovernment(l.Line.Category));
+        Assert.Equal(new[] { "SSS", "PhilHealth", "Pag-IBIG", "Withholding tax" }, vm.DrawerGov.Select(g => g.Label));
+        Assert.Equal(1300m, vm.DrawerGov[0].Amount);
+
+        var unpaid = vm.Rows.FirstOrDefault(r => r.NoSalary);
+        if (unpaid is not null)
+        {
+            await vm.OpenDrawerCommand.ExecuteAsync(unpaid);
+            Assert.Equal("No salary set, so nothing is deducted.", vm.DrawerGovNote);
+        }
     }
 }

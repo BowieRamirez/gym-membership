@@ -584,6 +584,8 @@ public sealed class PayrollRow
     [System.Text.Json.Serialization.JsonPropertyName("month_gross")] public decimal MonthGross { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("month_base")] public decimal MonthBase { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("taxable")] public decimal Taxable { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("msc")] public decimal Msc { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("pagibig_base")] public decimal PagIbigBase { get; set; }
     [System.Text.Json.Serialization.JsonIgnore] public string RoleLabel => Role switch { "employee" => "Front desk", "coach" => "Coach", "subadmin" => "Admin", "admin" => "System admin", _ => Role };
     /// <summary>"41.5 h × ₱80.00", "12 sessions × ₱150.00" or "Fixed".</summary>
     [System.Text.Json.Serialization.JsonIgnore] public string BasisText => PayTypes.BasisText(PayType, Payable, Rate);

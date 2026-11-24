@@ -113,6 +113,25 @@ try {
     assert.equal(n(a.gov_total), 0); assert.equal(a.gov_cut, false); assert.equal(n(a.net), 200);
   });
 
+  await test('review fix: someone with no pay all month gets no "cut" warning; MSC and Pag-IBIG base come from the table', async () => {
+    const idle = await user('coach', 'Coach Idle');
+    await as(admin, `select set_staff_salary($1, 100, 'hourly')`, [idle]);
+    const r = await row('2026-10-16', idle);
+    assert.equal(r.gov_cut, false); assert.equal(n(r.gov_total), 0);
+    const d = await row('2026-10-16', desk);
+    assert.equal(n(d.msc), 26000); assert.equal(n(d.pagibig_base), 10000);
+    await db.query(`update payroll_deduction_rates set pagibig_cap = 5000`);
+    assert.equal(n((await row('2026-10-16', desk)).pagibig_base), 5000);
+    assert.equal(await one(`select public.payroll_pagibig(20000) v`), 100);
+    await db.query(`update payroll_deduction_rates set pagibig_cap = 10000`);
+  });
+
+  await test('review fix: the switch is refused for a deactivated account', async () => {
+    const gone = await user('employee', 'Desk Gone');
+    await as(admin, `select set_user_active($1, false)`, [gone]);
+    await assert.rejects(as(admin, `select set_payroll_deductions($1, false)`, [gone]), /bad_input/);
+  });
+
   await test('Review Focus 5: switch off: no government deductions; own switch refused; audited', async () => {
     await as(admin, `select set_payroll_deductions($1, false)`, [off]);
     const r = await row('2026-10-16', off);

@@ -202,8 +202,9 @@ public sealed partial class DemoGateway
             var on = !r.NoSalary && !_noDeductions.Contains(r.UserId);
             var f = first.FirstOrDefault(x => x.UserId == r.UserId);
             var mGross = r.Gross + (f?.Gross ?? 0); var mBase = r.BasePay + (f?.BasePay ?? 0);
-            decimal ws = on && secondHalf ? PayrollDeductions.Sss(mGross) : 0, wp = on && secondHalf ? PayrollDeductions.PhilHealth(mBase) : 0,
-                    wi = on && secondHalf ? PayrollDeductions.PagIbig(mGross) : 0;
+            var due = on && secondHalf && mGross > 0;   // no pay all month: nothing is due (0144 review fix)
+            decimal ws = due ? PayrollDeductions.Sss(mGross) : 0, wp = due ? PayrollDeductions.PhilHealth(mBase) : 0,
+                    wi = due ? PayrollDeductions.PagIbig(mGross) : 0;
             var taxable = Math.Max(0, r.Gross - ws - wp - wi);
             var wt = on ? PayrollDeductions.Tax(taxable) : 0;
             decimal s, p, i, t;
@@ -221,6 +222,7 @@ public sealed partial class DemoGateway
             r.DeductionsOn = on; r.ManualDeductions = r.Deductions; r.Sss = s; r.PhilHealth = p; r.PagIbig = i; r.Tax = t; r.GovTotal = gov;
             r.GovCut = per.PaidAt is null && gov < ws + wp + wi + wt;
             r.MonthGross = secondHalf ? mGross : r.Gross; r.MonthBase = secondHalf ? mBase : r.BasePay; r.Taxable = taxable;
+            r.Msc = PayrollDeductions.Msc(mGross); r.PagIbigBase = Math.Min(Math.Max(mGross, 0), 10000);
             r.Deductions += gov; r.Net -= gov;
         }
         return rows;
@@ -509,7 +511,7 @@ public sealed partial class DemoGateway
                     {
                         ("sss", row.Sss, $"SSS, {month}, on ₱{M(row.MonthGross)} month pay"),
                         ("philhealth", row.PhilHealth, $"PhilHealth, {month}, on ₱{M(row.MonthBase)} base pay"),
-                        ("pagibig", row.PagIbig, $"Pag-IBIG, {month}, on ₱{M(Math.Min(row.MonthGross, 10000))}"),
+                        ("pagibig", row.PagIbig, $"Pag-IBIG, {month}, on ₱{M(row.PagIbigBase)}"),
                         ("tax", row.Tax, $"Withholding tax, {GymMembership.Core.Services.PayrollPdf.PeriodSpan(per.StartsOn, per.EndsOn)}, on ₱{M(row.Taxable)} taxable")
                     }.Where(x => x.Item2 > 0))
                         _payrollLines.Add(new DemoPayrollLine { Id = _payrollLines.Count + 1, PeriodId = per.Id, UserId = row.UserId, Kind = "deduction",

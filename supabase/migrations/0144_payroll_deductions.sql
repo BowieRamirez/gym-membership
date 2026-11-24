@@ -34,6 +34,8 @@ create table public.payroll_no_deductions (
   set_at timestamptz not null default now()
 );
 alter table public.payroll_no_deductions enable row level security;
+-- reached only through the functions below; no table rights for clients (RLS on, no policies)
+revoke all on public.payroll_deduction_rates, public.payroll_no_deductions from public, anon, authenticated;
 comment on table public.payroll_no_deductions is 'People with government deductions switched off (0144, T4); no row = on';
 
 alter table public.payroll_lines drop constraint payroll_lines_category_check;
@@ -120,7 +122,7 @@ returns table (user_id uuid, full_name text, role text, pay_type text, rate nume
                logged numeric, adjustment numeric, payable numeric, base_pay numeric, bonuses numeric, deductions numeric,
                gross numeric, net numeric, pending int, flagged int,
                deductions_on boolean, manual_deductions numeric, sss numeric, philhealth numeric, pagibig numeric, tax numeric,
-               gov_total numeric, gov_cut boolean, month_gross numeric, month_base numeric, taxable numeric)
+               gov_total numeric, gov_cut boolean, month_gross numeric, month_base numeric, taxable numeric, msc numeric, pagibig_base numeric)
 language sql stable set search_path = '' as $$
   with per as (select * from public.payroll_periods where period_id = p_period),
   half1 as (select f.period_id from public.payroll_periods f, per
@@ -141,9 +143,9 @@ language sql stable set search_path = '' as $$
     from core c cross join per left join fh f on f.user_id = c.user_id),
   wanted as (
     select r.*,
-           case when r.on_ and r.second_half then public.payroll_sss(r.m_gross) else 0 end as w_sss,
-           case when r.on_ and r.second_half then public.payroll_philhealth(r.m_base) else 0 end as w_ph,
-           case when r.on_ and r.second_half then public.payroll_pagibig(r.m_gross) else 0 end as w_pi
+           case when r.on_ and r.second_half and r.m_gross > 0 then public.payroll_sss(r.m_gross) else 0 end as w_sss,
+           case when r.on_ and r.second_half and r.m_gross > 0 then public.payroll_philhealth(r.m_base) else 0 end as w_ph,
+           case when r.on_ and r.second_half and r.m_gross > 0 then public.payroll_pagibig(r.m_gross) else 0 end as w_pi
     from raw r),
   wanted2 as (
     select w.*, greatest(0, w.gross - w.w_sss - w.w_ph - w.w_pi)::numeric(12,2) as w_taxable,
@@ -163,7 +165,9 @@ language sql stable set search_path = '' as $$
          (t.gross - t.deductions - t.t_sss - t.t_ph - t.t_pi - t.t_tax)::numeric(12,2), t.pending, t.flagged,
          t.on_, t.deductions, t.t_sss, t.t_ph, t.t_pi, t.t_tax, (t.t_sss + t.t_ph + t.t_pi + t.t_tax)::numeric(12,2),
          not t.paid and (t.t_sss + t.t_ph + t.t_pi + t.t_tax) < (t.w_sss + t.w_ph + t.w_pi + t.w_tax),
-         case when t.second_half then t.m_gross else t.gross end, case when t.second_half then t.m_base else t.base_pay end, t.w_taxable
+         case when t.second_half then t.m_gross else t.gross end, case when t.second_half then t.m_base else t.base_pay end, t.w_taxable,
+         (select least(r.sss_msc_max, greatest(r.sss_msc_min, r.sss_msc_step * round(t.m_gross / r.sss_msc_step))) from public.payroll_deduction_rates r)::numeric(12,2),
+         (select least(greatest(t.m_gross, 0), r.pagibig_cap) from public.payroll_deduction_rates r)::numeric(12,2)
   from taken t
 $$;
 
@@ -173,7 +177,10 @@ language plpgsql security definer set search_path = '' as $$
 declare v_was boolean;
 begin
   perform public.require_permission('reports:revenue');
-  if p_user is null or p_on is null or public.payroll_role(p_user) is null then perform public.fail('bad_input', '22023'); end if;
+  if p_user is null or p_on is null or public.payroll_role(p_user) is null
+     or not exists (select 1 from public.profiles p where p.id = p_user and p.is_active and p.deleted_at is null) then
+    perform public.fail('bad_input', '22023');
+  end if;
   if p_user = auth.uid() then perform public.fail('own_salary', '42501'); end if;
   v_was := not exists (select 1 from public.payroll_no_deductions where user_id = p_user);
   if p_on then delete from public.payroll_no_deductions where user_id = p_user;
@@ -268,7 +275,7 @@ begin
            'deductions', b.deductions, 'net', b.net, 'no_salary', b.no_salary, 'pending', b.pending, 'flagged', b.flagged,
            'deductions_on', b.deductions_on, 'manual_deductions', b.manual_deductions, 'sss', b.sss, 'philhealth', b.philhealth,
            'pagibig', b.pagibig, 'tax', b.tax, 'gov_total', b.gov_total, 'gov_cut', b.gov_cut,
-           'month_gross', b.month_gross, 'month_base', b.month_base, 'taxable', b.taxable)
+           'month_gross', b.month_gross, 'month_base', b.month_base, 'taxable', b.taxable, 'msc', b.msc, 'pagibig_base', b.pagibig_base)
          order by case b.role when 'employee' then 1 when 'coach' then 2 when 'subadmin' then 3 else 4 end, b.full_name), '[]'::jsonb),
          coalesce(sum(b.net), 0), coalesce(sum(b.gross), 0), coalesce(sum(b.gov_total), 0)
   into v_rows, v_net, v_gross, v_gov
@@ -327,7 +334,7 @@ begin
   cross join lateral (values
     ('sss', m.sss, 'SSS, ' || v_month || ', on ₱' || to_char(m.month_gross, 'FM999,999,990.00') || ' month pay'),
     ('philhealth', m.philhealth, 'PhilHealth, ' || v_month || ', on ₱' || to_char(m.month_base, 'FM999,999,990.00') || ' base pay'),
-    ('pagibig', m.pagibig, 'Pag-IBIG, ' || v_month || ', on ₱' || to_char(least(m.month_gross, 10000), 'FM999,999,990.00')),
+    ('pagibig', m.pagibig, 'Pag-IBIG, ' || v_month || ', on ₱' || to_char(m.pagibig_base, 'FM999,999,990.00')),
     ('tax', m.tax, 'Withholding tax, ' || v_span || ', on ₱' || to_char(m.taxable, 'FM999,999,990.00') || ' taxable')
   ) x(category, amount, note)
   where x.amount > 0;

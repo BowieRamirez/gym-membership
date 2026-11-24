@@ -171,7 +171,13 @@ public static class PayrollPdf
     public static string Payslip(PayrollRow r, IReadOnlyList<PayrollLine> lines, IReadOnlyList<PayrollHourAdjustment> adjustments)
     {
         var unit = r.PayType == "per_session" ? "sessions" : "h";
-        string Line(PayrollLine x) => $"{(x.Kind == "bonus" ? "+" : "-")}{PayTypes.Money(x.Amount)} {(string.IsNullOrEmpty(x.CategoryLabel) ? "" : x.CategoryLabel + ": ")}{x.Note}";
+        // government lines: their note already starts with the name ("SSS, Oct 2026, …"), so no "SSS: SSS, …"
+        string Line(PayrollLine x) => $"{(x.Kind == "bonus" ? "+" : "-")}{PayTypes.Money(x.Amount)} "
+            + (PayTypes.IsGovernment(x.Category) ? x.Note ?? x.CategoryLabel : $"{(string.IsNullOrEmpty(x.CategoryLabel) ? "" : x.CategoryLabel + ": ")}{x.Note}");
+        // a draft has no frozen government lines yet: list the amounts the period shows (0144 review fix)
+        if (r.GovTotal > 0 && !lines.Any(x => PayTypes.IsGovernment(x.Category)))
+            lines = [.. lines, .. new[] { ("sss", r.Sss), ("philhealth", r.PhilHealth), ("pagibig", r.PagIbig), ("tax", r.Tax) }
+                .Where(g => g.Item2 > 0).Select(g => new PayrollLine { Kind = "deduction", Category = g.Item1, Amount = g.Item2, Note = PayTypes.CategoryLabel(g.Item1) })];
         var parts = new List<string>
         {
             r.NoSalary ? $"{r.FullName} ({r.RoleLabel}) · No salary set" : $"{r.FullName} ({r.RoleLabel}) · {PayTypes.Label(r.PayType)} pay, {PayTypes.RateText(r.PayType, r.Rate)}",
@@ -181,7 +187,7 @@ public static class PayrollPdf
         parts.Add($"Base pay {PayTypes.Money(r.BasePay)}");
         parts.AddRange(lines.Where(x => x.Kind == "bonus").Select(Line));
         parts.Add($"Gross pay {PayTypes.Money(r.Gross)}");
-        parts.AddRange(lines.Where(x => x.Kind == "deduction").Select(Line));
+        parts.AddRange(lines.Where(x => x.Kind == "deduction").OrderBy(x => PayTypes.IsGovernment(x.Category)).Select(Line));
         parts.Add($"Net pay {PayTypes.Money(r.Net)}");
         return string.Join(" | ", parts);
     }

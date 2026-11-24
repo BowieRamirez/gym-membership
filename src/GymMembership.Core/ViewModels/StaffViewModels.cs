@@ -3887,17 +3887,28 @@ public partial class PayrollViewModel : LoadableViewModel
         DrawerGovNote = "";
         if (SelectedRow is not { } sel) return;
         var r = sel.Row;
+        if (r.NoSalary) { DrawerGovNote = "No salary set, so nothing is deducted."; return; }
+        if (IsPaid)
+        {
+            // a paid period shows what was frozen when it was paid, whatever the switch or rates say today
+            foreach (var (label, amount) in new[] { ("SSS", r.Sss), ("PhilHealth", r.PhilHealth), ("Pag-IBIG", r.PagIbig), ("Withholding tax", r.Tax) })
+                if (amount > 0) DrawerGov.Add(new(label, "Taken when this period was paid", amount));
+            if (DrawerGov.Count == 0) DrawerGovNote = "No government deductions in this pay.";
+            return;
+        }
         if (!r.DeductionsOn) { DrawerGovNote = "Government deductions are off for this person (Salaries tab)."; return; }
         var money = PayTypes.Money;
+        var notes = new List<string>();
         if (PeriodStartsOn.Day == 16)
         {
-            DrawerGov.Add(new("SSS", $"MSC {money(PayrollDeductions.Msc(r.MonthGross))}", r.Sss));
+            DrawerGov.Add(new("SSS", $"MSC {money(r.Msc)}", r.Sss));
             DrawerGov.Add(new("PhilHealth", $"on {money(r.MonthBase)} base pay", r.PhilHealth));
-            DrawerGov.Add(new("Pag-IBIG", $"on {money(Math.Min(r.MonthGross, 10000))}", r.PagIbig));
+            DrawerGov.Add(new("Pag-IBIG", $"on {money(r.PagIbigBase)}", r.PagIbig));
         }
-        else DrawerGovNote = "SSS, PhilHealth and Pag-IBIG are taken in the 16th–end pay.";
+        else notes.Add("SSS, PhilHealth and Pag-IBIG are taken in the 16th–end pay.");
         DrawerGov.Add(new("Withholding tax", $"on {money(r.Taxable)} taxable", r.Tax));
-        if (r.GovCut) DrawerGovNote = "Deductions cut to keep pay above ₱0.";
+        if (r.GovCut) notes.Add("Deductions cut to keep pay above ₱0.");
+        DrawerGovNote = string.Join(" ", notes);
     }
 
     void NotifyDrawerKind()
@@ -3933,7 +3944,7 @@ public partial class PayrollViewModel : LoadableViewModel
     {
         if (SelectedRow is not { } row || PeriodId <= 0) return;
         await RunAsync(() => _svc.PayrollLinesAsync(PeriodId, row.UserId), lines =>
-            Fill(DrawerLines, lines.Where(l => l.Kind != "salary").Select(l => new PayrollLineItem(l, !IsPaid))));
+            Fill(DrawerLines, lines.Where(l => l.Kind != "salary" && !PayTypes.IsGovernment(l.Category)).Select(l => new PayrollLineItem(l, !IsPaid))));
         if (!HasTimeRecords) { DrawerRecords.Clear(); DrawerAdjustments.Clear(); return; }
         var unit = row.Row.PayType == "per_session" ? "sessions" : "h";
         await RunAsync(() => _svc.PayrollRecordsAsync(PeriodId, row.UserId), recs =>
