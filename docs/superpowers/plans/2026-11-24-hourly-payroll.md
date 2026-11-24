@@ -4,9 +4,9 @@
 
 Created: 2026-11-24
 Last updated: 2026-11-25
-Status (2026-11-24): H1-H17 confirmed by the owner (as recommended). Phases 1-2 built, reviewed, live-tested and fixed. The branch also carries the follow-ups listed under "Everything on this branch" below. Migrations `0142`-`0146` all live; branch pushed (in sync with `origin`); owner hand checks and a new app release left. **Not merged.** Next migration `0147`.
+Status (2026-11-25): H1-H17 confirmed by the owner (as recommended). Phases 1-2 built, reviewed, live-tested and fixed. The branch also carries the follow-ups listed under "Everything on this branch" below, including a live test of the whole system (2026-11-25) and its fixes. Migrations `0142`-`0148` all live; Xendit webhook confirmed working in Test mode; branch pushed (in sync with `origin`). Left: owner hand checks, reject TEST shift 35 in karl's 16-30 Nov payroll, decide the open items below, a new app release. **Not merged.** Next migration `0149`.
 
-## Everything on this branch (2026-11-24)
+## Everything on this branch (2026-11-24 to 2026-11-25)
 
 | What | Plan | Database | Commits |
 |---|---|---|---|
@@ -16,9 +16,18 @@ Status (2026-11-24): H1-H17 confirmed by the owner (as recommended). Phases 1-2 
 | **Government deductions**: SSS, PhilHealth, Pag-IBIG once a month in the 16th–end pay; BIR withholding tax every pay; rates in one table; never below ₱0; the 16th–end waits for the 1st–15th; frozen on paid | `2026-11-24-payroll-deductions.md` (T1-T12) | `0144` | `4796f65`, `77c66b4` |
 | **Exemptions and the payout steps**: separate switches for contributions and tax (minimum wage earners) with a reason; 13th month / other benefits tax-free up to ₱90,000 a year; de minimis never taxed; Retro pay / adjustment; **Approve → Reopen (with a reason) → Mark as paid out** | `2026-11-24-payroll-exemptions-reopen.md` (U1-U12) | `0145` | `2bf837f`, `6d6eb86` |
 | **Paid out tab** on Payroll: every period marked as paid out with its frozen totals (people, base pay, bonuses, gross, deductions, government deductions, net, who approved, who paid out) | — (owner request; built with Gemini, see Session log) | `0146` | `5d7d5d9` |
-| **Live system test fixes**: `assign_role` refuses the System admin role (the app could not take it back); refunding a membership expires its unpaid coach access, so money paid later becomes an approved refund | — (owner's live system test, see Session log) | `0147` | (this commit) |
-| **Booking slot hold and cleanup**: an unpaid online booking holds its slot for 15 minutes (members, desk, desk walk-ins, pass bookings, the grid); Revenue says when the start date is after the end date; the app code for hiring and time requests removed in 0121 is deleted (unreachable Requests page, its view model, service calls, demo cases, tests); the member's "current session" card names the coach from the sessions list | — (owner, after the live test) | `0148` | (this commit) |
+| **Live system test fixes**: `assign_role` refuses the System admin role (the app could not take it back); refunding a membership expires its unpaid coach access, so money paid later becomes an approved refund | — (owner's live system test, see Session log) | `0147` | `7f5d5ee` |
+| **Booking slot hold and cleanup**: an unpaid online booking holds its slot for 15 minutes (members, desk, desk walk-ins, pass bookings, the grid); Revenue says when the start date is after the end date; the app code for hiring and time requests removed in 0121 is deleted (unreachable Requests page, its view model, service calls, demo cases, tests); the member's "current session" card names the coach from the sessions list | — (owner, after the live test) | `0148` | `933b9a8` |
 | **Staff page tabs and a layout fix**: Revenue gets **Revenue / Cash shifts** tabs, Users and roles gets **Active accounts / Deactivated** tabs (both were stacked tables), Payroll Salaries' government-deductions editor gets its own full-width line | — (owner request, see Session log) | — | `8595f8d` |
+| **Live system test** (360 checks as admin, coach, front desk and TEST members; Xendit Test mode) and the **Xendit webhook fix** (URL moved to "Payment Session Completed" in the dashboard; no code change; payment 161 confirmed by the webhook alone) | — (owner request, see Session log) | — | `a5a2118`, `bc5cb28` (docs) |
+
+## Open items (2026-11-25)
+
+- **Reschedule requests can't be answered**: the Sessions page still sends a new time (`request_reschedule`), but 0121 removed `respond_time_request`, so nobody can approve it. Owner to choose: remove the button, or add an approve step.
+- **Coach access paid before a membership refund**: the refund covers the membership only; owner to decide whether unused coach access days are refunded too.
+- **TEST records on live** from the live test: accounts `claude.test*.20261125@example.com`, payments 148-161, refunds 39-43 (paid by GCash reference), discount `TESTCLAUDE6534`, closed shift 35, payroll period 144 (16-31 Jan 2025) paid out. Owner to reject TEST shift 35 in karl's 16-30 Nov payroll.
+- **Xendit Live mode**: when switching to live keys, set the same webhook URL on "Payment Session Completed" in Live mode and Live mode's own `XENDIT_WEBHOOK_TOKEN`.
+- Not live-tested: gym and coach check-ins (the test ran after closing time; only their refusals were checked); creating or publishing packages, amenity status, announcements and damage reports (they would reach real members).
 Branch: `hourly-payroll-2026-11-24` (cut from `origin/main` at `a464366`, v0.10.0). **Owner's rule: this branch is not merged into `main` yet.** No PR until the owner asks.
 
 **Goal:** Payroll pays each person by their own arrangement instead of one fixed salary for everyone: **Hourly** (approved hours × hourly rate), **Per session** (completed sessions × session rate) or **Fixed** (today's salary per period). Hours come from the records the app already keeps (front desk cash shifts, coach check-in/out); **a record only counts once the admin approves it** (a raw log never becomes payable time by itself), overlapping records are never counted twice, the admin can correct totals with a reason while the period is a draft, and Mark as paid freezes the hours, rate and pay so a later rate change never alters a paid period.
