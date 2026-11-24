@@ -133,10 +133,6 @@
                                                     <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" /></DataTrigger></Label.Triggers>
                                             </Label>
                                             <Label Grid.Column="1" Grid.Row="1" Text="{Binding Time}" Style="{StaticResource Caption}" />
-                                            <HorizontalStackLayout Grid.Column="1" Grid.Row="2" Margin="0,6,0,0" IsVisible="{Binding CanRequest}">
-                                                <Button Text="Ask for this time" Style="{StaticResource SmallButton}" Clicked="OnRequest"
-                                                        SemanticProperties.Hint="Sends a time request to your coach, as on Time requests." />
-                                            </HorizontalStackLayout>
                                             <HorizontalStackLayout Grid.Column="1" Grid.Row="2" Margin="0,6,0,0" IsVisible="{Binding CanOpen}">
                                                 <Button Text="Open" Style="{StaticResource SmallOutlineButton}" Clicked="OnOpen" SemanticProperties.Hint="Opens Book an amenity." />
                                             </HorizontalStackLayout>

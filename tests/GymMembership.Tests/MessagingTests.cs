@@ -103,31 +103,6 @@ public class MessagingTests
     }
 
     [Fact]
-    public async Task A_coach_invitation_and_the_members_answer_show_in_the_chat_as_request_cards_in_each_ones_name()
-    {
-        var gw = new DemoGateway();
-        var svc = new SessionService(gw);
-        var start = DateTime.UtcNow.Date.AddDays(14).AddHours(9);
-        await gw.SignInAsync("coach@demo.io", DemoGateway.DemoPassword);
-        foreach (var row in (await svc.SessionsAsync()).Value!.Where(r => r.Session.MemberId == "u-alex" && r.Session.Status == Status.Scheduled))
-            Assert.True((await svc.CancelSessionAsync(row.Session.Id, "test setup")).Ok);
-        Assert.True((await svc.InviteMemberAsync("u-alex", start, start.AddHours(1))).Ok);
-        await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
-        var invite = (await svc.RequestsAsync()).Value!.Rows.Where(r => r.Request.RequestedBy == "coach" && r.Request.Status == "pending").MaxBy(r => r.Request.Id)!;
-        Assert.True((await svc.DeclineAsync(invite.Request.Id, "Away that week")).Ok);
-
-        var (_, alex, nav) = await Open("member@demo.io", gw);
-        await alex.OpenCommand.ExecuteAsync(alex.Threads.Single(t => t.Thread.CoachId == "u-coach1"));
-        var cards = alex.Bubbles.Where(b => b.IsRequest).TakeLast(2).ToList();
-        Assert.Equal(("Training session invitation", false), (cards[0].RequestTitle, cards[0].Mine));
-        Assert.Equal(("Training session declined", true), (cards[1].RequestTitle, cards[1].Mine));
-        Assert.EndsWith("Reason: Away that week", cards[1].Line.Body);
-        Assert.Equal(invite.Request.Id, cards[1].Line.TimeRequestId);
-        alex.OpenRequestsCommand.Execute(null);
-        Assert.Equal(1, nav.Requests);
-    }
-
-    [Fact]
     public async Task The_Announcements_page_posts_to_the_chosen_audience_and_lists_what_was_posted()
     {
         var gw = new DemoGateway(); await gw.SignInAsync("subadmin@demo.io", DemoGateway.DemoPassword);

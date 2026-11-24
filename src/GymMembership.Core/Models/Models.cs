@@ -512,6 +512,7 @@ public sealed class MemberPass : BaseModel
   [Column("total_price", ignoreOnInsert: true, ignoreOnUpdate: true)] public decimal TotalPrice { get; set; }
   [Column("down_payment", ignoreOnInsert: true, ignoreOnUpdate: true)] public decimal DownPayment { get; set; }
   [Column("balance_payment_id", ignoreOnInsert: true, ignoreOnUpdate: true)] public int? BalancePaymentId { get; set; }
+  [Column("held_until", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? HeldUntil { get; set; }   // 0148: an unpaid booking holds its slot until then
   [System.Text.Json.Serialization.JsonIgnore] public decimal Balance => TotalPrice - DownPayment; }
 
 public record RevenueRow(DateTime Day, string Kind, string Method, long Payments, decimal Total)

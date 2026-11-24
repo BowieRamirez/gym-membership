@@ -177,7 +177,9 @@ try {
 
   await test('slot taken still refunds as before', async () => {
     const one = await member(), two = await member();
-    const r1 = await book(one, '15:00'), r2 = await book(two, '15:00'), id = xid();
+    const r1 = await book(one, '15:00');
+    await db.query(`update reservations set held_until = now() - interval '1 second' where reservation_id=$1`, [r1.reservation_id]);   // 0148: the hold ran out
+    const r2 = await book(two, '15:00'), id = xid();
     await as(desk, 'select verify_payment($1,true)', [r1.payment_id]);
     await checkout(await payment(r2.payment_id), id);
     await confirm(id, r2.down_payment);

@@ -603,7 +603,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
         if (sessions is null) return;
         var activePkgName = Memberships.FirstOrDefault(m => m.Status == Status.Active)?.PackageName;
         var pkgsTask = activePkgName is not null ? svc.ListPackagesAsync() : null;
-        var reqTask = sessions.RequestsAsync();
+        var reqTask = sessions.SessionsAsync();
         await (pkgsTask is not null ? Task.WhenAll(pkgsTask, reqTask) : reqTask);
 
         var pkgsRes = pkgsTask?.Result;
@@ -619,12 +619,13 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
             CoachIncludedNote = "";
 
         var res = reqTask.Result;
-        if (!res.Ok || res.Value is not { } view) return;
+        if (!res.Ok || res.Value is not { } rows) return;
 
         var now = DateTime.UtcNow;
-        var active = view.ActiveSessions ?? [];
-        var current = active.FirstOrDefault(s => s.ScheduledStart.ToUniversalTime() <= now && s.ScheduledEnd.ToUniversalTime() > now)
-            ?? active.Where(s => s.ScheduledStart.ToUniversalTime() > now).OrderBy(s => s.ScheduledStart).FirstOrDefault();
+        var active = rows.Where(r => !r.IsMine && r.Session.Status == Status.Scheduled && r.Session.ScheduledEnd.ToUniversalTime() > now).ToList();
+        var row = active.FirstOrDefault(r => r.Session.ScheduledStart.ToUniversalTime() <= now)
+            ?? active.OrderBy(r => r.Session.ScheduledStart).FirstOrDefault();
+        var current = row?.Session;
         if (current is null)
         {
             CurrentSessionText = "None scheduled";
@@ -637,8 +638,7 @@ public partial class MyMembershipViewModel(IMembershipService svc, ISubscription
         CurrentSessionText = current.ScheduledStart.ToUniversalTime() <= now
             ? $"Now until {end:h:mm tt}"
             : $"{start:ddd d MMM, h:mm tt}";
-        var coach = view.HiredCoaches.FirstOrDefault(c => c.Coach.UserId == current.CoachId)?.Name;
-        CurrentSessionNote = coach is not null ? $"with {coach}" : "Scheduled session";
+        CurrentSessionNote = row!.With is { Length: > 0 } coach and not "Unknown" ? $"with {coach}" : "Scheduled session";
     }
 
     async Task<bool> LoadPaymentsAsync()
@@ -907,21 +907,6 @@ public partial class CoachesViewModel(ICoachService svc, IChatService messages, 
         var res = await sessions.SessionsAsync();
         if (res.Ok)
             HasActiveSession = res.Value!.Any(r => !r.IsMine && r.Session.Status == Status.Scheduled && (r.Session.HeldUntil is null || r.Session.HeldUntil > DateTime.UtcNow));
-    }
-
-    [RelayCommand]
-    private async Task HireAsync(CoachCard card)
-    {
-        // G30 (0074): a request; messaging and sessions open once the coach accepts
-        if (!await Confirm.AskAsync($"Send a hire request to {card.Name}?", "They will accept or decline it. Once they accept, you can message them and book sessions together.", "Send request")) return;
-        if (await RunAsync(() => svc.HireAsync(card.Coach.UserId))) await LoadAsync();
-    }
-
-    [RelayCommand]
-    private async Task CancelRequestAsync(CoachCard card)
-    {
-        if (card.RequestId is not { } id || !await Confirm.AskAsync($"Cancel your request to {card.Name}?", "You can ask again later.", "Cancel request")) return;
-        if (await RunAsync(() => svc.CancelHireRequestAsync(id))) await LoadAsync();
     }
 
     [RelayCommand]

@@ -10,6 +10,8 @@ public sealed partial class DemoGateway
     static readonly TimeSpan SlotStep = TimeSpan.FromMinutes(30), Cooldown = TimeSpan.Zero, Manila = TimeSpan.FromHours(8);
     // G13 (0064): only confirmed bookings take a slot, the member's time and the coach; a request waiting for its down payment holds nothing
     IEnumerable<Reservation> Confirmed => All<Reservation>().Where(r => r.Status == "confirmed");
+    // 0148: an unpaid booking holds its slot for 15 minutes too
+    IEnumerable<Reservation> Taken => All<Reservation>().Where(r => r.Status == "confirmed" || r.Status == AwaitingPayment && r.HeldUntil > SubscriptionNow);
     const string AwaitingPayment = "awaiting_payment";
 
     Reservation? HoldOf(Payment pay) => All<Reservation>().FirstOrDefault(r => r.PaymentId == pay.Id && r.Status == AwaitingPayment);
@@ -119,7 +121,7 @@ public sealed partial class DemoGateway
                     Now = now, Opens = from + g.OpensAt, Closes = from + g.ClosesAt,
                     Amenities = All<Amenity>().Where(x => x.State == CatalogState.Published).OrderBy(x => x.Name)
                         .Select(x => new GridAmenity { Id = x.Id, Name = x.Name, Status = x.Availability, Back = x.BackAt }).ToList(),
-                    Blocks = All<Reservation>().Where(r => r.Status == "confirmed" || (r.Status == AwaitingPayment && r.MemberId == Uid))
+                    Blocks = Taken.Concat(All<Reservation>().Where(r => r.Status == AwaitingPayment && r.MemberId == Uid)).Distinct()
                         .Where(r => r.StartsAt < to && from < r.EndsAt + Cooldown).OrderBy(r => r.StartsAt)
                         .Select(r => new GridBlock { Amenity = r.AmenityId, Starts = r.StartsAt, Ends = r.EndsAt, Cooldown = r.EndsAt + Cooldown, Mine = r.MemberId == Uid,
                             Id = r.MemberId == Uid ? r.Id : null, Pending = r.Status == AwaitingPayment }).ToList()
@@ -164,7 +166,8 @@ public sealed partial class DemoGateway
                         .Concat(made.Select(m => (AmenityId: m.Amenity, MemberId: Uid!, Start: m.Start, End: m.End))).ToList();
                     if (others.Any(o => o.MemberId == Uid && o.Start < b.End && b.Start < o.End)
                         || All<TrainingSession>().Any(t => t.MemberId == Uid && t.Status == Status.Scheduled && t.ScheduledStart < b.End && b.Start < t.ScheduledEnd)) throw Err("member_busy");
-                    if (others.Any(o => o.AmenityId == b.Amenity && o.Start < b.End + Cooldown && b.Start < o.End + Cooldown)) throw Err("slot_taken");
+                    if (others.Any(o => o.AmenityId == b.Amenity && o.Start < b.End + Cooldown && b.Start < o.End + Cooldown)
+                        || Taken.Any(o => o.Status == AwaitingPayment && o.AmenityId == b.Amenity && o.StartsAt < b.End + Cooldown && b.Start < o.EndsAt + Cooldown)) throw Err("slot_taken");
                     made.Add((b.Amenity, b.Start, b.End, pass.IsSession ? pass.Id : null));
                 }
                 result = made.Select(m =>
@@ -248,8 +251,8 @@ public sealed partial class DemoGateway
                 var am = AmenityForSale(amenityId);
                 if (am.Availability == "unavailable" && (am.BackAt is null || am.BackAt > start)) throw Err("amenity_unavailable");
                 if (All<TrainingSession>().Any(t => t.MemberId == who && t.Status == Status.Scheduled && t.ScheduledStart < end && start < t.ScheduledEnd)) throw Err("member_busy");
-                if (Confirmed.Any(x => x.AmenityId == amenityId && x.StartsAt < end + Cooldown && start < x.EndsAt + Cooldown)) throw Err("slot_taken");
-                if (Confirmed.Any(x => x.MemberId == who && x.StartsAt < end && start < x.EndsAt)) throw Err("member_busy");
+                if (Taken.Any(x => x.AmenityId == amenityId && x.StartsAt < end + Cooldown && start < x.EndsAt + Cooldown)) throw Err("slot_taken");
+                if (Taken.Any(x => x.MemberId == who && x.StartsAt < end && start < x.EndsAt)) throw Err("member_busy");
                 // 0118 (E2): amenity bookings cost amenity price only, with no coach attached
                 var total = am.Price * (minutes / 60);   // 0090: per hour
                 var d = Discounted(who, new() { ["p_discount_code"] = a.GetValueOrDefault("p_code")! }, total, "amenity", amenityId);
@@ -259,7 +262,7 @@ public sealed partial class DemoGateway
                 var pay = Add(new Payment { PaymentCode = PaymentCode(), Kind = PayKind.Amenity, Method = method, Status = Status.Pending, Amount = down, DiscountId = d.Id, DiscountAmount = d.Cut,
                     MemberId = who, RecordedBy = desk ? Uid : null, UserAmenityId = ua.Id, CreatedAt = now, ExpiresAt = new[] { now.AddHours(g.PaymentExpiryHours), start.AddHours(-1) }.Min() });
                 var r = Add(new Reservation { MemberId = who, AmenityId = amenityId, CoachId = null, StartsAt = start, EndsAt = end, UserAmenityId = ua.Id, PaymentId = pay.Id,
-                    Status = AwaitingPayment, TotalPrice = d.Amount, DownPayment = down });
+                    Status = AwaitingPayment, TotalPrice = d.Amount, DownPayment = down, HeldUntil = now.AddMinutes(15) });
                 Audit("reservation.request", "reservations", r.Id.ToString());
                 if (desk) Call("verify_payment", new() { ["p_payment_id"] = pay.Id, ["p_approve"] = true });   // confirms it and sends the receipt (0094)
                 else if (down == 0)
@@ -289,7 +292,7 @@ public sealed partial class DemoGateway
                 if (am.Availability == "unavailable" && (am.BackAt is null || am.BackAt > start)) throw Err("amenity_unavailable");
                 var online = a.GetValueOrDefault("p_online") is true;   // 0092: paid online through Xendit, confirmed when it is paid
                 int? shift = online ? null : OpenShiftOf(Uid!);   // 0050: no open shift, nothing is booked
-                if (Confirmed.Any(x => x.AmenityId == amenityId && x.StartsAt < end + Cooldown && start < x.EndsAt + Cooldown)) throw Err("slot_taken");
+                if (Taken.Any(x => x.AmenityId == amenityId && x.StartsAt < end + Cooldown && start < x.EndsAt + Cooldown)) throw Err("slot_taken");
                 var total = am.Price * (minutes / 60);
                 var pay = Add(online
                     ? new Payment { PaymentCode = PaymentCode(), Kind = PayKind.Amenity, Method = PayMethod.Qr, Status = Status.Pending, Amount = total, WalkInName = name,
@@ -297,7 +300,7 @@ public sealed partial class DemoGateway
                     : new Payment { PaymentCode = PaymentCode(), Kind = PayKind.Amenity, Method = PayMethod.Cash, Status = Status.Verified, Amount = total, WalkInName = name,
                         RecordedBy = Uid, VerifiedBy = Uid, VerifiedAt = now, ReceiptNo = ReceiptNo(), CashShiftId = shift, CreatedAt = now });
                 var r = Add(new Reservation { MemberId = null!, WalkInName = name, AmenityId = amenityId, StartsAt = start, EndsAt = end, PaymentId = pay.Id,
-                    Status = online ? AwaitingPayment : "confirmed", TotalPrice = total, DownPayment = total });
+                    Status = online ? AwaitingPayment : "confirmed", TotalPrice = total, DownPayment = total, HeldUntil = online ? now.AddMinutes(15) : null });
                 Audit(online ? "reservation.desk_walk_in_online" : "reservation.desk_walk_in", "reservations", r.Id.ToString());
                 result = Clone(r);
                 return true;

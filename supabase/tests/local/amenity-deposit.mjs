@@ -1,5 +1,5 @@
 // Phase 6 of the 2026-11-12 plan (0064, owner decisions G13, G14): a booking is a request until its down payment is verified (50% by
-// default, Gym settings); before that nobody's slot is held, and of two paid requests for one slot the first verified wins and the
+// default, Gym settings); before that the slot is held only 15 minutes (0148), and of two paid requests for one slot the first verified wins and the
 // other's down payment goes to Refunds. The rest is paid at the desk. Cancelling 24 hours or more before refunds the down payment.
 // Solo or with a coach: a coach who runs the amenity, has a shift over the whole time and isn't booked; a coach fee set on the amenity.
 import { start, openCashShifts, oldPass } from './harness.mjs';
@@ -66,9 +66,11 @@ try {
     await db.query('update gym_settings set down_payment_percent=50');
     await assert.rejects(db.query('update gym_settings set down_payment_percent=0'), /check/);
   });
-  await test('G13: a request holds nothing: someone else can ask for the same slot', async () => {
+  await test('G13 + 0148: a request holds its slot for 15 minutes; after that someone else can ask for it', async () => {
     const one = await member(), two = await member(), a = await amenity('D Free');
-    await book(one, a, '10:00');
+    const r1 = await book(one, a, '10:00');
+    await assert.rejects(book(two, a, '10:00'), /slot_taken/);
+    await db.query(`update reservations set held_until = now() - interval '1 second' where reservation_id=$1`, [r1.reservation_id]);
     const r2 = await book(two, a, '10:00');
     assert.equal(r2.status, 'awaiting_payment');
     const grid = (await as(two, 'select amenity_grid($1::date) g', [day]))[0].g;
@@ -76,7 +78,9 @@ try {
   });
   await test('G13: of two paid requests for one slot the first verified wins; the other\'s down payment goes to Refunds', async () => {
     const one = await member(), two = await member(), a = await amenity('D Race');
-    const r1 = await book(one, a, '10:00'), r2 = await book(two, a, '10:00');   // the same slot (0093: starts on the hour)
+    const r1 = await book(one, a, '10:00');
+    await db.query(`update reservations set held_until = now() - interval '1 second' where reservation_id=$1`, [r1.reservation_id]);   // 0148: the hold ran out
+    const r2 = await book(two, a, '10:00');   // the same slot (0093: starts on the hour)
     await approve(r2);
     assert.equal((await res(r2.reservation_id)).status, 'confirmed');
     await approve(r1);                                                             // paid, but the slot went to the other

@@ -200,9 +200,6 @@ public class PaymentTests
         await new AuthService(gw).RegisterAsync("Guest", "User", "guest@demo.io", "secret12", true);
 
         Assert.Equal(AppErrorKind.Validation, (await Safe.RunAsync(() => gw.RpcAsync<Payment>("avail_amenity", new() { ["p_amenity_id"] = 1 }))).Error);
-        Assert.Equal(AppErrorKind.Validation, (await new CoachService(gw).HireAsync("u-coach1")).Error);
-        var t = DateTime.UtcNow.AddDays(3);
-        Assert.Equal(AppErrorKind.Validation, (await new SessionService(gw).RequestAsync("u-coach1", t, t.AddHours(1), null)).Error);
         Assert.Equal(AppErrorKind.Unauthorized, (await new ChatService(gw, new NotificationService(gw)).SendAsync(new ChatThread { Kind = "coach", CoachId = "u-coach1", MemberId = gw.CurrentUserId! }, "hello")).Error);
 
         // but they can see the catalogue and the coaches

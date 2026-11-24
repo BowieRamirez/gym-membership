@@ -88,17 +88,11 @@ public class ConfirmationTests
         { "MemberViewModels.cs", "SettingsViewModel", "ChangePassword" },
         // PackagesViewModel.Avail left this list 2026-11-17 (Z7): the Buy popup is the confirmation (BuyPopupTests)
         { "MemberViewModels.cs", "PackagesViewModel", "PayOnline" },   // Xendit plan: replaced Send proof; on Packages since 2026-11-16
-        { "MemberViewModels.cs", "CoachesViewModel", "Hire" },
         { "MemberViewModels.cs", "CoachesViewModel", "EndHire" },
         { "BookingViewModels.cs", "BookAmenityViewModel", "Book" },
         { "BookingViewModels.cs", "BookAmenityViewModel", "Cancel" },
         { "BookingViewModels.cs", "BookAmenityViewModel", "End" },
         { "BookingViewModels.cs", "BookAmenityViewModel", "PayOnline" },
-        { "StaffViewModels.cs", "RequestsViewModel", "Submit" },
-        { "StaffViewModels.cs", "RequestsViewModel", "Cancel" },
-        { "StaffViewModels.cs", "RequestsViewModel", "Accept" },
-        { "StaffViewModels.cs", "RequestsViewModel", "Respond" },
-        { "StaffViewModels.cs", "RequestsViewModel", "SubmitResponse" },
         { "StaffViewModels.cs", "SessionsViewModel", "Cancel" },
         { "StaffViewModels.cs", "SessionsViewModel", "Set" },
         { "StaffViewModels.cs", "SessionsViewModel", "Extend" },

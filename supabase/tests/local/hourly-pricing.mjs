@@ -56,6 +56,7 @@ try {
   });
 
   await test('the desk takes the hourly price for every hour', async () => {
+    await db.query(`update reservations set held_until = null where status = 'awaiting_payment'`);   // 0148: earlier tests' unpaid bookings let go of the ring
     const r = (await as(desk, 'select * from desk_book_amenity(p_member=>$1, p_amenity=>$2, p_start=>$3, p_minutes=>180)', [await member(), ring, at('09:00')]))[0];
     assert.equal(Number(r.total_price), 300);
   });

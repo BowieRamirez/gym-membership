@@ -84,6 +84,16 @@ public class RevenueDashboardTests
     }
 
     [Fact]
+    public async Task A_start_date_after_the_end_date_says_so_and_loads_nothing()   // live test 2026-11-25
+    {
+        var gw = new DemoGateway(); await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var vm = new RevenueViewModel(new AdminService(gw)) { From = DateTime.Today, To = DateTime.Today.AddDays(-3) };
+        await vm.LoadCommand.ExecuteAsync(null);
+        Assert.Equal("The start date is after the end date.", vm.ErrorMessage);
+        Assert.Empty(vm.Rows);
+    }
+
+    [Fact]
     public async Task The_page_loads_the_figures_the_chart_the_shares_and_the_days_from_the_demo()
     {
         var gw = new DemoGateway(); await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
