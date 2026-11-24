@@ -195,12 +195,22 @@ public static class PayrollPdf
     public static string PeriodSpan(DateOnly startsOn, DateOnly endsOn) =>
         $"{startsOn.Day}–{endsOn.Day} {startsOn.ToString("MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)}";
 
+    /// <summary>0145 (U10): which step the period is at, for the PDF.</summary>
+    public static string StatusLine(PayrollPeriod p)
+    {
+        string Day(DateTime t) => ManilaTime.Of(t).ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
+        return p.Status switch
+        {
+            "paid_out" => $"Paid out {Day(p.PaidOutAt!.Value)} by {p.PaidOutByName ?? "Admin"}",
+            "approved" => $"Approved {Day(p.PaidAt!.Value)} by {p.PaidByName ?? "Admin"}, not yet paid out",
+            _ => "Draft (not yet approved)"
+        };
+    }
+
     public static byte[] Build(string gymName, PayrollPeriod period, IReadOnlyDictionary<string, IReadOnlyList<PayrollLine>> linesByUser, DateTime generatedUtc, byte[] font,
         IReadOnlyDictionary<string, IReadOnlyList<PayrollHourAdjustment>>? adjustmentsByUser = null)
     {
-        var status = period.IsPaid
-            ? $"Paid {ManilaTime.Of(period.PaidAt!.Value).ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)} by {period.PaidByName ?? "Admin"}"
-            : "Draft (not yet paid)";
+        var status = StatusLine(period);
         var span = PeriodSpan(period.StartsOn, period.EndsOn);
         var rows = period.Rows.Select(r => new[]
         {

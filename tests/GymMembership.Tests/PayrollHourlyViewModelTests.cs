@@ -111,7 +111,8 @@ public class PayrollHourlyViewModelTests
         await vm.ApproveAllUnflaggedCommand.ExecuteAsync(null);
         await vm.OpenDrawerCommand.ExecuteAsync(vm.Rows.First(r => r.UserId == desk.UserId));
 
-        Assert.Equal(new[] { "Regular bonus", "Overtime adjustment", "Holiday pay adjustment", "Other adjustment" }, vm.LineCategories);
+        Assert.Equal(new[] { "Regular bonus", "Overtime adjustment", "Holiday pay adjustment", "13th month / other benefits", "De minimis",
+                             "Retro pay / adjustment", "Other adjustment" }, vm.LineCategories);   // 0145 (U3) added three
         vm.LineCategory = "Overtime adjustment";
         vm.LineAmountText = "200";
         vm.LineNote = "Sunday cover";

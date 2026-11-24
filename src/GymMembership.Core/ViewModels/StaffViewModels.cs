@@ -3600,13 +3600,28 @@ public sealed class PayrollAdjustmentItem(PayrollHourAdjustment adj, string unit
 }
 
 public sealed partial class StaffSalaryItem(StaffSalary s, Func<StaffSalaryItem, Task> save, Func<StaffSalaryItem, Task>? useRoleDefault = null,
-    Func<StaffSalaryItem, Task>? toggleDeductions = null) : ObservableObject
+    Func<StaffSalaryItem, Task>? toggleDeductions = null, Func<StaffSalaryItem, Task>? saveDeductions = null) : ObservableObject
 {
-    // 0144 (T4): government deductions on/off
+    // 0144 (T4) / 0145 (U1, U2): contributions and withholding tax on/off, with an optional reason
     public bool DeductionsOn => Data.DeductionsOn;
-    public string DeductionsText => DeductionsOn ? "Gov't deductions on" : "No gov't deductions";
+    public string DeductionsText => $"Contributions {(Data.ContributionsOn ? "on" : "off")} · Tax {(Data.TaxOn ? "on" : "off")}"
+        + (string.IsNullOrWhiteSpace(Data.DeductionsReason) ? "" : $" ({Data.DeductionsReason})");
     public string ToggleDeductionsText => DeductionsOn ? "Turn off" : "Turn on";
     [RelayCommand] private Task ToggleDeductionsAsync() => toggleDeductions?.Invoke(this) ?? Task.CompletedTask;
+
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsNotEditingDeductions))] private bool isEditingDeductions;
+    public bool IsNotEditingDeductions => !IsEditingDeductions;
+    [ObservableProperty] private bool contributionsInput = s.ContributionsOn;
+    [ObservableProperty] private bool taxInput = s.TaxOn;
+    [ObservableProperty] private string deductionsReasonInput = s.DeductionsReason ?? "";
+    [RelayCommand]
+    private void BeginDeductions()
+    {
+        ContributionsInput = Data.ContributionsOn; TaxInput = Data.TaxOn; DeductionsReasonInput = Data.DeductionsReason ?? "";
+        ErrorText = null; IsEditingDeductions = true;
+    }
+    [RelayCommand] private void CancelDeductions() { IsEditingDeductions = false; ErrorText = null; }
+    [RelayCommand] private Task SaveDeductionsAsync() => saveDeductions?.Invoke(this) ?? Task.CompletedTask;
     public StaffSalary Data { get; } = s;
     public string UserId => Data.UserId;
     public string FullName => Data.FullName;
@@ -3676,11 +3691,59 @@ public partial class PayrollViewModel : LoadableViewModel
     static string PayTypeCode(string label) => label switch { "Hourly" => "hourly", "Per session" => "per_session", _ => "fixed" };
     static string AmountWord(string payType) => payType switch { "hourly" => "an hourly rate", "per_session" => "a session rate", _ => "a salary" };
     // H16: categories for bonus and deduction lines
-    public IReadOnlyList<string> LineCategories { get; } = ["Regular bonus", "Overtime adjustment", "Holiday pay adjustment", "Other adjustment"];
+    public IReadOnlyList<string> LineCategories { get; } = ["Regular bonus", "Overtime adjustment", "Holiday pay adjustment",
+        "13th month / other benefits", "De minimis", "Retro pay / adjustment", "Other adjustment"];
     static string CategoryCode(string label) => label switch
     {
-        "Regular bonus" => "regular_bonus", "Overtime adjustment" => "overtime", "Holiday pay adjustment" => "holiday", _ => "other"
+        "Regular bonus" => "regular_bonus", "Overtime adjustment" => "overtime", "Holiday pay adjustment" => "holiday",
+        "13th month / other benefits" => "thirteenth_month", "De minimis" => "de_minimis", "Retro pay / adjustment" => "retro", _ => "other"
     };
+    /// <summary>0145 (U4, U5): what the chosen category does to tax.</summary>
+    public string LineCategoryHint => LineCategory switch
+    {
+        "13th month / other benefits" => $"Tax-free up to ₱90,000.00 a year; {PayTypes.Money(SelectedRow?.Row.ThirteenthUsed ?? 0)} used this year.",
+        "De minimis" => "Never taxed. Keep within the BIR limits: rice ₱2,500 a month, laundry ₱400 a month, uniform ₱8,000 a year, medical ₱12,000 a year, gifts ₱6,000 a year, up to 12 days of leave a year.",
+        "Retro pay / adjustment" => "A correction for an earlier period that was already paid out. Taxed like pay.",
+        _ => ""
+    };
+    partial void OnLineCategoryChanged(string value) => OnPropertyChanged(nameof(LineCategoryHint));
+
+    // 0145 (U7-U10): Draft -> Approve -> Reopen (with a reason) or Mark as paid out
+    string _status = "draft";
+    public bool CanApprove => CanMarkPaid;
+    public bool CanReopen => _status == "approved";
+    public bool CanMarkPaidOut => _status == "approved";
+    [ObservableProperty] private string reopenReason = "";
+    [ObservableProperty] private string? reopenError;
+
+    [RelayCommand]
+    private async Task ReopenAsync()
+    {
+        ReopenError = null;
+        var reason = ReopenReason.Trim();
+        if (reason.Length is 0 or > 200) { ReopenError = "Add a reason (1–200 characters)."; return; }
+        var res = await _svc.ReopenPayrollAsync(PeriodId, reason);
+        if (!res.Ok) { ReopenError = ErrorText.For(res.Error, res.Message); return; }
+        ReopenReason = "";
+        ApplyPeriod(res.Value!);
+        if (SelectedRow is not null) await LoadDrawerLinesAsync();
+        Notice = $"{PeriodLabel} reopened. Fix it, then approve it again.";
+    }
+
+    public string PaidOutConfirmMessage() =>
+        $"Mark {PeriodLabel} as paid out? Only do this after the money is sent. Paid-out periods can't be reopened; corrections go in the next period as Retro pay.";
+
+    [RelayCommand]
+    private async Task MarkPaidOutAsync()
+    {
+        if (!CanMarkPaidOut) return;
+        Notice = null;
+        if (!await Confirm.AskAsync($"Mark {PeriodLabel} as paid out?", PaidOutConfirmMessage(), "Mark as paid out")) return;
+        var res = await _svc.MarkPayrollPaidOutAsync(PeriodId);
+        if (!res.Ok) { ErrorMessage = ErrorText.For(res.Error, res.Message); return; }
+        ApplyPeriod(res.Value!);
+        Notice = $"{PeriodLabel} marked as paid out.";
+    }
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPeriodTab), nameof(IsSalariesTab))]
     private string activeTab = "period";
@@ -3800,7 +3863,7 @@ public partial class PayrollViewModel : LoadableViewModel
         });
         await RunAsync(() => _svc.PayrollStaffAsync(), list =>
         {
-            Fill(StaffSalaries, list.Select(s => new StaffSalaryItem(s, SaveSalaryAsync, UseRoleDefaultAsync, ToggleDeductionsAsync)));
+            Fill(StaffSalaries, list.Select(s => new StaffSalaryItem(s, SaveSalaryAsync, UseRoleDefaultAsync, ToggleDeductionsAsync, SaveDeductionsAsync)));
         });
     }
 
@@ -3833,9 +3896,15 @@ public partial class PayrollViewModel : LoadableViewModel
         PeriodStartsOn = p.StartsOn;
         PeriodEndsOn = p.EndsOn;
         IsPaid = p.IsPaid;
-        StatusText = p.IsPaid
-            ? $"Paid {ManilaTime.Of(p.PaidAt!.Value).ToString("d MMM", System.Globalization.CultureInfo.InvariantCulture)} by {p.PaidByName ?? "Admin"}"
-            : "Draft";
+        string Day(DateTime t) => ManilaTime.Of(t).ToString("d MMM", System.Globalization.CultureInfo.InvariantCulture);
+        _status = p.Status;
+        StatusText = p.Status switch
+        {
+            "paid_out" => $"Paid out {Day(p.PaidOutAt!.Value)} by {p.PaidOutByName ?? "Admin"}",
+            "approved" => $"Approved {Day(p.PaidAt!.Value)} by {p.PaidByName ?? "Admin"} · not paid out",
+            _ => "Draft"
+        };
+        OnPropertyChanged(nameof(CanApprove)); OnPropertyChanged(nameof(CanReopen)); OnPropertyChanged(nameof(CanMarkPaidOut));
         TotalNetText = $"₱{p.TotalNet:N2}";
         TotalGrossText = p.TotalGov > 0 ? $"Gross {PayTypes.Money(p.TotalGross)} · Gov't deductions {PayTypes.Money(p.TotalGov)}" : $"Gross {PayTypes.Money(p.TotalGross)}";
         _totalGov = p.TotalGov;
@@ -3906,7 +3975,7 @@ public partial class PayrollViewModel : LoadableViewModel
             DrawerGov.Add(new("Pag-IBIG", $"on {money(r.PagIbigBase)}", r.PagIbig));
         }
         else notes.Add("SSS, PhilHealth and Pag-IBIG are taken in the 16th–end pay.");
-        DrawerGov.Add(new("Withholding tax", $"on {money(r.Taxable)} taxable", r.Tax));
+        DrawerGov.Add(new("Withholding tax", r.Nontaxable > 0 ? $"on {money(r.Taxable)} taxable ({money(r.Nontaxable)} non-taxable)" : $"on {money(r.Taxable)} taxable", r.Tax));
         if (r.GovCut) notes.Add("Deductions cut to keep pay above ₱0.");
         DrawerGovNote = string.Join(" ", notes);
     }
@@ -4051,7 +4120,7 @@ public partial class PayrollViewModel : LoadableViewModel
     {
         var paidCount = Rows.Count(r => !r.NoSalary);
         var noSal = Rows.Where(r => r.NoSalary).Select(r => r.FullName).ToList();
-        var msg = $"Mark {PeriodLabel} as paid? {paidCount} {(paidCount == 1 ? "person" : "people")}, {TotalNetText}.";
+        var msg = $"Approve {PeriodLabel}? {paidCount} {(paidCount == 1 ? "person" : "people")}, {TotalNetText}.";
         if (noSal.Count > 0)
         {
             var names = noSal.Count == 1 ? noSal[0] : string.Join(", ", noSal[..^1]) + " and " + noSal[^1];
@@ -4064,7 +4133,7 @@ public partial class PayrollViewModel : LoadableViewModel
             var names = flagged.Count == 1 ? flagged[0] : string.Join(", ", flagged[..^1]) + " and " + flagged[^1];
             msg += $" {names} {(flagged.Count == 1 ? "has" : "have")} records with warnings (open, closed by the system, over 12 hours or overlapping).";
         }
-        return msg + " Paid periods can't be changed.";
+        return msg + " Approved periods are locked; you can reopen one until you mark it as paid out.";
     }
 
     [RelayCommand(CanExecute = nameof(CanMarkPaid))]
@@ -4072,7 +4141,7 @@ public partial class PayrollViewModel : LoadableViewModel
     {
         if (!CanMarkPaid) return;
         Notice = null;
-        if (!await Confirm.AskAsync($"Mark {PeriodLabel} as paid?", MarkPaidConfirmMessage(), "Mark as paid")) return;
+        if (!await Confirm.AskAsync($"Approve {PeriodLabel}?", MarkPaidConfirmMessage(), "Approve")) return;
         var res = await _svc.MarkPayrollPaidAsync(PeriodId);
         if (!res.Ok)
         {
@@ -4092,7 +4161,7 @@ public partial class PayrollViewModel : LoadableViewModel
         }
         ApplyPeriod(res.Value!);
         if (SelectedRow is not null) await LoadDrawerLinesAsync();
-        Notice = $"{PeriodLabel} marked as paid.";
+        Notice = $"{PeriodLabel} approved. Mark it as paid out once the money is sent.";
     }
 
     [RelayCommand]
@@ -4130,6 +4199,19 @@ public partial class PayrollViewModel : LoadableViewModel
         if (!res.Ok) { item.ErrorText = ErrorText.For(res.Error, res.Message); return; }
         item.IsEditing = false;
         Notice = $"Pay saved for {item.FullName}.";
+        await LoadSalariesAsync();
+        await LoadPeriodAsync();
+    }
+
+    async Task SaveDeductionsAsync(StaffSalaryItem item)
+    {
+        item.ErrorText = null;
+        var reason = item.DeductionsReasonInput.Trim();
+        if (reason.Length > 60) { item.ErrorText = "Keep the reason short (up to 60 characters)."; return; }
+        var res = await _svc.SetPayrollDeductionsAsync(item.UserId, item.ContributionsInput, item.TaxInput, reason.Length == 0 ? null : reason);
+        if (!res.Ok) { item.ErrorText = ErrorText.For(res.Error, res.Message); return; }
+        item.IsEditingDeductions = false;
+        Notice = $"Deductions saved for {item.FullName}.";
         await LoadSalariesAsync();
         await LoadPeriodAsync();
     }

@@ -16,7 +16,7 @@ public sealed partial class DemoGateway
     }
     sealed class DemoPayrollPeriod
     {
-        public int Id; public DateOnly StartsOn; public DateOnly EndsOn; public DateTime? PaidAt; public string? PaidBy;
+        public int Id; public DateOnly StartsOn; public DateOnly EndsOn; public DateTime? PaidAt; public string? PaidBy; public DateTime? PaidOutAt; public string? PaidOutBy;
     }
     sealed class DemoPayrollLine
     {
@@ -36,7 +36,7 @@ public sealed partial class DemoGateway
     readonly List<DemoHourAdjustment> _hourAdjustments = new();
     readonly Dictionary<(string Source, long Id), (string Status, string? Reason)> _timeReviews = new();
 
-    static readonly string[] Categories = ["regular_bonus", "overtime", "holiday", "other"];
+    static readonly string[] Categories = ["regular_bonus", "overtime", "holiday", "other", "thirteenth_month", "de_minimis", "retro"];
 
     /// <summary>Tests: a closed (or open) cash shift at given times; returns its id.</summary>
     public int OwnerAddShift(string cashierId, DateTime openedAt, DateTime? closedAt)
@@ -188,9 +188,13 @@ public sealed partial class DemoGateway
         }).OrderBy(r => RoleOrder(r.Role)).ThenBy(r => r.FullName).ToList();
     }
 
-    readonly HashSet<string> _noDeductions = new();
+    // 0144/0145: people with contributions and/or tax switched off (no entry = both on)
+    readonly Dictionary<string, (bool ContributionsOff, bool TaxOff, string? Reason)> _noDeductions = new();
 
-    // 0144 (T1-T9): government deductions on top of the basis; same order and rules as payroll_basis
+    decimal Bonus(int periodId, string userId, string category) =>
+        _payrollLines.Where(l => l.PeriodId == periodId && l.UserId == userId && l.Kind == "bonus" && l.Category == category).Sum(l => l.Amount);
+
+    // 0144 (T1-T9) + 0145 (U1, U4-U6): government deductions on top of the basis; same order and rules as payroll_basis
     List<PayrollRow> PayrollWithDeductions(DemoPayrollPeriod per)
     {
         var rows = PayrollBasis(per);
@@ -199,14 +203,22 @@ public sealed partial class DemoGateway
         var first = half1 is null ? [] : PayrollBasis(half1);
         foreach (var r in rows)
         {
-            var on = !r.NoSalary && !_noDeductions.Contains(r.UserId);
+            var off = _noDeductions.TryGetValue(r.UserId, out var o) ? o : (false, false, null);
+            bool cOn = !r.NoSalary && !off.ContributionsOff, tOn = !r.NoSalary && !off.TaxOff;
             var f = first.FirstOrDefault(x => x.UserId == r.UserId);
-            var mGross = r.Gross + (f?.Gross ?? 0); var mBase = r.BasePay + (f?.BasePay ?? 0);
-            var due = on && secondHalf && mGross > 0;   // no pay all month: nothing is due (0144 review fix)
+            decimal m13 = Bonus(per.Id, r.UserId, "thirteenth_month"), dm = Bonus(per.Id, r.UserId, "de_minimis");
+            decimal half1Out = half1 is null ? 0 : Bonus(half1.Id, r.UserId, "thirteenth_month") + Bonus(half1.Id, r.UserId, "de_minimis");
+            var m13Before = _payrollPeriods.Where(pp => pp.PaidAt is not null && pp.StartsOn < per.StartsOn && pp.StartsOn.Year == per.StartsOn.Year)
+                .Sum(pp => Bonus(pp.Id, r.UserId, "thirteenth_month"));
+            var nontax = Math.Min(m13, Math.Max(0, 90000 - m13Before)) + dm;
+            var mGross = r.Gross + (f?.Gross ?? 0) - m13 - dm - half1Out; var mBase = r.BasePay + (f?.BasePay ?? 0);
+            var due = cOn && secondHalf && mGross > 0;   // no pay all month: nothing is due (0144 review fix)
             decimal ws = due ? PayrollDeductions.Sss(mGross) : 0, wp = due ? PayrollDeductions.PhilHealth(mBase) : 0,
                     wi = due ? PayrollDeductions.PagIbig(mGross) : 0;
-            var taxable = Math.Max(0, r.Gross - ws - wp - wi);
-            var wt = on ? PayrollDeductions.Tax(taxable) : 0;
+            var taxable = Math.Max(0, r.Gross - nontax - ws - wp - wi);
+            var wt = tOn ? PayrollDeductions.Tax(taxable) : 0;
+            var on = cOn || tOn;
+            r.ContributionsOn = cOn; r.TaxOn = tOn; r.DeductionsReason = off.Reason; r.Nontaxable = nontax; r.ThirteenthUsed = m13Before + m13;
             decimal s, p, i, t;
             if (per.PaidAt is not null)
             {
@@ -221,7 +233,7 @@ public sealed partial class DemoGateway
             var gov = s + p + i + t;
             r.DeductionsOn = on; r.ManualDeductions = r.Deductions; r.Sss = s; r.PhilHealth = p; r.PagIbig = i; r.Tax = t; r.GovTotal = gov;
             r.GovCut = per.PaidAt is null && gov < ws + wp + wi + wt;
-            r.MonthGross = secondHalf ? mGross : r.Gross; r.MonthBase = secondHalf ? mBase : r.BasePay; r.Taxable = taxable;
+            r.MonthGross = secondHalf ? mGross : r.Gross - m13 - dm; r.MonthBase = secondHalf ? mBase : r.BasePay; r.Taxable = taxable;
             r.Msc = PayrollDeductions.Msc(mGross); r.PagIbigBase = Math.Min(Math.Max(mGross, 0), 10000);
             r.Deductions += gov; r.Net -= gov;
         }
@@ -235,6 +247,8 @@ public sealed partial class DemoGateway
         {
             PeriodId = per.Id, StartsOn = per.StartsOn, EndsOn = per.EndsOn, PaidAt = per.PaidAt,
             PaidByName = per.PaidBy is null ? null : NameOf(per.PaidBy),
+            PaidOutAt = per.PaidOutAt, PaidOutByName = per.PaidOutBy is null ? null : NameOf(per.PaidOutBy),
+            Status = per.PaidOutAt is not null ? "paid_out" : per.PaidAt is not null ? "approved" : "draft",
             TotalNet = rows.Sum(r => r.Net), TotalGross = rows.Sum(r => r.Gross), TotalGov = rows.Sum(r => r.GovTotal), Rows = rows
         };
     }
@@ -336,7 +350,10 @@ public sealed partial class DemoGateway
                         {
                             UserId = x.Profile.Id, FullName = StaffDisplayName(x.Profile), Role = x.Role!,
                             Amount = x.Salary?.Amount ?? rs?.Amount, PayType = x.Salary?.PayType ?? rs?.PayType ?? "fixed", Personal = x.Salary is not null,
-                            DeductionsOn = !_noDeductions.Contains(x.Profile.Id),
+                            DeductionsOn = !(_noDeductions.TryGetValue(x.Profile.Id, out var nd) && nd.ContributionsOff && nd.TaxOff),
+                            ContributionsOn = !_noDeductions.TryGetValue(x.Profile.Id, out var nd2) || !nd2.ContributionsOff,
+                            TaxOn = !_noDeductions.TryGetValue(x.Profile.Id, out var nd3) || !nd3.TaxOff,
+                            DeductionsReason = _noDeductions.TryGetValue(x.Profile.Id, out var nd4) ? nd4.Reason : null,
                             UpdatedAt = x.Salary?.UpdatedAt ?? rs?.UpdatedAt, UpdatedByName = by is null ? null : NameOf(by)
                         };
                     }).ToList();
@@ -358,13 +375,39 @@ public sealed partial class DemoGateway
             {
                 Require("reports:revenue");
                 var userId = Str("p_user") ?? throw Err("bad_input");
-                var on = a.TryGetValue("p_on", out var v) && v is bool b ? b : throw Err("bad_input");
-                if (PrimaryPayrollRole(userId) is null) throw Err("bad_input");
+                bool Flag(string k) => a.TryGetValue(k, out var v) && v is bool b ? b : throw Err("bad_input");
+                var (contributions, tax) = a.ContainsKey("p_on") ? (Flag("p_on"), Flag("p_on")) : (Flag("p_contributions"), Flag("p_tax"));
+                var reason = Str("p_reason");
+                if (PrimaryPayrollRole(userId) is null || reason?.Length > 60
+                    || !All<Profile>().Any(p => p.Id == userId && p.IsActive && p.DeletedAt is null)) throw Err("bad_input");
                 if (userId == Uid) throw Err("own_salary");
-                var was = !_noDeductions.Contains(userId);
-                if (on) _noDeductions.Remove(userId); else _noDeductions.Add(userId);
-                if (was != on) Audit("payroll.deductions_set", "staff_salaries", userId);
+                if (contributions && tax) _noDeductions.Remove(userId); else _noDeductions[userId] = (!contributions, !tax, reason);
+                Audit("payroll.deductions_set", "staff_salaries", userId);
                 return true;
+            }
+            case "payroll_reopen":
+            {
+                Require("reports:revenue");
+                var reason = Str("p_reason");
+                if (reason is null || reason.Length > 200) throw Err("bad_input");
+                var per = _payrollPeriods.FirstOrDefault(x => x.Id == Int("p_period")) ?? throw Err("bad_input");
+                if (per.PaidOutAt is not null) throw Err("paid_out");
+                if (per.PaidAt is null) throw Err("not_approved");
+                if (per.StartsOn.Day == 1 && _payrollPeriods.Any(x => x.StartsOn == per.StartsOn.AddDays(15) && x.PaidAt is not null)) throw Err("second_half_approved");
+                _payrollLines.RemoveAll(l => l.PeriodId == per.Id && (l.Kind == "salary" || PayTypes.IsGovernment(l.Category)));
+                per.PaidAt = null; per.PaidBy = null;
+                Audit("payroll.reopened", "payroll_periods", per.Id.ToString());
+                result = BuildPayrollPeriod(per); return true;
+            }
+            case "payroll_mark_paid_out":
+            {
+                Require("reports:revenue");
+                var per = _payrollPeriods.FirstOrDefault(x => x.Id == Int("p_period")) ?? throw Err("bad_input");
+                if (per.PaidOutAt is not null) throw Err("paid_out");
+                if (per.PaidAt is null) throw Err("not_approved");
+                per.PaidOutAt = SubscriptionNow; per.PaidOutBy = Uid;
+                Audit("payroll.paid_out", "payroll_periods", per.Id.ToString());
+                result = BuildPayrollPeriod(per); return true;
             }
             case "payroll_records_for":
             {
@@ -461,7 +504,7 @@ public sealed partial class DemoGateway
                 var note = Str("p_note");
                 var category = a.ContainsKey("p_category") ? Str("p_category") : "other";
                 if (kind is not ("bonus" or "deduction") || amount is <= 0 or > 10_000_000 || note is null || note.Length > 200
-                    || category is null || !Categories.Contains(category))
+                    || category is null || !Categories.Contains(category) || (kind == "deduction" && category is "thirteenth_month" or "de_minimis"))
                     throw Err("bad_input");
                 PayrollDraft(periodId);
                 var p = All<Profile>().FirstOrDefault(x => x.Id == userId && x.IsActive && x.DeletedAt is null) ?? throw Err("bad_input");

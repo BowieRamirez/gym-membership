@@ -116,12 +116,28 @@
 
                     <VerticalStackLayout Grid.Column="2" Spacing="2" VerticalOptions="Center">
                         <Label Text="{Binding UpdatedText}" Style="{StaticResource Muted}" LineBreakMode="TailTruncation" />
-                        <!-- 0144 (T4): government deductions on/off -->
-                        <HorizontalStackLayout Spacing="6">
+                        <!-- 0144 (T4) / 0145 (U1, U2): contributions and tax on/off, with a reason -->
+                        <HorizontalStackLayout Spacing="6" IsVisible="{Binding IsNotEditingDeductions}">
                             <Label Text="{Binding DeductionsText}" Style="{StaticResource Caption}" VerticalOptions="Center" />
-                            <Button Text="{Binding ToggleDeductionsText}" Style="{StaticResource LinkButton}" Command="{Binding ToggleDeductionsCommand}" VerticalOptions="Center"
-                                    SemanticProperties.Description="{Binding FullName, StringFormat='Switch government deductions for {0}'}" />
+                            <Button Text="Change" Style="{StaticResource LinkButton}" Command="{Binding BeginDeductionsCommand}" VerticalOptions="Center"
+                                    SemanticProperties.Description="{Binding FullName, StringFormat='Change government deductions for {0}'}" />
                         </HorizontalStackLayout>
+                        <VerticalStackLayout Spacing="4" IsVisible="{Binding IsEditingDeductions}">
+                            <HorizontalStackLayout Spacing="14">
+                                <HorizontalStackLayout Spacing="4"><CheckBox IsChecked="{Binding ContributionsInput}" VerticalOptions="Center" SemanticProperties.Description="SSS, PhilHealth and Pag-IBIG" />
+                                    <Label Text="SSS, PhilHealth, Pag-IBIG" Style="{StaticResource Caption}" VerticalOptions="Center" /></HorizontalStackLayout>
+                                <HorizontalStackLayout Spacing="4"><CheckBox IsChecked="{Binding TaxInput}" VerticalOptions="Center" SemanticProperties.Description="Withholding tax" />
+                                    <Label Text="Withholding tax" Style="{StaticResource Caption}" VerticalOptions="Center" /></HorizontalStackLayout>
+                            </HorizontalStackLayout>
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                                <Border Style="{StaticResource Field}" Padding="8,2">
+                                    <Entry Text="{Binding DeductionsReasonInput}" MaxLength="60" Placeholder="Why off (optional), e.g. Minimum wage earner" SemanticProperties.Description="Reason" />
+                                </Border>
+                                <Button Grid.Column="1" Text="Save" Style="{StaticResource SmallButton}" Command="{Binding SaveDeductionsCommand}" />
+                                <Button Grid.Column="2" Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelDeductionsCommand}" />
+                            </Grid>
+                            <Label Text="{Binding ErrorText}" Style="{StaticResource FieldError}" IsVisible="{Binding ErrorText, Converter={StaticResource IsNotNull}}" />
+                        </VerticalStackLayout>
                     </VerticalStackLayout>
 
                     <HorizontalStackLayout Grid.Column="3" Spacing="8" HorizontalOptions="End" VerticalOptions="Center" IsVisible="{Binding IsNotEditing}">
@@ -172,10 +188,24 @@
                             </MultiBinding>
                         </Label.Text>
                     </Label>
-                    <HorizontalStackLayout Spacing="6">
+                    <HorizontalStackLayout Spacing="6" IsVisible="{Binding IsNotEditingDeductions}">
                         <Label Text="{Binding DeductionsText}" Style="{StaticResource Caption}" VerticalOptions="Center" />
-                        <Button Text="{Binding ToggleDeductionsText}" Style="{StaticResource LinkButton}" Command="{Binding ToggleDeductionsCommand}" VerticalOptions="Center" />
+                        <Button Text="Change" Style="{StaticResource LinkButton}" Command="{Binding BeginDeductionsCommand}" VerticalOptions="Center" />
                     </HorizontalStackLayout>
+                    <VerticalStackLayout Spacing="4" IsVisible="{Binding IsEditingDeductions}">
+                        <HorizontalStackLayout Spacing="4"><CheckBox IsChecked="{Binding ContributionsInput}" VerticalOptions="Center" />
+                            <Label Text="SSS, PhilHealth, Pag-IBIG" Style="{StaticResource Caption}" VerticalOptions="Center" /></HorizontalStackLayout>
+                        <HorizontalStackLayout Spacing="4"><CheckBox IsChecked="{Binding TaxInput}" VerticalOptions="Center" />
+                            <Label Text="Withholding tax" Style="{StaticResource Caption}" VerticalOptions="Center" /></HorizontalStackLayout>
+                        <Border Style="{StaticResource Field}" Padding="8,2">
+                            <Entry Text="{Binding DeductionsReasonInput}" MaxLength="60" Placeholder="Why off (optional)" />
+                        </Border>
+                        <HorizontalStackLayout Spacing="6">
+                            <Button Text="Save" Style="{StaticResource SmallButton}" Command="{Binding SaveDeductionsCommand}" />
+                            <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelDeductionsCommand}" />
+                        </HorizontalStackLayout>
+                        <Label Text="{Binding ErrorText}" Style="{StaticResource FieldError}" IsVisible="{Binding ErrorText, Converter={StaticResource IsNotNull}}" />
+                    </VerticalStackLayout>
                     <HorizontalStackLayout Spacing="10" IsVisible="{Binding IsNotEditing}">
                         <Button Text="Set pay" Style="{StaticResource SmallOutlineButton}" Command="{Binding BeginEditCommand}" />
                         <Button Text="Use role default" Style="{StaticResource LinkButton}" Command="{Binding UseRoleDefaultCommand}"
@@ -307,9 +337,26 @@
                             <Button Text="Export PDF" Style="{StaticResource SmallOutlineButton}" Command="{Binding ExportPdfCommand}" AutomationId="ExportPayrollPdf" />
                             <Label Grid.Column="1" Text="{Binding MarkPaidBlockedText}" Style="{StaticResource Muted}" HorizontalOptions="End" VerticalOptions="Center"
                                    IsVisible="{Binding HasPendingRecords}" />
-                            <Button Grid.Column="2" Text="Mark as paid" Style="{StaticResource SmallButton}" Command="{Binding MarkPaidCommand}"
+                            <Button Grid.Column="2" Text="Approve" Style="{StaticResource SmallButton}" Command="{Binding MarkPaidCommand}"
                                     IsVisible="{Binding IsDraft}" IsEnabled="{Binding CanMarkPaid}" AutomationId="MarkPayrollPaid" />
+                            <!-- 0145 (U7, U8): approved, not paid out yet -->
+                            <Button Grid.Column="2" Text="Mark as paid out" Style="{StaticResource SmallButton}" Command="{Binding MarkPaidOutCommand}"
+                                    IsVisible="{Binding CanMarkPaidOut}" AutomationId="MarkPayrollPaidOut" />
                         </Grid>
+                        <Border Style="{StaticResource Panel}" IsVisible="{Binding CanReopen}">
+                            <VerticalStackLayout Spacing="8">
+                                <Label Text="Approved, not paid out yet" Style="{StaticResource SectionTitle}" />
+                                <Label Text="Send the money, then mark it as paid out. Found a mistake first? Reopen it with a reason, fix it and approve it again."
+                                       Style="{StaticResource Caption}" />
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <Border Style="{StaticResource Field}">
+                                        <Entry Text="{Binding ReopenReason}" MaxLength="200" Placeholder="Why reopen, e.g. Wrong hours for Ana" AutomationId="ReopenReason" />
+                                    </Border>
+                                    <Button Grid.Column="1" Text="Reopen" Style="{StaticResource SmallOutlineButton}" Command="{Binding ReopenCommand}" AutomationId="ReopenPeriod" />
+                                </Grid>
+                                <Label Text="{Binding ReopenError}" Style="{StaticResource FieldError}" IsVisible="{Binding ReopenError, Converter={StaticResource IsNotNull}}" />
+                            </VerticalStackLayout>
+                        </Border>
                     </VerticalStackLayout>
 
                     <!-- SALARIES TAB -->
@@ -598,6 +645,7 @@
                                     <Picker ItemsSource="{Binding LineCategories}" SelectedItem="{Binding LineCategory}" AutomationId="LineCategory"
                                             SemanticProperties.Description="Category" />
                                 </Border>
+                                <Label Text="{Binding LineCategoryHint}" Style="{StaticResource Caption}" IsVisible="{Binding LineCategoryHint, Converter={StaticResource HasText}}" />
                             </VerticalStackLayout>
 
                             <VerticalStackLayout Spacing="4">

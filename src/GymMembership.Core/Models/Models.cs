@@ -530,6 +530,9 @@ public sealed class StaffSalary
     [System.Text.Json.Serialization.JsonPropertyName("pay_type")] public string PayType { get; set; } = "fixed";
     [System.Text.Json.Serialization.JsonPropertyName("personal")] public bool Personal { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("deductions_on")] public bool DeductionsOn { get; set; } = true;   // 0144, T4
+    [System.Text.Json.Serialization.JsonPropertyName("contributions_on")] public bool ContributionsOn { get; set; } = true;   // 0145, U1
+    [System.Text.Json.Serialization.JsonPropertyName("tax_on")] public bool TaxOn { get; set; } = true;
+    [System.Text.Json.Serialization.JsonPropertyName("deductions_reason")] public string? DeductionsReason { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("updated_at")] public DateTime? UpdatedAt { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("updated_by_name")] public string? UpdatedByName { get; set; }
     [System.Text.Json.Serialization.JsonIgnore] public bool NoSalary => Amount is null;
@@ -586,6 +589,12 @@ public sealed class PayrollRow
     [System.Text.Json.Serialization.JsonPropertyName("taxable")] public decimal Taxable { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("msc")] public decimal Msc { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("pagibig_base")] public decimal PagIbigBase { get; set; }
+    // 0145 (U1-U6): two switches, non-taxable pay, the year's 13th month
+    [System.Text.Json.Serialization.JsonPropertyName("contributions_on")] public bool ContributionsOn { get; set; } = true;
+    [System.Text.Json.Serialization.JsonPropertyName("tax_on")] public bool TaxOn { get; set; } = true;
+    [System.Text.Json.Serialization.JsonPropertyName("deductions_reason")] public string? DeductionsReason { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("nontaxable")] public decimal Nontaxable { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("thirteenth_used")] public decimal ThirteenthUsed { get; set; }
     [System.Text.Json.Serialization.JsonIgnore] public string RoleLabel => Role switch { "employee" => "Front desk", "coach" => "Coach", "subadmin" => "Admin", "admin" => "System admin", _ => Role };
     /// <summary>"41.5 h × ₱80.00", "12 sessions × ₱150.00" or "Fixed".</summary>
     [System.Text.Json.Serialization.JsonIgnore] public string BasisText => PayTypes.BasisText(PayType, Payable, Rate);
@@ -608,6 +617,10 @@ public sealed class PayrollPeriod
     [System.Text.Json.Serialization.JsonPropertyName("total_net")] public decimal TotalNet { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("total_gross")] public decimal TotalGross { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("total_gov")] public decimal TotalGov { get; set; }
+    // 0145 (U7): draft / approved / paid_out; IsPaid stays "locked" (approved or paid out)
+    [System.Text.Json.Serialization.JsonPropertyName("status")] public string Status { get; set; } = "draft";
+    [System.Text.Json.Serialization.JsonPropertyName("paid_out_at")] public DateTime? PaidOutAt { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("paid_out_by_name")] public string? PaidOutByName { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("rows")] public List<PayrollRow> Rows { get; set; } = new();
     [System.Text.Json.Serialization.JsonIgnore] public bool IsPaid => PaidAt is not null;
 }
@@ -682,7 +695,8 @@ public static class PayTypes
     public static string CategoryLabel(string? category) => category switch
     {
         "regular_bonus" => "Regular bonus", "overtime" => "Overtime adjustment", "holiday" => "Holiday pay adjustment",
-        "other" => "Other adjustment", "sss" => "SSS", "philhealth" => "PhilHealth", "pagibig" => "Pag-IBIG", "tax" => "Withholding tax", _ => ""
+        "other" => "Other adjustment", "thirteenth_month" => "13th month / other benefits", "de_minimis" => "De minimis",
+        "retro" => "Retro pay / adjustment", "sss" => "SSS", "philhealth" => "PhilHealth", "pagibig" => "Pag-IBIG", "tax" => "Withholding tax", _ => ""
     };
     public static bool IsGovernment(string? category) => category is "sss" or "philhealth" or "pagibig" or "tax";
 }
