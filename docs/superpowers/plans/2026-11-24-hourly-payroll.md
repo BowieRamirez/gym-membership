@@ -39,6 +39,7 @@ Same rules as `2026-11-20-desk-customer-shifts.md`:
 
 ## 1. Findings (2026-11-24)
 
+
 | Item | Today | Consequence |
 |---|---|---|
 | Pay | `staff_salaries` (user → `amount` per period) and `role_salaries` (`employee` / `coach` default, 0137, copied to everyone with that role). Fixed per period, hours never change pay (P1). | Add `pay_type` to both; `amount` keeps its column and becomes "rate for that pay type". Existing rows become `fixed`, so nothing changes for anyone until the admin switches them. |

@@ -4,7 +4,7 @@
 
 Created: 2026-11-24
 Last updated: 2026-11-24
-Status (2026-11-24): plan written; T1-T12 recommended, **waiting on the owner to confirm**. Not built.
+Status (2026-11-24): T1-T12 confirmed (as recommended); Phases 1-2 built, reviewed and fixed; `0144` live; owner hand checks left. Not merged.
 Branch: `hourly-payroll-2026-11-24` (same branch as the hourly payroll it builds on, `docs/superpowers/plans/2026-11-24-hourly-payroll.md`). **Owner's rule: not merged into `main` yet.** No PR until the owner asks.
 
 **Goal:** Payroll works out each person's employee share of **SSS, PhilHealth and Pag-IBIG** and their **BIR withholding tax**, shows them as their own lines on the page, the details panel and the payslip, and freezes them when a period is marked paid. A switch per person turns them off (contractors, exempt staff). This is the part H10 of the hourly plan left out.
@@ -33,9 +33,9 @@ Same rules as `2026-11-24-hourly-payroll.md`:
 
 | Phase | What | Needs | Status |
 |---|---|---|---|
-| 1 | Database: rates table, per-person switch, deductions in the pay maths, frozen on paid | T1-T12 | Not started |
-| 2 | Payroll page: switch on Salaries, deduction lines in the table, details panel, confirm and payslip | T1-T12 | Not started |
-| 3 | Checks, review, owner hand checks | | Not started |
+| 1 | Database: rates table, per-person switch, deductions in the pay maths, frozen on paid | T1-T12 | Done (`4796f65`, fixes `77c66b4`) |
+| 2 | Payroll page: switch on Salaries, deduction lines in the table, details panel, confirm and payslip | T1-T12 | Done (`4796f65`, fixes `77c66b4`) |
+| 3 | Checks, review, owner hand checks | | Review done and fixed; owner hand checks left |
 
 ## 1. Findings (2026-11-24)
 
@@ -111,8 +111,8 @@ Run `impeccable` before the XAML and again before the commit. **Operate mode**, 
 - App: `IAdminService` + `Services.cs`, `Models.cs` (`PayrollRow` gov fields, `StaffSalary.DeductionsOn`, category labels), `Foundation.cs` sentence (`first_half_unpaid`), `DemoPayroll.cs` mirror (same math, one shared C# copy of the rates).
 - Tests: `supabase/tests/local/payroll-deductions.mjs`, `tests/GymMembership.Tests/PayrollDeductionsTests.cs`.
 
-- [ ] Failing tests first: Review Focus 1-9.
-- [ ] Migration, dry-run push, push live, live grants checked, `ponytail:ponytail-review`, commit, push branch.
+- [x] Failing tests first: Review Focus 1-9.
+- [x] Migration, dry-run push, push live, live grants checked, `ponytail:ponytail-review`, commit, push branch.
 
 ## Phase 2: Payroll page
 
@@ -120,15 +120,17 @@ Run `impeccable` before the XAML and again before the commit. **Operate mode**, 
 
 **Files:** `Views/PayrollPage.xaml`, `PayrollViewModel` and items in `StaffViewModels.cs`, `PayrollPdf` in `RevenueReport.cs`, tests in `PayrollDeductionsTests.cs` (switch saves and reloads; row caption and warning; panel lines and "Taken in the 16th–end pay" on a 1st–15th; confirm total; `first_half_unpaid` sentence and step link; payslip lines in order).
 
-- [ ] `impeccable` before the XAML (brief above); build; check on Windows light and dark at narrow and wide widths; fix what it finds.
-- [ ] View model tests green; Windows build; `ponytail:ponytail-review`; commit, push branch.
+- [x] `impeccable` before the XAML (brief above); build; check on Windows light and dark at narrow and wide widths; fix what it finds.
+- [x] View model tests green; Windows build; `ponytail:ponytail-review`; commit, push branch.
 
 ## Phase 3: Checks
 
-- [ ] Whole suite (`dotnet test`, Windows & Android builds, DB suite) green.
-- [ ] `superpowers:requesting-code-review` on the branch diff; fixes committed.
+- [x] Whole suite (`dotnet test`, Windows & Android builds, DB suite) green.
+- [x] `superpowers:requesting-code-review` on the branch diff; fixes committed.
 - [ ] Owner hand checks (Windows): open a 1st–15th draft (tax only), a 16th–end draft (month's contributions + tax), switch one person off, try paying the 16th–end before the 1st–15th, pay both, export the PDF and compare a payslip with the accountant's own computation.
 
 ## Session log
 
 - 2026-11-24: owner asked to add the tax H10 left out; chose tax + SSS/PhilHealth/Pag-IBIG, on/off per person, and option 1 (whole month's contributions in the 16th–end period). Rates checked against published 2026 guides (sources in the chat; accountant to confirm). Plan written on `hourly-payroll-2026-11-24`. T1-T12 recommended, waiting on the owner. Not built. Next migration `0144`.
+- 2026-11-24: owner: T1-T12 as recommended, start building. Built `0144_payroll_deductions.sql` (rates table, switch table, `payroll_sss/philhealth/pagibig/tax`, `payroll_basis_core` + `payroll_basis` with government columns, `set_payroll_deductions`, `payroll_deduction_rates_info`, first_half_unpaid, frozen lines on paid), app (models, `PayrollDeductions` C# copy for the demo, services, demo mirror, view model, page, payslip). Checked on screen in a demo copy (no live data): Salaries switch and rates note, 16–30 Nov row "Gov't ₱2,214.95", panel SSS ₱1,300 (MSC ₱26,000) / PhilHealth ₱650 / Pag-IBIG ₱200 / tax ₱64.95 on ₱10,850. Commit `4796f65`.
+- 2026-11-24: fresh review: no Critical. Fixed (`77c66b4`): no contributions or "cut" warning for someone with no pay all month; draft payslips list the government deductions; a paid period's panel lists frozen government lines once (not twice) and shows frozen amounts; no-salary note; no repeated names on payslip lines; switch refused for deactivated accounts; MSC and Pag-IBIG base returned from the rates table; explicit table revokes. Left: a link to step to the 1st–15th on `first_half_unpaid`; someone paid in the 1st–15th but gone by the 16th–end has no month contributions taken (tell the accountant). Unit 1277/1277, DB suite 759 ok, Windows & Android builds. `0144` pushed live (dry run first), grants checked: helpers refuse everyone, client functions signed-in only, the two tables have no client rights; rates 5% / 2.5% / ₱10,000 cap. Next migration `0145`.
