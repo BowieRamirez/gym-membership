@@ -25,7 +25,7 @@
                     <VerticalStackLayout Spacing="2" BindableLayout.ItemsSource="{Binding Benefits}" IsVisible="{Binding Benefits.Count, Converter={StaticResource Any}}">
                         <BindableLayout.ItemTemplate><DataTemplate x:DataType="x:String"><Label Text="{Binding ., StringFormat='• {0}'}" FontSize="14" /></DataTemplate></BindableLayout.ItemTemplate>
                     </VerticalStackLayout>
-                    <Button Text="Choose next term" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" Clicked="OnAvail" />
+                    <Button Text="{Binding BuyText}" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" Clicked="OnAvail" />
                 </VerticalStackLayout>
             </Border>
         </DataTemplate>
@@ -41,7 +41,7 @@
                     <VerticalStackLayout Spacing="2" BindableLayout.ItemsSource="{Binding Benefits}" IsVisible="{Binding Benefits.Count, Converter={StaticResource Any}}">
                         <BindableLayout.ItemTemplate><DataTemplate x:DataType="x:String"><Label Text="{Binding ., StringFormat='• {0}'}" FontSize="14" /></DataTemplate></BindableLayout.ItemTemplate>
                     </VerticalStackLayout>
-                    <Button Text="Choose next term" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" Margin="0,8,0,0" Clicked="OnAvail" />
+                    <Button Text="{Binding BuyText}" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" Margin="0,8,0,0" Clicked="OnAvail" />
                 </VerticalStackLayout>
             </Border>
         </DataTemplate>
@@ -75,13 +75,26 @@
                     </HorizontalStackLayout>
                 </Grid>
             </Border>
-            <c:CardGrid Columns="{OnIdiom Phone=1, Default=3}" MinColumnWidth="260" Padding="0,0,0,16" BindableLayout.ItemsSource="{Binding Packages}"
+            <!-- owner 2026-11-24: memberships and the Day pass apart, same page; the Day pass hides for members (they can't buy it, 0098) -->
+            <VerticalStackLayout Spacing="2" Margin="0,4,0,0">
+                <Label Text="Memberships" Style="{StaticResource SectionTitle}" SemanticProperties.HeadingLevel="Level2" AutomationId="MembershipsTitle" />
+                <Label Text="Starts once paid, or when your current term ends." Style="{StaticResource Caption}" />
+            </VerticalStackLayout>
+            <c:CardGrid Columns="{OnIdiom Phone=1, Default=3}" MinColumnWidth="260" Padding="0,0,0,8" BindableLayout.ItemsSource="{Binding Memberships}"
                      BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource PackagePhone}, Default={StaticResource PackageWide}}">
             <BindableLayout.EmptyView>
-                <Label Text="No packages are on sale right now. Check back soon." Style="{StaticResource Muted}" />
+                <Label Text="No memberships are on sale right now. Check back soon." Style="{StaticResource Muted}" />
             </BindableLayout.EmptyView>
+            </c:CardGrid>
 
-        </c:CardGrid></VerticalStackLayout>
+            <VerticalStackLayout Spacing="2" Margin="0,12,0,0" IsVisible="{Binding HasDayPasses}">
+                <Label Text="Day pass" Style="{StaticResource SectionTitle}" SemanticProperties.HeadingLevel="Level2" AutomationId="DayPassTitle" />
+                <Label Text="One visit, today only. Ends at midnight." Style="{StaticResource Caption}" />
+            </VerticalStackLayout>
+            <c:CardGrid Columns="{OnIdiom Phone=1, Default=3}" MinColumnWidth="260" Padding="0,0,0,16" BindableLayout.ItemsSource="{Binding DayPasses}"
+                     BindableLayout.ItemTemplate="{OnIdiom Phone={StaticResource PackagePhone}, Default={StaticResource PackageWide}}"
+                     IsVisible="{Binding HasDayPasses}" />
+        </VerticalStackLayout>
                 <!-- Pay online (Xendit plan; moved here from My membership, owner 2026-11-16): one action. The amount is the title; the deadline sits
                      right under what is bought; the methods are named under the button so nobody wonders whether GCash works. Coming back re-checks it (Checking). -->
                 <!-- SideLayout takes one side child: both cards sit in it; only one shows (one pending package payment at a time) -->

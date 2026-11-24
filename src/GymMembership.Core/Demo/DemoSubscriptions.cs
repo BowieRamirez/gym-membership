@@ -153,7 +153,17 @@ public sealed partial class DemoGateway
                 if(approve && t.CancelledAt is not null) throw Err("already_processed");
                 var due=RefundMath.Due(p.Amount,t.DurationDays,t.StartsAt,now);   // G22: the days left now, when access ends
                 if(approve && due<=0) throw Err("nothing_to_refund");
-                if(approve) {r.Amount=due;t.CancelledAt=now;t.CancelledBy=Uid;t.CancellationReason="Refund approved";ProjectTerms(r.MemberId);}
+                if(approve) {r.Amount=due;t.CancelledAt=now;t.CancelledBy=Uid;t.CancellationReason="Refund approved";ProjectTerms(r.MemberId);
+                    // 0147: the term's unpaid coach access can no longer be paid
+                    foreach(var c in All<Payment>().Where(c=>c.MemberId==r.MemberId&&c.Kind==PayKind.CoachAddon&&c.Status==Status.Pending&&c.CreatedAt>=t.StartsAt&&c.CreatedAt<t.EndsAt)) c.Status=Status.Expired;
+                    // 0150: the unused days of paid coach access come back too
+                    if(t.CoachAccessAt is { } from && All<Payment>().FirstOrDefault(c=>c.Id==t.CoachAccessPaymentId&&c.Status==Status.Verified&&c.Amount>0) is { } coach)
+                    {
+                        var days=Math.Max(1,(int)Math.Ceiling((t.EndsAt-from).TotalSeconds/86400));
+                        var coachDue=RefundMath.Due(coach.Amount,days,from,now);
+                        if(coachDue>0) Add(new RefundRequest{Kind="coach_access",PaymentId=coach.Id,MemberId=r.MemberId,Amount=coachDue,Reason="Membership refunded",RequestedAt=now,
+                            Status="approved",DecidedBy=Uid,DecidedAt=now,DecisionReason="Unused coach access days, refunded with the membership"});
+                    }}
                 r.Status=approve?"approved":"rejected";r.DecidedBy=Uid;r.DecidedAt=now;r.DecisionReason=reason;
                 Notify(r.MemberId,"payment",approve?"Cancellation approved; refund awaiting repayment":"Cancellation request rejected",reason);
                 Audit("refund.decide","refund_requests",r.Id.ToString());return true;

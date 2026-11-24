@@ -165,38 +165,68 @@ public static class CashShiftPdf
 public static class PayrollPdf
 {
     static readonly (string Title, double Width, bool Right)[] Columns =
-        [("Name", 130, false), ("Role", 65, false), ("Hours (ref.)", 85, false), ("Salary", 60, true), ("Bonuses", 55, true), ("Deductions", 60, true), ("Net pay", 60, true)];
+        [("Name", 105, false), ("Role", 55, false), ("Worked out from", 95, false), ("Base pay", 55, true), ("Bonuses", 50, true), ("Gross", 55, true), ("Deductions", 50, true), ("Net pay", 55, true)];
+
+    /// <summary>One person's payslip block: pay type and rate, how the base pay was worked out, corrections, each line with its category, gross and net (H17).</summary>
+    public static string Payslip(PayrollRow r, IReadOnlyList<PayrollLine> lines, IReadOnlyList<PayrollHourAdjustment> adjustments)
+    {
+        var unit = r.PayType == "per_session" ? "sessions" : "h";
+        // government lines: their note already starts with the name ("SSS, Oct 2026, …"), so no "SSS: SSS, …"
+        string Line(PayrollLine x) => $"{(x.Kind == "bonus" ? "+" : "-")}{PayTypes.Money(x.Amount)} "
+            + (PayTypes.IsGovernment(x.Category) ? x.Note ?? x.CategoryLabel : $"{(string.IsNullOrEmpty(x.CategoryLabel) ? "" : x.CategoryLabel + ": ")}{x.Note}");
+        // a draft has no frozen government lines yet: list the amounts the period shows (0144 review fix)
+        if (r.GovTotal > 0 && !lines.Any(x => PayTypes.IsGovernment(x.Category)))
+            lines = [.. lines, .. new[] { ("sss", r.Sss), ("philhealth", r.PhilHealth), ("pagibig", r.PagIbig), ("tax", r.Tax) }
+                .Where(g => g.Item2 > 0).Select(g => new PayrollLine { Kind = "deduction", Category = g.Item1, Amount = g.Item2, Note = PayTypes.CategoryLabel(g.Item1) })];
+        var parts = new List<string>
+        {
+            r.NoSalary ? $"{r.FullName} ({r.RoleLabel}) · No salary set" : $"{r.FullName} ({r.RoleLabel}) · {PayTypes.Label(r.PayType)} pay, {PayTypes.RateText(r.PayType, r.Rate)}",
+            PayTypes.BasisSentence(r)
+        };
+        parts.AddRange(adjustments.Select(a => $"Correction {(a.Quantity > 0 ? "+" : "")}{a.Quantity.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} {unit}: {a.Note}"));
+        parts.Add($"Base pay {PayTypes.Money(r.BasePay)}");
+        parts.AddRange(lines.Where(x => x.Kind == "bonus").Select(Line));
+        parts.Add($"Gross pay {PayTypes.Money(r.Gross)}");
+        parts.AddRange(lines.Where(x => x.Kind == "deduction").OrderBy(x => PayTypes.IsGovernment(x.Category)).Select(Line));
+        parts.Add($"Net pay {PayTypes.Money(r.Net)}");
+        return string.Join(" | ", parts);
+    }
 
     public static string PeriodSpan(DateOnly startsOn, DateOnly endsOn) =>
         $"{startsOn.Day}–{endsOn.Day} {startsOn.ToString("MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)}";
 
-    public static byte[] Build(string gymName, PayrollPeriod period, IReadOnlyDictionary<string, IReadOnlyList<PayrollLine>> linesByUser, DateTime generatedUtc, byte[] font)
+    /// <summary>0145 (U10): which step the period is at, for the PDF.</summary>
+    public static string StatusLine(PayrollPeriod p)
     {
-        var status = period.IsPaid
-            ? $"Paid {ManilaTime.Of(period.PaidAt!.Value).ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)} by {period.PaidByName ?? "Admin"}"
-            : "Draft (not yet paid)";
+        string Day(DateTime t) => ManilaTime.Of(t).ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
+        return p.Status switch
+        {
+            "paid_out" => $"Paid out {Day(p.PaidOutAt!.Value)} by {p.PaidOutByName ?? "Admin"}",
+            "approved" => $"Approved {Day(p.PaidAt!.Value)} by {p.PaidByName ?? "Admin"}, not yet paid out",
+            _ => "Draft (not yet approved)"
+        };
+    }
+
+    public static byte[] Build(string gymName, PayrollPeriod period, IReadOnlyDictionary<string, IReadOnlyList<PayrollLine>> linesByUser, DateTime generatedUtc, byte[] font,
+        IReadOnlyDictionary<string, IReadOnlyList<PayrollHourAdjustment>>? adjustmentsByUser = null)
+    {
+        var status = StatusLine(period);
         var span = PeriodSpan(period.StartsOn, period.EndsOn);
         var rows = period.Rows.Select(r => new[]
         {
             r.FullName,
             r.RoleLabel,
-            r.HoursText,
-            r.NoSalary ? "No salary" : RevenuePdf.Money(r.Salary),
+            r.BasisText,
+            r.NoSalary ? "No salary" : RevenuePdf.Money(r.BasePay),
             r.Bonuses == 0 ? "–" : RevenuePdf.Money(r.Bonuses),
+            RevenuePdf.Money(r.Gross),
             r.Deductions == 0 ? "–" : RevenuePdf.Money(r.Deductions),
             RevenuePdf.Money(r.Net)
         }).ToList();
 
-        var payslips = new List<string>();
-        foreach (var r in period.Rows)
-        {
-            var lines = linesByUser.TryGetValue(r.UserId, out var l) ? l : [];
-            var detail = lines.Count == 0
-                ? "No bonus or deduction lines."
-                : string.Join(" | ", lines.Where(x => x.Kind != "salary").Select(x => $"{(x.Kind == "bonus" ? "+" : "-")}{RevenuePdf.Money(x.Amount)} ({x.Note})"));
-            if (string.IsNullOrWhiteSpace(detail)) detail = "No bonus or deduction lines.";
-            payslips.Add($"{r.FullName} ({r.RoleLabel}) — Salary: {(r.NoSalary ? "No salary set" : RevenuePdf.Money(r.Salary))}, Bonuses: {RevenuePdf.Money(r.Bonuses)}, Deductions: {RevenuePdf.Money(r.Deductions)}, Net: {RevenuePdf.Money(r.Net)} | {detail}");
-        }
+        var payslips = period.Rows.Select(r => Payslip(r,
+            linesByUser.TryGetValue(r.UserId, out var l) ? l : [],
+            adjustmentsByUser is not null && adjustmentsByUser.TryGetValue(r.UserId, out var a) ? a : [])).ToList();
 
         return RevenuePdf.Document(
             $"{gymName} — Payroll",
@@ -205,7 +235,7 @@ public static class PayrollPdf
             [(span, RevenuePdf.Kind.Text), (status, RevenuePdf.Kind.Strong), ($"Generated {RevenuePdf.Manila(generatedUtc)} (Asia/Manila)", RevenuePdf.Kind.Body), ("", RevenuePdf.Kind.Gap)],
             Columns,
             rows,
-            ["Total", "", $"{period.Rows.Count} people", "", "", "", RevenuePdf.Money(period.TotalNet)],
+            ["Total", "", $"{period.Rows.Count} people", "", "", RevenuePdf.Money(period.TotalGross), "", RevenuePdf.Money(period.TotalNet)],
             "No staff in this pay period.",
             payslips);
     }

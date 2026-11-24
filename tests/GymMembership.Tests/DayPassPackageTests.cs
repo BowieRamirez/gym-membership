@@ -62,6 +62,26 @@ public class DayPassPackageTests
         Assert.DoesNotContain(vm.Packages, p => p.IsDayPass);
     }
 
+    [Fact]   // owner 2026-11-24: Packages shows memberships and the Day pass apart, on the same page
+    public async Task Packages_shows_memberships_and_day_passes_apart()
+    {
+        var (gw, _, _) = await NewMember();
+        var vm = new GymMembership.Core.ViewModels.PackagesViewModel(new MembershipService(gw), new ConfirmationTests.Nav(), new SubscriptionService(gw));
+        await vm.OnAppearingAsync();
+        Assert.NotEmpty(vm.Memberships);
+        Assert.DoesNotContain(vm.Memberships, p => p.IsDayPass);
+        Assert.Equal(vm.Memberships.OrderBy(p => p.DurationDays).ThenBy(p => p.Price).Select(p => p.Id), vm.Memberships.Select(p => p.Id));
+        Assert.All(vm.DayPasses, p => Assert.True(p.IsDayPass));
+        Assert.True(vm.HasDayPasses);
+        Assert.Equal("Buy day pass", vm.DayPasses[0].BuyText);
+        Assert.Equal("Choose next term", vm.Memberships[0].BuyText);
+
+        await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);   // Alex has a membership: no Day pass section
+        await vm.OnAppearingAsync();
+        Assert.Empty(vm.DayPasses);
+        Assert.False(vm.HasDayPasses);
+    }
+
     [Fact]
     public void Outside_the_membership_has_its_own_sentence() =>
         Assert.Contains("membership", ErrorText.For(AppErrorKind.Validation, "outside_membership"));

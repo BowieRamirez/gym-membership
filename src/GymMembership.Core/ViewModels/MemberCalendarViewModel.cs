@@ -65,16 +65,5 @@ public partial class MemberCalendarViewModel(IMemberCalendarService svc, ISessio
         return Task.CompletedTask;
     }
 
-    [RelayCommand]
-    private async Task RequestAsync(CalendarEntry open)
-    {
-        if (!open.CanRequest || open.CoachId is null) return;
-        Notice = null;
-        if (!await Confirm.AskAsync("Ask for this time?", $"{open.Title}\n{DayText}, {open.Time}", "Send request")) return;
-        if (!await RunAsync(() => sessions.RequestAsync(open.CoachId, open.StartUtc, open.EndUtc, null))) return;
-        Notice = "Request sent. Your coach answers it in Time requests.";
-        await LoadAsync();
-    }
-
     [RelayCommand] private void Open(CalendarEntry entry) { if (entry.CanOpen) nav.GoToBookings(); }
 }

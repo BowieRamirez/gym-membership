@@ -405,6 +405,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
         return Task.FromResult<IReadOnlyList<T>>(rows.Select(Clone).ToList());
     }
 
+    /// <summary>A second System admin exists only when made in the database itself; the app can't make one (0147).</summary>
+    public void SeedSystemAdmin(string userId) => Add(new UserRole { UserId = userId, RoleId = All<Role>().First(r => r.Name == "admin").RoleId });
+
     // Direct writes are limited to what the table privileges and policies allow (0006). Everything else is a function.
     const string Rls = "new row violates row-level security policy";
 
@@ -728,7 +731,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     // plan 8.4: switch on whatever the payment paid for
     void ActivateTarget(Payment pay)
     {
-        var now = DateTime.UtcNow;
+        var now = SubscriptionNow;   // the demo's clock, as everywhere else (was the real clock: tests with a set date never got coach access)
         if (pay.Kind is PayKind.Membership or PayKind.Renewal)
         {
             ActivateMembershipTerm(pay);
@@ -787,7 +790,6 @@ public sealed partial class DemoGateway : ISupabaseGateway
         if (SessionCheckInCall(fn, a, out var sessionCheckInResult)) return sessionCheckInResult;
         if (ReservationCall(fn, a, out var reservationResult)) return reservationResult;
         if (ClosureCall(fn, a, out var closureResult)) return closureResult;
-        if (RequestCall(fn, a, out var requestResult)) return requestResult;
         if (CashShiftCall(fn, a, out var shiftResult)) return shiftResult;
         if (PayrollCall(fn, a, out var payrollResult)) return payrollResult;
         if (MessengerCall(fn, a, out var chatResult)) return chatResult;
@@ -1066,42 +1068,6 @@ public sealed partial class DemoGateway : ISupabaseGateway
             // ----- coaching -----
             case "taken_coaches":
                 return All<CoachHire>().Where(h => h.Status == Status.Active).Select(h => h.CoachId).Distinct().ToList();
-            case "hire_coach":
-            {
-                RequireActive();
-                if (!ActiveMember(uid)) throw Err("no_active_membership");
-                var coachId = S("p_coach_id");
-                if (!All<Coach>().Any(c => c.UserId == coachId && c.IsAvailable) || !(All<Profile>().FirstOrDefault(p => p.Id == coachId)?.IsActive ?? false)) throw Err("not_found");
-                // G30 (0074): a request the coach answers; one open (pending or active) per member and coach
-                if (All<CoachHire>().Any(h => h.MemberId == uid && h.CoachId == coachId && h.Status is Status.Pending or Status.Active)) throw Err("hire_already_requested");
-                var hire = Add(new CoachHire { MemberId = uid, CoachId = coachId, Status = Status.Pending, HiredAt = now });
-                Notify(coachId, "system", "New hire request", All<Profile>().First(p => p.Id == uid).FullName);
-                return hire.Id;
-            }
-            case "answer_hire":
-            {
-                RequireActive();
-                var h = All<CoachHire>().FirstOrDefault(x => x.Id == I("p_hire_id") && x.CoachId == uid) ?? throw Err("not_found");
-                if (h.Status != Status.Pending) throw Err("already_processed");
-                var coachName = All<Profile>().First(p => p.Id == uid).FullName;
-                if (B("p_accept"))
-                {
-                    if (!ActiveMember(h.MemberId)) throw Err("no_active_membership");
-                    h.Status = Status.Active; h.HiredAt = now;
-                    Notify(h.MemberId, "system", "Hire accepted", coachName);
-                }
-                else { h.Status = "declined"; h.EndedAt = now; Notify(h.MemberId, "system", "Hire declined", coachName); }
-                return null;
-            }
-            case "cancel_hire_request":
-            {
-                RequireActive();
-                var h = All<CoachHire>().FirstOrDefault(x => x.Id == I("p_hire_id") && x.MemberId == uid) ?? throw Err("not_found");
-                if (h.Status != Status.Pending) throw Err("already_processed");
-                h.Status = Status.Cancelled; h.EndedAt = now;
-                return null;
-            }
-            // 0032: check_ins:record for any coach (0140: no longer the coach themselves); twice in a row is harmless
             case "coach_check_in" or "coach_check_out":
             {
                 var coachId = Opt("p_coach") ?? uid;
@@ -1173,110 +1139,6 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 foreach (var s in All<TrainingSession>().Where(s => s.CoachId == h.CoachId && s.MemberId == h.MemberId && s.Status == Status.Scheduled && s.ScheduledStart > now)) s.Status = Status.Cancelled;
                 foreach (var r in All<TimeRequest>().Where(r => r.CoachId == h.CoachId && r.MemberId == h.MemberId && r.Status == Status.Pending)) r.Status = Status.Cancelled;
                 Notify(uid == h.CoachId ? h.MemberId : h.CoachId, "system", "Coaching ended");
-                return null;
-            }
-            case "request_time":
-            {
-                RequireActive();
-                var coachId = S("p_coach_id"); var start = T("p_start"); var end = T("p_end");
-                if (end <= start) throw Err("end must be after start");
-                TimeRequest req;
-                if (uid == coachId)
-                {
-                    if (!IsCoach(uid)) throw Err("forbidden");
-                    req = Add(new TimeRequest { CoachId = uid, MemberId = null, RequestedBy = "coach", RequestedStart = start, RequestedEnd = end, Message = Opt("p_message") });
-                    foreach (var h in All<CoachHire>().Where(h => h.CoachId == uid && h.Status == Status.Active)) Notify(h.MemberId, "time_request", "Your coach offered an open slot");
-                }
-                else
-                {
-                    if (!ActiveMember(uid)) throw Err("no_active_membership");
-                    if (!CoachesMember(coachId, uid)) throw Err("no_active_hire");
-                    if (All<TrainingSession>().Any(s => s.CoachId == coachId && s.MemberId == uid && s.Status == Status.Scheduled && s.ScheduledEnd > now)) throw Err("active_coaching_session");
-                    if (All<TimeRequest>().Any(r => r.CoachId == coachId && r.MemberId == uid && r.RequestedBy == "member" && r.SessionId is null && r.Status is Status.Pending or "proposed")) throw Err("pending_session_request");
-                    req = Add(new TimeRequest { CoachId = coachId, MemberId = uid, RequestedBy = "member", RequestedStart = start, RequestedEnd = end, Message = Opt("p_message") });
-                    Notify(coachId, "time_request", "New time request");
-                }
-                return req.Id;
-            }
-            case "request_member_time":
-            {
-                RequireActive();
-                if (!IsCoach(uid)) throw Err("forbidden");
-                var member = S("p_member_id"); var start = T("p_start"); var end = T("p_end");
-                if (end <= start) throw Err("end must be after start");
-                if (!CoachesMember(uid, member)) throw Err("no_active_hire");
-                if (!ActiveMember(member)) throw Err("invite_member_inactive");
-                if (All<TrainingSession>().Any(s => s.CoachId == uid && s.MemberId == member && s.Status == Status.Scheduled && s.ScheduledEnd > now)) throw Err("active_coaching_session");
-                var invitation = Add(new TimeRequest { CoachId = uid, MemberId = member, RequestedBy = "coach", RequestedStart = start, RequestedEnd = end });
-                Notify(member, "time_request", "Your coach invited you to a session");
-                return invitation.Id;
-            }
-            case "request_reschedule":
-            {
-                RequireActive();
-                var start = T("p_start"); var end = T("p_end");
-                if (end <= start) throw Err("end must be after start");
-                var s = All<TrainingSession>().FirstOrDefault(x => x.Id == I("p_session_id") && (x.CoachId == uid || x.MemberId == uid)) ?? throw Err("not_found");
-                if (s.Status != Status.Scheduled || s.ScheduledStart <= now || All<TimeRequest>().Any(r => r.SessionId == s.Id && r.Status == Status.Pending)) throw Err("already_processed");
-                var byCoach = uid == s.CoachId;
-                var req = Add(new TimeRequest { CoachId = s.CoachId, MemberId = s.MemberId, SessionId = s.Id, RequestedBy = byCoach ? "coach" : "member",
-                                                RequestedStart = start, RequestedEnd = end, Message = Opt("p_message") });
-                Notify(byCoach ? s.MemberId : s.CoachId, "time_request", "Reschedule requested");
-                return req.Id;
-            }
-            case "respond_time_request":
-            {
-                RequireActive();
-                var r = All<TimeRequest>().FirstOrDefault(x => x.Id == I("p_request_id")) ?? throw Err("not_found");
-                if (!CoachTurn(r, now)) throw Err("already_processed");
-                var approve = B("p_approve");
-                string member;
-                if (r.MemberId is null)
-                {   // an open slot: a trainee of that coach claims it, which counts as approving
-                    if (!(ActiveMember(uid) && CoachesMember(r.CoachId, uid))) throw Err("forbidden");
-                    if (!approve) throw Err("bad_input");
-                    member = uid;
-                }
-                else if (r.RequestedBy == "member") { if (uid != r.CoachId) throw Err("forbidden"); member = r.MemberId; }
-                else { if (uid != r.MemberId) throw Err("forbidden"); member = r.MemberId; }
-
-                if (approve)
-                {
-                    if (r.SessionId is null && !ActiveMember(member)) throw Err("no_active_membership");
-                    if (r.SessionId is null && All<TrainingSession>().Any(s => s.CoachId == r.CoachId && s.MemberId == member && s.Status == Status.Scheduled && s.ScheduledEnd > now)) throw Err("active_coaching_session");
-                    var ignore = r.SessionId ?? 0;
-                    if (Overlap(r.CoachId, true, r.RequestedStart, r.RequestedEnd, ignore) || Overlap(member, false, r.RequestedStart, r.RequestedEnd, ignore)) throw Err("overlap");
-                    // the session's amenity (0031) is checked before anything changes, so a clash leaves the request waiting
-                    var amenity = r.SessionId is { } held ? Confirmed.FirstOrDefault(x => x.TrainingSessionId == held)?.AmenityId : r.AmenityId;
-                    if (amenity is { } am)
-                    {
-                        if (r.SessionId is not null) CheckSessionTime(r.RequestedStart, r.RequestedEnd, am, now);
-                        CheckSessionAmenity(r.CoachId, member, r.SessionId, am, r.RequestedStart, r.RequestedEnd);
-                    }
-                    TrainingSession session;
-                    if (r.SessionId is { } sid)
-                    {   // a reschedule moves the booked session instead of creating a second one
-                        session = All<TrainingSession>().First(s => s.Id == sid);
-                        if (session.Status != Status.Scheduled) throw Err("already_processed");
-                        RefuseClosed(r.RequestedStart);   // G17 (0065)
-                        session.ScheduledStart = r.RequestedStart; session.ScheduledEnd = r.RequestedEnd;
-                    }
-                    else session = Add(new TrainingSession { CoachId = r.CoachId, MemberId = member, Title = "Training session", ScheduledStart = r.RequestedStart, ScheduledEnd = r.RequestedEnd });
-                    if (amenity is { } placed) PlaceSessionAmenity(session, placed, r.RequestedStart, r.RequestedEnd);
-                    r.Status = Status.Approved; r.MemberId = member;
-                }
-                else r.Status = Status.Rejected;
-                Notify(uid == r.CoachId ? member : r.CoachId, "time_request", approve ? "Time request approved" : "Time request declined");
-                return null;
-            }
-            case "cancel_time_request":
-            {
-                RequireActive();
-                var r = All<TimeRequest>().FirstOrDefault(x => x.Id == I("p_request_id")) ?? throw Err("not_found");
-                var mine = (r.RequestedBy == "member" && r.MemberId == uid) || (r.RequestedBy == "coach" && r.CoachId == uid);
-                if (!mine) throw Err("forbidden");
-                if (r.Status is not (Status.Pending or "proposed")) throw Err("already_processed");
-                r.Status = Status.Cancelled;
                 return null;
             }
             case "cancel_session":
@@ -1392,6 +1254,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             case "assign_role":
             {
                 Require("roles:manage");
+                if (S("p_role") == "admin") throw Err("bad_input");   // 0147: the System admin role is never handed out
                 if (RolesOf(S("p_user")).Contains("admin")) throw Err("super_admin_protected");   // 0037
                 var role = All<Role>().FirstOrDefault(r => r.Name == S("p_role")) ?? throw Err("bad_input");
                 if (All<Profile>().All(p => p.Id != S("p_user"))) throw Err("not_found");

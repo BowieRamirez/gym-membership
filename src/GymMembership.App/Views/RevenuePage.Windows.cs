@@ -236,7 +236,8 @@ public partial class RevenuePage
             var now = table.Width > 0 && table.Width < 640;
             if (now == narrow) return;
             narrow = now;
-            foreach (var g in new[] { head }.Concat(rows.Children.OfType<VerticalStackLayout>().Select(r => (Grid)r.Children[1])))
+            // only day rows (hairline + grid); the table's other stacks (its pager) were cast too and crashed at narrow widths
+            foreach (var g in new[] { head }.Concat(rows.Children.OfType<VerticalStackLayout>().Select(DayGrid).OfType<Grid>()))
             {
                 g.ColumnDefinitions = Columns();
                 for (var i = 2; i <= 3 && i < g.Children.Count; i++) ((View)g.Children[i]).IsVisible = !narrow;
@@ -244,12 +245,14 @@ public partial class RevenuePage
         };
         rows.ChildAdded += (_, e) =>
         {
-            if (e.Element is not VerticalStackLayout r || r.Children[1] is not Grid g) return;
+            if (e.Element is not VerticalStackLayout r || DayGrid(r) is not { } g) return;
             g.ColumnDefinitions = Columns();
             for (var i = 2; i <= 3; i++) ((View)g.Children[i]).IsVisible = !narrow;
         };
         return new Border { Style = Resource<Style>("TablePanel"), Content = table };
     }
+
+    static Grid? DayGrid(VerticalStackLayout r) => r.Children.Count > 1 ? r.Children[1] as Grid : null;
 
     static View CoachHoursTable(RevenueViewModel vm)
     {

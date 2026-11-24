@@ -120,59 +120,6 @@ public class BehaviorTests
         Assert.InRange(renewed.DaysLeft!.Value, 29, 30);
     }
 
-    [Fact]
-    public async Task Overlapping_session_is_rejected_but_back_to_back_is_allowed()
-    {
-        var gw = await As("member@demo.io");
-        var svc = new SessionService(gw);
-        var booked = (await svc.SessionsAsync()).Value!.First(r => r.Session.Status == "scheduled").Session;
-        Assert.True((await new CoachService(gw).HireAsync("u-coach2")).Ok);
-        await HireRequestTests.Accept(gw, "kai@demo.io", "member@demo.io", DemoGateway.DemoPassword);   // G30: the coach accepts
-        Assert.True((await svc.RequestAsync("u-coach2", booked.ScheduledStart.AddMinutes(30), booked.ScheduledEnd.AddMinutes(30), "overlaps")).Ok);
-        var overlap = (await svc.RequestsAsync()).Value!.Rows.First(r => r.Request.Message == "overlaps");
-        await gw.SignInAsync("kai@demo.io", DemoGateway.DemoPassword);
-        Assert.Equal(AppErrorKind.Conflict, (await svc.RespondAsync(overlap.Request.Id, true)).Error);
-        await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
-        Assert.True((await svc.CancelRequestAsync(overlap.Request.Id)).Ok);
-        Assert.True((await svc.RequestAsync("u-coach2", booked.ScheduledEnd, booked.ScheduledEnd.AddHours(1), "back to back")).Ok);
-        var adjacent = (await svc.RequestsAsync()).Value!.Rows.First(r => r.Request.Message == "back to back");
-        await gw.SignInAsync("kai@demo.io", DemoGateway.DemoPassword);
-        Assert.True((await svc.RespondAsync(adjacent.Request.Id, true)).Ok);
-    }
-
-    [Fact]
-    public async Task Request_end_before_start_is_rejected_locally()
-    {
-        var gw = await As("member@demo.io");
-        var t = DateTime.UtcNow.AddDays(1);
-        Assert.Equal(AppErrorKind.Validation, (await new SessionService(gw).RequestAsync("u-coach1", t, t.AddHours(-1), null)).Error);
-    }
-
-    [Fact]
-    public async Task A_member_cannot_approve_a_request_addressed_to_the_coach()
-    {
-        var gw = await As("member@demo.io");
-        var svc = new SessionService(gw);
-        var mine = (await svc.RequestsAsync()).Value!.Rows.First(r => r.Request.RequestedBy == "member");
-        Assert.Equal(AppErrorKind.Unauthorized, (await svc.RespondAsync(mine.Request.Id, true)).Error);
-    }
-
-    [Fact]
-    public async Task A_member_can_withdraw_their_own_pending_request_and_nobody_else_can()
-    {
-        var gw = await As("member@demo.io");
-        var svc = new SessionService(gw);
-        var mine = (await svc.RequestsAsync()).Value!.Rows.First(r => r.Request.RequestedBy == "member");
-        Assert.True(mine.CanCancel);
-
-        await gw.SignInAsync("coach@demo.io", DemoGateway.DemoPassword);
-        Assert.Equal(AppErrorKind.Unauthorized, (await svc.CancelRequestAsync(mine.Request.Id)).Error);   // it is the member's to withdraw
-
-        await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
-        Assert.True((await svc.CancelRequestAsync(mine.Request.Id)).Ok);
-        Assert.Equal(AppErrorKind.Conflict, (await svc.CancelRequestAsync(mine.Request.Id)).Error);
-    }
-
     sealed class Clock : TimeProvider
     {
         public DateTimeOffset Now = DateTimeOffset.UtcNow;

@@ -59,30 +59,8 @@ public class MemberCalendarTests
         Assert.Equal(("Shift", "Session", "+1 more"), (d12.Entry1, d12.Entry2, d12.More));
         Assert.Equal(("shift", "session"), (d12.Kind1, d12.Kind2));
         Assert.Equal((true, true, true, false), (d12.IsSelected, d12.HasSession, d12.HasBooking, d12.HasOpen));
-        Assert.True(days.Single(d => d.Date == new DateOnly(2026, 11, 13)).HasOpen);
         Assert.True(days.Single(d => d.Date == new DateOnly(2026, 11, 10)).IsToday);
         Assert.True(days.Single(d => d.Date == new DateOnly(2026, 10, 31)).Dimmed);   // the grid's days from the month before
-    }
-
-    [Fact]
-    public async Task A_member_sees_their_coachs_open_time_and_requesting_it_sends_a_time_request()
-    {
-        var (gw, vm, _) = await Calendar();
-        await vm.PickDayCommand.ExecuteAsync(vm.Days.Single(d => d.Date == Tomorrow));
-        var open = Assert.Single(vm.DayEntries, e => e.Kind == "open");
-        Assert.True(open.CanRequest);
-        Assert.StartsWith("Open with ", open.Title);
-        await vm.RequestCommand.ExecuteAsync(open);
-        Assert.StartsWith("You already have an active session together", vm.ErrorMessage);   // the same rules as Time requests
-        foreach (var s in await gw.ListAsync<TrainingSession>(s => s.MemberId == "u-alex" && s.Status == Status.Scheduled))
-            Assert.True((await new SessionService(gw).CancelSessionAsync(s.Id)).Ok);
-        foreach (var r in await gw.ListAsync<TimeRequest>(r => r.MemberId == "u-alex" && r.RequestedBy == "member" && r.Status == "pending"))
-            Assert.True((await new SessionService(gw).CancelRequestAsync(r.Id)).Ok);
-        await vm.RequestCommand.ExecuteAsync(open);
-        Assert.Null(vm.ErrorMessage);
-        Assert.Equal("Request sent. Your coach answers it in Time requests.", vm.Notice);
-        var sent = (await gw.ListAsync<TimeRequest>(r => r.MemberId == "u-alex" && r.RequestedBy == "member")).OrderBy(r => r.Id).Last();
-        Assert.Equal((open.StartUtc, open.EndUtc), (sent.RequestedStart.ToUniversalTime(), sent.RequestedEnd.ToUniversalTime()));
     }
 
     [Fact]

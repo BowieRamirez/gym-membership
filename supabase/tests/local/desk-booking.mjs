@@ -165,6 +165,7 @@ try {
 
   await test('0092: the slot taken while the walk-in pays: cancelled, with an approved refund for the desk', async () => {
     const r = (await online(desk, 'Eli', '03:00'))[0];
+    await db.query(`update reservations set held_until = now() - interval '1 second' where reservation_id=$1`, [r.reservation_id]);   // 0148: the hold ran out
     await as(desk, 'select * from desk_book_walk_in(p_name=>$1, p_amenity=>$2, p_start=>$3, p_minutes=>60)', ['Gus', court, at('03:00')]);
     assert.equal(await xenditPays(r, 'ps-walk-2'), 'confirmed');
     assert.equal(await status(r.reservation_id), 'cancelled');

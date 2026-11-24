@@ -370,7 +370,9 @@ public class StatusChip : ContentView
     void Update(string? status)
     {
         status ??= "";
-        var key = Good.Contains(status) ? "DotVerified" : Bad.Contains(status) ? "DotRejected" : Wait.Contains(status) ? "DotPending" : "DotScheduled";
+        // payroll (0142): "3 to approve" and "Check warnings" read as waiting
+        var waiting = Wait.Contains(status) || status.EndsWith(" to approve", StringComparison.Ordinal) || status == "Check warnings";
+        var key = Good.Contains(status) ? "DotVerified" : Bad.Contains(status) ? "DotRejected" : waiting ? "DotPending" : "DotScheduled";
         if (Application.Current!.Resources.TryGetValue(key, out var style)) _dot.Style = (Style)style;
         var text = status.Replace('_', ' ');
         _label.Text = text.Length == 0 ? "" : char.ToUpper(text[0]) + text[1..];

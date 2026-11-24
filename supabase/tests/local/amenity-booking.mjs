@@ -139,11 +139,14 @@ try {
     const r = await book(uid, a, '10:00');
     assert.deepEqual([r.status, r.payment_id], ['confirmed', null]);
   });
-  await test('G13: the grid shows confirmed bookings as taken; someone else\'s request does not show', async () => {
+  await test('G13: the grid shows confirmed bookings as taken; someone else\'s request shows only while its 15-minute hold lasts (0148)', async () => {
     const uid = await member(), other = await member(), a = await amenity('B Grid');
     const r = await book(uid, a, '10:00');
     let g = (await as(other, 'select amenity_grid($1::date) g', [day]))[0].g;
-    assert.ok(!g.blocks.some(b => b.amenity == a));
+    assert.ok(g.blocks.some(b => b.amenity == a && !b.mine));   // held
+    await db.query(`update reservations set held_until = now() - interval '1 second' where reservation_id=$1`, [r.reservation_id]);
+    g = (await as(other, 'select amenity_grid($1::date) g', [day]))[0].g;
+    assert.ok(!g.blocks.some(b => b.amenity == a));   // hold ran out
     await approve(r);
     g = (await as(other, 'select amenity_grid($1::date) g', [day]))[0].g;
     assert.ok(g.blocks.some(b => b.amenity == a && !b.mine));

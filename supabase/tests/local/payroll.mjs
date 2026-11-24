@@ -206,11 +206,11 @@ try {
     assert.equal(Number(roles.find(r => r.role === 'employee').amount), 7800);
     assert.equal(Number(roles.find(r => r.role === 'coach').amount), 11000);
 
-    // Existing desk (including Desk Leo who had no salary) and coach get the role salary
+    // Desk Leo (no salary of his own) follows the role; people with their own salary keep it (0142, H14)
     const staff = await as(admin, `select * from payroll_staff()`);
-    assert.equal(Number(staff.find(s => s.user_id === desk).amount), 7800);
+    assert.equal(Number(staff.find(s => s.user_id === desk).amount), 9500);
     assert.equal(Number(staff.find(s => s.user_id === deskNoSalary).amount), 7800);
-    assert.equal(Number(staff.find(s => s.user_id === coach).amount), 11000);
+    assert.equal(Number(staff.find(s => s.user_id === coach).amount), 10000);
 
     // A newly added front desk employee automatically inherits the role salary
     const newDesk = await user('employee', 'Desk New');

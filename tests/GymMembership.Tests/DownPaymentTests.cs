@@ -29,6 +29,12 @@ public class DownPaymentTests
         vm.PickLengthCommand.Execute(vm.Lengths.Single(l => l.Minutes == minutes));
     }
 
+    sealed class Clock : TimeProvider
+    {
+        public DateTimeOffset Now = DateTimeOffset.UtcNow;
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
     static async Task MakeCarloActive(DemoGateway gw)
     {
         await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();
@@ -99,11 +105,13 @@ public class DownPaymentTests
     [Fact]
     public async Task Of_two_paid_requests_for_one_slot_the_first_verified_wins_and_the_other_is_refunded()
     {
-        var gw = new DemoGateway();
+        var clock = new Clock();
+        var gw = new DemoGateway(clock: clock);
         await MakeCarloActive(gw);
         var (_, alex) = await Member(gw: gw);
         await Pick(alex, "Group classes", "10:00");
         await alex.BookCommand.ExecuteAsync(null);
+        clock.Now = clock.Now.AddMinutes(16);   // 0148: Alex's 15-minute hold has run out, so Carlo can ask for the slot too
         var (_, carlo) = await Member("carlo@demo.io", gw);
         await Pick(carlo, "Group classes", "10:00");
         await carlo.BookCommand.ExecuteAsync(null);

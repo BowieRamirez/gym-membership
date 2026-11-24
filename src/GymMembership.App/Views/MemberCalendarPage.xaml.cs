@@ -21,6 +21,5 @@ public partial class MemberCalendarPage : BasePage
 	void OnMonthSized(object? sender, EventArgs e) { if (Month.Width > 0) CalendarContent.Resources["TileWidth"] = Math.Floor(Month.Width / 7) - 4; }   // 2 px margin each side
 
 	void OnDay(object? sender, EventArgs e) => Row<MemberCalendarViewModel>(sender, v => v.PickDayCommand);
-	void OnRequest(object? sender, EventArgs e) => Row<MemberCalendarViewModel>(sender, v => v.RequestCommand);
 	void OnOpen(object? sender, EventArgs e) => Row<MemberCalendarViewModel>(sender, v => v.OpenCommand);
 }

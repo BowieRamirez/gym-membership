@@ -27,20 +27,9 @@ public class AttendanceViewModelTests
             : AppResult<IReadOnlyList<CalendarSession>>.Success(All.Where(s => s.Session.ScheduledStart >= from && s.Session.ScheduledStart < to).ToList());
         public Task<AppResult<IReadOnlyList<CalendarSession>>> UpcomingAsync() => Task.FromResult(AppResult<IReadOnlyList<CalendarSession>>.Success(Upcoming));
 
-        public Task<AppResult<RequestsView>> RequestsAsync() => throw new NotSupportedException();
-        public Task<AppResult<bool>> RequestAsync(string coachId, DateTime startUtc, DateTime endUtc, string? message, int? amenityId = null) => throw new NotSupportedException();
-        public Task<AppResult<bool>> ProposeAsync(int requestId, DateTime startUtc, DateTime endUtc, int? amenityId, string reason) => throw new NotSupportedException();
-        public Task<AppResult<string>> AcceptProposalAsync(int requestId, int version) => throw new NotSupportedException();
-        public Task<AppResult<bool>> RequestAnotherTimeAsync(int requestId, DateTime startUtc, DateTime endUtc, int? amenityId, string? message) => throw new NotSupportedException();
-        public Task<AppResult<bool>> DeclineAsync(int requestId, string reason) => throw new NotSupportedException();
         public Task<AppResult<bool>> ExtendAsync(int reservationId, int minutes) => throw new NotSupportedException();
-        public Task<AppResult<bool>> PostAvailabilityAsync(DateTime startUtc, DateTime endUtc) => throw new NotSupportedException();
-        public Task<AppResult<bool>> InviteMemberAsync(string memberId, DateTime startUtc, DateTime endUtc) => throw new NotSupportedException();
-        public Task<AppResult<bool>> RespondAsync(int requestId, bool approve) => throw new NotSupportedException();
-        public Task<AppResult<bool>> CancelRequestAsync(int requestId) => throw new NotSupportedException();
         public Task<AppResult<IReadOnlyList<SessionRow>>> SessionsAsync() => throw new NotSupportedException();
         public Task<AppResult<bool>> SetSessionStatusAsync(int sessionId, string status) => throw new NotSupportedException();
-        public Task<AppResult<bool>> RescheduleAsync(int sessionId, DateTime startUtc, DateTime endUtc) => throw new NotSupportedException();
         public Task<AppResult<bool>> CancelSessionAsync(int sessionId, string? reason = null) => throw new NotSupportedException();
     }
 

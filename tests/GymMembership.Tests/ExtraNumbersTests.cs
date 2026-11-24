@@ -42,16 +42,6 @@ public class ExtraNumbersTests
     }
 
     [Fact]
-    public async Task Time_requests_count_what_waits_and_show_the_next_session()
-    {
-        var gw = await As("coach");
-        var vm = new RequestsViewModel(new SessionService(gw));
-        await vm.OnAppearingAsync();
-        Assert.Equal(vm.Requests.Count.ToString(), vm.WaitingText);
-        Assert.NotEqual("None booked", vm.NextSessionText);   // the demo coach has upcoming sessions
-    }
-
-    [Fact]
     public async Task The_dashboard_counts_the_coachs_trainees()
     {
         var gw = await As("coach");

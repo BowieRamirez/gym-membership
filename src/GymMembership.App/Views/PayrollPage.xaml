@@ -11,7 +11,7 @@
         <!-- Wide table row (Period tab) -->
         <DataTemplate x:Key="PayrollRowTemplate" x:DataType="vm:PayrollRowItem">
             <VerticalStackLayout>
-                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,140,115,110,110,120,84" ColumnSpacing="12">
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,190,105,95,105,95,110,84" ColumnSpacing="12">
                     <Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnRowTapped" /></Grid.GestureRecognizers>
                     <Grid.Triggers>
                         <DataTrigger TargetType="Grid" Binding="{Binding IsSelected}" Value="True">
@@ -30,23 +30,36 @@
                         <c:StatusChip Status="{Binding RoleLabel}" VerticalOptions="Center" />
                     </HorizontalStackLayout>
 
-                    <Label Grid.Column="1" Text="{Binding HoursText}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    <!-- How the pay is worked out, with what still needs a look -->
+                    <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                        <Label Text="{Binding BasisText}" Style="{StaticResource Muted}" LineBreakMode="TailTruncation" />
+                        <HorizontalStackLayout Spacing="6">
+                            <c:StatusChip Status="{Binding PendingText}" IsVisible="{Binding HasPending}" />
+                            <c:StatusChip Status="Check warnings" IsVisible="{Binding IsFlagged}" />
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
 
-                    <!-- Salary or warning chip -->
-                    <Label Grid.Column="2" Text="{Binding SalaryText}" HorizontalOptions="End" VerticalOptions="Center" LineBreakMode="NoWrap"
+                    <!-- Base pay or warning chip -->
+                    <Label Grid.Column="2" Text="{Binding BasePayText}" HorizontalOptions="End" VerticalOptions="Center" LineBreakMode="NoWrap"
                            IsVisible="{Binding NoSalary, Converter={StaticResource Not}}" />
-                    <c:StatusChip Grid.Column="2" Status="No salary set" HorizontalOptions="End" VerticalOptions="Center"
+                    <c:StatusChip Grid.Column="2" Grid.ColumnSpan="2" Status="No salary set" HorizontalOptions="End" VerticalOptions="Center"
                                   IsVisible="{Binding NoSalary}" />
 
                     <Label Grid.Column="3" Text="{Binding BonusesText}" HorizontalOptions="End" VerticalOptions="Center" LineBreakMode="NoWrap"
                            IsVisible="{Binding NoSalary, Converter={StaticResource Not}}" />
-                    <Label Grid.Column="4" Text="{Binding DeductionsText}" HorizontalOptions="End" VerticalOptions="Center" LineBreakMode="NoWrap"
+                    <Label Grid.Column="4" Text="{Binding GrossText}" HorizontalOptions="End" VerticalOptions="Center" LineBreakMode="NoWrap"
                            IsVisible="{Binding NoSalary, Converter={StaticResource Not}}" />
-                    <Label Grid.Column="5" Text="{Binding NetText}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center" LineBreakMode="NoWrap"
+                    <!-- 0144 (T10): manual + government; the government part and the T8 warning under it -->
+                    <VerticalStackLayout Grid.Column="5" Spacing="2" HorizontalOptions="End" VerticalOptions="Center" IsVisible="{Binding NoSalary, Converter={StaticResource Not}}">
+                        <Label Text="{Binding DeductionsText}" HorizontalOptions="End" LineBreakMode="NoWrap" />
+                        <Label Text="{Binding GovText}" Style="{StaticResource Caption}" HorizontalOptions="End" LineBreakMode="NoWrap" IsVisible="{Binding HasGov}" />
+                        <c:StatusChip Status="Check warnings" HorizontalOptions="End" IsVisible="{Binding IsGovCut}" ToolTipProperties.Text="Deductions cut to keep pay above ₱0" />
+                    </VerticalStackLayout>
+                    <Label Grid.Column="6" Text="{Binding NetText}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center" LineBreakMode="NoWrap"
                            IsVisible="{Binding NoSalary, Converter={StaticResource Not}}" />
 
-                    <Button Grid.Column="6" Text="Lines" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="End" VerticalOptions="Center"
-                            Clicked="OnOpenDrawerClicked" SemanticProperties.Description="{Binding FullName, StringFormat='Open payroll lines for {0}'}" />
+                    <Button Grid.Column="7" Text="Details" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="End" VerticalOptions="Center"
+                            Clicked="OnOpenDrawerClicked" SemanticProperties.Description="{Binding FullName, StringFormat='Open pay details for {0}'}" />
                 </Grid>
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
@@ -65,14 +78,21 @@
                            IsVisible="{Binding NoSalary, Converter={StaticResource Not}}" />
                     <c:StatusChip Grid.Column="1" Status="No salary set" VerticalOptions="Center" IsVisible="{Binding NoSalary}" />
 
-                    <Label Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding HoursText}" Style="{StaticResource Muted}" />
+                    <VerticalStackLayout Grid.Row="1" Grid.ColumnSpan="2" Spacing="4">
+                        <Label Text="{Binding BasisText}" Style="{StaticResource Muted}" />
+                        <HorizontalStackLayout Spacing="6">
+                            <c:StatusChip Status="{Binding PendingText}" IsVisible="{Binding HasPending}" />
+                            <c:StatusChip Status="Check warnings" IsVisible="{Binding IsFlagged}" />
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
 
-                    <HorizontalStackLayout Grid.Row="2" Spacing="12" IsVisible="{Binding NoSalary, Converter={StaticResource Not}}">
-                        <Label Text="{Binding SalaryText, StringFormat='Salary {0}'}" Style="{StaticResource Caption}" />
-                        <Label Text="{Binding BonusesText, StringFormat='Bonus {0}'}" Style="{StaticResource Caption}" />
+                    <FlexLayout Grid.Row="2" Wrap="Wrap" IsVisible="{Binding NoSalary, Converter={StaticResource Not}}">
+                        <Label Text="{Binding BasePayText, StringFormat='Base {0}'}" Style="{StaticResource Caption}" Margin="0,0,12,0" />
+                        <Label Text="{Binding BonusesText, StringFormat='Bonus {0}'}" Style="{StaticResource Caption}" Margin="0,0,12,0" />
+                        <Label Text="{Binding GrossText, StringFormat='Gross {0}'}" Style="{StaticResource Caption}" Margin="0,0,12,0" />
                         <Label Text="{Binding DeductionsText, StringFormat='Ded. {0}'}" Style="{StaticResource Caption}" />
-                    </HorizontalStackLayout>
-                    <Button Grid.Row="2" Grid.Column="1" Text="Lines" Style="{StaticResource SmallOutlineButton}" Clicked="OnOpenDrawerClicked" />
+                    </FlexLayout>
+                    <Button Grid.Row="2" Grid.Column="1" Text="Details" Style="{StaticResource SmallOutlineButton}" Clicked="OnOpenDrawerClicked" />
                 </Grid>
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
@@ -81,30 +101,68 @@
         <!-- Wide table row (Salaries tab) -->
         <DataTemplate x:Key="SalaryRowTemplate" x:DataType="vm:StaffSalaryItem">
             <VerticalStackLayout>
-                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="1.1*,140,1.1*,230" ColumnSpacing="14">
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="1.1*,190,1*,360" RowDefinitions="Auto,Auto" ColumnSpacing="14">
                     <HorizontalStackLayout Spacing="10" VerticalOptions="Center">
                         <Label Text="{Binding FullName}" FontFamily="BarlowSemiBold" VerticalOptions="Center" LineBreakMode="TailTruncation" />
                         <c:StatusChip Status="{Binding RoleLabel}" VerticalOptions="Center" />
                     </HorizontalStackLayout>
 
-                    <Label Grid.Column="1" Text="{Binding AmountText}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center" LineBreakMode="NoWrap"
-                           IsVisible="{Binding NoSalary, Converter={StaticResource Not}}" />
+                    <VerticalStackLayout Grid.Column="1" Spacing="2" HorizontalOptions="End" VerticalOptions="Center"
+                                         IsVisible="{Binding NoSalary, Converter={StaticResource Not}}">
+                        <Label Text="{Binding AmountText}" FontFamily="BarlowSemiBold" HorizontalOptions="End" LineBreakMode="NoWrap" />
+                        <Label Text="{Binding SourceText}" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                    </VerticalStackLayout>
                     <c:StatusChip Grid.Column="1" Status="No salary set" HorizontalOptions="End" VerticalOptions="Center" IsVisible="{Binding NoSalary}" />
 
-                    <Label Grid.Column="2" Text="{Binding UpdatedText}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    <VerticalStackLayout Grid.Column="2" Spacing="2" VerticalOptions="Center">
+                        <Label Text="{Binding UpdatedText}" Style="{StaticResource Muted}" LineBreakMode="TailTruncation" />
+                        <!-- 0144 (T4) / 0145 (U1, U2): contributions and tax on/off, with a reason -->
+                        <HorizontalStackLayout Spacing="6" IsVisible="{Binding IsNotEditingDeductions}">
+                            <Label Text="{Binding DeductionsText}" Style="{StaticResource Caption}" VerticalOptions="Center" />
+                            <Button Text="Change" Style="{StaticResource LinkButton}" Command="{Binding BeginDeductionsCommand}" VerticalOptions="Center"
+                                    SemanticProperties.Description="{Binding FullName, StringFormat='Change government deductions for {0}'}" />
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
 
-                    <Button Grid.Column="3" Text="Set salary" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="End" VerticalOptions="Center"
-                            Command="{Binding BeginEditCommand}" IsVisible="{Binding IsNotEditing}" />
+                    <!-- the switches editor gets its own full-width line under the row (was squeezed into the Last changed column) -->
+                    <VerticalStackLayout Grid.Row="1" Grid.ColumnSpan="4" Spacing="6" Margin="0,10,0,0" MaximumWidthRequest="680" HorizontalOptions="Start"
+                                         IsVisible="{Binding IsEditingDeductions}">
+                            <Label Text="Government deductions" Style="{StaticResource Caption}" />
+                            <HorizontalStackLayout Spacing="20">
+                                <HorizontalStackLayout Spacing="4"><CheckBox IsChecked="{Binding ContributionsInput}" VerticalOptions="Center" SemanticProperties.Description="SSS, PhilHealth and Pag-IBIG" />
+                                    <Label Text="SSS, PhilHealth, Pag-IBIG" Style="{StaticResource Caption}" VerticalOptions="Center" /></HorizontalStackLayout>
+                                <HorizontalStackLayout Spacing="4"><CheckBox IsChecked="{Binding TaxInput}" VerticalOptions="Center" SemanticProperties.Description="Withholding tax" />
+                                    <Label Text="Withholding tax" Style="{StaticResource Caption}" VerticalOptions="Center" /></HorizontalStackLayout>
+                            </HorizontalStackLayout>
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                                <Border Style="{StaticResource Field}" Padding="8,2" WidthRequest="340">
+                                    <Entry Text="{Binding DeductionsReasonInput}" MaxLength="60" Placeholder="Why off (optional), e.g. Minimum wage earner" SemanticProperties.Description="Reason" />
+                                </Border>
+                                <Button Grid.Column="1" Text="Save" Style="{StaticResource SmallButton}" Command="{Binding SaveDeductionsCommand}" />
+                                <Button Grid.Column="2" Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelDeductionsCommand}" />
+                            </Grid>
+                            <Label Text="{Binding ErrorText}" Style="{StaticResource FieldError}" IsVisible="{Binding ErrorText, Converter={StaticResource IsNotNull}}" />
+                    </VerticalStackLayout>
+
+                    <HorizontalStackLayout Grid.Column="3" Spacing="8" HorizontalOptions="End" VerticalOptions="Center" IsVisible="{Binding IsNotEditing}">
+                        <Button Text="Use role default" Style="{StaticResource LinkButton}" Command="{Binding UseRoleDefaultCommand}"
+                                IsVisible="{Binding CanUseRoleDefault}" VerticalOptions="Center"
+                                SemanticProperties.Description="{Binding FullName, StringFormat='Make {0} follow the role default'}" />
+                        <Button Text="Set pay" Style="{StaticResource SmallOutlineButton}" Command="{Binding BeginEditCommand}" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
 
                     <VerticalStackLayout Grid.Column="3" Spacing="4" IsVisible="{Binding IsEditing}" VerticalOptions="Center">
-                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
-                            <Border Style="{StaticResource Field}" Padding="8,4">
-                                <Entry Text="{Binding AmountInput}" Keyboard="Numeric" Placeholder="₱0.00" SemanticProperties.Description="Salary per period">
+                        <Grid ColumnDefinitions="112,*,Auto,Auto" ColumnSpacing="6">
+                            <Border Style="{StaticResource Field}" Padding="8,0">
+                                <Picker ItemsSource="{Binding PayTypeOptions}" SelectedItem="{Binding PayTypeInput}" SemanticProperties.Description="Pay type" />
+                            </Border>
+                            <Border Grid.Column="1" Style="{StaticResource Field}" Padding="8,4">
+                                <Entry Text="{Binding AmountInput}" Keyboard="Numeric" Placeholder="₱0.00" SemanticProperties.Description="Rate">
                                     <Entry.Behaviors><c:NumericOnlyBehavior /></Entry.Behaviors>
                                 </Entry>
                             </Border>
-                            <Button Grid.Column="1" Text="Save" Style="{StaticResource SmallButton}" Command="{Binding SaveCommand}" />
-                            <Button Grid.Column="2" Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelEditCommand}" />
+                            <Button Grid.Column="2" Text="Save" Style="{StaticResource SmallButton}" Command="{Binding SaveCommand}" />
+                            <Button Grid.Column="3" Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelEditCommand}" />
                         </Grid>
                         <Label Text="{Binding ErrorText}" Style="{StaticResource FieldError}" IsVisible="{Binding ErrorText, Converter={StaticResource IsNotNull}}" />
                     </VerticalStackLayout>
@@ -126,13 +184,44 @@
                                IsVisible="{Binding NoSalary, Converter={StaticResource Not}}" />
                         <c:StatusChip Grid.Column="1" Status="No salary set" VerticalOptions="Center" IsVisible="{Binding NoSalary}" />
                     </Grid>
-                    <Label Text="{Binding UpdatedText, StringFormat='Updated {0}'}" Style="{StaticResource Caption}" />
-                    <Button Text="Set salary" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start"
-                            Command="{Binding BeginEditCommand}" IsVisible="{Binding IsNotEditing}" />
+                    <Label Style="{StaticResource Caption}">
+                        <Label.Text>
+                            <MultiBinding StringFormat="{}{0} · updated {1}">
+                                <Binding Path="SourceText" />
+                                <Binding Path="UpdatedText" />
+                            </MultiBinding>
+                        </Label.Text>
+                    </Label>
+                    <HorizontalStackLayout Spacing="6" IsVisible="{Binding IsNotEditingDeductions}">
+                        <Label Text="{Binding DeductionsText}" Style="{StaticResource Caption}" VerticalOptions="Center" />
+                        <Button Text="Change" Style="{StaticResource LinkButton}" Command="{Binding BeginDeductionsCommand}" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                    <VerticalStackLayout Spacing="4" IsVisible="{Binding IsEditingDeductions}">
+                        <HorizontalStackLayout Spacing="4"><CheckBox IsChecked="{Binding ContributionsInput}" VerticalOptions="Center" />
+                            <Label Text="SSS, PhilHealth, Pag-IBIG" Style="{StaticResource Caption}" VerticalOptions="Center" /></HorizontalStackLayout>
+                        <HorizontalStackLayout Spacing="4"><CheckBox IsChecked="{Binding TaxInput}" VerticalOptions="Center" />
+                            <Label Text="Withholding tax" Style="{StaticResource Caption}" VerticalOptions="Center" /></HorizontalStackLayout>
+                        <Border Style="{StaticResource Field}" Padding="8,2">
+                            <Entry Text="{Binding DeductionsReasonInput}" MaxLength="60" Placeholder="Why off (optional)" />
+                        </Border>
+                        <HorizontalStackLayout Spacing="6">
+                            <Button Text="Save" Style="{StaticResource SmallButton}" Command="{Binding SaveDeductionsCommand}" />
+                            <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelDeductionsCommand}" />
+                        </HorizontalStackLayout>
+                        <Label Text="{Binding ErrorText}" Style="{StaticResource FieldError}" IsVisible="{Binding ErrorText, Converter={StaticResource IsNotNull}}" />
+                    </VerticalStackLayout>
+                    <HorizontalStackLayout Spacing="10" IsVisible="{Binding IsNotEditing}">
+                        <Button Text="Set pay" Style="{StaticResource SmallOutlineButton}" Command="{Binding BeginEditCommand}" />
+                        <Button Text="Use role default" Style="{StaticResource LinkButton}" Command="{Binding UseRoleDefaultCommand}"
+                                IsVisible="{Binding CanUseRoleDefault}" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
                     <VerticalStackLayout Spacing="4" IsVisible="{Binding IsEditing}">
+                        <Border Style="{StaticResource Field}" Padding="8,0">
+                            <Picker ItemsSource="{Binding PayTypeOptions}" SelectedItem="{Binding PayTypeInput}" SemanticProperties.Description="Pay type" />
+                        </Border>
                         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
                             <Border Style="{StaticResource Field}" Padding="8,4">
-                                <Entry Text="{Binding AmountInput}" Keyboard="Numeric" Placeholder="₱0.00">
+                                <Entry Text="{Binding AmountInput}" Keyboard="Numeric" Placeholder="₱0.00" SemanticProperties.Description="Rate">
                                     <Entry.Behaviors><c:NumericOnlyBehavior /></Entry.Behaviors>
                                 </Entry>
                             </Border>
@@ -145,12 +234,61 @@
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
         </DataTemplate>
+
+        <!-- Wide table row (Paid out tab) -->
+        <DataTemplate x:Key="PaidOutRowTemplate" x:DataType="vm:PaidOutPeriodItem">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="1.3*,95,110,115,120,1.2*,84" ColumnSpacing="12">
+                    <Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnPaidOutRowTapped" /></Grid.GestureRecognizers>
+                    <Label Text="{Binding PeriodText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="1" Text="{Binding PeopleText}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="NoWrap" />
+                    <Label Grid.Column="2" Text="{Binding GrossText}" HorizontalOptions="End" VerticalOptions="Center" LineBreakMode="NoWrap" />
+                    <VerticalStackLayout Grid.Column="3" Spacing="2" HorizontalOptions="End" VerticalOptions="Center">
+                        <Label Text="{Binding DeductionsText}" HorizontalOptions="End" LineBreakMode="NoWrap" />
+                        <Label Text="{Binding GovText}" Style="{StaticResource Caption}" HorizontalOptions="End" LineBreakMode="NoWrap" IsVisible="{Binding HasGov}" />
+                    </VerticalStackLayout>
+                    <Label Grid.Column="4" Text="{Binding NetText}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center" LineBreakMode="NoWrap" />
+                    <Label Grid.Column="5" Text="{Binding PaidOutText}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    <Button Grid.Column="6" Text="View" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="End" VerticalOptions="Center"
+                            Clicked="OnOpenPaidOutClicked" SemanticProperties.Description="{Binding PeriodText, StringFormat='Open paid out period {0}'}" />
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+
+        <!-- Narrow card (Paid out tab) -->
+        <DataTemplate x:Key="PaidOutCardTemplate" x:DataType="vm:PaidOutPeriodItem">
+            <VerticalStackLayout>
+                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="4" Padding="14,12">
+                    <Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnPaidOutRowTapped" /></Grid.GestureRecognizers>
+                    <Label Text="{Binding PeriodText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                    <Label Grid.Column="1" Text="{Binding NetText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                    <Label Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource Caption}">
+                        <Label.Text>
+                            <MultiBinding StringFormat="{}{0} · Paid out {1}">
+                                <Binding Path="PeopleText" />
+                                <Binding Path="PaidOutText" />
+                            </MultiBinding>
+                        </Label.Text>
+                    </Label>
+                    <FlexLayout Grid.Row="2" Wrap="Wrap" AlignItems="Center">
+                        <Label Text="{Binding BasePayText, StringFormat='Base {0}'}" Style="{StaticResource Caption}" Margin="0,0,12,0" />
+                        <Label Text="{Binding GrossText, StringFormat='Gross {0}'}" Style="{StaticResource Caption}" Margin="0,0,12,0" />
+                        <Label Text="{Binding DeductionsText, StringFormat='Ded. {0}'}" Style="{StaticResource Caption}" Margin="0,0,12,0" />
+                        <Label Text="{Binding GovText}" Style="{StaticResource Caption}" IsVisible="{Binding HasGov}" />
+                    </FlexLayout>
+                    <Button Grid.Row="2" Grid.Column="1" Text="View" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center"
+                            Clicked="OnOpenPaidOutClicked" SemanticProperties.Description="{Binding PeriodText, StringFormat='Open paid out period {0}'}" />
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
     </v:BasePage.Resources>
 
     <Grid>
         <Grid RowDefinitions="Auto,*">
-            <!-- Segment tabs (Pay period | Salaries) -->
-            <Border Style="{StaticResource SegmentTrack}" Margin="24,14,24,0" HorizontalOptions="Start">
+            <!-- Segment tabs (Pay period | Paid out | Salaries) -->
+            <Border Style="{StaticResource SegmentTrack}" Margin="{OnIdiom Phone='16,12,16,0', Default='24,14,24,0'}" HorizontalOptions="Start">
                 <HorizontalStackLayout Spacing="2">
                     <Button Text="Pay period" Command="{Binding OpenPeriodTabCommand}" Style="{StaticResource Segment}" AutomationId="PayrollPeriodTab">
                         <Button.Triggers>
@@ -160,6 +298,20 @@
                                 <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
                             </DataTrigger>
                             <DataTrigger TargetType="Button" Binding="{Binding IsPeriodTab}" Value="False">
+                                <Setter Property="FontFamily" Value="BarlowMedium" />
+                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                            </DataTrigger>
+                        </Button.Triggers>
+                    </Button>
+                    <Button Text="Paid out" Command="{Binding OpenPaidOutTabCommand}" Style="{StaticResource Segment}" AutomationId="PayrollPaidOutTab">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button" Binding="{Binding IsPaidOutTab}" Value="True">
+                                <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                            </DataTrigger>
+                            <DataTrigger TargetType="Button" Binding="{Binding IsPaidOutTab}" Value="False">
                                 <Setter Property="FontFamily" Value="BarlowMedium" />
                                 <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
                                 <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
@@ -184,7 +336,7 @@
             </Border>
 
             <ScrollView Grid.Row="1">
-                <VerticalStackLayout Padding="24,16,24,32" Spacing="16">
+                <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='24,16,24,32'}" Spacing="16">
                     <c:Banner Kind="notice" Message="{Binding Notice}" />
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" IsVisible="{Binding ErrorMessage, Converter={StaticResource IsNotNull}}">
                         <c:Banner Message="{Binding ErrorMessage}" />
@@ -197,22 +349,32 @@
                         <Border Style="{StaticResource Panel}">
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                 <VerticalStackLayout Spacing="6" VerticalOptions="Center">
-                                    <HorizontalStackLayout Spacing="10" VerticalOptions="Center">
-                                        <Button Text="‹" Style="{StaticResource SmallOutlineButton}" Command="{Binding PrevPeriodCommand}" WidthRequest="36" AutomationId="PrevPeriod" SemanticProperties.Description="Previous pay period" />
-                                        <Label Text="{Binding PeriodLabel}" Style="{StaticResource Heading}" VerticalOptions="Center" />
-                                        <Button Text="›" Style="{StaticResource SmallOutlineButton}" Command="{Binding NextPeriodCommand}" WidthRequest="36" AutomationId="NextPeriod" SemanticProperties.Description="Next pay period" />
-                                        <c:StatusChip Status="{Binding StatusText}" VerticalOptions="Center" />
-                                    </HorizontalStackLayout>
-                                    <HorizontalStackLayout Spacing="8" VerticalOptions="Center">
-                                        <Label Text="{Binding SummaryText}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                                    <FlexLayout Wrap="Wrap" AlignItems="Center">
+                                        <HorizontalStackLayout Spacing="10" Margin="0,0,10,4" VerticalOptions="Center">
+                                            <Button Text="‹" Style="{StaticResource SmallOutlineButton}" Command="{Binding PrevPeriodCommand}" WidthRequest="36" AutomationId="PrevPeriod" SemanticProperties.Description="Previous pay period" />
+                                            <Label Text="{Binding PeriodLabel}" Style="{StaticResource Heading}" VerticalOptions="Center" />
+                                            <Button Text="›" Style="{StaticResource SmallOutlineButton}" Command="{Binding NextPeriodCommand}" WidthRequest="36" AutomationId="NextPeriod" SemanticProperties.Description="Next pay period" />
+                                        </HorizontalStackLayout>
+                                        <c:StatusChip Status="{Binding StatusText}" Margin="0,0,0,4" VerticalOptions="Center" />
+                                    </FlexLayout>
+                                    <FlexLayout Wrap="Wrap" AlignItems="Center">
+                                        <Label Text="{Binding SummaryText}" Style="{StaticResource Muted}" Margin="0,0,8,0" VerticalOptions="Center" />
                                         <Button Text="Set salaries" Style="{StaticResource LinkButton}" Command="{Binding OpenSalariesTabCommand}"
                                                 IsVisible="{Binding HasNoSalary}" VerticalOptions="Center" />
-                                    </HorizontalStackLayout>
+                                    </FlexLayout>
+                                    <!-- H12: what still has to be approved before paying -->
+                                    <FlexLayout Wrap="Wrap" AlignItems="Center" IsVisible="{Binding HasPendingRecords}">
+                                        <c:StatusChip Status="Pending" Margin="0,0,8,0" VerticalOptions="Center" />
+                                        <Label Text="{Binding MarkPaidBlockedText}" Style="{StaticResource Muted}" Margin="0,0,8,0" VerticalOptions="Center" />
+                                        <Button Text="Approve all without warnings" Style="{StaticResource LinkButton}" Command="{Binding ApproveAllUnflaggedCommand}"
+                                                VerticalOptions="Center" AutomationId="ApproveAllUnflagged" />
+                                    </FlexLayout>
                                 </VerticalStackLayout>
 
                                 <VerticalStackLayout Grid.Column="1" HorizontalOptions="End" VerticalOptions="Center" Spacing="2">
                                     <Label Text="Total net pay" Style="{StaticResource Caption}" HorizontalOptions="End" />
                                     <Label Text="{Binding TotalNetText}" Style="{StaticResource Numeral}" FontFamily="BarlowBold" FontSize="28" HorizontalOptions="End" AutomationId="TotalNet" />
+                                    <Label Text="{Binding TotalGrossText}" Style="{StaticResource Caption}" HorizontalOptions="End" HorizontalTextAlignment="End" AutomationId="TotalGross" />
                                 </VerticalStackLayout>
                             </Grid>
                         </Border>
@@ -220,17 +382,18 @@
                         <Border Style="{StaticResource TablePanel}">
                             <VerticalStackLayout>
                                 <VerticalStackLayout x:Name="PeriodHead">
-                                    <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,140,115,110,110,120,84" ColumnSpacing="12">
+                                    <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,190,105,95,105,95,110,84" ColumnSpacing="12">
                                         <Label Text="Staff member" Style="{StaticResource Caption}" />
-                                        <Label Grid.Column="1" Text="Hours (ref.)" Style="{StaticResource Caption}" />
-                                        <Label Grid.Column="2" Text="Salary" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                        <Label Grid.Column="1" Text="Worked out from" Style="{StaticResource Caption}" />
+                                        <Label Grid.Column="2" Text="Base pay" Style="{StaticResource Caption}" HorizontalOptions="End" />
                                         <Label Grid.Column="3" Text="Bonuses" Style="{StaticResource Caption}" HorizontalOptions="End" />
-                                        <Label Grid.Column="4" Text="Deductions" Style="{StaticResource Caption}" HorizontalOptions="End" />
-                                        <Label Grid.Column="5" Text="Net pay" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                        <Label Grid.Column="4" Text="Gross" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                        <Label Grid.Column="5" Text="Deductions" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                        <Label Grid.Column="6" Text="Net pay" Style="{StaticResource Caption}" HorizontalOptions="End" />
                                     </Grid>
                                     <BoxView Style="{StaticResource Hairline}" />
                                 </VerticalStackLayout>
-                                <c:TableBody Items="{Binding Rows}" Header="{x:Reference PeriodHead}" WideFrom="900"
+                                <c:TableBody Items="{Binding Rows}" Header="{x:Reference PeriodHead}" WideFrom="1050"
                                              RowTemplate="{StaticResource PayrollRowTemplate}" CardTemplate="{StaticResource PayrollCardTemplate}">
                                     <c:TableBody.Empty>
                                         <Label Text="No front desk or coach accounts yet. Add them in Users and roles." Style="{StaticResource Muted}" Margin="14" />
@@ -241,52 +404,122 @@
 
                         <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
                             <Button Text="Export PDF" Style="{StaticResource SmallOutlineButton}" Command="{Binding ExportPdfCommand}" AutomationId="ExportPayrollPdf" />
-                            <Button Grid.Column="2" Text="Mark as paid" Style="{StaticResource SmallButton}" Command="{Binding MarkPaidCommand}"
+                            <Label Grid.Column="1" Text="{Binding MarkPaidBlockedText}" Style="{StaticResource Muted}" HorizontalOptions="End" VerticalOptions="Center"
+                                   IsVisible="{Binding HasPendingRecords}" />
+                            <Button Grid.Column="2" Text="Approve" Style="{StaticResource SmallButton}" Command="{Binding MarkPaidCommand}"
                                     IsVisible="{Binding IsDraft}" IsEnabled="{Binding CanMarkPaid}" AutomationId="MarkPayrollPaid" />
+                            <!-- 0145 (U7, U8): approved, not paid out yet -->
+                            <Button Grid.Column="2" Text="Mark as paid out" Style="{StaticResource SmallButton}" Command="{Binding MarkPaidOutCommand}"
+                                    IsVisible="{Binding CanMarkPaidOut}" AutomationId="MarkPayrollPaidOut" />
                         </Grid>
+                        <Border Style="{StaticResource Panel}" IsVisible="{Binding CanReopen}">
+                            <VerticalStackLayout Spacing="8">
+                                <Label Text="Approved, not paid out yet" Style="{StaticResource SectionTitle}" />
+                                <Label Text="Send the money, then mark it as paid out. Found a mistake first? Reopen it with a reason, fix it and approve it again."
+                                       Style="{StaticResource Caption}" />
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <Border Style="{StaticResource Field}">
+                                        <Entry Text="{Binding ReopenReason}" MaxLength="200" Placeholder="Why reopen, e.g. Wrong hours for Ana" AutomationId="ReopenReason" />
+                                    </Border>
+                                    <Button Grid.Column="1" Text="Reopen" Style="{StaticResource SmallOutlineButton}" Command="{Binding ReopenCommand}" AutomationId="ReopenPeriod" />
+                                </Grid>
+                                <Label Text="{Binding ReopenError}" Style="{StaticResource FieldError}" IsVisible="{Binding ReopenError, Converter={StaticResource IsNotNull}}" />
+                            </VerticalStackLayout>
+                        </Border>
+                    </VerticalStackLayout>
+
+                    <!-- PAID OUT TAB -->
+                    <VerticalStackLayout Spacing="14" IsVisible="{Binding IsPaidOutTab}">
+                        <Border Style="{StaticResource Panel}">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <VerticalStackLayout Spacing="4" VerticalOptions="Center">
+                                    <Label Text="Paid out payroll" Style="{StaticResource Heading}" />
+                                    <Label Text="{Binding PaidOutSummaryText}" Style="{StaticResource Muted}" />
+                                    <Label Text="Select a period to open its full breakdown or export its PDF." Style="{StaticResource Caption}" />
+                                </VerticalStackLayout>
+
+                                <VerticalStackLayout Grid.Column="1" HorizontalOptions="End" VerticalOptions="Center" Spacing="2">
+                                    <Label Text="Total paid out" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                    <Label Text="{Binding PaidOutTotalNetText}" Style="{StaticResource Numeral}" FontFamily="BarlowBold" FontSize="28" HorizontalOptions="End" AutomationId="PaidOutTotalNet" />
+                                    <Label Text="{Binding PaidOutTotalGrossText}" Style="{StaticResource Caption}" HorizontalOptions="End" HorizontalTextAlignment="End" AutomationId="PaidOutTotalGross" />
+                                </VerticalStackLayout>
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource TablePanel}">
+                            <VerticalStackLayout>
+                                <VerticalStackLayout x:Name="PaidOutHead" IsVisible="{OnIdiom Phone=False, Default=True}">
+                                    <Grid Style="{StaticResource TableHead}" ColumnDefinitions="1.3*,95,110,115,120,1.2*,84" ColumnSpacing="12">
+                                        <Label Text="Pay period" Style="{StaticResource Caption}" />
+                                        <Label Grid.Column="1" Text="Staff" Style="{StaticResource Caption}" />
+                                        <Label Grid.Column="2" Text="Gross" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                        <Label Grid.Column="3" Text="Deductions" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                        <Label Grid.Column="4" Text="Net paid out" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                        <Label Grid.Column="5" Text="Paid out" Style="{StaticResource Caption}" />
+                                    </Grid>
+                                    <BoxView Style="{StaticResource Hairline}" />
+                                </VerticalStackLayout>
+                                <c:TableBody Items="{Binding PaidOutPeriods}" Header="{x:Reference PaidOutHead}" WideFrom="960"
+                                             RowTemplate="{StaticResource PaidOutRowTemplate}" CardTemplate="{StaticResource PaidOutCardTemplate}">
+                                    <c:TableBody.Empty>
+                                        <Label Text="No paid-out periods yet. Approve a period, send the money, then mark it as paid out." Style="{StaticResource Muted}" Margin="14" />
+                                    </c:TableBody.Empty>
+                                </c:TableBody>
+                            </VerticalStackLayout>
+                        </Border>
                     </VerticalStackLayout>
 
                     <!-- SALARIES TAB -->
                     <VerticalStackLayout Spacing="14" IsVisible="{Binding IsSalariesTab}">
-                        <Label Text="Fixed salary per half-month pay period (1st–15th and 16th–end). Draft periods update immediately when a salary changes; paid periods stay locked."
+                        <Label Text="Pay per half-month period (1st–15th and 16th–end): Fixed per period, Hourly for approved hours, or Per session for a coach's approved sessions. Drafts follow changes straight away; paid periods stay locked."
                                Style="{StaticResource Muted}" />
 
-                        <!-- Role-level fixed salaries -->
+                        <!-- Role defaults -->
                         <Border Style="{StaticResource Panel}">
                             <VerticalStackLayout Spacing="10">
-                                <Label Text="Set fixed salary by role" Style="{StaticResource SectionTitle}" />
-                                <Label Text="Applies to every active account in that role (and any new ones added later)." Style="{StaticResource Caption}" />
-                                <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
+                                <Label Text="Role defaults" Style="{StaticResource SectionTitle}" />
+                                <Label Text="Everyone in the role without a rate of their own follows this, including new accounts. Personal rates stay as they are." Style="{StaticResource Caption}" />
+                                <Label Text="SSS, PhilHealth and Pag-IBIG are taken once a month in the 16th–end pay; withholding tax every pay. Rates from the 2026 tables; confirm them with your accountant."
+                                       Style="{StaticResource Caption}" />
+                                <c:CardGrid Columns="2" MinColumnWidth="380" Spacing="16">
                                     <VerticalStackLayout Spacing="6">
                                         <HorizontalStackLayout Spacing="8">
                                             <c:StatusChip Status="Front desk" />
                                             <Label Text="{Binding EmployeeRoleSalaryStatus}" Style="{StaticResource Caption}" VerticalOptions="Center" />
                                         </HorizontalStackLayout>
-                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                            <Border Style="{StaticResource Field}" Padding="10,4">
-                                                <Entry Text="{Binding EmployeeRoleSalaryInput}" Keyboard="Numeric" Placeholder="₱0.00" AutomationId="EmployeeRoleSalary" SemanticProperties.Description="Front desk fixed salary">
+                                        <Grid ColumnDefinitions="112,*,Auto" ColumnSpacing="8">
+                                            <Border Style="{StaticResource Field}" Padding="8,0">
+                                                <Picker ItemsSource="{Binding EmployeePayTypeOptions}" SelectedItem="{Binding EmployeeRolePayType}"
+                                                        AutomationId="EmployeeRolePayType" SemanticProperties.Description="Front desk pay type" />
+                                            </Border>
+                                            <Border Grid.Column="1" Style="{StaticResource Field}" Padding="10,4">
+                                                <Entry Text="{Binding EmployeeRoleSalaryInput}" Keyboard="Numeric" Placeholder="₱0.00" AutomationId="EmployeeRoleSalary" SemanticProperties.Description="Front desk rate">
                                                     <Entry.Behaviors><c:NumericOnlyBehavior /></Entry.Behaviors>
                                                 </Entry>
                                             </Border>
-                                            <Button Grid.Column="1" Text="Apply to all" Style="{StaticResource SmallButton}" Command="{Binding SaveEmployeeRoleSalaryCommand}" AutomationId="SaveEmployeeRoleSalary" />
+                                            <Button Grid.Column="2" Text="Save default" Style="{StaticResource SmallButton}" Command="{Binding SaveEmployeeRoleSalaryCommand}" AutomationId="SaveEmployeeRoleSalary" />
                                         </Grid>
                                     </VerticalStackLayout>
 
-                                    <VerticalStackLayout Grid.Column="1" Spacing="6">
+                                    <VerticalStackLayout Spacing="6">
                                         <HorizontalStackLayout Spacing="8">
                                             <c:StatusChip Status="Coach" />
                                             <Label Text="{Binding CoachRoleSalaryStatus}" Style="{StaticResource Caption}" VerticalOptions="Center" />
                                         </HorizontalStackLayout>
-                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                            <Border Style="{StaticResource Field}" Padding="10,4">
-                                                <Entry Text="{Binding CoachRoleSalaryInput}" Keyboard="Numeric" Placeholder="₱0.00" AutomationId="CoachRoleSalary" SemanticProperties.Description="Coach fixed salary">
+                                        <Grid ColumnDefinitions="112,*,Auto" ColumnSpacing="8">
+                                            <Border Style="{StaticResource Field}" Padding="8,0">
+                                                <Picker ItemsSource="{Binding CoachPayTypeOptions}" SelectedItem="{Binding CoachRolePayType}"
+                                                        AutomationId="CoachRolePayType" SemanticProperties.Description="Coach pay type" />
+                                            </Border>
+                                            <Border Grid.Column="1" Style="{StaticResource Field}" Padding="10,4">
+                                                <Entry Text="{Binding CoachRoleSalaryInput}" Keyboard="Numeric" Placeholder="₱0.00" AutomationId="CoachRoleSalary" SemanticProperties.Description="Coach rate">
                                                     <Entry.Behaviors><c:NumericOnlyBehavior /></Entry.Behaviors>
                                                 </Entry>
                                             </Border>
-                                            <Button Grid.Column="1" Text="Apply to all" Style="{StaticResource SmallButton}" Command="{Binding SaveCoachRoleSalaryCommand}" AutomationId="SaveCoachRoleSalary" />
+                                            <Button Grid.Column="2" Text="Save default" Style="{StaticResource SmallButton}" Command="{Binding SaveCoachRoleSalaryCommand}" AutomationId="SaveCoachRoleSalary" />
                                         </Grid>
                                     </VerticalStackLayout>
-                                </Grid>
+                                </c:CardGrid>
                                 <Label Text="{Binding RoleSalaryError}" Style="{StaticResource FieldError}" IsVisible="{Binding RoleSalaryError, Converter={StaticResource IsNotNull}}" />
                             </VerticalStackLayout>
                         </Border>
@@ -294,14 +527,14 @@
                         <Border Style="{StaticResource TablePanel}">
                             <VerticalStackLayout>
                                 <VerticalStackLayout x:Name="SalariesHead">
-                                    <Grid Style="{StaticResource TableHead}" ColumnDefinitions="1.1*,140,1.1*,230" ColumnSpacing="14">
+                                    <Grid Style="{StaticResource TableHead}" ColumnDefinitions="1.1*,190,1*,360" ColumnSpacing="14">
                                         <Label Text="Staff member" Style="{StaticResource Caption}" />
-                                        <Label Grid.Column="1" Text="Salary per period" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                        <Label Grid.Column="1" Text="Pay" Style="{StaticResource Caption}" HorizontalOptions="End" />
                                         <Label Grid.Column="2" Text="Last changed" Style="{StaticResource Caption}" />
                                     </Grid>
                                     <BoxView Style="{StaticResource Hairline}" />
                                 </VerticalStackLayout>
-                                <c:TableBody Items="{Binding StaffSalaries}" Header="{x:Reference SalariesHead}" WideFrom="900"
+                                <c:TableBody Items="{Binding StaffSalaries}" Header="{x:Reference SalariesHead}" WideFrom="1000"
                                              RowTemplate="{StaticResource SalaryRowTemplate}" CardTemplate="{StaticResource SalaryCardTemplate}">
                                     <c:TableBody.Empty>
                                         <Label Text="No front desk or coach accounts yet. Add them in Users and roles." Style="{StaticResource Muted}" Margin="14" />
@@ -318,7 +551,7 @@
         <BoxView Color="Black" Opacity="{AppThemeBinding Light=0.28, Dark=0.55}" IsVisible="{Binding IsDrawerOpen}">
             <BoxView.GestureRecognizers><TapGestureRecognizer Command="{Binding CloseDrawerCommand}" /></BoxView.GestureRecognizers>
         </BoxView>
-        <Border IsVisible="{Binding IsDrawerOpen}" HorizontalOptions="{OnIdiom Phone=Fill, Default=End}" WidthRequest="{OnIdiom Phone=-1, Default=460}"
+        <Border IsVisible="{Binding IsDrawerOpen}" HorizontalOptions="{OnIdiom Phone=Fill, Default=End}" WidthRequest="{OnIdiom Phone=-1, Default=520}"
                 StrokeThickness="0" Padding="0"
                 BackgroundColor="{AppThemeBinding Light={StaticResource CardLight}, Dark={StaticResource CardDark}}">
             <Border.Shadow><Shadow Brush="Black" Offset="-12,0" Radius="30" Opacity="0.3" /></Border.Shadow>
@@ -330,7 +563,7 @@
                             <Label.Text>
                                 <MultiBinding StringFormat="{}{0} · {1}">
                                     <Binding Path="SelectedRow.RoleLabel" />
-                                    <Binding Path="SelectedRow.HoursText" />
+                                    <Binding Path="SelectedRow.PayTypeLabel" />
                                 </MultiBinding>
                             </Label.Text>
                         </Label>
@@ -342,23 +575,118 @@
                 <ScrollView Grid.Row="2">
                     <VerticalStackLayout Padding="22,16" Spacing="14">
                         <Border Style="{StaticResource Panel}" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}">
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                                <VerticalStackLayout Spacing="2">
-                                    <Label Text="Salary per period" Style="{StaticResource Caption}" />
-                                    <Label Text="From Salaries · change it there" Style="{StaticResource Caption}" IsVisible="{Binding IsDraft}" />
-                                </VerticalStackLayout>
-                                <Label Grid.Column="1" Text="{Binding SelectedRow.SalaryText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
-                            </Grid>
+                            <VerticalStackLayout Spacing="6">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                    <VerticalStackLayout Spacing="2">
+                                        <Label Text="Base pay" Style="{StaticResource Caption}" />
+                                        <Label Text="Rate from Salaries · change it there" Style="{StaticResource Caption}" IsVisible="{Binding IsDraft}" />
+                                    </VerticalStackLayout>
+                                    <Label Grid.Column="1" Text="{Binding SelectedRow.BasePayText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                                </Grid>
+                                <Label Text="{Binding DrawerBasisText}" Style="{StaticResource Muted}" AutomationId="DrawerBasis" />
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                    <Label Text="Gross (base pay + bonuses)" Style="{StaticResource Caption}" VerticalOptions="Center" />
+                                    <Label Grid.Column="1" Text="{Binding SelectedRow.GrossText}" VerticalOptions="Center" />
+                                </Grid>
+                            </VerticalStackLayout>
                         </Border>
 
-                        <Label Text="Adjustments" Style="{StaticResource SectionTitle}" />
+                        <!-- H12: shifts / check-ins / sessions to approve -->
+                        <VerticalStackLayout Spacing="8" IsVisible="{Binding HasTimeRecords}">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                <Label Text="{Binding RecordsTitle}" Style="{StaticResource SectionTitle}" VerticalOptions="Center" />
+                                <Button Grid.Column="1" Text="Approve all without warnings" Style="{StaticResource LinkButton}" Command="{Binding ApproveAllForPersonCommand}"
+                                        IsVisible="{Binding SelectedRow.HasPending}" VerticalOptions="Center" />
+                            </Grid>
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding DrawerRecords}" Spacing="0">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:PayrollRecordItem">
+                                        <VerticalStackLayout Spacing="6" Padding="0,10">
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                                <VerticalStackLayout Spacing="2">
+                                                    <Label Text="{Binding TitleText}" FontFamily="BarlowSemiBold" LineBreakMode="TailTruncation" />
+                                                    <Label Text="{Binding TimeText}" Style="{StaticResource Caption}" />
+                                                </VerticalStackLayout>
+                                                <c:StatusChip Grid.Column="1" Status="{Binding StatusLabel}" VerticalOptions="Start" />
+                                            </Grid>
+                                            <HorizontalStackLayout Spacing="6" IsVisible="{Binding HasFlags}">
+                                                <c:StatusChip Status="Check warnings" />
+                                                <Label Text="{Binding FlagText}" Style="{StaticResource Caption}" VerticalOptions="Center" />
+                                            </HorizontalStackLayout>
+                                            <Label Text="{Binding Reason, StringFormat='Reason: {0}'}" Style="{StaticResource Caption}" IsVisible="{Binding HasReason}" />
+                                            <HorizontalStackLayout Spacing="8" IsVisible="{Binding CanReview}">
+                                                <Button Text="Approve" Style="{StaticResource SmallButton}" Command="{Binding ApproveCommand}" IsVisible="{Binding CanApprove}" />
+                                                <Button Text="Reject" Style="{StaticResource SmallOutlineButton}" Command="{Binding BeginRejectCommand}" IsVisible="{Binding CanReject}" />
+                                                <Button Text="Back to pending" Style="{StaticResource LinkButton}" Command="{Binding ReopenCommand}" IsVisible="{Binding CanReopen}" VerticalOptions="Center" />
+                                            </HorizontalStackLayout>
+                                            <VerticalStackLayout Spacing="6" IsVisible="{Binding IsRejecting}">
+                                                <Border Style="{StaticResource Field}">
+                                                    <Entry Text="{Binding RejectReason}" MaxLength="200" Placeholder="Why it isn't paid, e.g. Opened by mistake"
+                                                           SemanticProperties.Description="Reason for rejecting" />
+                                                </Border>
+                                                <HorizontalStackLayout Spacing="8">
+                                                    <Button Text="Reject" Style="{StaticResource SmallButton}" Command="{Binding RejectCommand}" />
+                                                    <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelRejectCommand}" />
+                                                </HorizontalStackLayout>
+                                            </VerticalStackLayout>
+                                            <Label Text="{Binding ErrorText}" Style="{StaticResource FieldError}" IsVisible="{Binding ErrorText, Converter={StaticResource IsNotNull}}" />
+                                            <BoxView Style="{StaticResource Hairline}" Margin="0,4,0,0" />
+                                        </VerticalStackLayout>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                                <BindableLayout.EmptyView>
+                                    <Label Text="Nothing recorded in this period." Style="{StaticResource Muted}" />
+                                </BindableLayout.EmptyView>
+                            </VerticalStackLayout>
+
+                            <!-- H5: corrections -->
+                            <Label Text="Corrections" Style="{StaticResource SectionTitle}" Margin="0,6,0,0" />
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding DrawerAdjustments}" Spacing="8">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:PayrollAdjustmentItem">
+                                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                                            <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                                                <Label Text="{Binding Note}" />
+                                                <Label Text="{Binding ByText}" Style="{StaticResource Caption}" />
+                                            </VerticalStackLayout>
+                                            <Label Grid.Column="1" Text="{Binding QuantityText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                                            <Button Grid.Column="2" Text="Remove" Style="{StaticResource LinkButton}" Clicked="OnRemoveHoursClicked"
+                                                    IsVisible="{Binding CanRemove}" VerticalOptions="Center" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                                <BindableLayout.EmptyView>
+                                    <Label Text="No corrections." Style="{StaticResource Muted}" />
+                                </BindableLayout.EmptyView>
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Spacing="6" IsVisible="{Binding CanCorrectHours}">
+                                <Grid ColumnDefinitions="120,*" ColumnSpacing="8">
+                                    <VerticalStackLayout Spacing="4">
+                                        <Label Text="{Binding CorrectionUnitLabel}" Style="{StaticResource Caption}" />
+                                        <Border Style="{StaticResource Field}">
+                                            <Entry Text="{Binding HoursInput}" Keyboard="Text" Placeholder="1.5 or -2" AutomationId="CorrectionAmount" />
+                                        </Border>
+                                    </VerticalStackLayout>
+                                    <VerticalStackLayout Grid.Column="1" Spacing="4">
+                                        <Label Text="Note (required)" Style="{StaticResource Caption}" />
+                                        <Border Style="{StaticResource Field}">
+                                            <Entry Text="{Binding HoursNote}" MaxLength="200" Placeholder="e.g. Forgot to open the drawer at 8 am" AutomationId="CorrectionNote" />
+                                        </Border>
+                                    </VerticalStackLayout>
+                                </Grid>
+                                <Label Text="{Binding HoursError}" Style="{StaticResource FieldError}" IsVisible="{Binding HoursError, Converter={StaticResource IsNotNull}}" />
+                                <Button Text="Add correction" Style="{StaticResource SmallOutlineButton}" Command="{Binding AddHoursCommand}" HorizontalOptions="Start" />
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+
+                        <Label Text="Bonuses and deductions" Style="{StaticResource SectionTitle}" />
                         <VerticalStackLayout BindableLayout.ItemsSource="{Binding DrawerLines}" Spacing="8">
                             <BindableLayout.ItemTemplate>
                                 <DataTemplate x:DataType="vm:PayrollLineItem">
                                     <Border Style="{StaticResource Panel}" Padding="12,10">
                                         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
                                             <VerticalStackLayout Spacing="2" VerticalOptions="Center">
-                                                <Label Text="{Binding KindLabel}" FontFamily="BarlowSemiBold" />
+                                                <Label Text="{Binding HeadingText}" FontFamily="BarlowSemiBold" />
                                                 <Label Text="{Binding Note}" Style="{StaticResource Caption}" IsVisible="{Binding Note, Converter={StaticResource IsNotNull}}" />
                                             </VerticalStackLayout>
                                             <Label Grid.Column="1" Text="{Binding AmountText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
@@ -373,16 +701,33 @@
                             </BindableLayout.EmptyView>
                         </VerticalStackLayout>
 
+                        <!-- 0144 (T10): government deductions, read-only (the switch is on Salaries) -->
+                        <Label Text="Government deductions" Style="{StaticResource SectionTitle}" Margin="0,6,0,0" />
+                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding DrawerGov}" Spacing="8">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="vm:PayrollGovItem">
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                        <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                                            <Label Text="{Binding Label}" FontFamily="BarlowSemiBold" />
+                                            <Label Text="{Binding BasisText}" Style="{StaticResource Caption}" />
+                                        </VerticalStackLayout>
+                                        <Label Grid.Column="1" Text="{Binding AmountText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+                        <Label Text="{Binding DrawerGovNote}" Style="{StaticResource Caption}" IsVisible="{Binding DrawerGovNote, Converter={StaticResource HasText}}" />
+
                         <!-- Add bonus / deduction (Draft only) -->
                         <VerticalStackLayout Spacing="10" IsVisible="{Binding IsDraft}" Margin="0,6,0,0">
                             <BoxView Style="{StaticResource Hairline}" />
-                            <Label Text="Add line" Style="{StaticResource SectionTitle}" />
+                            <Label Text="Add bonus or deduction" Style="{StaticResource SectionTitle}" />
                             <HorizontalStackLayout Spacing="8">
                                 <Button Text="Bonus" Style="{StaticResource SmallOutlineButton}" Command="{Binding SetLineKindCommand}" CommandParameter="bonus">
                                     <Button.Triggers>
                                         <DataTrigger TargetType="Button" Binding="{Binding IsBonusKind}" Value="True">
-                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
-                                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+                                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PageDark}}" />
                                         </DataTrigger>
                                         <DataTrigger TargetType="Button" Binding="{Binding IsBonusKind}" Value="False">
                                             <Setter Property="BackgroundColor" Value="Transparent" />
@@ -393,8 +738,8 @@
                                 <Button Text="Deduction" Style="{StaticResource SmallOutlineButton}" Command="{Binding SetLineKindCommand}" CommandParameter="deduction">
                                     <Button.Triggers>
                                         <DataTrigger TargetType="Button" Binding="{Binding IsDeductionKind}" Value="True">
-                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
-                                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+                                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PageDark}}" />
                                         </DataTrigger>
                                         <DataTrigger TargetType="Button" Binding="{Binding IsDeductionKind}" Value="False">
                                             <Setter Property="BackgroundColor" Value="Transparent" />
@@ -403,6 +748,15 @@
                                     </Button.Triggers>
                                 </Button>
                             </HorizontalStackLayout>
+
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="Category" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}" Padding="8,0">
+                                    <Picker ItemsSource="{Binding LineCategories}" SelectedItem="{Binding LineCategory}" AutomationId="LineCategory"
+                                            SemanticProperties.Description="Category" />
+                                </Border>
+                                <Label Text="{Binding LineCategoryHint}" Style="{StaticResource Caption}" IsVisible="{Binding LineCategoryHint, Converter={StaticResource HasText}}" />
+                            </VerticalStackLayout>
 
                             <VerticalStackLayout Spacing="4">
                                 <Label Text="Amount (₱)" Style="{StaticResource Caption}" />
@@ -421,7 +775,7 @@
                             </VerticalStackLayout>
 
                             <Label Text="{Binding LineError}" Style="{StaticResource FieldError}" IsVisible="{Binding LineError, Converter={StaticResource IsNotNull}}" />
-                            <Button Text="Add line" Style="{StaticResource SmallButton}" Command="{Binding AddLineCommand}" HorizontalOptions="Start" />
+                            <Button Text="Add" Style="{StaticResource SmallButton}" Command="{Binding AddLineCommand}" HorizontalOptions="Start" />
                         </VerticalStackLayout>
                     </VerticalStackLayout>
                 </ScrollView>

@@ -40,8 +40,6 @@ public sealed record CalendarEntry(DateTime StartUtc, DateTime EndUtc, string Ki
     public string KindText => Kind switch { "session" => "Session", "booking" => "Amenity booking", "shift" => "Coach on the floor", "closed" => "Gym closed", _ => "Open time" };
     /// <summary>The word a day tile has room for; the day's list carries the full title.</summary>
     public string Short => Kind switch { "session" => "Session", "shift" => "Shift", "open" => "Open slot", "closed" => "Closed", _ => Title };
-    /// <summary>F15: tapping a coach's open time asks for it, with the same rules as Time requests.</summary>
-    public bool CanRequest => Kind == "open" && StartUtc > DateTime.UtcNow;
     public bool CanOpen => Kind == "booking";
 }
 
@@ -123,13 +121,9 @@ public sealed class MemberCalendarService(ISupabaseGateway gw) : IMemberCalendar
             .Select(r => new CalendarEntry(r.StartsAt.ToUniversalTime(), r.EndsAt.ToUniversalTime(), "booking", amenities.GetValueOrDefault(r.AmenityId, "Amenity"))));
         if (coaches.Count > 0)
         {
-            var shiftsTask = gw.ListAsync<ShiftPost>();
-            var openTask = gw.ListAsync<TimeRequest>(r => r.Status == "pending");
-            await Task.WhenAll(shiftsTask, openTask);
-            entries.AddRange(shiftsTask.Result.Where(p => coaches.Contains(p.CoachId) && p.Status == Status.Scheduled && In(p.Start))
+            var shifts = await gw.ListAsync<ShiftPost>();
+            entries.AddRange(shifts.Where(p => coaches.Contains(p.CoachId) && p.Status == Status.Scheduled && In(p.Start))
                 .Select(p => new CalendarEntry(p.Start.ToUniversalTime(), p.End.ToUniversalTime(), "shift", $"{Coach(p.CoachId)} on the floor", p.CoachId)));
-            entries.AddRange(openTask.Result.Where(r => r.MemberId is null && coaches.Contains(r.CoachId) && In(r.RequestedStart))
-                .Select(r => new CalendarEntry(r.RequestedStart.ToUniversalTime(), r.RequestedEnd.ToUniversalTime(), "open", $"Open with {Coach(r.CoachId)}", r.CoachId)));
         }
         var gym = gymTask.Result.First();
         // G16 (0065): a closed day is one entry over the gym's hours, with its reason

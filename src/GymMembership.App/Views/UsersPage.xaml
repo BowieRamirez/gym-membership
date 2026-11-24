@@ -123,15 +123,39 @@
             <!-- 9.8: the accounts as a table (hairline rows in one panel, a header), each row's menu a labelled "Actions" button (was a "⋮"
                  glyph); the menu itself is unchanged (owner, D28). AutomationId stays: scripts/Test-WindowsArchive.ps1 uses it. -->
             <!-- item 3 (0059): accounts with no last name, for a System admin to correct with Actions > Correct name; shown only when there are some -->
+            <!-- Active | Deactivated tabs (owner, 2026-11-25), the Payroll segment control -->
             <Grid ColumnDefinitions="*,Auto">
-                <Label Text="Active accounts" Style="{StaticResource SectionTitle}" VerticalOptions="Center" />
-                <Button Grid.Column="1" Text="{Binding IncompleteText}" Style="{StaticResource FilterChip}" Command="{Binding ToggleIncompleteCommand}"
+                <Border Style="{StaticResource SegmentTrack}" VerticalOptions="Center">
+                    <HorizontalStackLayout Spacing="2">
+                        <Button Text="Active accounts" Command="{Binding OpenActiveTabCommand}" Style="{StaticResource Segment}" AutomationId="UsersActiveTab">
+                            <Button.Triggers>
+                                <DataTrigger TargetType="Button" Binding="{Binding IsActiveTab}" Value="True">
+                                    <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                                    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                                </DataTrigger>
+                            </Button.Triggers>
+                        </Button>
+                        <Button Text="Deactivated" Command="{Binding OpenDeactivatedTabCommand}" Style="{StaticResource Segment}" AutomationId="UsersDeactivatedTab">
+                            <Button.Triggers>
+                                <DataTrigger TargetType="Button" Binding="{Binding IsDeactivatedTab}" Value="True">
+                                    <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                                    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                                </DataTrigger>
+                            </Button.Triggers>
+                        </Button>
+                    </HorizontalStackLayout>
+                </Border>
+                <ContentView Grid.Column="1" IsVisible="{Binding IsActiveTab}" VerticalOptions="Center">
+                <Button Text="{Binding IncompleteText}" Style="{StaticResource FilterChip}" Command="{Binding ToggleIncompleteCommand}"
                         IsVisible="{Binding HasIncomplete}" AutomationId="NameIncompleteFilter" VerticalOptions="Center"
                         SemanticProperties.Hint="Shows only the accounts with no last name, or every account again">
                     <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding OnlyIncomplete}" Value="True"><Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /><Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource OnChosenLight}, Dark={StaticResource Black}}" /><Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource ChosenLight}, Dark={StaticResource Signal}}" /></DataTrigger></Button.Triggers>
                 </Button>
+                </ContentView>
             </Grid>
-            <Border Style="{StaticResource TablePanel}">
+            <Border Style="{StaticResource TablePanel}" IsVisible="{Binding IsActiveTab}">
                 <VerticalStackLayout>
                     <VerticalStackLayout x:Name="AccountHead">
                         <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,*,110,100">
@@ -148,13 +172,25 @@
                 </VerticalStackLayout>
             </Border>
 
-            <Label Text="Deactivated accounts" Style="{StaticResource SectionTitle}" />
-            <Label Text="Switched off, not deleted. Reactivate someone to let them sign in again." Style="{StaticResource Caption}" />
-            <Border Style="{StaticResource TablePanel}">
-                <c:TableBody Items="{Binding Deactivated}" WideFrom="700" RowTemplate="{StaticResource AccountRow}" CardTemplate="{StaticResource AccountCard}">
-                    <c:TableBody.Empty><Label Text="No deactivated accounts." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
-                </c:TableBody>
-            </Border>
+            <VerticalStackLayout Spacing="10" IsVisible="{Binding IsDeactivatedTab}">
+                <Label Text="Switched off, not deleted. Reactivate someone to let them sign in again." Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource TablePanel}">
+                    <VerticalStackLayout>
+                        <VerticalStackLayout x:Name="DeactivatedHead">
+                            <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,*,110,100">
+                                <Label Text="Name and sign-in email" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="1" Text="Role" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="2" Text="Status" Style="{StaticResource Caption}" />
+                            </Grid>
+                            <BoxView Style="{StaticResource Hairline}" />
+                        </VerticalStackLayout>
+                        <c:TableBody Items="{Binding Deactivated}" Header="{x:Reference DeactivatedHead}" WideFrom="700"
+                                     RowTemplate="{StaticResource AccountRow}" CardTemplate="{StaticResource AccountCard}">
+                            <c:TableBody.Empty><Label Text="No deactivated accounts." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
+                        </c:TableBody>
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

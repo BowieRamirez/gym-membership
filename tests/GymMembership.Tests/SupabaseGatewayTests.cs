@@ -813,7 +813,6 @@ public sealed class SupabaseGatewayTests : IDisposable
         Note("my memberships", await new MembershipService(gw).MyMembershipsAsync());
         Note("chat threads", await new ChatService(gw, new NotificationService(gw)).ThreadsAsync());
         Note("find members", await new AttendanceService(gw).FindMembersAsync("a"));
-        Note("requests", await new SessionService(gw).RequestsAsync());
         Note("sessions", await new SessionService(gw).SessionsAsync());
         Note("amenities", await new AmenityService(gw).CatalogAsync());
         Note("pending payments", await new PaymentStaffService(gw).PendingAsync());

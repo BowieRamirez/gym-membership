@@ -77,7 +77,8 @@ try {
   await test('0106: a Monthly member booking past their term end still works', async () => {
     const m = await user(null); const p = await buy(m, monthly);
     await db.query(`update membership_terms set starts_at = now() - interval '1 day', ends_at = $2 where payment_id = $1`, [p.payment_id, await inDays(1, '22:00')]);
-    const ok = (await as(m, `select * from book_amenity($1,$2,120)`, [court, await inDays(1, '21:00')]))[0];
+    await db.query(`update reservations set held_until = null where status = 'awaiting_payment'`);   // 0148: earlier tests' unpaid bookings let go of the court
+    const ok =(await as(m, `select * from book_amenity($1,$2,120)`, [court, await inDays(1, '21:00')]))[0];
     assert.ok(ok.reservation_id);
   });
 
