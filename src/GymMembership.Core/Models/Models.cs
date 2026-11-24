@@ -529,6 +529,7 @@ public sealed class StaffSalary
     [System.Text.Json.Serialization.JsonPropertyName("amount")] public decimal? Amount { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("pay_type")] public string PayType { get; set; } = "fixed";
     [System.Text.Json.Serialization.JsonPropertyName("personal")] public bool Personal { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("deductions_on")] public bool DeductionsOn { get; set; } = true;   // 0144, T4
     [System.Text.Json.Serialization.JsonPropertyName("updated_at")] public DateTime? UpdatedAt { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("updated_by_name")] public string? UpdatedByName { get; set; }
     [System.Text.Json.Serialization.JsonIgnore] public bool NoSalary => Amount is null;
@@ -571,6 +572,18 @@ public sealed class PayrollRow
     [System.Text.Json.Serialization.JsonPropertyName("gross")] public decimal Gross { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("pending")] public int Pending { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("flagged")] public int Flagged { get; set; }
+    // 0144 (T1-T12): government deductions; Deductions and Net include them, ManualDeductions doesn't
+    [System.Text.Json.Serialization.JsonPropertyName("deductions_on")] public bool DeductionsOn { get; set; } = true;
+    [System.Text.Json.Serialization.JsonPropertyName("manual_deductions")] public decimal ManualDeductions { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("sss")] public decimal Sss { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("philhealth")] public decimal PhilHealth { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("pagibig")] public decimal PagIbig { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("tax")] public decimal Tax { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("gov_total")] public decimal GovTotal { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("gov_cut")] public bool GovCut { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("month_gross")] public decimal MonthGross { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("month_base")] public decimal MonthBase { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("taxable")] public decimal Taxable { get; set; }
     [System.Text.Json.Serialization.JsonIgnore] public string RoleLabel => Role switch { "employee" => "Front desk", "coach" => "Coach", "subadmin" => "Admin", "admin" => "System admin", _ => Role };
     /// <summary>"41.5 h × ₱80.00", "12 sessions × ₱150.00" or "Fixed".</summary>
     [System.Text.Json.Serialization.JsonIgnore] public string BasisText => PayTypes.BasisText(PayType, Payable, Rate);
@@ -592,6 +605,7 @@ public sealed class PayrollPeriod
     [System.Text.Json.Serialization.JsonPropertyName("paid_by_name")] public string? PaidByName { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("total_net")] public decimal TotalNet { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("total_gross")] public decimal TotalGross { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("total_gov")] public decimal TotalGov { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("rows")] public List<PayrollRow> Rows { get; set; } = new();
     [System.Text.Json.Serialization.JsonIgnore] public bool IsPaid => PaidAt is not null;
 }
@@ -666,6 +680,25 @@ public static class PayTypes
     public static string CategoryLabel(string? category) => category switch
     {
         "regular_bonus" => "Regular bonus", "overtime" => "Overtime adjustment", "holiday" => "Holiday pay adjustment",
-        "other" => "Other adjustment", _ => ""
+        "other" => "Other adjustment", "sss" => "SSS", "philhealth" => "PhilHealth", "pagibig" => "Pag-IBIG", "tax" => "Withholding tax", _ => ""
     };
+    public static bool IsGovernment(string? category) => category is "sss" or "philhealth" or "pagibig" or "tax";
+}
+
+/// <summary>0144 (T2, T3, T5): employee shares and BIR semi-monthly withholding, the same numbers as payroll_deduction_rates.
+/// Used by the demo gateway; the live app gets the amounts from the server.</summary>
+public static class PayrollDeductions
+{
+    static readonly (decimal Over, decimal Base, decimal Rate)[] Brackets =
+        [(0, 0, 0), (10417, 0, 0.15m), (16667, 937.50m, 0.20m), (33333, 4270.70m, 0.25m), (83333, 16770.70m, 0.30m), (333333, 91770.70m, 0.35m)];
+    static decimal R(decimal v) => Math.Round(v, 2, MidpointRounding.AwayFromZero);
+    public static decimal Msc(decimal monthPay) => Math.Clamp(500 * Math.Round(monthPay / 500, MidpointRounding.AwayFromZero), 5000, 35000);
+    public static decimal Sss(decimal monthPay) => R(0.05m * Msc(monthPay));
+    public static decimal PhilHealth(decimal monthBase) => R(0.025m * Math.Clamp(monthBase, 10000, 100000));
+    public static decimal PagIbig(decimal monthPay) => R((monthPay <= 1500 ? 0.01m : 0.02m) * Math.Min(Math.Max(monthPay, 0), 10000));
+    public static decimal Tax(decimal taxable)
+    {
+        var b = Brackets.Last(x => taxable > x.Over || x.Over == 0);
+        return taxable > b.Over ? R(b.Base + b.Rate * (taxable - b.Over)) : 0;
+    }
 }

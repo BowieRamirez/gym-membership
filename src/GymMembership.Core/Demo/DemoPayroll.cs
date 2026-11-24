@@ -164,7 +164,7 @@ public sealed partial class DemoGateway
             else if (pay.PayType == "fixed") { payable = 1; basePay = pay.Rate; }
             else { payable = Math.Max(0, logged + adjustment); basePay = Math.Round(payable * pay.Rate, 2, MidpointRounding.AwayFromZero); }
             var bonuses = _payrollLines.Where(l => l.PeriodId == per.Id && l.UserId == id && l.Kind == "bonus").Sum(l => l.Amount);
-            var deductions = _payrollLines.Where(l => l.PeriodId == per.Id && l.UserId == id && l.Kind == "deduction").Sum(l => l.Amount);
+            var deductions = _payrollLines.Where(l => l.PeriodId == per.Id && l.UserId == id && l.Kind == "deduction" && !PayTypes.IsGovernment(l.Category)).Sum(l => l.Amount);
 
             // reference numbers from Part 3 (closed shifts, completed sessions)
             var sessions = pay.Role == "coach" ? All<TrainingSession>().Where(ts => ts.CoachId == id && ts.Status == "completed"
@@ -188,14 +188,52 @@ public sealed partial class DemoGateway
         }).OrderBy(r => RoleOrder(r.Role)).ThenBy(r => r.FullName).ToList();
     }
 
-    PayrollPeriod BuildPayrollPeriod(DemoPayrollPeriod per)
+    readonly HashSet<string> _noDeductions = new();
+
+    // 0144 (T1-T9): government deductions on top of the basis; same order and rules as payroll_basis
+    List<PayrollRow> PayrollWithDeductions(DemoPayrollPeriod per)
     {
         var rows = PayrollBasis(per);
+        var secondHalf = per.StartsOn.Day == 16;
+        var half1 = secondHalf ? _payrollPeriods.FirstOrDefault(p => p.StartsOn == new DateOnly(per.StartsOn.Year, per.StartsOn.Month, 1)) : null;
+        var first = half1 is null ? [] : PayrollBasis(half1);
+        foreach (var r in rows)
+        {
+            var on = !r.NoSalary && !_noDeductions.Contains(r.UserId);
+            var f = first.FirstOrDefault(x => x.UserId == r.UserId);
+            var mGross = r.Gross + (f?.Gross ?? 0); var mBase = r.BasePay + (f?.BasePay ?? 0);
+            decimal ws = on && secondHalf ? PayrollDeductions.Sss(mGross) : 0, wp = on && secondHalf ? PayrollDeductions.PhilHealth(mBase) : 0,
+                    wi = on && secondHalf ? PayrollDeductions.PagIbig(mGross) : 0;
+            var taxable = Math.Max(0, r.Gross - ws - wp - wi);
+            var wt = on ? PayrollDeductions.Tax(taxable) : 0;
+            decimal s, p, i, t;
+            if (per.PaidAt is not null)
+            {
+                decimal Frozen(string c) => _payrollLines.Where(l => l.PeriodId == per.Id && l.UserId == r.UserId && l.Kind == "deduction" && l.Category == c).Sum(l => l.Amount);
+                (s, p, i, t) = (Frozen("sss"), Frozen("philhealth"), Frozen("pagibig"), Frozen("tax"));
+            }
+            else
+            {
+                var room = Math.Max(0, r.Gross - r.Deductions);
+                s = Math.Min(ws, room); p = Math.Min(wp, Math.Max(0, room - ws)); i = Math.Min(wi, Math.Max(0, room - ws - wp)); t = Math.Min(wt, Math.Max(0, room - ws - wp - wi));
+            }
+            var gov = s + p + i + t;
+            r.DeductionsOn = on; r.ManualDeductions = r.Deductions; r.Sss = s; r.PhilHealth = p; r.PagIbig = i; r.Tax = t; r.GovTotal = gov;
+            r.GovCut = per.PaidAt is null && gov < ws + wp + wi + wt;
+            r.MonthGross = secondHalf ? mGross : r.Gross; r.MonthBase = secondHalf ? mBase : r.BasePay; r.Taxable = taxable;
+            r.Deductions += gov; r.Net -= gov;
+        }
+        return rows;
+    }
+
+    PayrollPeriod BuildPayrollPeriod(DemoPayrollPeriod per)
+    {
+        var rows = PayrollWithDeductions(per);
         return new PayrollPeriod
         {
             PeriodId = per.Id, StartsOn = per.StartsOn, EndsOn = per.EndsOn, PaidAt = per.PaidAt,
             PaidByName = per.PaidBy is null ? null : NameOf(per.PaidBy),
-            TotalNet = rows.Sum(r => r.Net), TotalGross = rows.Sum(r => r.Gross), Rows = rows
+            TotalNet = rows.Sum(r => r.Net), TotalGross = rows.Sum(r => r.Gross), TotalGov = rows.Sum(r => r.GovTotal), Rows = rows
         };
     }
 
@@ -296,6 +334,7 @@ public sealed partial class DemoGateway
                         {
                             UserId = x.Profile.Id, FullName = StaffDisplayName(x.Profile), Role = x.Role!,
                             Amount = x.Salary?.Amount ?? rs?.Amount, PayType = x.Salary?.PayType ?? rs?.PayType ?? "fixed", Personal = x.Salary is not null,
+                            DeductionsOn = !_noDeductions.Contains(x.Profile.Id),
                             UpdatedAt = x.Salary?.UpdatedAt ?? rs?.UpdatedAt, UpdatedByName = by is null ? null : NameOf(by)
                         };
                     }).ToList();
@@ -306,9 +345,24 @@ public sealed partial class DemoGateway
                 Require("reports:revenue");
                 var startsOn = DateOnly.Parse(Str("p_starts_on") ?? throw Err("bad_input"));
                 var endsOn = PayrollPeriodEnd(startsOn);
-                var per = _payrollPeriods.FirstOrDefault(x => x.StartsOn == startsOn)
-                          ?? AddReturn(_payrollPeriods, new DemoPayrollPeriod { Id = _payrollPeriods.Count + 1, StartsOn = startsOn, EndsOn = endsOn });
+                DemoPayrollPeriod Open(DateOnly s) => _payrollPeriods.FirstOrDefault(x => x.StartsOn == s)
+                          ?? AddReturn(_payrollPeriods, new DemoPayrollPeriod { Id = _payrollPeriods.Count + 1, StartsOn = s, EndsOn = PayrollPeriodEnd(s) });
+                var per = Open(startsOn);
+                if (startsOn.Day == 16) Open(new DateOnly(startsOn.Year, startsOn.Month, 1));   // the month's first half (0144)
+                _ = endsOn;
                 result = BuildPayrollPeriod(per); return true;
+            }
+            case "set_payroll_deductions":
+            {
+                Require("reports:revenue");
+                var userId = Str("p_user") ?? throw Err("bad_input");
+                var on = a.TryGetValue("p_on", out var v) && v is bool b ? b : throw Err("bad_input");
+                if (PrimaryPayrollRole(userId) is null) throw Err("bad_input");
+                if (userId == Uid) throw Err("own_salary");
+                var was = !_noDeductions.Contains(userId);
+                if (on) _noDeductions.Remove(userId); else _noDeductions.Add(userId);
+                if (was != on) Audit("payroll.deductions_set", "staff_salaries", userId);
+                return true;
             }
             case "payroll_records_for":
             {
@@ -434,9 +488,12 @@ public sealed partial class DemoGateway
                 Require("reports:revenue");
                 var per = PayrollDraft(Int("p_period"));
                 if (ManilaDay(SubscriptionNow) < per.EndsOn) throw Err("period_not_ended");
-                var rows = PayrollBasis(per);
+                var rows = PayrollWithDeductions(per);
                 // hourly / per-session periods are paid from the day after (later shifts that day would be lost)
                 if (ManilaDay(SubscriptionNow) == per.EndsOn && rows.Any(r => r.PayType != "fixed" && !r.NoSalary)) throw Err("period_not_ended");
+                if (per.StartsOn.Day == 16 && rows.Any(r => r.DeductionsOn)
+                    && _payrollPeriods.FirstOrDefault(p => p.StartsOn == new DateOnly(per.StartsOn.Year, per.StartsOn.Month, 1))?.PaidAt is null)
+                    throw Err("first_half_unpaid");
                 if (rows.Where(r => r.Pending > 0).OrderBy(r => r.FullName).FirstOrDefault() is { } waiting) throw Err($"time_pending:{waiting.FullName}");
                 if (rows.Where(r => r.Net < 0).OrderBy(r => r.FullName).FirstOrDefault() is { } neg) throw Err($"net_below_zero:{neg.FullName}");
                 foreach (var row in rows.Where(r => !r.NoSalary && (r.BasePay > 0 || r.PayType != "fixed")))
@@ -445,6 +502,18 @@ public sealed partial class DemoGateway
                         Id = _payrollLines.Count + 1, PeriodId = per.Id, UserId = row.UserId, Kind = "salary", Amount = row.BasePay,
                         PayType = row.PayType, Quantity = row.Payable, Rate = row.Rate, CreatedBy = Uid, CreatedAt = SubscriptionNow
                     });
+                var month = per.StartsOn.ToString("MMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
+                string M(decimal v) => v.ToString("#,##0.00", System.Globalization.CultureInfo.InvariantCulture);
+                foreach (var row in rows)
+                    foreach (var (cat, amount, note) in new[]
+                    {
+                        ("sss", row.Sss, $"SSS, {month}, on ₱{M(row.MonthGross)} month pay"),
+                        ("philhealth", row.PhilHealth, $"PhilHealth, {month}, on ₱{M(row.MonthBase)} base pay"),
+                        ("pagibig", row.PagIbig, $"Pag-IBIG, {month}, on ₱{M(Math.Min(row.MonthGross, 10000))}"),
+                        ("tax", row.Tax, $"Withholding tax, {GymMembership.Core.Services.PayrollPdf.PeriodSpan(per.StartsOn, per.EndsOn)}, on ₱{M(row.Taxable)} taxable")
+                    }.Where(x => x.Item2 > 0))
+                        _payrollLines.Add(new DemoPayrollLine { Id = _payrollLines.Count + 1, PeriodId = per.Id, UserId = row.UserId, Kind = "deduction",
+                                                                Amount = amount, Note = note, Category = cat, CreatedBy = Uid, CreatedAt = SubscriptionNow });
                 per.PaidAt = SubscriptionNow;
                 per.PaidBy = Uid;
                 Audit("payroll.paid", "payroll_periods", per.Id.ToString());

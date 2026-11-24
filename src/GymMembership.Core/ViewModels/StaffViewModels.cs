@@ -3529,7 +3529,17 @@ public sealed partial class PayrollRowItem(PayrollRow row) : ObservableObject
     public bool HasPending => Row.Pending > 0;
     public string PendingText => $"{Row.Pending} to approve";
     public bool IsFlagged => Row.Flagged > 0;
+    // 0144 (T10): the government part of Deductions, and the T8 warning
+    public bool HasGov => Row.GovTotal > 0;
+    public string GovText => HasGov ? $"Gov't {PayTypes.Money(Row.GovTotal)}" : "";
+    public bool IsGovCut => Row.GovCut;
     [ObservableProperty] private bool isSelected;
+}
+
+/// <summary>0144 (T10): one government deduction in the drawer, with what it was based on.</summary>
+public sealed record PayrollGovItem(string Label, string BasisText, decimal Amount)
+{
+    public string AmountText => $"-{PayTypes.Money(Amount)}";
 }
 
 /// <summary>0142 (H12): one shift, coach check-in or session in the drawer, with Approve / Reject.</summary>
@@ -3589,8 +3599,14 @@ public sealed class PayrollAdjustmentItem(PayrollHourAdjustment adj, string unit
     public bool CanRemove { get; } = canRemove;
 }
 
-public sealed partial class StaffSalaryItem(StaffSalary s, Func<StaffSalaryItem, Task> save, Func<StaffSalaryItem, Task>? useRoleDefault = null) : ObservableObject
+public sealed partial class StaffSalaryItem(StaffSalary s, Func<StaffSalaryItem, Task> save, Func<StaffSalaryItem, Task>? useRoleDefault = null,
+    Func<StaffSalaryItem, Task>? toggleDeductions = null) : ObservableObject
 {
+    // 0144 (T4): government deductions on/off
+    public bool DeductionsOn => Data.DeductionsOn;
+    public string DeductionsText => DeductionsOn ? "Gov't deductions on" : "No gov't deductions";
+    public string ToggleDeductionsText => DeductionsOn ? "Turn off" : "Turn on";
+    [RelayCommand] private Task ToggleDeductionsAsync() => toggleDeductions?.Invoke(this) ?? Task.CompletedTask;
     public StaffSalary Data { get; } = s;
     public string UserId => Data.UserId;
     public string FullName => Data.FullName;
@@ -3784,7 +3800,7 @@ public partial class PayrollViewModel : LoadableViewModel
         });
         await RunAsync(() => _svc.PayrollStaffAsync(), list =>
         {
-            Fill(StaffSalaries, list.Select(s => new StaffSalaryItem(s, SaveSalaryAsync, UseRoleDefaultAsync)));
+            Fill(StaffSalaries, list.Select(s => new StaffSalaryItem(s, SaveSalaryAsync, UseRoleDefaultAsync, ToggleDeductionsAsync)));
         });
     }
 
@@ -3821,7 +3837,8 @@ public partial class PayrollViewModel : LoadableViewModel
             ? $"Paid {ManilaTime.Of(p.PaidAt!.Value).ToString("d MMM", System.Globalization.CultureInfo.InvariantCulture)} by {p.PaidByName ?? "Admin"}"
             : "Draft";
         TotalNetText = $"₱{p.TotalNet:N2}";
-        TotalGrossText = $"Gross {PayTypes.Money(p.TotalGross)}";
+        TotalGrossText = p.TotalGov > 0 ? $"Gross {PayTypes.Money(p.TotalGross)} · Gov't deductions {PayTypes.Money(p.TotalGov)}" : $"Gross {PayTypes.Money(p.TotalGross)}";
+        _totalGov = p.TotalGov;
         PendingTotal = p.IsPaid ? 0 : p.Rows.Sum(r => r.Pending);
         NoSalaryCount = p.Rows.Count(r => r.NoSalary);
         SummaryText = p.Rows.Count == 0
@@ -3834,6 +3851,7 @@ public partial class PayrollViewModel : LoadableViewModel
         Fill(Rows, p.Rows.Select(r => new PayrollRowItem(r) { IsSelected = r.UserId == selectedId }));
         if (selectedId is not null) SelectedRow = Rows.FirstOrDefault(r => r.UserId == selectedId);
         DrawerBasisText = SelectedRow is { } sel ? BasisSentence(sel.Row) : "";
+        BuildGov();
         NotifyDrawerKind();
         OnPropertyChanged(nameof(IsEmptyStaff));
         OnPropertyChanged(nameof(CanMarkPaid));
@@ -3853,8 +3871,33 @@ public partial class PayrollViewModel : LoadableViewModel
         LineCategory = "Regular bonus";
         HoursInput = ""; HoursNote = ""; HoursError = null;
         DrawerBasisText = BasisSentence(row.Row);
+        BuildGov();
         NotifyDrawerKind();
         await LoadDrawerLinesAsync();
+    }
+
+    // 0144 (T10): the government deductions block of the drawer
+    public ObservableCollection<PayrollGovItem> DrawerGov { get; } = new();
+    [ObservableProperty] private string drawerGovNote = "";
+    decimal _totalGov;
+
+    void BuildGov()
+    {
+        DrawerGov.Clear();
+        DrawerGovNote = "";
+        if (SelectedRow is not { } sel) return;
+        var r = sel.Row;
+        if (!r.DeductionsOn) { DrawerGovNote = "Government deductions are off for this person (Salaries tab)."; return; }
+        var money = PayTypes.Money;
+        if (PeriodStartsOn.Day == 16)
+        {
+            DrawerGov.Add(new("SSS", $"MSC {money(PayrollDeductions.Msc(r.MonthGross))}", r.Sss));
+            DrawerGov.Add(new("PhilHealth", $"on {money(r.MonthBase)} base pay", r.PhilHealth));
+            DrawerGov.Add(new("Pag-IBIG", $"on {money(Math.Min(r.MonthGross, 10000))}", r.PagIbig));
+        }
+        else DrawerGovNote = "SSS, PhilHealth and Pag-IBIG are taken in the 16th–end pay.";
+        DrawerGov.Add(new("Withholding tax", $"on {money(r.Taxable)} taxable", r.Tax));
+        if (r.GovCut) DrawerGovNote = "Deductions cut to keep pay above ₱0.";
     }
 
     void NotifyDrawerKind()
@@ -4003,6 +4046,7 @@ public partial class PayrollViewModel : LoadableViewModel
             var names = noSal.Count == 1 ? noSal[0] : string.Join(", ", noSal[..^1]) + " and " + noSal[^1];
             msg += $" {names} {(noSal.Count == 1 ? "has" : "have")} no salary set and {(noSal.Count == 1 ? "gets" : "get")} nothing.";
         }
+        if (_totalGov > 0) msg += $" Government deductions {PayTypes.Money(_totalGov)} (SSS, PhilHealth, Pag-IBIG, tax).";
         var flagged = Rows.Where(r => r.IsFlagged).Select(r => r.FullName).ToList();
         if (flagged.Count > 0)
         {
@@ -4075,6 +4119,16 @@ public partial class PayrollViewModel : LoadableViewModel
         if (!res.Ok) { item.ErrorText = ErrorText.For(res.Error, res.Message); return; }
         item.IsEditing = false;
         Notice = $"Pay saved for {item.FullName}.";
+        await LoadSalariesAsync();
+        await LoadPeriodAsync();
+    }
+
+    async Task ToggleDeductionsAsync(StaffSalaryItem item)
+    {
+        item.ErrorText = null;
+        var res = await _svc.SetPayrollDeductionsAsync(item.UserId, !item.DeductionsOn);
+        if (!res.Ok) { item.ErrorText = ErrorText.For(res.Error, res.Message); return; }
+        Notice = item.DeductionsOn ? $"Government deductions turned off for {item.FullName}." : $"Government deductions turned on for {item.FullName}.";
         await LoadSalariesAsync();
         await LoadPeriodAsync();
     }

@@ -2063,6 +2063,7 @@ public interface IAdminService
     Task<AppResult<bool>> SetRoleSalaryAsync(string role, decimal amount, string? payType = null) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<bool>> SetStaffSalaryAsync(string userId, decimal amount, string? payType = null) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<bool>> UseRoleSalaryAsync(string userId) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<bool>> SetPayrollDeductionsAsync(string userId, bool on) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<PayrollPeriod>> PayrollPeriodAsync(DateOnly startsOn) => Task.FromResult(AppResult<PayrollPeriod>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<IReadOnlyList<PayrollLine>>> PayrollLinesAsync(int periodId, string userId) => Task.FromResult(AppResult<IReadOnlyList<PayrollLine>>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<PayrollLine>> AddPayrollLineAsync(int periodId, string userId, string kind, decimal amount, string note, string category = "other") => Task.FromResult(AppResult<PayrollLine>.Fail(AppErrorKind.Unknown, "not_implemented"));
@@ -2161,6 +2162,8 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
         Rpc("set_staff_salary", new() { ["p_user"] = userId, ["p_amount"] = amount, ["p_pay_type"] = payType! });
 
     public Task<AppResult<bool>> UseRoleSalaryAsync(string userId) => Rpc("use_role_salary", new() { ["p_user"] = userId });
+
+    public Task<AppResult<bool>> SetPayrollDeductionsAsync(string userId, bool on) => Rpc("set_payroll_deductions", new() { ["p_user"] = userId, ["p_on"] = on });
 
     public Task<AppResult<IReadOnlyList<PayrollTimeRecord>>> PayrollRecordsAsync(int periodId, string userId) => Safe.RunAsync<IReadOnlyList<PayrollTimeRecord>>(async () =>
         await gw.RpcAsync<List<PayrollTimeRecord>>("payroll_records_for", new() { ["p_period"] = periodId, ["p_user"] = userId }) ?? []);

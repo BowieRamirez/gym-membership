@@ -49,8 +49,12 @@
                            IsVisible="{Binding NoSalary, Converter={StaticResource Not}}" />
                     <Label Grid.Column="4" Text="{Binding GrossText}" HorizontalOptions="End" VerticalOptions="Center" LineBreakMode="NoWrap"
                            IsVisible="{Binding NoSalary, Converter={StaticResource Not}}" />
-                    <Label Grid.Column="5" Text="{Binding DeductionsText}" HorizontalOptions="End" VerticalOptions="Center" LineBreakMode="NoWrap"
-                           IsVisible="{Binding NoSalary, Converter={StaticResource Not}}" />
+                    <!-- 0144 (T10): manual + government; the government part and the T8 warning under it -->
+                    <VerticalStackLayout Grid.Column="5" Spacing="2" HorizontalOptions="End" VerticalOptions="Center" IsVisible="{Binding NoSalary, Converter={StaticResource Not}}">
+                        <Label Text="{Binding DeductionsText}" HorizontalOptions="End" LineBreakMode="NoWrap" />
+                        <Label Text="{Binding GovText}" Style="{StaticResource Caption}" HorizontalOptions="End" LineBreakMode="NoWrap" IsVisible="{Binding HasGov}" />
+                        <c:StatusChip Status="Check warnings" HorizontalOptions="End" IsVisible="{Binding IsGovCut}" ToolTipProperties.Text="Deductions cut to keep pay above ₱0" />
+                    </VerticalStackLayout>
                     <Label Grid.Column="6" Text="{Binding NetText}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center" LineBreakMode="NoWrap"
                            IsVisible="{Binding NoSalary, Converter={StaticResource Not}}" />
 
@@ -110,7 +114,15 @@
                     </VerticalStackLayout>
                     <c:StatusChip Grid.Column="1" Status="No salary set" HorizontalOptions="End" VerticalOptions="Center" IsVisible="{Binding NoSalary}" />
 
-                    <Label Grid.Column="2" Text="{Binding UpdatedText}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    <VerticalStackLayout Grid.Column="2" Spacing="2" VerticalOptions="Center">
+                        <Label Text="{Binding UpdatedText}" Style="{StaticResource Muted}" LineBreakMode="TailTruncation" />
+                        <!-- 0144 (T4): government deductions on/off -->
+                        <HorizontalStackLayout Spacing="6">
+                            <Label Text="{Binding DeductionsText}" Style="{StaticResource Caption}" VerticalOptions="Center" />
+                            <Button Text="{Binding ToggleDeductionsText}" Style="{StaticResource LinkButton}" Command="{Binding ToggleDeductionsCommand}" VerticalOptions="Center"
+                                    SemanticProperties.Description="{Binding FullName, StringFormat='Switch government deductions for {0}'}" />
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
 
                     <HorizontalStackLayout Grid.Column="3" Spacing="8" HorizontalOptions="End" VerticalOptions="Center" IsVisible="{Binding IsNotEditing}">
                         <Button Text="Use role default" Style="{StaticResource LinkButton}" Command="{Binding UseRoleDefaultCommand}"
@@ -160,6 +172,10 @@
                             </MultiBinding>
                         </Label.Text>
                     </Label>
+                    <HorizontalStackLayout Spacing="6">
+                        <Label Text="{Binding DeductionsText}" Style="{StaticResource Caption}" VerticalOptions="Center" />
+                        <Button Text="{Binding ToggleDeductionsText}" Style="{StaticResource LinkButton}" Command="{Binding ToggleDeductionsCommand}" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
                     <HorizontalStackLayout Spacing="10" IsVisible="{Binding IsNotEditing}">
                         <Button Text="Set pay" Style="{StaticResource SmallOutlineButton}" Command="{Binding BeginEditCommand}" />
                         <Button Text="Use role default" Style="{StaticResource LinkButton}" Command="{Binding UseRoleDefaultCommand}"
@@ -306,6 +322,8 @@
                             <VerticalStackLayout Spacing="10">
                                 <Label Text="Role defaults" Style="{StaticResource SectionTitle}" />
                                 <Label Text="Everyone in the role without a rate of their own follows this, including new accounts. Personal rates stay as they are." Style="{StaticResource Caption}" />
+                                <Label Text="SSS, PhilHealth and Pag-IBIG are taken once a month in the 16th–end pay; withholding tax every pay. Rates from the 2026 tables; confirm them with your accountant."
+                                       Style="{StaticResource Caption}" />
                                 <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
                                     <VerticalStackLayout Spacing="6">
                                         <HorizontalStackLayout Spacing="8">
@@ -525,6 +543,23 @@
                                 <Label Text="No bonus or deduction lines yet." Style="{StaticResource Muted}" />
                             </BindableLayout.EmptyView>
                         </VerticalStackLayout>
+
+                        <!-- 0144 (T10): government deductions, read-only (the switch is on Salaries) -->
+                        <Label Text="Government deductions" Style="{StaticResource SectionTitle}" Margin="0,6,0,0" />
+                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding DrawerGov}" Spacing="8">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="vm:PayrollGovItem">
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                        <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                                            <Label Text="{Binding Label}" FontFamily="BarlowSemiBold" />
+                                            <Label Text="{Binding BasisText}" Style="{StaticResource Caption}" />
+                                        </VerticalStackLayout>
+                                        <Label Grid.Column="1" Text="{Binding AmountText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+                        <Label Text="{Binding DrawerGovNote}" Style="{StaticResource Caption}" IsVisible="{Binding DrawerGovNote, Converter={StaticResource HasText}}" />
 
                         <!-- Add bonus / deduction (Draft only) -->
                         <VerticalStackLayout Spacing="10" IsVisible="{Binding IsDraft}" Margin="0,6,0,0">
