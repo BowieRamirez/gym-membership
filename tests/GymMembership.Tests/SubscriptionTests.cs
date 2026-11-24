@@ -290,6 +290,23 @@ public class SubscriptionTests
     }
 
     [Fact]
+    public async Task Refunding_a_membership_also_refunds_unused_paid_coach_access()   // 0150 (owner, 2026-11-25)
+    {
+        var (gw, _, svc, monthly, _) = await Setup();
+        var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
+        var member=new MembershipService(gw);
+        var coach=(await member.BuyCoachAccessAsync()).Value!;
+        Assert.True((await member.PayOnlineAsync(coach.Id)).Value!.Paid);
+        var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
+        Assert.True((await svc.RequestRefundAsync(term.Id,"Changed plans","change_of_mind")).Ok);
+        await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
+        Assert.True((await svc.DecideAsync((await gw.ListAsync<RefundRequest>(r=>r.Kind=="membership")).Single().Id,true,"Ok")).Ok);
+        var card=(await svc.RefundsAsync()).Value!.Single(c=>c.Request.Kind=="coach_access");
+        Assert.Equal(("Coach access","To repay"),(card.PackageName,card.Status));
+        Assert.Equal(coach.Amount,card.Request.Amount);   // the demo's clock stands still: no coach access day used yet, all of it comes back
+    }
+
+    [Fact]
     public async Task Refunding_a_membership_expires_its_unpaid_coach_access()   // 0147 (live test 2026-11-25)
     {
         var (gw, _, svc, monthly, _) = await Setup();

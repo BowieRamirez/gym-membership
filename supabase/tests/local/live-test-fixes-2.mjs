@@ -75,6 +75,36 @@ try {
     await as(admin, `select decide_membership_refund($1,true,'Ok')`, [r.refund_request_id]);
     assert.equal((await payment(pb.payment_id)).status, 'pending');
   });
+  // 0150 (owner, 2026-11-25): approving a membership refund also refunds the unused days of paid coach access
+  const paidCoachAccess = async m => {
+    const ca = (await as(m.uid, 'select * from buy_coach_access(null)'))[0];
+    await as(desk, 'select verify_payment($1,true)', [ca.payment_id]);
+    return ca;
+  };
+  const refundTerm = async (m, approve = true) => {
+    const r = (await as(m.uid, `select * from request_membership_refund($1,'Moving away')`, [m.term.term_id]))[0];
+    await as(admin, `select decide_membership_refund($1,$2,'Ok')`, [r.refund_request_id, approve]);
+  };
+  await test('0150: approving a membership refund also refunds the unused coach access days, approved and ready to repay', async () => {
+    const m = await memberWithTerm(); const ca = await paidCoachAccess(m);
+    await refundTerm(m);
+    const r = (await db.query(`select * from refund_requests where payment_id=$1`, [ca.payment_id])).rows[0];
+    assert.ok(r, 'a coach access refund was opened');
+    assert.equal(r.kind, 'coach_access');
+    assert.equal(r.status, 'approved');
+    assert.ok(Number(r.amount) > 0 && Number(r.amount) < Number(ca.amount), `prorated: ${r.amount} of ${ca.amount}`);
+    await as(admin, `select record_membership_refund_paid($1,'gcash','TEST-REF')`, [r.refund_request_id]);
+    assert.equal((await db.query('select status from refund_requests where refund_request_id=$1', [r.refund_request_id])).rows[0].status, 'paid');
+  });
+  await test('0150: no coach access, or a rejected membership refund: no coach access refund', async () => {
+    const plain = await memberWithTerm();
+    await refundTerm(plain);
+    assert.equal((await db.query(`select count(*) n from refund_requests where member_id=$1 and kind='coach_access'`, [plain.uid])).rows[0].n, '0');
+    const kept = await memberWithTerm(); await paidCoachAccess(kept);
+    await refundTerm(kept, false);
+    assert.equal((await db.query(`select count(*) n from refund_requests where member_id=$1 and kind='coach_access'`, [kept.uid])).rows[0].n, '0');
+  });
+
   await test('0149: reschedule requests are gone (nothing could approve them since 0121); cancel and book again instead', async () => {
     const n = (await db.query(`select count(*) n from pg_proc where proname = 'request_reschedule' and pronamespace = 'public'::regnamespace`)).rows[0].n;
     assert.equal(n, '0');

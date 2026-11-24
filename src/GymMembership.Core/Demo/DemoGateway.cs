@@ -731,7 +731,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
     // plan 8.4: switch on whatever the payment paid for
     void ActivateTarget(Payment pay)
     {
-        var now = DateTime.UtcNow;
+        var now = SubscriptionNow;   // the demo's clock, as everywhere else (was the real clock: tests with a set date never got coach access)
         if (pay.Kind is PayKind.Membership or PayKind.Renewal)
         {
             ActivateMembershipTerm(pay);

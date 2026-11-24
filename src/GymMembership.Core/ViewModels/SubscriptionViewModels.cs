@@ -68,7 +68,7 @@ public partial class RefundsViewModel(ISubscriptionService subscription) : Loada
                 1 => r.Request.Kind == "membership",
                 2 => r.Request.Kind == "day_pass",
                 3 => r.Request.ReservationId is not null || r.Request.Kind is "cancel" or "no_show" or "walk_in_booking",
-                4 => r.Request.Kind == "coach_addon",
+                4 => r.Request.Kind is "coach_addon" or "coach_access",   // 0150
                 _ => true
             }
             && (q.Length == 0 || r.Member.Contains(q, StringComparison.OrdinalIgnoreCase) || r.PackageName.Contains(q, StringComparison.OrdinalIgnoreCase)));

@@ -79,7 +79,7 @@ public sealed record RefundCard(RefundRequest Request, string Member, string Pac
     {
         "cancel" => $"{Request.DecisionReason?.TrimEnd('.') ?? "Booking cancelled: down payment refunded"}.",   // G13 (0064): 24 hours or more before, the gym, or slot taken
         "no_show" => Request.Status == "pending" ? "The member says they didn't use the booking." : $"Didn't use it: {(Request.Status == "rejected" ? "declined" : "approved")} by the front desk.",
-        "online" => $"{Request.DecisionReason}.",   // 0095
+        "online" or "coach_access" => $"{Request.DecisionReason}.",   // 0095, 0150
         "day_pass" => "The front desk asked for this on the day the Day pass was paid for.",   // 0096
         "walk_in_booking" => Request.Status == "pending" ? "The front desk asked for this. Approving cancels the booking." : "The front desk asked for this.",
         _ => MembershipReview
@@ -89,7 +89,7 @@ public sealed record RefundCard(RefundRequest Request, string Member, string Pac
         : (Request.Kind == "day_pass" ? "The check-in stays on record." : "The booking is cancelled and its slot is freed.") + " The refund will await manual repayment — no money is sent by approving.";
     /// <summary>0095, 0096: a refund tied only to a payment: online money that could not be applied, or a Day pass.</summary>
     public static RefundCard ForOnline(RefundRequest r, Payment? p, string? memberName) =>
-        new(r, (p?.WalkInName is { } name && name != "Day pass" ? name : memberName) ?? (r.Kind == "day_pass" ? "No name given" : "Member"), r.Kind == "day_pass" ? "Day pass" : "Online payment",
+        new(r, (p?.WalkInName is { } name && name != "Day pass" ? name : memberName) ?? (r.Kind == "day_pass" ? "No name given" : "Member"), r.Kind switch { "day_pass" => "Day pass", "coach_access" => "Coach access", _ => "Online payment" },   // 0150: coach access
             p is null ? "" : $"{p.PaymentCode} · {p.OnlineChannel ?? PayMethod.Name(p.Method)}", Period: $"{r.RequestedAt.ToUniversalTime().AddHours(8):d MMM, h:mm tt}");
     string MembershipReview => Request.WasActivated switch
     {
@@ -189,7 +189,7 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
         var termsTask = gw.ListAsync<MembershipTerm>();
         var namesTask = Directory_.UserNamesAsync(gw);
         var bookingsTask = requests.Any(r => r.IsBooking) ? gw.ListAsync<Reservation>() : Task.FromResult<IReadOnlyList<Reservation>>([]);
-        var paymentsTask = requests.Any(r => r.Kind is "online" or "day_pass") ? gw.ListAsync<Payment>() : Task.FromResult<IReadOnlyList<Payment>>([]);
+        var paymentsTask = requests.Any(r => r.Kind is "online" or "day_pass" or "coach_access") ? gw.ListAsync<Payment>() : Task.FromResult<IReadOnlyList<Payment>>([]);
         await Task.WhenAll(termsTask, namesTask, bookingsTask, paymentsTask);
         var terms = termsTask.Result.Select(InUtc).ToList();
         var names = namesTask.Result;
@@ -198,7 +198,7 @@ public sealed class SubscriptionService(ISupabaseGateway gw, TimeProvider? time 
         var payments = paymentsTask.Result.ToDictionary(p => p.Id);
         return requests.OrderBy(r => r.Status is "paid" or "rejected").ThenBy(r => r.RequestedAt).Select(r =>
         {
-            if (r.Kind is "online" or "day_pass") return RefundCard.ForOnline(r, payments.GetValueOrDefault(r.PaymentId), names.GetValueOrDefault(r.MemberId ?? ""));
+            if (r.Kind is "online" or "day_pass" or "coach_access") return RefundCard.ForOnline(r, payments.GetValueOrDefault(r.PaymentId), names.GetValueOrDefault(r.MemberId ?? ""));
             if (r.IsBooking && bookings.GetValueOrDefault(r.ReservationId ?? 0) is { } b)   // F13: a booking refund names the amenity and the booked time
                 return new RefundCard(r, b.WalkInName ?? names.GetValueOrDefault(r.MemberId ?? "", "Member"), $"{amenities.GetValueOrDefault(b.AmenityId, "Amenity")} booking",
                     $"{b.StartsAt.ToUniversalTime().AddHours(8):d MMM yyyy, h:mm tt} – {b.EndsAt.ToUniversalTime().AddHours(8):h:mm tt} (Manila)",
