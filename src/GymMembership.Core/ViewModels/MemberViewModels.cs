@@ -210,6 +210,10 @@ public partial class RegisterViewModel(IAuthService auth, IAppNavigator nav) : L
 public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav, ISubscriptionService subscription, IUrlOpener? opener = null, ISessionService? sessions = null) : LoadableViewModel
 {
     public ObservableCollection<MembershipPackage> Packages { get; } = new();
+    /// <summary>Owner 2026-11-24: the page shows memberships (shortest first) and the Day pass apart.</summary>
+    public ObservableCollection<MembershipPackage> Memberships { get; } = new();
+    public ObservableCollection<MembershipPackage> DayPasses { get; } = new();
+    [ObservableProperty] private bool hasDayPasses;
     /// <summary>G4 (0060): shown codes this member can still use that fit a package, newest first. The section hides when there are none.</summary>
     public ObservableCollection<AvailableCode> Codes { get; } = new();
     [ObservableProperty] private bool hasCodes;
@@ -242,7 +246,12 @@ public partial class PackagesViewModel(IMembershipService svc, IAppNavigator nav
             LoadPayAsync()
         );
         if (allPackages is not null)
+        {
             Fill(Packages, allPackages.Where(p => !(member && p.IsDayPass)));
+            Fill(Memberships, Packages.Where(p => !p.IsDayPass).OrderBy(p => p.DurationDays).ThenBy(p => p.Price));
+            Fill(DayPasses, Packages.Where(p => p.IsDayPass).OrderBy(p => p.Price));
+            HasDayPasses = DayPasses.Count > 0;
+        }
     }
 
     async Task LoadPayAsync()

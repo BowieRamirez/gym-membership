@@ -86,6 +86,7 @@ public static class PayMethod
   [Column("includes_coach")] public bool IncludesCoach { get; set; }   // 0119: E3
   [Column("coach_addon_price")] public decimal? CoachAddonPrice { get; set; }   // 0119: E4
   [System.Text.Json.Serialization.JsonIgnore] public string LengthText => IsDayPass ? "Today only, until midnight" : $"{DurationDays} days of access";
+  [System.Text.Json.Serialization.JsonIgnore] public string BuyText => IsDayPass ? "Buy day pass" : "Choose next term";
   [System.Text.Json.Serialization.JsonIgnore] public string CoachText => IncludesCoach ? "Coach included" : CoachAddonPrice is { } p ? $"Add a coach: \u20B1{p:N0}" : "";
   // G6/G9 (0061): null = a draft; set only by publish_catalog_item. A version points at the package it replaces.
   [Column("published_at", ignoreOnInsert: true, ignoreOnUpdate: true)] public DateTime? PublishedAt { get; set; }
