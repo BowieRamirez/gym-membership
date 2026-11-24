@@ -159,6 +159,7 @@ public sealed partial class DemoGateway
                 var sl = _payrollLines.Where(l => l.PeriodId == per.Id && l.UserId == id && l.Kind == "salary").OrderBy(l => l.Id).FirstOrDefault();
                 payable = sl?.Quantity ?? (pay.PayType == "fixed" ? 1 : 0);
                 basePay = sl?.Amount ?? 0;
+                logged = pay.PayType == "fixed" ? 0 : Math.Max(0, payable - adjustment);   // what it was paid for (0143)
             }
             else if (pay.PayType == "fixed") { payable = 1; basePay = pay.Rate; }
             else { payable = Math.Max(0, logged + adjustment); basePay = Math.Round(payable * pay.Rate, 2, MidpointRounding.AwayFromZero); }
@@ -249,7 +250,7 @@ public sealed partial class DemoGateway
                 var userId = Str("p_user") ?? throw Err("bad_input");
                 if (PrimaryPayrollRole(userId) is not ("employee" or "coach")) throw Err("bad_input");
                 if (userId == Uid) throw Err("own_salary");
-                _staffSalaries.RemoveAll(s => s.UserId == userId);
+                if (_staffSalaries.RemoveAll(s => s.UserId == userId) == 0) return true;   // already following the role (0143)
                 Audit("payroll.salary_set", "staff_salaries", userId);
                 return true;
             }

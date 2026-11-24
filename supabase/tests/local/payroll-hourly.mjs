@@ -270,6 +270,26 @@ try {
     await assert.rejects(as(admin, `select payroll_mark_paid($1)`, [pid]), /period_not_ended/);
   });
 
+  await test('0143: a missing status is bad_input, not a database error', async () => {
+    const aug = (await period('2026-08-01')).period_id;
+    await assert.rejects(review(aug, 'cash_shift', 1, null), /bad_input/);
+  });
+
+  await test('0143: Use role default on someone already following the role changes nothing and logs nothing', async () => {
+    const follower = await user('employee', 'Desk Follower');
+    const before = (await db.query(`select count(*)::int n from audit_log where entity_id = $1::text`, [follower])).rows[0].n;
+    await as(admin, `select use_role_salary($1)`, [follower]);
+    const after = (await db.query(`select count(*)::int n from audit_log where entity_id = $1::text`, [follower])).rows[0].n;
+    assert.equal(after, before);
+  });
+
+  await test('0143: a paid period shows the approved hours it was paid for, even if records change later', async () => {
+    const late = await shift(desk, '2026-09-06T08:00:00+08:00', '2026-09-06T10:00:00+08:00');
+    await db.query(`insert into payroll_time_reviews(source, source_id, status, reviewed_by) values ('cash_shift', $1, 'approved', $2)`, [late, admin]);
+    const r = await row('2026-09-01', desk);
+    assert.equal(Number(r.logged), 7.5); assert.equal(Number(r.payable), 7.5);
+  });
+
   await test('RF7: a Part 3 paid line (no type, quantity or rate) reads as Fixed', async () => {
     const pid = (await db.query(`insert into payroll_periods(starts_on, ends_on, paid_at, paid_by) values ('2025-06-01','2025-06-15',now(),$1) returning period_id`, [admin])).rows[0].period_id;
     await db.query(`insert into payroll_lines(period_id,user_id,kind,amount,created_by) values ($1,$2,'salary',8000,$3)`, [pid, desk, admin]);

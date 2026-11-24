@@ -103,6 +103,10 @@ public class PayrollHourlyTests
         me = (await admin.PayrollStaffAsync()).Value!.First(s => s.UserId == desk.UserId);
         Assert.Equal((85m, false), (me.Amount, me.Personal));
         Assert.Equal("per_session_coach_only", (await admin.SetStaffSalaryAsync(desk.UserId, 150m, "per_session")).Message);
+        // already following the role: nothing changes and nothing is logged (0143)
+        var logged = (await admin.AuditExportAsync(new AuditFilter(Area: "payroll"))).Value!.Count;
+        Assert.True((await admin.UseRoleSalaryAsync(desk.UserId)).Ok);
+        Assert.Equal(logged, (await admin.AuditExportAsync(new AuditFilter(Area: "payroll"))).Value!.Count);
         Assert.Equal("hourly", (await admin.PayrollRoleSalariesAsync()).Value!.First(r => r.Role == "employee").PayType);
     }
 

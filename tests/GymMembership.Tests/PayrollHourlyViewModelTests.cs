@@ -93,6 +93,7 @@ public class PayrollHourlyViewModelTests
         Assert.Single(vm.DrawerAdjustments);
         Assert.Equal("+1.5 h", vm.DrawerAdjustments[0].QuantityText);
         Assert.Equal("Approved 4 h · corrections +1.5 h · payable 5.5 h × ₱80.00 = ₱440.00", vm.DrawerBasisText);
+        Assert.Equal("5.5 h × ₱80.00 (+1.5 h)", vm.Rows.First(r => r.UserId == desk.UserId).BasisText);
 
         vm.HoursInput = "-1";
         vm.HoursNote = "Left early";

@@ -3522,7 +3522,7 @@ public sealed partial class PayrollRowItem(PayrollRow row) : ObservableObject
     public string NetText => NoSalary && Net == 0 ? "–" : $"₱{Net:N2}";
     // 0142: basis, gross, pending and warning chips
     public string BasisText => Row.PayType == "fixed" ? "Fixed" : Row.Adjustment == 0 ? Row.BasisText
-        : $"{Row.BasisText} ({(Row.Adjustment > 0 ? "+" : "")}{Row.Adjustment.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)})";
+        : $"{Row.BasisText} ({(Row.Adjustment > 0 ? "+" : "")}{Row.Adjustment.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}{(Row.PayType == "per_session" ? (Math.Abs(Row.Adjustment) == 1 ? " session" : " sessions") : " h")})";
     public string PayTypeLabel => $"{PayTypes.Label(Row.PayType)} pay";
     public string BasePayText => NoSalary ? "–" : PayTypes.Money(Row.BasePay);
     public string GrossText => NoSalary && Row.Gross == 0 ? "–" : PayTypes.Money(Row.Gross);
