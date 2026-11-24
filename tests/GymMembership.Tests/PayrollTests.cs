@@ -153,8 +153,8 @@ public class PayrollTests
         await vm.SaveCoachRoleSalaryCommand.ExecuteAsync(null);
 
         Assert.Null(vm.RoleSalaryError);
-        Assert.Equal("Current: ₱7,800.00", vm.EmployeeRoleSalaryStatus);
-        Assert.Equal("Current: ₱11,000.00", vm.CoachRoleSalaryStatus);
+        Assert.Equal("Current: ₱7,800.00 per period", vm.EmployeeRoleSalaryStatus);
+        Assert.Equal("Current: ₱11,000.00 per period", vm.CoachRoleSalaryStatus);
         Assert.All(vm.StaffSalaries.Where(s => s.Data.Role == "employee"), s => Assert.Equal(7800m, s.Data.Amount));
         Assert.All(vm.StaffSalaries.Where(s => s.Data.Role == "coach"), s => Assert.Equal(11000m, s.Data.Amount));
         Assert.All(vm.Rows.Where(r => r.Row.Role == "employee"), r => Assert.Equal(7800m, r.Salary));

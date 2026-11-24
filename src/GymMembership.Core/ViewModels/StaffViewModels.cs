@@ -3499,6 +3499,8 @@ public sealed class PayrollLineItem(PayrollLine line, bool canRemove)
     public string KindLabel => Line.Kind switch { "bonus" => "Bonus", "deduction" => "Deduction", "salary" => "Salary", _ => Line.Kind };
     public string? Note => Line.Note;
     public string AmountText => $"{(Line.Kind == "deduction" ? "-" : "+")}₱{Line.Amount:N2}";
+    public string CategoryLabel => Line.CategoryLabel;
+    public string HeadingText => string.IsNullOrEmpty(CategoryLabel) ? KindLabel : $"{KindLabel} · {CategoryLabel}";
     public bool CanRemove { get; } = canRemove && line.Kind != "salary";
 }
 
@@ -3518,28 +3520,100 @@ public sealed partial class PayrollRowItem(PayrollRow row) : ObservableObject
     public string BonusesText => Bonuses == 0 ? "–" : $"₱{Bonuses:N2}";
     public string DeductionsText => Deductions == 0 ? "–" : $"₱{Deductions:N2}";
     public string NetText => NoSalary && Net == 0 ? "–" : $"₱{Net:N2}";
+    // 0142: basis, gross, pending and warning chips
+    public string BasisText => Row.PayType == "fixed" ? "Fixed" : Row.Adjustment == 0 ? Row.BasisText
+        : $"{Row.BasisText} ({(Row.Adjustment > 0 ? "+" : "")}{Row.Adjustment.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)})";
+    public string PayTypeLabel => $"{PayTypes.Label(Row.PayType)} pay";
+    public string BasePayText => NoSalary ? "–" : PayTypes.Money(Row.BasePay);
+    public string GrossText => NoSalary && Row.Gross == 0 ? "–" : PayTypes.Money(Row.Gross);
+    public bool HasPending => Row.Pending > 0;
+    public string PendingText => $"{Row.Pending} to approve";
+    public bool IsFlagged => Row.Flagged > 0;
     [ObservableProperty] private bool isSelected;
 }
 
-public sealed partial class StaffSalaryItem(StaffSalary s, Func<StaffSalaryItem, Task> save) : ObservableObject
+/// <summary>0142 (H12): one shift, coach check-in or session in the drawer, with Approve / Reject.</summary>
+public sealed partial class PayrollRecordItem(PayrollTimeRecord rec, bool editable, Func<PayrollRecordItem, string, string?, Task<string?>> review) : ObservableObject
+{
+    public PayrollTimeRecord Rec { get; } = rec;
+    public string Status => Rec.Status;
+    public string StatusLabel => Rec.EndsAt is null ? "Open" : Rec.Status switch { "approved" => "Approved", "rejected" => "Rejected", _ => "Pending" };
+    public string? Reason => Rec.Reason;
+    public bool HasReason => !string.IsNullOrEmpty(Rec.Reason);
+    public string TitleText => Rec.Label;
+    public string TimeText
+    {
+        get
+        {
+            var s = ManilaTime.Of(Rec.StartsAt);
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            return Rec.EndsAt is { } e ? $"{s.ToString("ddd d MMM · h:mm tt", inv)} → {ManilaTime.Of(e).ToString("h:mm tt", inv)} · {Rec.Hours.ToString("0.##", inv)} h"
+                                       : $"{s.ToString("ddd d MMM · h:mm tt", inv)} → still open";
+        }
+    }
+    public string FlagText => string.Join(" · ", Rec.Flags.Select(f => f switch
+    {
+        "open" => "Still open, not counted", "auto_closed" => "Closed by the system at closing time", "long" => "Over 12 hours",
+        "overlap" => "Overlaps, counted once", _ => f
+    }));
+    public bool HasFlags => Rec.Flags.Count > 0;
+    public bool CanReview => editable && Rec.EndsAt is not null;
+    public bool CanApprove => CanReview && Rec.Status != "approved";
+    public bool CanReject => CanReview && Rec.Status != "rejected";
+    public bool CanReopen => CanReview && Rec.Status != "pending";
+
+    [ObservableProperty] private bool isRejecting;
+    [ObservableProperty] private string rejectReason = "";
+    [ObservableProperty] private string? errorText;
+
+    [RelayCommand] private async Task ApproveAsync() => ErrorText = await review(this, "approved", null);
+    [RelayCommand] private async Task ReopenAsync() => ErrorText = await review(this, "pending", null);
+    [RelayCommand] private void BeginReject() { IsRejecting = true; ErrorText = null; }
+    [RelayCommand] private void CancelReject() { IsRejecting = false; ErrorText = null; }
+    [RelayCommand]
+    private async Task RejectAsync()
+    {
+        var reason = RejectReason.Trim();
+        if (reason.Length is 0 or > 200) { ErrorText = "Add a reason (1–200 characters)."; return; }
+        ErrorText = await review(this, "rejected", reason);
+    }
+}
+
+/// <summary>0142 (H5): one +/- hours (or sessions) correction in the drawer.</summary>
+public sealed class PayrollAdjustmentItem(PayrollHourAdjustment adj, string unit, bool canRemove)
+{
+    public PayrollHourAdjustment Adj { get; } = adj;
+    public string QuantityText => $"{(Adj.Quantity > 0 ? "+" : "")}{Adj.Quantity.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} {unit}";
+    public string Note => Adj.Note;
+    public string ByText => $"{Adj.CreatedByName} · {ManilaTime.Of(Adj.CreatedAt).ToString("d MMM", System.Globalization.CultureInfo.InvariantCulture)}";
+    public bool CanRemove { get; } = canRemove;
+}
+
+public sealed partial class StaffSalaryItem(StaffSalary s, Func<StaffSalaryItem, Task> save, Func<StaffSalaryItem, Task>? useRoleDefault = null) : ObservableObject
 {
     public StaffSalary Data { get; } = s;
     public string UserId => Data.UserId;
     public string FullName => Data.FullName;
     public string RoleLabel => Data.RoleLabel;
     public bool NoSalary => Data.NoSalary;
-    public string AmountText => Data.Amount is { } a ? $"₱{a:N2}" : "–";
+    public string AmountText => Data.Amount is { } a ? PayTypes.RateText(Data.PayType, a) : "–";
     public string UpdatedText => Data.UpdatedAt is { } at ? $"{ManilaTime.Of(at):d MMM yyyy} by {Data.UpdatedByName}" : "–";
+    // H14: a personal rate beats the role default; Use role default goes back
+    public string SourceText => Data.Personal ? "Personal" : "Role default";
+    public bool CanUseRoleDefault => Data.Personal && Data.Role is "employee" or "coach";
+    public IReadOnlyList<string> PayTypeOptions { get; } = PayrollViewModel.PayTypeOptionsFor(s.Role);
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsNotEditing))] private bool isEditing;
     public bool IsNotEditing => !IsEditing;
     [ObservableProperty] private string amountInput = s.Amount?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+    [ObservableProperty] private string payTypeInput = PayTypes.Label(s.PayType);
     [ObservableProperty] private string? errorText;
 
     [RelayCommand]
     private void BeginEdit()
     {
         AmountInput = Data.Amount?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+        PayTypeInput = PayTypes.Label(Data.PayType);
         ErrorText = null;
         IsEditing = true;
     }
@@ -3549,6 +3623,9 @@ public sealed partial class StaffSalaryItem(StaffSalary s, Func<StaffSalaryItem,
 
     [RelayCommand]
     private Task SaveAsync() => save(this);
+
+    [RelayCommand]
+    private Task UseRoleDefaultAsync() => useRoleDefault?.Invoke(this) ?? Task.CompletedTask;
 }
 
 public partial class PayrollViewModel : LoadableViewModel
@@ -3572,7 +3649,22 @@ public partial class PayrollViewModel : LoadableViewModel
 
     public ObservableCollection<PayrollRowItem> Rows { get; } = new();
     public ObservableCollection<PayrollLineItem> DrawerLines { get; } = new();
+    public ObservableCollection<PayrollRecordItem> DrawerRecords { get; } = new();
+    public ObservableCollection<PayrollAdjustmentItem> DrawerAdjustments { get; } = new();
     public ObservableCollection<StaffSalaryItem> StaffSalaries { get; } = new();
+
+    // 0142 (H1): pay type words; Per session is for coaches only
+    public static IReadOnlyList<string> PayTypeOptionsFor(string role) => role == "coach" ? ["Fixed", "Hourly", "Per session"] : ["Fixed", "Hourly"];
+    public IReadOnlyList<string> EmployeePayTypeOptions { get; } = PayTypeOptionsFor("employee");
+    public IReadOnlyList<string> CoachPayTypeOptions { get; } = PayTypeOptionsFor("coach");
+    static string PayTypeCode(string label) => label switch { "Hourly" => "hourly", "Per session" => "per_session", _ => "fixed" };
+    static string AmountWord(string payType) => payType switch { "hourly" => "an hourly rate", "per_session" => "a session rate", _ => "a salary" };
+    // H16: categories for bonus and deduction lines
+    public IReadOnlyList<string> LineCategories { get; } = ["Regular bonus", "Overtime adjustment", "Holiday pay adjustment", "Other adjustment"];
+    static string CategoryCode(string label) => label switch
+    {
+        "Regular bonus" => "regular_bonus", "Overtime adjustment" => "overtime", "Holiday pay adjustment" => "holiday", _ => "other"
+    };
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPeriodTab), nameof(IsSalariesTab))]
     private string activeTab = "period";
@@ -3588,13 +3680,18 @@ public partial class PayrollViewModel : LoadableViewModel
     [ObservableProperty] private int periodId;
     [ObservableProperty] private string statusText = "Draft";
     [ObservableProperty] private string totalNetText = "₱0.00";
+    [ObservableProperty] private string totalGrossText = "Gross ₱0.00";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanMarkPaid), nameof(HasPendingRecords), nameof(MarkPaidBlockedText))]
+    private int pendingTotal;
+    public bool HasPendingRecords => PendingTotal > 0;
+    public string MarkPaidBlockedText => PendingTotal == 0 ? "" : $"Approve or reject {PendingTotal} {(PendingTotal == 1 ? "shift or session" : "shifts or sessions")} first";
     [ObservableProperty] private string summaryText = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasNoSalary))]
     private int noSalaryCount;
     public bool HasNoSalary => NoSalaryCount > 0;
     public bool IsDraft => !IsPaid;
     public bool IsEmptyStaff => !IsBusy && Rows.Count == 0 && ErrorMessage is null;
-    public bool CanMarkPaid => !IsPaid && Rows.Count > 0 && PeriodEndsOn <= ManilaToday();
+    public bool CanMarkPaid => !IsPaid && Rows.Count > 0 && PendingTotal == 0 && PeriodEndsOn <= ManilaToday();
     public string PeriodLabel => PayrollPdf.PeriodSpan(PeriodStartsOn, PeriodEndsOn == default ? PeriodStartFor(PeriodStartsOn).AddDays(14) : PeriodEndsOn);
 
     // Side drawer state
@@ -3608,10 +3705,22 @@ public partial class PayrollViewModel : LoadableViewModel
     [ObservableProperty] private string lineAmountText = "";
     [ObservableProperty] private string lineNote = "";
     [ObservableProperty] private string? lineError;
+    [ObservableProperty] private string lineCategory = "Regular bonus";
+    // H5: hour (or session) corrections
+    [ObservableProperty] private string hoursInput = "";
+    [ObservableProperty] private string hoursNote = "";
+    [ObservableProperty] private string? hoursError;
+    [ObservableProperty] private string drawerBasisText = "";
+    public bool CanCorrectHours => IsDraft && SelectedRow?.Row.PayType is "hourly" or "per_session";
+    public bool HasTimeRecords => SelectedRow?.Row.PayType is "hourly" or "per_session";
+    public string CorrectionUnitLabel => SelectedRow?.Row.PayType == "per_session" ? "Sessions (+ or −)" : "Hours (+ or −)";
+    public string RecordsTitle => SelectedRow?.Row.PayType == "per_session" ? "Sessions" : SelectedRow?.Row.Role == "coach" ? "Check-ins" : "Cash shifts";
 
     // Role-level fixed salaries (Salaries tab)
     [ObservableProperty] private string employeeRoleSalaryInput = "";
     [ObservableProperty] private string coachRoleSalaryInput = "";
+    [ObservableProperty] private string employeeRolePayType = "Fixed";
+    [ObservableProperty] private string coachRolePayType = "Fixed";
     [ObservableProperty] private string employeeRoleSalaryStatus = "Not set yet";
     [ObservableProperty] private string coachRoleSalaryStatus = "Not set yet";
     [ObservableProperty] private string? roleSalaryError;
@@ -3662,8 +3771,10 @@ public partial class PayrollViewModel : LoadableViewModel
         {
             var emp = roles.FirstOrDefault(r => r.Role == "employee");
             var coach = roles.FirstOrDefault(r => r.Role == "coach");
-            EmployeeRoleSalaryStatus = emp?.Amount is { } ea ? $"Current: ₱{ea:N2}" : "Not set yet";
-            CoachRoleSalaryStatus = coach?.Amount is { } ca ? $"Current: ₱{ca:N2}" : "Not set yet";
+            EmployeeRoleSalaryStatus = emp?.Amount is { } ea ? $"Current: {PayTypes.RateText(emp.PayType, ea)}" : "Not set yet";
+            CoachRoleSalaryStatus = coach?.Amount is { } ca ? $"Current: {PayTypes.RateText(coach.PayType, ca)}" : "Not set yet";
+            if (emp?.Amount is not null) EmployeeRolePayType = PayTypes.Label(emp.PayType);
+            if (coach?.Amount is not null) CoachRolePayType = PayTypes.Label(coach.PayType);
             if (emp?.Amount is { } eVal && string.IsNullOrWhiteSpace(EmployeeRoleSalaryInput))
                 EmployeeRoleSalaryInput = eVal.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
             if (coach?.Amount is { } cVal && string.IsNullOrWhiteSpace(CoachRoleSalaryInput))
@@ -3671,28 +3782,29 @@ public partial class PayrollViewModel : LoadableViewModel
         });
         await RunAsync(() => _svc.PayrollStaffAsync(), list =>
         {
-            Fill(StaffSalaries, list.Select(s => new StaffSalaryItem(s, SaveSalaryAsync)));
+            Fill(StaffSalaries, list.Select(s => new StaffSalaryItem(s, SaveSalaryAsync, UseRoleDefaultAsync)));
         });
     }
 
     [RelayCommand]
-    private Task SaveEmployeeRoleSalaryAsync() => SaveRoleSalaryAsync("employee", EmployeeRoleSalaryInput);
+    private Task SaveEmployeeRoleSalaryAsync() => SaveRoleSalaryAsync("employee", EmployeeRoleSalaryInput, EmployeeRolePayType);
 
     [RelayCommand]
-    private Task SaveCoachRoleSalaryAsync() => SaveRoleSalaryAsync("coach", CoachRoleSalaryInput);
+    private Task SaveCoachRoleSalaryAsync() => SaveRoleSalaryAsync("coach", CoachRoleSalaryInput, CoachRolePayType);
 
-    async Task SaveRoleSalaryAsync(string role, string input)
+    async Task SaveRoleSalaryAsync(string role, string input, string payTypeLabel)
     {
         RoleSalaryError = null;
+        var payType = PayTypeCode(payTypeLabel);
         if (!decimal.TryParse(input.Trim(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var amount) || amount <= 0)
         {
-            RoleSalaryError = "Enter a salary above ₱0.";
+            RoleSalaryError = $"Enter {AmountWord(payType)} above ₱0.";
             return;
         }
-        var res = await _svc.SetRoleSalaryAsync(role, amount);
+        var res = await _svc.SetRoleSalaryAsync(role, amount, payType);
         if (!res.Ok) { RoleSalaryError = ErrorText.For(res.Error, res.Message); return; }
         var label = role == "coach" ? "Coach" : "Front desk";
-        Notice = $"₱{amount:N2} applied to all {label} staff.";
+        Notice = $"{PayTypes.RateText(payType, amount)} set for {label} staff who follow the role default.";
         await LoadSalariesAsync();
         await LoadPeriodAsync();
     }
@@ -3707,6 +3819,8 @@ public partial class PayrollViewModel : LoadableViewModel
             ? $"Paid {ManilaTime.Of(p.PaidAt!.Value).ToString("d MMM", System.Globalization.CultureInfo.InvariantCulture)} by {p.PaidByName ?? "Admin"}"
             : "Draft";
         TotalNetText = $"₱{p.TotalNet:N2}";
+        TotalGrossText = $"Gross {PayTypes.Money(p.TotalGross)}";
+        PendingTotal = p.IsPaid ? 0 : p.Rows.Sum(r => r.Pending);
         NoSalaryCount = p.Rows.Count(r => r.NoSalary);
         SummaryText = p.Rows.Count == 0
             ? "No staff in this period"
@@ -3717,6 +3831,8 @@ public partial class PayrollViewModel : LoadableViewModel
         var selectedId = SelectedRow?.UserId;
         Fill(Rows, p.Rows.Select(r => new PayrollRowItem(r) { IsSelected = r.UserId == selectedId }));
         if (selectedId is not null) SelectedRow = Rows.FirstOrDefault(r => r.UserId == selectedId);
+        DrawerBasisText = SelectedRow is { } sel ? BasisSentence(sel.Row) : "";
+        NotifyDrawerKind();
         OnPropertyChanged(nameof(IsEmptyStaff));
         OnPropertyChanged(nameof(CanMarkPaid));
         MarkPaidCommand.NotifyCanExecuteChanged();
@@ -3732,8 +3848,22 @@ public partial class PayrollViewModel : LoadableViewModel
         LineAmountText = "";
         LineNote = "";
         LineKind = "bonus";
+        LineCategory = "Regular bonus";
+        HoursInput = ""; HoursNote = ""; HoursError = null;
+        DrawerBasisText = BasisSentence(row.Row);
+        NotifyDrawerKind();
         await LoadDrawerLinesAsync();
     }
+
+    void NotifyDrawerKind()
+    {
+        OnPropertyChanged(nameof(CanCorrectHours));
+        OnPropertyChanged(nameof(HasTimeRecords));
+        OnPropertyChanged(nameof(CorrectionUnitLabel));
+        OnPropertyChanged(nameof(RecordsTitle));
+    }
+
+    static string BasisSentence(PayrollRow r) => PayTypes.BasisSentence(r);
 
     [RelayCommand]
     private void CloseDrawer()
@@ -3741,16 +3871,89 @@ public partial class PayrollViewModel : LoadableViewModel
         foreach (var r in Rows) r.IsSelected = false;
         SelectedRow = null;
         DrawerLines.Clear();
+        DrawerRecords.Clear();
+        DrawerAdjustments.Clear();
         LineError = null;
     }
 
-    [RelayCommand] private void SetLineKind(string kind) { LineKind = kind == "deduction" ? "deduction" : "bonus"; LineError = null; }
+    [RelayCommand]
+    private void SetLineKind(string kind)
+    {
+        LineKind = kind == "deduction" ? "deduction" : "bonus";
+        LineCategory = LineKind == "deduction" ? "Other adjustment" : "Regular bonus";
+        LineError = null;
+    }
 
     async Task LoadDrawerLinesAsync()
     {
         if (SelectedRow is not { } row || PeriodId <= 0) return;
         await RunAsync(() => _svc.PayrollLinesAsync(PeriodId, row.UserId), lines =>
             Fill(DrawerLines, lines.Where(l => l.Kind != "salary").Select(l => new PayrollLineItem(l, !IsPaid))));
+        if (!HasTimeRecords) { DrawerRecords.Clear(); DrawerAdjustments.Clear(); return; }
+        var unit = row.Row.PayType == "per_session" ? "sessions" : "h";
+        await RunAsync(() => _svc.PayrollRecordsAsync(PeriodId, row.UserId), recs =>
+            Fill(DrawerRecords, recs.Select(r => new PayrollRecordItem(r, !IsPaid, ReviewRecordAsync))));
+        await RunAsync(() => _svc.PayrollAdjustmentsAsync(PeriodId, row.UserId), adjs =>
+            Fill(DrawerAdjustments, adjs.Select(a => new PayrollAdjustmentItem(a, unit, !IsPaid))));
+    }
+
+    async Task<string?> ReviewRecordAsync(PayrollRecordItem item, string status, string? reason)
+    {
+        var res = await _svc.ReviewPayrollTimeAsync(PeriodId, item.Rec.Source, item.Rec.SourceId, status, reason);
+        if (!res.Ok) return ErrorText.For(res.Error, res.Message);
+        await LoadPeriodAsync();
+        await LoadDrawerLinesAsync();
+        return null;
+    }
+
+    /// <summary>H12 quick path: approves every Pending record without a warning, in the whole period.</summary>
+    [RelayCommand]
+    private Task ApproveAllUnflaggedAsync() => ApproveAllAsync(null);
+
+    /// <summary>Same, for the person open in the drawer.</summary>
+    [RelayCommand]
+    private Task ApproveAllForPersonAsync() => SelectedRow is { } row ? ApproveAllAsync(row.UserId) : Task.CompletedTask;
+
+    async Task ApproveAllAsync(string? userId)
+    {
+        if (IsPaid || PeriodId <= 0) return;
+        var res = await _svc.ApproveAllPayrollTimeAsync(PeriodId, userId);
+        if (!res.Ok) { ErrorMessage = ErrorText.For(res.Error, res.Message); return; }
+        Notice = res.Value == 0 ? "Nothing approved: the rest have warnings to check one by one."
+                                : $"{res.Value} {(res.Value == 1 ? "record" : "records")} approved.";
+        await LoadPeriodAsync();
+        await LoadDrawerLinesAsync();
+    }
+
+    [RelayCommand]
+    private async Task AddHoursAsync()
+    {
+        if (SelectedRow is not { } row || !CanCorrectHours) return;
+        HoursError = null;
+        if (!decimal.TryParse(HoursInput.Trim(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var q)
+            || Math.Round(q, 2) == 0 || Math.Abs(q) > 1000)
+        {
+            HoursError = row.Row.PayType == "per_session" ? "Enter sessions to add or take away, like 1 or -1." : "Enter hours to add or take away, like 1.5 or -2.";
+            return;
+        }
+        var note = HoursNote.Trim();
+        if (note.Length is 0 or > 200) { HoursError = "Add a short note (1–200 characters)."; return; }
+        var res = await _svc.AddPayrollHoursAsync(PeriodId, row.UserId, q, note);
+        if (!res.Ok) { HoursError = ErrorText.For(res.Error, res.Message); return; }
+        HoursInput = ""; HoursNote = "";
+        await LoadPeriodAsync();
+        await LoadDrawerLinesAsync();
+    }
+
+    [RelayCommand]
+    private async Task RemoveHoursAsync(PayrollAdjustmentItem? item)
+    {
+        if (item is null || !item.CanRemove) return;
+        HoursError = null;
+        var res = await _svc.RemovePayrollHoursAsync(item.Adj.AdjustmentId);
+        if (!res.Ok) { HoursError = ErrorText.For(res.Error, res.Message); return; }
+        await LoadPeriodAsync();
+        await LoadDrawerLinesAsync();
     }
 
     [RelayCommand]
@@ -3769,7 +3972,7 @@ public partial class PayrollViewModel : LoadableViewModel
             LineError = "Add a short note (1–200 characters).";
             return;
         }
-        var res = await _svc.AddPayrollLineAsync(PeriodId, row.UserId, LineKind, amount, note);
+        var res = await _svc.AddPayrollLineAsync(PeriodId, row.UserId, LineKind, amount, note, CategoryCode(LineCategory));
         if (!res.Ok) { LineError = ErrorText.For(res.Error, res.Message); return; }
         LineAmountText = "";
         LineNote = "";
@@ -3798,6 +4001,12 @@ public partial class PayrollViewModel : LoadableViewModel
             var names = noSal.Count == 1 ? noSal[0] : string.Join(", ", noSal[..^1]) + " and " + noSal[^1];
             msg += $" {names} {(noSal.Count == 1 ? "has" : "have")} no salary set and {(noSal.Count == 1 ? "gets" : "get")} nothing.";
         }
+        var flagged = Rows.Where(r => r.IsFlagged).Select(r => r.FullName).ToList();
+        if (flagged.Count > 0)
+        {
+            var names = flagged.Count == 1 ? flagged[0] : string.Join(", ", flagged[..^1]) + " and " + flagged[^1];
+            msg += $" {names} {(flagged.Count == 1 ? "has" : "have")} records with warnings (open, closed by the system, over 12 hours or overlapping).";
+        }
         return msg + " Paid periods can't be changed.";
     }
 
@@ -3811,9 +4020,9 @@ public partial class PayrollViewModel : LoadableViewModel
         if (!res.Ok)
         {
             var msg = res.Message ?? "";
-            if (msg.StartsWith("net_below_zero:", StringComparison.Ordinal))
+            if (msg.StartsWith("net_below_zero:", StringComparison.Ordinal) || msg.StartsWith("time_pending:", StringComparison.Ordinal))
             {
-                var who = msg["net_below_zero:".Length..];
+                var who = msg[(msg.IndexOf(':') + 1)..];
                 var target = Rows.FirstOrDefault(r => r.FullName == who);
                 if (target is not null) await OpenDrawerAsync(target);
                 LineError = ErrorText.For(res.Error, res.Message);
@@ -3837,28 +4046,43 @@ public partial class PayrollViewModel : LoadableViewModel
         PayrollPeriod? current = null;
         if (!await RunAsync(() => _svc.PayrollPeriodAsync(PeriodStartsOn), p => current = p) || current is null) return;
         var linesByUser = new Dictionary<string, IReadOnlyList<PayrollLine>>();
+        var adjustmentsByUser = new Dictionary<string, IReadOnlyList<PayrollHourAdjustment>>();
         foreach (var r in current.Rows)
         {
             var res = await _svc.PayrollLinesAsync(current.PeriodId, r.UserId);
             if (res.Ok && res.Value is not null) linesByUser[r.UserId] = res.Value;
+            if (r.PayType == "fixed") continue;
+            var adj = await _svc.PayrollAdjustmentsAsync(current.PeriodId, r.UserId);
+            if (adj.Ok && adj.Value is not null) adjustmentsByUser[r.UserId] = adj.Value;
         }
         var name = $"payroll-{current.StartsOn:yyyy-MM-dd}-to-{current.EndsOn:yyyy-MM-dd}.pdf";
-        if (await RunAsync(() => Safe.RunAsync(async () => { await _files.ShareAsync(name, PayrollPdf.Build(_gymName, current, linesByUser, DateTime.UtcNow, await _files.FontAsync())); return true; })))
+        if (await RunAsync(() => Safe.RunAsync(async () => { await _files.ShareAsync(name, PayrollPdf.Build(_gymName, current, linesByUser, DateTime.UtcNow, await _files.FontAsync(), adjustmentsByUser)); return true; })))
             Notice = "Payroll PDF saved to your Downloads folder and opened.";
     }
 
     async Task SaveSalaryAsync(StaffSalaryItem item)
     {
         item.ErrorText = null;
+        var payType = PayTypeCode(item.PayTypeInput);
         if (!decimal.TryParse(item.AmountInput.Trim(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var amount) || amount <= 0)
         {
-            item.ErrorText = "Enter a salary above ₱0.";
+            item.ErrorText = $"Enter {AmountWord(payType)} above ₱0.";
             return;
         }
-        var res = await _svc.SetStaffSalaryAsync(item.UserId, amount);
+        var res = await _svc.SetStaffSalaryAsync(item.UserId, amount, payType);
         if (!res.Ok) { item.ErrorText = ErrorText.For(res.Error, res.Message); return; }
         item.IsEditing = false;
-        Notice = $"Salary saved for {item.FullName}.";
+        Notice = $"Pay saved for {item.FullName}.";
+        await LoadSalariesAsync();
+        await LoadPeriodAsync();
+    }
+
+    async Task UseRoleDefaultAsync(StaffSalaryItem item)
+    {
+        item.ErrorText = null;
+        var res = await _svc.UseRoleSalaryAsync(item.UserId);
+        if (!res.Ok) { item.ErrorText = ErrorText.For(res.Error, res.Message); return; }
+        Notice = $"{item.FullName} now follows the {item.RoleLabel} default.";
         await LoadSalariesAsync();
         await LoadPeriodAsync();
     }
