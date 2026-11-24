@@ -4,12 +4,12 @@
 
 Created: 2026-11-24
 Last updated: 2026-11-24
-Status (2026-11-24): plan written; H1-H11 recommended, **waiting on the owner to confirm**. Not built.
+Status (2026-11-24): plan written; H1-H13 recommended (H12 shift approval and H13 overlaps added at the owner's request), **waiting on the owner to confirm**. Not built.
 Branch: `hourly-payroll-2026-11-24` (cut from `origin/main` at `a464366`, v0.10.0). **Owner's rule: this branch is not merged into `main` yet.** No PR until the owner asks.
 
-**Goal:** Payroll pays each person by their own arrangement instead of one fixed salary for everyone: **Hourly** (approved hours × hourly rate), **Per session** (completed sessions × session rate) or **Fixed** (today's salary per period). Hours come from the records the app already keeps (front desk cash shifts, coach check-in/out), the admin can correct them with a reason while the period is a draft, and Mark as paid freezes the hours, rate and pay so a later rate change never alters a paid period.
+**Goal:** Payroll pays each person by their own arrangement instead of one fixed salary for everyone: **Hourly** (approved hours × hourly rate), **Per session** (completed sessions × session rate) or **Fixed** (today's salary per period). Hours come from the records the app already keeps (front desk cash shifts, coach check-in/out); **a record only counts once the admin approves it** (a raw log never becomes payable time by itself), overlapping records are never counted twice, the admin can correct totals with a reason while the period is a draft, and Mark as paid freezes the hours, rate and pay so a later rate change never alters a paid period.
 
-**Architecture:** Extend Part 3's payroll (`0136`-`0138`), don't replace it. `staff_salaries` and `role_salaries` gain a pay type; `amount` becomes the rate for that type. Hours already computed by `payroll_period` (closed `cash_shifts` for front desk) and the coach check-in/out table `coach_visits` (0032) become the pay basis. One new table for hour corrections. `payroll_lines` gains `quantity`, `rate` and `pay_type` so the frozen salary line explains itself. Same page (`PayrollPage`), same drawer, same PDF path (`PayrollPdf`), same permission (`reports:revenue`), same audit.
+**Architecture:** Extend Part 3's payroll (`0136`-`0138`), don't replace it. `staff_salaries` and `role_salaries` gain a pay type; `amount` becomes the rate for that type. Hours already computed by `payroll_period` (closed `cash_shifts` for front desk) and the coach check-in/out table `coach_visits` (0032) become the pay basis. Two new tables: hour corrections, and a review status per shift/visit (no row = Pending; the shift and visit tables themselves are not touched). `payroll_lines` gains `quantity`, `rate` and `pay_type` so the frozen salary line explains itself. Same page (`PayrollPage`), same drawer, same PDF path (`PayrollPdf`), same permission (`reports:revenue`), same audit.
 
 **Tech Stack:** Supabase (Postgres migrations), .NET MAUI (Core + App), CommunityToolkit.Mvvm, xUnit, Node database tests.
 
@@ -19,7 +19,7 @@ Branch: `hourly-payroll-2026-11-24` (cut from `origin/main` at `a464366`, v0.10.
 
 Same rules as `2026-11-20-desk-customer-shifts.md`:
 
-- Decisions first. Nothing is built until the owner confirms H1-H11. One phase at a time, in order; each phase ends working and committed.
+- Decisions first. Nothing is built until the owner confirms H1-H13. One phase at a time, in order; each phase ends working and committed.
 - **Skills, every phase:**
   - `ponytail` full mode for the whole session (smallest diff, reuse before writing).
   - `superpowers:test-driven-development` for every rule: the failing test first, watched failing.
@@ -33,8 +33,8 @@ Same rules as `2026-11-20-desk-customer-shifts.md`:
 
 | Phase | What | Needs | Status |
 |---|---|---|---|
-| 1 | Database: pay type and rate, hours as the pay basis, hour corrections, frozen lines | H1-H9, H11 | Not started |
-| 2 | Payroll page: pay type on Salaries, hours × rate on the period, corrections in the drawer, PDF | H1-H9, H11 | Not started |
+| 1 | Database: pay type and rate, shift/visit approval, overlap-free hours as the pay basis, hour corrections, frozen lines | H1-H9, H11-H13 | Not started |
+| 2 | Payroll page: pay type on Salaries, hours × rate on the period, approve/reject records and corrections in the drawer, PDF | H1-H9, H11-H13 | Not started |
 | 3 | Checks, review, owner hand checks | | Not started |
 
 ## 1. Findings (2026-11-24)
@@ -60,12 +60,14 @@ All recommended by Claude, **to confirm by the owner**.
 | H3 | **Hourly coach hours = desk check-in/out (`coach_visits`)**, closed visits in the period, by the Manila date of check-in. Time at work, not only time in sessions. Auto-closed visits count up to the closing time they were closed at, and are flagged (H6). | Recommended |
 | H4 | **No double pay:** one pay type per person, so a per-session coach is never also paid hourly for the same time. Per session counts the same sessions the reference count shows today (completed, in the period, not an unpaid held add-on). | Recommended |
 | H5 | **Hour corrections:** on a draft the admin adds **+ or − hours** for a person with a required note (1-200 characters, e.g. "Forgot to open the drawer 8-9 am on 3 Nov"). Removable while draft. The original shift and visit records are never edited. Payable hours = logged hours + corrections, never below 0. Per-session people get **+ or − sessions** the same way. | Recommended |
-| H6 | **Flags (shown, not blocking):** a shift or visit still open at the end of the period (not counted), an auto-closed visit, any single shift or visit over 12 hours. Shown as a warning chip on the row and listed in the drawer and in the Mark as paid confirm. | Recommended |
+| H6 | **Flags (shown, not blocking):** a shift or visit still open at the end of the period (not counted), an auto-closed visit, any single shift or visit over 12 hours, records that overlap (H13). Shown as a warning chip on the row and listed in the drawer and in the Mark as paid confirm. | Recommended |
 | H7 | **Frozen on paid:** Mark as paid writes the salary line with `pay_type`, `quantity` (hours or sessions, after corrections) and `rate`, and `amount = round(quantity × rate, 2)` (Fixed: quantity 1). A rate or pay type changed later never changes a paid period. No separate rate-history table: the paid line is the history. | Recommended |
 | H8 | **Rate changes on a draft:** a draft uses the person's **current** pay type and rate for the whole period (same as P3 today). Changing a rate mid-period: change it after Mark as paid, or fix the difference with a Bonus/Deduction note. | Recommended |
 | H9 | **Rounding and money:** hours to the minute, shown to 2 decimals; pay rounded to the centavo once per person (never per shift). Money `numeric(12,2)`, hours `numeric(8,2)`. Audit: `payroll.salary_set` now records old → new pay type and rate; new `payroll.hours_adjusted` / `payroll.hours_adjustment_removed`. | Recommended |
 | H10 | **Out of scope for now:** paper DTR comparison, automatic overtime / holiday / rest day / night differential, SSS / PhilHealth / Pag-IBIG / tax, Draft → For review → Approved steps, monthly salary proration, staff seeing their own payslip. These need the gym's accountant to set the rules; until then, Bonus/Deduction lines with notes cover them (P5). | Recommended |
 | H11 | **Mark as paid with no rate:** someone Hourly or Per session with 0 hours/sessions gets ₱0 and is listed; someone with no pay set stays "No salary set" (P2). `net_below_zero` still refuses. | Recommended |
+| H12 | **Each shift and visit is approved before it pays** (source document: "a raw time log must not automatically become payable time"). For every **Hourly** person, each closed cash shift / coach visit in the period is **Pending** until the admin marks it **Approved** or **Rejected** (reason required, 1-200 characters). Only Approved records count; Pending and Rejected show in the drawer but add 0 h. Quick path: **Approve all** for a person (or the whole period) approves their Pending records **that have no flag** (H6); flagged ones must be approved one by one. The decision can be changed while the period is a draft and is locked once paid. **Mark as paid is refused while any Hourly person has a Pending record** (`time_pending`, naming the person), so nothing is forgotten. Fixed and Per session people need no review: Fixed ignores hours, and a completed session is already confirmed by the desk's session code check-in (0122). Status is kept in its own table (no row = Pending), so `cash_shifts` and `coach_visits` are never edited. Audit: `payroll.time_approved`, `payroll.time_rejected`, `payroll.time_reopened` (record, person, old → new status, reason). | Owner asked to add, 2026-11-24 |
+| H13 | **Overlapping time counts once.** Before summing, a person's Approved records in the period are merged where they overlap (two shifts 8:00-12:00 and 11:00-14:00 = 6 h, not 7 h). Overlapping records are also flagged (H6) so the admin sees why the total is lower. Done in the one basis helper so the draft and the frozen line agree. | Owner asked to add, 2026-11-24 |
 
 ## The Payroll page changes (impeccable brief)
 
@@ -73,8 +75,9 @@ Run `impeccable` before the XAML and again before the commit. Same **operate mod
 
 - **Salaries tab:** each row gets a **Pay type** (Fixed / Hourly / Per session, segment or picker; Per session only for coaches) and the amount label follows it: "₱8,000.00 per period", "₱80.00 per hour", "₱150.00 per session". **Set pay** edits type + amount inline (Save, Cancel). The role defaults at the top get the same pair.
 - **Pay period table:** the Hours column becomes the **basis**: "41.50 h × ₱80.00" / "12 sessions × ₱150.00" / "Fixed". Corrected hours show a small "(+1.00 h)" after them. Salary column renamed **Base pay**. A flag chip (H6) on rows with open, auto-closed or very long records. Money right-aligned, tabular figures, as today.
-- **Drawer:** the basis line ("Logged 40.50 h · corrections +1.00 h · payable 41.50 h × ₱80.00 = ₱3,320.00"), the flagged records with date and times, **Add hours correction** (± hours + note; ± sessions for Per session) next to Add bonus / Add deduction, remove on each correction while draft. Read-only once paid.
-- **Mark as paid confirm:** adds "3 records flagged" with the names, like the no-salary names today.
+- **Pending count:** rows with Pending records show "3 to approve" (warning chip); the quiet line under the total says "5 shifts to approve" and **Approve all unflagged** sits next to it (H12).
+- **Drawer:** the basis line ("Approved 40.50 h · corrections +1.00 h · payable 41.50 h × ₱80.00 = ₱3,320.00"), then a compact list of the person's shifts/visits in the period (date, in → out, hours, flag, status chip Pending / Approved / Rejected) with **Approve** and **Reject** (reason box) on each, and **Approve all unflagged** above the list. Overlapping records are marked "overlaps, counted once". **Add hours correction** (± hours + note; ± sessions for Per session) next to Add bonus / Add deduction, remove on each correction while draft. Read-only once paid.
+- **Mark as paid:** disabled with "Approve or reject 5 shifts first" while anything is Pending (the server refuses `time_pending` too). The confirm adds "3 records flagged" with the names, like the no-salary names today.
 - **PDF:** each payslip block shows the basis line and the corrections with notes.
 - **Anti-goals:** no clock-in screen, no timesheet grid per day, no charts, nothing on member, coach or desk screens.
 
@@ -93,8 +96,13 @@ Run `impeccable` before the XAML and again before the commit. Same **operate mod
 5. **Per-session coach** → paid by completed sessions only; no-shows, cancelled and unpaid held add-on sessions not counted; check-in hours ignored.
 6. **Add or remove a correction on a paid period** → `payroll_paid`, nothing changes.
 7. **Old paid periods from Part 3** still show and export the same totals.
+8. **Hourly person with 3 shifts: 1 Approved, 1 Pending, 1 Rejected** → only the Approved shift counts; Mark as paid refused `time_pending` naming them until the Pending one is decided.
+9. **Approve all** → approves only unflagged Pending records; flagged ones stay Pending.
+10. **Approve or reject on a paid period**, or a record outside the period, or a record of someone else's period → refused, nothing changes.
+11. **Two approved shifts 8:00-12:00 and 11:00-14:00** → 6.00 h, both flagged as overlapping; a shift fully inside another adds nothing.
+12. **Reject without a reason** → refused.
 
-## Phase 1: Database (H1-H9, H11)
+## Phase 1: Database (H1-H9, H11-H13)
 
 ### Task 1: Pay type, corrections, computed pay
 
@@ -108,19 +116,22 @@ Run `impeccable` before the XAML and again before the commit. Same **operate mod
   - `payroll_period(p_starts_on)`: per person also returns `pay_type`, `rate`, `logged` (hours or sessions by H2/H3/H4), `adjustment`, `payable` (≥ 0), `base_pay` (`round(payable × rate, 2)`, or the fixed amount), and `flags` (H6); once paid, all from the frozen line. Net = base pay + bonuses − deductions.
   - `payroll_add_hours(p_period, p_user, p_hours, p_note)` / `payroll_remove_hours(p_adjustment)`: draft only (`payroll_paid`), audited.
   - `payroll_adjustments_for(p_period, p_user)` and `payroll_flags_for(p_period, p_user)` for the drawer (or fold into `payroll_lines_for`; pick the smaller diff).
-  - `payroll_mark_paid(p_period)`: same locks and refusals; freezes `base_pay` with `pay_type`, `quantity`, `rate`.
-  - The basis maths lives in one place (a private helper function both `payroll_period` and `payroll_mark_paid` call), so the draft and the frozen line can't disagree.
+  - `payroll_mark_paid(p_period)`: same locks and refusals, plus `time_pending:<name>` while any Hourly person has a Pending record; freezes `base_pay` with `pay_type`, `quantity`, `rate`.
+  - The basis maths lives in one place (a private helper function both `payroll_period` and `payroll_mark_paid` call), so the draft and the frozen line can't disagree. It counts only Approved records and merges overlapping intervals per person before summing (H13; gaps-and-islands over `tstzrange`, or `range_agg` if the live Postgres has it).
+- New `payroll_time_reviews` (`source text check (source in ('cash_shift','coach_visit'))`, `source_id bigint`, primary key `(source, source_id)`, `status text check (status in ('approved','rejected'))`, `reason` required for rejected (1-200), `reviewed_by`, `reviewed_at`). RLS on, no grants. No row = Pending.
+- Functions: `payroll_records_for(p_period, p_user)` (the person's shifts/visits in the period: times, hours, flags, status, reason) for the drawer; `payroll_review_time(p_period, p_source, p_source_id, p_status, p_reason)` (`approved`, `rejected` or `pending` to reopen; the record must belong to the period and to an Hourly person; draft only, `payroll_paid`; audited); `payroll_approve_all(p_period, p_user default null)` (unflagged Pending only; returns how many; audited once with the count).
+- App also: `PayrollTimeRecord` model, `Foundation.cs` sentence for `time_pending`.
 - App: `IAdminService` + `Services.cs`, `Models.cs` (`PayrollRow`, `StaffSalary` gain pay type, rate, logged, adjustment, payable, flags; new `PayrollHourAdjustment`), `Foundation.cs` sentences (`per_session_coach_only`), `DemoPayroll.cs` mirror.
 - Tests: `supabase/tests/local/payroll.mjs` (extend), `tests/GymMembership.Tests/PayrollTests.cs`.
 
-- [ ] Failing tests first: Review Focus 1-7; existing salaries read as Fixed with the same totals; per session refused for a front desk person; correction without a note refused; auto-closed visit counted and flagged; a shift over 12 h flagged; pay rounded once per person (e.g. 3 shifts of 20 min at ₱80 = ₱80.00).
+- [ ] Failing tests first: Review Focus 1-12; existing salaries read as Fixed with the same totals; per session refused for a front desk person; correction without a note refused; auto-closed visit counted and flagged; a shift over 12 h flagged; pay rounded once per person (e.g. 3 shifts of 20 min at ₱80 = ₱80.00).
 - [ ] Migration, dry-run push, push live, live grants checked (anon and non-admin refused), `ponytail:ponytail-review`, commit, push branch.
 
 ## Phase 2: Payroll page
 
 ### Task 2: Salaries tab, period table, drawer, PDF
 
-**Files:** `Views/PayrollPage.xaml` (+ `.xaml.cs`), `PayrollViewModel` in `StaffViewModels.cs` (pay type editing, basis text, flags, add/remove hours), `PayrollPdf` in `RevenueReport.cs`, `PayrollTests.cs` (basis text per pay type; corrections shown; paid period hides Add hours; confirm names flagged people; the PDF payslip lists the basis and corrections).
+**Files:** `Views/PayrollPage.xaml` (+ `.xaml.cs`), `PayrollViewModel` in `StaffViewModels.cs` (pay type editing, basis text, flags, add/remove hours), `PayrollPdf` in `RevenueReport.cs`, `PayrollTests.cs` (basis text per pay type; corrections shown; paid period hides Add hours and Approve/Reject; Mark as paid disabled while records are Pending; Reject needs a reason; Approve all leaves flagged records Pending; confirm names flagged people; the PDF payslip lists the basis and corrections).
 
 - [ ] `impeccable` before the XAML (brief above); build; check with `impeccable` (critique and audit) in light and dark on Windows at narrow and wide widths; fix what it finds.
 - [ ] View model tests green; Windows build; `ponytail:ponytail-review` on the diff; commit, push branch.
@@ -129,8 +140,9 @@ Run `impeccable` before the XAML and again before the commit. Same **operate mod
 
 - [ ] Whole suite (`dotnet test`, Windows & Android builds, `payroll.mjs`) green.
 - [ ] `superpowers:requesting-code-review` on the branch diff; fixes committed.
-- [ ] Owner hand checks (Windows): set a front desk person to Hourly ₱80 and a coach to Per session ₱150, open the current period, check the hours against the cash shifts, add a correction, export the PDF, mark a past period paid, change a rate and confirm the paid period didn't change.
+- [ ] Owner hand checks (Windows): set a front desk person to Hourly ₱80 and a coach to Per session ₱150, open the current period, check the hours against the cash shifts, approve some shifts, reject one with a reason, try Mark as paid with one still Pending (refused), add a correction, export the PDF, mark a past period paid, change a rate and confirm the paid period didn't change.
 
 ## Session log
 
 - 2026-11-24: plan written from the owner's `hourly_based_payroll_recommendation_v2.md`, cut down to its section 13 first implementation on top of Part 3 payroll. Branch `hourly-payroll-2026-11-24` cut from `origin/main` (`a464366`). H1-H11 recommended, waiting on the owner. Not built. Next migration `0142`.
+- 2026-11-24: owner compared the plan with the source document and asked to add (1) per-shift approval and (2) no double-counting of overlaps: H12 and H13 added (new `payroll_time_reviews` table, Approve / Reject / Approve all, `time_pending` blocks Mark as paid, overlapping approved time merged). Still left out on purpose: breaks, paper DTR, rate history table, extra statuses, per-person payment records, premiums and statutory deductions, fuller summary (see H10).
