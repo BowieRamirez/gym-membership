@@ -219,21 +219,18 @@ public class NewFeatureTests
         await Assert.ThrowsAsync<Exception>(() => gw.UpdateAsync(other));
     }
 
-    // ---------- reschedule and cancel ----------
+    // ---------- cancel (0149: no reschedule; cancel and book again) ----------
     [Fact]
-    public async Task Cancelling_a_session_works_for_either_side_and_drops_its_open_reschedule()
+    public async Task Cancelling_a_session_works_for_either_side()
     {
         var gw = await As("member@demo.io");
         var sessions = new SessionService(gw);
         var booked = (await sessions.SessionsAsync()).Value!.First(r => r.Session.Status == "scheduled").Session;
-        var start = booked.ScheduledStart.AddDays(1);
-        await sessions.RescheduleAsync(booked.Id, start, start.AddHours(1));
 
         Assert.True((await sessions.CancelSessionAsync(booked.Id)).Ok);
         Assert.Equal(AppErrorKind.Conflict, (await sessions.CancelSessionAsync(booked.Id)).Error); // already cancelled
 
         await gw.SignInAsync("coach@demo.io", DemoGateway.DemoPassword);
-        Assert.DoesNotContain(await gw.ListAsync<TimeRequest>(r => r.SessionId == booked.Id && r.Status == "pending"), _ => true);
         Assert.Contains(await gw.ListAsync<UserNotification>(), n => n.Title.Contains("cancelled"));
 
         await gw.SignInAsync("carlo@demo.io", DemoGateway.DemoPassword);

@@ -31,7 +31,6 @@
                                 SemanticProperties.Hint="Extends this session and its amenity booking by 30 minutes" />
                         <Button Text="Mark complete" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanManage}" Clicked="OnComplete" />
                         <Button Text="No-show" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanManage}" Clicked="OnNoShow" />
-                        <Button Text="Reschedule" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanChange}" Clicked="OnStartReschedule" />
                         <Button Text="Cancel session" Style="{StaticResource SmallOutlineButton}" IsVisible="{Binding CanChange}" Clicked="OnCancel" />
                     </HorizontalStackLayout>
                 </Grid>
@@ -62,7 +61,6 @@
                                 SemanticProperties.Hint="Extends this session and its amenity booking by 30 minutes" />
                         <Button Text="Mark complete" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanManage}" Clicked="OnComplete" />
                         <Button Text="No-show" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanManage}" Clicked="OnNoShow" />
-                        <Button Text="Reschedule" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanChange}" Clicked="OnStartReschedule" />
                         <Button Text="Cancel session" Style="{StaticResource FilterChip}" Margin="0,0,8,8" IsVisible="{Binding CanChange}" Clicked="OnCancel" />
                     </FlexLayout>
                 </VerticalStackLayout>
@@ -201,31 +199,7 @@
                 </Border>
                 </VerticalStackLayout>
 
-                <!-- the side panel only while a session is being moved; otherwise the list takes the full width. The coach photo
-                     prompt lives on My coach profile only (9.6: here it sat above the sessions that needed action). -->
-                <VerticalStackLayout Spacing="12" IsVisible="{Binding Rescheduling, Converter={StaticResource IsNotNull}}">
-                    <Border Style="{StaticResource SidePanel}">
-                        <VerticalStackLayout Spacing="12">
-                                <c:CardTitle Text="{Binding Rescheduling.Title, StringFormat='Move “{0}” to a new time'}" />
-                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                    <VerticalStackLayout Spacing="4">
-                                        <Label Text="New date" Style="{StaticResource Caption}" />
-                                        <Border Style="{StaticResource Field}"><DatePicker Date="{Binding Date}" MinimumDate="{x:Static x:DateTime.Today}" /></Border>
-                                    </VerticalStackLayout>
-                                    <VerticalStackLayout Grid.Column="1" Spacing="4">
-                                        <Label Text="New start time" Style="{StaticResource Caption}" />
-                                        <Border Style="{StaticResource Field}"><TimePicker Time="{Binding Time}" /></Border>
-                                    </VerticalStackLayout>
-                                </Grid>
-                                <Label Text="The session keeps its length. The other person has to approve the new time before it moves." Style="{StaticResource Caption}" />
-                                <FlexLayout Wrap="Wrap">
-                                    <Button Text="Send new time" Style="{StaticResource SmallButton}" Margin="0,0,8,8" Command="{Binding SendRescheduleCommand}" />
-                                    <Button Text="Keep current time" Style="{StaticResource SmallOutlineButton}" Margin="0,0,8,8" Command="{Binding StopRescheduleCommand}" />
-                                </FlexLayout>
-                            </VerticalStackLayout>
-                    </Border>
-
-                </VerticalStackLayout>
+                <!-- 0149: no side panel any more (reschedule removed; change a time by cancelling and booking again) -->
             </c:SideLayout>
 
             <VerticalStackLayout x:Name="CalendarSection" IsVisible="False" Spacing="12" Margin="0,12,0,0">

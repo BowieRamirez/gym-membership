@@ -249,7 +249,7 @@ public static class ErrorText
         "already_requested" => "A refund request already exists for this.",
         "refund_day_passed" => "A Day pass can only be refunded on the day it was paid for.",   // 0096
         "refund_too_late" => "This booking starts in under 24 hours, so it can only be refunded if the gym is cancelling it.",
-        "active_coaching_session" => "You already have an active session together. Open Sessions to reschedule or cancel it. Finish, cancel or mark that session no-show before requesting another.",
+        "active_coaching_session" => "You already have an active session together. Open Sessions to cancel it, or finish it or mark it no-show, before booking another.",
         "pending_session_request" => "You already have a pending request to this coach. Wait for a reply or cancel it below before sending another.",
         "invite_member_inactive" => "This member needs an active membership before you can invite them to a session.",
         _ when raw?.Contains("time_requests_one_pending_member_per_coach", StringComparison.OrdinalIgnoreCase) == true => "You already have a pending request to this coach. Wait for a reply or cancel it below before sending another.",

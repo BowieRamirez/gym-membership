@@ -30,7 +30,6 @@ public class AttendanceViewModelTests
         public Task<AppResult<bool>> ExtendAsync(int reservationId, int minutes) => throw new NotSupportedException();
         public Task<AppResult<IReadOnlyList<SessionRow>>> SessionsAsync() => throw new NotSupportedException();
         public Task<AppResult<bool>> SetSessionStatusAsync(int sessionId, string status) => throw new NotSupportedException();
-        public Task<AppResult<bool>> RescheduleAsync(int sessionId, DateTime startUtc, DateTime endUtc) => throw new NotSupportedException();
         public Task<AppResult<bool>> CancelSessionAsync(int sessionId, string? reason = null) => throw new NotSupportedException();
     }
 

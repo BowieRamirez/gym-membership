@@ -1228,7 +1228,6 @@ public interface ISessionService
     Task<AppResult<IReadOnlyList<SessionRow>>> SessionsAsync();
     /// <summary>The coach marks a session done (Completed) or missed (NoShow). Recorded as attendance, which also sets the status.</summary>
     Task<AppResult<bool>> SetSessionStatusAsync(int sessionId, string status);
-    Task<AppResult<bool>> RescheduleAsync(int sessionId, DateTime startUtc, DateTime endUtc);
     Task<AppResult<bool>> CancelSessionAsync(int sessionId, string? reason = null);
     /// <summary>The coach adds minutes (30-minute steps) to a session on an amenity; the session and its reservation move together.</summary>
     Task<AppResult<bool>> ExtendAsync(int reservationId, int minutes);
@@ -1275,16 +1274,6 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
                 r?.Id, r is null ? null : amenities.FirstOrDefault(a => a.Id == r.AmenityId)?.Name ?? "Amenity");
         }).ToList();
     });
-
-    public async Task<AppResult<bool>> RescheduleAsync(int sessionId, DateTime startUtc, DateTime endUtc)
-    {
-        if (endUtc <= startUtc) return AppResult<bool>.Fail(AppErrorKind.Validation, "end must be after start");
-        return await Safe.RunAsync(async () =>
-        {
-            await gw.RpcAsync<int>("request_reschedule", new() { ["p_session_id"] = sessionId, ["p_start"] = startUtc.ToString("O"), ["p_end"] = endUtc.ToString("O") });
-            return true;
-        });
-    }
 
     public Task<AppResult<bool>> CancelSessionAsync(int sessionId, string? reason = null) => Safe.RunAsync(async () =>
     {

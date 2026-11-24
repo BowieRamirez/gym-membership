@@ -96,7 +96,6 @@ public class ConfirmationTests
         { "StaffViewModels.cs", "SessionsViewModel", "Cancel" },
         { "StaffViewModels.cs", "SessionsViewModel", "Set" },
         { "StaffViewModels.cs", "SessionsViewModel", "Extend" },
-        { "StaffViewModels.cs", "SessionsViewModel", "SendReschedule" },
         { "StaffViewModels.cs", "AttendanceViewModel", "CancelShift" },
         { "StaffViewModels.cs", "ShiftsViewModel", "Cancel" },
         { "StaffViewModels.cs", "CoachProfileViewModel", "ToggleVisit" },

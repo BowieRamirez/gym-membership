@@ -4,7 +4,7 @@
 
 Created: 2026-11-24
 Last updated: 2026-11-25
-Status (2026-11-25): H1-H17 confirmed by the owner (as recommended). Phases 1-2 built, reviewed, live-tested and fixed. The branch also carries the follow-ups listed under "Everything on this branch" below, including a live test of the whole system (2026-11-25) and its fixes. Migrations `0142`-`0148` all live; Xendit webhook confirmed working in Test mode; branch pushed (in sync with `origin`). Left: owner hand checks, reject TEST shift 35 in karl's 16-30 Nov payroll, decide the open items below, a new app release. **Not merged.** Next migration `0149`.
+Status (2026-11-25): H1-H17 confirmed by the owner (as recommended). Phases 1-2 built, reviewed, live-tested and fixed. The branch also carries the follow-ups listed under "Everything on this branch" below, including a live test of the whole system (2026-11-25) and its fixes. Migrations `0142`-`0149` all live; Xendit webhook confirmed working in Test mode; branch pushed (in sync with `origin`). Left: owner hand checks, reject TEST shift 35 in karl's 16-30 Nov payroll, decide the open items below, a new app release. **Not merged.** Next migration `0150`.
 
 ## Everything on this branch (2026-11-24 to 2026-11-25)
 
@@ -18,13 +18,15 @@ Status (2026-11-25): H1-H17 confirmed by the owner (as recommended). Phases 1-2 
 | **Paid out tab** on Payroll: every period marked as paid out with its frozen totals (people, base pay, bonuses, gross, deductions, government deductions, net, who approved, who paid out) | — (owner request; built with Gemini, see Session log) | `0146` | `5d7d5d9` |
 | **Live system test fixes**: `assign_role` refuses the System admin role (the app could not take it back); refunding a membership expires its unpaid coach access, so money paid later becomes an approved refund | — (owner's live system test, see Session log) | `0147` | `7f5d5ee` |
 | **Booking slot hold and cleanup**: an unpaid online booking holds its slot for 15 minutes (members, desk, desk walk-ins, pass bookings, the grid); Revenue says when the start date is after the end date; the app code for hiring and time requests removed in 0121 is deleted (unreachable Requests page, its view model, service calls, demo cases, tests); the member's "current session" card names the coach from the sessions list | — (owner, after the live test) | `0148` | `933b9a8` |
+| **Reschedule removed**: the Sessions page's Reschedule button and panel and `request_reschedule` (nothing could approve them since 0121); change a time by cancelling and booking again | — (owner, 2026-11-25) | `0149` | (this commit) |
 | **Staff page tabs and a layout fix**: Revenue gets **Revenue / Cash shifts** tabs, Users and roles gets **Active accounts / Deactivated** tabs (both were stacked tables), Payroll Salaries' government-deductions editor gets its own full-width line | — (owner request, see Session log) | — | `8595f8d` |
 | **Live system test** (360 checks as admin, coach, front desk and TEST members; Xendit Test mode) and the **Xendit webhook fix** (URL moved to "Payment Session Completed" in the dashboard; no code change; payment 161 confirmed by the webhook alone) | — (owner request, see Session log) | — | `a5a2118`, `bc5cb28` (docs) |
 
 ## Before merging (owner)
 
 - [ ] Reject TEST shift 35 (karl, 25 Nov) in the 16-30 Nov payroll, reason "TEST shift from the live test".
-- [ ] Decide the two open choices below (reschedule requests; coach access in a membership refund).
+- [x] Reschedule requests: removed (0149).
+- [ ] Decide the open choice below: coach access in a membership refund.
 - [ ] Hand checks on Windows: Payroll (Phase 3 list below), the Revenue / Cash shifts tabs, the Users Active / Deactivated tabs, the Salaries deductions editor at narrow width, a booking held for 15 minutes; light and dark.
 - [ ] Phone checks: Packages page (Memberships / Day pass sections) and the member Calendar, light and dark, 1.3 font scale.
 - [ ] New app release (v0.10.0 can't approve shifts, so it can't pay hourly people).
@@ -32,7 +34,7 @@ Status (2026-11-25): H1-H17 confirmed by the owner (as recommended). Phases 1-2 
 
 ## Open items (2026-11-25)
 
-- **Reschedule requests can't be answered**: the Sessions page still sends a new time (`request_reschedule`), but 0121 removed `respond_time_request`, so nobody can approve it. Owner to choose: remove the button, or add an approve step.
+- ~~Reschedule requests can't be answered~~ **Done (0149)**: owner chose to remove it. The Reschedule button and panel are gone from Sessions and `request_reschedule` is dropped; a session's time changes by cancelling and booking again (the new coach booking, 0120). Old app versions still show the button; it now gives an error instead of sending a request nobody can answer.
 - **Coach access paid before a membership refund**: the refund covers the membership only; owner to decide whether unused coach access days are refunded too.
 - **TEST records on live** from the live test: accounts `claude.test*.20261125@example.com`, payments 148-161, refunds 39-43 (paid by GCash reference), discount `TESTCLAUDE6534`, closed shift 35, payroll period 144 (16-31 Jan 2025) paid out. Owner to reject TEST shift 35 in karl's 16-30 Nov payroll.
 - **Xendit Live mode**: when switching to live keys, set the same webhook URL on "Payment Session Completed" in Live mode and Live mode's own `XENDIT_WEBHOOK_TOKEN`.
@@ -198,6 +200,7 @@ Run `impeccable` before the XAML and again before the commit. Same **operate mod
 - Payroll has a **Paid out** tab listing every paid-out period and its totals.
 - Revenue has **Revenue / Cash shifts** tabs; Users and roles has **Active accounts / Deactivated** tabs.
 - An unpaid online amenity booking holds its slot for 15 minutes, so two people can't pay for the same hour.
+- Sessions no longer has Reschedule: to change a session's time, cancel it and book again.
 - The System admin role can no longer be given to an account; a refunded membership cancels its unpaid coach access (money paid anyway is refunded).
 - **Update the admin app before using these.** On 0.10.0: its "Mark as paid" approves; it can't approve shifts (so it can't pay hourly people), reopen, mark paid out or set the two switches (its single switch turns both off/on); its totals already include the government deductions. Fixed-only payroll still works on 0.10.0.
 - Hourly and per-session periods are approved from the day after the period ends (fixed-only periods: on the last day, as before); a 16th–end is approved only after the same month's 1st–15th.

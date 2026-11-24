@@ -75,6 +75,10 @@ try {
     await as(admin, `select decide_membership_refund($1,true,'Ok')`, [r.refund_request_id]);
     assert.equal((await payment(pb.payment_id)).status, 'pending');
   });
+  await test('0149: reschedule requests are gone (nothing could approve them since 0121); cancel and book again instead', async () => {
+    const n = (await db.query(`select count(*) n from pg_proc where proname = 'request_reschedule' and pronamespace = 'public'::regnamespace`)).rows[0].n;
+    assert.equal(n, '0');
+  });
 } finally {
   await db.end(); await server.stop();
 }

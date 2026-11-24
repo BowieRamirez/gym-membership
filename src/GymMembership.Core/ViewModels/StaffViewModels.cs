@@ -1161,9 +1161,6 @@ public partial class SessionsViewModel(ISessionService svc, IMembershipService? 
     /// <summary>All, Scheduled, Completed or Cancelled (which also covers no-shows). Kept across reloads.</summary>
     [ObservableProperty, NotifyPropertyChangedFor(nameof(EmptyText))] private string filter = "All";
     public string EmptyText => Filter == "All" ? "No sessions yet. Book a coach above." : "No sessions with this status. Choose All to see every session.";
-    [ObservableProperty] private SessionRow? rescheduling;
-    [ObservableProperty] private DateTime date = DateTime.Today.AddDays(1);
-    [ObservableProperty] private TimeSpan time = new(9, 0, 0);
 
     public override async Task OnAppearingAsync()
     {
@@ -1244,28 +1241,6 @@ public partial class SessionsViewModel(ISessionService svc, IMembershipService? 
         Notice = null;
         if (row.ReservationId is not { } id || !await Confirm.AskAsync("Add 30 minutes?", $"With {row.With}. The member will be told.", "Add 30 minutes")) return;
         if (await RunAsync(() => svc.ExtendAsync(id, 30))) { Notice = "Added 30 minutes. The member has been told."; await LoadAsync(); }
-    }
-
-    [RelayCommand]
-    private void StartReschedule(SessionRow row)
-    {
-        Notice = null; Rescheduling = row;
-        var start = row.Session.ScheduledStart.ToLocalTime();
-        Date = start.Date; Time = start.TimeOfDay;
-    }
-
-    [RelayCommand] private void StopReschedule() => Rescheduling = null;
-
-    [RelayCommand]
-    private async Task SendRescheduleAsync()
-    {
-        if (Rescheduling is not { } row) return;
-        var start = (Date.Date + Time).ToUniversalTime();
-        var end = start + (row.Session.ScheduledEnd - row.Session.ScheduledStart); // keep the session length
-        Notice = null;
-        if (!await Confirm.AskAsync("Ask for this new time?", $"With {row.With}, {Fmt.Range(start, end)}.\nIt moves once they approve.", "Send")) return;
-        if (await RunAsync(() => svc.RescheduleAsync(row.Session.Id, start, end)))
-        { Notice = "Reschedule sent. It moves once the other person approves it in Time requests."; Rescheduling = null; }
     }
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsReportingDamage))] private SessionRow? reportingDamageSession;

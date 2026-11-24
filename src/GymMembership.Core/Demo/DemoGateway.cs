@@ -1141,19 +1141,6 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 Notify(uid == h.CoachId ? h.MemberId : h.CoachId, "system", "Coaching ended");
                 return null;
             }
-            case "request_reschedule":
-            {
-                RequireActive();
-                var start = T("p_start"); var end = T("p_end");
-                if (end <= start) throw Err("end must be after start");
-                var s = All<TrainingSession>().FirstOrDefault(x => x.Id == I("p_session_id") && (x.CoachId == uid || x.MemberId == uid)) ?? throw Err("not_found");
-                if (s.Status != Status.Scheduled || s.ScheduledStart <= now || All<TimeRequest>().Any(r => r.SessionId == s.Id && r.Status == Status.Pending)) throw Err("already_processed");
-                var byCoach = uid == s.CoachId;
-                var req = Add(new TimeRequest { CoachId = s.CoachId, MemberId = s.MemberId, SessionId = s.Id, RequestedBy = byCoach ? "coach" : "member",
-                                                RequestedStart = start, RequestedEnd = end, Message = Opt("p_message") });
-                Notify(byCoach ? s.MemberId : s.CoachId, "time_request", "Reschedule requested");
-                return req.Id;
-            }
             case "cancel_session":
             {
                 RequireActive();
