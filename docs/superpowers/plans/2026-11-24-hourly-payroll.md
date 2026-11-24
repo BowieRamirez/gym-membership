@@ -4,7 +4,7 @@
 
 Created: 2026-11-24
 Last updated: 2026-11-25
-Status (2026-11-25): H1-H17 confirmed by the owner (as recommended). Phases 1-2 built, reviewed, live-tested and fixed. The branch also carries the follow-ups listed under "Everything on this branch" below, including a live test of the whole system (2026-11-25) and its fixes. Migrations `0142`-`0150` all live; Xendit webhook confirmed working in Test mode; branch pushed (in sync with `origin`). Left: a new app release, then the PR (owner hand checks on Windows and Android done; TEST shift 35 rejected). **Not merged.** Next migration `0151`.
+Status (2026-11-25): H1-H17 confirmed by the owner (as recommended). Phases 1-2 built, reviewed, live-tested and fixed. The branch also carries the follow-ups listed under "Everything on this branch" below, including a live test of the whole system (2026-11-25) and its fixes. Migrations `0142`-`0150` all live; Xendit webhook confirmed working in Test mode; branch pushed (in sync with `origin`). Done: merged into `main` by PR #26 (`df3f54c`) and released as **v0.11.0** on 2026-11-25. Staff update the admin app before paying hourly people. Next migration `0151`.
 
 ## Everything on this branch (2026-11-24 to 2026-11-25)
 
@@ -30,8 +30,8 @@ Status (2026-11-25): H1-H17 confirmed by the owner (as recommended). Phases 1-2 
 - [x] Coach access in a membership refund: unused days refunded too (0150).
 - [x] Hand checks on Windows (owner, 2026-11-25: all working): Payroll (Phase 3 list below), the Revenue / Cash shifts tabs, the Users Active / Deactivated tabs, the Salaries deductions editor at narrow width, a booking held for 15 minutes; light and dark.
 - [x] Phone checks (owner, 2026-11-25: all working): Packages page (Memberships / Day pass sections) and the member Calendar, light and dark, 1.3 font scale.
-- [ ] New app release (v0.10.0 can't approve shifts, so it can't pay hourly people).
-- [ ] Ask for the PR and merge into `main`.
+- [x] New app release: v0.11.0 tagged 2026-11-25, GitHub Release with MSI, MSIX, sideload zip and APK (v0.10.0 can't approve shifts, so it can't pay hourly people).
+- [x] Merged into `main` by PR #26 (`df3f54c`) after all checks passed.
 
 ## Open items (2026-11-25)
 
