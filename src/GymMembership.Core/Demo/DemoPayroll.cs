@@ -413,6 +413,32 @@ public sealed partial class DemoGateway
                 Audit("payroll.paid_out", "payroll_periods", per.Id.ToString());
                 result = BuildPayrollPeriod(per); return true;
             }
+            case "payroll_paid_out_periods":
+            {
+                Require("reports:revenue");
+                result = _payrollPeriods
+                    .Where(p => p.PaidOutAt is not null)
+                    .OrderByDescending(p => p.StartsOn)
+                    .ThenByDescending(p => p.PaidOutAt)
+                    .Select(p =>
+                    {
+                        var lines = _payrollLines.Where(l => l.PeriodId == p.Id).ToList();
+                        var basePay = lines.Where(l => l.Kind == "salary").Sum(l => l.Amount);
+                        var bonuses = lines.Where(l => l.Kind == "bonus").Sum(l => l.Amount);
+                        var deductions = lines.Where(l => l.Kind == "deduction").Sum(l => l.Amount);
+                        var gov = lines.Where(l => l.Kind == "deduction" && PayTypes.IsGovernment(l.Category)).Sum(l => l.Amount);
+                        return new PaidOutPeriod
+                        {
+                            PeriodId = p.Id, StartsOn = p.StartsOn, EndsOn = p.EndsOn,
+                            PaidAt = p.PaidAt, PaidByName = p.PaidBy is null ? null : NameOf(p.PaidBy),
+                            PaidOutAt = p.PaidOutAt!.Value, PaidOutByName = p.PaidOutBy is null ? null : NameOf(p.PaidOutBy),
+                            People = lines.Select(l => l.UserId).Distinct().Count(),
+                            BasePay = basePay, Bonuses = bonuses, Gross = basePay + bonuses,
+                            Deductions = deductions, GovTotal = gov, Net = basePay + bonuses - deductions
+                        };
+                    }).ToList();
+                return true;
+            }
             case "payroll_records_for":
             {
                 Require("reports:revenue");

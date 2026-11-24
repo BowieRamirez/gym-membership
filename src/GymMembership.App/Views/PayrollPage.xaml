@@ -230,12 +230,61 @@
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
         </DataTemplate>
+
+        <!-- Wide table row (Paid out tab) -->
+        <DataTemplate x:Key="PaidOutRowTemplate" x:DataType="vm:PaidOutPeriodItem">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="1.3*,95,110,115,120,1.2*,84" ColumnSpacing="12">
+                    <Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnPaidOutRowTapped" /></Grid.GestureRecognizers>
+                    <Label Text="{Binding PeriodText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="1" Text="{Binding PeopleText}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="NoWrap" />
+                    <Label Grid.Column="2" Text="{Binding GrossText}" HorizontalOptions="End" VerticalOptions="Center" LineBreakMode="NoWrap" />
+                    <VerticalStackLayout Grid.Column="3" Spacing="2" HorizontalOptions="End" VerticalOptions="Center">
+                        <Label Text="{Binding DeductionsText}" HorizontalOptions="End" LineBreakMode="NoWrap" />
+                        <Label Text="{Binding GovText}" Style="{StaticResource Caption}" HorizontalOptions="End" LineBreakMode="NoWrap" IsVisible="{Binding HasGov}" />
+                    </VerticalStackLayout>
+                    <Label Grid.Column="4" Text="{Binding NetText}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center" LineBreakMode="NoWrap" />
+                    <Label Grid.Column="5" Text="{Binding PaidOutText}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    <Button Grid.Column="6" Text="View" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="End" VerticalOptions="Center"
+                            Clicked="OnOpenPaidOutClicked" SemanticProperties.Description="{Binding PeriodText, StringFormat='Open paid out period {0}'}" />
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+
+        <!-- Narrow card (Paid out tab) -->
+        <DataTemplate x:Key="PaidOutCardTemplate" x:DataType="vm:PaidOutPeriodItem">
+            <VerticalStackLayout>
+                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="4" Padding="14,12">
+                    <Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnPaidOutRowTapped" /></Grid.GestureRecognizers>
+                    <Label Text="{Binding PeriodText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                    <Label Grid.Column="1" Text="{Binding NetText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                    <Label Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource Caption}">
+                        <Label.Text>
+                            <MultiBinding StringFormat="{}{0} · Paid out {1}">
+                                <Binding Path="PeopleText" />
+                                <Binding Path="PaidOutText" />
+                            </MultiBinding>
+                        </Label.Text>
+                    </Label>
+                    <FlexLayout Grid.Row="2" Wrap="Wrap" AlignItems="Center">
+                        <Label Text="{Binding BasePayText, StringFormat='Base {0}'}" Style="{StaticResource Caption}" Margin="0,0,12,0" />
+                        <Label Text="{Binding GrossText, StringFormat='Gross {0}'}" Style="{StaticResource Caption}" Margin="0,0,12,0" />
+                        <Label Text="{Binding DeductionsText, StringFormat='Ded. {0}'}" Style="{StaticResource Caption}" Margin="0,0,12,0" />
+                        <Label Text="{Binding GovText}" Style="{StaticResource Caption}" IsVisible="{Binding HasGov}" />
+                    </FlexLayout>
+                    <Button Grid.Row="2" Grid.Column="1" Text="View" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center"
+                            Clicked="OnOpenPaidOutClicked" SemanticProperties.Description="{Binding PeriodText, StringFormat='Open paid out period {0}'}" />
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
     </v:BasePage.Resources>
 
     <Grid>
         <Grid RowDefinitions="Auto,*">
-            <!-- Segment tabs (Pay period | Salaries) -->
-            <Border Style="{StaticResource SegmentTrack}" Margin="24,14,24,0" HorizontalOptions="Start">
+            <!-- Segment tabs (Pay period | Paid out | Salaries) -->
+            <Border Style="{StaticResource SegmentTrack}" Margin="{OnIdiom Phone='16,12,16,0', Default='24,14,24,0'}" HorizontalOptions="Start">
                 <HorizontalStackLayout Spacing="2">
                     <Button Text="Pay period" Command="{Binding OpenPeriodTabCommand}" Style="{StaticResource Segment}" AutomationId="PayrollPeriodTab">
                         <Button.Triggers>
@@ -245,6 +294,20 @@
                                 <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
                             </DataTrigger>
                             <DataTrigger TargetType="Button" Binding="{Binding IsPeriodTab}" Value="False">
+                                <Setter Property="FontFamily" Value="BarlowMedium" />
+                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                            </DataTrigger>
+                        </Button.Triggers>
+                    </Button>
+                    <Button Text="Paid out" Command="{Binding OpenPaidOutTabCommand}" Style="{StaticResource Segment}" AutomationId="PayrollPaidOutTab">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button" Binding="{Binding IsPaidOutTab}" Value="True">
+                                <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                            </DataTrigger>
+                            <DataTrigger TargetType="Button" Binding="{Binding IsPaidOutTab}" Value="False">
                                 <Setter Property="FontFamily" Value="BarlowMedium" />
                                 <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
                                 <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
@@ -269,7 +332,7 @@
             </Border>
 
             <ScrollView Grid.Row="1">
-                <VerticalStackLayout Padding="24,16,24,32" Spacing="16">
+                <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='24,16,24,32'}" Spacing="16">
                     <c:Banner Kind="notice" Message="{Binding Notice}" />
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" IsVisible="{Binding ErrorMessage, Converter={StaticResource IsNotNull}}">
                         <c:Banner Message="{Binding ErrorMessage}" />
@@ -282,30 +345,32 @@
                         <Border Style="{StaticResource Panel}">
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                 <VerticalStackLayout Spacing="6" VerticalOptions="Center">
-                                    <HorizontalStackLayout Spacing="10" VerticalOptions="Center">
-                                        <Button Text="‹" Style="{StaticResource SmallOutlineButton}" Command="{Binding PrevPeriodCommand}" WidthRequest="36" AutomationId="PrevPeriod" SemanticProperties.Description="Previous pay period" />
-                                        <Label Text="{Binding PeriodLabel}" Style="{StaticResource Heading}" VerticalOptions="Center" />
-                                        <Button Text="›" Style="{StaticResource SmallOutlineButton}" Command="{Binding NextPeriodCommand}" WidthRequest="36" AutomationId="NextPeriod" SemanticProperties.Description="Next pay period" />
-                                        <c:StatusChip Status="{Binding StatusText}" VerticalOptions="Center" />
-                                    </HorizontalStackLayout>
-                                    <HorizontalStackLayout Spacing="8" VerticalOptions="Center">
-                                        <Label Text="{Binding SummaryText}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                                    <FlexLayout Wrap="Wrap" AlignItems="Center">
+                                        <HorizontalStackLayout Spacing="10" Margin="0,0,10,4" VerticalOptions="Center">
+                                            <Button Text="‹" Style="{StaticResource SmallOutlineButton}" Command="{Binding PrevPeriodCommand}" WidthRequest="36" AutomationId="PrevPeriod" SemanticProperties.Description="Previous pay period" />
+                                            <Label Text="{Binding PeriodLabel}" Style="{StaticResource Heading}" VerticalOptions="Center" />
+                                            <Button Text="›" Style="{StaticResource SmallOutlineButton}" Command="{Binding NextPeriodCommand}" WidthRequest="36" AutomationId="NextPeriod" SemanticProperties.Description="Next pay period" />
+                                        </HorizontalStackLayout>
+                                        <c:StatusChip Status="{Binding StatusText}" Margin="0,0,0,4" VerticalOptions="Center" />
+                                    </FlexLayout>
+                                    <FlexLayout Wrap="Wrap" AlignItems="Center">
+                                        <Label Text="{Binding SummaryText}" Style="{StaticResource Muted}" Margin="0,0,8,0" VerticalOptions="Center" />
                                         <Button Text="Set salaries" Style="{StaticResource LinkButton}" Command="{Binding OpenSalariesTabCommand}"
                                                 IsVisible="{Binding HasNoSalary}" VerticalOptions="Center" />
-                                    </HorizontalStackLayout>
+                                    </FlexLayout>
                                     <!-- H12: what still has to be approved before paying -->
-                                    <HorizontalStackLayout Spacing="8" VerticalOptions="Center" IsVisible="{Binding HasPendingRecords}">
-                                        <c:StatusChip Status="Pending" VerticalOptions="Center" />
-                                        <Label Text="{Binding MarkPaidBlockedText}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                                    <FlexLayout Wrap="Wrap" AlignItems="Center" IsVisible="{Binding HasPendingRecords}">
+                                        <c:StatusChip Status="Pending" Margin="0,0,8,0" VerticalOptions="Center" />
+                                        <Label Text="{Binding MarkPaidBlockedText}" Style="{StaticResource Muted}" Margin="0,0,8,0" VerticalOptions="Center" />
                                         <Button Text="Approve all without warnings" Style="{StaticResource LinkButton}" Command="{Binding ApproveAllUnflaggedCommand}"
                                                 VerticalOptions="Center" AutomationId="ApproveAllUnflagged" />
-                                    </HorizontalStackLayout>
+                                    </FlexLayout>
                                 </VerticalStackLayout>
 
                                 <VerticalStackLayout Grid.Column="1" HorizontalOptions="End" VerticalOptions="Center" Spacing="2">
                                     <Label Text="Total net pay" Style="{StaticResource Caption}" HorizontalOptions="End" />
                                     <Label Text="{Binding TotalNetText}" Style="{StaticResource Numeral}" FontFamily="BarlowBold" FontSize="28" HorizontalOptions="End" AutomationId="TotalNet" />
-                                    <Label Text="{Binding TotalGrossText}" Style="{StaticResource Caption}" HorizontalOptions="End" AutomationId="TotalGross" />
+                                    <Label Text="{Binding TotalGrossText}" Style="{StaticResource Caption}" HorizontalOptions="End" HorizontalTextAlignment="End" AutomationId="TotalGross" />
                                 </VerticalStackLayout>
                             </Grid>
                         </Border>
@@ -359,6 +424,47 @@
                         </Border>
                     </VerticalStackLayout>
 
+                    <!-- PAID OUT TAB -->
+                    <VerticalStackLayout Spacing="14" IsVisible="{Binding IsPaidOutTab}">
+                        <Border Style="{StaticResource Panel}">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <VerticalStackLayout Spacing="4" VerticalOptions="Center">
+                                    <Label Text="Paid out payroll" Style="{StaticResource Heading}" />
+                                    <Label Text="{Binding PaidOutSummaryText}" Style="{StaticResource Muted}" />
+                                    <Label Text="Select a period to open its full breakdown or export its PDF." Style="{StaticResource Caption}" />
+                                </VerticalStackLayout>
+
+                                <VerticalStackLayout Grid.Column="1" HorizontalOptions="End" VerticalOptions="Center" Spacing="2">
+                                    <Label Text="Total paid out" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                    <Label Text="{Binding PaidOutTotalNetText}" Style="{StaticResource Numeral}" FontFamily="BarlowBold" FontSize="28" HorizontalOptions="End" AutomationId="PaidOutTotalNet" />
+                                    <Label Text="{Binding PaidOutTotalGrossText}" Style="{StaticResource Caption}" HorizontalOptions="End" HorizontalTextAlignment="End" AutomationId="PaidOutTotalGross" />
+                                </VerticalStackLayout>
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource TablePanel}">
+                            <VerticalStackLayout>
+                                <VerticalStackLayout x:Name="PaidOutHead" IsVisible="{OnIdiom Phone=False, Default=True}">
+                                    <Grid Style="{StaticResource TableHead}" ColumnDefinitions="1.3*,95,110,115,120,1.2*,84" ColumnSpacing="12">
+                                        <Label Text="Pay period" Style="{StaticResource Caption}" />
+                                        <Label Grid.Column="1" Text="Staff" Style="{StaticResource Caption}" />
+                                        <Label Grid.Column="2" Text="Gross" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                        <Label Grid.Column="3" Text="Deductions" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                        <Label Grid.Column="4" Text="Net paid out" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                        <Label Grid.Column="5" Text="Paid out" Style="{StaticResource Caption}" />
+                                    </Grid>
+                                    <BoxView Style="{StaticResource Hairline}" />
+                                </VerticalStackLayout>
+                                <c:TableBody Items="{Binding PaidOutPeriods}" Header="{x:Reference PaidOutHead}" WideFrom="960"
+                                             RowTemplate="{StaticResource PaidOutRowTemplate}" CardTemplate="{StaticResource PaidOutCardTemplate}">
+                                    <c:TableBody.Empty>
+                                        <Label Text="No paid-out periods yet. Approve a period, send the money, then mark it as paid out." Style="{StaticResource Muted}" Margin="14" />
+                                    </c:TableBody.Empty>
+                                </c:TableBody>
+                            </VerticalStackLayout>
+                        </Border>
+                    </VerticalStackLayout>
+
                     <!-- SALARIES TAB -->
                     <VerticalStackLayout Spacing="14" IsVisible="{Binding IsSalariesTab}">
                         <Label Text="Pay per half-month period (1st–15th and 16th–end): Fixed per period, Hourly for approved hours, or Per session for a coach's approved sessions. Drafts follow changes straight away; paid periods stay locked."
@@ -371,7 +477,7 @@
                                 <Label Text="Everyone in the role without a rate of their own follows this, including new accounts. Personal rates stay as they are." Style="{StaticResource Caption}" />
                                 <Label Text="SSS, PhilHealth and Pag-IBIG are taken once a month in the 16th–end pay; withholding tax every pay. Rates from the 2026 tables; confirm them with your accountant."
                                        Style="{StaticResource Caption}" />
-                                <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
+                                <c:CardGrid Columns="2" MinColumnWidth="380" Spacing="16">
                                     <VerticalStackLayout Spacing="6">
                                         <HorizontalStackLayout Spacing="8">
                                             <c:StatusChip Status="Front desk" />
@@ -391,7 +497,7 @@
                                         </Grid>
                                     </VerticalStackLayout>
 
-                                    <VerticalStackLayout Grid.Column="1" Spacing="6">
+                                    <VerticalStackLayout Spacing="6">
                                         <HorizontalStackLayout Spacing="8">
                                             <c:StatusChip Status="Coach" />
                                             <Label Text="{Binding CoachRoleSalaryStatus}" Style="{StaticResource Caption}" VerticalOptions="Center" />
@@ -409,7 +515,7 @@
                                             <Button Grid.Column="2" Text="Save default" Style="{StaticResource SmallButton}" Command="{Binding SaveCoachRoleSalaryCommand}" AutomationId="SaveCoachRoleSalary" />
                                         </Grid>
                                     </VerticalStackLayout>
-                                </Grid>
+                                </c:CardGrid>
                                 <Label Text="{Binding RoleSalaryError}" Style="{StaticResource FieldError}" IsVisible="{Binding RoleSalaryError, Converter={StaticResource IsNotNull}}" />
                             </VerticalStackLayout>
                         </Border>

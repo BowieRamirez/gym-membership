@@ -2067,6 +2067,7 @@ public interface IAdminService
     Task<AppResult<bool>> SetPayrollDeductionsAsync(string userId, bool contributions, bool tax, string? reason) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<PayrollPeriod>> ReopenPayrollAsync(int periodId, string reason) => Task.FromResult(AppResult<PayrollPeriod>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<PayrollPeriod>> MarkPayrollPaidOutAsync(int periodId) => Task.FromResult(AppResult<PayrollPeriod>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<IReadOnlyList<PaidOutPeriod>>> PayrollPaidOutPeriodsAsync() => Task.FromResult(AppResult<IReadOnlyList<PaidOutPeriod>>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<PayrollPeriod>> PayrollPeriodAsync(DateOnly startsOn) => Task.FromResult(AppResult<PayrollPeriod>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<IReadOnlyList<PayrollLine>>> PayrollLinesAsync(int periodId, string userId) => Task.FromResult(AppResult<IReadOnlyList<PayrollLine>>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<PayrollLine>> AddPayrollLineAsync(int periodId, string userId, string kind, decimal amount, string note, string category = "other") => Task.FromResult(AppResult<PayrollLine>.Fail(AppErrorKind.Unknown, "not_implemented"));
@@ -2176,6 +2177,9 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
 
     public Task<AppResult<PayrollPeriod>> MarkPayrollPaidOutAsync(int periodId) => Safe.RunAsync(() =>
         gw.RpcAsync<PayrollPeriod>("payroll_mark_paid_out", new() { ["p_period"] = periodId }));
+
+    public Task<AppResult<IReadOnlyList<PaidOutPeriod>>> PayrollPaidOutPeriodsAsync() => Safe.RunAsync<IReadOnlyList<PaidOutPeriod>>(async () =>
+        await gw.RpcAsync<List<PaidOutPeriod>>("payroll_paid_out_periods", new()) ?? []);
 
     public Task<AppResult<IReadOnlyList<PayrollTimeRecord>>> PayrollRecordsAsync(int periodId, string userId) => Safe.RunAsync<IReadOnlyList<PayrollTimeRecord>>(async () =>
         await gw.RpcAsync<List<PayrollTimeRecord>>("payroll_records_for", new() { ["p_period"] = periodId, ["p_user"] = userId }) ?? []);

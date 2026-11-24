@@ -3599,6 +3599,24 @@ public sealed class PayrollAdjustmentItem(PayrollHourAdjustment adj, string unit
     public bool CanRemove { get; } = canRemove;
 }
 
+/// <summary>0146: one paid-out payroll period row in the Paid out table.</summary>
+public sealed class PaidOutPeriodItem(PaidOutPeriod data)
+{
+    public PaidOutPeriod Data { get; } = data;
+    public int PeriodId => Data.PeriodId;
+    public DateOnly StartsOn => Data.StartsOn;
+    public string PeriodText => PayrollPdf.PeriodSpan(Data.StartsOn, Data.EndsOn);
+    public string PeopleText => $"{Data.People} {(Data.People == 1 ? "person" : "people")}";
+    public string BasePayText => PayTypes.Money(Data.BasePay);
+    public string BonusesText => Data.Bonuses == 0 ? "–" : PayTypes.Money(Data.Bonuses);
+    public string GrossText => PayTypes.Money(Data.Gross);
+    public string DeductionsText => Data.Deductions == 0 ? "–" : PayTypes.Money(Data.Deductions);
+    public bool HasGov => Data.GovTotal > 0;
+    public string GovText => HasGov ? $"Gov't {PayTypes.Money(Data.GovTotal)}" : "";
+    public string NetText => PayTypes.Money(Data.Net);
+    public string PaidOutText => $"{ManilaTime.Of(Data.PaidOutAt).ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)} · {Data.PaidOutByName ?? "Admin"}";
+}
+
 public sealed partial class StaffSalaryItem(StaffSalary s, Func<StaffSalaryItem, Task> save, Func<StaffSalaryItem, Task>? useRoleDefault = null,
     Func<StaffSalaryItem, Task>? saveDeductions = null) : ObservableObject
 {
@@ -3681,6 +3699,7 @@ public partial class PayrollViewModel : LoadableViewModel
     public ObservableCollection<PayrollRecordItem> DrawerRecords { get; } = new();
     public ObservableCollection<PayrollAdjustmentItem> DrawerAdjustments { get; } = new();
     public ObservableCollection<StaffSalaryItem> StaffSalaries { get; } = new();
+    public ObservableCollection<PaidOutPeriodItem> PaidOutPeriods { get; } = new();
 
     // 0142 (H1): pay type words; Per session is for coaches only
     public static IReadOnlyList<string> PayTypeOptionsFor(string role) => role == "coach" ? ["Fixed", "Hourly", "Per session"] : ["Fixed", "Hourly"];
@@ -3741,13 +3760,19 @@ public partial class PayrollViewModel : LoadableViewModel
         var res = await _svc.MarkPayrollPaidOutAsync(PeriodId);
         if (!res.Ok) { ErrorMessage = ErrorText.For(res.Error, res.Message); return; }
         ApplyPeriod(res.Value!);
+        await LoadPaidOutAsync();
         Notice = $"{PeriodLabel} marked as paid out.";
     }
 
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPeriodTab), nameof(IsSalariesTab))]
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPeriodTab), nameof(IsPaidOutTab), nameof(IsSalariesTab))]
     private string activeTab = "period";
     public bool IsPeriodTab => ActiveTab == "period";
+    public bool IsPaidOutTab => ActiveTab == "paid_out";
     public bool IsSalariesTab => ActiveTab == "salaries";
+
+    [ObservableProperty] private string paidOutTotalNetText = "₱0.00";
+    [ObservableProperty] private string paidOutTotalGrossText = "Gross ₱0.00";
+    [ObservableProperty] private string paidOutSummaryText = "No paid-out periods yet";
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(PeriodLabel), nameof(CanMarkPaid))]
     private DateOnly periodStartsOn;
@@ -3808,7 +3833,18 @@ public partial class PayrollViewModel : LoadableViewModel
     public override Task OnAppearingAsync() => LoadAsync();
 
     [RelayCommand] private void OpenPeriodTab() => ActiveTab = "period";
+    [RelayCommand] private async Task OpenPaidOutTabAsync() { ActiveTab = "paid_out"; await LoadPaidOutAsync(); }
     [RelayCommand] private async Task OpenSalariesTabAsync() { ActiveTab = "salaries"; await LoadSalariesAsync(); }
+
+    [RelayCommand]
+    private async Task OpenPaidOutPeriodAsync(PaidOutPeriodItem? item)
+    {
+        if (item is null) return;
+        PeriodStartsOn = item.StartsOn;
+        CloseDrawer();
+        ActiveTab = "period";
+        await LoadPeriodAsync();
+    }
 
     [RelayCommand]
     private Task PrevPeriodAsync()
@@ -3832,9 +3868,25 @@ public partial class PayrollViewModel : LoadableViewModel
         var settingsTask = _svc.GymSettingsAsync();
         var periodTask = LoadPeriodAsync();
         var salariesTask = LoadSalariesAsync();
-        await Task.WhenAll(settingsTask, periodTask, salariesTask);
+        var paidOutTask = LoadPaidOutAsync();
+        await Task.WhenAll(settingsTask, periodTask, salariesTask, paidOutTask);
         if (settingsTask.Result.Ok && settingsTask.Result.Value is { } gs && !string.IsNullOrWhiteSpace(gs.GymName))
             _gymName = gs.GymName;
+    }
+
+    async Task LoadPaidOutAsync()
+    {
+        await RunAsync(() => _svc.PayrollPaidOutPeriodsAsync(), list =>
+        {
+            Fill(PaidOutPeriods, list.Select(p => new PaidOutPeriodItem(p)));
+            PaidOutTotalNetText = PayTypes.Money(list.Sum(p => p.Net));
+            var gov = list.Sum(p => p.GovTotal);
+            var gross = PayTypes.Money(list.Sum(p => p.Gross));
+            PaidOutTotalGrossText = gov > 0 ? $"Gross {gross} · Gov't deductions {PayTypes.Money(gov)}" : $"Gross {gross}";
+            PaidOutSummaryText = list.Count == 0
+                ? "No paid-out periods yet"
+                : $"{list.Count} paid-out {(list.Count == 1 ? "period" : "periods")} · newest first";
+        });
     }
 
     async Task LoadPeriodAsync()

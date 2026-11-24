@@ -625,6 +625,25 @@ public sealed class PayrollPeriod
     [System.Text.Json.Serialization.JsonIgnore] public bool IsPaid => PaidAt is not null;
 }
 
+/// <summary>0146: one paid-out payroll period summary for the Paid out table.</summary>
+public sealed class PaidOutPeriod
+{
+    [System.Text.Json.Serialization.JsonPropertyName("period_id")] public int PeriodId { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("starts_on")] public DateOnly StartsOn { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("ends_on")] public DateOnly EndsOn { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("paid_at")] public DateTime? PaidAt { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("paid_by_name")] public string? PaidByName { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("paid_out_at")] public DateTime PaidOutAt { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("paid_out_by_name")] public string? PaidOutByName { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("people")] public int People { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("base_pay")] public decimal BasePay { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("bonuses")] public decimal Bonuses { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("gross")] public decimal Gross { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("deductions")] public decimal Deductions { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("gov_total")] public decimal GovTotal { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("net")] public decimal Net { get; set; }
+}
+
 /// <summary>Phase 17 (0136): one salary, bonus or deduction line in a payroll period.</summary>
 public sealed class PayrollLine
 {
