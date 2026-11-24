@@ -21,12 +21,22 @@ Status (2026-11-25): H1-H17 confirmed by the owner (as recommended). Phases 1-2 
 | **Staff page tabs and a layout fix**: Revenue gets **Revenue / Cash shifts** tabs, Users and roles gets **Active accounts / Deactivated** tabs (both were stacked tables), Payroll Salaries' government-deductions editor gets its own full-width line | — (owner request, see Session log) | — | `8595f8d` |
 | **Live system test** (360 checks as admin, coach, front desk and TEST members; Xendit Test mode) and the **Xendit webhook fix** (URL moved to "Payment Session Completed" in the dashboard; no code change; payment 161 confirmed by the webhook alone) | — (owner request, see Session log) | — | `a5a2118`, `bc5cb28` (docs) |
 
+## Before merging (owner)
+
+- [ ] Reject TEST shift 35 (karl, 25 Nov) in the 16-30 Nov payroll, reason "TEST shift from the live test".
+- [ ] Decide the two open choices below (reschedule requests; coach access in a membership refund).
+- [ ] Hand checks on Windows: Payroll (Phase 3 list below), the Revenue / Cash shifts tabs, the Users Active / Deactivated tabs, the Salaries deductions editor at narrow width, a booking held for 15 minutes; light and dark.
+- [ ] Phone checks: Packages page (Memberships / Day pass sections) and the member Calendar, light and dark, 1.3 font scale.
+- [ ] New app release (v0.10.0 can't approve shifts, so it can't pay hourly people).
+- [ ] Ask for the PR and merge into `main`.
+
 ## Open items (2026-11-25)
 
 - **Reschedule requests can't be answered**: the Sessions page still sends a new time (`request_reschedule`), but 0121 removed `respond_time_request`, so nobody can approve it. Owner to choose: remove the button, or add an approve step.
 - **Coach access paid before a membership refund**: the refund covers the membership only; owner to decide whether unused coach access days are refunded too.
 - **TEST records on live** from the live test: accounts `claude.test*.20261125@example.com`, payments 148-161, refunds 39-43 (paid by GCash reference), discount `TESTCLAUDE6534`, closed shift 35, payroll period 144 (16-31 Jan 2025) paid out. Owner to reject TEST shift 35 in karl's 16-30 Nov payroll.
 - **Xendit Live mode**: when switching to live keys, set the same webhook URL on "Payment Session Completed" in Live mode and Live mode's own `XENDIT_WEBHOOK_TOKEN`.
+- **Checked and left as they are (by design)**: a member cancelling their own booking needs no reason (staff must give one; the app sends none for members, so requiring it would block cancelling); a refund reason category is required only when the member checked in during that term; the sign-up message without accepting the terms can't be changed server-side (Supabase Auth hides it) and the app already blocks it.
 - Not live-tested: gym and coach check-ins (the test ran after closing time; only their refusals were checked); creating or publishing packages, amenity status, announcements and damage reports (they would reach real members).
 Branch: `hourly-payroll-2026-11-24` (cut from `origin/main` at `a464366`, v0.10.0). **Owner's rule: this branch is not merged into `main` yet.** No PR until the owner asks.
 
