@@ -4,7 +4,7 @@
 
 Created: 2026-11-24
 Last updated: 2026-11-24
-Status (2026-11-24): H1-H17 confirmed by the owner (as recommended). Phases 1-2 built, reviewed and fixed; `0142` live push and owner hand checks left (see Session log).
+Status (2026-11-24): H1-H17 confirmed by the owner (as recommended). Phases 1-2 built, reviewed and fixed; `0142` live; owner hand checks left. Not merged.
 Branch: `hourly-payroll-2026-11-24` (cut from `origin/main` at `a464366`, v0.10.0). **Owner's rule: this branch is not merged into `main` yet.** No PR until the owner asks.
 
 **Goal:** Payroll pays each person by their own arrangement instead of one fixed salary for everyone: **Hourly** (approved hours × hourly rate), **Per session** (completed sessions × session rate) or **Fixed** (today's salary per period). Hours come from the records the app already keeps (front desk cash shifts, coach check-in/out); **a record only counts once the admin approves it** (a raw log never becomes payable time by itself), overlapping records are never counted twice, the admin can correct totals with a reason while the period is a draft, and Mark as paid freezes the hours, rate and pay so a later rate change never alters a paid period.
@@ -137,7 +137,7 @@ Run `impeccable` before the XAML and again before the commit. Same **operate mod
 - Tests: `supabase/tests/local/payroll.mjs` (extend), `tests/GymMembership.Tests/PayrollTests.cs`.
 
 - [x] Failing tests first: Review Focus 1-16; existing salaries read as Fixed with the same totals; per session refused for a front desk person; correction without a note refused; auto-closed visit counted and flagged; a shift over 12 h flagged; pay rounded once per person (e.g. 3 shifts of 20 min at ₱80 = ₱80.00).
-- [ ] Migration, dry-run push, push live, live grants checked (anon and non-admin refused), `ponytail:ponytail-review`, commit, push branch.
+- [x] Migration, dry-run push, push live, live grants checked (anon and non-admin refused), `ponytail:ponytail-review`, commit, push branch.
 
 ## Phase 2: Payroll page
 
@@ -161,3 +161,4 @@ Run `impeccable` before the XAML and again before the commit. Same **operate mod
 - 2026-11-24: owner checked the plan against their own Payroll task list (Phases 1-9) and asked to add the four gaps: H14 personal rates survive role defaults (`follows_role`), H15 per-session coaches' sessions approved like shifts, H16 bonus/deduction categories (Regular bonus, Overtime, Holiday pay, Other), H17 gross pay on the page, totals and payslip.
 - 2026-11-24: owner: H1-H17 as recommended, start building. Phase 1 (`0142_hourly_payroll.sql`, services, demo mirror; `payroll-hourly.mjs` 14/14, `payroll.mjs` updated for H14) and Phase 2 (Payroll page, view model, payslip PDF) built and committed (`f4fd9c5`, `3f4c641`). Rulings recorded in `.superpowers/sdd/2026-11-24-hourly-payroll/progress.md`: H14 done as "no personal row = follows the role" (no `follows_role` column); `p_pay_type` / `p_category` default so the released v0.10.0 app keeps working; open shifts are flagged, not counted, never blocking; the impeccable check was done on the code, not the running app (owner tests the app).
 - 2026-11-24: fresh whole-branch review: no Critical. Fixed: (1) a period with hourly or per-session people can be marked paid only from the day after it ends (on the last day itself, a shift later that day would have been locked out and never paid; fixed-only periods keep Part 3's last-day rule); (2) a paid period no longer shows "to approve" for shifts closed after paying. Deferred minors listed in the ledger (null status error text, Use role default audit when already following, correction suffix without a unit, paid "Approved X h" recomputed from live records, v0.10.0 admins see a generic message for `time_pending`).
+- 2026-11-24: `0142_hourly_payroll.sql` pushed live to `avxcitoddadbblxuhiik` (dry run first, only `0142`). Live grants checked read-only: every payroll function refuses anon; the five private helpers (`payroll_role`, `payroll_pay`, `payroll_records`, `payroll_basis`, `payroll_draft`) refuse everyone; the two new tables have RLS on with no policies, like `payroll_lines`. Live `staff_salaries` had 0 rows after the H14 cleanup, so everyone follows their role default. Local: unit 1259/1259, DB suite 744 ok, Windows & Android builds. Left: owner hand checks; ship a new app version before admins rely on hourly pay (v0.10.0 can't approve shifts). Next migration `0143`.
