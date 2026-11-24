@@ -273,7 +273,7 @@ public class SubscriptionTests
         var (gw, _, svc, monthly, _) = await Setup();
         var self=gw.CurrentUserId!;
         await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
-        Assert.True((await new AdminService(gw).AssignRoleAsync(self,"admin")).Ok);
+        gw.SeedSystemAdmin(self);
         await gw.SignInAsync("phase7@demo.io","secret12");
         var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
         var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
@@ -287,6 +287,20 @@ public class SubscriptionTests
         Assert.False((await svc.MarkPaidAsync(request.Id,PayMethod.Cash,null)).Ok);
         Assert.Equal("approved",(await gw.ListAsync<RefundRequest>()).Single().Status);
         Assert.Contains("own refund",ErrorText.For(AppErrorKind.Validation,"self_decision"));
+    }
+
+    [Fact]
+    public async Task Refunding_a_membership_expires_its_unpaid_coach_access()   // 0147 (live test 2026-11-25)
+    {
+        var (gw, _, svc, monthly, _) = await Setup();
+        var p=(await svc.ExtendAsync(monthly.Id)).Value!; await Verify(gw,p);
+        var coach=(await new MembershipService(gw).BuyCoachAccessAsync()).Value!;
+        Assert.Equal(Status.Pending,coach.Status);
+        var term=Assert.Single((await svc.TermsAsync()).Value!).Term;
+        Assert.True((await svc.RequestRefundAsync(term.Id,"Changed plans","change_of_mind")).Ok);
+        await gw.SignInAsync("admin@demo.io",DemoGateway.DemoPassword);
+        Assert.True((await svc.DecideAsync((await gw.ListAsync<RefundRequest>()).Single().Id,true,"Ok")).Ok);
+        Assert.Equal(Status.Expired,(await gw.ListAsync<Payment>(x=>x.Id==coach.Id)).Single().Status);
     }
 
     [Fact]

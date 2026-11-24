@@ -152,7 +152,8 @@ public class SubAdminTests
         var gw = await As("admin@demo.io");
         var admin = new AdminService(gw);
         var bea = IdOf(gw, "bea@demo.io");
-        Assert.True((await admin.AssignRoleAsync(bea, "admin")).Ok);   // a second super admin
+        Assert.False((await admin.AssignRoleAsync(bea, "admin")).Ok);   // 0147: the app never makes a System admin
+        gw.SeedSystemAdmin(bea);   // a second one made in the database
         foreach (var r in new[] { await admin.AssignRoleAsync(bea, "coach"), await admin.RevokeRoleAsync(bea, "admin"), await admin.SetActiveAsync(bea, false),
                                   await new AccountArchiveService(gw).DeleteAsync(bea, "Leaving") })
         {

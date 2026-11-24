@@ -151,7 +151,7 @@ public class Phase6bPhotoTests
         await gw.SignUpAsync("second-admin@demo.io", DemoGateway.DemoPassword, "Second", "Admin", TermsInfo.Version);
         var secondId = gw.CurrentUserId!;
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
-        Assert.True((await admin.AssignRoleAsync(secondId, "admin")).Ok);
+        gw.SeedSystemAdmin(secondId);
         // 0037: a super admin can't be deactivated from the app; the database owner switches this one off
         gw.OwnerSetActive(uid, false);
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);

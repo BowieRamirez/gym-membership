@@ -405,6 +405,9 @@ public sealed partial class DemoGateway : ISupabaseGateway
         return Task.FromResult<IReadOnlyList<T>>(rows.Select(Clone).ToList());
     }
 
+    /// <summary>A second System admin exists only when made in the database itself; the app can't make one (0147).</summary>
+    public void SeedSystemAdmin(string userId) => Add(new UserRole { UserId = userId, RoleId = All<Role>().First(r => r.Name == "admin").RoleId });
+
     // Direct writes are limited to what the table privileges and policies allow (0006). Everything else is a function.
     const string Rls = "new row violates row-level security policy";
 
@@ -1392,6 +1395,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             case "assign_role":
             {
                 Require("roles:manage");
+                if (S("p_role") == "admin") throw Err("bad_input");   // 0147: the System admin role is never handed out
                 if (RolesOf(S("p_user")).Contains("admin")) throw Err("super_admin_protected");   // 0037
                 var role = All<Role>().FirstOrDefault(r => r.Name == S("p_role")) ?? throw Err("bad_input");
                 if (All<Profile>().All(p => p.Id != S("p_user"))) throw Err("not_found");
