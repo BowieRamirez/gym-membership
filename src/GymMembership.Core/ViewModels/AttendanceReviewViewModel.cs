@@ -96,7 +96,9 @@ public partial class AttendanceReviewViewModel(IAdminService svc) : LoadableView
     [ObservableProperty] private int periodId;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ReadOnlyText))] private bool isReadOnly;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPending), nameof(PendingText), nameof(ReviewTabText))] private int pendingCount;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsReviewTab), nameof(IsRecordsTab), nameof(IsCorrectionsTab), nameof(EmptyText))] private string activeTab = "review";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsReviewTab), nameof(IsRecordsTab), nameof(IsCorrectionsTab), nameof(EmptyText), nameof(SectionTitle))] private string activeTab = "review";
+    // owner, 2026-11-25: no tab bar; the menu opens each part and the page title says which (the menu's own words)
+    public string SectionTitle => ActiveTab switch { "records" => "Attendance Records", "corrections" => "Attendance Corrections", _ => "Attendance Review" };
     [ObservableProperty] private string statusFilter = "All";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsConfirming))] private AttendanceCardItem? confirming;
     [ObservableProperty] private string? confirmError;

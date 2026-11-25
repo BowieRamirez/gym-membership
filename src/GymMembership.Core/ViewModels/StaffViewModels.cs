@@ -3550,8 +3550,10 @@ public partial class PayrollViewModel : LoadableViewModel, IOpensTab
         Notice = $"{PeriodLabel} marked as paid out.";
     }
 
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPeriodTab), nameof(IsPaidOutTab), nameof(IsSalariesTab), nameof(IsPayslipsTab))]
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPeriodTab), nameof(IsPaidOutTab), nameof(IsSalariesTab), nameof(IsPayslipsTab), nameof(SectionTitle))]
     private string activeTab = "period";
+    // owner, 2026-11-25: no tab bar; the menu opens each part and the page title says which (the menu's own words)
+    public string SectionTitle => ActiveTab switch { "payslips" => "Payslips", "paid_out" => "Payroll History", "salaries" => "Salary Configuration", _ => "Payroll Processing" };
     public bool IsPeriodTab => ActiveTab == "period";
     public bool IsPayslipsTab => ActiveTab == "payslips";
     public bool IsPaidOutTab => ActiveTab == "paid_out";

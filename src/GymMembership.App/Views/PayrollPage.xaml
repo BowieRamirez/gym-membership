@@ -5,7 +5,7 @@
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:m="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
-            x:Class="GymMembership.App.Views.PayrollPage" x:DataType="vm:PayrollViewModel" Title="Payroll">
+            x:Class="GymMembership.App.Views.PayrollPage" x:DataType="vm:PayrollViewModel" Title="{Binding SectionTitle}">
 
     <v:BasePage.Resources>
         <!-- Wide table row (Period tab) -->
@@ -287,67 +287,6 @@
 
     <Grid>
         <Grid RowDefinitions="Auto,*">
-            <!-- Segment tabs (Pay period | Paid out | Salaries) -->
-            <Border Style="{StaticResource SegmentTrack}" Margin="{OnIdiom Phone='16,12,16,0', Default='24,14,24,0'}" HorizontalOptions="Start">
-                <HorizontalStackLayout Spacing="2">
-                    <Button Text="Pay period" Command="{Binding OpenPeriodTabCommand}" Style="{StaticResource Segment}" AutomationId="PayrollPeriodTab">
-                        <Button.Triggers>
-                            <DataTrigger TargetType="Button" Binding="{Binding IsPeriodTab}" Value="True">
-                                <Setter Property="FontFamily" Value="BarlowSemiBold" />
-                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
-                            </DataTrigger>
-                            <DataTrigger TargetType="Button" Binding="{Binding IsPeriodTab}" Value="False">
-                                <Setter Property="FontFamily" Value="BarlowMedium" />
-                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
-                            </DataTrigger>
-                        </Button.Triggers>
-                    </Button>
-                    <Button Text="Payslips" Command="{Binding OpenPayslipsTabCommand}" Style="{StaticResource Segment}" AutomationId="PayrollPayslipsTab">
-                        <Button.Triggers>
-                            <DataTrigger TargetType="Button" Binding="{Binding IsPayslipsTab}" Value="True">
-                                <Setter Property="FontFamily" Value="BarlowSemiBold" />
-                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
-                            </DataTrigger>
-                            <DataTrigger TargetType="Button" Binding="{Binding IsPayslipsTab}" Value="False">
-                                <Setter Property="FontFamily" Value="BarlowMedium" />
-                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
-                            </DataTrigger>
-                        </Button.Triggers>
-                    </Button>
-                    <Button Text="Paid out" Command="{Binding OpenPaidOutTabCommand}" Style="{StaticResource Segment}" AutomationId="PayrollPaidOutTab">
-                        <Button.Triggers>
-                            <DataTrigger TargetType="Button" Binding="{Binding IsPaidOutTab}" Value="True">
-                                <Setter Property="FontFamily" Value="BarlowSemiBold" />
-                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
-                            </DataTrigger>
-                            <DataTrigger TargetType="Button" Binding="{Binding IsPaidOutTab}" Value="False">
-                                <Setter Property="FontFamily" Value="BarlowMedium" />
-                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
-                            </DataTrigger>
-                        </Button.Triggers>
-                    </Button>
-                    <Button Text="Salaries" Command="{Binding OpenSalariesTabCommand}" Style="{StaticResource Segment}" AutomationId="PayrollSalariesTab">
-                        <Button.Triggers>
-                            <DataTrigger TargetType="Button" Binding="{Binding IsSalariesTab}" Value="True">
-                                <Setter Property="FontFamily" Value="BarlowSemiBold" />
-                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
-                            </DataTrigger>
-                            <DataTrigger TargetType="Button" Binding="{Binding IsSalariesTab}" Value="False">
-                                <Setter Property="FontFamily" Value="BarlowMedium" />
-                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
-                            </DataTrigger>
-                        </Button.Triggers>
-                    </Button>
-                </HorizontalStackLayout>
-            </Border>
 
             <ScrollView Grid.Row="1">
                 <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='24,16,24,32'}" Spacing="16">

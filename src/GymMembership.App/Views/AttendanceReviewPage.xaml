@@ -8,7 +8,7 @@
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:models="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
-            x:Class="GymMembership.App.Views.AttendanceReviewPage" x:DataType="vm:AttendanceReviewViewModel" Title="Attendance">
+            x:Class="GymMembership.App.Views.AttendanceReviewPage" x:DataType="vm:AttendanceReviewViewModel" Title="{Binding SectionTitle}">
 
     <v:BasePage.Resources>
         <!-- owner, 2026-11-25: Review and Records as a table. One row a record: who, the day, time in and out, the shift, status, actions;
@@ -146,52 +146,6 @@
 
     <Grid>
         <Grid RowDefinitions="Auto,*">
-            <Border Style="{StaticResource SegmentTrack}" Margin="24,14,24,0" HorizontalOptions="Start">
-                <HorizontalStackLayout Spacing="2">
-                    <Button Text="{Binding ReviewTabText}" Command="{Binding OpenTabCommand}" CommandParameter="review" Style="{StaticResource Segment}" AutomationId="AttendanceReviewTab">
-                        <Button.Triggers>
-                            <DataTrigger TargetType="Button" Binding="{Binding IsReviewTab}" Value="True">
-                                <Setter Property="FontFamily" Value="BarlowSemiBold" />
-                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
-                            </DataTrigger>
-                            <DataTrigger TargetType="Button" Binding="{Binding IsReviewTab}" Value="False">
-                                <Setter Property="FontFamily" Value="BarlowMedium" />
-                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
-                            </DataTrigger>
-                        </Button.Triggers>
-                    </Button>
-                    <Button Text="Records" Command="{Binding OpenTabCommand}" CommandParameter="records" Style="{StaticResource Segment}" AutomationId="AttendanceRecordsTab">
-                        <Button.Triggers>
-                            <DataTrigger TargetType="Button" Binding="{Binding IsRecordsTab}" Value="True">
-                                <Setter Property="FontFamily" Value="BarlowSemiBold" />
-                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
-                            </DataTrigger>
-                            <DataTrigger TargetType="Button" Binding="{Binding IsRecordsTab}" Value="False">
-                                <Setter Property="FontFamily" Value="BarlowMedium" />
-                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
-                            </DataTrigger>
-                        </Button.Triggers>
-                    </Button>
-                    <Button Text="Corrections" Command="{Binding OpenTabCommand}" CommandParameter="corrections" Style="{StaticResource Segment}" AutomationId="AttendanceCorrectionsTab">
-                        <Button.Triggers>
-                            <DataTrigger TargetType="Button" Binding="{Binding IsCorrectionsTab}" Value="True">
-                                <Setter Property="FontFamily" Value="BarlowSemiBold" />
-                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
-                            </DataTrigger>
-                            <DataTrigger TargetType="Button" Binding="{Binding IsCorrectionsTab}" Value="False">
-                                <Setter Property="FontFamily" Value="BarlowMedium" />
-                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
-                            </DataTrigger>
-                        </Button.Triggers>
-                    </Button>
-                </HorizontalStackLayout>
-            </Border>
 
             <ScrollView Grid.Row="1">
                 <VerticalStackLayout Padding="24,16,24,32" Spacing="16">
