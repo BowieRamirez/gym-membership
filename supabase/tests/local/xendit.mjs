@@ -230,7 +230,7 @@ try {
     const p = await deskOnline('membership', uid, pack);
     assert.deepEqual([p.status, p.method, p.recorded_by, p.verified_by, p.receipt_no, p.cash_shift_id], ['pending', 'qr', desk, null, null, null]);
     const minutes = (new Date(p.expires_at) - Date.now()) / 60000;
-    assert.ok(minutes > 28 && minutes <= 30, `expires in ${minutes} minutes`);
+    assert.ok(minutes > 28 && minutes <= 30.1, `expires in ${minutes} minutes`);   // the database and this script read the clock a moment apart
     assert.equal((await db.query(`select count(*) n from user_membership_packages where member_id=$1 and status='active'`, [uid])).rows[0].n, '0');
     const id = xid(); await checkout(p, id);
     assert.equal(await confirm(id, p.amount, 'QRPH'), 'confirmed');
