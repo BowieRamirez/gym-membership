@@ -65,6 +65,14 @@ public class AttendanceReviewViewModelTests
         Assert.DoesNotContain(vm.Cards, c => c.DateText == "August 6, 2026");   // Review shows pending only
     }
 
+    [Fact]   // review: two overlapping records each show their full amount, but the shared time is paid once
+    public async Task Overlapping_record_says_the_shared_time_is_paid_once()
+    {
+        var (_, _, vm, _, _) = await Open((gw, d, _) => { gw.OwnerAddShift(d.UserId, Manila(7, 8), Manila(7, 12)); gw.OwnerAddShift(d.UserId, Manila(7, 11), Manila(7, 13)); });
+        vm.Cards[0].ApproveCommand.Execute(null);
+        Assert.Equal(("Overlaps another record", "The shared time is paid once, so the period total is lower"), (vm.MoneyRows[^1].Label, vm.MoneyRows[^1].Value));
+    }
+
     [Fact]
     public async Task Cancel_leaves_the_record_pending()
     {

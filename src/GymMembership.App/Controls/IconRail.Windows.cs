@@ -104,7 +104,16 @@ public static class IconRail
         var folds = new List<(AdminMenuEntry Entry, MenuRow Row, VerticalStackLayout Kids)>();
         string? lastTab = null;
         ShellItem? lastItem = null;
+        (ShellItem Item, string Tab)? wantTab = null;
         StatusChip? pendingChip = null;
+
+        void ApplyTab()
+        {
+            if (wantTab is not { } w || shell.CurrentItem != w.Item || shell.CurrentPage?.BindingContext is not IOpensTab page) return;
+            if (!ReferenceEquals(shell.CurrentPage, (w.Item.CurrentItem?.CurrentItem as IShellContentController)?.Page)) return;   // not that page yet
+            wantTab = null;
+            page.OpenTab(w.Tab);
+        }
 
         MenuRow LinkRow(AdminMenuEntry entry, ShellItem item, bool child)
         {
@@ -113,9 +122,12 @@ public static class IconRail
             row.Button.Clicked += (_, _) =>
             {
                 (lastItem, lastTab) = (item, entry.Tab);
-                shell.CurrentItem = item;
-                // the page exists once its item is current; open it on the menu's tab (Users and roles: everyone, Employees: staff only)
-                shell.Dispatcher.Dispatch(() => { (shell.CurrentPage?.BindingContext as IOpensTab)?.OpenTab(entry.Tab ?? ""); Refresh(); });
+                // the menu's tab (Users and roles: everyone, Employees: staff only) goes to the page once the shell has shown it; a page
+                // opened for the first time is built during navigation, so it's applied in Navigated, or now when it is already showing
+                wantTab = (item, entry.Tab ?? "");
+                if (shell.CurrentItem == item) ApplyTab();
+                else shell.CurrentItem = item;
+                Refresh();
             };
             links.Add((entry, item, row));
             return row;
@@ -163,8 +175,10 @@ public static class IconRail
             foreach (var (entry, item, row) in links)
             {
                 // a page with one entry is lit whenever it shows; Payroll, Attendance and Users and roles / Employees light the entry clicked
+                // opened some other way (an Overview card, a Home tile): its first entry
                 var current = shell.CurrentItem == item
-                    && (links.Count(l => l.Item == item) == 1 || (lastItem == item && entry.Tab == lastTab));
+                    && (links.Count(l => l.Item == item) == 1
+                        || (lastItem == item ? entry.Tab == lastTab : links.First(l => l.Item == item).Entry == entry));
                 row.Selected = current;
                 SemanticProperties.SetDescription(row.Button, current ? entry.Label + ", current page" : entry.Label);
             }
@@ -206,6 +220,8 @@ public static class IconRail
 
         shell.Navigated += (_, _) =>
         {
+            ApplyTab();
+            if (lastItem != shell.CurrentItem) lastItem = null;   // left by another way: the old tab no longer says where you are
             // open the fold that holds the page you landed on (an overview link, a Home tile)
             foreach (var (_, _, kids) in folds)
                 if (links.Any(l => shell.CurrentItem == l.Item && kids.Children.Contains(l.Row))) kids.IsVisible = true;

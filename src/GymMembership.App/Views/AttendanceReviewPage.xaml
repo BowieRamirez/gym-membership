@@ -23,11 +23,12 @@
                         <c:StatusChip Grid.Column="2" Status="{Binding StatusLabel}" VerticalOptions="Start" />
                     </Grid>
 
-                    <HorizontalStackLayout Spacing="8">
+                    <!-- a Grid, so a long member name on a session cuts off inside the card -->
+                    <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
                         <c:IconView Icon="calendar-days" Size="16" ChipSize="20" Bare="True" VerticalOptions="Center" />
-                        <Label Text="{Binding DateText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
-                        <Label Text="{Binding WhatText}" Style="{StaticResource Caption}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
-                    </HorizontalStackLayout>
+                        <Label Grid.Column="1" Text="{Binding DateText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                        <Label Grid.Column="2" Text="{Binding WhatText}" Style="{StaticResource Caption}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    </Grid>
 
                     <BoxView Style="{StaticResource Hairline}" />
 
@@ -80,10 +81,10 @@
 
         <DataTemplate x:Key="CorrectionCard" x:DataType="vm:AttendanceCorrectionItem">
             <VerticalStackLayout Padding="14,12" Spacing="4">
-                <HorizontalStackLayout Spacing="8">
-                    <Label Text="{Binding FullName}" FontFamily="BarlowSemiBold" />
-                    <Label Text="{Binding QuantityText}" Style="{StaticResource Numeral}" />
-                </HorizontalStackLayout>
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <Label Text="{Binding FullName}" FontFamily="BarlowSemiBold" LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="1" Text="{Binding QuantityText}" Style="{StaticResource Numeral}" />
+                </Grid>
                 <Label Text="{Binding Note}" />
                 <Label Text="{Binding ByText}" Style="{StaticResource Caption}" />
                 <BoxView Style="{StaticResource Hairline}" />

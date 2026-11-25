@@ -3610,12 +3610,8 @@ public partial class PayrollViewModel : LoadableViewModel, IOpensTab
     public override Task OnAppearingAsync() => LoadAsync();
 
     /// <summary>Fix 4: the menu opens Payroll on Salaries, Pay period (Processing and Payslips) or Paid out.</summary>
-    public void OpenTab(string tab)
-    {
-        if (tab == "salaries") _ = OpenSalariesTabAsync();
-        else if (tab == "paid_out") _ = OpenPaidOutTabAsync();
-        else OpenPeriodTab();
-    }
+    // the page loads every tab when it shows (LoadAsync), so switching here needs no second read
+    public void OpenTab(string tab) => ActiveTab = tab is "salaries" or "paid_out" ? tab : "period";
 
     [RelayCommand] private void OpenPeriodTab() => ActiveTab = "period";
     [RelayCommand] private async Task OpenPaidOutTabAsync() { ActiveTab = "paid_out"; await LoadPaidOutAsync(); }

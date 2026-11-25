@@ -64,8 +64,11 @@ public sealed partial class AttendanceCardItem(PayrollStaffRecord rec, bool edit
             return [new("Recorded", "1 session"), new("Approved", approved ? "1 session" : "0 sessions"),
                     new("Rate", PayTypes.RateText("per_session", Rec.Rate)), new("Potential payable amount", PayTypes.Money(Rec.Rate))];
         string H(decimal h) => $"{h.ToString("0.##", Inv)} hours";
-        return [new("Recorded hours", H(Rec.Hours)), new("Approved hours", H(approved ? Rec.Hours : 0)),
+        List<MoneyRow> rows = [new("Recorded hours", H(Rec.Hours)), new("Approved hours", H(approved ? Rec.Hours : 0)),
                 new("Hourly rate", PayTypes.Money(Rec.Rate)), new("Potential payable amount", PayTypes.Money(Math.Round(Rec.Hours * Rec.Rate, 2)))];
+        // pay merges overlapping time (range_agg, 0142), so this record alone overstates it
+        if (Rec.Flags.Contains("overlap")) rows.Add(new("Overlaps another record", "The shared time is paid once, so the period total is lower"));
+        return rows;
     }
 }
 
@@ -115,7 +118,11 @@ public partial class AttendanceReviewViewModel(IAdminService svc) : LoadableView
     public override Task OnAppearingAsync() => LoadAsync();
 
     partial void OnStatusFilterChanged(string value) => Show();
-    partial void OnPendingCountChanged(int value) => WeakReferenceMessenger.Default.Send(new AttendancePendingChanged(value));   // the menu's Pending tag
+    // the menu's Pending tag counts this pay period only, so looking at an older one doesn't change it
+    partial void OnPendingCountChanged(int value)
+    {
+        if (PeriodStartsOn == PayrollViewModel.PeriodStartFor(PayrollViewModel.ManilaToday())) WeakReferenceMessenger.Default.Send(new AttendancePendingChanged(value));
+    }
 
     [RelayCommand] public void OpenTab(string tab) { ActiveTab = tab is "records" or "corrections" ? tab : "review"; Confirming = null; Show(); }
     [RelayCommand] private Task PrevPeriodAsync() { PeriodStartsOn = PayrollViewModel.StepPrev(PeriodStartsOn); return LoadAsync(); }
@@ -125,6 +132,8 @@ public partial class AttendanceReviewViewModel(IAdminService svc) : LoadableView
     private async Task LoadAsync()
     {
         Confirming = null;
+        _records = [];   // a failed read must not leave the last period's cards under this period's name
+        Corrections.Clear();
         PayrollPeriod? period = null;
         if (!await RunAsync(() => svc.PayrollPeriodAsync(PeriodStartsOn), p => period = p) || period is null) return;
         PeriodId = period.PeriodId;
