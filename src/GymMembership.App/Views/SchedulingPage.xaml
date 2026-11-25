@@ -102,7 +102,7 @@
 
         <DataTemplate x:Key="PersonRowTemplate" x:DataType="vm:SchedulePersonItem">
             <VerticalStackLayout>
-                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="260,*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="14">
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="340,*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="24">
                     <HorizontalStackLayout Spacing="10" VerticalOptions="Center">
                         <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" VerticalOptions="Center" LineBreakMode="TailTruncation" />
                         <c:StatusChip Status="{Binding RoleLabel}" VerticalOptions="Center" />
@@ -442,7 +442,7 @@
                     <Border Style="{StaticResource TablePanel}">
                         <VerticalStackLayout>
                             <VerticalStackLayout x:Name="PeopleHead">
-                                <Grid Style="{StaticResource TableHead}" ColumnDefinitions="260,*,Auto" ColumnSpacing="14">
+                                <Grid Style="{StaticResource TableHead}" ColumnDefinitions="340,*,Auto" ColumnSpacing="24">
                                     <Label Text="Person" Style="{StaticResource Caption}" />
                                     <Label Grid.Column="1" Text="Schedule" Style="{StaticResource Caption}" />
                                 </Grid>
