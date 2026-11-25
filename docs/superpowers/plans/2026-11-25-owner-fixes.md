@@ -6,7 +6,7 @@ Created: 2026-11-25
 Last updated: 2026-11-25
 Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phases 3.1-3.6 built, checked and pushed; `0151`-`0157` all live (dry run 2026-11-25: remote up to date); shift check-in rule is **off** until the admin turns it on from Scheduling. S1-S9 confirmed; S8 amended by option (b). Left: owner hand checks, the rollout steps (Phase 3.6), merge and a new app release. **Owner: do not merge until told.** Fix 4 (admin menu with words, Attendance page, Payslips tab, corrections on Attendance) BUILT, `0158` live. Fix 5 (Expenses, Financial reports) BUILT, `0159` live. Layout fixes after Fix 5 (Amenity status margins, compact menu) BUILT. Withholding tax on the month (`0160` live: BIR monthly table, nothing up to ₱20,833, taken in the 16th–end pay) BUILT. Cashier Membership in one go (new member + package + payment), Employees as its own page, no tab bars on Payroll and Attendance BUILT (app only). All pushed; owner hand checks left. More fixes get added below as the owner sends them.
 Branch: `owner-fixes-2026-11-25` (cut from `main` at `df3f54c`, v0.11.0). Owner merges to `main` when done; no push or PR without the owner.
-Next migration: `0162`.
+Next migration: `0163`.
 
 **Goal:** The owner's fixes after the v0.11.0 release.
 
@@ -379,3 +379,7 @@ Owner, 2026-11-25 (screenshot: November Payroll ₱0.00 while Payroll History ha
 ### Amenity status as a table
 
 Owner, 2026-11-25: "make the amenity status page to table form, change the card to table". The amenity cards are a table (Photo, Amenity with who runs it, Status, Reason with "Back about", Change status); a narrow window gets the same facts stacked (`TableBody`, wide from 700). The photo tile style `Thumb` moved from Packages and amenities into the shared styles so both pages use it. Members' amenity cards are unchanged. 1280 C# tests pass; Windows and Android build. App only. Not opened in the app here (owner checks it).
+
+### Supabase lint: security definer view (`0162`)
+
+Owner, 2026-11-25: Supabase's linter flagged `security_definer_view` (ERROR) on `public.public_profiles` (0140's names-only view, which ran as its owner to read profiles past the narrowed policy). Now the view is `security_invoker` and reads a new closed `security definer` function `public_profile_rows()` with the same row rule and columns, so who sees which names does not change; the app is unchanged. Test added to `live-test-fixes.mjs` first (failed); all local database test files pass. Deployed: dry run showed only `0162`; pushed; live: the view is `security_invoker=true`, `anon` can't read it or call the function, `authenticated` reads it.

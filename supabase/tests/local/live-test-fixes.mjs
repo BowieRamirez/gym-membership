@@ -51,6 +51,12 @@ try {
     await db.query('begin'); await db.query('set local role anon');
     try { await assert.rejects(db.query('select * from public_profiles'), /permission denied/); } finally { await db.query('rollback'); }
   });
+  await test('0162: public_profiles is a security invoker view (Supabase lint 0010); anon cannot call its row function', async () => {
+    const opts = (await db.query(`select reloptions from pg_class where oid = 'public.public_profiles'::regclass`)).rows[0].reloptions ?? [];
+    assert.ok(opts.includes('security_invoker=true'), String(opts));
+    await db.query('begin'); await db.query('set local role anon');
+    try { await assert.rejects(db.query('select * from public_profile_rows()'), /permission denied/); } finally { await db.query('rollback'); }
+  });
   await test('2: a coach cannot check themselves in or out; the desk can', async () => {
     await assert.rejects(as(coach, 'select coach_check_in()'), /forbidden/);
     await assert.rejects(as(coach, 'select coach_check_in($1)', [coach]), /forbidden/);
