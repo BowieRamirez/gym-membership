@@ -14,54 +14,58 @@
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
-            <Border Style="{StaticResource Panel}" MaximumWidthRequest="{OnIdiom Phone=10000, Default=640}" HorizontalOptions="{OnIdiom Phone=Fill, Default=Start}">
+            <!-- owner, 2026-11-26: the form in a column beside the reports on a wide window (as Amenity status and the Cashier); stacked, form first -->
+            <c:SideLayout SideWidth="420" Spacing="20" SideFirst="True">
                 <VerticalStackLayout Spacing="10">
-                    <c:CardTitle Text="New report" />
-                    <Label Text="Where is it?" Style="{StaticResource Caption}" />
-                    <Border Style="{StaticResource Field}">
-                        <Picker ItemsSource="{Binding Places}" ItemDisplayBinding="{Binding Name}" SelectedItem="{Binding Where}" Title="Choose an amenity or something else"
-                                AutomationId="DamageWhere" SemanticProperties.Description="Where the damage is" />
+                    <Label Text="Your reports" Style="{StaticResource SectionTitle}" Margin="0" />
+                    <Border Style="{StaticResource TablePanel}">
+                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Reports}">
+                            <BindableLayout.EmptyView>
+                                <Label Text="No reports yet. When you send one, you'll see here what the admins did with it." Style="{StaticResource Muted}" Margin="14" />
+                            </BindableLayout.EmptyView>
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ReportDamageViewModel+Sent">
+                                    <VerticalStackLayout>
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="14,12" RowDefinitions="Auto,Auto,Auto" RowSpacing="2">
+                                            <Label Text="{Binding What}" FontFamily="BarlowSemiBold" LineBreakMode="WordWrap" />
+                                            <c:StatusChip Grid.Column="1" Status="{Binding Status}" VerticalOptions="Start" />
+                                            <Label Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource Caption}" LineBreakMode="TailTruncation">
+                                                <Label.Text>
+                                                    <MultiBinding StringFormat="{}{0}, {1}">
+                                                        <Binding Path="Where" />
+                                                        <Binding Path="When" />
+                                                    </MultiBinding>
+                                                </Label.Text>
+                                            </Label>
+                                            <Label Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding Note, StringFormat='Admin: {0}'}" Style="{StaticResource Muted}" LineBreakMode="WordWrap" IsVisible="{Binding HasNote}" Margin="0,4,0,0" />
+                                        </Grid>
+                                        <BoxView Style="{StaticResource Hairline}" />
+                                    </VerticalStackLayout>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
                     </Border>
-                    <Label Text="What is damaged?" Style="{StaticResource Caption}" />
-                    <Border Style="{StaticResource Field}">
-                        <Editor Text="{Binding Description}" Placeholder="For example: the ring rope is frayed near the red corner" MaxLength="1000"
-                                AutoSize="TextChanges" MinimumHeightRequest="88" AutomationId="DamageWhat" SemanticProperties.Description="What is damaged" />
-                    </Border>
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                        <Label Text="{Binding CountText}" Style="{StaticResource Caption}" VerticalOptions="Center" />
-                        <Button Grid.Column="1" Text="Send report" Command="{Binding SendCommand}" AutomationId="SendDamageReport" />
-                    </Grid>
                 </VerticalStackLayout>
-            </Border>
-
-            <Label Text="Your reports" Style="{StaticResource SectionTitle}" Margin="0,8,0,0" />
-            <Border Style="{StaticResource TablePanel}">
-                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Reports}">
-                    <BindableLayout.EmptyView>
-                        <Label Text="No reports yet. When you send one, you'll see here what the admins did with it." Style="{StaticResource Muted}" Margin="14" />
-                    </BindableLayout.EmptyView>
-                    <BindableLayout.ItemTemplate>
-                        <DataTemplate x:DataType="vm:ReportDamageViewModel+Sent">
-                            <VerticalStackLayout>
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="14,12" RowDefinitions="Auto,Auto,Auto" RowSpacing="2">
-                                    <Label Text="{Binding What}" FontFamily="BarlowSemiBold" LineBreakMode="WordWrap" />
-                                    <c:StatusChip Grid.Column="1" Status="{Binding Status}" VerticalOptions="Start" />
-                                    <Label Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource Caption}" LineBreakMode="TailTruncation">
-                                        <Label.Text>
-                                            <MultiBinding StringFormat="{}{0}, {1}">
-                                                <Binding Path="Where" />
-                                                <Binding Path="When" />
-                                            </MultiBinding>
-                                        </Label.Text>
-                                    </Label>
-                                    <Label Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding Note, StringFormat='Admin: {0}'}" LineBreakMode="WordWrap" IsVisible="{Binding HasNote}" Margin="0,4,0,0" />
-                                </Grid>
-                                <BoxView Style="{StaticResource Hairline}" />
-                            </VerticalStackLayout>
-                        </DataTemplate>
-                    </BindableLayout.ItemTemplate>
-                </VerticalStackLayout>
-            </Border>
+                <Border Style="{StaticResource Panel}" VerticalOptions="Start">
+                    <VerticalStackLayout Spacing="10">
+                        <c:CardTitle Text="New report" />
+                        <Label Text="Where is it?" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}">
+                            <Picker ItemsSource="{Binding Places}" ItemDisplayBinding="{Binding Name}" SelectedItem="{Binding Where}" Title="Choose an amenity or something else"
+                                    AutomationId="DamageWhere" SemanticProperties.Description="Where the damage is" />
+                        </Border>
+                        <Label Text="What is damaged?" Style="{StaticResource Caption}" />
+                        <Border Style="{StaticResource Field}">
+                            <Editor Text="{Binding Description}" Placeholder="For example: the ring rope is frayed near the red corner" MaxLength="1000"
+                                    AutoSize="TextChanges" MinimumHeightRequest="88" AutomationId="DamageWhat" SemanticProperties.Description="What is damaged" />
+                        </Border>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <Label Text="{Binding CountText}" Style="{StaticResource Caption}" VerticalOptions="Center" />
+                            <Button Grid.Column="1" Text="Send report" Command="{Binding SendCommand}" AutomationId="SendDamageReport" />
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
+            </c:SideLayout>
         </VerticalStackLayout>
     </ScrollView>
 </v:BasePage>

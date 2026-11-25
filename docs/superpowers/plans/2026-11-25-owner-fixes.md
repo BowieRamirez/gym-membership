@@ -441,3 +441,5 @@ Owner, 2026-11-25 (screenshot of Cashier → Amenity booking with the Windows ca
 - `Controls/ClosedDays` (attached property): on Windows the DatePicker's calendar marks the closed days as blackout days (struck through, can't be picked). Both desk forms bind it.
 - `DeskBookingViewModel` and `DeskCoachBookingViewModel` load the closed days (`GymClosures.ByDayAsync`; new `ISessionService.ClosedDaysAsync`); a closed day already picked shows "The gym is closed on Tue 1 Dec: test. Choose another day." in red, and Book is off on the amenity form (the server refuses either way).
 - Test `The_desk_booking_forms_know_the_closed_days_and_say_so_when_one_is_picked` (failed first). 1293 C# tests pass; Windows and Android build. App only; reaches the desk with the next release. Not opened in the app here.
+
+- Owner, 2026-11-26 (screenshot: "so much space is wasted"): Report damage puts the form in a 420-wide column beside "Your reports" on a wide window (`SideLayout`, as Amenity status and the Cashier), stacked with the form first on a phone or narrow window; the admin note is a muted line. Windows and Android build; 1293 C# tests pass.
