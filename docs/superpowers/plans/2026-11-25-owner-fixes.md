@@ -4,7 +4,7 @@
 
 Created: 2026-11-25
 Last updated: 2026-11-25
-Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phases 3.1-3.5 done (0151-0155 live; shift check-in rule off until the admin turns it on from Scheduling); 3.6 (checks and rollout) TODO. S1-S9 confirmed. More fixes get added below as the owner sends them.
+Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phases 3.1-3.6 built, checked and pushed; `0151`-`0157` all live (dry run 2026-11-25: remote up to date); shift check-in rule is **off** until the admin turns it on from Scheduling. S1-S9 confirmed; S8 amended by option (b). Left: owner hand checks, the rollout steps (Phase 3.6), merge and a new app release. **Owner: do not merge until told.** More fixes get added below as the owner sends them.
 Branch: `owner-fixes-2026-11-25` (cut from `main` at `df3f54c`, v0.11.0). Owner merges to `main` when done; no push or PR without the owner.
 Next migration: `0158`.
 
@@ -23,7 +23,7 @@ Next migration: `0158`.
 |---|---|---|
 | 1 | Cashier: Membership is register-only; Renewal lists existing accounts; no Register on Day pass | BUILT (`ef2c67c`, pushed) |
 | 2 | Cashier: no Day pass cards under Membership/Renewal; amenity booking Member or Walk-in, one at a time | BUILT (`2db811e`, pushed) |
-| 3 | Staff scheduling: admin sets coach and front desk shifts; check-in follows the shift; payroll pays from shift start (5 phases) | PLANNED |
+| 3 | Staff scheduling: admin sets coach and front desk shifts; check-in follows the shift; payroll pays from shift start; desk moves a session to another coach (6 phases) | BUILT (`0151`-`0157` live, rule off; not merged) |
 
 ## Notes from today (no change)
 
@@ -168,6 +168,7 @@ Owner, 2026-11-25: can the coaches' shifts and payroll work like `C:\Users\bowie
 - [x] Whole-fix review (3.1-3.5, `27ea8c8^..fd6c5e1`). Found and fixed: the schedule could replace a coach shift that had an **amenity booking with that coach** (only coach sessions kept a shift); `0156` keeps it and reports the day, demo the same; db test added. Raised to the owner, not changed (decision): see "Open decision" below.
 - [x] All unit and database tests; Windows and Android builds. Full db run: 72 files; the only failure was `rules.mjs` (no break test for three schedule functions), fixed and rerun (106 passed); `staff-scheduling.mjs` 22 passed; 1254 C# tests pass; Windows builds (Android built in 3.5, no Android change since).
 - [x] Owner screenshot (Templates, New template): the per-day "Works" label ran under the time pickers and over "Rest day" (a Windows CheckBox is ~120 wide). Fixed: one caption row (Day, Works, Starts, Ends) and the checkbox alone in a 120-wide column.
+- [x] Owner screenshot 3 (People tab): long names and the role chip ran into the Schedule column. The Person column is wider (260 → 340) with more gap (24), header and rows alike.
 - [x] Owner screenshot 2 (Edit template wasted the width) and "just table form": the editor is a table with the days across (Mon-Sun columns; Works, Starts, Ends rows; "—" on a day off), 7 equal cells a row like the Week grid; Name, Save and Cancel on one line above. A Works / Day off chip (`ChoiceChip`) replaces the checkbox.
 - [ ] Rollout (owner): see the steps below. `0151`-`0157` are live with `schedule_enforced` off, so nothing changes until step 4.
 - [ ] Coaches' own future shifts stay until the first sync for that coach replaces the unbooked ones (S8). Nothing to do; it happens at step 3.
@@ -185,3 +186,19 @@ Owner, 2026-11-25: can the coaches' shifts and payroll work like `C:\Users\bowie
 **Decided (owner, 2026-11-25): option (b).** A change that starts today (an assignment from today, a change for today) also rewrites today's coach shift, so a coach given today off can't be booked later today; today's new shift starts no earlier than the next half hour; a shift with something booked in it is kept and named; a shift already over stays as history. Template edits and the nightly fill still start tomorrow. `0157` (live), demo the same; db test added. This amends S8.
 
 **Release notes (for the next version):** the admin sets coach and front desk shifts on the new Scheduling page (templates, people, week, one-off changes); check-in and opening a drawer follow the shift once turned on; Payroll pays from the shift start and flags Late / Left early; coaches no longer post shifts; the desk sees each coach's shift and Late, and can move a session to another free coach.
+
+### Fix 3 commits (branch `owner-fixes-2026-11-25`)
+
+| Commit | What | Migration |
+|---|---|---|
+| `c0281e5`, `56c02b4`, `634ffa3` | Plan: Fix 3 decisions S1-S9, phases | — |
+| `27ea8c8` | 3.1 templates, assignments, overrides, `shift_for`, coach shift sync, clock-in rule (off); local db harness reads LF | `0151` |
+| `b654931` | 3.2 payroll pays from the later of check-in and shift start; Late / Left early | `0152` |
+| `f355007` | 3.3 Scheduling page (Week, Templates, People, check-in switch) | `0153` |
+| `830c340` | 3.4 coaches stop posting shifts; refusals in words; desk sees shift and Late | `0154` |
+| `fd6c5e1` | 3.5 desk moves a booked session to another free coach | `0155` |
+| `11968c3` | 3.6 review: keep shifts with coach amenity bookings; option (b) a change starting today rewrites today; editor layout fix | `0156`, `0157` |
+| `63dd54a`, `0d27a2f` | Template editor: day tiles, then a table with the days across (owner) | — |
+| `a27c8c0` | People tab: wider Person column (owner) | — |
+
+All migrations are live; app commits up to `0d27a2f` are on GitHub, `a27c8c0` waits for the owner's push.
