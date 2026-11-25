@@ -10,7 +10,7 @@
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <!-- owner, 2026-11-17: the desk's Booked card sits on the right (staff pages are Windows only);
              2026-11-23: below 1100 wide it goes under the main column instead of squeezing it (SideLayout, as the Cashier) -->
-        <c:SideLayout SideWidth="380" Spacing="20" SideFirst="False" Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}">
+        <c:SideLayout SideWidth="380" Spacing="20" SideFirst="False" Padding="{OnIdiom Phone='16,12,16,24', Default='24,16,24,32'}">
         <VerticalStackLayout Spacing="12">
             <Label Text="Members who follow an amenity are alerted when it becomes available or unavailable." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
