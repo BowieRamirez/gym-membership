@@ -183,6 +183,17 @@
     <Style x:Key="TablePanel" TargetType="Border" BasedOn="{StaticResource Panel}">
         <Setter Property="Padding" Value="0" />
     </Style>
+    <!-- a photo tile in a table row (Packages and amenities, Amenity status) -->
+    <Style x:Key="Thumb" TargetType="Border">
+        <Setter Property="StrokeShape" Value="RoundRectangle 8" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="WidthRequest" Value="52" />
+        <Setter Property="HeightRequest" Value="38" />
+        <Setter Property="VerticalOptions" Value="Center" />
+        <Setter Property="HorizontalOptions" Value="Start" />
+        <!-- Line, not Surface: a new version's row is Surface, and its empty tile must still show -->
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+    </Style>
     <Style x:Key="TableHead" TargetType="Grid">
         <Setter Property="Padding" Value="14,10" />
         <Setter Property="ColumnSpacing" Value="12" />

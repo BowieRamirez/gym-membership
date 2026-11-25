@@ -10,17 +10,6 @@
     <!-- Phase 4 (G8, approved mockup docs/mockups/catalog-add.html): one Actions button per row, offering only what the row's state
          allows; adding and editing happen in a side panel over the list. Narrow windows get the same facts stacked. -->
     <v:BasePage.Resources>
-        <Style x:Key="Thumb" TargetType="Border">
-            <Setter Property="StrokeShape" Value="RoundRectangle 8" />
-            <Setter Property="StrokeThickness" Value="0" />
-            <Setter Property="WidthRequest" Value="52" />
-            <Setter Property="HeightRequest" Value="38" />
-            <Setter Property="VerticalOptions" Value="Center" />
-            <Setter Property="HorizontalOptions" Value="Start" />
-            <!-- Line, not Surface: a new version's row is Surface, and its empty tile must still show -->
-            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
-        </Style>
-
         <DataTemplate x:Key="PackageRow" x:DataType="vm:CatalogPackageRow">
             <VerticalStackLayout>
                 <Grid Style="{StaticResource TableRow}" ColumnDefinitions="52,*,120,70,120,100" ColumnSpacing="14">
