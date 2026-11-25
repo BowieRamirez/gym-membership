@@ -3360,16 +3360,18 @@ public sealed partial class PayrollRecordItem(PayrollTimeRecord rec, bool editab
     {
         get
         {
-            var s = ManilaTime.Of(Rec.StartsAt);
             var inv = System.Globalization.CultureInfo.InvariantCulture;
-            return Rec.EndsAt is { } e ? $"{s.ToString("ddd d MMM · h:mm tt", inv)} → {ManilaTime.Of(e).ToString("h:mm tt", inv)} · {Rec.Hours.ToString("0.##", inv)} h"
-                                       : $"{s.ToString("ddd d MMM · h:mm tt", inv)} → still open";
+            string T(DateTime t) => ManilaTime.Of(t).ToString("h:mm tt", inv);
+            var s = Rec.ActualStart ?? Rec.StartsAt;   // the real check-in; pay may start later (0152)
+            var head = ManilaTime.Of(s).ToString("ddd d MMM", inv)
+                + (Rec.ExpectedStart is { } es && Rec.ExpectedEnd is { } ee ? $" · shift {T(es)} – {T(ee)} · in" : " ·");
+            return Rec.EndsAt is { } e ? $"{head} {T(s)} → {T(e)} · {Rec.Hours.ToString("0.##", inv)} h" : $"{head} {T(s)} → still open";
         }
     }
     public string FlagText => string.Join(" · ", Rec.Flags.Select(f => f switch
     {
         "open" => "Still open, not counted", "auto_closed" => "Closed by the system at closing time", "long" => "Over 12 hours",
-        "overlap" => "Overlaps, counted once", _ => f
+        "overlap" => "Overlaps, counted once", "late" => "Late", "left_early" => "Left early", _ => f
     }));
     public bool HasFlags => Rec.Flags.Count > 0;
     public bool CanReview => editable && Rec.EndsAt is not null;

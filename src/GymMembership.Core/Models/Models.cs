@@ -673,6 +673,10 @@ public sealed class PayrollTimeRecord
     [System.Text.Json.Serialization.JsonPropertyName("status")] public string Status { get; set; } = "pending";
     [System.Text.Json.Serialization.JsonPropertyName("reason")] public string? Reason { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("flags")] public List<string> Flags { get; set; } = new();
+    // 0152: StartsAt is the payable start (the shift start when in early); the real check-in and the shift it was against
+    [System.Text.Json.Serialization.JsonPropertyName("actual_start")] public DateTime? ActualStart { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("expected_start")] public DateTime? ExpectedStart { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("expected_end")] public DateTime? ExpectedEnd { get; set; }
 }
 
 /// <summary>0142 (H5): +/- hours (or sessions) for one person in one period, with a note.</summary>

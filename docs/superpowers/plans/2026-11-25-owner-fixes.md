@@ -4,9 +4,9 @@
 
 Created: 2026-11-25
 Last updated: 2026-11-25
-Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phase 3.1 DEPLOYED (0151 live, shift check-in rule off until the admin sets schedules); 3.2-3.6 TODO. S1-S9 confirmed. More fixes get added below as the owner sends them.
+Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phases 3.1-3.2 DEPLOYED (0151, 0152 live; shift check-in rule off until the admin sets schedules); 3.3-3.6 TODO. S1-S9 confirmed. More fixes get added below as the owner sends them.
 Branch: `owner-fixes-2026-11-25` (cut from `main` at `df3f54c`, v0.11.0). Owner merges to `main` when done; no push or PR without the owner.
-Next migration: `0152`.
+Next migration: `0153`.
 
 **Goal:** The owner's fixes after the v0.11.0 release.
 
@@ -106,7 +106,7 @@ Owner, 2026-11-25: can the coaches' shifts and payroll work like `C:\Users\bowie
 | Phase | What | Status |
 |---|---|---|
 | 3.1 | Database: templates, assignments, overrides, `shift_for`, coach shift sync, clock-in rule (off by default) | DEPLOYED (`0151` live 2026-11-25, rule off) |
-| 3.2 | Payroll: Late / Left early flags, pay from shift start | TODO |
+| 3.2 | Payroll: Late / Left early flags, pay from shift start | DEPLOYED (`0152` live 2026-11-25) |
 | 3.3 | Scheduling page (Templates, Assignments, Calendar) | TODO |
 | 3.4 | Coach and desk screens: no Post a shift, refusal sentences, shift and Late on the desk | TODO |
 | 3.5 | Move a booked session to another coach (S9) | TODO |
@@ -132,10 +132,11 @@ Owner, 2026-11-25: can the coaches' shifts and payroll work like `C:\Users\bowie
 
 #### Phase 3.2: Payroll
 
-- [ ] New flags in `payroll_records_for`: **Late** (in after expected start), **Left early** (out before expected end, S7), next to **Auto closed**. Flagged records still need one-by-one approval (Approve all skips them).
-- [ ] Payable hours = `greatest(check-in, expected_start)` to check-out (S6), for coach visits and front desk cash shifts; records without an expected start count as today.
-- [ ] Drawer row: "Shift 8:00 AM–5:00 PM · in 8:07 AM (Late) · out 5:30 PM".
-- [ ] Tests: early check-in pays from start; late check-in pays from check-in; late check-out pays to check-out; paid freeze unchanged.
+- [x] New flags in `payroll_records_for`: **Late** (in after expected start), **Left early** (out before expected end, S7), next to **Auto closed**. Flagged records still need one-by-one approval (Approve all skips them).
+- [x] Payable hours = `greatest(check-in, expected_start)` to check-out (S6), for coach visits and front desk cash shifts; records without an expected start count as today.
+- [x] Drawer row: "Shift 8:00 AM–5:00 PM · in 8:07 AM (Late) · out 5:30 PM".
+- [x] Tests: early check-in pays from start; late check-in pays from check-in; late check-out pays to check-out; paid freeze unchanged.
+- Built notes: `payroll_records` (and `payroll_records_for`) now return `starts_at` as the payable start (`least(expected_start, ends_at)` when in early, so in-and-out before the shift counts 0 h) plus `actual_start`, `expected_start`, `expected_end`; every sum already read `starts_at`, so totals, overlap and Approve all needed no change. Drawer row: "Mon 3 Aug · shift 8:00 AM – 5:00 PM · in 8:07 AM → 5:30 PM · 9.38 h"; flags read Late / Left early. Audit labels added for the `schedule.*` actions from 0151 (missed in 3.1; caught by `AuditLogTests`). Demo payroll has no shifts, so it only carries the new fields. Tests: `supabase/tests/local/payroll-schedule.mjs` (7), `A_scheduled_record_shows_shift_real_check_in_and_its_flags`; payroll db tests and 1248 C# tests pass; Windows app builds.
 
 #### Phase 3.3: Scheduling page (System admin and Admin, Windows only)
 
