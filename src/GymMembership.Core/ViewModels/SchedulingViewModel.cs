@@ -22,7 +22,10 @@ public sealed partial class TemplateDayInput(int weekday, IReadOnlyList<string>?
     public int Weekday { get; } = weekday;   // ISO: 1 Monday .. 7 Sunday
     public IReadOnlyList<string> Options { get; } = options ?? [];
     public string DayName => CultureInfo.InvariantCulture.DateTimeFormat.GetDayName((DayOfWeek)(Weekday % 7));
-    [ObservableProperty] private bool works;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(WorksText))] private bool works;
+    /// <summary>The day tile's toggle chip (chosen = works).</summary>
+    public string WorksText => Works ? "Works" : "Day off";
+    [CommunityToolkit.Mvvm.Input.RelayCommand] private void ToggleWorks() => Works = !Works;
     [ObservableProperty] private string start = "9:00 AM";
     [ObservableProperty] private string end = "5:00 PM";
 }

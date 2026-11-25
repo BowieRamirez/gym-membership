@@ -341,43 +341,41 @@
                     <Button Text="New template" Style="{StaticResource SmallButton}" Command="{Binding NewTemplateCommand}" HorizontalOptions="Start"
                             IsVisible="{Binding IsEditingTemplate, Converter={StaticResource Not}}" AutomationId="ScheduleNewTemplate" />
 
-                    <Border Style="{StaticResource Panel}" IsVisible="{Binding IsEditingTemplate}" MaximumWidthRequest="720" HorizontalOptions="Start">
-                        <VerticalStackLayout Spacing="12">
-                            <c:CardTitle Text="{Binding EditorTitle}" />
-                            <VerticalStackLayout Spacing="4" WidthRequest="320" HorizontalOptions="Start">
-                                <Label Text="Name" Style="{StaticResource Caption}" />
-                                <Border Style="{StaticResource Field}"><Entry Text="{Binding TemplateName}" MaxLength="60" Placeholder="Weekdays 9-5" SemanticProperties.Description="Template name" /></Border>
-                            </VerticalStackLayout>
-                            <!-- one caption row instead of a "Works" label per day: a Windows CheckBox is ~120 wide and its label ran into the times -->
-                            <Grid ColumnDefinitions="110,120,140,140" ColumnSpacing="12">
-                                <Label Text="Day" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="1" Text="Works" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="2" Text="Starts" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="3" Text="Ends" Style="{StaticResource Caption}" />
-                            </Grid>
-                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding EditorDays}" Spacing="4">
+                    <!-- the week sideways: seven day tiles, one row at full screen and wrapping on a narrower window (owner, 2026-11-25:
+                         the tall one-day-a-row editor wasted the width) -->
+                    <Border Style="{StaticResource Panel}" IsVisible="{Binding IsEditingTemplate}">
+                        <VerticalStackLayout Spacing="14">
+                            <FlexLayout Wrap="Wrap" AlignItems="End">
+                                <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
+                                    <c:CardTitle Text="{Binding EditorTitle}" />
+                                    <Label Text="Name" Style="{StaticResource Caption}" Margin="0,6,0,0" />
+                                    <Border Style="{StaticResource Field}" WidthRequest="320"><Entry Text="{Binding TemplateName}" MaxLength="60" Placeholder="Weekdays 9-5" SemanticProperties.Description="Template name" /></Border>
+                                </VerticalStackLayout>
+                                <Button Text="Save template" Style="{StaticResource SmallButton}" Command="{Binding SaveTemplateCommand}" Margin="0,0,8,12" AutomationId="ScheduleSaveTemplate" />
+                                <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelTemplateCommand}" Margin="0,0,16,12" />
+                                <Label Text="Coaches on this template get these shifts from tomorrow; members book them in those hours." Style="{StaticResource Caption}"
+                                       VerticalOptions="End" Margin="0,0,0,16" />
+                            </FlexLayout>
+                            <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding EditorDays}">
                                 <BindableLayout.ItemTemplate>
                                     <DataTemplate x:DataType="vm:TemplateDayInput">
-                                        <Grid ColumnDefinitions="110,120,140,140" ColumnSpacing="12" MinimumHeightRequest="44">
-                                            <Label Text="{Binding DayName}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
-                                            <CheckBox Grid.Column="1" IsChecked="{Binding Works}" VerticalOptions="Center" SemanticProperties.Description="{Binding DayName, StringFormat='Works on {0}'}" />
-                                            <Border Grid.Column="2" Style="{StaticResource Field}" IsVisible="{Binding Works}">
-                                                <Picker ItemsSource="{Binding Options}" SelectedItem="{Binding Start}" SemanticProperties.Description="{Binding DayName, StringFormat='{0} start'}" />
-                                            </Border>
-                                            <Border Grid.Column="3" Style="{StaticResource Field}" IsVisible="{Binding Works}">
-                                                <Picker ItemsSource="{Binding Options}" SelectedItem="{Binding End}" SemanticProperties.Description="{Binding DayName, StringFormat='{0} end'}" />
-                                            </Border>
-                                            <Label Grid.Column="2" Grid.ColumnSpan="2" Text="Rest day" Style="{StaticResource Muted}" VerticalOptions="Center"
-                                                   IsVisible="{Binding Works, Converter={StaticResource Not}}" />
-                                        </Grid>
+                                        <Border StrokeShape="RoundRectangle 10" StrokeThickness="1" Padding="12" Margin="0,0,10,10" WidthRequest="172"
+                                                Stroke="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}">
+                                            <VerticalStackLayout Spacing="8">
+                                                <Label Text="{Binding DayName}" FontFamily="BarlowSemiBold" />
+                                                <c:ChoiceChip Text="{Binding WorksText}" IsChosen="{Binding Works}" Command="{Binding ToggleWorksCommand}"
+                                                              SemanticProperties.Description="{Binding DayName, StringFormat='Works on {0}'}" />
+                                                <VerticalStackLayout Spacing="6" IsVisible="{Binding Works}">
+                                                    <Label Text="Starts" Style="{StaticResource Caption}" />
+                                                    <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Options}" SelectedItem="{Binding Start}" SemanticProperties.Description="{Binding DayName, StringFormat='{0} start'}" /></Border>
+                                                    <Label Text="Ends" Style="{StaticResource Caption}" />
+                                                    <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding Options}" SelectedItem="{Binding End}" SemanticProperties.Description="{Binding DayName, StringFormat='{0} end'}" /></Border>
+                                                </VerticalStackLayout>
+                                            </VerticalStackLayout>
+                                        </Border>
                                     </DataTemplate>
                                 </BindableLayout.ItemTemplate>
-                            </VerticalStackLayout>
-                            <Label Text="Coaches on this template get these shifts from tomorrow; members book them in those hours." Style="{StaticResource Caption}" />
-                            <HorizontalStackLayout Spacing="8">
-                                <Button Text="Save template" Style="{StaticResource SmallButton}" Command="{Binding SaveTemplateCommand}" AutomationId="ScheduleSaveTemplate" />
-                                <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelTemplateCommand}" />
-                            </HorizontalStackLayout>
+                            </FlexLayout>
                         </VerticalStackLayout>
                     </Border>
 
