@@ -110,6 +110,7 @@ public static class MauiProgram
 		});
 		s.AddSingleton<IDeskHomeService, DeskHomeService>();
 		s.AddSingleton<IAdminService, AdminService>();
+		s.AddSingleton<ScheduleService>();
 		s.AddSingleton<IAccountArchiveService, AccountArchiveService>();
 		s.AddSingleton<IArchiveService, ArchiveService>();
 		s.AddSingleton<IProfileService, ProfileService>();

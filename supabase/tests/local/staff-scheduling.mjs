@@ -197,6 +197,15 @@ try {
     await as(admin, 'select schedule_template_archive($1)', [spare]);
     await assert.rejects(as(admin, `select schedule_assign($1, $2, $3::date)`, [coach2, spare, today]), /template_archived/);
   });
+  await test('Phase 3.3: the admin turns shift check-in on and off; nobody else can', async () => {
+    await as(admin, 'select schedule_set_enforced(false)');
+    assert.equal((await one('select schedule_enforced e from gym_settings')).e, false);
+    await as(admin, 'select schedule_set_enforced(true)');
+    assert.equal((await one('select schedule_enforced e from gym_settings')).e, true);
+    for (const who of [desk, coach, member]) await assert.rejects(as(who, 'select schedule_set_enforced(false)'), /forbidden/);
+    await assert.rejects(asAnon('select schedule_set_enforced(false)'), /permission denied|42501/);
+    assert.equal((await one(`select count(*)::int n from audit_log where action = 'schedule.enforced'`)).n, 2);
+  });
   await test('schedule changes are audited', async () => {
     const n = (await one(`select count(*)::int n from audit_log where action like 'schedule.%'`)).n;
     assert.ok(n >= 5);

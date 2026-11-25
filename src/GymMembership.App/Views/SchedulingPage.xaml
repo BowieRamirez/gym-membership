@@ -1,0 +1,423 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Owner fixes 2026-11-25, Fix 3 Phase 3.3: who works when. Week (with one-off changes), Templates (a Mon-Sun week), People (who follows
+     which template from when), and the shift check-in switch. Same parts as Payroll: segment tabs, panels, TableBody tables. Windows only. -->
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.SchedulingPage" x:DataType="vm:SchedulingViewModel" Title="Scheduling">
+
+    <v:BasePage.Resources>
+        <!-- one day of the week grid: a one-off change is outlined (ink in light, yellow in dark, as a picked card) with its reason under it -->
+        <Style x:Key="DayCell" TargetType="Border">
+            <Setter Property="StrokeShape" Value="RoundRectangle 8" />
+            <Setter Property="StrokeThickness" Value="0" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="VerticalOptions" Value="Center" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <!-- seven days share the row equally, header and rows alike -->
+            <Setter Property="FlexLayout.Basis" Value="14.28%" />
+        </Style>
+
+        <DataTemplate x:Key="DayCellTemplate" x:DataType="vm:ScheduleDayCell">
+            <Border Style="{StaticResource DayCell}">
+                <Border.Triggers>
+                    <DataTrigger TargetType="Border" Binding="{Binding IsChange}" Value="True">
+                        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource Signal}}" />
+                        <Setter Property="StrokeThickness" Value="1.5" />
+                    </DataTrigger>
+                </Border.Triggers>
+                <VerticalStackLayout Spacing="2">
+                    <Label Text="{Binding Text}" FontSize="13" LineBreakMode="WordWrap">
+                        <Label.Triggers>
+                            <DataTrigger TargetType="Label" Binding="{Binding IsRest}" Value="True">
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                            </DataTrigger>
+                            <DataTrigger TargetType="Label" Binding="{Binding IsChange}" Value="True">
+                                <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                            </DataTrigger>
+                        </Label.Triggers>
+                    </Label>
+                    <Label Text="{Binding Reason}" Style="{StaticResource Caption}" LineBreakMode="TailTruncation" IsVisible="{Binding Reason, Converter={StaticResource HasText}}" />
+                </VerticalStackLayout>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="WeekRowTemplate" x:DataType="vm:ScheduleWeekRow">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="190,*" ColumnSpacing="6">
+                    <VerticalStackLayout Spacing="4" VerticalOptions="Center">
+                        <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" LineBreakMode="TailTruncation" />
+                        <c:StatusChip Status="{Binding RoleLabel}" HorizontalOptions="Start" />
+                    </VerticalStackLayout>
+                    <FlexLayout Grid.Column="1" Direction="Row" Wrap="NoWrap" AlignItems="Center"
+                                BindableLayout.ItemsSource="{Binding Days}" BindableLayout.ItemTemplate="{StaticResource DayCellTemplate}" />
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+
+        <DataTemplate x:Key="WeekCardTemplate" x:DataType="vm:ScheduleWeekRow">
+            <VerticalStackLayout Padding="14,12" Spacing="6">
+                <HorizontalStackLayout Spacing="8">
+                    <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                    <c:StatusChip Status="{Binding RoleLabel}" VerticalOptions="Center" />
+                </HorizontalStackLayout>
+                <Label Text="{Binding DaysText}" Style="{StaticResource Muted}" LineBreakMode="WordWrap" />
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+
+        <DataTemplate x:Key="TemplateRowTemplate" x:DataType="vm:ScheduleTemplateItem">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="220,*,Auto" ColumnSpacing="14">
+                    <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="1" Text="{Binding SummaryText}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="WordWrap" />
+                    <HorizontalStackLayout Grid.Column="2" Spacing="8" VerticalOptions="Center">
+                        <Button Text="Edit" Style="{StaticResource SmallOutlineButton}" Command="{Binding EditCommand}"
+                                SemanticProperties.Description="{Binding Name, StringFormat='Edit {0}'}" />
+                        <Button Text="Duplicate" Style="{StaticResource SmallOutlineButton}" Command="{Binding DuplicateCommand}"
+                                SemanticProperties.Description="{Binding Name, StringFormat='Duplicate {0}'}" />
+                        <Button Text="Archive" Style="{StaticResource LinkButton}" Command="{Binding ArchiveCommand}"
+                                SemanticProperties.Description="{Binding Name, StringFormat='Archive {0}'}" />
+                    </HorizontalStackLayout>
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+
+        <DataTemplate x:Key="TemplateCardTemplate" x:DataType="vm:ScheduleTemplateItem">
+            <VerticalStackLayout Padding="14,12" Spacing="6">
+                <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" />
+                <Label Text="{Binding SummaryText}" Style="{StaticResource Muted}" />
+                <HorizontalStackLayout Spacing="8">
+                    <Button Text="Edit" Style="{StaticResource SmallOutlineButton}" Command="{Binding EditCommand}" />
+                    <Button Text="Duplicate" Style="{StaticResource SmallOutlineButton}" Command="{Binding DuplicateCommand}" />
+                    <Button Text="Archive" Style="{StaticResource LinkButton}" Command="{Binding ArchiveCommand}" />
+                </HorizontalStackLayout>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+
+        <DataTemplate x:Key="PersonRowTemplate" x:DataType="vm:SchedulePersonItem">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="260,*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="14">
+                    <HorizontalStackLayout Spacing="10" VerticalOptions="Center">
+                        <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                        <c:StatusChip Status="{Binding RoleLabel}" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                    <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                        <Label Text="{Binding CurrentText}" />
+                        <Label Text="{Binding NextText, StringFormat='Then {0}'}" Style="{StaticResource Caption}" IsVisible="{Binding HasNext}" />
+                    </VerticalStackLayout>
+                    <Button Grid.Column="2" Text="Change" Style="{StaticResource SmallOutlineButton}" Command="{Binding BeginChangeCommand}" VerticalOptions="Center"
+                            IsVisible="{Binding IsChanging, Converter={StaticResource Not}}" SemanticProperties.Description="{Binding Name, StringFormat='Change the schedule of {0}'}" />
+
+                    <!-- the change goes on its own line under the row -->
+                    <FlexLayout Grid.Row="1" Grid.ColumnSpan="3" Wrap="Wrap" AlignItems="End" Margin="0,10,0,0" IsVisible="{Binding IsChanging}">
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="240">
+                            <Label Text="Template" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding TemplateNames}" SelectedItem="{Binding TemplateChoice}" Title="Template" SemanticProperties.Description="Template" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                            <Label Text="From" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><DatePicker Date="{Binding FromDate}" MinimumDate="{Binding MinDate}" SemanticProperties.Description="From date" /></Border>
+                        </VerticalStackLayout>
+                        <Button Text="Save" Style="{StaticResource SmallButton}" Command="{Binding SaveCommand}" Margin="0,0,8,8" />
+                        <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelChangeCommand}" Margin="0,0,8,8" />
+                    </FlexLayout>
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+
+        <DataTemplate x:Key="PersonCardTemplate" x:DataType="vm:SchedulePersonItem">
+            <VerticalStackLayout Padding="14,12" Spacing="6">
+                <HorizontalStackLayout Spacing="8">
+                    <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                    <c:StatusChip Status="{Binding RoleLabel}" VerticalOptions="Center" />
+                </HorizontalStackLayout>
+                <Label Text="{Binding CurrentText}" />
+                <Label Text="{Binding NextText, StringFormat='Then {0}'}" Style="{StaticResource Caption}" IsVisible="{Binding HasNext}" />
+                <Button Text="Change" Style="{StaticResource SmallOutlineButton}" Command="{Binding BeginChangeCommand}" HorizontalOptions="Start"
+                        IsVisible="{Binding IsChanging, Converter={StaticResource Not}}" />
+                <VerticalStackLayout Spacing="6" IsVisible="{Binding IsChanging}">
+                    <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding TemplateNames}" SelectedItem="{Binding TemplateChoice}" Title="Template" /></Border>
+                    <Border Style="{StaticResource Field}"><DatePicker Date="{Binding FromDate}" MinimumDate="{Binding MinDate}" /></Border>
+                    <HorizontalStackLayout Spacing="8">
+                        <Button Text="Save" Style="{StaticResource SmallButton}" Command="{Binding SaveCommand}" />
+                        <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelChangeCommand}" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ChangeRowTemplate" x:DataType="vm:ScheduleChangeItem">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="220,280,*,Auto" ColumnSpacing="14">
+                    <Label Text="{Binding Who}" FontFamily="BarlowSemiBold" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="1" Text="{Binding WhenText}" VerticalOptions="Center" />
+                    <Label Grid.Column="2" Text="{Binding Reason}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    <Button Grid.Column="3" Text="Remove" Style="{StaticResource LinkButton}" Command="{Binding RemoveCommand}" VerticalOptions="Center"
+                            IsVisible="{Binding CanRemove}" SemanticProperties.Description="{Binding Who, StringFormat='Remove the change for {0}'}" />
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ChangeCardTemplate" x:DataType="vm:ScheduleChangeItem">
+            <VerticalStackLayout Padding="14,12" Spacing="4">
+                <Label Text="{Binding Who}" FontFamily="BarlowSemiBold" />
+                <Label Text="{Binding WhenText}" />
+                <Label Text="{Binding Reason}" Style="{StaticResource Muted}" />
+                <Button Text="Remove" Style="{StaticResource LinkButton}" Command="{Binding RemoveCommand}" HorizontalOptions="Start" IsVisible="{Binding CanRemove}" />
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+    </v:BasePage.Resources>
+
+    <Grid RowDefinitions="Auto,*">
+        <Border Style="{StaticResource SegmentTrack}" Margin="24,14,24,0" HorizontalOptions="Start">
+            <HorizontalStackLayout Spacing="2">
+                <Button Text="Week" Command="{Binding OpenWeekTabCommand}" Style="{StaticResource Segment}" AutomationId="ScheduleWeekTab">
+                    <Button.Triggers>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsWeekTab}" Value="True">
+                            <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsWeekTab}" Value="False">
+                            <Setter Property="FontFamily" Value="BarlowMedium" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                        </DataTrigger>
+                    </Button.Triggers>
+                </Button>
+                <Button Text="Templates" Command="{Binding OpenTemplatesTabCommand}" Style="{StaticResource Segment}" AutomationId="ScheduleTemplatesTab">
+                    <Button.Triggers>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsTemplatesTab}" Value="True">
+                            <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsTemplatesTab}" Value="False">
+                            <Setter Property="FontFamily" Value="BarlowMedium" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                        </DataTrigger>
+                    </Button.Triggers>
+                </Button>
+                <Button Text="People" Command="{Binding OpenPeopleTabCommand}" Style="{StaticResource Segment}" AutomationId="SchedulePeopleTab">
+                    <Button.Triggers>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsPeopleTab}" Value="True">
+                            <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsPeopleTab}" Value="False">
+                            <Setter Property="FontFamily" Value="BarlowMedium" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                        </DataTrigger>
+                    </Button.Triggers>
+                </Button>
+            </HorizontalStackLayout>
+        </Border>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Padding="24,16,24,32" Spacing="16">
+                <c:Banner Kind="notice" Message="{Binding Notice}" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" IsVisible="{Binding ErrorMessage, Converter={StaticResource IsNotNull}}">
+                    <c:Banner Message="{Binding ErrorMessage}" />
+                    <Button Grid.Column="1" Text="Try again" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" Command="{Binding LoadCommand}" />
+                </Grid>
+                <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" HorizontalOptions="Start" />
+
+                <!-- the check-in switch: on every tab, because it changes what every coach and front desk person can do -->
+                <Border Style="{StaticResource Panel}">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                        <VerticalStackLayout Spacing="4" VerticalOptions="Center">
+                            <Label Text="{Binding EnforcedTitle}" Style="{StaticResource Heading}" />
+                            <Label Text="{Binding EnforcedText}" Style="{StaticResource Muted}" LineBreakMode="WordWrap" />
+                        </VerticalStackLayout>
+                        <Button Grid.Column="1" Text="{Binding EnforcedButton}" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center"
+                                Command="{Binding ToggleEnforcedCommand}" AutomationId="ScheduleEnforce" />
+                    </Grid>
+                </Border>
+
+                <!-- WEEK -->
+                <VerticalStackLayout Spacing="14" IsVisible="{Binding IsWeekTab}">
+                    <HorizontalStackLayout Spacing="10">
+                        <Button Text="‹" Style="{StaticResource SmallOutlineButton}" Command="{Binding PrevWeekCommand}" WidthRequest="36" SemanticProperties.Description="Previous week" />
+                        <Label Text="{Binding WeekLabel}" Style="{StaticResource Heading}" VerticalOptions="Center" />
+                        <Button Text="›" Style="{StaticResource SmallOutlineButton}" Command="{Binding NextWeekCommand}" WidthRequest="36" SemanticProperties.Description="Next week" />
+                    </HorizontalStackLayout>
+
+                    <Border Style="{StaticResource TablePanel}">
+                        <VerticalStackLayout>
+                            <VerticalStackLayout x:Name="WeekHead">
+                                <Grid Style="{StaticResource TableHead}" ColumnDefinitions="190,*" ColumnSpacing="6">
+                                    <Label Text="Person" Style="{StaticResource Caption}" />
+                                    <FlexLayout Grid.Column="1" Direction="Row" Wrap="NoWrap" BindableLayout.ItemsSource="{Binding DayHeaders}">
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="x:String">
+                                                <Label Text="{Binding .}" Style="{StaticResource Caption}" Padding="8,0" FlexLayout.Basis="14.28%" />
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
+                                    </FlexLayout>
+                                </Grid>
+                                <BoxView Style="{StaticResource Hairline}" />
+                            </VerticalStackLayout>
+                            <c:TableBody Items="{Binding WeekRows}" Header="{x:Reference WeekHead}" WideFrom="1050"
+                                         RowTemplate="{StaticResource WeekRowTemplate}" CardTemplate="{StaticResource WeekCardTemplate}">
+                                <c:TableBody.Empty>
+                                    <Label Text="No coach or front desk accounts yet. Add them in Users and roles." Style="{StaticResource Muted}" Margin="14" />
+                                </c:TableBody.Empty>
+                            </c:TableBody>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border Style="{StaticResource Panel}">
+                        <VerticalStackLayout Spacing="10">
+                            <c:CardTitle Text="Change a day" />
+                            <Label Text="For one day or a few: a different shift, or a day off. The weekly template stays as it is." Style="{StaticResource Caption}" />
+                            <FlexLayout Wrap="Wrap" AlignItems="End">
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="220">
+                                    <Label Text="Person" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding People}" ItemDisplayBinding="{Binding Name, x:DataType=vm:SchedulePersonItem}" SelectedItem="{Binding OverridePerson}" Title="Person" SemanticProperties.Description="Person" /></Border>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                                    <Label Text="From" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><DatePicker Date="{Binding OverrideFrom}" MinimumDate="{Binding MinDate}" SemanticProperties.Description="From date" /></Border>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                                    <Label Text="To" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><DatePicker Date="{Binding OverrideTo}" MinimumDate="{Binding OverrideFrom}" SemanticProperties.Description="To date" /></Border>
+                                </VerticalStackLayout>
+                                <HorizontalStackLayout Spacing="6" Margin="0,0,12,14" VerticalOptions="End">
+                                    <CheckBox IsChecked="{Binding OverrideWorks}" VerticalOptions="Center" SemanticProperties.Description="Works a shift" />
+                                    <Label Text="Works a shift" VerticalOptions="Center" />
+                                </HorizontalStackLayout>
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="130" IsVisible="{Binding OverrideWorks}">
+                                    <Label Text="Starts" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding TimeOptions}" SelectedItem="{Binding OverrideStart}" SemanticProperties.Description="Start time" /></Border>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="130" IsVisible="{Binding OverrideWorks}">
+                                    <Label Text="Ends" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding TimeOptions}" SelectedItem="{Binding OverrideEnd}" SemanticProperties.Description="End time" /></Border>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="260">
+                                    <Label Text="Why" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><Entry Text="{Binding OverrideReason}" MaxLength="200" Placeholder="Sick, covering for Ana" SemanticProperties.Description="Reason" /></Border>
+                                </VerticalStackLayout>
+                                <Button Text="Add change" Style="{StaticResource SmallButton}" Command="{Binding AddOverrideCommand}" Margin="0,0,0,8" AutomationId="ScheduleAddChange" />
+                            </FlexLayout>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <VerticalStackLayout Spacing="8" IsVisible="{Binding HasChanges}">
+                        <Label Text="Coming changes" Style="{StaticResource SectionTitle}" />
+                        <Border Style="{StaticResource TablePanel}">
+                            <VerticalStackLayout>
+                                <VerticalStackLayout x:Name="ChangesHead">
+                                    <Grid Style="{StaticResource TableHead}" ColumnDefinitions="220,280,*,Auto" ColumnSpacing="14">
+                                        <Label Text="Person" Style="{StaticResource Caption}" />
+                                        <Label Grid.Column="1" Text="When" Style="{StaticResource Caption}" />
+                                        <Label Grid.Column="2" Text="Why" Style="{StaticResource Caption}" />
+                                    </Grid>
+                                    <BoxView Style="{StaticResource Hairline}" />
+                                </VerticalStackLayout>
+                                <c:TableBody Items="{Binding Changes}" Header="{x:Reference ChangesHead}" WideFrom="900"
+                                             RowTemplate="{StaticResource ChangeRowTemplate}" CardTemplate="{StaticResource ChangeCardTemplate}" />
+                            </VerticalStackLayout>
+                        </Border>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+
+                <!-- TEMPLATES -->
+                <VerticalStackLayout Spacing="14" IsVisible="{Binding IsTemplatesTab}">
+                    <Button Text="New template" Style="{StaticResource SmallButton}" Command="{Binding NewTemplateCommand}" HorizontalOptions="Start"
+                            IsVisible="{Binding IsEditingTemplate, Converter={StaticResource Not}}" AutomationId="ScheduleNewTemplate" />
+
+                    <Border Style="{StaticResource Panel}" IsVisible="{Binding IsEditingTemplate}" MaximumWidthRequest="720" HorizontalOptions="Start">
+                        <VerticalStackLayout Spacing="12">
+                            <c:CardTitle Text="{Binding EditorTitle}" />
+                            <VerticalStackLayout Spacing="4" WidthRequest="320" HorizontalOptions="Start">
+                                <Label Text="Name" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><Entry Text="{Binding TemplateName}" MaxLength="60" Placeholder="Weekdays 9-5" SemanticProperties.Description="Template name" /></Border>
+                            </VerticalStackLayout>
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding EditorDays}" Spacing="4">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:TemplateDayInput">
+                                        <Grid ColumnDefinitions="110,120,140,140" ColumnSpacing="12" MinimumHeightRequest="44">
+                                            <Label Text="{Binding DayName}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                                            <HorizontalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                                                <CheckBox IsChecked="{Binding Works}" VerticalOptions="Center" SemanticProperties.Description="{Binding DayName, StringFormat='Works on {0}'}" />
+                                                <Label Text="Works" VerticalOptions="Center" />
+                                            </HorizontalStackLayout>
+                                            <Border Grid.Column="2" Style="{StaticResource Field}" IsVisible="{Binding Works}">
+                                                <Picker ItemsSource="{Binding Options}" SelectedItem="{Binding Start}" SemanticProperties.Description="{Binding DayName, StringFormat='{0} start'}" />
+                                            </Border>
+                                            <Border Grid.Column="3" Style="{StaticResource Field}" IsVisible="{Binding Works}">
+                                                <Picker ItemsSource="{Binding Options}" SelectedItem="{Binding End}" SemanticProperties.Description="{Binding DayName, StringFormat='{0} end'}" />
+                                            </Border>
+                                            <Label Grid.Column="2" Grid.ColumnSpan="2" Text="Rest day" Style="{StaticResource Muted}" VerticalOptions="Center"
+                                                   IsVisible="{Binding Works, Converter={StaticResource Not}}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+                            <Label Text="Coaches on this template get these shifts from tomorrow; members book them in those hours." Style="{StaticResource Caption}" />
+                            <HorizontalStackLayout Spacing="8">
+                                <Button Text="Save template" Style="{StaticResource SmallButton}" Command="{Binding SaveTemplateCommand}" AutomationId="ScheduleSaveTemplate" />
+                                <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelTemplateCommand}" />
+                            </HorizontalStackLayout>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border Style="{StaticResource TablePanel}">
+                        <VerticalStackLayout>
+                            <VerticalStackLayout x:Name="TemplatesHead">
+                                <Grid Style="{StaticResource TableHead}" ColumnDefinitions="220,*,Auto" ColumnSpacing="14">
+                                    <Label Text="Template" Style="{StaticResource Caption}" />
+                                    <Label Grid.Column="1" Text="Hours" Style="{StaticResource Caption}" />
+                                </Grid>
+                                <BoxView Style="{StaticResource Hairline}" />
+                            </VerticalStackLayout>
+                            <c:TableBody Items="{Binding Templates}" Header="{x:Reference TemplatesHead}" WideFrom="900"
+                                         RowTemplate="{StaticResource TemplateRowTemplate}" CardTemplate="{StaticResource TemplateCardTemplate}">
+                                <c:TableBody.Empty>
+                                    <Label Text="No templates yet. Make one for each usual week, like Weekdays 9-5 or Weekend mornings." Style="{StaticResource Muted}" Margin="14" />
+                                </c:TableBody.Empty>
+                            </c:TableBody>
+                        </VerticalStackLayout>
+                    </Border>
+                </VerticalStackLayout>
+
+                <!-- PEOPLE -->
+                <VerticalStackLayout Spacing="14" IsVisible="{Binding IsPeopleTab}">
+                    <Label Text="Each person follows one template from the date you pick. Earlier days keep the template they had." Style="{StaticResource Muted}" />
+                    <Border Style="{StaticResource TablePanel}">
+                        <VerticalStackLayout>
+                            <VerticalStackLayout x:Name="PeopleHead">
+                                <Grid Style="{StaticResource TableHead}" ColumnDefinitions="260,*,Auto" ColumnSpacing="14">
+                                    <Label Text="Person" Style="{StaticResource Caption}" />
+                                    <Label Grid.Column="1" Text="Schedule" Style="{StaticResource Caption}" />
+                                </Grid>
+                                <BoxView Style="{StaticResource Hairline}" />
+                            </VerticalStackLayout>
+                            <c:TableBody Items="{Binding People}" Header="{x:Reference PeopleHead}" WideFrom="900"
+                                         RowTemplate="{StaticResource PersonRowTemplate}" CardTemplate="{StaticResource PersonCardTemplate}">
+                                <c:TableBody.Empty>
+                                    <Label Text="No coach or front desk accounts yet. Add them in Users and roles." Style="{StaticResource Muted}" Margin="14" />
+                                </c:TableBody.Empty>
+                            </c:TableBody>
+                        </VerticalStackLayout>
+                    </Border>
+                </VerticalStackLayout>
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</v:BasePage>

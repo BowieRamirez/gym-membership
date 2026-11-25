@@ -27,6 +27,7 @@ public static class IconRail
         ["Gym settings"] = "sliders-horizontal",
         ["Revenue"] = "chart-line",
         ["Payroll"] = "wallet",
+        ["Scheduling"] = "calendar-clock",
         ["Damage reports"] = "alert-circle",
         ["Announcements"] = "megaphone",
         ["Logs & Archive"] = "archive",

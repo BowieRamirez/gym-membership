@@ -4,9 +4,9 @@
 
 Created: 2026-11-25
 Last updated: 2026-11-25
-Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phases 3.1-3.2 DEPLOYED (0151, 0152 live; shift check-in rule off until the admin sets schedules); 3.3-3.6 TODO. S1-S9 confirmed. More fixes get added below as the owner sends them.
+Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phases 3.1-3.3 done (0151-0153 live; shift check-in rule off until the admin turns it on from Scheduling); 3.4-3.6 TODO. S1-S9 confirmed. More fixes get added below as the owner sends them.
 Branch: `owner-fixes-2026-11-25` (cut from `main` at `df3f54c`, v0.11.0). Owner merges to `main` when done; no push or PR without the owner.
-Next migration: `0153`.
+Next migration: `0154`.
 
 **Goal:** The owner's fixes after the v0.11.0 release.
 
@@ -107,7 +107,7 @@ Owner, 2026-11-25: can the coaches' shifts and payroll work like `C:\Users\bowie
 |---|---|---|
 | 3.1 | Database: templates, assignments, overrides, `shift_for`, coach shift sync, clock-in rule (off by default) | DEPLOYED (`0151` live 2026-11-25, rule off) |
 | 3.2 | Payroll: Late / Left early flags, pay from shift start | DEPLOYED (`0152` live 2026-11-25) |
-| 3.3 | Scheduling page (Templates, Assignments, Calendar) | TODO |
+| 3.3 | Scheduling page (Templates, Assignments, Calendar) | BUILT (`0153` live 2026-11-25; owner hand check left) |
 | 3.4 | Coach and desk screens: no Post a shift, refusal sentences, shift and Late on the desk | TODO |
 | 3.5 | Move a booked session to another coach (S9) | TODO |
 | 3.6 | Checks and rollout (admin sets schedules, then the rule is switched on) | TODO |
@@ -140,12 +140,13 @@ Owner, 2026-11-25: can the coaches' shifts and payroll work like `C:\Users\bowie
 
 #### Phase 3.3: Scheduling page (System admin and Admin, Windows only)
 
-- [ ] New staff page **Scheduling** next to Payroll, permission `reports:revenue`.
+- [x] New staff page **Scheduling** next to Payroll, permission `reports:revenue`.
   - **Templates:** list with Duplicate and Archive; editor is a Mon-Sun week with Start, End and a Rest day switch per row.
   - **Assignments:** pick a coach or front desk person, a template and an Effective from date; current template and past assignments.
   - **Calendar:** a week at a time, one row per person, each day the shift, "Rest" or the override with its reason; Add override (one day or a range, times or rest, reason).
-- [ ] After a change that keeps booked coach shifts (S8), the notice names how many and which days.
-- [ ] **Turn on shift check-in** switch (`schedule_enforced`), with a confirm that lists who has no schedule yet.
+- [x] After a change that keeps booked coach shifts (S8), the notice names how many and which days.
+- [x] **Turn on shift check-in** switch (`schedule_enforced`), with a confirm that lists who has no schedule yet.
+- Built notes: tabs are **Week** (grid per person, a change outlined with its reason; "Change a day" form; Coming changes with Remove), **Templates** (Mon-Sun editor on the half-hour grid inside gym hours; Edit, Duplicate as "(copy)", Archive) and **People** (current and next template, Change: template + from date). The check-in switch sits above the tabs on every tab; turning it on names everyone with no schedule. New `schedule_set_enforced` (`0153`, `reports:revenue`, audited) because gym settings are the System admin's and a sub-admin needs the switch; `GymSettings.ScheduleEnforced` is never written by a Gym settings save. `ScheduleService` + `ScheduleData.ShiftFor` (same rule as `shift_for`, shared by the page and the demo); demo emulates all schedule functions and the coach shift sync. Admin overview gets a Scheduling link; icon `calendar-clock`. Tests: `SchedulingViewModelTests` (5), db `staff-scheduling.mjs` (18); 1254 C# tests pass; Windows app builds. Not opened in the app here (owner checks it).
 
 #### Phase 3.4: Coach and desk screens
 

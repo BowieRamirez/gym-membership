@@ -71,9 +71,31 @@ public static class PayMethod
   [Column("down_payment_percent")] public int DownPaymentPercent { get; set; } = 50;
   [Column("max_coach_sessions_per_day")] public int MaxCoachSessionsPerDay { get; set; } = 1;
   [Column("max_upcoming_coach_sessions")] public int MaxUpcomingCoachSessions { get; set; } = 1;
-  [Column("max_coach_hours_per_day")] public int? MaxCoachHoursPerDay { get; set; } = 6; }   // G13 (0064): of an amenity booking's price   // F2 (0050): the drawer float a cashier starts a shift with
+  [Column("max_coach_hours_per_day")] public int? MaxCoachHoursPerDay { get; set; } = 6;
+  // 0151: check-in follows the shift; changed only by schedule_set_enforced (0153), so a Gym settings save never writes it back stale
+  [Column("schedule_enforced", ignoreOnInsert: true, ignoreOnUpdate: true)] public bool ScheduleEnforced { get; set; } }   // G13 (0064): of an amenity booking's price   // F2 (0050): the drawer float a cashier starts a shift with
 
 /// <summary>G16 (0065): a whole Manila day the gym is closed; written only by close_gym_day and reopen_gym_day.</summary>
+// 0151 (owner fixes 2026-11-25, Fix 3): the admin's shift schedule for coaches and front desk; written only by the schedule_* functions
+[Table("schedule_templates")] public class ScheduleTemplate : BaseModel
+{ [PrimaryKey("template_id")] public int Id { get; set; } [Column("name")] public string Name { get; set; } = "";
+  [Column("archived_at")] public DateTime? ArchivedAt { get; set; } }
+[Table("schedule_template_days")] public class ScheduleTemplateDay : BaseModel
+{ [PrimaryKey("template_id", true)] public int TemplateId { get; set; } [Column("weekday")] public int Weekday { get; set; }   // ISO: 1 Monday .. 7 Sunday
+  [Column("starts_at")] public TimeSpan StartsAt { get; set; } [Column("ends_at")] public TimeSpan EndsAt { get; set; } }
+[Table("schedule_assignments")] public class ScheduleAssignment : BaseModel
+{ [PrimaryKey("assignment_id")] public int Id { get; set; } [Column("user_id")] public string UserId { get; set; } = ""; [Column("template_id")] public int TemplateId { get; set; }
+  [Column("effective_from")] public DateTime EffectiveFrom { get; set; } public DateOnly From => DateOnly.FromDateTime(EffectiveFrom); }
+[Table("schedule_overrides")] public class ScheduleOverride : BaseModel
+{ [PrimaryKey("override_id")] public int Id { get; set; } [Column("user_id")] public string UserId { get; set; } = "";
+  [Column("from_date")] public DateTime FromDate { get; set; } [Column("to_date")] public DateTime ToDate { get; set; }
+  [Column("starts_at")] public TimeSpan? StartsAt { get; set; } [Column("ends_at")] public TimeSpan? EndsAt { get; set; } [Column("reason")] public string Reason { get; set; } = "";
+  public DateOnly From => DateOnly.FromDateTime(FromDate); public DateOnly To => DateOnly.FromDateTime(ToDate); }
+/// <summary>What schedule_template_save returns: the template and the days whose coach shift was kept because a session is booked in it.</summary>
+public sealed class ScheduleSaveResult
+{ [System.Text.Json.Serialization.JsonPropertyName("template_id")] public int TemplateId { get; set; }
+  [System.Text.Json.Serialization.JsonPropertyName("kept")] public List<string> Kept { get; set; } = new(); }
+
 [Table("gym_closures")] public class GymClosure : BaseModel
 { [PrimaryKey("closed_on", true)] public DateTime ClosedOn { get; set; } [Column("reason")] public string Reason { get; set; } = "";
   [Column("closed_by")] public string ClosedBy { get; set; } = ""; [Column("closed_at")] public DateTime ClosedAt { get; set; }

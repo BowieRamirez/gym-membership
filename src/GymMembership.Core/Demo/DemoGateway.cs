@@ -792,6 +792,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         if (ClosureCall(fn, a, out var closureResult)) return closureResult;
         if (CashShiftCall(fn, a, out var shiftResult)) return shiftResult;
         if (PayrollCall(fn, a, out var payrollResult)) return payrollResult;
+        if (ScheduleCall(fn, a, out var scheduleResult)) return scheduleResult;
         if (MessengerCall(fn, a, out var chatResult)) return chatResult;
         var now = SubscriptionNow;
         int I(string k) => Convert.ToInt32(a[k]);
