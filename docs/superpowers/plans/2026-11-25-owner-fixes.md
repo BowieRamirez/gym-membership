@@ -6,7 +6,7 @@ Created: 2026-11-25
 Last updated: 2026-11-25
 Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phases 3.1-3.5 done (0151-0155 live; shift check-in rule off until the admin turns it on from Scheduling); 3.6 (checks and rollout) TODO. S1-S9 confirmed. More fixes get added below as the owner sends them.
 Branch: `owner-fixes-2026-11-25` (cut from `main` at `df3f54c`, v0.11.0). Owner merges to `main` when done; no push or PR without the owner.
-Next migration: `0156`.
+Next migration: `0158`.
 
 **Goal:** The owner's fixes after the v0.11.0 release.
 
@@ -88,7 +88,7 @@ Owner, 2026-11-25: can the coaches' shifts and payroll work like `C:\Users\bowie
 | S5 | **Late check-out allowed.** Check-out stays as today; open coach visits still auto-close at gym closing (0032). | Owner, confirmed |
 | S6 | **Paid time starts at the later of check-in and shift start.** The real check-in time is kept; only payable hours are clipped. | Owner, confirmed |
 | S7 | **Leaving before the shift end is flagged, not refused:** **Left early**, still paid for time worked once approved. | Owner, confirmed (recommended) |
-| S8 | **Schedule changes reach the future only:** a change rewrites the coach's scheduled `shift_posts` from tomorrow on, only rows with no booked session inside them; a shift with bookings is kept and reported to the admin. Past and today's rows are never touched. A daily job keeps 8 weeks of coach shifts filled ahead. | Owner, confirmed (recommended) |
+| S8 | **Schedule changes reach the future only** (amended by option b in 3.6: a change starting today also rewrites today): a change rewrites the coach's scheduled `shift_posts` from tomorrow on, only rows with no booked session inside them; a shift with bookings is kept and reported to the admin. Past and today's rows are never touched. A daily job keeps 8 weeks of coach shifts filled ahead. | Owner, confirmed (recommended) |
 | S9 | **Booking lists stay shift-based** (no same-day "checked in" filter). If a coach doesn't come, the front desk or an admin **moves the booked session to another coach** who is free that hour (has a shift, not booked, under the daily hour limit). The time, price and payment stay; the member and both coaches are notified; audited (`session.reassigned`). Per-session pay goes to the coach who completes it. | Owner, 2026-11-25 ("they can be assigned to other coach"); details recommended |
 
 ### Fix 3 skills
@@ -110,7 +110,7 @@ Owner, 2026-11-25: can the coaches' shifts and payroll work like `C:\Users\bowie
 | 3.3 | Scheduling page (Templates, Assignments, Calendar) | BUILT (`0153` live 2026-11-25; owner hand check left) |
 | 3.4 | Coach and desk screens: no Post a shift, refusal sentences, shift and Late on the desk | BUILT (`0154` live 2026-11-25; owner hand check left) |
 | 3.5 | Move a booked session to another coach (S9) | BUILT (`0155` live 2026-11-25; owner hand check left) |
-| 3.6 | Checks and rollout (admin sets schedules, then the rule is switched on) | TODO |
+| 3.6 | Checks and rollout (admin sets schedules, then the rule is switched on) | CHECKS DONE (`0156`, `0157` live); rollout and release wait on the owner; **not merged** |
 
 #### Phase 3.1: Database (`0151_staff_scheduling.sql`)
 
@@ -165,7 +165,22 @@ Owner, 2026-11-25: can the coaches' shifts and payroll work like `C:\Users\bowie
 
 #### Phase 3.6: Checks and rollout
 
-- [ ] Whole-fix review; all unit and database tests; Windows and Android builds.
-- [ ] Rollout: push 3.1 with `schedule_enforced` off; the admin assigns templates to every coach and front desk person; then turns it on from the Scheduling page.
-- [ ] Coaches' own future shifts stay until the first sync for that coach replaces the unbooked ones (S8).
-- [ ] New app release (old apps still show Post a shift; the server refuses it).
+- [x] Whole-fix review (3.1-3.5, `27ea8c8^..fd6c5e1`). Found and fixed: the schedule could replace a coach shift that had an **amenity booking with that coach** (only coach sessions kept a shift); `0156` keeps it and reports the day, demo the same; db test added. Raised to the owner, not changed (decision): see "Open decision" below.
+- [x] All unit and database tests; Windows and Android builds. Full db run: 72 files; the only failure was `rules.mjs` (no break test for three schedule functions), fixed and rerun (106 passed); `staff-scheduling.mjs` 22 passed; 1254 C# tests pass; Windows builds (Android built in 3.5, no Android change since).
+- [x] Owner screenshot (Templates, New template): the per-day "Works" label ran under the time pickers and over "Rest day" (a Windows CheckBox is ~120 wide). Fixed: one caption row (Day, Works, Starts, Ends) and the checkbox alone in a 120-wide column.
+- [ ] Rollout (owner): see the steps below. `0151`-`0157` are live with `schedule_enforced` off, so nothing changes until step 4.
+- [ ] Coaches' own future shifts stay until the first sync for that coach replaces the unbooked ones (S8). Nothing to do; it happens at step 3.
+- [ ] New app release after the owner merges (old apps still show Post a shift; the server refuses it). **Not merged: owner said to wait.**
+
+**Rollout steps for the owner (in this order):**
+
+1. Install the new app on the admin PC (after the merge and release).
+2. **Scheduling → Templates:** make one template per usual week (e.g. "Weekdays 9-5", "Weekend mornings"). Times are on the half hour inside gym hours.
+3. **Scheduling → People:** give every coach and front desk person a template from today. Coaches' shifts for the next 8 weeks are written from tomorrow; any day kept because something is booked is named in the notice.
+4. Check **Week** for the coming days, add one-off changes (Change a day) where needed, then press **Turn on** at the top. The confirm names anyone still without a schedule; they can't check in or open a drawer until they have one.
+5. From then on: the desk checks coaches in from 5 minutes before their shift; Payroll shows Late / Left early to approve; a coach who doesn't come gets **Change coach** on Home before the session starts.
+6. To undo quickly: **Turn off** on Scheduling. Everyone can check in again; schedules stay.
+
+**Decided (owner, 2026-11-25): option (b).** A change that starts today (an assignment from today, a change for today) also rewrites today's coach shift, so a coach given today off can't be booked later today; today's new shift starts no earlier than the next half hour; a shift with something booked in it is kept and named; a shift already over stays as history. Template edits and the nightly fill still start tomorrow. `0157` (live), demo the same; db test added. This amends S8.
+
+**Release notes (for the next version):** the admin sets coach and front desk shifts on the new Scheduling page (templates, people, week, one-off changes); check-in and opening a drawer follow the shift once turned on; Payroll pays from the shift start and flags Late / Left early; coaches no longer post shifts; the desk sees each coach's shift and Late, and can move a session to another free coach.

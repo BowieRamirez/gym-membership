@@ -66,6 +66,16 @@ try {
     await assert.rejects(asAnon(`select shift_for($1, $2::date)`, [coach, today]), /permission denied|42501/);
     await assert.rejects(as(admin, `insert into schedule_templates(name) values('direct')`), /permission denied|42501/);
   });
+  await test('break attempts: duplicate, add and remove a change are refused for non-admins, the past and bad input', async () => {
+    await assert.rejects(as(desk, `select schedule_template_duplicate($1, 'Copy')`, [tpl]), /forbidden/);
+    await assert.rejects(as(admin, `select schedule_template_duplicate($1, 'Weekday 9-5')`, [tpl]), /name_taken/);
+    await assert.rejects(as(coach, `select schedule_override_add($1, $2::date, $2::date, null, null, 'x')`, [coach, today]), /forbidden/);
+    await assert.rejects(as(admin, `select schedule_override_add($1, $2::date, $2::date, null, null, 'x')`, [coach, await plus(-1)]), /past_date/);
+    await assert.rejects(as(admin, `select schedule_override_add($1, $2::date, $2::date, '09:10', '12:00', 'x')`, [coach, today]), /off_grid/);
+    await assert.rejects(as(admin, `select schedule_override_add($1, $2::date, $2::date, null, null, ' ')`, [coach, today]), /bad_input/);
+    await assert.rejects(as(member, 'select schedule_override_remove(1)'), /forbidden/);
+    await assert.rejects(as(admin, 'select schedule_override_remove(-1)'), /not_found/);   // a missing or already-started change
+  });
   await test('only coaches and front desk can be scheduled, and not from a past date', async () => {
     await assert.rejects(as(admin, `select schedule_assign($1, $2, $3::date)`, [member, tpl, today]), /not_schedulable/);
     await assert.rejects(as(admin, `select schedule_assign($1, $2, $3::date)`, [admin, tpl, today]), /not_schedulable/);
@@ -161,16 +171,18 @@ try {
   });
 
   // ---- S8: the schedule writes coach shifts from tomorrow on ----
-  await test('S8: assigning a coach writes their shifts from tomorrow for 8 weeks, not today', async () => {
+  await test('S8 + option b: assigning from today writes the rest of today, then every day for 8 weeks', async () => {
     await clearSchedules();
     await db.query('delete from training_sessions where coach_id=$1', [coach]); await db.query('delete from shift_posts where coach_id=$1', [coach]);
     await as(admin, `select schedule_assign($1, $2, $3::date)`, [coach, tpl, today]);
     const rows = (await db.query(`select (starts_at at time zone 'Asia/Manila')::date::text d, to_char(starts_at at time zone 'Asia/Manila','HH24:MI') s,
       to_char(ends_at at time zone 'Asia/Manila','HH24:MI') e from shift_posts where coach_id=$1 and status='scheduled' order by starts_at`, [coach])).rows;
-    assert.equal(rows[0].d, tomorrow);
-    assert.deepEqual([rows[0].s, rows[0].e], ['09:00', '17:00']);
+    const first = rows.find(r => r.d === tomorrow);
+    assert.deepEqual([first.s, first.e], ['09:00', '17:00']);
     assert.equal(rows.at(-1).d, await plus(56));
-    assert.ok(!rows.some(r => r.d === today));
+    const todayRow = rows.find(r => r.d === today);   // only while today's 9-5 is still ahead, and never before the next half hour
+    if (minute < 16 * 60 + 30) assert.ok(todayRow && todayRow.e === '17:00' && Number(todayRow.s.slice(0, 2)) * 60 + Number(todayRow.s.slice(3)) >= Math.max(minute, 9 * 60));
+    else assert.equal(todayRow, undefined);
   });
   await test('S8: a change replaces unbooked shifts and keeps one with a booked session, naming its day', async () => {
     const day2 = await plus(2);
@@ -183,6 +195,28 @@ try {
     assert.deepEqual(await day(tomorrow), ['07:00']);
     assert.deepEqual(await day(day2), ['09:00']);   // kept: a session is booked inside it
   });
+  await test('3.6 review: a shift with an amenity booking that includes the coach is kept too', async () => {
+    const day4 = await plus(6);   // +4 is the closed day from the shift_for test
+    const amenity = (await one(`insert into amenities(name,price) values('Review court',200) returning amenity_id`)).amenity_id;
+    await db.query(`insert into reservations(member_id,amenity_id,coach_id,starts_at,ends_at,created_by,status,total_price,down_payment)
+      values($1,$2,$3,$4,$5,$1,'confirmed',0,0)`, [member, amenity, coach, at(day4, '08:00'), at(day4, '09:00')]);
+    const kept = (await as(admin, `select schedule_assign($1, $2, $3::date) k`, [coach, tpl, today]))[0].k;
+    assert.ok(kept.includes(day4), JSON.stringify(kept));
+  });
+  if (minute >= 6 * 60 && minute < 19 * 60) {
+    await test('option b: a change starting today rewrites today\'s unbooked coach hours, never before the next half hour', async () => {
+      const todayPosts = async () => (await db.query(`select to_char(starts_at at time zone 'Asia/Manila','HH24:MI') s from shift_posts
+        where coach_id=$1 and status='scheduled' and (starts_at at time zone 'Asia/Manila')::date=$2::date order by starts_at`, [coach2, today])).rows.map(r => r.s);
+      await db.query('delete from shift_posts where coach_id=$1', [coach2]);
+      await db.query(`insert into shift_posts(coach_id,starts_at,ends_at) values($1, date_trunc('hour', now()) + interval '2 hours', date_trunc('hour', now()) + interval '3 hours')`, [coach2]);
+      assert.equal((await todayPosts()).length, 1);
+      await as(admin, `select schedule_override_add($1, $2::date, $2::date, null, null, 'Sick')`, [coach2, today]);
+      assert.deepEqual(await todayPosts(), []);   // a day off today: members can no longer book them today
+      const start = hhmm(Math.ceil((minute + 1) / 60) * 60 + 60), end = hhmm(Math.ceil((minute + 1) / 60) * 60 + 120);
+      await as(admin, `select schedule_override_add($1, $2::date, $2::date, $3, $4, 'Covering')`, [coach2, today, start, end]);
+      assert.deepEqual(await todayPosts(), [start]);
+    });
+  } else console.log('  skip  option b checks: needs a gym hour still ahead today');
   await test('S8: the daily fill only touches coaches who have a schedule; a coach without one keeps their own shifts', async () => {
     await db.query('delete from shift_posts where coach_id=$1', [coach2]);
     await db.query(`insert into shift_posts(coach_id,starts_at,ends_at) values($1,$2,$3)`, [coach2, at(tomorrow, '10:00'), at(tomorrow, '12:00')]);

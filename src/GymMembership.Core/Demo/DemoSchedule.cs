@@ -160,25 +160,33 @@ public sealed partial class DemoGateway
             All<ScheduleOverride>().ToList(), All<GymClosure>().ToList(), gym.ScheduleEnforced, gym.OpensAt, gym.ClosesAt);
     }
 
-    // S8: a coach's scheduled shifts from tomorrow follow the schedule; a shift with a booked session inside is kept and its day returned
+    // S8 + option b (0157): a coach's scheduled shifts follow the schedule from the change's first day (today at the earliest; template edits
+    // pass tomorrow); today's new shift starts no earlier than the next half hour; a shift with something booked in it is kept and its day returned
     List<string> SyncCoaches(IEnumerable<string> users, DateOnly from, DateOnly to)
     {
         var kept = new List<string>();
         var today = ManilaDay(SubscriptionNow);
         var data = ScheduleNow();
         foreach (var coach in users.Distinct().Where(u => RolesOf(u).Contains("coach")))
-            for (var day = from > today ? from : today.AddDays(1); day <= to && day <= today.AddDays(56); day = day.AddDays(1))
+            for (var day = from > today ? from : today; day <= to && day <= today.AddDays(56); day = day.AddDays(1))
             {
                 var (s, e, _, _) = data.ShiftFor(coach, day);
                 DateTime At(TimeSpan t) => day.ToDateTime(TimeOnly.MinValue).Add(t).AddHours(-8);   // Manila wall clock to UTC
+                var now = SubscriptionNow;
                 var posts = All<ShiftPost>().Where(p => p.CoachId == coach && p.Status == "scheduled" && ManilaDay(p.Start) == day).ToList();
                 if (posts.Count == 1 && s is { } s1 && e is { } e1 && posts[0].Start == At(s1) && posts[0].End == At(e1)) continue;
                 var blocked = false;
-                foreach (var p in posts)
-                    if (All<TrainingSession>().Any(t => t.CoachId == coach && t.Status == "scheduled" && t.ScheduledStart < p.End && p.Start < t.ScheduledEnd)) blocked = true;
+                foreach (var p in posts.Where(p => p.End > now))   // a shift already over stays; something booked in it keeps it (0156)
+                    if (All<TrainingSession>().Any(t => t.CoachId == coach && t.Status == "scheduled" && t.ScheduledStart < p.End && p.Start < t.ScheduledEnd)
+                        || All<Reservation>().Any(r => r.CoachId == coach && r.Status is "confirmed" or "awaiting_payment" && r.EndsAt > now && r.StartsAt < p.End && p.Start < r.EndsAt)) blocked = true;
                     else p.Status = "cancelled";
                 if (blocked) kept.Add(day.ToString("yyyy-MM-dd"));
-                else if (s is { } st && e is { } en) Add(new ShiftPost { CoachId = coach, Start = At(st), End = At(en) });
+                else if (s is { } st && e is { } en)
+                {
+                    var next = new DateTime((now.Ticks + TimeSpan.TicksPerMinute * 30 - 1) / (TimeSpan.TicksPerMinute * 30) * (TimeSpan.TicksPerMinute * 30), DateTimeKind.Utc);
+                    var start = day == today && At(st) < next ? next : At(st);
+                    if (start < At(en)) Add(new ShiftPost { CoachId = coach, Start = start, End = At(en) });
+                }
             }
         return kept;
     }

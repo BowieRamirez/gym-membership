@@ -348,15 +348,19 @@
                                 <Label Text="Name" Style="{StaticResource Caption}" />
                                 <Border Style="{StaticResource Field}"><Entry Text="{Binding TemplateName}" MaxLength="60" Placeholder="Weekdays 9-5" SemanticProperties.Description="Template name" /></Border>
                             </VerticalStackLayout>
+                            <!-- one caption row instead of a "Works" label per day: a Windows CheckBox is ~120 wide and its label ran into the times -->
+                            <Grid ColumnDefinitions="110,120,140,140" ColumnSpacing="12">
+                                <Label Text="Day" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="1" Text="Works" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="2" Text="Starts" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="3" Text="Ends" Style="{StaticResource Caption}" />
+                            </Grid>
                             <VerticalStackLayout BindableLayout.ItemsSource="{Binding EditorDays}" Spacing="4">
                                 <BindableLayout.ItemTemplate>
                                     <DataTemplate x:DataType="vm:TemplateDayInput">
                                         <Grid ColumnDefinitions="110,120,140,140" ColumnSpacing="12" MinimumHeightRequest="44">
                                             <Label Text="{Binding DayName}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
-                                            <HorizontalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
-                                                <CheckBox IsChecked="{Binding Works}" VerticalOptions="Center" SemanticProperties.Description="{Binding DayName, StringFormat='Works on {0}'}" />
-                                                <Label Text="Works" VerticalOptions="Center" />
-                                            </HorizontalStackLayout>
+                                            <CheckBox Grid.Column="1" IsChecked="{Binding Works}" VerticalOptions="Center" SemanticProperties.Description="{Binding DayName, StringFormat='Works on {0}'}" />
                                             <Border Grid.Column="2" Style="{StaticResource Field}" IsVisible="{Binding Works}">
                                                 <Picker ItemsSource="{Binding Options}" SelectedItem="{Binding Start}" SemanticProperties.Description="{Binding DayName, StringFormat='{0} start'}" />
                                             </Border>
