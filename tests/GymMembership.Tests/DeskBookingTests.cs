@@ -90,6 +90,17 @@ public class DeskBookingTests
         Assert.True(vm.BookCommand.CanExecute(null));
     }
 
+    [Fact]   // owner, 2026-11-25: Member and Walk-in chips; going back to Member leaves walk-in mode
+    public async Task Member_and_walk_in_are_one_at_a_time()
+    {
+        var (_, vm) = await Open();
+        Assert.False(vm.IsWalkIn);
+        vm.StartWalkInCommand.Execute(null);
+        Assert.True(vm.IsWalkIn);
+        vm.StartMemberCommand.Execute(null);
+        Assert.False(vm.IsWalkIn);
+    }
+
     [Fact]   // 0091 (owner, 2026-11-17): no account, no registering; booked by name, paid in cash, with a receipt to photograph
     public async Task Walk_in_is_booked_by_name_with_a_receipt()
     {

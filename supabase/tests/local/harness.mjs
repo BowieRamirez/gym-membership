@@ -57,7 +57,8 @@ export async function start({ beforeMigration } = {}) {
   const files = fs.readdirSync(MIGRATIONS).filter(f => f.endsWith('.sql')).sort();
   for (const f of files) {
     // pg_cron is a Supabase extension; the stub schema above stands in for it
-    const sql = fs.readFileSync(path.join(MIGRATIONS, f), 'utf8').replace(/create extension if not exists pg_cron[^;]*;/i, '');
+    // a Windows checkout (core.autocrlf) gives CRLF files; 0148 matches function text with LF, as the live database has it
+    const sql = fs.readFileSync(path.join(MIGRATIONS, f), 'utf8').replace(/\r\n/g, '\n').replace(/create extension if not exists pg_cron[^;]*;/i, '');
     try { await beforeMigration?.(client, f, sql); await client.query(sql); console.log('ok  ', f); }
     catch (e) { console.log('FAIL', f, '\n    ', e.message, e.position ? `(pos ${e.position})` : '', e.where ?? ''); await client.end(); await server.stop(); throw e; }
   }

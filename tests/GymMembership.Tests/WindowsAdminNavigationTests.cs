@@ -6,10 +6,13 @@ public class WindowsAdminNavigationTests
     public void Grouping_is_Windows_only_and_admin_only()
     {
         var setup = File.ReadAllText(Path.Combine(TestPaths.AppFolder(), "StaffShell.xaml.cs")).Replace("\r\n", "\n");
-        // D15: the sub-admin gets the overview and the grouped menu too; everyone else gets the plain icon rail
-        Assert.Contains("#if WINDOWS\n\t\tif (role is AppRole.Admin or AppRole.SubAdmin) SetupAdminOverview(sp, role == AppRole.Admin);\n"
-            + "\t\tControls.IconRail.Install(this, RoleName(role), (Core.ViewModels.HeaderViewModel)GetTitleView(this).BindingContext, groupFrontDesk: role is AppRole.Admin or AppRole.SubAdmin);\n#endif", setup);
-        Assert.False(File.Exists(Path.Combine(TestPaths.AppFolder(), "StaffShell.Windows.cs")));   // the old text menu is gone
+        // D15: the sub-admin gets the overview and the menu with words too (Fix 4, W1); everyone else gets the plain icon rail
+        var windows = setup[setup.IndexOf("#if WINDOWS", StringComparison.Ordinal)..setup.IndexOf("#endif", StringComparison.Ordinal)];
+        Assert.Contains("if (role is AppRole.Admin or AppRole.SubAdmin) SetupAdminOverview(sp, role == AppRole.Admin);", windows);
+        Assert.Contains("if (role is AppRole.Admin or AppRole.SubAdmin)\n\t\t{", windows);
+        Assert.Contains("Controls.IconRail.InstallMenu(", windows);
+        Assert.Contains("else Controls.IconRail.Install(this, RoleName(role), header);", windows);
+        Assert.False(File.Exists(Path.Combine(TestPaths.AppFolder(), "StaffShell.Windows.cs")));   // the old text menu file is gone
     }
 
     [Fact]
@@ -49,10 +52,10 @@ public class WindowsAdminNavigationTests
     {
         var root = XDocument.Load(Path.Combine(TestPaths.AppFolder(), "StaffShell.xaml")).Root!;
         var items = root.Elements().Where(e => e.Name.LocalName == "FlyoutItem").ToList();
-        Assert.Equal(16, items.Count);
+        Assert.Equal(21, items.Count);
         Assert.Equal(new[] { "home", "cashier", "checkin", "amenities" },
             items.Where(e => (string?)e.Attribute("ClassId") == "desk").Select(e => (string?)e.Attribute("Route")));
-        Assert.Equal(7, items.Count(e => (string?)e.Attribute("ClassId") == "admin"));   // D15: shared with the sub-admin (F10: Announcements, E10: Damage reports, P4: Payroll)
+        Assert.Equal(12, items.Count(e => (string?)e.Attribute("ClassId") == "admin"));   // D15: shared with the sub-admin (F10: Announcements, E10: Damage reports, P4: Payroll, Fix 3: Scheduling, Fix 4: Attendance, Fix 5: Expenses, Financial reports)
         Assert.Equal(3, items.Count(e => (string?)e.Attribute("ClassId") == "super"));   // super admin only
         Assert.Single(items, e => (string?)e.Attribute("Route") == "messages");
         Assert.Single(items, e => (string?)e.Attribute("Route") == "settings");

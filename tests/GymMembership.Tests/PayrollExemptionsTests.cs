@@ -76,7 +76,7 @@ public class PayrollExemptionsTests
         var jul = (await admin.PayrollPeriodAsync(new DateOnly(2026, 7, 1))).Value!.PeriodId;
         await admin.AddPayrollLineAsync(jul, desk.UserId, "deduction", 1000m, "Overpaid in June", "retro");
         var r = (await admin.PayrollPeriodAsync(new DateOnly(2026, 7, 1))).Value!.Rows.First(x => x.UserId == desk.UserId);
-        Assert.Equal((12000m, 237.45m), (r.Taxable, r.Tax));
+        Assert.Equal((12000m, 0m), (r.Taxable, r.Tax));   // 0160: the 1st-15th pay takes no tax
 
         var dec = (await admin.PayrollPeriodAsync(new DateOnly(2024, 12, 1))).Value!.PeriodId;
         await admin.AddPayrollLineAsync(dec, desk.UserId, "bonus", 40000m, "December first", "thirteenth_month");

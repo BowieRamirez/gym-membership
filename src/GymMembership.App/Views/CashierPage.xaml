@@ -208,14 +208,16 @@
                             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
                             <!-- 1. who -->
-                            <VerticalStackLayout Spacing="4">
-                                <FlexLayout Wrap="Wrap" AlignItems="End">
-                                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="300">
-                                        <Label Text="Customer" Style="{StaticResource Caption}" />
-                                        <Border Style="{StaticResource Field}"><Entry Text="{Binding Search}" Placeholder="Name, email or phone" ReturnCommand="{Binding PickTopSuggestionCommand}" SemanticProperties.Description="Search members by name, email or phone" AutomationId="DeskBookSearch" /></Border>
-                                    </VerticalStackLayout>
-                                    <Button Text="Book for a walk-in" Style="{StaticResource SmallOutlineButton}" Margin="0,0,12,8" Command="{Binding StartWalkInCommand}" AutomationId="DeskBookWalkIn" />
-                                </FlexLayout>
+                            <!-- owner, 2026-11-25: member or walk-in, one at a time -->
+                            <HorizontalStackLayout Spacing="8">
+                                <c:ChoiceChip Text="Member" IsChosen="{Binding IsWalkIn, Converter={StaticResource Not}}" Command="{Binding StartMemberCommand}" AutomationId="DeskBookMember" />
+                                <c:ChoiceChip Text="Walk-in" IsChosen="{Binding IsWalkIn}" Command="{Binding StartWalkInCommand}" AutomationId="DeskBookWalkIn" />
+                            </HorizontalStackLayout>
+                            <VerticalStackLayout Spacing="4" IsVisible="{Binding IsWalkIn, Converter={StaticResource Not}}">
+                                <VerticalStackLayout Spacing="4" WidthRequest="300" HorizontalOptions="Start">
+                                    <Label Text="Customer" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><Entry Text="{Binding Search}" Placeholder="Name, email or phone" ReturnCommand="{Binding PickTopSuggestionCommand}" SemanticProperties.Description="Search members by name, email or phone" AutomationId="DeskBookSearch" /></Border>
+                                </VerticalStackLayout>
                                 <Border Style="{StaticResource TablePanel}" IsVisible="{Binding HasSuggestions}" MaximumWidthRequest="480" HorizontalOptions="Start" AutomationId="DeskBookSuggestions">
                                     <VerticalStackLayout BindableLayout.ItemsSource="{Binding Suggestions}">
                                         <BindableLayout.ItemTemplate>
@@ -238,7 +240,7 @@
                                     </VerticalStackLayout>
                                 </Border>
                             </VerticalStackLayout>
-                            <Label Text="No member found. Check the spelling, or try their email or phone. No account? Book for a walk-in." Style="{StaticResource Muted}" IsVisible="{Binding NoMatch}" />
+                            <Label Text="No member found. Check the spelling, or try their email or phone. No account? Choose Walk-in." Style="{StaticResource Muted}" IsVisible="{Binding NoMatch}" />
                             <!-- 0091 (owner): someone with no account is booked by name; they photograph the receipt shown after booking -->
                             <VerticalStackLayout Spacing="4" IsVisible="{Binding IsWalkIn}" WidthRequest="300" HorizontalOptions="Start">
                                 <Label Text="Walk-in's name" Style="{StaticResource Caption}" />
@@ -405,6 +407,21 @@
                                 </VerticalStackLayout>
 
                                 <VerticalStackLayout Spacing="12" IsVisible="{Binding ShowsOrder}">
+                                    <!-- owner, 2026-11-25: Membership is for someone new: their details here, a package below, then Record payment (or
+                                         GCash / QR Ph) makes the account and takes the payment in one go -->
+                                    <Border Style="{StaticResource Panel}" IsVisible="{Binding ShowsRegisterForm}" MaximumWidthRequest="640" HorizontalOptions="Start">
+                                        <VerticalStackLayout Spacing="10">
+                                            <c:CardTitle Text="New member" />
+                                            <Label Text="Fill in their details, choose a package below, then record the payment: the account is made with it. They get a temporary password to change the first time they sign in. Already have an account? Use Renewal." Style="{StaticResource Caption}" LineBreakMode="WordWrap" />
+                                            <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto" RowSpacing="10">
+                                                <VerticalStackLayout Spacing="4"><Label Text="First name" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><Entry Text="{Binding NewFirstName}" SemanticProperties.Description="First name" /></Border></VerticalStackLayout>
+                                                <VerticalStackLayout Grid.Column="1" Spacing="4"><Label Text="Last name" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><Entry Text="{Binding NewLastName}" SemanticProperties.Description="Last name" /></Border></VerticalStackLayout>
+                                                <VerticalStackLayout Grid.Row="1" Spacing="4"><Label Text="Email" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><Entry Text="{Binding NewEmail}" Keyboard="Email" SemanticProperties.Description="Email" /></Border></VerticalStackLayout>
+                                                <VerticalStackLayout Grid.Row="1" Grid.Column="1" Spacing="4"><Label Text="Phone (optional)" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><Entry Text="{Binding NewPhone}" Keyboard="Telephone" SemanticProperties.Description="Phone" /></Border></VerticalStackLayout>
+                                            </Grid>
+                                        </VerticalStackLayout>
+                                    </Border>
+                                    <VerticalStackLayout Spacing="12" IsVisible="{Binding ShowsSearch}">
                                     <!-- D1 (2026-11-20): typing 2+ letters shows up to 8 suggestions under the box; Enter picks the top one -->
                                     <VerticalStackLayout Spacing="4">
                                         <FlexLayout Wrap="Wrap" AlignItems="End">
@@ -412,8 +429,6 @@
                                                 <Label Text="Customer" Style="{StaticResource Caption}" />
                                                 <Border Style="{StaticResource Field}"><Entry Text="{Binding Search}" Placeholder="Name, email or phone" ReturnCommand="{Binding PickTopSuggestionCommand}" SemanticProperties.Description="Search members by name, email or phone" AutomationId="CashierSearch" /></Border>
                                             </VerticalStackLayout>
-                                            <!-- owner, 2026-11-16: always visible, so the desk can find it; search first still avoids a second account -->
-                                            <Button Text="Register new member" Style="{StaticResource SmallOutlineButton}" Margin="0,0,12,8" Command="{Binding StartRegisterCommand}" AutomationId="CashierRegister" />
                                         </FlexLayout>
                                         <Border Style="{StaticResource TablePanel}" IsVisible="{Binding ShowSuggestions}" MaximumWidthRequest="480" HorizontalOptions="Start" AutomationId="CashierSuggestions">
                                             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Suggestions}">
@@ -437,25 +452,8 @@
                                             </VerticalStackLayout>
                                         </Border>
                                     </VerticalStackLayout>
-                                    <!-- cashier plan Y2: search first, so nobody gets a second account; then register them here -->
-                                    <Label Text="No member found. Check the spelling, or try their email or phone. New here? Register new member." Style="{StaticResource Muted}" IsVisible="{Binding ShowNoMatch}" />
+                                    <Label Text="No member found. Check the spelling, or try their email or phone. New here? Register them under Membership." Style="{StaticResource Muted}" IsVisible="{Binding ShowNoMatch}" />
                                     <Label Text="{Binding HiddenHint}" Style="{StaticResource Muted}" IsVisible="{Binding HasHiddenHint}" AutomationId="CashierHiddenHint" />
-                                    <Border Style="{StaticResource Panel}" IsVisible="{Binding IsRegistering}" MaximumWidthRequest="640" HorizontalOptions="Start">
-                                        <VerticalStackLayout Spacing="10">
-                                            <c:CardTitle Text="Register a new member" />
-                                            <Label Text="They get a temporary password to change the first time they sign in." Style="{StaticResource Caption}" />
-                                            <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto" RowSpacing="10">
-                                                <VerticalStackLayout Spacing="4"><Label Text="First name" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><Entry Text="{Binding NewFirstName}" SemanticProperties.Description="First name" /></Border></VerticalStackLayout>
-                                                <VerticalStackLayout Grid.Column="1" Spacing="4"><Label Text="Last name" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><Entry Text="{Binding NewLastName}" SemanticProperties.Description="Last name" /></Border></VerticalStackLayout>
-                                                <VerticalStackLayout Grid.Row="1" Spacing="4"><Label Text="Email" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><Entry Text="{Binding NewEmail}" Keyboard="Email" SemanticProperties.Description="Email" /></Border></VerticalStackLayout>
-                                                <VerticalStackLayout Grid.Row="1" Grid.Column="1" Spacing="4"><Label Text="Phone (optional)" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><Entry Text="{Binding NewPhone}" Keyboard="Telephone" SemanticProperties.Description="Phone" /></Border></VerticalStackLayout>
-                                            </Grid>
-                                            <HorizontalStackLayout Spacing="8">
-                                                <Button Text="Register member" Style="{StaticResource SmallButton}" Command="{Binding RegisterCommand}" />
-                                                <Button Text="Back" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelRegisterCommand}" />
-                                            </HorizontalStackLayout>
-                                        </VerticalStackLayout>
-                                    </Border>
                                     <Border Style="{StaticResource TablePanel}" IsVisible="{Binding ShowHits}">
                                         <VerticalStackLayout>
                                             <VerticalStackLayout x:Name="HitHead" IsVisible="{OnIdiom Phone=False, Default=True}">
@@ -471,6 +469,7 @@
                                                          RowTemplate="{StaticResource HitRow}" CardTemplate="{StaticResource HitCard}" />
                                         </VerticalStackLayout>
                                     </Border>
+                                    </VerticalStackLayout>
                                     <Label Text="{Binding Member.Username, StringFormat='Chosen: {0}'}" FontFamily="BarlowSemiBold" IsVisible="{Binding Member, Converter={StaticResource IsNotNull}}" />
 
                                     <Label Text="Choose one" Style="{StaticResource SectionTitle}" Margin="0" IsVisible="{Binding NeedsMember}" />

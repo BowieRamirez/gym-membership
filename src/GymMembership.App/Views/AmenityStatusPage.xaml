@@ -10,7 +10,7 @@
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <!-- owner, 2026-11-17: the desk's Booked card sits on the right (staff pages are Windows only);
              2026-11-23: below 1100 wide it goes under the main column instead of squeezing it (SideLayout, as the Cashier) -->
-        <c:SideLayout SideWidth="380" Spacing="20" SideFirst="False" Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}">
+        <c:SideLayout SideWidth="380" Spacing="20" SideFirst="False" Padding="{OnIdiom Phone='16,12,16,24', Default='24,16,24,32'}">
         <VerticalStackLayout Spacing="12">
             <Label Text="Members who follow an amenity are alerted when it becomes available or unavailable." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
@@ -147,14 +147,62 @@
                 </VerticalStackLayout>
             </Border>
 
-            <c:CardGrid Columns="{OnIdiom Phone=1, Default=3}" BindableLayout.ItemsSource="{Binding Cards}">
-                <BindableLayout.EmptyView><Label Text="No amenities are listed yet." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
-                <BindableLayout.ItemTemplate>
-                    <DataTemplate x:DataType="svc:AmenityCard">
-                        <c:AmenityCardView ActionText="Change status" ActionClicked="OnChange" />
-                    </DataTemplate>
-                </BindableLayout.ItemTemplate>
-            </c:CardGrid>
+            <!-- owner, 2026-11-25: a table, not cards (a narrow window gets the same facts stacked) -->
+            <Border Style="{StaticResource TablePanel}">
+                <VerticalStackLayout>
+                    <VerticalStackLayout x:Name="AmenityHead">
+                        <Grid Style="{StaticResource TableHead}" ColumnDefinitions="52,*,120,*,130" ColumnSpacing="14">
+                            <Label Text="Photo" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="1" Text="Amenity" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="2" Text="Status" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="3" Text="Reason" Style="{StaticResource Caption}" />
+                        </Grid>
+                        <BoxView Style="{StaticResource Hairline}" />
+                    </VerticalStackLayout>
+                    <c:TableBody Items="{Binding Cards}" Header="{x:Reference AmenityHead}" WideFrom="700">
+                        <c:TableBody.RowTemplate>
+                            <DataTemplate x:DataType="svc:AmenityCard">
+                                <VerticalStackLayout>
+                                    <Grid Style="{StaticResource TableRow}" ColumnDefinitions="52,*,120,*,130" ColumnSpacing="14">
+                                        <Border Style="{StaticResource Thumb}"><Image Source="{Binding PhotoUrl}" Aspect="AspectFill" IsVisible="{Binding PhotoUrl, Converter={StaticResource IsNotNull}}" /></Border>
+                                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
+                                            <Label Text="{Binding Amenity.Name}" FontFamily="BarlowSemiBold" LineBreakMode="TailTruncation" />
+                                            <Label Text="{Binding RunText}" Style="{StaticResource Caption}" LineBreakMode="TailTruncation" IsVisible="{Binding RunText, Converter={StaticResource HasText}}" />
+                                        </VerticalStackLayout>
+                                        <c:StatusChip Grid.Column="2" Status="{Binding Availability}" HorizontalOptions="Start" VerticalOptions="Center" />
+                                        <VerticalStackLayout Grid.Column="3" VerticalOptions="Center">
+                                            <Label Text="{Binding Reason}" LineBreakMode="TailTruncation" IsVisible="{Binding HasReason}" />
+                                            <Label Text="{Binding BackAt, Converter={StaticResource LocalDate}, ConverterParameter='ddd d MMM, h:mm tt', StringFormat='Back about {0}'}"
+                                                   Style="{StaticResource Caption}" IsVisible="{Binding HasBackAt}" />
+                                        </VerticalStackLayout>
+                                        <Button Grid.Column="4" Text="Change status" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="End" VerticalOptions="Center"
+                                                Clicked="OnChange" SemanticProperties.Description="{Binding Amenity.Name, StringFormat='Change the status of {0}'}" />
+                                    </Grid>
+                                    <BoxView Style="{StaticResource Hairline}" />
+                                </VerticalStackLayout>
+                            </DataTemplate>
+                        </c:TableBody.RowTemplate>
+                        <c:TableBody.CardTemplate>
+                            <DataTemplate x:DataType="svc:AmenityCard">
+                                <VerticalStackLayout>
+                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Padding="14,12">
+                                        <Border Style="{StaticResource Thumb}"><Image Source="{Binding PhotoUrl}" Aspect="AspectFill" IsVisible="{Binding PhotoUrl, Converter={StaticResource IsNotNull}}" /></Border>
+                                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                            <Label Text="{Binding Amenity.Name}" FontFamily="BarlowSemiBold" LineBreakMode="TailTruncation" />
+                                            <c:StatusChip Status="{Binding Availability}" HorizontalOptions="Start" />
+                                            <Label Text="{Binding Reason}" Style="{StaticResource Caption}" IsVisible="{Binding HasReason}" />
+                                        </VerticalStackLayout>
+                                        <Button Grid.Column="2" Text="Change status" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center"
+                                                Clicked="OnChange" SemanticProperties.Description="{Binding Amenity.Name, StringFormat='Change the status of {0}'}" />
+                                    </Grid>
+                                    <BoxView Style="{StaticResource Hairline}" />
+                                </VerticalStackLayout>
+                            </DataTemplate>
+                        </c:TableBody.CardTemplate>
+                        <c:TableBody.Empty><Label Text="No amenities are listed yet. Add one on Packages and amenities." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
+                    </c:TableBody>
+                </VerticalStackLayout>
+            </Border>
         </VerticalStackLayout>
 
         <!-- who booked: confirmed bookings not yet ended, soonest first; View shows the details and prints the receipt -->

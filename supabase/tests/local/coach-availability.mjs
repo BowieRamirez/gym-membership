@@ -28,7 +28,9 @@ const admin = await user('admin'), desk = await user('employee'), coach = await 
 // a day well ahead, as Manila wall-clock times
 const day = (await db.query(`select ((now() at time zone 'Asia/Manila')::date + 3)::text d`)).rows[0].d;
 const at = hm => `${day} ${hm}:00+08`;
-const post = (from, to, who = coach) => as(who, `insert into shift_posts(coach_id,starts_at,ends_at) values($1,$2,$3) returning *`, [coach, at(from), at(to)]);
+// 0151: the schedule writes shifts (as the database owner), so the guards are checked that way; nobody posts one from the app
+const post = (from, to) => db.query(`insert into shift_posts(coach_id,starts_at,ends_at) values($1,$2,$3) returning *`, [coach, at(from), at(to)]).then(r => r.rows);
+const denied = who => as(who, `insert into shift_posts(coach_id,starts_at,ends_at) values($1,$2,$3)`, [coach, at('08:00'), at('09:00')]);
 const session = async (from, to) => (await db.query(`insert into training_sessions(coach_id,member_id,scheduled_start,scheduled_end)
   values($1,$2,$3,$4) returning training_session_id`, [coach, member, at(from), at(to)])).rows[0].training_session_id;
 
@@ -45,29 +47,28 @@ try {
     await assert.rejects(post('08:15', '10:00'), /off_grid/);
     await assert.rejects(post('05:30', '07:00'), /outside_gym_hours/);
     await assert.rejects(post('21:00', '22:30'), /outside_gym_hours/);
-    await assert.rejects(as(coach, `insert into shift_posts(coach_id,starts_at,ends_at) values($1,$2,$3)`, [coach, at('21:00'), `${day} 23:00:00+08`]), /outside_gym_hours/);
+    await assert.rejects(db.query(`insert into shift_posts(coach_id,starts_at,ends_at) values($1,$2,$3)`, [coach, at('21:00'), `${day} 23:00:00+08`]), /outside_gym_hours/);
     const s = (await post('06:00', '22:00'))[0];
     assert.ok(s.shift_post_id);
-    await as(coach, `update shift_posts set status='cancelled' where shift_post_id=$1`, [s.shift_post_id]);
+    await db.query(`update shift_posts set status='cancelled' where shift_post_id=$1`, [s.shift_post_id]);
   });
-  await test('nobody else can open a coach\'s availability', async () => {
-    await assert.rejects(post('08:00', '09:00', member), /row-level security|42501/);
-    await assert.rejects(post('08:00', '09:00', desk), /row-level security|42501/);
+  await test('nobody posts a shift from the app, the coach included (0151)', async () => {
+    for (const who of [coach, member, desk]) await assert.rejects(denied(who), /permission denied|42501/);
   });
   await test('a shift with a scheduled session cannot be cancelled, deleted or shrunk away from it', async () => {
     const s = (await post('08:00', '12:00'))[0];
     await session('10:00', '11:00');
-    await assert.rejects(as(coach, `update shift_posts set status='cancelled' where shift_post_id=$1`, [s.shift_post_id]), /shift_has_sessions/);
+    await assert.rejects(db.query(`update shift_posts set status='cancelled' where shift_post_id=$1`, [s.shift_post_id]), /shift_has_sessions/);
     await assert.rejects(as(coach, `delete from shift_posts where shift_post_id=$1`, [s.shift_post_id]), /permission denied/);   // 0041: never erased
-    await assert.rejects(as(coach, `update shift_posts set ends_at=$2 where shift_post_id=$1`, [s.shift_post_id, at('10:30')]), /shift_has_sessions/);
-    await as(coach, `update shift_posts set starts_at=$2, note='Later start' where shift_post_id=$1`, [s.shift_post_id, at('09:00')]);   // still covers it
+    await assert.rejects(db.query(`update shift_posts set ends_at=$2 where shift_post_id=$1`, [s.shift_post_id, at('10:30')]), /shift_has_sessions/);
+    await db.query(`update shift_posts set starts_at=$2, note='Later start' where shift_post_id=$1`, [s.shift_post_id, at('09:00')]);   // still covers it
     assert.equal((await db.query('select status from shift_posts where shift_post_id=$1', [s.shift_post_id])).rows[0].status, 'scheduled');
   });
   await test('an empty shift can be cancelled and a cancelled session does not block', async () => {
     const s = (await post('13:00', '15:00'))[0];
     const id = await session('13:30', '14:00');
     await db.query(`update training_sessions set status='cancelled' where training_session_id=$1`, [id]);
-    await as(coach, `update shift_posts set status='cancelled' where shift_post_id=$1`, [s.shift_post_id]);
+    await db.query(`update shift_posts set status='cancelled' where shift_post_id=$1`, [s.shift_post_id]);
   });
   await test('a bought amenity session grants nothing until staff verify the payment', async () => {
     const pack = (await db.query(`insert into membership_packages(name,price,duration_days) values('P5 Monthly',1000,30) returning membership_package_id`)).rows[0].membership_package_id;
@@ -83,7 +84,7 @@ try {
   // Phase 9 (0033)
   await test('a shift cannot start in the past or overlap another of the same coach', async () => {
     const yesterday = (await db.query(`select ((now() at time zone 'Asia/Manila')::date - 1)::text d`)).rows[0].d;
-    await assert.rejects(as(coach, `insert into shift_posts(coach_id,starts_at,ends_at) values($1,$2,$3)`, [coach, `${yesterday} 08:00:00+08`, `${yesterday} 10:00:00+08`]), /past_slot/);
+    await assert.rejects(db.query(`insert into shift_posts(coach_id,starts_at,ends_at) values($1,$2,$3)`, [coach, `${yesterday} 08:00:00+08`, `${yesterday} 10:00:00+08`]), /past_slot/);
     await post('16:00', '18:00');
     await assert.rejects(post('17:00', '19:00'), /shift_posts_no_overlap/);
   });

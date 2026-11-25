@@ -1022,9 +1022,13 @@ public sealed record TraineeRow(int HireId, string CoachId, string MemberId, str
 }
 
 /// <summary>A coach on the front desk's check-in page. InSince is null while they are not in the gym.</summary>
-public sealed record CoachPresenceRow(string CoachId, string Name, DateTime? InSince)
+public sealed record CoachPresenceRow(string CoachId, string Name, DateTime? InSince, DateTime? ShiftStart = null, DateTime? ShiftEnd = null, bool IsLate = false)
 {
     public bool InGym => InSince is not null;
+    /// <summary>Fix 3 (0154): today's shift from the admin's schedule, in Manila time.</summary>
+    public string ShiftText => ShiftStart is { } s && ShiftEnd is { } e
+        ? $"Shift {ManilaTime.Of(s).ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture)} – {ManilaTime.Of(e).ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture)}"
+        : "No shift today";
     public string StateText => InSince is { } t ? $"In the gym since {Fmt.Time(t)}" : "Not in the gym";
     public string ActionText => InGym ? "Check out" : "Check in";
 }
@@ -1037,8 +1041,6 @@ public interface ICoachService
     Task<AppResult<bool>> UpdateProfileAsync(string? bio, string? specialty, bool available);
     Task<AppResult<IReadOnlyList<TraineeRow>>> TraineesAsync();
     Task<AppResult<IReadOnlyList<ShiftPost>>> MyShiftsAsync();
-    Task<AppResult<bool>> PostShiftAsync(DateTime startUtc, DateTime endUtc, string? note);
-    Task<AppResult<bool>> CancelShiftAsync(int shiftId);
     /// <summary>The signed-in coach's open visit, or null when they are not checked in.</summary>
     Task<AppResult<CoachVisit?>> MyVisitAsync();
     /// <summary>Null coachId: the signed-in coach themselves. Otherwise front desk for that coach. Twice in a row is harmless.</summary>
@@ -1100,11 +1102,15 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
         var activeTask = gw.ListAsync<PublicProfile>(p => p.IsActive == true);
         var openTask = gw.ListAsync<CoachVisit>(v => v.CheckedOutAt == null);
         var coachesTask = gw.ListAsync<Coach>();
-        await Task.WhenAll(activeTask, openTask, coachesTask);
+        // 0154: today's shifts and who is late; the presence list still shows if that look fails (e.g. a page without check-in rights)
+        var shiftsTask = Safe.RunAsync(async () => await gw.RpcAsync<List<CoachShiftToday>>("coach_shifts_today", new()) ?? []);
+        await Task.WhenAll(activeTask, openTask, coachesTask, shiftsTask);
         var active = activeTask.Result.ToDictionary(p => p.Id, p => p.FullName);
         var open = openTask.Result.ToDictionary(v => v.CoachId, v => v.CheckedInAt);
+        var shifts = (shiftsTask.Result.Value ?? []).ToDictionary(s => s.CoachId);
         return coachesTask.Result.Where(c => active.ContainsKey(c.UserId))
-            .Select(c => new CoachPresenceRow(c.UserId, active[c.UserId], open.TryGetValue(c.UserId, out var t) ? t : null))
+            .Select(c => new CoachPresenceRow(c.UserId, active[c.UserId], open.TryGetValue(c.UserId, out var t) ? t : null,
+                shifts.GetValueOrDefault(c.UserId)?.StartsAt, shifts.GetValueOrDefault(c.UserId)?.EndsAt, shifts.GetValueOrDefault(c.UserId)?.Late ?? false))
             .OrderByDescending(r => r.InGym).ThenBy(r => r.Name).ToList();
     });
 
@@ -1152,24 +1158,6 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
         return (await gw.ListAsync<ShiftPost>(s => s.CoachId == uid && s.End > now && s.Status == "scheduled")).OrderBy(s => s.Start).ToList();
     });
 
-    public async Task<AppResult<bool>> PostShiftAsync(DateTime startUtc, DateTime endUtc, string? note)
-    {
-        if (endUtc <= startUtc) return AppResult<bool>.Fail(AppErrorKind.Validation, "end must be after start");
-        return await Safe.RunAsync(async () =>
-        {
-            var uid = gw.CurrentUserId ?? throw new Exception("not authenticated");
-            await gw.InsertAsync(new ShiftPost { CoachId = uid, Start = startUtc, End = endUtc, Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim() });
-            return true;
-        });
-    }
-
-    public Task<AppResult<bool>> CancelShiftAsync(int shiftId) => Safe.RunAsync(async () =>
-    {
-        var row = (await gw.ListAsync<ShiftPost>(s => s.Id == shiftId)).First();
-        row.Status = Status.Cancelled;
-        await gw.UpdateAsync(row);
-        return true;
-    });
 }
 
 // ===================== Time requests and sessions =====================
@@ -1203,6 +1191,8 @@ public sealed record TodayCoachSession(
     public string TimeRange => Fmt.Range(ScheduledStart, ScheduledEnd);
     public bool CanMarkCoachArrived => CheckedInAt is not null && CoachArrivedAt is null && Status == "Checked in";
     public bool CanCheckIn => CheckedInAt is null && HeldUntil is null && Status == "scheduled";
+    /// <summary>Fix 3 (0155, S9): the coach hasn't arrived, so the desk can move it; the server refuses once it has started.</summary>
+    public bool CanChangeCoach => CoachArrivedAt is null && Status == "scheduled";
 }
 public sealed record FreeCoachSlot(
     [property: System.Text.Json.Serialization.JsonPropertyName("coach_id")] string CoachId,
@@ -1242,6 +1232,8 @@ public interface ISessionService
     Task<AppResult<int>> DeskBookWalkInCoachAsync(string coachId, DateTime startUtc, int hours, string? walkInName = null) => Task.FromResult(AppResult<int>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<TodayCoachSession>> ScanSessionAsync(string code) => Task.FromResult(AppResult<TodayCoachSession>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<bool>> MarkCoachArrivedAsync(int sessionId) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    /// <summary>Fix 3 (0155): move a booked session to another free coach; time, price and payment stay.</summary>
+    Task<AppResult<bool>> ReassignAsync(int sessionId, string coachId, string reason) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<IReadOnlyList<TodayCoachSession>>> TodayCoachSessionsAsync() => Task.FromResult(AppResult<IReadOnlyList<TodayCoachSession>>.Success([]));
     Task<AppResult<int>> ReportDamageAsync(int? sessionId, int? amenityId, string description, string? photoPath = null) => Task.FromResult(AppResult<int>.Fail(AppErrorKind.Unknown, "not_implemented"));
 }
@@ -1357,6 +1349,9 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
 
     public Task<AppResult<bool>> MarkCoachArrivedAsync(int sessionId) => Safe.RunAsync(async () =>
     { await gw.RpcAsync("mark_coach_arrived", new() { ["p_session"] = sessionId }); return true; });
+
+    public Task<AppResult<bool>> ReassignAsync(int sessionId, string coachId, string reason) => Safe.RunAsync(async () =>
+    { await gw.RpcAsync("reassign_session", new() { ["p_session"] = sessionId, ["p_coach"] = coachId, ["p_reason"] = reason }); return true; });
 
     public Task<AppResult<IReadOnlyList<TodayCoachSession>>> TodayCoachSessionsAsync() => Safe.RunAsync<IReadOnlyList<TodayCoachSession>>(async () =>
         await gw.RpcAsync<List<TodayCoachSession>>("today_coach_sessions"));
@@ -1858,6 +1853,12 @@ public interface IAdminService
     Task<AppResult<PayrollLine>> AddPayrollLineAsync(int periodId, string userId, string kind, decimal amount, string note, string category = "other") => Task.FromResult(AppResult<PayrollLine>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<IReadOnlyList<PayrollTimeRecord>>> PayrollRecordsAsync(int periodId, string userId) => Task.FromResult(AppResult<IReadOnlyList<PayrollTimeRecord>>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<bool>> ReviewPayrollTimeAsync(int periodId, string source, long sourceId, string status, string? reason = null) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<PayrollAttendance>> PayrollRecordsAllAsync(int periodId) => Task.FromResult(AppResult<PayrollAttendance>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    // Fix 5 (0159): expenses and the payroll cost the financial report reads
+    Task<AppResult<IReadOnlyList<Expense>>> ExpensesAsync(DateOnly from, DateOnly to) => Task.FromResult(AppResult<IReadOnlyList<Expense>>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<Expense>> AddExpenseAsync(DateOnly spentOn, string category, decimal amount, string note) => Task.FromResult(AppResult<Expense>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<bool>> VoidExpenseAsync(long expenseId, string reason) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<IReadOnlyList<PayrollCostDay>>> PayrollCostAsync(DateOnly from, DateOnly to) => Task.FromResult(AppResult<IReadOnlyList<PayrollCostDay>>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<int>> ApproveAllPayrollTimeAsync(int periodId, string? userId) => Task.FromResult(AppResult<int>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<IReadOnlyList<PayrollHourAdjustment>>> PayrollAdjustmentsAsync(int periodId, string userId) => Task.FromResult(AppResult<IReadOnlyList<PayrollHourAdjustment>>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<PayrollHourAdjustment>> AddPayrollHoursAsync(int periodId, string userId, decimal quantity, string note) => Task.FromResult(AppResult<PayrollHourAdjustment>.Fail(AppErrorKind.Unknown, "not_implemented"));
@@ -1968,6 +1969,18 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
 
     public Task<AppResult<IReadOnlyList<PayrollTimeRecord>>> PayrollRecordsAsync(int periodId, string userId) => Safe.RunAsync<IReadOnlyList<PayrollTimeRecord>>(async () =>
         await gw.RpcAsync<List<PayrollTimeRecord>>("payroll_records_for", new() { ["p_period"] = periodId, ["p_user"] = userId }) ?? []);
+
+    public Task<AppResult<IReadOnlyList<Expense>>> ExpensesAsync(DateOnly from, DateOnly to) => Safe.RunAsync<IReadOnlyList<Expense>>(async () =>
+        await gw.RpcAsync<List<Expense>>("expenses_list", new() { ["p_from"] = Day(from), ["p_to"] = Day(to) }) ?? []);
+    public Task<AppResult<Expense>> AddExpenseAsync(DateOnly spentOn, string category, decimal amount, string note) => Safe.RunAsync(() =>
+        gw.RpcAsync<Expense>("expense_add", new() { ["p_spent_on"] = Day(spentOn), ["p_category"] = category, ["p_amount"] = amount, ["p_note"] = note.Trim() }));
+    public Task<AppResult<bool>> VoidExpenseAsync(long expenseId, string reason) =>
+        Rpc("expense_void", new() { ["p_expense"] = expenseId, ["p_reason"] = reason.Trim() });
+    public Task<AppResult<IReadOnlyList<PayrollCostDay>>> PayrollCostAsync(DateOnly from, DateOnly to) => Safe.RunAsync<IReadOnlyList<PayrollCostDay>>(async () =>
+        await gw.RpcAsync<List<PayrollCostDay>>("payroll_cost", new() { ["p_from"] = Day(from), ["p_to"] = Day(to) }) ?? []);
+
+    public Task<AppResult<PayrollAttendance>> PayrollRecordsAllAsync(int periodId) => Safe.RunAsync(async () =>
+        await gw.RpcAsync<PayrollAttendance>("payroll_records_all", new() { ["p_period"] = periodId }) ?? new PayrollAttendance());
 
     public Task<AppResult<bool>> ReviewPayrollTimeAsync(int periodId, string source, long sourceId, string status, string? reason = null) =>
         Rpc("payroll_review_time", new() { ["p_period"] = periodId, ["p_source"] = source, ["p_source_id"] = sourceId, ["p_status"] = status, ["p_reason"] = reason?.Trim()! });

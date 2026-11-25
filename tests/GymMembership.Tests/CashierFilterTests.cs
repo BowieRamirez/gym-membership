@@ -63,17 +63,47 @@ public class CashierFilterTests
         Assert.DoesNotContain(vm.Hits, h => h.MemberId == "u-carlo");
         Assert.Contains(vm.Hits, h => h.MemberId == "u-bea");
 
-        // Renewal kind: shows only active members (Alex), hides Day pass (Carlo) and non-members (Bea)
+        // Renewal kind (owner, 2026-11-25): every existing account, active (extend) or not (buy again); a Day pass until midnight is hidden
         vm.PickKindCommand.Execute("Renewal");
+        await vm.SuggestNowAsync();
         Assert.Contains(vm.Hits, h => h.MemberId == "u-alex");
         Assert.DoesNotContain(vm.Hits, h => h.MemberId == "u-carlo");
-        Assert.DoesNotContain(vm.Hits, h => h.MemberId == "u-bea");
+        Assert.Contains(vm.Hits, h => h.MemberId == "u-bea");
 
         // Amenity kind: shows everyone
         vm.PickKindCommand.Execute("Amenity");
         Assert.Contains(vm.Hits, h => h.MemberId == "u-alex");
         Assert.Contains(vm.Hits, h => h.MemberId == "u-carlo");
         Assert.Contains(vm.Hits, h => h.MemberId == "u-bea");
+    }
+
+    [Fact]   // owner, 2026-11-25: Renewal lists accounts with nothing typed; one with no membership buys a package again
+    public async Task Renewal_lists_accounts_and_a_member_with_no_membership_buys_a_package()
+    {
+        Confirm.Answer = (_, _, _) => Task.FromResult(true);
+        var (gw, vm, _) = await OpenAsync();
+        vm.PickKindCommand.Execute("Renewal");
+        await vm.SuggestNowAsync();
+        Assert.Contains(vm.Hits, h => h.MemberId == "u-joy");
+        Assert.Empty(vm.Suggestions);   // no dropdown without a typed search
+        Assert.Empty(vm.Options);       // nothing to sell until a member is picked
+
+        vm.PickMemberCommand.Execute(vm.Hits.First(h => h.MemberId == "u-joy"));
+        for (var i = 0; i < 50 && vm.Options.Count == 0; i++) await Task.Delay(10);
+        vm.PickItemCommand.Execute(vm.Options.First(o => o.Item.Label.Contains("Monthly")));
+        await vm.RecordCommand.ExecuteAsync(null);
+        Assert.Null(vm.ErrorMessage);
+        var paid = (await gw.ListAsync<Payment>()).Where(p => p.MemberId == "u-joy").OrderBy(p => p.Id).Last();
+        Assert.Equal(PayKind.Membership, paid.Kind);
+    }
+
+    [Fact]   // owner, 2026-11-25: Day passes are sold on the Day pass tab, not under Membership
+    public async Task Membership_lists_no_Day_pass_packages()
+    {
+        var (_, vm, _) = await OpenAsync();
+        for (var i = 0; i < 50 && vm.Options.Count == 0; i++) await Task.Delay(10);
+        Assert.NotEmpty(vm.Options);
+        Assert.DoesNotContain(vm.Options, o => o.Item.DayPass);
     }
 
     [Fact]

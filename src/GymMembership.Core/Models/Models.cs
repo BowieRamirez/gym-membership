@@ -71,9 +71,37 @@ public static class PayMethod
   [Column("down_payment_percent")] public int DownPaymentPercent { get; set; } = 50;
   [Column("max_coach_sessions_per_day")] public int MaxCoachSessionsPerDay { get; set; } = 1;
   [Column("max_upcoming_coach_sessions")] public int MaxUpcomingCoachSessions { get; set; } = 1;
-  [Column("max_coach_hours_per_day")] public int? MaxCoachHoursPerDay { get; set; } = 6; }   // G13 (0064): of an amenity booking's price   // F2 (0050): the drawer float a cashier starts a shift with
+  [Column("max_coach_hours_per_day")] public int? MaxCoachHoursPerDay { get; set; } = 6;
+  // 0151: check-in follows the shift; changed only by schedule_set_enforced (0153), so a Gym settings save never writes it back stale
+  [Column("schedule_enforced", ignoreOnInsert: true, ignoreOnUpdate: true)] public bool ScheduleEnforced { get; set; } }   // G13 (0064): of an amenity booking's price   // F2 (0050): the drawer float a cashier starts a shift with
 
 /// <summary>G16 (0065): a whole Manila day the gym is closed; written only by close_gym_day and reopen_gym_day.</summary>
+// 0151 (owner fixes 2026-11-25, Fix 3): the admin's shift schedule for coaches and front desk; written only by the schedule_* functions
+[Table("schedule_templates")] public class ScheduleTemplate : BaseModel
+{ [PrimaryKey("template_id")] public int Id { get; set; } [Column("name")] public string Name { get; set; } = "";
+  [Column("archived_at")] public DateTime? ArchivedAt { get; set; } }
+[Table("schedule_template_days")] public class ScheduleTemplateDay : BaseModel
+{ [PrimaryKey("template_id", true)] public int TemplateId { get; set; } [Column("weekday")] public int Weekday { get; set; }   // ISO: 1 Monday .. 7 Sunday
+  [Column("starts_at")] public TimeSpan StartsAt { get; set; } [Column("ends_at")] public TimeSpan EndsAt { get; set; } }
+[Table("schedule_assignments")] public class ScheduleAssignment : BaseModel
+{ [PrimaryKey("assignment_id")] public int Id { get; set; } [Column("user_id")] public string UserId { get; set; } = ""; [Column("template_id")] public int TemplateId { get; set; }
+  [Column("effective_from")] public DateTime EffectiveFrom { get; set; } public DateOnly From => DateOnly.FromDateTime(EffectiveFrom); }
+[Table("schedule_overrides")] public class ScheduleOverride : BaseModel
+{ [PrimaryKey("override_id")] public int Id { get; set; } [Column("user_id")] public string UserId { get; set; } = "";
+  [Column("from_date")] public DateTime FromDate { get; set; } [Column("to_date")] public DateTime ToDate { get; set; }
+  [Column("starts_at")] public TimeSpan? StartsAt { get; set; } [Column("ends_at")] public TimeSpan? EndsAt { get; set; } [Column("reason")] public string Reason { get; set; } = "";
+  public DateOnly From => DateOnly.FromDateTime(FromDate); public DateOnly To => DateOnly.FromDateTime(ToDate); }
+/// <summary>coach_shifts_today (0154): a coach's shift today and whether they are late (server time).</summary>
+public sealed class CoachShiftToday
+{ [System.Text.Json.Serialization.JsonPropertyName("coach_id")] public string CoachId { get; set; } = "";
+  [System.Text.Json.Serialization.JsonPropertyName("starts_at")] public DateTime StartsAt { get; set; }
+  [System.Text.Json.Serialization.JsonPropertyName("ends_at")] public DateTime EndsAt { get; set; }
+  [System.Text.Json.Serialization.JsonPropertyName("late")] public bool Late { get; set; } }
+/// <summary>What schedule_template_save returns: the template and the days whose coach shift was kept because a session is booked in it.</summary>
+public sealed class ScheduleSaveResult
+{ [System.Text.Json.Serialization.JsonPropertyName("template_id")] public int TemplateId { get; set; }
+  [System.Text.Json.Serialization.JsonPropertyName("kept")] public List<string> Kept { get; set; } = new(); }
+
 [Table("gym_closures")] public class GymClosure : BaseModel
 { [PrimaryKey("closed_on", true)] public DateTime ClosedOn { get; set; } [Column("reason")] public string Reason { get; set; } = "";
   [Column("closed_by")] public string ClosedBy { get; set; } = ""; [Column("closed_at")] public DateTime ClosedAt { get; set; }
@@ -662,7 +690,7 @@ public sealed class PayrollLine
 }
 
 /// <summary>0142 (H12): a shift, coach check-in or session that can pay someone, with its review status.</summary>
-public sealed class PayrollTimeRecord
+public class PayrollTimeRecord
 {
     [System.Text.Json.Serialization.JsonPropertyName("source")] public string Source { get; set; } = "";
     [System.Text.Json.Serialization.JsonPropertyName("source_id")] public long SourceId { get; set; }
@@ -673,6 +701,10 @@ public sealed class PayrollTimeRecord
     [System.Text.Json.Serialization.JsonPropertyName("status")] public string Status { get; set; } = "pending";
     [System.Text.Json.Serialization.JsonPropertyName("reason")] public string? Reason { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("flags")] public List<string> Flags { get; set; } = new();
+    // 0152: StartsAt is the payable start (the shift start when in early); the real check-in and the shift it was against
+    [System.Text.Json.Serialization.JsonPropertyName("actual_start")] public DateTime? ActualStart { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("expected_start")] public DateTime? ExpectedStart { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("expected_end")] public DateTime? ExpectedEnd { get; set; }
 }
 
 /// <summary>0142 (H5): +/- hours (or sessions) for one person in one period, with a note.</summary>
@@ -683,6 +715,49 @@ public sealed class PayrollHourAdjustment
     [System.Text.Json.Serialization.JsonPropertyName("note")] public string Note { get; set; } = "";
     [System.Text.Json.Serialization.JsonPropertyName("created_by_name")] public string? CreatedByName { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("created_at")] public DateTime CreatedAt { get; set; }
+    // 0158: set only by payroll_records_all (every person's corrections at once)
+    [System.Text.Json.Serialization.JsonPropertyName("user_id")] public string? UserId { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("full_name")] public string? FullName { get; set; }
+}
+
+/// <summary>0159 (Fix 5, X3): money the gym spent; a mistake is voided with a reason, never edited or deleted.</summary>
+public sealed class Expense
+{
+    [System.Text.Json.Serialization.JsonPropertyName("expense_id")] public long ExpenseId { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("spent_on")] public DateOnly SpentOn { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("category")] public string Category { get; set; } = "other";
+    [System.Text.Json.Serialization.JsonPropertyName("amount")] public decimal Amount { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("note")] public string Note { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("created_by_name")] public string? CreatedByName { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("created_at")] public DateTime CreatedAt { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("voided_at")] public DateTime? VoidedAt { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("voided_by_name")] public string? VoidedByName { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("void_reason")] public string? VoidReason { get; set; }
+    public bool IsVoided => VoidedAt is not null;
+}
+
+/// <summary>0159 (Fix 5, X4): an approved or paid-out pay period's gross pay, on its last day.</summary>
+public sealed class PayrollCostDay
+{
+    [System.Text.Json.Serialization.JsonPropertyName("day")] public DateOnly Day { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("gross")] public decimal Gross { get; set; }
+}
+
+/// <summary>0158 (Fix 4, W2): a time record with whose it is and how they are paid, for Attendance Review.</summary>
+public sealed class PayrollStaffRecord : PayrollTimeRecord
+{
+    [System.Text.Json.Serialization.JsonPropertyName("user_id")] public string UserId { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("full_name")] public string FullName { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("role_name")] public string RoleName { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("pay_type")] public string PayType { get; set; } = "fixed";
+    [System.Text.Json.Serialization.JsonPropertyName("rate")] public decimal Rate { get; set; }
+}
+
+/// <summary>0158 (Fix 4, W2, W6): every person's records and hour corrections for one pay period.</summary>
+public sealed class PayrollAttendance
+{
+    [System.Text.Json.Serialization.JsonPropertyName("records")] public List<PayrollStaffRecord> Records { get; set; } = new();
+    [System.Text.Json.Serialization.JsonPropertyName("adjustments")] public List<PayrollHourAdjustment> Adjustments { get; set; } = new();
 }
 
 /// <summary>0142: words for pay types, rates and line categories.</summary>
@@ -721,12 +796,12 @@ public static class PayTypes
     public static bool IsGovernment(string? category) => category is "sss" or "philhealth" or "pagibig" or "tax";
 }
 
-/// <summary>0144 (T2, T3, T5): employee shares and BIR semi-monthly withholding, the same numbers as payroll_deduction_rates.
+/// <summary>0144 (T2, T5) + 0160: employee shares and BIR monthly withholding (taken in the 16th-end pay on the month), the same numbers as payroll_deduction_rates.
 /// Used by the demo gateway; the live app gets the amounts from the server.</summary>
 public static class PayrollDeductions
 {
     static readonly (decimal Over, decimal Base, decimal Rate)[] Brackets =
-        [(0, 0, 0), (10417, 0, 0.15m), (16667, 937.50m, 0.20m), (33333, 4270.70m, 0.25m), (83333, 16770.70m, 0.30m), (333333, 91770.70m, 0.35m)];
+        [(0, 0, 0), (20833, 0, 0.15m), (33333, 1875m, 0.20m), (66667, 8541.80m, 0.25m), (166667, 33541.80m, 0.30m), (666667, 183541.80m, 0.35m)];
     static decimal R(decimal v) => Math.Round(v, 2, MidpointRounding.AwayFromZero);
     public static decimal Msc(decimal monthPay) => Math.Clamp(500 * Math.Round(monthPay / 500, MidpointRounding.AwayFromZero), 5000, 35000);
     public static decimal Sss(decimal monthPay) => R(0.05m * Msc(monthPay));

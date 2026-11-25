@@ -120,6 +120,8 @@ public sealed partial class DemoGateway : ISupabaseGateway
     public void OwnerSetActive(string userId, bool active) => All<Profile>().First(p => p.Id == userId).IsActive = active;
     public void OwnerAgeSessions(string memberId, int days) { foreach (var s in All<TrainingSession>().Where(s => s.MemberId == memberId)) { s.ScheduledStart = s.ScheduledStart.AddDays(-days); s.ScheduledEnd = s.ScheduledEnd.AddDays(-days); } }
     public TrainingSession OwnerAddSession(TrainingSession s) => Add(s);
+    /// <summary>A coach shift as the schedule writes it (0151): coaches can't post their own, so tests set one up this way.</summary>
+    public ShiftPost OwnerAddCoachShift(string coachId, DateTime startUtc, DateTime endUtc) => Add(new ShiftPost { CoachId = coachId, Start = startUtc, End = endUtc });
     /// <summary>0066 (G19): the database owner, not the app, can still leave an amenity set up as a pass, as amenities sold before were.</summary>
     public void OwnerSetPassDays(int amenityId, int? days) => All<Amenity>().First(a => a.Id == amenityId).DurationDays = days;
     /// <summary>A pass bought before 0066; it keeps working until it ends.</summary>
@@ -421,11 +423,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
             {
                 case MembershipPackage or Amenity: if (!Has("catalog:manage")) throw Err(Rls); if (row is Amenity { DurationDays: not null }) throw Err("pass_not_sold"); break;   // G19 (0066)
                 case Discount or DiscountItem: throw Err(Rls);   // G2 (0060): codes are made only by create_discount
-                case ShiftPost s:
-                    if (s.CoachId != Uid || !IsCoach(Uid)) throw Err(Rls);
-                    GuardShift(null, s);
-                    if (All<ShiftPost>().Any(x => x.CoachId == s.CoachId && x.Status == Status.Scheduled && x.Start < s.End && s.Start < x.End)) throw Err("overlap");
-                    break;
+                case ShiftPost: throw Err("permission denied for table shift_posts");   // 0151: the admin's schedule writes shifts
                 case ChatMessage c:
                     if (c.SenderId != Uid || !CanMessageCoachMember(c.CoachId, c.MemberId)) throw Err(Rls);
                     // the table's own checks: the sender is one of the two people, there is text or a photo, and the photo is in this conversation's folder
@@ -457,10 +455,6 @@ public sealed partial class DemoGateway : ISupabaseGateway
         }
         switch (added)
         {
-            case ShiftPost s:
-                s.Status = Status.Scheduled;
-                foreach (var h in All<CoachHire>().Where(h => h.CoachId == s.CoachId && h.Status == Status.Active)) Notify(h.MemberId, "system", "Your coach posted a shift");
-                break;
             case ChatMessage c:
                 c.SentAt = DateTime.UtcNow; c.ReadAt = null; c.DeliveredAt = null;
                 NotifyChat(c.SenderId == c.CoachId ? c.MemberId : c.CoachId, "New message", null, $"c|{c.CoachId}|{c.MemberId}");
@@ -503,11 +497,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                     break;
                 case (Discount, Discount): throw Err(Rls);   // G2 (0060): a code can't be edited; turn it off instead
                 case (GymSettings, _): if (!Has("gym_settings:manage")) throw Err(Rls); list[index] = Clone(row); break;
-                case (ShiftPost s, ShiftPost old):   // a coach changes times, note and status, never the owner
-                    if (old.CoachId != Uid) throw Err(Rls);
-                    GuardShift(old, s);
-                    old.Start = s.Start; old.End = s.End; old.Note = s.Note; old.Status = s.Status;
-                    break;
+                case (ShiftPost, ShiftPost): throw Err("permission denied for table shift_posts");   // 0151: the schedule owns shifts
                 case (Coach c, Coach old):           // bio, specialty, availability
                     if (old.UserId != Uid && !RolesOf(Uid).Contains("admin")) throw Err(Rls);
                     if (!All<Profile>().Any(p => p.Id == old.UserId && p.IsActive)) throw Err("record_archived");
@@ -673,26 +663,6 @@ public sealed partial class DemoGateway : ISupabaseGateway
         return $"{prefix}-{DateTime.UtcNow.AddHours(8).Year}-{++_receiptSeq:D6}";
     }
 
-    /// <summary>0028: a shift sits on the half-hour grid inside gym hours on one Manila day, and never leaves a scheduled session of its coach outside it.</summary>
-    void GuardShift(ShiftPost? old, ShiftPost next)
-    {
-        if (next is { Status: Status.Scheduled } && (old is null || old.Start != next.Start || old.End != next.End || old.Status != Status.Scheduled))
-        {
-            static bool OffGrid(DateTime t) => (t.ToUniversalTime() - DateTime.UnixEpoch).Ticks % (30 * TimeSpan.TicksPerMinute) != 0;
-            if (OffGrid(next.Start) || OffGrid(next.End)) throw Err("off_grid");
-            var g = All<GymSettings>().First();
-            var day = next.Start.ToUniversalTime().AddHours(8).Date;   // Manila has no daylight saving
-            if (next.Start.ToUniversalTime() < day + g.OpensAt - TimeSpan.FromHours(8) || next.End.ToUniversalTime() > day + g.ClosesAt - TimeSpan.FromHours(8)) throw Err("outside_gym_hours");
-            if ((old is null || old.Start != next.Start || old.Status != Status.Scheduled) && next.Start.ToUniversalTime() < SubscriptionNow) throw Err("past_slot");   // 0033
-            if (old is null || old.Start != next.Start) RefuseClosed(next.Start);   // G17 (0065)
-            if (All<ShiftPost>().Any(s => !ReferenceEquals(s, old) && s.CoachId == next.CoachId && s.Status == Status.Scheduled && s.Start < next.End && next.Start < s.End))
-                throw Err("conflicting key value violates exclusion constraint \"shift_posts_no_overlap\"");
-        }
-        if (old is { Status: Status.Scheduled } && All<TrainingSession>().Any(t => t.CoachId == old.CoachId && t.Status == Status.Scheduled
-                && t.ScheduledStart < old.End && old.Start < t.ScheduledEnd
-                && (next is not { Status: Status.Scheduled } || t.ScheduledStart < next.Start || t.ScheduledEnd > next.End)))
-            throw Err("shift_has_sessions");
-    }
 
     /// <summary>No code: full price. A bad, expired or already-used code is an error, never a silent full price.</summary>
     (int? Id, decimal Cut, decimal Amount) Discounted(string member, Dictionary<string, object> a, decimal price, string kind, int itemId, bool skipFit = false)
@@ -792,6 +762,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
         if (ClosureCall(fn, a, out var closureResult)) return closureResult;
         if (CashShiftCall(fn, a, out var shiftResult)) return shiftResult;
         if (PayrollCall(fn, a, out var payrollResult)) return payrollResult;
+        if (ScheduleCall(fn, a, out var scheduleResult)) return scheduleResult;
         if (MessengerCall(fn, a, out var chatResult)) return chatResult;
         var now = SubscriptionNow;
         int I(string k) => Convert.ToInt32(a[k]);
@@ -1066,6 +1037,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 return null;
             }
             // ----- coaching -----
+            case "coach_shifts_today": return CoachShiftsToday();   // 0154
             case "taken_coaches":
                 return All<CoachHire>().Where(h => h.Status == Status.Active).Select(h => h.CoachId).Distinct().ToList();
             case "coach_check_in" or "coach_check_out":
@@ -1084,6 +1056,7 @@ public sealed partial class DemoGateway : ISupabaseGateway
                 var g = All<GymSettings>().First();
                 var manila = (now + Manila).TimeOfDay;
                 if (manila < g.OpensAt || manila >= g.ClosesAt) throw Err("gym_closed");
+                ScheduleClockIn(coachId!);   // 0151: no shift today, or over 5 minutes early, is refused
                 return Add(new CoachVisit { CoachId = coachId, CheckedInBy = uid, CheckedInAt = now }).Id;
             }
             case "issue_member_pass":   // F6, 0049

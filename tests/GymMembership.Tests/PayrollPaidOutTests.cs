@@ -101,7 +101,7 @@ public class PayrollPaidOutTests
     public void PayrollPage_has_responsive_paid_out_table_for_fullscreen_and_minimized()
     {
         var xaml = File.ReadAllText(Path.Combine(TestPaths.AppFolder(), "Views", "PayrollPage.xaml"));
-        Assert.Contains("AutomationId=\"PayrollPaidOutTab\"", xaml);
+        // owner, 2026-11-25: no tab bar; the menu's Payroll History opens this table
         Assert.Contains("x:Name=\"PaidOutHead\"", xaml);
         Assert.Contains("RowTemplate=\"{StaticResource PaidOutRowTemplate}\"", xaml);
         Assert.Contains("CardTemplate=\"{StaticResource PaidOutCardTemplate}\"", xaml);

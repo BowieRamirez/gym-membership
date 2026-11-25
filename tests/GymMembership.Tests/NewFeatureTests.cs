@@ -171,24 +171,16 @@ public class NewFeatureTests
     [Fact]
     public async Task Coach_shifts_show_on_the_coach_card_and_cancelled_ones_disappear()
     {
-        var gw = await As("coach@demo.io");
+        var gw = await As("member@demo.io");
         var coaches = new CoachService(gw);
-        var start = DateTime.SpecifyKind(DateTime.UtcNow.AddHours(8).Date.AddDays(5).AddHours(2), DateTimeKind.Utc);   // 10:00 Manila: on the grid, inside gym hours
-        Assert.Equal(AppErrorKind.Validation, (await coaches.PostShiftAsync(start, start.AddHours(-1), null)).Error);
-        Assert.True((await coaches.PostShiftAsync(start, start.AddHours(4), "Late shift")).Ok);
-        Assert.Equal(AppErrorKind.Conflict, (await coaches.PostShiftAsync(start.AddHours(1), start.AddHours(3), null)).Error);   // no overlapping shifts
-
-        await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
+        var start = DateTime.SpecifyKind(DateTime.UtcNow.AddHours(8).Date.AddDays(5).AddHours(2), DateTimeKind.Utc);   // 10:00 Manila
+        var shift = gw.OwnerAddCoachShift("u-coach1", start, start.AddHours(4));   // Fix 3 (0151): the gym's schedule writes shifts
+        shift.Note = "Late shift";
         var card = (await coaches.ListCoachesAsync()).Value!.First(c => c.Name == "Lena Cruz");
         Assert.Contains(card.Shifts!, s => s.Note == "Late shift");
         Assert.Contains("Late shift", card.ShiftsText);
 
-        Assert.Equal(AppErrorKind.Unauthorized, (await coaches.PostShiftAsync(start.AddDays(1), start.AddDays(1).AddHours(2), null)).Error); // a member has no coach profile
-
-        await gw.SignInAsync("coach@demo.io", DemoGateway.DemoPassword);
-        var mine = (await coaches.MyShiftsAsync()).Value!.First(s => s.Note == "Late shift");
-        Assert.True((await coaches.CancelShiftAsync(mine.Id)).Ok);
-        await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
+        shift.Status = Status.Cancelled;
         Assert.DoesNotContain((await coaches.ListCoachesAsync()).Value!.First(c => c.Name == "Lena Cruz").Shifts!, s => s.Note == "Late shift");
     }
 

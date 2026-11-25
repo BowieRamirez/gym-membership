@@ -220,7 +220,7 @@ await test('revenue excludes voided payments and only admin can read it', async 
   const total = r.rows.reduce((s, x) => s + Number(x.total), 0);
   assert.equal(total, 1000 + 150 + 300);   // alex's QR + walk-in + eve's amenity (eve's membership voided)
   assert.match(await code(run(desk, `select * from revenue_summary(${today}, ${today})`)), /forbidden/);
-  assert.equal((await run(desk, `select * from daily_cash_summary(${today})`)).rowCount > 0, true);
+  assert.match(await code(run(desk, `select * from daily_cash_summary(${today})`)), /permission denied/);   // 0163: closed to the app
 });
 await test('renewing an active plan extends from its end date', async () => {
   const ump = (await run(alex, `select user_membership_package_id id, ends_at from user_membership_packages`)).rows[0];
@@ -274,10 +274,11 @@ await test('attendance is the coach only and sets the session status', async () 
 await test('a third person cannot post into another pair’s conversation', async () => {
   assert.match(await code(run(eve, `insert into messages (coach_id, member_id, sender_id, body) values ($1,$2,$3,'hello')`, [coach, alex, eve])), /42501|23514/);
 });
-await test('a coach posts a shift, overlap is refused', async () => {
+await test('a shift is written by the schedule (0151), overlap is refused, a coach cannot post one', async () => {
   const s1 = new Date(t3.getTime() + 36e5), s2 = new Date(s1.getTime() + 36e5);
-  await run(coach, `insert into shift_posts (coach_id, starts_at, ends_at, note) values ($1,$2,$3,'Floor')`, [coach, s1, s2]);
-  assert.match(await code(run(coach, `insert into shift_posts (coach_id, starts_at, ends_at) values ($1,$2,$3)`, [coach, s1, s2])), /23P01/);
+  await db.query(`insert into shift_posts (coach_id, starts_at, ends_at, note) values ($1,$2,$3,'Floor')`, [coach, s1, s2]);
+  assert.match(await code(db.query(`insert into shift_posts (coach_id, starts_at, ends_at) values ($1,$2,$3)`, [coach, s1, s2])), /23P01|shift_posts_no_overlap/);
+  assert.match(await code(run(coach, `insert into shift_posts (coach_id, starts_at, ends_at) values ($1,$2,$3)`, [coach, s1, s2])), /42501/);
   assert.equal((await run(alex, `select * from shift_posts`)).rowCount, 2);
   assert.equal((await run(eve, `select * from shift_posts`)).rowCount, 2);   // G29 (0072): every member sees coaches' shifts
   assert.match(await code(run(alex, `insert into shift_posts (coach_id, starts_at, ends_at) values ($1,$2,$3)`, [coach, s1, s2])), /42501/);

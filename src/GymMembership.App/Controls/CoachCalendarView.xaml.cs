@@ -51,7 +51,6 @@ public partial class CoachCalendarView : ContentView
 
 	void OnDay(object? sender, TappedEventArgs e) => Run<CalendarDay>(sender, v => v.SelectDayCommand);
 	void OnWeekDay(object? sender, TappedEventArgs e) => Run<CalendarDay>(sender, v => v.SelectDayCommand, row => ((WeekRow)row).Day);
-	void OnCancelShift(object? sender, EventArgs e) => Run<Core.Models.ShiftPost>(sender, v => v.CancelShiftCommand);
 
 	void OnMarkPresent(object? sender, EventArgs e) => Run<string>(sender, v => v.MarkCommand, row => $"{((CalendarSession)row).Session.Id}|present");
 	void OnMarkLate(object? sender, EventArgs e) => Run<string>(sender, v => v.MarkCommand, row => $"{((CalendarSession)row).Session.Id}|late");

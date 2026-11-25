@@ -107,7 +107,12 @@
                                         <Border Style="{StaticResource Row}">
                                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
                                                 <VerticalStackLayout Spacing="2" VerticalOptions="Center">
-                                                    <Label Text="{Binding Name}" FontFamily="BarlowMedium" />
+                                                    <HorizontalStackLayout Spacing="8">
+                                                        <Label Text="{Binding Name}" FontFamily="BarlowMedium" VerticalOptions="Center" />
+                                                        <!-- Fix 3 (0154): checked in after the shift start, or not in while it runs -->
+                                                        <c:StatusChip Status="Late" IsVisible="{Binding IsLate}" VerticalOptions="Center" />
+                                                    </HorizontalStackLayout>
+                                                    <Label Text="{Binding ShiftText}" Style="{StaticResource Caption}" />
                                                     <Label Text="{Binding StateText}" Style="{StaticResource Caption}" />
                                                 </VerticalStackLayout>
                                                 <Button Grid.Column="1" Text="{Binding ActionText}" Style="{StaticResource SmallOutlineButton}" Clicked="OnToggleCoach" />

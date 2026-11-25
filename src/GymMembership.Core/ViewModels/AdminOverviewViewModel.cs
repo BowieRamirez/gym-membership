@@ -43,9 +43,9 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
     }
 
     public IReadOnlyList<AdminOverviewCard> Cards { get; } = [
-        new("users", "Users and roles", "Accounts"), new("catalog", "Packages and amenities", "Packages"),
+        new("users", "Users and roles", "Accounts"), new("employees", "Employees"), new("catalog", "Packages and amenities", "Packages"),
         new("discounts", "Discounts", "Discount codes"), new("refunds", "Refunds"),
-        new("revenue", "Revenue", "Revenue today"), new("payroll", "Payroll"), new("damage", "Damage reports"), new("announcements", "Announcements"),
+        new("revenue", "Revenue", "Revenue today"), new("expenses", "Expenses"), new("finance", "Financial reports"), new("payroll", "Payroll"), new("scheduling", "Scheduling"), new("attendance", "Attendance"), new("damage", "Damage reports"), new("announcements", "Announcements"),
         new("gym", "Gym settings"), new("audit", "Logs & Archive")];
     /// <summary>The number strip, in the order shown; every role on the overview has these four pages.</summary>
     public IEnumerable<AdminOverviewCard> Figures => new[] { "revenue", "users", "catalog", "discounts" }.Select(k => Cards.Single(c => c.Key == k));
@@ -120,6 +120,11 @@ public partial class AdminOverviewViewModel(IAdminService admin, ISubscriptionSe
                 // UI test 2026-11-23: both cards were listed but never loaded, so they said "Loading…" forever
                 // no figure: opening a pay period creates it, and the overview only reads
                 Load("payroll", () => Task.FromResult(("Salaries and pay periods, twice a month", ""))),
+                Load("scheduling", () => Task.FromResult(("Who works when, and shift check-in", ""))),
+                Load("attendance", () => Task.FromResult(("Check-ins and drawer shifts to approve", ""))),
+                Load("employees", () => Task.FromResult(("Coaches and front desk, with their pay", ""))),
+                Load("expenses", () => Task.FromResult(("Bills, rent, equipment and other spending", ""))),
+                Load("finance", () => Task.FromResult(("Revenue, expenses, payroll and net income", ""))),
                 Load("damage", async () =>
                 {
                     var open = Require(await admin.DamageReportsAsync()).Count(r => r.Report.Status == "open");

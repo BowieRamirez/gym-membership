@@ -181,17 +181,19 @@ public class CrudTests
         Assert.Equal(("New bio", "Strength"), (me.Bio, me.Specialty));
     }
 
-    [Fact]
-    public async Task A_shift_is_posted_read_and_cancelled_and_stays_in_history()
+    [Fact]   // Fix 3 (0151): the gym's schedule writes shifts; a coach reads them and can neither post nor cancel one
+    public async Task A_coach_reads_their_shifts_but_cannot_post_or_cancel_one()
     {
         var gw = await As("coach@demo.io");
         var coaches = new CoachService(gw);
         var start = new DateTime(DateTime.UtcNow.AddDays(3).Date.Ticks, DateTimeKind.Utc).AddHours(2);   // 10:00 in Manila, inside gym hours
-        Assert.True((await coaches.PostShiftAsync(start, start.AddHours(2), "Crud shift")).Ok);
-        var shift = (await coaches.MyShiftsAsync()).Value!.Single(s => s.Note == "Crud shift");
-
-        Assert.True((await coaches.CancelShiftAsync(shift.Id)).Ok);
-        Assert.Equal(Status.Cancelled, (await gw.ListAsync<ShiftPost>(s => s.Id == shift.Id)).Single().Status);
+        var shift = gw.OwnerAddCoachShift("u-coach1", start, start.AddHours(2));
+        Assert.Contains((await coaches.MyShiftsAsync()).Value!, s => s.Id == shift.Id);
+        await Assert.ThrowsAnyAsync<Exception>(() => gw.InsertAsync(new ShiftPost { CoachId = "u-coach1", Start = start.AddDays(1), End = start.AddDays(1).AddHours(2) }));
+        var mine = (await gw.ListAsync<ShiftPost>(s => s.Id == shift.Id)).Single();
+        mine.Status = Status.Cancelled;
+        await Assert.ThrowsAnyAsync<Exception>(() => gw.UpdateAsync(mine));
+        Assert.Equal(Status.Scheduled, (await gw.ListAsync<ShiftPost>(s => s.Id == shift.Id)).Single().Status);
     }
 
     [Fact]

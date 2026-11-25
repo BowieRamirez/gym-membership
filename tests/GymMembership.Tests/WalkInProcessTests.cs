@@ -86,50 +86,77 @@ public class WalkInProcessTests
         Assert.NotNull(again.Waiting);
     }
 
-    [Fact]   // owner, 2026-11-16: Find shows only the table; Register new member shows only its form
-    public async Task Find_and_register_show_one_at_a_time()
+    [Fact]   // owner, 2026-11-25: Membership is only the register form; Renewal and Day pass search, with no register
+    public async Task Membership_registers_while_Renewal_and_Day_pass_search()
     {
         var (_, vm) = await Open();
-        vm.Search = "bea"; await vm.SuggestNowAsync();
-        Assert.Equal((true, false), (vm.ShowHits, vm.IsRegistering));
-        vm.StartRegisterCommand.Execute(null);
-        Assert.Equal((false, true, false), (vm.ShowHits, vm.IsRegistering, vm.ShowNoMatch));
-        await vm.SuggestNowAsync();
-        Assert.Equal((true, false), (vm.ShowHits, vm.IsRegistering));
-        vm.Search = "zzz"; await vm.SuggestNowAsync();
-        Assert.True(vm.ShowNoMatch);
-        vm.StartRegisterCommand.Execute(null);
-        Assert.False(vm.ShowNoMatch);
+        Assert.Equal((false, true), (vm.ShowsSearch, vm.ShowsRegisterForm));
+        foreach (var kind in new[] { "Renewal", "Day pass" })
+        {
+            vm.PickKindCommand.Execute(kind);
+            Assert.Equal((true, false), (vm.ShowsSearch, vm.ShowsRegisterForm));
+        }
     }
 
-    [Fact]
-    public async Task Nobody_found_then_register_them_as_a_member_and_they_are_chosen()
+    [Fact]   // owner, 2026-11-25: Membership registers the account, its package and the payment in one go
+    public async Task Membership_registers_the_account_with_its_package_and_payment_in_one_go()
     {
         var (gw, vm) = await Open();
-        vm.Search = "nora"; await vm.SuggestNowAsync();
-        Assert.True(vm.NoMatch);
-        vm.StartRegisterCommand.Execute(null);
-        Assert.True(vm.IsRegistering);
         (vm.NewFirstName, vm.NewLastName, vm.NewEmail, vm.NewPhone) = ("Nora", "Cruz", "nora@demo.io", "0918 222 3344");
-        await vm.RegisterCommand.ExecuteAsync(null);
+        Assert.False(vm.RecordCommand.CanExecute(null));   // a package first
+        await WaitForOptions(vm);
+        vm.PickItemCommand.Execute(vm.Options[0]);
+        Assert.True(vm.RecordCommand.CanExecute(null));
+        Assert.Equal("New member: Nora Cruz", vm.OrderWho);
+        await vm.RecordCommand.ExecuteAsync(null);
         Assert.Null(vm.ErrorMessage);
-        Assert.False(vm.IsRegistering);
-        Assert.Equal("Nora Cruz", vm.Member?.Username);
+        Assert.Contains("Payment complete", vm.Notice);
         Assert.Contains("Temporary password", vm.Notice);
         var profile = (await gw.ListAsync<Profile>()).Single(p => p.Username == "nora@demo.io");
         Assert.Equal(("0918 222 3344", true), (profile.Phone, profile.MustChangePassword));
         Assert.Single(await gw.ListAsync<Member>(), m => m.UserId == profile.Id);
+        var pay = await Last(gw);
+        Assert.Equal((PayKind.Membership, profile.Id, Status.Verified), (pay.Kind, pay.MemberId, pay.Status));
+        Assert.True(vm.ShowsRegisterForm);   // the next customer starts clean
+        Assert.Equal("", vm.NewEmail);
     }
 
     [Fact]
-    public async Task Registering_an_email_already_in_use_is_refused_and_says_so()
+    public async Task A_new_member_can_pay_online_and_keeps_the_temporary_password_on_screen()
     {
-        var (_, vm) = await Open();
-        vm.StartRegisterCommand.Execute(null);
+        var (gw, vm) = await Open();
+        (vm.NewFirstName, vm.NewLastName, vm.NewEmail) = ("Lia", "Santos", "lia@demo.io");
+        await WaitForOptions(vm);
+        vm.PickItemCommand.Execute(vm.Options[0]);
+        vm.PickMethodCommand.Execute(CashierViewModel.Online);
+        await vm.RecordCommand.ExecuteAsync(null);
+        Assert.Null(vm.ErrorMessage);
+        // the demo's checkout is paid as soon as it opens, so the sale completes here
+        Assert.Contains("Payment complete", vm.Notice);
+        Assert.Contains("Temporary password", vm.Notice);
+        var lia = (await gw.ListAsync<Profile>()).Single(p => p.Username == "lia@demo.io");
+        var pay = await Last(gw);
+        Assert.Equal((PayKind.Membership, lia.Id, PayMethod.Qr), (pay.Kind, pay.MemberId, pay.Method));
+    }
+
+    static async Task WaitForOptions(CashierViewModel vm)
+    {
+        for (var i = 0; i < 50 && vm.Options.Count == 0; i++) await Task.Delay(20);
+        Assert.NotEmpty(vm.Options);
+    }
+
+    [Fact]
+    public async Task Registering_an_email_already_in_use_is_refused_and_nothing_is_paid()
+    {
+        var (gw, vm) = await Open();
+        var before = (await gw.ListAsync<Payment>()).Count;
         (vm.NewFirstName, vm.NewLastName, vm.NewEmail) = ("Bea", "Lim", "bea@demo.io");
-        await vm.RegisterCommand.ExecuteAsync(null);
+        await WaitForOptions(vm);
+        vm.PickItemCommand.Execute(vm.Options[0]);
+        await vm.RecordCommand.ExecuteAsync(null);
         Assert.NotNull(vm.ErrorMessage);
-        Assert.True(vm.IsRegistering);
+        Assert.True(vm.ShowsRegisterForm);
+        Assert.Equal(before, (await gw.ListAsync<Payment>()).Count);
     }
 
     [Fact]

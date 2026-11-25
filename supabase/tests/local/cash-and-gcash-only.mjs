@@ -66,7 +66,7 @@ try {
     await as(admin, `select * from revenue_summary($1,$2)`, [day(-1), day(1)]);
     const lines = await as(admin, `select * from revenue_lines($1,$2,0,100)`, [day(-1), day(1)]);
     assert.ok(lines.some(l => l.method === 'gcash'));
-    await as(admin, `select * from membership_refund_outflows($1,$2)`, [day(-1), day(1)]);
+    await assert.rejects(as(admin, `select * from membership_refund_outflows($1,$2)`, [day(-1), day(1)]), /permission denied/);   // 0163: the app never called it
   });
 
   await test('the table rules came back unchanged: a walk-in cannot be a QR payment', async () => {
@@ -78,7 +78,7 @@ try {
     const can = async (role, fn) => (await db.query(`select has_function_privilege($1, $2, 'execute') ok`, [role, fn])).rows[0].ok;
     const app = ['public.record_counter_payment(public.payment_kind,public.payment_method,uuid,bigint,text,text,text)',
       'public.book_amenity(bigint,timestamptz,integer,public.payment_method,uuid,text)', 'public.record_membership_refund_paid(bigint,public.payment_method,text)',
-      'public.revenue_lines(date,date,integer,integer)', 'public.revenue_summary(date,date)', 'public.membership_refund_outflows(date,date)'];
+      'public.revenue_lines(date,date,integer,integer)', 'public.revenue_summary(date,date)'];
     for (const fn of app) {
       assert.equal(await can('authenticated', fn), true, `${fn} closed to signed-in users`);
       assert.equal(await can('anon', fn), false, `${fn} open to anon`);

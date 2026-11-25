@@ -1,0 +1,320 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Owner fixes 2026-11-25, Fix 4 Phase 4.2 (W2, W4, W6): every person's attendance for one pay period. Review = pending records as the
+     owner's card (whose it is, the day, time in and out); Approve opens the money table first, as a side panel like Payroll's drawer.
+     Records = every record with a status filter; Corrections = the period's hour corrections. Same parts as Payroll. Windows only. -->
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:models="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.AttendanceReviewPage" x:DataType="vm:AttendanceReviewViewModel" Title="{Binding SectionTitle}">
+
+    <v:BasePage.Resources>
+        <!-- owner, 2026-11-25: Review and Records as a table. One row a record: who, the day, time in and out, the shift, status, actions;
+             Reject opens its reason under the row. -->
+        <DataTemplate x:Key="AttendanceRow" x:DataType="vm:AttendanceCardItem">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,170,90,90,210,110,180" ColumnSpacing="12">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10" VerticalOptions="Center">
+                        <c:Avatar Diameter="32" Letters="{Binding Initials}" VerticalOptions="Center" />
+                        <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                            <Label Text="{Binding FullName}" FontFamily="BarlowSemiBold" LineBreakMode="TailTruncation" />
+                            <Label Text="{Binding RoleText}" Style="{StaticResource Caption}" />
+                        </VerticalStackLayout>
+                    </Grid>
+                    <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                        <Label Text="{Binding DateText}" />
+                        <Label Text="{Binding WhatText}" Style="{StaticResource Caption}" LineBreakMode="TailTruncation" />
+                    </VerticalStackLayout>
+                    <Label Grid.Column="2" Text="{Binding InText}" VerticalOptions="Center" LineBreakMode="NoWrap" />
+                    <Label Grid.Column="3" Text="{Binding OutText}" VerticalOptions="Center" LineBreakMode="NoWrap" />
+                    <VerticalStackLayout Grid.Column="4" Spacing="2" VerticalOptions="Center">
+                        <Label Text="{Binding ShiftText}" Style="{StaticResource Muted}" IsVisible="{Binding HasShift}" LineBreakMode="TailTruncation" />
+                        <Label Text="No shift" Style="{StaticResource Muted}" IsVisible="{Binding HasShift, Converter={StaticResource Not}}" />
+                        <Label Text="{Binding FlagText}" FontFamily="BarlowSemiBold" FontSize="13" IsVisible="{Binding HasFlags}" LineBreakMode="WordWrap" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Column="5" Spacing="2" VerticalOptions="Center">
+                        <c:StatusChip Status="{Binding StatusLabel}" HorizontalOptions="Start" />
+                        <Label Text="{Binding Reason}" Style="{StaticResource Caption}" IsVisible="{Binding HasReason}" LineBreakMode="TailTruncation"
+                               ToolTipProperties.Text="{Binding Reason}" />
+                    </VerticalStackLayout>
+                    <HorizontalStackLayout Grid.Column="6" Spacing="8" HorizontalOptions="End" VerticalOptions="Center">
+                        <Button Text="Approve" Style="{StaticResource SmallButton}" Command="{Binding ApproveCommand}" IsVisible="{Binding CanApprove}"
+                                SemanticProperties.Description="{Binding FullName, StringFormat='Approve this record for {0}'}" />
+                        <Button Text="Reject" Style="{StaticResource SmallOutlineButton}" Command="{Binding BeginRejectCommand}" IsVisible="{Binding CanReject}"
+                                SemanticProperties.Description="{Binding FullName, StringFormat='Reject this record for {0}'}" />
+                    </HorizontalStackLayout>
+                </Grid>
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Padding="14,0,14,12" IsVisible="{Binding IsRejecting}">
+                    <Border Style="{StaticResource Field}">
+                        <Entry Text="{Binding RejectReason}" MaxLength="200" Placeholder="Why it isn't paid, e.g. Opened by mistake" SemanticProperties.Description="Reason for rejecting" />
+                    </Border>
+                    <Button Grid.Column="1" Text="Reject" Style="{StaticResource SmallButton}" Command="{Binding RejectCommand}" VerticalOptions="Center" />
+                    <Button Grid.Column="2" Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelRejectCommand}" VerticalOptions="Center" />
+                </Grid>
+                <Label Text="{Binding ErrorText}" Style="{StaticResource FieldError}" Margin="14,0,14,10" IsVisible="{Binding ErrorText, Converter={StaticResource IsNotNull}}" />
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+
+        <!-- narrow window: the owner's card, one under the other inside the table panel -->
+        <DataTemplate x:Key="AttendanceCard" x:DataType="vm:AttendanceCardItem">
+            <VerticalStackLayout>
+                <VerticalStackLayout Spacing="12" Padding="14,14">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                        <c:Avatar Diameter="40" Letters="{Binding Initials}" VerticalOptions="Center" />
+                        <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                            <Label Text="{Binding FullName}" FontFamily="BarlowSemiBold" FontSize="16" LineBreakMode="TailTruncation" />
+                            <Label Text="{Binding RoleText}" Style="{StaticResource Caption}" />
+                        </VerticalStackLayout>
+                        <c:StatusChip Grid.Column="2" Status="{Binding StatusLabel}" VerticalOptions="Start" />
+                    </Grid>
+
+                    <!-- a Grid, so a long member name on a session cuts off inside the card -->
+                    <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
+                        <c:IconView Icon="calendar-days" Size="16" ChipSize="20" Bare="True" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="{Binding DateText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                        <Label Grid.Column="2" Text="{Binding WhatText}" Style="{StaticResource Caption}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    </Grid>
+
+                    <BoxView Style="{StaticResource Hairline}" />
+
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                        <VerticalStackLayout Spacing="2">
+                            <Label Text="Time-in" Style="{StaticResource Caption}" />
+                            <Label Text="{Binding InText}" FontFamily="BarlowSemiBold" FontSize="18" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="1" Spacing="2">
+                            <Label Text="Time-out" Style="{StaticResource Caption}" />
+                            <Label Text="{Binding OutText}" FontFamily="BarlowSemiBold" FontSize="18" />
+                        </VerticalStackLayout>
+                    </Grid>
+
+                    <Label Text="{Binding ShiftText}" Style="{StaticResource Caption}" IsVisible="{Binding HasShift}" />
+                    <Label Text="{Binding FlagText}" FontFamily="BarlowSemiBold" FontSize="13" IsVisible="{Binding HasFlags}" LineBreakMode="WordWrap" />
+                    <Label Text="{Binding Reason, StringFormat='Reason: {0}'}" Style="{StaticResource Caption}" IsVisible="{Binding HasReason}" LineBreakMode="WordWrap" />
+
+                    <HorizontalStackLayout Spacing="8">
+                        <Button Text="Approve" Style="{StaticResource SmallButton}" Command="{Binding ApproveCommand}" IsVisible="{Binding CanApprove}"
+                                SemanticProperties.Description="{Binding FullName, StringFormat='Approve this record for {0}'}" />
+                        <Button Text="Reject" Style="{StaticResource SmallOutlineButton}" Command="{Binding BeginRejectCommand}" IsVisible="{Binding CanReject}"
+                                SemanticProperties.Description="{Binding FullName, StringFormat='Reject this record for {0}'}" />
+                    </HorizontalStackLayout>
+                    <VerticalStackLayout Spacing="6" IsVisible="{Binding IsRejecting}">
+                        <Border Style="{StaticResource Field}">
+                            <Entry Text="{Binding RejectReason}" MaxLength="200" Placeholder="Why it isn't paid, e.g. Opened by mistake" SemanticProperties.Description="Reason for rejecting" />
+                        </Border>
+                        <HorizontalStackLayout Spacing="8">
+                            <Button Text="Reject" Style="{StaticResource SmallButton}" Command="{Binding RejectCommand}" />
+                            <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelRejectCommand}" />
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
+                    <Label Text="{Binding ErrorText}" Style="{StaticResource FieldError}" IsVisible="{Binding ErrorText, Converter={StaticResource IsNotNull}}" />
+                </VerticalStackLayout>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+
+        <DataTemplate x:Key="CorrectionRow" x:DataType="vm:AttendanceCorrectionItem">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="260,110,*,220,90" ColumnSpacing="14">
+                    <Label Text="{Binding FullName}" FontFamily="BarlowSemiBold" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="1" Text="{Binding QuantityText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                    <Label Grid.Column="2" Text="{Binding Note}" VerticalOptions="Center" LineBreakMode="WordWrap" />
+                    <Label Grid.Column="3" Text="{Binding ByText}" Style="{StaticResource Caption}" VerticalOptions="Center" />
+                    <Button Grid.Column="4" Text="Remove" Style="{StaticResource LinkButton}" Clicked="OnRemoveCorrectionClicked" IsVisible="{Binding CanRemove}"
+                            HorizontalOptions="End" VerticalOptions="Center" SemanticProperties.Description="{Binding FullName, StringFormat='Remove this correction for {0}'}" />
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+
+        <DataTemplate x:Key="CorrectionCard" x:DataType="vm:AttendanceCorrectionItem">
+            <VerticalStackLayout Padding="14,12" Spacing="4">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <Label Text="{Binding FullName}" FontFamily="BarlowSemiBold" LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="1" Text="{Binding QuantityText}" FontFamily="BarlowSemiBold" />
+                </Grid>
+                <Label Text="{Binding Note}" />
+                <Label Text="{Binding ByText}" Style="{StaticResource Caption}" />
+                <Button Text="Remove" Style="{StaticResource LinkButton}" Clicked="OnRemoveCorrectionClicked" IsVisible="{Binding CanRemove}" HorizontalOptions="Start" />
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+    </v:BasePage.Resources>
+
+    <Grid>
+        <Grid RowDefinitions="Auto,*">
+
+            <ScrollView Grid.Row="1">
+                <VerticalStackLayout Padding="24,16,24,32" Spacing="16">
+                    <c:Banner Kind="notice" Message="{Binding Notice}" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" IsVisible="{Binding ErrorMessage, Converter={StaticResource IsNotNull}}">
+                        <c:Banner Message="{Binding ErrorMessage}" />
+                        <Button Grid.Column="1" Text="Try again" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" Command="{Binding LoadCommand}" />
+                    </Grid>
+                    <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" HorizontalOptions="Start" />
+
+                    <!-- the pay period, as on Payroll -->
+                    <Border Style="{StaticResource Panel}">
+                        <VerticalStackLayout Spacing="6">
+                            <HorizontalStackLayout Spacing="10">
+                                <Button Text="‹" Style="{StaticResource SmallOutlineButton}" Command="{Binding PrevPeriodCommand}" WidthRequest="36" SemanticProperties.Description="Previous pay period" />
+                                <Label Text="{Binding PeriodLabel}" Style="{StaticResource Heading}" VerticalOptions="Center" />
+                                <Button Text="›" Style="{StaticResource SmallOutlineButton}" Command="{Binding NextPeriodCommand}" WidthRequest="36" SemanticProperties.Description="Next pay period" />
+                            </HorizontalStackLayout>
+                            <HorizontalStackLayout Spacing="8" IsVisible="{Binding HasPending}">
+                                <c:StatusChip Status="Pending" VerticalOptions="Center" />
+                                <Label Text="{Binding PendingText}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                            </HorizontalStackLayout>
+                            <Label Text="{Binding ReadOnlyText}" Style="{StaticResource Muted}" IsVisible="{Binding IsReadOnly}" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- REVIEW and RECORDS: the same cards; Records adds the status filter -->
+                    <VerticalStackLayout Spacing="14" IsVisible="{Binding IsCorrectionsTab, Converter={StaticResource Not}}">
+                        <HorizontalStackLayout Spacing="10" IsVisible="{Binding IsRecordsTab}">
+                            <Label Text="Show" Style="{StaticResource Caption}" VerticalOptions="Center" />
+                            <Border Style="{StaticResource Field}" WidthRequest="160">
+                                <Picker ItemsSource="{Binding StatusOptions}" SelectedItem="{Binding StatusFilter}" SemanticProperties.Description="Show records by status" />
+                            </Border>
+                        </HorizontalStackLayout>
+                        <Border Style="{StaticResource TablePanel}">
+                            <VerticalStackLayout>
+                                <VerticalStackLayout x:Name="RecordsHead">
+                                    <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,170,90,90,210,110,180" ColumnSpacing="12">
+                                        <Label Text="Person" Style="{StaticResource Caption}" />
+                                        <Label Grid.Column="1" Text="Date" Style="{StaticResource Caption}" />
+                                        <Label Grid.Column="2" Text="Time-in" Style="{StaticResource Caption}" />
+                                        <Label Grid.Column="3" Text="Time-out" Style="{StaticResource Caption}" />
+                                        <Label Grid.Column="4" Text="Shift" Style="{StaticResource Caption}" />
+                                        <Label Grid.Column="5" Text="Status" Style="{StaticResource Caption}" />
+                                    </Grid>
+                                    <BoxView Style="{StaticResource Hairline}" />
+                                </VerticalStackLayout>
+                                <c:TableBody Items="{Binding Cards}" Header="{x:Reference RecordsHead}" WideFrom="1100"
+                                             RowTemplate="{StaticResource AttendanceRow}" CardTemplate="{StaticResource AttendanceCard}">
+                                    <c:TableBody.Empty>
+                                        <Label Text="{Binding EmptyText}" Style="{StaticResource Muted}" Margin="14" />
+                                    </c:TableBody.Empty>
+                                </c:TableBody>
+                            </VerticalStackLayout>
+                        </Border>
+                    </VerticalStackLayout>
+
+                    <!-- CORRECTIONS: add one here (owner, 2026-11-25: moved from Payroll's pay details), the period's list under it -->
+                    <Border Style="{StaticResource Panel}" IsVisible="{Binding IsCorrectionsTab}">
+                        <VerticalStackLayout Spacing="10">
+                            <c:CardTitle Text="Add correction" />
+                            <Label Text="Hours (or sessions) to add to or take from someone's pay in this period, with why. It shows on their payslip."
+                                   Style="{StaticResource Caption}" LineBreakMode="WordWrap" />
+                            <Label Text="Nothing to correct: no one in this period is paid by the hour or the session, or the period is approved or paid out."
+                                   Style="{StaticResource Muted}" LineBreakMode="WordWrap" IsVisible="{Binding CanCorrect, Converter={StaticResource Not}}" />
+                            <FlexLayout Wrap="Wrap" AlignItems="End" IsVisible="{Binding CanCorrect}">
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="240">
+                                    <Label Text="Person" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}">
+                                        <Picker ItemsSource="{Binding CorrectionPeople}" ItemDisplayBinding="{Binding FullName, x:DataType=models:PayrollRow}" SelectedItem="{Binding CorrectionPerson}"
+                                                Title="Choose a person" SemanticProperties.Description="Person" AutomationId="CorrectionPerson" />
+                                    </Border>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="150">
+                                    <Label Text="{Binding CorrectionUnitLabel}" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}">
+                                        <Entry Text="{Binding CorrectionHours}" Placeholder="1.5 or -2" SemanticProperties.Description="{Binding CorrectionUnitLabel}" AutomationId="CorrectionAmount" />
+                                    </Border>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="360">
+                                    <Label Text="Why (required)" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}">
+                                        <Entry Text="{Binding CorrectionNote}" MaxLength="200" Placeholder="e.g. Forgot to open the drawer at 8 am" SemanticProperties.Description="Why" AutomationId="CorrectionNote" />
+                                    </Border>
+                                </VerticalStackLayout>
+                                <Button Text="Add correction" Style="{StaticResource SmallButton}" Command="{Binding AddCorrectionCommand}" Margin="0,0,0,8" AutomationId="AddCorrection" />
+                            </FlexLayout>
+                            <Label Text="{Binding CorrectionError}" Style="{StaticResource FieldError}" IsVisible="{Binding CorrectionError, Converter={StaticResource IsNotNull}}" />
+                        </VerticalStackLayout>
+                    </Border>
+                    <Border Style="{StaticResource TablePanel}" IsVisible="{Binding IsCorrectionsTab}">
+                        <VerticalStackLayout>
+                            <VerticalStackLayout x:Name="CorrectionsHead">
+                                <Grid Style="{StaticResource TableHead}" ColumnDefinitions="260,110,*,220,90" ColumnSpacing="14">
+                                    <Label Text="Person" Style="{StaticResource Caption}" />
+                                    <Label Grid.Column="1" Text="Hours" Style="{StaticResource Caption}" />
+                                    <Label Grid.Column="2" Text="Why" Style="{StaticResource Caption}" />
+                                    <Label Grid.Column="3" Text="By" Style="{StaticResource Caption}" />
+                                </Grid>
+                                <BoxView Style="{StaticResource Hairline}" />
+                            </VerticalStackLayout>
+                            <c:TableBody Items="{Binding Corrections}" Header="{x:Reference CorrectionsHead}" WideFrom="900"
+                                         RowTemplate="{StaticResource CorrectionRow}" CardTemplate="{StaticResource CorrectionCard}">
+                                <c:TableBody.Empty>
+                                    <Label Text="No hour corrections in this period." Style="{StaticResource Muted}" Margin="14" />
+                                </c:TableBody.Empty>
+                            </c:TableBody>
+                        </VerticalStackLayout>
+                    </Border>
+                </VerticalStackLayout>
+            </ScrollView>
+        </Grid>
+
+        <!-- W4: before approving, what it means in money (same side panel as Payroll's pay details) -->
+        <BoxView Color="Black" Opacity="{AppThemeBinding Light=0.28, Dark=0.55}" IsVisible="{Binding IsConfirming}">
+            <BoxView.GestureRecognizers><TapGestureRecognizer Command="{Binding CancelApproveCommand}" /></BoxView.GestureRecognizers>
+        </BoxView>
+        <Border IsVisible="{Binding IsConfirming}" HorizontalOptions="End" WidthRequest="440" StrokeThickness="0" Padding="0"
+                BackgroundColor="{AppThemeBinding Light={StaticResource CardLight}, Dark={StaticResource CardDark}}">
+            <Border.Shadow><Shadow Brush="Black" Offset="-12,0" Radius="30" Opacity="0.3" /></Border.Shadow>
+            <Grid RowDefinitions="Auto,Auto,*,Auto">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" Padding="22,18,22,12">
+                    <c:Avatar Diameter="40" Letters="{Binding Confirming.Initials}" VerticalOptions="Center" />
+                    <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                        <Label Text="{Binding Confirming.FullName, StringFormat='Approve for {0}?'}" Style="{StaticResource Heading}" LineBreakMode="WordWrap" SemanticProperties.HeadingLevel="Level2" />
+                        <Label Style="{StaticResource Caption}">
+                            <Label.Text>
+                                <MultiBinding StringFormat="{}{0} · {1} · {2} – {3}">
+                                    <Binding Path="Confirming.RoleText" />
+                                    <Binding Path="Confirming.DateText" />
+                                    <Binding Path="Confirming.InText" />
+                                    <Binding Path="Confirming.OutText" />
+                                </MultiBinding>
+                            </Label.Text>
+                        </Label>
+                    </VerticalStackLayout>
+                </Grid>
+                <BoxView Grid.Row="1" Style="{StaticResource Hairline}" />
+
+                <ScrollView Grid.Row="2">
+                    <VerticalStackLayout Padding="22,16" Spacing="14">
+                        <Label Text="What approving means" Style="{StaticResource SectionTitle}" />
+                        <Border Style="{StaticResource TablePanel}">
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding MoneyRows}">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:MoneyRow">
+                                        <VerticalStackLayout>
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="14,11">
+                                                <Label Text="{Binding Label}" VerticalOptions="Center" />
+                                                <Label Grid.Column="1" Text="{Binding Value}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                                            </Grid>
+                                            <BoxView Style="{StaticResource Hairline}" />
+                                        </VerticalStackLayout>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+                        </Border>
+                        <Label Text="Before deductions. Approving adds this to their pay for the period; you can still reject it before the period is approved."
+                               Style="{StaticResource Caption}" LineBreakMode="WordWrap" />
+                        <Label Text="{Binding Confirming.FlagText}" FontFamily="BarlowSemiBold" FontSize="13" IsVisible="{Binding Confirming.HasFlags}" LineBreakMode="WordWrap" />
+                        <Label Text="{Binding ConfirmError}" Style="{StaticResource FieldError}" IsVisible="{Binding ConfirmError, Converter={StaticResource IsNotNull}}" />
+                    </VerticalStackLayout>
+                </ScrollView>
+
+                <HorizontalStackLayout Grid.Row="3" Spacing="10" Padding="22,12,22,18" HorizontalOptions="End">
+                    <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelApproveCommand}" />
+                    <Button Text="Approve" Style="{StaticResource SmallButton}" Command="{Binding ConfirmApproveCommand}" AutomationId="AttendanceConfirmApprove" />
+                </HorizontalStackLayout>
+            </Grid>
+        </Border>
+    </Grid>
+</v:BasePage>

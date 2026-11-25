@@ -1,4 +1,5 @@
 using GymMembership.Core.Models;
+using GymMembership.Core.Services;
 
 namespace GymMembership.Core.Demo;
 
@@ -34,6 +35,7 @@ public sealed partial class DemoGateway
     readonly List<DemoPayrollPeriod> _payrollPeriods = new();
     readonly List<DemoPayrollLine> _payrollLines = new();
     readonly List<DemoHourAdjustment> _hourAdjustments = new();
+    readonly List<(Expense E, string By, string? VoidBy)> _expenses = new();   // 0159 (Fix 5)
     readonly Dictionary<(string Source, long Id), (string Status, string? Reason)> _timeReviews = new();
 
     static readonly string[] Categories = ["regular_bonus", "overtime", "holiday", "other", "thirteenth_month", "de_minimis", "retro"];
@@ -45,6 +47,12 @@ public sealed partial class DemoGateway
         _shifts.Add(s);
         return s.Id;
     }
+
+    Expense Listed((Expense E, string By, string? VoidBy) x) => new()
+    {
+        ExpenseId = x.E.ExpenseId, SpentOn = x.E.SpentOn, Category = x.E.Category, Amount = x.E.Amount, Note = x.E.Note, CreatedAt = x.E.CreatedAt,
+        CreatedByName = NameOf(x.By), VoidedAt = x.E.VoidedAt, VoidReason = x.E.VoidReason, VoidedByName = x.VoidBy is { } v ? NameOf(v) : null
+    };
 
     static DateOnly PayrollPeriodEnd(DateOnly startsOn) => startsOn.Day switch
     {
@@ -201,6 +209,7 @@ public sealed partial class DemoGateway
         var secondHalf = per.StartsOn.Day == 16;
         var half1 = secondHalf ? _payrollPeriods.FirstOrDefault(p => p.StartsOn == new DateOnly(per.StartsOn.Year, per.StartsOn.Month, 1)) : null;
         var first = half1 is null ? [] : PayrollBasis(half1);
+        var firstTaxed = half1 is null ? [] : PayrollWithDeductions(half1);   // 0160: the 1st-15th's taxable pay and any tax it took
         foreach (var r in rows)
         {
             var off = _noDeductions.TryGetValue(r.UserId, out var o) ? o : (false, false, null);
@@ -217,8 +226,11 @@ public sealed partial class DemoGateway
             var due = cOn && secondHalf && mGross > 0;   // no pay all month: nothing is due (0144 review fix)
             decimal ws = due ? PayrollDeductions.Sss(mGross) : 0, wp = due ? PayrollDeductions.PhilHealth(mBase) : 0,
                     wi = due ? PayrollDeductions.PagIbig(mGross) : 0;
+            // 0160 (owner): tax once a month, in the 16th-end pay, on the month's taxable pay, less what the 1st-15th took
             var taxable = Math.Max(0, r.Gross - nontax - rd - ws - wp - wi);
-            var wt = tOn ? PayrollDeductions.Tax(taxable) : 0;
+            var fd = firstTaxed.FirstOrDefault(x => x.UserId == r.UserId);
+            if (secondHalf) taxable += fd?.Taxable ?? 0;
+            var wt = tOn && secondHalf ? Math.Max(0, PayrollDeductions.Tax(taxable) - (fd?.Tax ?? 0)) : 0;
             var on = cOn || tOn;
             r.ContributionsOn = cOn; r.TaxOn = tOn; r.DeductionsReason = off.Reason; r.Nontaxable = nontax; r.ThirteenthUsed = m13Before + m13;
             decimal s, p, i, t;
@@ -445,6 +457,73 @@ public sealed partial class DemoGateway
                 var per = _payrollPeriods.FirstOrDefault(x => x.Id == Int("p_period")) ?? throw Err("bad_input");
                 var userId = Str("p_user") ?? throw Err("bad_input");
                 result = PayrollRecords(per).Where(r => r.UserId == userId).Select(r => r.Rec).ToList();
+                return true;
+            }
+            // ---- 0159 (Fix 5): expenses and the payroll cost the financial report reads ----
+            case "expense_add":
+            {
+                Require("reports:revenue");
+                var day = DateOnly.TryParse(Str("p_spent_on"), out var d) ? d : throw Err("bad_input");
+                var category = Str("p_category");
+                var amount = Money("p_amount");
+                var note = Str("p_note");
+                if (day > ManilaDay(SubscriptionNow) || category is null || ExpenseCategories.All.All(c => c.Code != category)
+                    || amount is <= 0 or > 10_000_000 || Math.Round(amount, 2) != amount || note is null || note.Length > 200) throw Err("bad_input");
+                var e = new Expense { ExpenseId = _expenses.Count + 1, SpentOn = day, Category = category, Amount = amount, Note = note, CreatedAt = SubscriptionNow };
+                _expenses.Add((e, Uid, null));
+                Audit("expense.added", "expenses", e.ExpenseId.ToString());
+                result = Listed(_expenses[^1]);
+                return true;
+            }
+            case "expense_void":
+            {
+                Require("reports:revenue");
+                var id = a.TryGetValue("p_expense", out var iv) && iv is not null ? Convert.ToInt64(iv) : throw Err("bad_input");
+                var reason = Str("p_reason");
+                if (reason is null || reason.Length > 200) throw Err("bad_input");
+                var i = _expenses.FindIndex(x => x.E.ExpenseId == id);
+                if (i < 0) throw Err("not_found");
+                if (_expenses[i].E.VoidedAt is not null) throw Err("already_processed");
+                _expenses[i].E.VoidedAt = SubscriptionNow; _expenses[i].E.VoidReason = reason;
+                _expenses[i] = _expenses[i] with { VoidBy = Uid };
+                Audit("expense.voided", "expenses", id.ToString());
+                return true;
+            }
+            case "expenses_list":
+            {
+                Require("reports:revenue");
+                var (from, to) = (DateOnly.TryParse(Str("p_from"), out var f) ? f : throw Err("bad_input"), DateOnly.TryParse(Str("p_to"), out var t) ? t : throw Err("bad_input"));
+                if (to < from) throw Err("bad_input");
+                result = _expenses.Where(x => x.E.SpentOn >= from && x.E.SpentOn <= to).OrderByDescending(x => x.E.SpentOn).ThenByDescending(x => x.E.ExpenseId).Select(Listed).ToList();
+                return true;
+            }
+            case "payroll_cost":
+            {
+                Require("reports:revenue");
+                var (from, to) = (DateOnly.TryParse(Str("p_from"), out var f) ? f : throw Err("bad_input"), DateOnly.TryParse(Str("p_to"), out var t) ? t : throw Err("bad_input"));
+                if (to < from) throw Err("bad_input");
+                result = _payrollPeriods.Where(p => p.PaidOutAt is { } at && ManilaDay(at) >= from && ManilaDay(at) <= to).OrderBy(p => p.PaidOutAt)   // 0161: on the day paid out
+                    .Select(p => new PayrollCostDay { Day = ManilaDay(p.PaidOutAt!.Value), Gross = _payrollLines.Where(l => l.PeriodId == p.Id && l.Kind is "salary" or "bonus").Sum(l => l.Amount) }).ToList();
+                return true;
+            }
+            case "payroll_records_all":   // 0158 (Fix 4): every person's records and corrections for Attendance Review
+            {
+                Require("reports:revenue");
+                var per = _payrollPeriods.FirstOrDefault(x => x.Id == Int("p_period")) ?? throw Err("bad_input");
+                var pays = PayrollPay(per).ToDictionary(p => p.Person.Id);
+                result = new PayrollAttendance
+                {
+                    Records = PayrollRecords(per).Select(x => (Pay: pays[x.UserId], x.Rec)).OrderBy(x => StaffDisplayName(x.Pay.Person)).Select(x => new PayrollStaffRecord
+                    {
+                        UserId = x.Pay.Person.Id, FullName = StaffDisplayName(x.Pay.Person), RoleName = x.Pay.Role, PayType = x.Pay.PayType, Rate = x.Pay.Rate,
+                        Source = x.Rec.Source, SourceId = x.Rec.SourceId, StartsAt = x.Rec.StartsAt, EndsAt = x.Rec.EndsAt, Hours = x.Rec.Hours, Label = x.Rec.Label,
+                        Status = x.Rec.Status, Reason = x.Rec.Reason, Flags = x.Rec.Flags,
+                        ActualStart = x.Rec.ActualStart, ExpectedStart = x.Rec.ExpectedStart, ExpectedEnd = x.Rec.ExpectedEnd
+                    }).ToList(),
+                    Adjustments = _hourAdjustments.Where(x => x.PeriodId == per.Id).OrderBy(x => x.CreatedAt).ThenBy(x => x.Id)
+                        .Select(x => new PayrollHourAdjustment { AdjustmentId = x.Id, Quantity = x.Quantity, Note = x.Note, CreatedByName = NameOf(x.CreatedBy), CreatedAt = x.CreatedAt, UserId = x.UserId, FullName = NameOf(x.UserId) })
+                        .ToList()
+                };
                 return true;
             }
             case "payroll_review_time":

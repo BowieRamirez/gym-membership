@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Owner, 2026-11-25: Employees is its own page (it was Users and roles): coaches and front desk only, All / Coaches / Front desk, how each
+     is paid, active or not. No adding accounts here (Users and roles does that; pay is set on Payroll → Salary Configuration). Windows only. -->
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.EmployeesPage" x:DataType="vm:EmployeesViewModel" Title="Employees">
+
+    <v:BasePage.Resources>
+        <DataTemplate x:Key="EmployeeRowTemplate" x:DataType="vm:EmployeeRow">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,170,220,120" ColumnSpacing="12">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10" VerticalOptions="Center">
+                        <c:Avatar Diameter="32" Letters="{Binding Initials}" VerticalOptions="Center" />
+                        <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                            <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" LineBreakMode="TailTruncation" />
+                            <Label Text="{Binding Email}" Style="{StaticResource Caption}" LineBreakMode="TailTruncation" />
+                        </VerticalStackLayout>
+                    </Grid>
+                    <Label Grid.Column="1" Text="{Binding RoleText}" VerticalOptions="Center" />
+                    <Label Grid.Column="2" Text="{Binding PayText}" VerticalOptions="Center" LineBreakMode="TailTruncation">
+                        <Label.Triggers>
+                            <DataTrigger TargetType="Label" Binding="{Binding HasPay}" Value="False">
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                            </DataTrigger>
+                        </Label.Triggers>
+                    </Label>
+                    <c:StatusChip Grid.Column="3" Status="{Binding Status}" HorizontalOptions="Start" VerticalOptions="Center" />
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+
+        <DataTemplate x:Key="EmployeeCardTemplate" x:DataType="vm:EmployeeRow">
+            <VerticalStackLayout Padding="14,12" Spacing="4">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" LineBreakMode="TailTruncation" />
+                    <c:StatusChip Grid.Column="1" Status="{Binding Status}" />
+                </Grid>
+                <Label Text="{Binding Email}" Style="{StaticResource Caption}" LineBreakMode="TailTruncation" />
+                <Label Style="{StaticResource Muted}">
+                    <Label.Text>
+                        <MultiBinding StringFormat="{}{0} · {1}">
+                            <Binding Path="RoleText" />
+                            <Binding Path="PayText" />
+                        </MultiBinding>
+                    </Label.Text>
+                </Label>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+    </v:BasePage.Resources>
+
+    <Grid RowDefinitions="Auto,*">
+        <Border Style="{StaticResource SegmentTrack}" Margin="24,14,24,0" HorizontalOptions="Start">
+            <HorizontalStackLayout Spacing="2">
+                <Button Text="All" Command="{Binding PickFilterCommand}" CommandParameter="All" Style="{StaticResource Segment}" AutomationId="EmployeesAll">
+                    <Button.Triggers>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsAll}" Value="True">
+                            <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsAll}" Value="False">
+                            <Setter Property="FontFamily" Value="BarlowMedium" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                        </DataTrigger>
+                    </Button.Triggers>
+                </Button>
+                <Button Text="Coaches" Command="{Binding PickFilterCommand}" CommandParameter="Coaches" Style="{StaticResource Segment}" AutomationId="EmployeesCoaches">
+                    <Button.Triggers>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsCoaches}" Value="True">
+                            <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsCoaches}" Value="False">
+                            <Setter Property="FontFamily" Value="BarlowMedium" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                        </DataTrigger>
+                    </Button.Triggers>
+                </Button>
+                <Button Text="Front desk" Command="{Binding PickFilterCommand}" CommandParameter="Front desk" Style="{StaticResource Segment}" AutomationId="EmployeesFrontDesk">
+                    <Button.Triggers>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsFrontDesk}" Value="True">
+                            <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsFrontDesk}" Value="False">
+                            <Setter Property="FontFamily" Value="BarlowMedium" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                        </DataTrigger>
+                    </Button.Triggers>
+                </Button>
+            </HorizontalStackLayout>
+        </Border>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Padding="24,16,24,32" Spacing="14">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" IsVisible="{Binding ErrorMessage, Converter={StaticResource IsNotNull}}">
+                    <c:Banner Message="{Binding ErrorMessage}" />
+                    <Button Grid.Column="1" Text="Try again" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" Command="{Binding LoadCommand}" />
+                </Grid>
+                <Label Style="{StaticResource Muted}" LineBreakMode="WordWrap">
+                    <Label.Text>
+                        <MultiBinding StringFormat="{}{0}. Accounts are added on Users and roles; pay is set on Payroll → Salary Configuration.">
+                            <Binding Path="CountText" />
+                        </MultiBinding>
+                    </Label.Text>
+                </Label>
+
+                <Border Style="{StaticResource TablePanel}">
+                    <VerticalStackLayout>
+                        <VerticalStackLayout x:Name="EmployeesHead">
+                            <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,170,220,120" ColumnSpacing="12">
+                                <Label Text="Name and sign-in email" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="1" Text="Role" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="2" Text="Pay" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="3" Text="Status" Style="{StaticResource Caption}" />
+                            </Grid>
+                            <BoxView Style="{StaticResource Hairline}" />
+                        </VerticalStackLayout>
+                        <c:TableBody Items="{Binding Rows}" Header="{x:Reference EmployeesHead}" WideFrom="900"
+                                     RowTemplate="{StaticResource EmployeeRowTemplate}" CardTemplate="{StaticResource EmployeeCardTemplate}">
+                            <c:TableBody.Empty>
+                                <Label Text="No one here yet. Add coaches and front desk on Users and roles." Style="{StaticResource Muted}" Margin="14" />
+                            </c:TableBody.Empty>
+                        </c:TableBody>
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</v:BasePage>

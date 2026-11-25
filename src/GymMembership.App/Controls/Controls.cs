@@ -75,31 +75,37 @@ public class SideLayout : Layout
     {
         IView? Part(int i) => layout.Part(i);
 
+        // owner, 2026-11-25: the layout's own Padding was ignored, so its pages touched the side menu; the wide / stacked switch still
+        // reads the full width, so pages switch where they always did
         public Size Measure(double widthConstraint, double heightConstraint)
         {
             IView? main = Part(0), side = Part(1);
+            var p = layout.Padding;
+            var width = double.IsFinite(widthConstraint) ? Math.Max(0, widthConstraint - p.HorizontalThickness) : widthConstraint;
             if (layout.IsWide(widthConstraint) && main is not null && side is not null)
             {
-                var mainHeight = main.Measure(widthConstraint - layout.SideWidth - layout.Spacing, double.PositiveInfinity).Height;
-                return new Size(widthConstraint, Math.Max(mainHeight, side.Measure(layout.SideWidth, double.PositiveInfinity).Height));
+                var mainHeight = main.Measure(width - layout.SideWidth - layout.Spacing, double.PositiveInfinity).Height;
+                return new Size(widthConstraint, Math.Max(mainHeight, side.Measure(layout.SideWidth, double.PositiveInfinity).Height) + p.VerticalThickness);
             }
-            var heights = (layout.SideFirst ? new[] { side, main } : new[] { main, side }).Where(v => v is not null).Select(v => v!.Measure(layout.StackedWidth(v, widthConstraint), double.PositiveInfinity).Height).ToList();
-            return new Size(widthConstraint, heights.Sum() + layout.Spacing * Math.Max(0, heights.Count - 1));
+            var heights = (layout.SideFirst ? new[] { side, main } : new[] { main, side }).Where(v => v is not null).Select(v => v!.Measure(layout.StackedWidth(v, width), double.PositiveInfinity).Height).ToList();
+            return new Size(widthConstraint, heights.Sum() + layout.Spacing * Math.Max(0, heights.Count - 1) + p.VerticalThickness);
         }
 
         public Size ArrangeChildren(Rect bounds)
         {
             IView? main = Part(0), side = Part(1);
+            var p = layout.Padding;
+            var inner = new Rect(bounds.Left + p.Left, bounds.Top + p.Top, Math.Max(0, bounds.Width - p.HorizontalThickness), Math.Max(0, bounds.Height - p.VerticalThickness));
             if (layout.IsWide(bounds.Width) && main is not null && side is not null)
             {
-                main.Arrange(new Rect(bounds.Left, bounds.Top, bounds.Width - layout.SideWidth - layout.Spacing, main.DesiredSize.Height));
-                side.Arrange(new Rect(bounds.Right - layout.SideWidth, bounds.Top, layout.SideWidth, side.DesiredSize.Height));
+                main.Arrange(new Rect(inner.Left, inner.Top, inner.Width - layout.SideWidth - layout.Spacing, main.DesiredSize.Height));
+                side.Arrange(new Rect(inner.Right - layout.SideWidth, inner.Top, layout.SideWidth, side.DesiredSize.Height));
                 return bounds.Size;
             }
-            var y = bounds.Top;
+            var y = inner.Top;
             foreach (var view in (layout.SideFirst ? new[] { side, main } : new[] { main, side }).Where(v => v is not null))
             {
-                view!.Arrange(new Rect(bounds.Left, y, layout.StackedWidth(view, bounds.Width), view.DesiredSize.Height));
+                view!.Arrange(new Rect(inner.Left, y, layout.StackedWidth(view, inner.Width), view.DesiredSize.Height));
                 y += view.DesiredSize.Height + layout.Spacing;
             }
             return bounds.Size;

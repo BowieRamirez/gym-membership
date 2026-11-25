@@ -10,7 +10,7 @@
     <v:BasePage.Resources>
         <DataTemplate x:Key="ShiftRow" x:DataType="m:ShiftPost">
             <VerticalStackLayout>
-                <Grid ColumnDefinitions="1.3*,1.4*,1.4*,Auto,Auto" ColumnSpacing="12" Padding="14,10">
+                <Grid ColumnDefinitions="1.3*,1.4*,1.4*,Auto" ColumnSpacing="12" Padding="14,10">
                     <Label Text="{Binding Start, Converter={StaticResource LocalDate}, ConverterParameter='dddd d MMM'}" FontFamily="BarlowSemiBold" VerticalOptions="Center" LineBreakMode="TailTruncation" />
                     <Label Grid.Column="1" VerticalOptions="Center">
                         <Label.Text>
@@ -22,11 +22,6 @@
                     </Label>
                     <Label Grid.Column="2" Text="{Binding Note, TargetNullValue='—'}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
                     <c:StatusChip Grid.Column="3" Status="{Binding Status}" VerticalOptions="Center" />
-                    <Button Grid.Column="4" Text="Cancel shift" Style="{StaticResource FilterChip}" Clicked="OnCancel" VerticalOptions="Center">
-                        <Button.Triggers>
-                            <DataTrigger TargetType="Button" Binding="{Binding Status}" Value="cancelled"><Setter Property="IsVisible" Value="False" /></DataTrigger>
-                        </Button.Triggers>
-                    </Button>
                 </Grid>
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
@@ -46,11 +41,6 @@
                     </Label.Text>
                 </Label>
                 <Label Text="{Binding Note}" Style="{StaticResource Muted}" IsVisible="{Binding Note, Converter={StaticResource HasText}}" />
-                <Button Text="Cancel shift" Style="{StaticResource FilterChip}" HorizontalOptions="Start" Clicked="OnCancel">
-                    <Button.Triggers>
-                        <DataTrigger TargetType="Button" Binding="{Binding Status}" Value="cancelled"><Setter Property="IsVisible" Value="False" /></DataTrigger>
-                    </Button.Triggers>
-                </Button>
                 <BoxView Style="{StaticResource Hairline}" Margin="0,4,0,0" />
             </VerticalStackLayout>
         </DataTemplate>
@@ -58,7 +48,8 @@
 
     <ScrollView MaximumWidthRequest="{StaticResource PageWidth}">
         <VerticalStackLayout Padding="{OnIdiom Phone='16,12,16,24', Default='16,12,16,20'}" Spacing="14">
-            <Label Text="Post when you are on the gym floor. Your trainees are notified and members can see it on the Coaches page." Style="{StaticResource Muted}" />
+            <!-- Fix 3 (0151, S2): the gym sets coaches' shifts on its Scheduling page; coaches see them here -->
+            <Label Text="The gym sets your shifts. Members can book you during them. Ask the admin if a shift needs to change." Style="{StaticResource Muted}" />
             <c:Banner Message="{Binding ErrorMessage}" />
             <c:Banner Kind="notice" Message="{Binding Notice}" />
             <c:CoachCalendarView BindingContext="{Binding Calendar}" ShowAmenities="False" IsVisible="{Binding ., Converter={StaticResource IsNotNull}}">
@@ -68,60 +59,22 @@
                         <Border Style="{StaticResource TablePanel}">
                             <VerticalStackLayout>
                                 <VerticalStackLayout x:Name="ShiftsHead" IsVisible="{OnIdiom Phone=False, Default=True}">
-                                    <Grid Style="{StaticResource TableHead}" ColumnDefinitions="1.3*,1.4*,1.4*,Auto,Auto" ColumnSpacing="12">
+                                    <Grid Style="{StaticResource TableHead}" ColumnDefinitions="1.3*,1.4*,1.4*,Auto" ColumnSpacing="12">
                                         <Label Text="Date" Style="{StaticResource Caption}" />
                                         <Label Grid.Column="1" Text="Hours" Style="{StaticResource Caption}" />
                                         <Label Grid.Column="2" Text="Note" Style="{StaticResource Caption}" />
                                         <Label Grid.Column="3" Text="Status" Style="{StaticResource Caption}" />
-                                        <Label Grid.Column="4" Text="Action" Style="{StaticResource Caption}" />
                                     </Grid>
                                     <BoxView Style="{StaticResource Hairline}" />
                                 </VerticalStackLayout>
                                 <c:TableBody Items="{Binding Shifts}" Header="{x:Reference ShiftsHead}" WideFrom="620"
                                              RowTemplate="{StaticResource ShiftRow}" CardTemplate="{StaticResource ShiftCard}">
-                                    <c:TableBody.Empty><Label Text="No shifts posted yet." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
+                                    <c:TableBody.Empty><Label Text="No shifts yet. The admin adds them on the Scheduling page." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                                 </c:TableBody>
                             </VerticalStackLayout>
                         </Border>
                     </VerticalStackLayout>
                 </c:CoachCalendarView.MainFooter>
-                <c:CoachCalendarView.SideFooter>
-                    <Border Style="{StaticResource SidePanel}" BindingContext="{Binding Source={x:Reference ShiftsRoot}, Path=BindingContext}" x:DataType="vm:ShiftsViewModel">
-                        <VerticalStackLayout Spacing="12">
-                            <c:CardTitle Text="Post a shift" />
-                            <FlexLayout Wrap="Wrap" AlignItems="End">
-                                <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
-                                    <Label Text="Date" Style="{StaticResource Caption}" />
-                                    <Border Style="{StaticResource Field}"><DatePicker Date="{Binding Date}" MinimumDate="{x:Static x:DateTime.Today}" /></Border>
-                                </VerticalStackLayout>
-                                <VerticalStackLayout Spacing="4" Margin="0,0,16,8">
-                                    <Label Text="Starts" Style="{StaticResource Caption}" />
-                                    <Border Style="{StaticResource Field}">
-                                        <Border.Triggers>
-                                            <DataTrigger TargetType="Border" Binding="{Binding HasPostTimeHint}" Value="True">
-                                                <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
-                                            </DataTrigger>
-                                        </Border.Triggers>
-                                        <TimePicker Time="{Binding Time}" />
-                                    </Border>
-                                </VerticalStackLayout>
-                                <VerticalStackLayout Spacing="4" Margin="0,0,0,8">
-                                    <Label Text="Hours" Style="{StaticResource Caption}" />
-                                    <Border Style="{StaticResource Field}">
-                                        <Picker ItemsSource="{Binding HoursOptions}" SelectedItem="{Binding Hours}" WidthRequest="90" />
-                                    </Border>
-                                </VerticalStackLayout>
-                            </FlexLayout>
-                            <Label Text="{Binding PostTimeHint}" Style="{StaticResource FieldError}" IsVisible="{Binding HasPostTimeHint}" />
-                            <Label Text="{Binding ErrorMessage}" Style="{StaticResource FieldError}" IsVisible="{Binding ErrorMessage, Converter={StaticResource HasText}}" />
-                            <VerticalStackLayout Spacing="4">
-                                <Label Text="Note (optional)" Style="{StaticResource Caption}" />
-                                <Border Style="{StaticResource Field}"><Entry Text="{Binding Note}" Placeholder="What you will be running" /></Border>
-                            </VerticalStackLayout>
-                            <Button Text="Post shift" Style="{StaticResource SmallButton}" HorizontalOptions="Start" Command="{Binding PostCommand}" />
-                        </VerticalStackLayout>
-                    </Border>
-                </c:CoachCalendarView.SideFooter>
             </c:CoachCalendarView>
         </VerticalStackLayout>
     </ScrollView>

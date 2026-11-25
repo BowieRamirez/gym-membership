@@ -61,7 +61,7 @@ public class CashierTests
     public async Task It_opens_on_memberships_as_cards_with_prices()
     {
         var (gw, vm) = await Open();
-        var packages = await gw.ListAsync<MembershipPackage>(p => p.IsActive == true);
+        var packages = (await gw.ListAsync<MembershipPackage>(p => p.IsActive == true)).Where(p => !p.IsDayPass).ToList();   // Day passes sell on Day pass (2026-11-25)
         Assert.Equal("Membership", vm.Kind);
         Assert.Equal(packages.Select(p => p.Name), vm.Options.Select(o => o.Name));
         Assert.Equal(packages.Select(p => Peso(p.Price)), vm.Options.Select(o => o.PriceText));

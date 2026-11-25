@@ -22,13 +22,18 @@
     <FlyoutItem Title="Amenity status" ClassId="desk" Route="amenities"><ShellContent ContentTemplate="{DataTemplate views:AmenityStatusPage}" /></FlyoutItem>
 
     <!-- ClassId="admin": super admin and sub-admin; ClassId="super": super admin only (D15). The front desk gets neither. -->
-    <FlyoutItem Title="Users and roles" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:UsersPage}" /></FlyoutItem>
+    <FlyoutItem Title="Users and roles" ClassId="admin" Route="users"><ShellContent ContentTemplate="{DataTemplate views:UsersPage}" /></FlyoutItem>
+    <FlyoutItem Title="Employees" ClassId="admin" Route="employees"><ShellContent ContentTemplate="{DataTemplate views:EmployeesPage}" /></FlyoutItem>
     <FlyoutItem Title="Packages and amenities" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:CatalogAdminPage}" /></FlyoutItem>
     <FlyoutItem Title="Discounts" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:DiscountsPage}" /></FlyoutItem>
     <FlyoutItem Title="Refunds" ClassId="super"><ShellContent ContentTemplate="{DataTemplate views:RefundsPage}" /></FlyoutItem>
     <FlyoutItem Title="Gym settings" ClassId="super"><ShellContent ContentTemplate="{DataTemplate views:GymSettingsPage}" /></FlyoutItem>
     <FlyoutItem Title="Revenue" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:RevenuePage}" /></FlyoutItem>
-    <FlyoutItem Title="Payroll" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:PayrollPage}" /></FlyoutItem>
+    <FlyoutItem Title="Expenses" ClassId="admin" Route="expenses"><ShellContent ContentTemplate="{DataTemplate views:ExpensesPage}" /></FlyoutItem>
+    <FlyoutItem Title="Financial reports" ClassId="admin" Route="finance"><ShellContent ContentTemplate="{DataTemplate views:FinancePage}" /></FlyoutItem>
+    <FlyoutItem Title="Payroll" ClassId="admin" Route="payroll"><ShellContent ContentTemplate="{DataTemplate views:PayrollPage}" /></FlyoutItem>
+    <FlyoutItem Title="Scheduling" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:SchedulingPage}" /></FlyoutItem>
+    <FlyoutItem Title="Attendance" ClassId="admin" Route="attendance"><ShellContent ContentTemplate="{DataTemplate views:AttendanceReviewPage}" /></FlyoutItem>
     <FlyoutItem Title="Damage reports" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:DamageReportsPage}" /></FlyoutItem>
     <FlyoutItem Title="Announcements" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:AnnouncementsPage}" /></FlyoutItem>
     <FlyoutItem Title="Logs &amp; Archive" ClassId="super"><ShellContent ContentTemplate="{DataTemplate views:AuditPage}" /></FlyoutItem>

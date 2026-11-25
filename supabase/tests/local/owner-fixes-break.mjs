@@ -134,7 +134,7 @@ try {
     for (const who of [alex, coach, desk]) {
       const codes = (await rows(who, 'select code from my_discount_codes()')).map(r => r.code);
       assert.ok(!codes.includes('OFHIDE'), 'hidden code listed');
-      assert.ok(!(await rows(who, 'select code from packages_codes()')).some(r => r.code === 'OFHIDE'));
+      await assert.rejects(rows(who, 'select code from packages_codes()'), /permission denied/);   // 0163: closed to the app
     }
   });
   await test('create_discount refuses bad items, bad percents and odd kinds', async () => {

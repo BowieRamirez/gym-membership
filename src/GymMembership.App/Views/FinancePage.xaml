@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Owner fixes 2026-11-25, Fix 5 (X4, X5): how the gym is doing for a month or a year. Revenue (as the Revenue page), Expenses (not voided),
+     Payroll (approved or paid-out gross pay, never entered as an expense) and Net income; revenue by method, expenses by category; a year
+     lists its months. Same parts as Payroll and Revenue. Windows only. -->
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:s="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.FinancePage" x:DataType="vm:FinanceViewModel" Title="Financial reports">
+
+    <v:BasePage.Resources>
+        <!-- a label and its amount on one line, in a hairline list -->
+        <DataTemplate x:Key="LineRow" x:DataType="s:FinanceLine">
+            <VerticalStackLayout>
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="14,10">
+                    <Label Text="{Binding Label}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="1" Text="{Binding Amount, StringFormat='₱{0:N2}'}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                </Grid>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+
+        <!-- one figure of the four, label above -->
+        <Style x:Key="FigureCaption" TargetType="Label" BasedOn="{StaticResource Caption}" />
+        <Style x:Key="Figure" TargetType="Label">
+            <Setter Property="FontFamily" Value="BarlowBold" />
+            <Setter Property="FontSize" Value="24" />
+            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+        </Style>
+    </v:BasePage.Resources>
+
+    <Grid RowDefinitions="Auto,*">
+        <Border Style="{StaticResource SegmentTrack}" Margin="24,14,24,0" HorizontalOptions="Start">
+            <HorizontalStackLayout Spacing="2">
+                <Button Text="Month" Command="{Binding ShowMonthCommand}" Style="{StaticResource Segment}" AutomationId="FinanceMonthTab">
+                    <Button.Triggers>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsMonth}" Value="True">
+                            <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsMonth}" Value="False">
+                            <Setter Property="FontFamily" Value="BarlowMedium" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                        </DataTrigger>
+                    </Button.Triggers>
+                </Button>
+                <Button Text="Year" Command="{Binding ShowYearCommand}" Style="{StaticResource Segment}" AutomationId="FinanceYearTab">
+                    <Button.Triggers>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsYear}" Value="True">
+                            <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsYear}" Value="False">
+                            <Setter Property="FontFamily" Value="BarlowMedium" />
+                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                        </DataTrigger>
+                    </Button.Triggers>
+                </Button>
+            </HorizontalStackLayout>
+        </Border>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Padding="24,16,24,32" Spacing="16">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" IsVisible="{Binding ErrorMessage, Converter={StaticResource IsNotNull}}">
+                    <c:Banner Message="{Binding ErrorMessage}" />
+                    <Button Grid.Column="1" Text="Try again" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" Command="{Binding LoadCommand}" />
+                </Grid>
+                <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" HorizontalOptions="Start" />
+
+                <!-- the span and its four figures in one panel -->
+                <Border Style="{StaticResource Panel}">
+                    <VerticalStackLayout Spacing="14">
+                        <HorizontalStackLayout Spacing="10">
+                            <Button Text="‹" Style="{StaticResource SmallOutlineButton}" Command="{Binding PrevCommand}" WidthRequest="36" SemanticProperties.Description="Previous" />
+                            <Label Text="{Binding SpanText}" Style="{StaticResource Heading}" VerticalOptions="Center" />
+                            <Button Text="›" Style="{StaticResource SmallOutlineButton}" Command="{Binding NextCommand}" WidthRequest="36" SemanticProperties.Description="Next" />
+                        </HorizontalStackLayout>
+                        <FlexLayout Wrap="Wrap" AlignItems="Start">
+                            <VerticalStackLayout Spacing="2" Margin="0,0,40,8" MinimumWidthRequest="170">
+                                <Label Text="Revenue" Style="{StaticResource FigureCaption}" />
+                                <Label Text="{Binding RevenueText}" Style="{StaticResource Figure}" AutomationId="FinanceRevenue" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Spacing="2" Margin="0,0,40,8" MinimumWidthRequest="170">
+                                <Label Text="Expenses" Style="{StaticResource FigureCaption}" />
+                                <Label Text="{Binding ExpensesText}" Style="{StaticResource Figure}" AutomationId="FinanceExpenses" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Spacing="2" Margin="0,0,40,8" MinimumWidthRequest="170">
+                                <Label Text="Payroll" Style="{StaticResource FigureCaption}" />
+                                <Label Text="{Binding PayrollText}" Style="{StaticResource Figure}" AutomationId="FinancePayroll" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Spacing="2" Margin="0,0,0,8" MinimumWidthRequest="170">
+                                <Label Text="Net income" Style="{StaticResource FigureCaption}" />
+                                <Label Text="{Binding NetText}" Style="{StaticResource Figure}" AutomationId="FinanceNet">
+                                    <Label.Triggers>
+                                        <DataTrigger TargetType="Label" Binding="{Binding IsLoss}" Value="True">
+                                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" />
+                                        </DataTrigger>
+                                    </Label.Triggers>
+                                </Label>
+                            </VerticalStackLayout>
+                        </FlexLayout>
+                        <Label Text="Net income = revenue − expenses − payroll. Revenue is verified payments minus approved refunds, as on Revenue. Payroll is the gross pay of paid-out pay periods, in the month they were paid out; a period isn't counted until it is marked paid out."
+                               Style="{StaticResource Caption}" LineBreakMode="WordWrap" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- where the money came from and where it went -->
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
+                    <VerticalStackLayout Spacing="8">
+                        <Label Text="Revenue by payment method" Style="{StaticResource SectionTitle}" />
+                        <Border Style="{StaticResource TablePanel}">
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding ByMethod}" BindableLayout.ItemTemplate="{StaticResource LineRow}">
+                                <BindableLayout.EmptyView><Label Text="No revenue in this span." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                            </VerticalStackLayout>
+                        </Border>
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Column="1" Spacing="8">
+                        <Label Text="Expenses by category" Style="{StaticResource SectionTitle}" />
+                        <Border Style="{StaticResource TablePanel}">
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding ByCategory}" BindableLayout.ItemTemplate="{StaticResource LineRow}">
+                                <BindableLayout.EmptyView><Label Text="No expenses in this span." Style="{StaticResource Muted}" Margin="14" /></BindableLayout.EmptyView>
+                            </VerticalStackLayout>
+                        </Border>
+                    </VerticalStackLayout>
+                </Grid>
+
+                <!-- YEAR: month by month -->
+                <VerticalStackLayout Spacing="8" IsVisible="{Binding IsYear}">
+                    <Label Text="Month by month" Style="{StaticResource SectionTitle}" />
+                    <Border Style="{StaticResource TablePanel}">
+                        <VerticalStackLayout>
+                            <VerticalStackLayout x:Name="MonthsHead">
+                                <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,150,150,150,150" ColumnSpacing="12">
+                                    <Label Text="Month" Style="{StaticResource Caption}" />
+                                    <Label Grid.Column="1" Text="Revenue" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                    <Label Grid.Column="2" Text="Expenses" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                    <Label Grid.Column="3" Text="Payroll" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                    <Label Grid.Column="4" Text="Net income" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                </Grid>
+                                <BoxView Style="{StaticResource Hairline}" />
+                            </VerticalStackLayout>
+                            <c:TableBody Items="{Binding Months}" Header="{x:Reference MonthsHead}" WideFrom="820">
+                                <c:TableBody.RowTemplate>
+                                    <DataTemplate x:DataType="s:FinanceMonth">
+                                        <VerticalStackLayout>
+                                            <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,150,150,150,150" ColumnSpacing="12">
+                                                <Label Text="{Binding MonthText}" VerticalOptions="Center" />
+                                                <Label Grid.Column="1" Text="{Binding Revenue, StringFormat='₱{0:N2}'}" HorizontalOptions="End" VerticalOptions="Center" />
+                                                <Label Grid.Column="2" Text="{Binding Expenses, StringFormat='₱{0:N2}'}" HorizontalOptions="End" VerticalOptions="Center" />
+                                                <Label Grid.Column="3" Text="{Binding Payroll, StringFormat='₱{0:N2}'}" HorizontalOptions="End" VerticalOptions="Center" />
+                                                <Label Grid.Column="4" Text="{Binding NetText}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center" />
+                                            </Grid>
+                                            <BoxView Style="{StaticResource Hairline}" />
+                                        </VerticalStackLayout>
+                                    </DataTemplate>
+                                </c:TableBody.RowTemplate>
+                                <c:TableBody.CardTemplate>
+                                    <DataTemplate x:DataType="s:FinanceMonth">
+                                        <VerticalStackLayout Padding="14,10" Spacing="2">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <Label Text="{Binding MonthText}" FontFamily="BarlowSemiBold" />
+                                                <Label Grid.Column="1" Text="{Binding NetText}" FontFamily="BarlowSemiBold" />
+                                            </Grid>
+                                            <Label Style="{StaticResource Caption}">
+                                                <Label.Text>
+                                                    <MultiBinding StringFormat="{}In ₱{0:N2} · spent ₱{1:N2} · payroll ₱{2:N2}">
+                                                        <Binding Path="Revenue" />
+                                                        <Binding Path="Expenses" />
+                                                        <Binding Path="Payroll" />
+                                                    </MultiBinding>
+                                                </Label.Text>
+                                            </Label>
+                                            <BoxView Style="{StaticResource Hairline}" />
+                                        </VerticalStackLayout>
+                                    </DataTemplate>
+                                </c:TableBody.CardTemplate>
+                            </c:TableBody>
+                        </VerticalStackLayout>
+                    </Border>
+                </VerticalStackLayout>
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</v:BasePage>
