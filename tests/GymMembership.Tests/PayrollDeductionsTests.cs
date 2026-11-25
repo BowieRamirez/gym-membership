@@ -21,8 +21,8 @@ public class PayrollDeductionsTests
     }
 
     [Theory]   // Review Focus 1: bracket edges, same numbers as payroll-deductions.mjs
-    [InlineData(10417, 0)] [InlineData(10417.01, 0)] [InlineData(16667, 937.5)] [InlineData(20000, 1604.1)]
-    public void Withholding_tax_follows_the_semi_monthly_table(decimal taxable, decimal tax) => Assert.Equal(tax, PayrollDeductions.Tax(taxable));
+    [InlineData(20833, 0)] [InlineData(20833.01, 0)] [InlineData(33333, 1875)] [InlineData(40000, 3208.4)] [InlineData(66667, 8541.8)]   // 0160: monthly table
+    public void Withholding_tax_follows_the_monthly_table(decimal taxable, decimal tax) => Assert.Equal(tax, PayrollDeductions.Tax(taxable));
 
     [Theory]
     [InlineData(5249.99, 250)] [InlineData(5250, 275)] [InlineData(34750, 1750)] [InlineData(90000, 1750)]
@@ -36,14 +36,14 @@ public class PayrollDeductionsTests
     }
 
     [Fact]
-    public async Task First_half_takes_tax_only_and_second_half_the_months_contributions()
+    public async Task First_half_takes_nothing_and_second_half_the_months_contributions_and_tax()
     {
         var (admin, desk, _) = await Setup();
         var a = (await admin.PayrollPeriodAsync(Oct1)).Value!.Rows.First(r => r.UserId == desk.UserId);
-        Assert.Equal((0m, 387.45m, 13000m - 387.45m), (a.Sss + a.PhilHealth + a.PagIbig, a.Tax, a.Net));
+        Assert.Equal((0m, 0m, 13000m), (a.Sss + a.PhilHealth + a.PagIbig, a.Tax, a.Net));   // 0160: tax waits for the 16th-end pay
         var b = (await admin.PayrollPeriodAsync(Oct16)).Value!.Rows.First(r => r.UserId == desk.UserId);
-        Assert.Equal((1300m, 650m, 200m, 64.95m), (b.Sss, b.PhilHealth, b.PagIbig, b.Tax));
-        Assert.Equal((2214.95m, 2214.95m, 13000m - 2214.95m), (b.GovTotal, b.Deductions, b.Net));
+        Assert.Equal((1300m, 650m, 200m, 452.55m, 23850m), (b.Sss, b.PhilHealth, b.PagIbig, b.Tax, b.Taxable));   // month 26,000 - 2,150; (23,850 - 20,833) x 15%
+        Assert.Equal((2602.55m, 2602.55m, 13000m - 2602.55m), (b.GovTotal, b.Deductions, b.Net));
     }
 
     [Fact]
@@ -59,9 +59,9 @@ public class PayrollDeductionsTests
         var lines = (await admin.PayrollLinesAsync(p2, desk.UserId)).Value!;
         Assert.Equal(1300m, lines.Single(l => l.Category == "sss").Amount);
         Assert.Equal("SSS", lines.Single(l => l.Category == "sss").CategoryLabel);
-        Assert.Equal(64.95m, lines.Single(l => l.Category == "tax").Amount);
+        Assert.Equal(452.55m, lines.Single(l => l.Category == "tax").Amount);
         await admin.SetStaffSalaryAsync(desk.UserId, 50000m, "fixed");
-        Assert.Equal(64.95m, (await admin.PayrollPeriodAsync(Oct16)).Value!.Rows.First(r => r.UserId == desk.UserId).Tax);
+        Assert.Equal(452.55m, (await admin.PayrollPeriodAsync(Oct16)).Value!.Rows.First(r => r.UserId == desk.UserId).Tax);
     }
 
     [Fact]
@@ -84,8 +84,8 @@ public class PayrollDeductionsTests
         var vm = new PayrollViewModel(admin) { PeriodStartsOn = Oct16 };
         await vm.OnAppearingAsync();
         var row = vm.Rows.First(r => r.UserId == desk.UserId);
-        Assert.Equal("₱2,214.95", row.DeductionsText);
-        Assert.Equal("Gov't ₱2,214.95", row.GovText);
+        Assert.Equal("₱2,602.55", row.DeductionsText);
+        Assert.Equal("Gov't ₱2,602.55", row.GovText);
         Assert.Contains("Gov't deductions", vm.TotalGrossText);
         await vm.OpenDrawerCommand.ExecuteAsync(row);
         Assert.Equal(new[] { "SSS", "PhilHealth", "Pag-IBIG", "Withholding tax" }, vm.DrawerGov.Select(g => g.Label));
@@ -96,8 +96,8 @@ public class PayrollDeductionsTests
         vm.PeriodStartsOn = Oct1;
         await vm.OnAppearingAsync();
         await vm.OpenDrawerCommand.ExecuteAsync(vm.Rows.First(r => r.UserId == desk.UserId));
-        Assert.Equal("Withholding tax", Assert.Single(vm.DrawerGov).Label);
-        Assert.Equal("SSS, PhilHealth and Pag-IBIG are taken in the 16th–end pay.", vm.DrawerGovNote);
+        Assert.Empty(vm.DrawerGov);   // 0160: nothing is taken in the 1st-15th pay
+        Assert.Equal("SSS, PhilHealth, Pag-IBIG and withholding tax are taken in the 16th–end pay, on the month.", vm.DrawerGovNote);
 
         var item = vm.StaffSalaries.First(s => s.UserId == desk.UserId);
         Assert.True(item.DeductionsOn);

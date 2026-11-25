@@ -3821,8 +3821,10 @@ public partial class PayrollViewModel : LoadableViewModel, IOpensTab
             DrawerGov.Add(new("PhilHealth", $"on {money(r.MonthBase)} base pay", r.PhilHealth));
             DrawerGov.Add(new("Pag-IBIG", $"on {money(r.PagIbigBase)}", r.PagIbig));
         }
-        else notes.Add("SSS, PhilHealth and Pag-IBIG are taken in the 16th–end pay.");
-        DrawerGov.Add(new("Withholding tax", r.Nontaxable > 0 ? $"on {money(r.Taxable)} taxable ({money(r.Nontaxable)} non-taxable)" : $"on {money(r.Taxable)} taxable", r.Tax));
+        else notes.Add("SSS, PhilHealth, Pag-IBIG and withholding tax are taken in the 16th–end pay, on the month.");
+        // 0160 (owner): tax on the month's taxable pay, nothing up to ₱20,833 a month
+        if (PeriodStartsOn.Day == 16)
+            DrawerGov.Add(new("Withholding tax", r.Nontaxable > 0 ? $"on {money(r.Taxable)} taxable this month ({money(r.Nontaxable)} non-taxable)" : $"on {money(r.Taxable)} taxable this month", r.Tax));
         if (r.GovCut) notes.Add("Deductions cut to keep pay above ₱0.");
         DrawerGovNote = string.Join(" ", notes);
     }

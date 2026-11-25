@@ -42,11 +42,12 @@ const member = await user('member', 'Member Ben');
 
 try {
   await test('Review Focus 1: bracket edges', async () => {
-    assert.equal(await one(`select public.payroll_tax(10417) v`), 0);
-    assert.equal(await one(`select public.payroll_tax(10417.01) v`), 0);
-    assert.equal(await one(`select public.payroll_tax(16667) v`), 937.5);
-    assert.equal(await one(`select public.payroll_tax(20000) v`), 937.5 + 0.2 * 3333);
-    assert.equal(await one(`select public.payroll_tax(400000) v`), 91770.7 + 0.35 * 66667);
+    // 0160 (owner): BIR's monthly table, taken once a month in the 16th-end pay
+    assert.equal(await one(`select public.payroll_tax(20833) v`), 0);
+    assert.equal(await one(`select public.payroll_tax(20833.01) v`), 0);
+    assert.equal(await one(`select public.payroll_tax(33333) v`), 1875);
+    assert.equal(await one(`select public.payroll_tax(40000) v`), 3208.4);   // 1,875 + 20% of 6,667
+    assert.equal(await one(`select public.payroll_tax(800000) v`), 230208.35);   // 183,541.80 + 35% of 133,333
     assert.equal(await one(`select public.payroll_sss(5249.99) v`), 250);
     assert.equal(await one(`select public.payroll_sss(5250) v`), 275);
     assert.equal(await one(`select public.payroll_sss(34750) v`), 1750);
@@ -76,19 +77,20 @@ try {
   await as(admin, `select set_staff_salary($1, 100, 'hourly')`, [low]);
   await as(admin, `select set_staff_salary($1, 13000, 'fixed')`, [off]);
 
-  await test('Review Focus 2: 1st-15th has tax only; 16th-end has the month\'s contributions and its own tax', async () => {
+  await test('Review Focus 2: 1st-15th has no tax (0160); 16th-end has the month\'s contributions and its own tax', async () => {
     const a = await row('2026-10-01', desk);
     assert.equal(a.deductions_on, true);
     assert.equal(n(a.sss) + n(a.philhealth) + n(a.pagibig), 0);
-    assert.equal(n(a.tax), 387.45);                      // (13,000 - 10,417) x 15%
-    assert.equal(n(a.net), 13000 - 387.45);
+    assert.equal(n(a.tax), 0);                           // 0160: tax is taken in the 16th-end pay, on the month
+    assert.equal(n(a.net), 13000);
     const b = await row('2026-10-16', desk);             // month gross 26,000
     assert.equal(n(b.sss), 1300); assert.equal(n(b.philhealth), 650); assert.equal(n(b.pagibig), 200);
-    assert.equal(n(b.tax), 64.95);                       // taxable 13,000 - 2,150 = 10,850
-    assert.equal(n(b.gov_total), 2214.95);
-    assert.equal(n(b.deductions), 2214.95);              // Review Focus 8: deductions and net include them
-    assert.equal(n(b.net), 13000 - 2214.95);
-    assert.equal(n((await period('2026-10-16')).total_gov) >= 2214.95, true);
+    assert.equal(n(b.taxable), 23850);                   // the month: 26,000 - 2,150
+    assert.equal(n(b.tax), 452.55);                      // (23,850 - 20,833) x 15%
+    assert.equal(n(b.gov_total), 2602.55);
+    assert.equal(n(b.deductions), 2602.55);              // Review Focus 8: deductions and net include them
+    assert.equal(n(b.net), 13000 - 2602.55);
+    assert.equal(n((await period('2026-10-16')).total_gov) >= 2602.55, true);
   });
 
   await test('Review Focus 3: the 16th-end follows the 1st-15th while it is a draft', async () => {
@@ -162,15 +164,15 @@ try {
     await as(admin, `select payroll_mark_paid($1)`, [p2]);
     const lines = await as(admin, `select * from payroll_lines_for($1,$2)`, [p2, desk]);
     const by = c => n(lines.find(l => l.category === c)?.amount ?? 0);
-    assert.equal(by('sss'), 1300); assert.equal(by('philhealth'), 650); assert.equal(by('pagibig'), 200); assert.equal(by('tax'), 64.95);
+    assert.equal(by('sss'), 1300); assert.equal(by('philhealth'), 650); assert.equal(by('pagibig'), 200); assert.equal(by('tax'), 452.55);
     assert.match(lines.find(l => l.category === 'sss').note, /SSS.*Oct 2026.*13,000|SSS.*Oct 2026.*26,000/);
     assert.equal((await as(admin, `select * from payroll_lines_for($1,$2)`, [p2, off])).filter(l => ['sss', 'philhealth', 'pagibig', 'tax'].includes(l.category)).length, 0);
     await db.query(`update payroll_deduction_rates set sss_rate = 0.10`);
     await as(admin, `select set_staff_salary($1, 50000, 'fixed')`, [desk]);
     await as(admin, `select set_payroll_deductions($1, false)`, [desk]);
     const r = await row('2026-10-16', desk);
-    assert.equal(n(r.sss), 1300); assert.equal(n(r.tax), 64.95); assert.equal(n(r.net), 13000 - 2214.95);
-    assert.equal(n((await row('2026-10-01', desk)).tax), 387.45);
+    assert.equal(n(r.sss), 1300); assert.equal(n(r.tax), 452.55); assert.equal(n(r.net), 13000 - 2602.55);
+    assert.equal(n((await row('2026-10-01', desk)).tax), 0);
     await db.query(`update payroll_deduction_rates set sss_rate = 0.05`);
   });
 

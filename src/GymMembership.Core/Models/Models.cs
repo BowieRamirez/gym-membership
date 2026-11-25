@@ -796,12 +796,12 @@ public static class PayTypes
     public static bool IsGovernment(string? category) => category is "sss" or "philhealth" or "pagibig" or "tax";
 }
 
-/// <summary>0144 (T2, T3, T5): employee shares and BIR semi-monthly withholding, the same numbers as payroll_deduction_rates.
+/// <summary>0144 (T2, T5) + 0160: employee shares and BIR monthly withholding (taken in the 16th-end pay on the month), the same numbers as payroll_deduction_rates.
 /// Used by the demo gateway; the live app gets the amounts from the server.</summary>
 public static class PayrollDeductions
 {
     static readonly (decimal Over, decimal Base, decimal Rate)[] Brackets =
-        [(0, 0, 0), (10417, 0, 0.15m), (16667, 937.50m, 0.20m), (33333, 4270.70m, 0.25m), (83333, 16770.70m, 0.30m), (333333, 91770.70m, 0.35m)];
+        [(0, 0, 0), (20833, 0, 0.15m), (33333, 1875m, 0.20m), (66667, 8541.80m, 0.25m), (166667, 33541.80m, 0.30m), (666667, 183541.80m, 0.35m)];
     static decimal R(decimal v) => Math.Round(v, 2, MidpointRounding.AwayFromZero);
     public static decimal Msc(decimal monthPay) => Math.Clamp(500 * Math.Round(monthPay / 500, MidpointRounding.AwayFromZero), 5000, 35000);
     public static decimal Sss(decimal monthPay) => R(0.05m * Msc(monthPay));

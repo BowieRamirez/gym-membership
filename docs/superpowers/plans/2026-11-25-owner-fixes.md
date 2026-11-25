@@ -6,7 +6,7 @@ Created: 2026-11-25
 Last updated: 2026-11-25
 Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phases 3.1-3.6 built, checked and pushed; `0151`-`0157` all live (dry run 2026-11-25: remote up to date); shift check-in rule is **off** until the admin turns it on from Scheduling. S1-S9 confirmed; S8 amended by option (b). Left: owner hand checks, the rollout steps (Phase 3.6), merge and a new app release. **Owner: do not merge until told.** Fix 4 (admin menu with words, Attendance page, Payslips tab, corrections on Attendance) BUILT, `0158` live. Fix 5 (Expenses, Financial reports) BUILT, `0159` live. Layout fixes after Fix 5 (Amenity status margins, compact menu) BUILT. All pushed (up to the plan commit after `0507c11`); owner hand checks left. More fixes get added below as the owner sends them.
 Branch: `owner-fixes-2026-11-25` (cut from `main` at `df3f54c`, v0.11.0). Owner merges to `main` when done; no push or PR without the owner.
-Next migration: `0160`.
+Next migration: `0161`.
 
 **Goal:** The owner's fixes after the v0.11.0 release.
 
@@ -331,6 +331,15 @@ Built 2026-11-25:
 | `0507c11` | Owner: "compact rows so everything fits". The admin menu's Gym pages were below the visible area (the middle scrolls with no bar). Rows 40 → 32 (fold rows 36 → 28), smaller icons, tighter section headings and gaps, smaller logo; text sizes unchanged. Everything fits at the owner's window height with Front desk open; it scrolls again only when Attendance and Payroll are open too. Coach, member and front desk strips unchanged. |
 
 Checks: 1277 C# tests pass; Windows and Android build. Not opened in the app here (owner checks it).
+
+### Withholding tax on the month (`0160`)
+
+Owner, 2026-11-25 (screenshot): "Only have withholding tax when the salary exceeds 20,833 PHP." Tax was taken every pay on that pay with BIR's semi-monthly table (0144, T3), so a month under ₱20,833 was taxed whenever one half went over ₱10,417 (e.g. ₱15,600 earned in 16–30 Nov was taxed ₱572.70). Now:
+- Withholding tax is worked out **once a month, in the 16th–end pay**, on the whole month's taxable pay (both halves, less non-taxable pay, retro deductions and the month's contributions), with **BIR's monthly table** (RR 11-2018 Annex E, 2023 on): nothing up to ₱20,833, then 15% over ₱20,833; ₱1,875 + 20% over ₱33,333; ₱8,541.80 + 25% over ₱66,667; ₱33,541.80 + 30% over ₱166,667; ₱183,541.80 + 35% over ₱666,667.
+- The **1st–15th pay has no tax**, like SSS, PhilHealth and Pag-IBIG. Tax a 1st–15th pay already took (approved before `0160`) is taken off the month's tax, so it is never taken twice. Approved and paid-out periods keep their frozen lines.
+- `payroll_half_tax` (plpgsql, closed to the app) gives `payroll_basis` the 1st–15th's taxable pay and tax. Demo the same; the pay details say "SSS, PhilHealth, Pag-IBIG and withholding tax are taken in the 16th–end pay, on the month." and show tax only in the 16th–end pay.
+- Tests: new `payroll-monthly-tax.mjs` (4, written first: the owner's ₱15,600 case pays no tax); `payroll-deductions.mjs` and `payroll-exemptions.mjs` and the C# payroll tests moved to the monthly rule (e.g. ₱13,000 + ₱13,000: 1st–15th tax 0, 16th–end tax ₱452.55 on ₱23,850). 1278 C# tests pass; all payroll db tests and `rules.mjs` pass; Windows builds. Deployed: dry run showed only `0160`; pushed; live brackets start at 20,833; the new helper is closed.
+- Left as is: the frozen tax line's note still reads "Withholding tax, 16–31 Oct 2026, on ₱X taxable", where X is now the month's taxable pay.
 
 **Owner hand checks still open (Windows, System admin and Admin):** the menu (fits, folds, current page lit, each Payroll and Attendance entry opens its tab on first click); Attendance (Review and Records tables, Approve with the money table, an overlapping record, Corrections add and remove); Payroll Payslips tab (Print payslip); Expenses (add, void); Financial reports (a month with approved payroll, a year); Amenity status margins.
 

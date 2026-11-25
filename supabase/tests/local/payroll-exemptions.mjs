@@ -55,7 +55,7 @@ try {
     assert.equal(m.contributions_on, true); assert.equal(m.tax_on, false); assert.equal(m.deductions_reason, 'Minimum wage earner');
     assert.equal(n(m.sss), 1300); assert.equal(n(m.philhealth), 650); assert.equal(n(m.pagibig), 200); assert.equal(n(m.tax), 0);
     const c = await row('2026-10-16', contractor);
-    assert.equal(n(c.sss) + n(c.philhealth) + n(c.pagibig), 0); assert.equal(n(c.tax), 387.45);   // taxable 13,000
+    assert.equal(n(c.sss) + n(c.philhealth) + n(c.pagibig), 0); assert.equal(n(c.tax), 775.05);   // 0160: the month, 26,000 - 20,833 at 15%
     const s = (await as(admin, `select * from payroll_staff()`)).find(x => x.user_id === mwe);
     assert.equal(s.contributions_on, true); assert.equal(s.tax_on, false); assert.equal(s.deductions_reason, 'Minimum wage earner');
   });
@@ -79,7 +79,7 @@ try {
     const r = await row('2025-12-01', big);
     assert.equal(n(r.nontaxable), 30000); assert.equal(n(r.thirteenth_used), 100000);
     assert.equal(n(r.taxable), 30000);                     // 60,000 gross - 30,000 non-taxable
-    assert.equal(n(r.tax), 3604.10);                       // 937.50 + 20% x (30,000 - 16,667)
+    assert.equal(n(r.tax), 0);                             // 0160: no tax in a 1st-15th pay; the 16th-end pay taxes the month
     const jan = (await period('2026-01-01')).period_id;    // new year: back to 0
     await line(jan, big, 'bonus', 50000, 'new year', 'thirteenth_month');
     assert.equal(n((await row('2026-01-01', big)).nontaxable), 50000);
@@ -89,7 +89,7 @@ try {
     const o1 = (await period('2026-10-01')).period_id, o2 = (await period('2026-10-16')).period_id;
     await line(o1, dm, 'bonus', 2000, 'Rice subsidy', 'de_minimis');
     let a = await row('2026-10-01', dm);
-    assert.equal(n(a.nontaxable), 2000); assert.equal(n(a.taxable), 13000); assert.equal(n(a.tax), 387.45);
+    assert.equal(n(a.nontaxable), 2000); assert.equal(n(a.taxable), 13000); assert.equal(n(a.tax), 0);   // 0160: tax in the 16th-end pay
     let b = await row('2026-10-16', dm);
     assert.equal(n(b.month_gross), 26000); assert.equal(n(b.msc), 26000);
     await line(o2, dm, 'bonus', 1000, 'September shift missed', 'retro');
@@ -105,9 +105,11 @@ try {
     await as(admin, `select set_staff_salary($1, 13000, 'fixed')`, [rd]);
     await line((await period('2026-07-01')).period_id, rd, 'deduction', 1000, 'Overpaid in June', 'retro');
     const a = await row('2026-07-01', rd);
-    assert.equal(n(a.taxable), 12000); assert.equal(n(a.tax), 237.45);
+    assert.equal(n(a.taxable), 12000); assert.equal(n(a.tax), 0);
     const b = await row('2026-07-16', rd);
     assert.equal(n(b.month_gross), 25000); assert.equal(n(b.msc), 25000);
+    assert.equal(n(b.taxable), 22900);                     // 0160: 12,000 + (13,000 - 2,100 contributions; PhilHealth is on base pay 26,000)
+    assert.equal(n(b.tax), 310.05);                        // (22,900 - 20,833) x 15%
   });
 
   await test('review fix: the 90,000 cap holds whatever order periods are approved in', async () => {
