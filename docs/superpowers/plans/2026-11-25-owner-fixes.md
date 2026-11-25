@@ -4,7 +4,7 @@
 
 Created: 2026-11-25
 Last updated: 2026-11-25
-Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling) PLANNED, S1-S6 confirmed, S7-S8 recommended. More fixes get added below as the owner sends them.
+Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling) PLANNED, S1-S8 confirmed by the owner. More fixes get added below as the owner sends them.
 Branch: `owner-fixes-2026-11-25` (cut from `main` at `df3f54c`, v0.11.0). Owner merges to `main` when done; no push or PR without the owner.
 Next migration: `0151`.
 
@@ -87,8 +87,8 @@ Owner, 2026-11-25: can the coaches' shifts and payroll work like `C:\Users\bowie
 | S4 | **No shift that day: check-in refused** (`no_shift_today`), for coaches and front desk. A rest day or a rest override counts as no shift. | Owner, confirmed |
 | S5 | **Late check-out allowed.** Check-out stays as today; open coach visits still auto-close at gym closing (0032). | Owner, confirmed |
 | S6 | **Paid time starts at the later of check-in and shift start.** The real check-in time is kept; only payable hours are clipped. | Owner, confirmed |
-| S7 | **Leaving before the shift end is flagged, not refused:** **Left early**, still paid for time worked once approved. | Recommended, to confirm |
-| S8 | **Schedule changes reach the future only:** a change rewrites the coach's scheduled `shift_posts` from tomorrow on, only rows with no booked session inside them; a shift with bookings is kept and reported to the admin. Past and today's rows are never touched. A daily job keeps 8 weeks of coach shifts filled ahead. | Recommended, to confirm |
+| S7 | **Leaving before the shift end is flagged, not refused:** **Left early**, still paid for time worked once approved. | Owner, confirmed (recommended) |
+| S8 | **Schedule changes reach the future only:** a change rewrites the coach's scheduled `shift_posts` from tomorrow on, only rows with no booked session inside them; a shift with bookings is kept and reported to the admin. Past and today's rows are never touched. A daily job keeps 8 weeks of coach shifts filled ahead. | Owner, confirmed (recommended) |
 
 ### Fix 3 skills
 
