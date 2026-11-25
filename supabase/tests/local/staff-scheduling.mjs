@@ -159,6 +159,56 @@ try {
     await db.query(`update gym_settings set opens_at='06:00', closes_at='22:00'`);
   } else console.log('  skip  clock-in window checks: too close to midnight Manila for a same-day test shift');
 
+  // 0164: needs today's Manila clock between 2:30 AM and 11:28 PM (shifts from 150 minutes back to 31 minutes ahead)
+  if (minute >= 150 && minute + 31 < 24 * 60 - 1) {
+    await db.query(`update gym_settings set opens_at='00:00', closes_at='24:00'`);
+    await test('0164: the front desk always follows their shift, even with the Scheduling switch off', async () => {
+      const close = () => db.query('update cash_shifts set closed_at=now(), cash_in=0, cash_out=0, expected=opening_float, counted=opening_float where closed_at is null');
+      await clearSchedules(); await close();
+      await db.query('update gym_settings set schedule_enforced=false');
+      try {
+        await assert.rejects(as(desk, 'select open_cash_shift(5000)'), /no_shift_today/);
+        await overrideToday(desk, 6);
+        await assert.rejects(as(desk, 'select open_cash_shift(5000)'), /too_early/);   // 7:54 for an 8:00 shift
+        await clearSchedules(); await overrideToday(desk, -150);   // ended 30 minutes ago
+        await assert.rejects(as(desk, 'select open_cash_shift(5000)'), /shift_over/);
+        await clearSchedules(); await overrideToday(desk, 4);   // 7:56 for an 8:00 shift
+        await as(desk, 'select open_cash_shift(5000)');
+        await assert.rejects(as(desk, 'select open_cash_shift(5000)'), /shift_open/);   // no second start
+        await close();
+        await db.query(`insert into gym_closures(closed_on,reason,closed_by) values($1,'Test closure',$2)`, [today, admin]);
+        await assert.rejects(as(desk, 'select open_cash_shift(5000)'), /day_closed/);
+        await as(admin, 'select open_cash_shift(5000)');   // S1: admins are never limited
+        await close();
+        await db.query('delete from gym_closures where closed_on=$1', [today]);
+        await db.query(`update gym_settings set opens_at=$1, closes_at='24:00'`, [hhmm(Math.ceil((minute + 6) / 30) * 30)]);   // opening on the half hour, more than 5 minutes ahead
+        await assert.rejects(as(desk, 'select open_cash_shift(5000)'), /gym_closed/);
+      } finally {
+        await db.query(`update gym_settings set opens_at='00:00', closes_at='24:00', schedule_enforced=true`);
+        await db.query('delete from gym_closures where closed_on=$1', [today]); await close();
+      }
+    });
+    await test('0164: without a started shift the front desk can sell nothing, cash or online; admins can', async () => {
+      await db.query('update cash_shifts set closed_at=now(), cash_in=0, cash_out=0, expected=opening_float, counted=opening_float where closed_at is null');
+      await assert.rejects(as(desk, `select * from record_counter_payment('walk_in','gcash',null,null,'No Shift','REF-NS-1',null)`), /no_open_shift/);
+      await assert.rejects(as(desk, `select * from record_counter_payment('walk_in','cash',null,null,'No Shift',null,null)`), /no_open_shift/);
+      await as(admin, `select * from record_counter_payment('walk_in','gcash',null,null,'Admin Sale','REF-AS-1',null)`);
+      await clearSchedules(); await overrideToday(desk, 0);
+      await as(desk, 'select open_cash_shift(5000)');
+      await as(desk, `select * from record_counter_payment('walk_in','gcash',null,null,'With Shift','REF-WS-1',null)`);
+      await db.query('update cash_shifts set closed_at=now(), cash_in=0, cash_out=0, expected=opening_float, counted=opening_float where closed_at is null');
+    });
+    await test('0164: my_shift_window gives the front desk their shift and the server time; an admin is not limited', async () => {
+      await clearSchedules(); await overrideToday(desk, 30);
+      const w = (await as(desk, 'select my_shift_window() w'))[0].w;
+      assert.equal(w.limited, true); assert.ok(w.now && w.starts_at && w.ends_at); assert.equal(w.closed_today, false);
+      assert.equal((await as(admin, 'select my_shift_window() w'))[0].w.limited, false);
+      await assert.rejects(as(member, 'select my_shift_window()'), /forbidden/);
+    });
+    await clearSchedules();
+    await db.query(`update gym_settings set opens_at='06:00', closes_at='22:00'`);
+  } else console.log('  skip  0164 front desk shift checks: too close to midnight Manila');
+
   // ---- S2: coaches no longer post shifts ----
   const tomorrow = await plus(1);
   const at = (d, t) => `${d} ${t}:00+08`;

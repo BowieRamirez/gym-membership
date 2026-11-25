@@ -98,7 +98,7 @@ public class BehaviorTests
     {
         var gw = await As("admin@demo.io");
         await new AdminService(gw).AssignRoleAsync("u-emp", "member");   // a front-desk person who is also a member
-        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();   // 0164: the front desk sells only during a started shift
         var monthly = (await new MembershipService(gw).ListPackagesAsync()).Value!.First(p => p.Name == "Monthly");
         var pay = (await new MembershipService(gw).AvailAsync(monthly.Id)).Value!;
         Assert.Equal(AppErrorKind.Validation, (await new PaymentStaffService(gw).VerifyAsync(pay.Id, true)).Error);
@@ -112,7 +112,7 @@ public class BehaviorTests
         var pay = (await new MembershipService(gw).RenewAsync(expired.Id)).Value!;
         Assert.Equal(PayKind.Renewal, pay.Kind);
 
-        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();   // 0164: the front desk sells only during a started shift
         Assert.True((await new PaymentStaffService(gw).VerifyAsync(pay.Id, true)).Ok);
         await gw.SignInAsync("carlo@demo.io", DemoGateway.DemoPassword);
         var renewed = (await new MembershipService(gw).MyMembershipsAsync()).Value!.First(m => m.Id == expired.Id);

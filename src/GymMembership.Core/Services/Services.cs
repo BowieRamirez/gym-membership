@@ -294,6 +294,28 @@ sealed class PaymentLookup
 public sealed record MembershipRow(int Id, string PackageName, string Status, DateTime? EndsAt, int? DaysLeft, int DurationDays, bool CanRenew, decimal Price);
 
 /// <summary>Owner, 2026-11-18: the live server's times arrive as local time, the demo's as UTC. Always go through here before comparing with UtcNow or adding Manila's 8 hours.</summary>
+/// <summary>0164 (owner, 2026-11-25): whether the front desk may press Start shift now, and the sentence that says when.
+/// Start is allowed from 5 minutes before the shift; the server checks again with its own clock.</summary>
+public static class ShiftGate
+{
+    public static (bool CanStart, string? Text) At(ShiftWindow? w, DateTime nowUtc)
+    {
+        if (w is not { Limited: true }) return (true, null);
+        static string T(DateTime utc) => ManilaTime.Of(utc).ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
+        if (w.ClosedToday) return (false, "The gym is closed today, so there is no shift to start.");
+        if (w.StartsAt is not { } s || w.EndsAt is not { } e) return (false, "No shift today. Ask the admin to add one on the Scheduling page.");
+        var start = ManilaTime.Utc(s); var end = ManilaTime.Utc(e); var from = start.AddMinutes(-5);
+        if (nowUtc >= end) return (false, $"Your shift today ended at {T(end)}.");
+        if (nowUtc < from)
+        {
+            var left = from - nowUtc;
+            var wait = left.TotalHours >= 1 ? $"{(int)left.TotalHours} h {left.Minutes:00} min" : $"{left.Minutes}:{left.Seconds:00}";
+            return (false, $"Your shift starts at {T(start)}. You can start it from {T(from)}, in {wait}.");
+        }
+        return (true, nowUtc > start ? $"Your shift started at {T(start)}; you're late." : $"Your shift starts at {T(start)}.");
+    }
+}
+
 public static class ManilaTime
 {
     public static DateTime Utc(DateTime t) => t.Kind == DateTimeKind.Local ? t.ToUniversalTime() : t;
@@ -584,6 +606,8 @@ public interface IPaymentStaffService
     Task<AppResult<IReadOnlyList<CounterItem>>> ItemsAsync(string kind, string? memberId);
     /// <summary>F2 (0050): the caller's open drawer shift (null when none) and the gym's opening float to start one with.</summary>
     Task<AppResult<(CashShift? Open, decimal DefaultFloat)>> ShiftAsync();
+    /// <summary>0164: when the front desk may start their shift (Limited is false for admins).</summary>
+    Task<AppResult<ShiftWindow>> ShiftWindowAsync() => Task.FromResult(AppResult<ShiftWindow>.Success(new ShiftWindow { Now = DateTime.UtcNow }));
     Task<AppResult<CashShift>> OpenShiftAsync(decimal openingFloat, string? note);
     Task<AppResult<CashShift>> CloseShiftAsync(decimal counted, string? note, string? reason = null);
 }
@@ -735,6 +759,8 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
         await Task.WhenAll(shiftTask, settingsTask);
         return ((shiftTask.Result ?? []).FirstOrDefault(), settingsTask.Result.First().OpeningFloat);
     });
+
+    public Task<AppResult<ShiftWindow>> ShiftWindowAsync() => Safe.RunAsync(() => gw.RpcAsync<ShiftWindow>("my_shift_window", new()));
 
     public Task<AppResult<CashShift>> OpenShiftAsync(decimal openingFloat, string? note) => openingFloat < 0
         ? Task.FromResult(AppResult<CashShift>.Fail(AppErrorKind.Validation, "bad_input"))

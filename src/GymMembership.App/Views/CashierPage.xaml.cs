@@ -8,7 +8,15 @@ public partial class CashierPage : BasePage
 	{
 		InitializeComponent();
 		BindingContext = vm;
+		// 0164: the Start shift countdown, once a second while the shift isn't started
+		_tick = Dispatcher.CreateTimer();
+		_tick.Interval = TimeSpan.FromSeconds(1);
+		_tick.Tick += (_, _) => { if (vm.NeedsShift) vm.TickShift(); };
 	}
+
+	readonly IDispatcherTimer _tick;
+	protected override void OnAppearing() { base.OnAppearing(); _tick.Start(); }
+	protected override void OnDisappearing() { _tick.Stop(); base.OnDisappearing(); }
 
 	protected override TimeSpan? AutoRefresh => TimeSpan.FromSeconds(5);   // only a payment waiting for Xendit is checked
 

@@ -1,6 +1,6 @@
 // Phase 3 (F1-F3, 2026-11-09): the cash-drawer shift. Cash is only taken (or paid back) inside the cashier's open shift; closing
 // shows expected = float + cash in - cash out against the count, and a closed shift never changes.
-import { start } from './harness.mjs';
+import { start, deskWorksAllDay } from './harness.mjs';
 import assert from 'node:assert/strict';
 
 const { server, client: db } = await start();
@@ -24,6 +24,7 @@ async function test(name, fn) {
   catch (e) { failed++; console.error('  FAIL', name, e.message); }
 }
 const admin = await user('admin'), sub = await user('subadmin'), desk = await user('employee', 'Desk Dana'), desk2 = await user('employee');
+await deskWorksAllDay(db, desk, desk2);
 const monthly = (await db.query(`insert into membership_packages(name,price,duration_days)
   values('Shift Monthly',1000,30) returning membership_package_id`)).rows[0].membership_package_id;
 await db.query(`update gym_settings set walk_in_price=150 where id=1`);
@@ -36,9 +37,10 @@ try {
   await test('the opening float is a gym setting, 5000 by default', async () => {
     assert.equal(Number((await db.query('select opening_float from gym_settings where id=1')).rows[0].opening_float), 5000);
   });
-  await test('no open shift: cash at the counter is refused, GCash still works', async () => {
+  await test("no open shift: the front desk is refused cash and GCash (0164); an admin's GCash needs no drawer", async () => {
     await assert.rejects(walkIn(desk), /no_open_shift/);
-    const g = (await as(desk, `select * from record_counter_payment('walk_in','gcash',null,null,'G Walk','REF-CS-1',null)`))[0];
+    await assert.rejects(as(desk, `select * from record_counter_payment('walk_in','gcash',null,null,'G Walk','REF-CS-0',null)`), /no_open_shift/);
+    const g = (await as(admin, `select * from record_counter_payment('walk_in','gcash',null,null,'G Walk','REF-CS-1',null)`))[0];
     assert.equal(g.cash_shift_id, null);
     assert.deepEqual(await mine(desk), []);
   });

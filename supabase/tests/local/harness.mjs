@@ -71,6 +71,14 @@ if (process.argv[1].endsWith('harness.mjs')) {
 }
 
 // 0050: cash is only taken inside the cashier's open shift. Files that are not about shifts open one for every staff member so far.
+// 0164: the front desk opens a drawer only inside their shift and gym hours. Files about the drawer itself, not the schedule, give
+// these front desk people a shift for the whole of today and keep the gym open all day, so they run at any hour.
+export async function deskWorksAllDay(db, ...desks) {
+  await db.query(`update gym_settings set opens_at='00:00', closes_at='24:00'`);
+  for (const d of desks) await db.query(`insert into schedule_overrides(user_id,from_date,to_date,starts_at,ends_at,reason,created_by)
+    values($1,(now() at time zone 'Asia/Manila')::date,(now() at time zone 'Asia/Manila')::date,'00:00','24:00','test',$1)`, [d]);
+}
+
 export const openCashShifts = db => db.query(`insert into cash_shifts(cashier_id, opening_float)
   select ur.user_id, 5000 from user_roles ur join roles r using (role_id) where r.name in ('admin', 'subadmin', 'employee')
     and not exists (select 1 from cash_shifts s where s.cashier_id = ur.user_id and s.closed_at is null)`);

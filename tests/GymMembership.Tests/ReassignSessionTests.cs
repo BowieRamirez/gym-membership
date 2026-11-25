@@ -22,7 +22,7 @@ public class ReassignSessionTests
         gw.OwnerAddCoachShift("u-coach1", Manila(13), Manila(17));
         gw.OwnerAddCoachShift("u-coach2", Manila(13), Manila(17));
         var s = gw.OwnerAddSession(new TrainingSession { CoachId = "u-coach1", MemberId = "u-alex", ScheduledStart = Manila(14), ScheduledEnd = Manila(15), Status = Status.Scheduled });
-        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();   // 0164: the front desk sells only during a started shift
         var sessions = new SessionService(gw);
         var vm = new HomeViewModel(new DeskHomeService(gw, new ChatService(gw, new NotificationService(gw))), new PaymentStaffService(gw), new CoachService(gw), sessions);
         await vm.OnAppearingAsync();

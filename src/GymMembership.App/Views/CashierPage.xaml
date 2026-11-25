@@ -78,6 +78,8 @@
                 <VerticalStackLayout Spacing="10">
                     <c:CardTitle Text="Start your shift" />
                     <Label Text="Count the cash in the drawer before your first sale. Cash you take and pay back is added to this shift." Style="{StaticResource Caption}" />
+                    <Label Text="{Binding ShiftWaitText}" FontFamily="BarlowSemiBold" IsVisible="{Binding HasShiftWait}" AutomationId="ShiftWait" />
+                    <Label Text="Nothing can be sold, booked or registered until your shift is started." Style="{StaticResource Caption}" IsVisible="{Binding SalesBlocked}" />
                     <FlexLayout Wrap="Wrap" AlignItems="End">
                         <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
                             <Label Text="Float you counted (₱)" Style="{StaticResource Caption}" />
@@ -174,6 +176,8 @@
                 </VerticalStackLayout>
             </Border>
 
+                    <!-- 0164 (owner, 2026-11-25): the front desk sells, books and registers only after starting their shift -->
+                    <VerticalStackLayout Spacing="12" IsEnabled="{Binding SalesOpen}">
                     <Label Text="What are they paying for?" Style="{StaticResource SectionTitle}" Margin="0" />
                                 <!-- 9.7: the app's chips (were icon pills); the chosen one is yellow and says "selected" to a screen reader -->
                                 <FlexLayout Wrap="Wrap">
@@ -502,6 +506,7 @@
                                     </FlexLayout>
                                 </VerticalStackLayout>
 
+                    </VerticalStackLayout>
                 </VerticalStackLayout>
                 <!-- side: the order, always in view while choosing (D5: customer header at the top) -->
                 <Border Style="{StaticResource SidePanel}">

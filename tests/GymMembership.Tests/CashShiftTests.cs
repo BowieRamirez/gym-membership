@@ -17,7 +17,7 @@ public class CashShiftTests
         svc.RecordCounterAsync(PayKind.WalkIn, method, null, null, "Pedro Ramos", reference, null);
 
     [Fact]
-    public async Task Without_a_shift_cash_is_refused_in_plain_words_and_GCash_still_goes_through()
+    public async Task Without_a_shift_the_front_desk_is_refused_in_plain_words_cash_or_GCash()
     {
         var (_, svc) = await As("employee@demo.io");
         var state = (await svc.ShiftAsync()).Value;
@@ -25,7 +25,7 @@ public class CashShiftTests
         var cash = await WalkIn(svc);
         Assert.Equal("no_open_shift", cash.Message);
         Assert.Contains("Start your cash shift", ErrorText.For(cash.Error, cash.Message));
-        Assert.True((await WalkIn(svc, PayMethod.Gcash, "GC-77")).Ok);
+        Assert.Equal("no_open_shift", (await WalkIn(svc, PayMethod.Gcash, "GC-77")).Message);   // 0164: online too
     }
 
     [Fact]
@@ -105,13 +105,13 @@ public class CashShiftTests
     }
 
     [Fact]
-    public async Task Without_a_shift_Complete_payment_waits_for_cash_but_not_for_GCash()
+    public async Task Without_a_shift_Complete_payment_waits_for_cash_and_GCash()
     {
         var (_, vm) = await Cashier();
         vm.Kind = "Day pass"; vm.WalkInName = "Pedro Ramos";
         Assert.True(vm.CashNeedsShift); Assert.False(vm.RecordCommand.CanExecute(null));
-        vm.Method = "GCash / QR Ph";   // cashier plan Y6: through Xendit, no drawer
-        Assert.False(vm.CashNeedsShift); Assert.True(vm.RecordCommand.CanExecute(null));
+        vm.Method = "GCash / QR Ph";   // 0164: the front desk sells nothing, online included, before starting their shift
+        Assert.False(vm.CashNeedsShift); Assert.True(vm.SalesBlocked); Assert.False(vm.RecordCommand.CanExecute(null));
         vm.Method = "Cash";
         await vm.StartShiftCommand.ExecuteAsync(null);
         Assert.False(vm.CashNeedsShift); Assert.True(vm.RecordCommand.CanExecute(null));

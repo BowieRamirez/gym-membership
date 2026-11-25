@@ -1,5 +1,5 @@
 // Phase 12 (E9): Session QR check-in, Coach is here, session status apart from payment, coach cancel with reason.
-import { start } from './harness.mjs';
+import { start, openCashShifts } from './harness.mjs';
 import assert from 'node:assert/strict';
 
 const { server, client: db } = await start();
@@ -133,6 +133,7 @@ try {
   });
 
   await test('desk can book walk-in coach session without member account; member cannot call it', async () => {
+    await openCashShifts(db);   // 0164: the front desk books only during a started shift
     const m5 = await user('member', 'Ria Cruz');
     const tomorrow = (await db.query(`select ((now() at time zone 'Asia/Manila')::date + 2)::text d`)).rows[0].d;
     const wStart = `${tomorrow}T10:00:00+08:00`, wEnd = `${tomorrow}T18:00:00+08:00`;

@@ -247,8 +247,19 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ItemsEmptyText))] private bool loadingItems;
 
     // F2 (0050): the cashier's own drawer shift. Cash needs an open one; GCash doesn't.
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasShift), nameof(NeedsShift), nameof(ShiftSince), nameof(CountText), nameof(CloseNeedsNote), nameof(CashNeedsShift)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private CashShift? shift;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(NeedsShift))] private bool shiftChecked;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasShift), nameof(NeedsShift), nameof(ShiftSince), nameof(CountText), nameof(CloseNeedsNote), nameof(CashNeedsShift), nameof(SalesBlocked), nameof(SalesOpen)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private CashShift? shift;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(NeedsShift), nameof(SalesBlocked), nameof(SalesOpen)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private bool shiftChecked;
+    // 0164 (owner, 2026-11-25): the front desk starts their shift from 5 minutes before it (server time) and sells nothing before
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(SalesBlocked), nameof(SalesOpen)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private ShiftWindow? shiftWindow;
+    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(StartShiftCommand))] private bool canStartShift = true;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasShiftWait))] private string? shiftWaitText;
+    public bool HasShiftWait => !string.IsNullOrEmpty(ShiftWaitText);
+    TimeSpan _serverOffset;
+    /// <summary>Front desk with no started shift: no payment, booking or new account until they start it.</summary>
+    public bool SalesBlocked => ShiftWindow is { Limited: true } && ShiftChecked && Shift is null;
+    public bool SalesOpen => !SalesBlocked;
+    /// <summary>Called every second by the page while the shift isn't started: the countdown, and the button opens on time.</summary>
+    public void TickShift() { var (ok, text) = ShiftGate.At(ShiftWindow, DateTime.UtcNow + _serverOffset); CanStartShift = ok; ShiftWaitText = text; }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(StartNeedsNote))] private decimal startFloat;
     [ObservableProperty] private string startNote = "";
     [ObservableProperty] private bool isClosing;
@@ -405,14 +416,20 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         finally { polling = false; }
     }
 
-    Task<bool> LoadShiftAsync() => RunAsync(svc.ShiftAsync, state =>
+    async Task<bool> LoadShiftAsync()
     {
-        defaultFloat = state.DefaultFloat; Shift = state.Open; ShiftChecked = true;
-        if (Shift is null) StartFloat = state.DefaultFloat;
-        OnPropertyChanged(nameof(StartNeedsNote)); OnPropertyChanged(nameof(FloatNoteLabel));
-    });
+        var window = RunAsync(svc.ShiftWindowAsync, w => { _serverOffset = ManilaTime.Utc(w.Now) - DateTime.UtcNow; ShiftWindow = w; });
+        var ok = await RunAsync(svc.ShiftAsync, state =>
+        {
+            defaultFloat = state.DefaultFloat; Shift = state.Open; ShiftChecked = true;
+            if (Shift is null) StartFloat = state.DefaultFloat;
+            OnPropertyChanged(nameof(StartNeedsNote)); OnPropertyChanged(nameof(FloatNoteLabel));
+        });
+        await window; TickShift();
+        return ok;
+    }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanStartShift))]
     private async Task StartShiftAsync()
     {
         Notice = null;
@@ -654,7 +671,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     bool CanComplete() =>
         (IsWalkIn || Item is not null && (Member is not null || RegistersNew))
         && OrderIneligibleText is null
-        && !CashNeedsShift && Waiting is null;
+        && !CashNeedsShift && !SalesBlocked && Waiting is null;
 
     // The command is off while it runs, so a double tap records one payment.
     [RelayCommand(CanExecute = nameof(CanComplete))]

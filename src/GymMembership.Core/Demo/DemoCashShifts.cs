@@ -52,8 +52,10 @@ public sealed partial class DemoGateway
                 if (amount is < 0 or > 10_000_000 || note?.Length > 500) throw Err("bad_input");
                 if (amount != All<GymSettings>().First().OpeningFloat && note is null) throw Err("note_required");
                 // 0151 (S1): front desk opens a drawer only in their shift; admins and sub-admins are not scheduled
-                if (RolesOf(Uid).Contains("employee") && !RolesOf(Uid).Any(r => r is "admin" or "subadmin")) ScheduleClockIn(Uid!);
                 if (_shifts.Any(s => s.Cashier == Uid && s.ClosedAt is null)) throw Err("shift_open");
+                // ponytail: 0164 always holds the front desk to their shift and gym hours; the demo keeps 0151's switch so its
+                // one-tap front desk can start a shift at any hour. The real rule is covered by staff-scheduling.mjs.
+                if (IsDeskOnly(Uid)) ScheduleClockIn(Uid!);
                 var s = new DemoShift { Id = _shifts.Count + 1, Cashier = Uid, OpenedAt = SubscriptionNow, Float = Math.Round(amount, 2), OpenNote = note };
                 _shifts.Add(s);
                 Audit("cash_shift.open", "cash_shifts", s.Id.ToString());
@@ -93,6 +95,14 @@ public sealed partial class DemoGateway
                 if (resolve && s.ResolvedAt is null) s.ResolvedAt = SubscriptionNow;
                 Audit("cash_shift.note", "cash_shifts", s.Id.ToString());
                 result = n; return true;
+            }
+            case "my_shift_window":   // 0164
+            {
+                Require("payments:record");
+                var (st, en) = ShiftToday(Uid!);
+                result = new ShiftWindow { Now = SubscriptionNow, Limited = IsDeskOnly(Uid), StartsAt = st, EndsAt = en,
+                    ClosedToday = All<GymClosure>().Any(c => c.Day == DateOnly.FromDateTime(SubscriptionNow.AddHours(8))) };
+                return true;
             }
             case "my_cash_shift":
                 Require("payments:record");
