@@ -282,7 +282,11 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     // the order panel, in the words the cashier uses
     // cashier plan Y3: a Day pass may carry a member found by search, a typed name, or nothing (anonymous)
     // plan 2026-11-17 Z3: the name box is the one source; picking a member only fills it, so what the desk typed wins
-    public string OrderWho => IsWalkIn ? DayPassName ?? "Day pass, no name" : Member?.Username ?? "Choose a customer";
+    public string OrderWho => IsWalkIn ? DayPassName ?? "Day pass, no name"
+        : Member?.Username ?? (RegistersNew ? NewMemberName is { Length: > 0 } n ? $"New member: {n}" : "New member: fill in their details" : "Choose a customer");
+    /// <summary>Owner, 2026-11-25: on Membership the account, its package and the payment are made in one go (Record or GCash / QR Ph).</summary>
+    public bool RegistersNew => Kind == "Membership" && Member is null;
+    string NewMemberName => NameParts.Join(NewFirstName.Trim(), NewLastName.Trim()).Trim();
     public string? OrderWhoStatus => Member?.DeskStatusText;
     public string? OrderWhoContact => Member?.ContactText;
     public bool HasChosenMember => Member is not null;
@@ -617,31 +621,38 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     }
 
     // ---- cashier plan Y2, owner 2026-11-25: Membership is the desk's register form; the server refuses an email already in use ----
-    [ObservableProperty] private string newFirstName = "";
-    [ObservableProperty] private string newLastName = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho))] private string newFirstName = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho))] private string newLastName = "";
     [ObservableProperty] private string newEmail = "";
     [ObservableProperty] private string newPhone = "";
 
-    [RelayCommand]
-    private async Task RegisterAsync()
+    string? _newMemberNote;
+
+    /// <summary>Owner, 2026-11-25: makes the account typed in the Membership form and picks it by its id (not a search, which could read a
+    /// list cached from before the account existed); the payment follows in RecordAsync. False, with the reason shown, when refused.</summary>
+    async Task<bool> CreateMemberAsync()
     {
-        Notice = null;
-        var name = NameParts.Join(NewFirstName.Trim(), NewLastName.Trim());
-        if (!await Confirm.AskAsync($"Register {name} as a member?", $"{NewEmail.Trim()}\nThey get a temporary password to change at first sign-in.", "Register member")) return;
+        var name = NewMemberName;
         var password = TempPassword.New();
         string? id = null;
-        if (!await RunAsync(() => svc.RegisterMemberAsync(NewFirstName, NewLastName, NewEmail, NewPhone, password), v => id = v)) return;
-        Search = NewEmail.Trim();
-        await RunAsync(() => members.FindMembersAsync(Search), rows => { Fill(Hits, rows); NoMatch = rows.Count == 0; OnPropertyChanged(nameof(HasHits)); OnPropertyChanged(nameof(ShowHits)); Member = rows.FirstOrDefault(h => h.MemberId == id); });
+        if (!await RunAsync(() => svc.RegisterMemberAsync(NewFirstName, NewLastName, NewEmail, NewPhone, password), v => id = v) || id is null) return false;
+        MemberHit? hit = null;
+        await RunAsync(() => members.MemberStatusAsync(id), h => hit = h);
+        var item = Item;
+        _refreshingStatus = true;   // the chosen package stays while the new member becomes the customer
+        Member = hit ?? new MemberHit(id, name, false, Phone: NewPhone, Email: NewEmail.Trim());
+        _refreshingStatus = false;
+        Item = item;
+        _newMemberNote = $"{name} is a member now. Temporary password: {password}. Hand it over; they change it at first sign-in.";
         NewFirstName = NewLastName = NewEmail = NewPhone = "";
-        Notice = $"{name} is a member now. Temporary password: {password}. Hand it over; they change it at first sign-in.";
+        return true;
     }
     [RelayCommand] private void PickKind(string value) => Kind = value;
     [RelayCommand] private void PickMethod(string value) => Method = value;
     [RelayCommand] private void PickItem(ItemOption option) => Item = option.Item;   // OnItemChanged marks the card
 
     bool CanComplete() =>
-        (IsWalkIn || Member is not null && Item is not null)
+        (IsWalkIn || Item is not null && (Member is not null || RegistersNew))
         && OrderIneligibleText is null
         && !CashNeedsShift && Waiting is null;
 
@@ -650,9 +661,12 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     private async Task RecordAsync()
     {
         Notice = null;
-        if (!IsWalkIn && (Member is null || Item is null)) { ErrorMessage = "Choose the member and what they are paying for."; return; }
-        if (!await Confirm.AskAsync("Record this payment?", $"{OrderWho}\n{OrderWhat}\n{TotalText}\n{OrderHow}"
-                + (Kind is "Membership" or "Renewal" ? $"\n\nTell them: {RefundRules.Line}" : ""), "Record payment")) return;   // G23
+        if (!IsWalkIn && (Member is null && !RegistersNew || Item is null)) { ErrorMessage = "Choose the member and what they are paying for."; return; }
+        var registering = RegistersNew;
+        if (!await Confirm.AskAsync(registering ? $"Register {NewMemberName} and record this payment?" : "Record this payment?",
+                (registering ? $"{NewEmail.Trim()}\nThey get a temporary password to change at first sign-in.\n\n" : "") + $"{OrderWho}\n{OrderWhat}\n{TotalText}\n{OrderHow}"
+                + (Kind is "Membership" or "Renewal" ? $"\n\nTell them: {RefundRules.Line}" : ""), registering ? "Register and record" : "Record payment")) return;   // G23
+        if (registering && !await CreateMemberAsync()) return;   // the account first; a refused email stops here and nothing is paid
         _pendingDayPassCoach = DayPassWithCoach && SelectedDayPassCoach is { } dc && SelectedDayPassHour is { } dh
             ? (DayPassMember?.MemberId, DayPassName, dc.CoachId, dh.Hour, Method == Online ? "online" : "cash") : null;
         if (Method == Online) { await StartOnlineAsync(); return; }
@@ -685,7 +699,8 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
                 bookedCoach = bookRes.Ok;
             }
         }
-        Notice = $"Payment complete: ₱{paid.Amount:N2}. Receipt {paid.ReceiptNo}." + (bookedCoach ? " Coach session booked." : "");
+        Notice = $"Payment complete: ₱{paid.Amount:N2}. Receipt {paid.ReceiptNo}." + (bookedCoach ? " Coach session booked." : "") + (_newMemberNote is { } nm ? " " + nm : "");
+        _newMemberNote = null;
         Item = null; Member = null; DiscountCode = ""; WalkInName = ""; Waiting = null;   // the next customer starts clean (final review)
         var notice = Notice; await LoadShiftAsync(); Notice = notice;
         RecordCommand.NotifyCanExecuteChanged();
@@ -711,7 +726,8 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         if (!await RunAsync(() => svc.PayOnlineAsync(pay.Id), c => checkout = c)) return;
         if (checkout!.Paid) { await PaidAsync(pay.Id); return; }
         if (checkout.Url is { } url && opener is not null) await opener.OpenAsync(url);
-        Notice = "Xendit's checkout is open on this PC. Let the customer scan the QR Ph code with GCash, Maya or their bank app. This screen updates by itself once they have paid.";
+        Notice = "Xendit's checkout is open on this PC. Let the customer scan the QR Ph code with GCash, Maya or their bank app. This screen updates by itself once they have paid."
+            + (_newMemberNote is { } nm ? " " + nm : "");   // a new member's temporary password stays on screen while they pay
     }
 
     [RelayCommand]

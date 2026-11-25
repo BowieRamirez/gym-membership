@@ -413,6 +413,9 @@ public sealed class SupabaseGateway : ISupabaseGateway
         // the signed-in staff member's own token goes along, and the function checks who it is (supabase/functions/_shared/admin.ts)
         try { return await c.Functions.Invoke(name, c.Auth.CurrentSession?.AccessToken, new Supabase.Functions.Client.InvokeFunctionOptions { Body = body }); }
         catch (Exception ex) when (ErrorCode(ex.Message) is { } code) { throw new Exception(code, ex); }   // {"error":"email_taken"} -> email_taken
+        // owner, 2026-11-25: again once it is done, so a list read while the function ran (from before, e.g. profiles without a new
+        // account) is never served afterwards
+        finally { ClearReadCache(); }
     }
 
     public async Task<bool> EmailInUseAsync(string email)

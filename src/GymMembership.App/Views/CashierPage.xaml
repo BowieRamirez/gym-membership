@@ -407,18 +407,18 @@
                                 </VerticalStackLayout>
 
                                 <VerticalStackLayout Spacing="12" IsVisible="{Binding ShowsOrder}">
-                                    <!-- owner, 2026-11-25: Membership is for someone new, so it is only the register form -->
+                                    <!-- owner, 2026-11-25: Membership is for someone new: their details here, a package below, then Record payment (or
+                                         GCash / QR Ph) makes the account and takes the payment in one go -->
                                     <Border Style="{StaticResource Panel}" IsVisible="{Binding ShowsRegisterForm}" MaximumWidthRequest="640" HorizontalOptions="Start">
                                         <VerticalStackLayout Spacing="10">
-                                            <c:CardTitle Text="Register new member" />
-                                            <Label Text="They get a temporary password to change the first time they sign in. Already have an account? Use Renewal." Style="{StaticResource Caption}" />
+                                            <c:CardTitle Text="New member" />
+                                            <Label Text="Fill in their details, choose a package below, then record the payment: the account is made with it. They get a temporary password to change the first time they sign in. Already have an account? Use Renewal." Style="{StaticResource Caption}" LineBreakMode="WordWrap" />
                                             <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto" RowSpacing="10">
                                                 <VerticalStackLayout Spacing="4"><Label Text="First name" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><Entry Text="{Binding NewFirstName}" SemanticProperties.Description="First name" /></Border></VerticalStackLayout>
                                                 <VerticalStackLayout Grid.Column="1" Spacing="4"><Label Text="Last name" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><Entry Text="{Binding NewLastName}" SemanticProperties.Description="Last name" /></Border></VerticalStackLayout>
                                                 <VerticalStackLayout Grid.Row="1" Spacing="4"><Label Text="Email" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><Entry Text="{Binding NewEmail}" Keyboard="Email" SemanticProperties.Description="Email" /></Border></VerticalStackLayout>
                                                 <VerticalStackLayout Grid.Row="1" Grid.Column="1" Spacing="4"><Label Text="Phone (optional)" Style="{StaticResource Caption}" /><Border Style="{StaticResource Field}"><Entry Text="{Binding NewPhone}" Keyboard="Telephone" SemanticProperties.Description="Phone" /></Border></VerticalStackLayout>
                                             </Grid>
-                                            <Button Text="Register member" Style="{StaticResource SmallButton}" HorizontalOptions="Start" Command="{Binding RegisterCommand}" AutomationId="CashierRegister" />
                                         </VerticalStackLayout>
                                     </Border>
                                     <VerticalStackLayout Spacing="12" IsVisible="{Binding ShowsSearch}">
