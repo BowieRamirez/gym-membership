@@ -206,6 +206,16 @@ try {
     await assert.rejects(asAnon('select schedule_set_enforced(false)'), /permission denied|42501/);
     assert.equal((await one(`select count(*)::int n from audit_log where action = 'schedule.enforced'`)).n, 2);
   });
+  await test('Phase 3.4: the desk reads every coach\'s shift today; members cannot', async () => {
+    await clearSchedules();
+    await db.query(`insert into schedule_overrides(user_id,from_date,to_date,starts_at,ends_at,reason,created_by) values($1,$2,$2,'08:00','16:00','test',$1)`, [coach, today]);
+    const rows = await as(desk, `select coach_id, to_char(starts_at at time zone 'Asia/Manila','HH24:MI') s, late from coach_shifts_today()`);
+    assert.equal(rows.find(r => r.coach_id === coach).late, minute > 8 * 60 && minute < 16 * 60);   // not in, shift running = late
+    assert.deepEqual(rows.filter(r => r.coach_id === coach).map(r => r.s), ['08:00']);
+    assert.ok(!rows.some(r => r.coach_id === coach2));   // no shift today: not listed
+    await assert.rejects(as(member, 'select * from coach_shifts_today()'), /forbidden/);
+    await assert.rejects(asAnon('select * from coach_shifts_today()'), /permission denied|42501/);
+  });
   await test('schedule changes are audited', async () => {
     const n = (await one(`select count(*)::int n from audit_log where action like 'schedule.%'`)).n;
     assert.ok(n >= 5);

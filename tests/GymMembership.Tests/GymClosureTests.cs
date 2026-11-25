@@ -68,9 +68,6 @@ public class GymClosureTests
         Assert.Equal("day_closed", booked.Message);
         Assert.Equal("The gym is closed that day. See Announcements for why, and choose another day.", ErrorText.For(booked.Error, booked.Message));
         Assert.True((await new ReservationService(gw).BookAsync(pool.Id, At(Closed.AddDays(1), 10), 60, PayMethod.Qr)).Ok);
-
-        await As("coach@demo.io", gw);
-        Assert.False((await new CoachService(gw).PostShiftAsync(At(Closed, 8), At(Closed, 12), null)).Ok);
     }
 
     [Fact]
@@ -162,22 +159,5 @@ public class GymClosureTests
         var data = (await new MemberCalendarService(gw).RangeAsync(At(Closed, 0), At(Closed.AddDays(1), 0))).Value!;
         var closed = Assert.Single(data.Entries, e => e.Kind == "closed");
         Assert.Equal(("Gym closed: Holiday", "Gym closed", "Closed"), (closed.Title, closed.KindText, closed.Short));
-    }
-
-    [Fact]
-    public async Task The_coach_dashboard_offers_no_shift_on_a_closed_day()
-    {
-        var gw = new DemoGateway();
-        await CloseAsync(gw);
-        await As("coach@demo.io", gw);
-        var vm = new AttendanceViewModel(new SessionService(gw), new AttendanceService(gw), new CoachService(gw), new MembershipService(gw))
-        { Zone = TimeZoneInfo.CreateCustomTimeZone("Manila", TimeSpan.FromHours(8), "Manila", "Manila") };
-        await vm.OnAppearingAsync();
-        vm.SelectDayCommand.Execute(new CalendarDay(Closed, true, false, false, 0, 0, 0, 0));
-        Assert.False(vm.CanPost);
-        Assert.Equal("The gym is closed this day: Holiday.", vm.ClosedNote);
-        vm.SelectDayCommand.Execute(new CalendarDay(Closed.AddDays(1), true, false, false, 0, 0, 0, 0));
-        Assert.True(vm.CanPost);
-        Assert.Equal("", vm.ClosedNote);
     }
 }

@@ -27,8 +27,7 @@ public class CoachSessionBookingTests
         var manila = TimeSpan.FromHours(8);
         var sStart = new DateTimeOffset(tomorrow.ToDateTime(TimeOnly.MinValue).AddHours(10), manila).UtcDateTime;
         var sEnd = new DateTimeOffset(tomorrow.ToDateTime(TimeOnly.MinValue).AddHours(14), manila).UtcDateTime;
-        await gw.SignInAsync("coach@demo.io", DemoGateway.DemoPassword);
-        await gw.InsertAsync(new ShiftPost { CoachId = "u-coach1", Start = sStart, End = sEnd, Status = Status.Scheduled });
+        gw.OwnerAddCoachShift("u-coach1", sStart, sEnd);   // Fix 3 (0151): the schedule writes shifts
 
         // Alex is on Monthly (CoachAddonPrice = 250)
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);

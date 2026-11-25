@@ -11,7 +11,10 @@
         <DataTemplate x:Key="CoachRow" x:DataType="svc:CoachPresenceRow">
             <VerticalStackLayout>
                 <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,*,110">
-                    <Label Text="{Binding Name}" FontFamily="BarlowMedium" VerticalOptions="Center" />
+                    <HorizontalStackLayout Spacing="8" VerticalOptions="Center">
+                        <Label Text="{Binding Name}" FontFamily="BarlowMedium" VerticalOptions="Center" />
+                        <c:StatusChip Status="Late" IsVisible="{Binding IsLate}" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
                     <Label Grid.Column="1" Text="{Binding StateText}" Style="{StaticResource Muted}" VerticalOptions="Center" />
                     <Button Grid.Column="2" Text="Check out" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="End" Clicked="OnCheckOutCoach" />
                 </Grid>
@@ -22,7 +25,10 @@
             <VerticalStackLayout>
                 <Grid Padding="14,10" ColumnDefinitions="*,Auto" ColumnSpacing="12">
                     <VerticalStackLayout Spacing="2">
-                        <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" />
+                        <HorizontalStackLayout Spacing="8">
+                            <Label Text="{Binding Name}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
+                            <c:StatusChip Status="Late" IsVisible="{Binding IsLate}" VerticalOptions="Center" />
+                        </HorizontalStackLayout>
                         <Label Text="{Binding StateText}" Style="{StaticResource Caption}" />
                     </VerticalStackLayout>
                     <Button Grid.Column="1" Text="Check out" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" Clicked="OnCheckOutCoach" />

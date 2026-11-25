@@ -1022,9 +1022,13 @@ public sealed record TraineeRow(int HireId, string CoachId, string MemberId, str
 }
 
 /// <summary>A coach on the front desk's check-in page. InSince is null while they are not in the gym.</summary>
-public sealed record CoachPresenceRow(string CoachId, string Name, DateTime? InSince)
+public sealed record CoachPresenceRow(string CoachId, string Name, DateTime? InSince, DateTime? ShiftStart = null, DateTime? ShiftEnd = null, bool IsLate = false)
 {
     public bool InGym => InSince is not null;
+    /// <summary>Fix 3 (0154): today's shift from the admin's schedule, in Manila time.</summary>
+    public string ShiftText => ShiftStart is { } s && ShiftEnd is { } e
+        ? $"Shift {ManilaTime.Of(s).ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture)} – {ManilaTime.Of(e).ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture)}"
+        : "No shift today";
     public string StateText => InSince is { } t ? $"In the gym since {Fmt.Time(t)}" : "Not in the gym";
     public string ActionText => InGym ? "Check out" : "Check in";
 }
@@ -1037,8 +1041,6 @@ public interface ICoachService
     Task<AppResult<bool>> UpdateProfileAsync(string? bio, string? specialty, bool available);
     Task<AppResult<IReadOnlyList<TraineeRow>>> TraineesAsync();
     Task<AppResult<IReadOnlyList<ShiftPost>>> MyShiftsAsync();
-    Task<AppResult<bool>> PostShiftAsync(DateTime startUtc, DateTime endUtc, string? note);
-    Task<AppResult<bool>> CancelShiftAsync(int shiftId);
     /// <summary>The signed-in coach's open visit, or null when they are not checked in.</summary>
     Task<AppResult<CoachVisit?>> MyVisitAsync();
     /// <summary>Null coachId: the signed-in coach themselves. Otherwise front desk for that coach. Twice in a row is harmless.</summary>
@@ -1100,11 +1102,15 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
         var activeTask = gw.ListAsync<PublicProfile>(p => p.IsActive == true);
         var openTask = gw.ListAsync<CoachVisit>(v => v.CheckedOutAt == null);
         var coachesTask = gw.ListAsync<Coach>();
-        await Task.WhenAll(activeTask, openTask, coachesTask);
+        // 0154: today's shifts and who is late; the presence list still shows if that look fails (e.g. a page without check-in rights)
+        var shiftsTask = Safe.RunAsync(async () => await gw.RpcAsync<List<CoachShiftToday>>("coach_shifts_today", new()) ?? []);
+        await Task.WhenAll(activeTask, openTask, coachesTask, shiftsTask);
         var active = activeTask.Result.ToDictionary(p => p.Id, p => p.FullName);
         var open = openTask.Result.ToDictionary(v => v.CoachId, v => v.CheckedInAt);
+        var shifts = (shiftsTask.Result.Value ?? []).ToDictionary(s => s.CoachId);
         return coachesTask.Result.Where(c => active.ContainsKey(c.UserId))
-            .Select(c => new CoachPresenceRow(c.UserId, active[c.UserId], open.TryGetValue(c.UserId, out var t) ? t : null))
+            .Select(c => new CoachPresenceRow(c.UserId, active[c.UserId], open.TryGetValue(c.UserId, out var t) ? t : null,
+                shifts.GetValueOrDefault(c.UserId)?.StartsAt, shifts.GetValueOrDefault(c.UserId)?.EndsAt, shifts.GetValueOrDefault(c.UserId)?.Late ?? false))
             .OrderByDescending(r => r.InGym).ThenBy(r => r.Name).ToList();
     });
 
@@ -1152,24 +1158,6 @@ public sealed class CoachService(ISupabaseGateway gw) : ICoachService
         return (await gw.ListAsync<ShiftPost>(s => s.CoachId == uid && s.End > now && s.Status == "scheduled")).OrderBy(s => s.Start).ToList();
     });
 
-    public async Task<AppResult<bool>> PostShiftAsync(DateTime startUtc, DateTime endUtc, string? note)
-    {
-        if (endUtc <= startUtc) return AppResult<bool>.Fail(AppErrorKind.Validation, "end must be after start");
-        return await Safe.RunAsync(async () =>
-        {
-            var uid = gw.CurrentUserId ?? throw new Exception("not authenticated");
-            await gw.InsertAsync(new ShiftPost { CoachId = uid, Start = startUtc, End = endUtc, Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim() });
-            return true;
-        });
-    }
-
-    public Task<AppResult<bool>> CancelShiftAsync(int shiftId) => Safe.RunAsync(async () =>
-    {
-        var row = (await gw.ListAsync<ShiftPost>(s => s.Id == shiftId)).First();
-        row.Status = Status.Cancelled;
-        await gw.UpdateAsync(row);
-        return true;
-    });
 }
 
 // ===================== Time requests and sessions =====================

@@ -51,6 +51,8 @@ public sealed partial class DemoGateway
                 var amount = Money("p_float"); var note = Note();
                 if (amount is < 0 or > 10_000_000 || note?.Length > 500) throw Err("bad_input");
                 if (amount != All<GymSettings>().First().OpeningFloat && note is null) throw Err("note_required");
+                // 0151 (S1): front desk opens a drawer only in their shift; admins and sub-admins are not scheduled
+                if (RolesOf(Uid).Contains("employee") && !RolesOf(Uid).Any(r => r is "admin" or "subadmin")) ScheduleClockIn(Uid!);
                 if (_shifts.Any(s => s.Cashier == Uid && s.ClosedAt is null)) throw Err("shift_open");
                 var s = new DemoShift { Id = _shifts.Count + 1, Cashier = Uid, OpenedAt = SubscriptionNow, Float = Math.Round(amount, 2), OpenNote = note };
                 _shifts.Add(s);

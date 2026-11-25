@@ -4,9 +4,9 @@
 
 Created: 2026-11-25
 Last updated: 2026-11-25
-Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phases 3.1-3.3 done (0151-0153 live; shift check-in rule off until the admin turns it on from Scheduling); 3.4-3.6 TODO. S1-S9 confirmed. More fixes get added below as the owner sends them.
+Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phases 3.1-3.4 done (0151-0154 live; shift check-in rule off until the admin turns it on from Scheduling); 3.5-3.6 TODO. S1-S9 confirmed. More fixes get added below as the owner sends them.
 Branch: `owner-fixes-2026-11-25` (cut from `main` at `df3f54c`, v0.11.0). Owner merges to `main` when done; no push or PR without the owner.
-Next migration: `0154`.
+Next migration: `0155`.
 
 **Goal:** The owner's fixes after the v0.11.0 release.
 
@@ -108,7 +108,7 @@ Owner, 2026-11-25: can the coaches' shifts and payroll work like `C:\Users\bowie
 | 3.1 | Database: templates, assignments, overrides, `shift_for`, coach shift sync, clock-in rule (off by default) | DEPLOYED (`0151` live 2026-11-25, rule off) |
 | 3.2 | Payroll: Late / Left early flags, pay from shift start | DEPLOYED (`0152` live 2026-11-25) |
 | 3.3 | Scheduling page (Templates, Assignments, Calendar) | BUILT (`0153` live 2026-11-25; owner hand check left) |
-| 3.4 | Coach and desk screens: no Post a shift, refusal sentences, shift and Late on the desk | TODO |
+| 3.4 | Coach and desk screens: no Post a shift, refusal sentences, shift and Late on the desk | BUILT (`0154` live 2026-11-25; owner hand check left) |
 | 3.5 | Move a booked session to another coach (S9) | TODO |
 | 3.6 | Checks and rollout (admin sets schedules, then the rule is switched on) | TODO |
 
@@ -150,9 +150,10 @@ Owner, 2026-11-25: can the coaches' shifts and payroll work like `C:\Users\bowie
 
 #### Phase 3.4: Coach and desk screens
 
-- [ ] Coach app: remove Post a shift; My shifts shows the admin-made shifts read-only ("Set by the gym").
-- [ ] Coach self check-in, desk coach list and Cashier Start shift show the refusals (`ErrorText`): `no_shift_today` → "No shift today. Ask the admin to add one."; `too_early` → "Your shift starts at 8:00 AM. Check in from 7:55 AM."
-- [ ] Desk coach list shows each coach's shift today and a Late tag.
+- [x] Coach app: remove Post a shift; My shifts shows the admin-made shifts read-only ("Set by the gym").
+- [x] Coach self check-in, desk coach list and Cashier Start shift show the refusals (`ErrorText`): `no_shift_today` → "No shift today. Ask the admin to add one."; `too_early` → "Your shift starts at 8:00 AM. Check in from 7:55 AM."
+- [x] Desk coach list shows each coach's shift today and a Late tag.
+- Built notes: coaches' Post a shift form (My shifts side panel) and Cancel shift buttons (My shifts table and coach calendar) are gone, with `PostShiftAsync`/`CancelShiftAsync`, the calendar's post fields and `ShiftSlot`; My shifts says "The gym sets your shifts." Refusals: `no_shift_today` → "No shift today. Ask the admin to add one on the Scheduling page."; `too_early:8:00 AM` → "The shift starts at 8:00 AM. Check in from 7:55 AM." New `coach_shifts_today()` (`0154`, `check_ins:record`): each coach's shift today and Late (server time: in after the start, or not in while it runs), because the desk can't read the schedule tables and coach shift_posts start tomorrow. Check-in page coach rows show the shift and a Late chip; Home's in-gym list shows Late. Demo: same check-in rule for coaches and front desk drawers, `coach_shifts_today`, coach shift writes refused; dead demo `GuardShift` and the "Your coach posted a shift" notice removed; tests set coach shifts with `DemoGateway.OwnerAddCoachShift`. Tests: `ShiftCheckInTests` (6), db `staff-scheduling.mjs` (19); 1252 C# tests pass; Windows and Android build.
 
 #### Phase 3.5: Move a booked session to another coach (S9)
 

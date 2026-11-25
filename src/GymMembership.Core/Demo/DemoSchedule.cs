@@ -119,6 +119,40 @@ public sealed partial class DemoGateway
         }
     }
 
+    // S3/S4 (0151): check-in follows the shift once the switch is on; returns the shift it was checked in against (UTC)
+    (DateTime? Start, DateTime? End) ScheduleClockIn(string user)
+    {
+        var (start, end) = ShiftToday(user);
+        if (!(All<GymSettings>().FirstOrDefault()?.ScheduleEnforced ?? false)) return (start, end);
+        if (start is not { } st) throw Err("no_shift_today");
+        if (SubscriptionNow < st.AddMinutes(-5)) throw Err("too_early:" + st.AddHours(8).ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture));
+        return (start, end);
+    }
+
+    // 0154: each coach's shift today and whether they are late (checked in after the start, or not in while the shift runs)
+    List<CoachShiftToday> CoachShiftsToday()
+    {
+        Require("check_ins:record");
+        var rows = new List<CoachShiftToday>();
+        foreach (var c in All<Coach>().Where(c => All<Profile>().Any(p => p.Id == c.UserId && p.IsActive)))
+        {
+            var (s, e) = ShiftToday(c.UserId);
+            if (s is not { } st || e is not { } en) continue;
+            var open = All<CoachVisit>().FirstOrDefault(v => v.CoachId == c.UserId && v.CheckedOutAt is null);
+            rows.Add(new CoachShiftToday { CoachId = c.UserId, StartsAt = st, EndsAt = en,
+                Late = open is not null ? open.CheckedInAt > st : SubscriptionNow > st && SubscriptionNow < en });
+        }
+        return rows;
+    }
+
+    (DateTime? Start, DateTime? End) ShiftToday(string user)
+    {
+        var today = ManilaDay(SubscriptionNow);
+        var (s, e, _, _) = ScheduleNow().ShiftFor(user, today);
+        DateTime? At(TimeSpan? t) => t is { } v ? today.ToDateTime(TimeOnly.MinValue).Add(v).AddHours(-8) : null;
+        return (At(s), At(e));
+    }
+
     ScheduleData ScheduleNow()
     {
         var gym = All<GymSettings>().FirstOrDefault() ?? new GymSettings();

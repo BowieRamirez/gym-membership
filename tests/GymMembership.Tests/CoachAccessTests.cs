@@ -66,8 +66,7 @@ public class CoachAccessTests
         var manilaToday = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8));
         var futureDay = manilaToday.AddDays(2);
         var startUtc = new DateTimeOffset(futureDay.ToDateTime(new TimeOnly(10, 0)), TimeSpan.FromHours(8)).UtcDateTime;
-        await gw.SignInAsync("coach@demo.io", DemoGateway.DemoPassword);
-        await gw.InsertAsync(new ShiftPost { CoachId = "u-coach1", Start = startUtc, End = startUtc.AddHours(4), Status = Status.Scheduled });
+        gw.OwnerAddCoachShift("u-coach1", startUtc, startUtc.AddHours(4));   // Fix 3 (0151): the schedule writes shifts
         await gw.SignInAsync("member@demo.io", DemoGateway.DemoPassword);
         var beforeBook = await ses.BookCoachAsync("u-coach1", startUtc, 1);
         Assert.False(beforeBook.Ok);
@@ -174,8 +173,7 @@ public class CoachAccessTests
         var nextHourUtc = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, DateTime.UtcNow.Day, DateTime.UtcNow.Hour, 0, 0, DateTimeKind.Utc).AddHours(1);
         if (DateOnly.FromDateTime(nextHourUtc.AddHours(8)) == manilaToday && nextHourUtc.AddHours(8).Hour < 23)
         {
-            await gw.SignInAsync("coach@demo.io", DemoGateway.DemoPassword);
-            await gw.InsertAsync(new ShiftPost { CoachId = "u-coach1", Start = nextHourUtc, End = nextHourUtc.AddHours(1), Status = Status.Scheduled });
+            gw.OwnerAddCoachShift("u-coach1", nextHourUtc, nextHourUtc.AddHours(1));
             await gw.SignInAsync("bea@demo.io", DemoGateway.DemoPassword);
             var dayOffer = await mem.CoachAccessOfferAsync();
             Assert.True(dayOffer.Value!.Offered);

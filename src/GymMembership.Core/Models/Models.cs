@@ -91,6 +91,12 @@ public static class PayMethod
   [Column("from_date")] public DateTime FromDate { get; set; } [Column("to_date")] public DateTime ToDate { get; set; }
   [Column("starts_at")] public TimeSpan? StartsAt { get; set; } [Column("ends_at")] public TimeSpan? EndsAt { get; set; } [Column("reason")] public string Reason { get; set; } = "";
   public DateOnly From => DateOnly.FromDateTime(FromDate); public DateOnly To => DateOnly.FromDateTime(ToDate); }
+/// <summary>coach_shifts_today (0154): a coach's shift today and whether they are late (server time).</summary>
+public sealed class CoachShiftToday
+{ [System.Text.Json.Serialization.JsonPropertyName("coach_id")] public string CoachId { get; set; } = "";
+  [System.Text.Json.Serialization.JsonPropertyName("starts_at")] public DateTime StartsAt { get; set; }
+  [System.Text.Json.Serialization.JsonPropertyName("ends_at")] public DateTime EndsAt { get; set; }
+  [System.Text.Json.Serialization.JsonPropertyName("late")] public bool Late { get; set; } }
 /// <summary>What schedule_template_save returns: the template and the days whose coach shift was kept because a session is booked in it.</summary>
 public sealed class ScheduleSaveResult
 { [System.Text.Json.Serialization.JsonPropertyName("template_id")] public int TemplateId { get; set; }

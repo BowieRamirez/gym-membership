@@ -1122,19 +1122,9 @@ public partial class ShiftsViewModel(ICoachService svc, ISessionService? session
     public AttendanceViewModel? Calendar { get; } = sessions is not null && attendance is not null
         ? new AttendanceViewModel(sessions, attendance, svc, gym)
         : null;
+    /// <summary>Fix 3 (0151, S2): the shifts the gym set on its Scheduling page; coaches no longer post or cancel them.</summary>
     public ObservableCollection<ShiftPost> Shifts { get; } = new();
-    public int[] HoursOptions { get; } = [2, 4, 6, 8, 10];
 
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(PostTimeHint), nameof(HasPostTimeHint)), NotifyCanExecuteChangedFor(nameof(PostCommand))]
-    private DateTime date = DateTime.Today.AddDays(1);
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(PostTimeHint), nameof(HasPostTimeHint)), NotifyCanExecuteChangedFor(nameof(PostCommand))]
-    private TimeSpan time = new(8, 0, 0);
-    [ObservableProperty] private int hours = 4;   // D10 default length
-    [ObservableProperty] private string? note;
-
-    public string? PostTimeHint => (Date.Date + Time) <= DateTime.Now ? "Pick a future start time — this time has already passed." : null;
-    public bool HasPostTimeHint => PostTimeHint is not null;
-    bool CanPost() => !HasPostTimeHint;
 
     // hiring on/off lives on My coach profile ("Taking new members"); 9.6 took the duplicate Pause hiring button off this page
     public override Task OnAppearingAsync() => LoadAsync();
@@ -1144,21 +1134,6 @@ public partial class ShiftsViewModel(ICoachService svc, ISessionService? session
         ? Task.WhenAll(RunAsync(svc.MyShiftsAsync, rows => Fill(Shifts, rows)), Calendar.OnAppearingAsync())
         : RunAsync(svc.MyShiftsAsync, rows => Fill(Shifts, rows));
 
-    [RelayCommand(CanExecute = nameof(CanPost))]
-    private async Task PostAsync()
-    {
-        Notice = null;
-        var start = (Date.Date + Time).ToUniversalTime();
-        if (await RunAsync(() => svc.PostShiftAsync(start, start.AddHours(Hours), Note)))
-        { Notice = "Shift posted. Your trainees can see it on the Coaches page."; Note = null; await LoadAsync(); }
-    }
-
-    [RelayCommand]
-    private async Task CancelAsync(ShiftPost shift)
-    {
-        if (!await Confirm.AskAsync("Cancel this shift?", Fmt.Range(shift.Start, shift.End), "Cancel shift")) return;
-        if (await RunAsync(() => svc.CancelShiftAsync(shift.Id))) await LoadAsync();
-    }
 }
 
 public partial class SessionsViewModel(ISessionService svc, IMembershipService? membership = null, IUrlOpener? opener = null) : LoadableViewModel
@@ -1430,17 +1405,8 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     public ObservableCollection<ShiftPost> DayShifts { get; } = new();
     public ObservableCollection<string> MyAmenities { get; } = new();
     public bool HasAmenities => MyAmenities.Count > 0;
-    public int[] HoursOptions { get; } = [2, 4, 6, 8, 10];
-
-    [ObservableProperty] private TimeSpan postTime = new(8, 0, 0);   // the start, as the coach's own clock shows it
-    [ObservableProperty] private int postHours = 4;
-    [ObservableProperty] private string? postNote;
-    [ObservableProperty] private bool canPost;                       // the selected day still has gym time ahead
-    [ObservableProperty] private string closedNote = "";              // G17 (0065): why no shift can be posted that day
-    public bool HasShifts => coach is not null;
+    public bool HasShifts => coach is not null;   // Fix 3 (0151): shown read-only; the gym sets them
     List<ShiftPost> shifts = [];
-    GymSettings? hours;
-    IReadOnlyDictionary<DateOnly, string> closed = new Dictionary<DateOnly, string>();
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsMonth), nameof(IsWeek), nameof(PeriodTitle))] private string viewMode = "Month";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(PeriodTitle))] private DateOnly focus;
@@ -1477,51 +1443,10 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     public override async Task OnAppearingAsync()
     {
         if (Focus == default) { Focus = Today; SelectedDay = Today; }
-        var gymTask = coach is not null && hours is null && gym is not null ? gym.GymAsync() : null;
-        var closedTask = coach is not null && gym is not null ? gym.ClosedDaysAsync() : null;
         var traineesTask = coach is not null ? RunAsync(coach.TraineesAsync, t => TraineesText = t.Count.ToString()) : null;
-        var reloadTask = ReloadAsync();
-        await Task.WhenAll(new[] { gymTask, closedTask, traineesTask, reloadTask }.OfType<Task>());
-        if (gymTask?.Result is { Ok: true, Value: { } g }) hours = g;
-        if (closedTask?.Result is { Ok: true, Value: { } c }) closed = c;
-        Prefill();
+        await Task.WhenAll(new[] { traineesTask, ReloadAsync() }.OfType<Task>());
     }
 
-    /// <summary>The form for the selected day: opening time, or the next half hour today; Post shift is off when no gym time is left.</summary>
-    void Prefill()
-    {
-        var start = hours is not null && SelectedDay is { } day ? ShiftSlot.DefaultStart(day, hours.OpensAt, hours.ClosesAt, Clock()) : null;
-        ClosedNote = SelectedDay is { } sd && closed.TryGetValue(sd, out var why) ? $"The gym is closed this day: {why}." : "";
-        CanPost = start is not null && ClosedNote == "";
-        if (start is { } s) PostTime = AttendanceCalendar.LocalTime(s, Zone).TimeOfDay;
-        PostHours = 4;
-    }
-
-    [RelayCommand]
-    private async Task PostShiftAsync()
-    {
-        if (coach is null || hours is null || SelectedDay is not { } day) return;
-        Notice = null;
-        var start = AttendanceCalendar.StartOfDayUtc(day, Zone) + PostTime;
-        var end = ShiftSlot.End(start, PostHours, hours.ClosesAt);
-        if (end <= start) { ErrorMessage = "That start is at or after closing time. Pick an earlier start."; return; }
-        if (!await RunAsync(() => coach.PostShiftAsync(start, end, PostNote))) return;
-        Notice = end < start.AddHours(PostHours)
-            ? $"Shift posted until closing at {AttendanceCalendar.LocalTime(end, Zone).ToString("h:mm tt", CultureInfo.InvariantCulture)}."
-            : "Shift posted. Your trainees can see it on the Coaches page.";
-        PostNote = null;
-        await ReloadAsync();
-        Prefill();
-    }
-
-    [RelayCommand]
-    private async Task CancelShiftAsync(ShiftPost shift)
-    {
-        if (coach is null) return;
-        Notice = null;
-        if (!await Confirm.AskAsync("Cancel this shift?", Fmt.Range(shift.Start, shift.End), "Cancel shift")) return;
-        if (await RunAsync(() => coach.CancelShiftAsync(shift.Id))) { Notice = "Shift cancelled."; await ReloadAsync(); }
-    }
 
     // one range covers both views of the same date (the month grid and its week), so switching between them needs no new load
     (DateTime From, DateTime To) Range()
@@ -1586,7 +1511,7 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
 
     [RelayCommand] private Task PreviousAsync() => MoveAsync(IsMonth ? Focus.AddMonths(-1) : Focus.AddDays(-7));
     [RelayCommand] private Task NextAsync() => MoveAsync(IsMonth ? Focus.AddMonths(1) : Focus.AddDays(7));
-    [RelayCommand] private async Task TodayAsync() { await MoveAsync(Today, select: Today); Prefill(); }
+    [RelayCommand] private async Task TodayAsync() => await MoveAsync(Today, select: Today);
 
     async Task MoveAsync(DateOnly to, DateOnly? select = null)
     {
@@ -1597,7 +1522,7 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
     }
 
     [RelayCommand]
-    private void SelectDay(CalendarDay day) { SelectedDay = day.Date; Rebuild(); Prefill(); }
+    private void SelectDay(CalendarDay day) { SelectedDay = day.Date; Rebuild(); }
 
     // the argument is "<sessionId>|<mark>" so one XAML button template serves all four marks
     [RelayCommand]

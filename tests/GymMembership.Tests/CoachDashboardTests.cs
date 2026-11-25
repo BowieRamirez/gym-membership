@@ -4,73 +4,13 @@ using GymMembership.Core.Services;
 using GymMembership.Core.ViewModels;
 using Xunit;
 
-// Phase 9 (D10): the coach dashboard posts a shift from the calendar (day tapped, start and 4 hours filled in, Post shift),
-// cut short at closing time; rates are peso amounts above 0 that never depend on the device's decimal separator.
+// Phase 9 (D10): the coach profile; rates are peso amounts above 0 that never depend on the device's decimal separator.
+// (Posting a shift from the calendar went with Fix 3, 0151: the gym sets coaches' shifts.)
 public class CoachDashboardTests
 {
     static readonly TimeZoneInfo Manila = TimeZoneInfo.CreateCustomTimeZone("Manila", TimeSpan.FromHours(8), "Manila", "Manila");
     static readonly DateOnly Day = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8)).AddDays(3);
     static DateTime At(DateOnly d, int h, int m = 0) => DateTime.SpecifyKind(d.ToDateTime(new TimeOnly(h, m)).AddHours(-8), DateTimeKind.Utc);
-
-    [Fact]
-    public void The_default_start_is_opening_or_the_next_half_hour_today_and_the_end_stops_at_closing()
-    {
-        TimeSpan opens = TimeSpan.FromHours(6), closes = TimeSpan.FromHours(22);
-        Assert.Equal(At(Day, 6), ShiftSlot.DefaultStart(Day, opens, closes, At(Day, 0)));
-        Assert.Equal(At(Day, 14, 30), ShiftSlot.DefaultStart(Day, opens, closes, At(Day, 14, 5)));
-        Assert.Equal(At(Day, 14), ShiftSlot.DefaultStart(Day, opens, closes, At(Day, 14)));
-        Assert.Null(ShiftSlot.DefaultStart(Day, opens, closes, At(Day, 21, 40)));
-        Assert.Equal(At(Day, 22), ShiftSlot.End(At(Day, 20), 4, closes));
-        Assert.Equal(At(Day, 12), ShiftSlot.End(At(Day, 8), 4, closes));
-    }
-
-    static async Task<(AttendanceViewModel Vm, DemoGateway Gw)> Dashboard()
-    {
-        var gw = new DemoGateway();
-        await gw.SignInAsync("coach@demo.io", DemoGateway.DemoPassword);
-        var vm = new AttendanceViewModel(new SessionService(gw), new AttendanceService(gw), new CoachService(gw), new MembershipService(gw)) { Zone = Manila, Focus = Day };
-        await vm.OnAppearingAsync();
-        vm.SelectDayCommand.Execute(vm.Days.Single(d => d.Date == Day));
-        return (vm, gw);
-    }
-
-    [Fact]
-    public async Task Tapping_a_day_fills_in_opening_time_and_four_hours_and_Post_shift_posts_it()
-    {
-        var (vm, gw) = await Dashboard();
-        Assert.True(vm.CanPost);
-        Assert.Equal(TimeSpan.FromHours(6), vm.PostTime);
-        Assert.Equal(4, vm.PostHours);
-
-        await vm.PostShiftCommand.ExecuteAsync(null);
-        Assert.Null(vm.ErrorMessage);
-        var shift = (await gw.ListAsync<ShiftPost>(s => s.CoachId == "u-coach1" && s.Status == "scheduled")).Single(s => s.Start == At(Day, 6));
-        Assert.Equal(At(Day, 10), shift.End);
-        Assert.Single(vm.DayShifts, s => s.Id == shift.Id);
-
-        await vm.PostShiftCommand.ExecuteAsync(null);   // the same start again overlaps
-        Assert.Equal("You already have a shift at that time. Pick another start or fewer hours.", vm.ErrorMessage);
-    }
-
-    [Fact]
-    public async Task A_shift_that_would_run_past_closing_ends_at_closing()
-    {
-        var (vm, gw) = await Dashboard();
-        vm.PostTime = TimeSpan.FromHours(20);
-        await vm.PostShiftCommand.ExecuteAsync(null);
-        Assert.Equal("Shift posted until closing at 10:00 PM.", vm.Notice);
-        Assert.Contains(await gw.ListAsync<ShiftPost>(s => s.CoachId == "u-coach1"), s => s.Start == At(Day, 20) && s.End == At(Day, 22));
-    }
-
-    [Fact]
-    public async Task A_shift_cannot_start_in_the_past()
-    {
-        var gw = new DemoGateway();
-        await gw.SignInAsync("coach@demo.io", DemoGateway.DemoPassword);
-        var yesterday = Day.AddDays(-4);
-        var r = await new CoachService(gw).PostShiftAsync(At(yesterday, 8), At(yesterday, 10), null);
-        Assert.Equal("That time has already started. Pick a later slot.", ErrorText.For(r.Error, r.Message));
-    }
 
     [Fact]
     public async Task The_profile_saves_bio_specialty_and_shows_On_or_Off()

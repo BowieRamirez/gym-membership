@@ -199,7 +199,6 @@
                                             </Label>
                                             <Label Text="{Binding Note}" Style="{StaticResource Caption}" IsVisible="{Binding Note, Converter={StaticResource HasText}}" />
                                         </VerticalStackLayout>
-                                        <Button Grid.Column="1" Text="Cancel shift" Style="{StaticResource FilterChip}" VerticalOptions="Center" Clicked="OnCancelShift" />
                                     </Grid>
                                 </VerticalStackLayout>
                             </DataTemplate>

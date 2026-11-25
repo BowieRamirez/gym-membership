@@ -105,18 +105,5 @@ public class AmenityPassTests
         Assert.Equal(new TimeSpan(5, 30, 0), (await new AdminService(gw).GymSettingsAsync()).Value!.OpensAt);
     }
 
-    [Fact]
-    public async Task Coach_shifts_must_sit_on_the_half_hour_inside_gym_hours()
-    {
-        var gw = await As("coach@demo.io");
-        var coach = new CoachService(gw);
-        var day = DateTime.UtcNow.AddHours(8).Date.AddDays(5);          // a Manila date
-        DateTime Manila(int h, int m = 0) => DateTime.SpecifyKind(day.AddHours(h - 8).AddMinutes(m), DateTimeKind.Utc);
-        Assert.Equal("off_grid", (await coach.PostShiftAsync(Manila(8, 15), Manila(10), null)).Message);
-        Assert.Equal("outside_gym_hours", (await coach.PostShiftAsync(Manila(5), Manila(7), null)).Message);
-        Assert.Equal("outside_gym_hours", (await coach.PostShiftAsync(Manila(21), Manila(23), null)).Message);
-        Assert.True((await coach.PostShiftAsync(Manila(8), Manila(10, 30), null)).Ok);
-    }
-
     sealed class NoPicker : IProofPicker { public Task<(string FileName, byte[] Data)?> PickAsync() => Task.FromResult<(string FileName, byte[] Data)?>(null); }
 }
