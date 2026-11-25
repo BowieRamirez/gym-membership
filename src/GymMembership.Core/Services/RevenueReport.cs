@@ -192,6 +192,19 @@ public static class PayrollPdf
         return string.Join(" | ", parts);
     }
 
+    /// <summary>Fix 4 (owner, option A): one person's payslip on its own, from the Payslips tab. Same row and payslip block as the period PDF.</summary>
+    public static byte[] PayslipDocument(string gymName, PayrollPeriod period, PayrollRow r, IReadOnlyList<PayrollLine> lines, IReadOnlyList<PayrollHourAdjustment> adjustments,
+        DateTime generatedUtc, byte[] font)
+    {
+        var span = PeriodSpan(period.StartsOn, period.EndsOn);
+        string[] row = [r.FullName, r.RoleLabel, r.BasisText, r.NoSalary ? "No salary" : RevenuePdf.Money(r.BasePay), r.Bonuses == 0 ? "–" : RevenuePdf.Money(r.Bonuses),
+            RevenuePdf.Money(r.Gross), r.Deductions == 0 ? "–" : RevenuePdf.Money(r.Deductions), RevenuePdf.Money(r.Net)];
+        return RevenuePdf.Document($"{gymName} — Payslip", $"Payslip {r.FullName} {span}", font,
+            [($"{r.FullName} · {span}", RevenuePdf.Kind.Text), (StatusLine(period), RevenuePdf.Kind.Strong),
+             ($"Generated {RevenuePdf.Manila(generatedUtc)} (Asia/Manila)", RevenuePdf.Kind.Body), ("", RevenuePdf.Kind.Gap)],
+            Columns, [row], null, "", [Payslip(r, lines, adjustments)]);
+    }
+
     public static string PeriodSpan(DateOnly startsOn, DateOnly endsOn) =>
         $"{startsOn.Day}–{endsOn.Day} {startsOn.ToString("MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)}";
 

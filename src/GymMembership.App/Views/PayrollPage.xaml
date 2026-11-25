@@ -304,6 +304,20 @@
                             </DataTrigger>
                         </Button.Triggers>
                     </Button>
+                    <Button Text="Payslips" Command="{Binding OpenPayslipsTabCommand}" Style="{StaticResource Segment}" AutomationId="PayrollPayslipsTab">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button" Binding="{Binding IsPayslipsTab}" Value="True">
+                                <Setter Property="FontFamily" Value="BarlowSemiBold" />
+                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource SurfaceDark}}" />
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource InkDark}}" />
+                            </DataTrigger>
+                            <DataTrigger TargetType="Button" Binding="{Binding IsPayslipsTab}" Value="False">
+                                <Setter Property="FontFamily" Value="BarlowMedium" />
+                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource PageDark}}" />
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                            </DataTrigger>
+                        </Button.Triggers>
+                    </Button>
                     <Button Text="Paid out" Command="{Binding OpenPaidOutTabCommand}" Style="{StaticResource Segment}" AutomationId="PayrollPaidOutTab">
                         <Button.Triggers>
                             <DataTrigger TargetType="Button" Binding="{Binding IsPaidOutTab}" Value="True">
@@ -424,6 +438,68 @@
                                     <Button Grid.Column="1" Text="Reopen" Style="{StaticResource SmallOutlineButton}" Command="{Binding ReopenCommand}" AutomationId="ReopenPeriod" />
                                 </Grid>
                                 <Label Text="{Binding ReopenError}" Style="{StaticResource FieldError}" IsVisible="{Binding ReopenError, Converter={StaticResource IsNotNull}}" />
+                            </VerticalStackLayout>
+                        </Border>
+                    </VerticalStackLayout>
+
+                    <!-- PAYSLIPS TAB (owner, 2026-11-25, option A): one row a person; Print payslip opens just their payslip for the period -->
+                    <VerticalStackLayout Spacing="14" IsVisible="{Binding IsPayslipsTab}">
+                        <Border Style="{StaticResource Panel}">
+                            <VerticalStackLayout Spacing="6">
+                                <HorizontalStackLayout Spacing="10">
+                                    <Button Text="‹" Style="{StaticResource SmallOutlineButton}" Command="{Binding PrevPeriodCommand}" WidthRequest="36" SemanticProperties.Description="Previous pay period" />
+                                    <Label Text="{Binding PeriodLabel}" Style="{StaticResource Heading}" VerticalOptions="Center" />
+                                    <Button Text="›" Style="{StaticResource SmallOutlineButton}" Command="{Binding NextPeriodCommand}" WidthRequest="36" SemanticProperties.Description="Next pay period" />
+                                </HorizontalStackLayout>
+                                <Label Text="Each person's pay for this period on its own page, to print or send them. Approving and paying the period is on Pay period."
+                                       Style="{StaticResource Muted}" LineBreakMode="WordWrap" />
+                            </VerticalStackLayout>
+                        </Border>
+                        <Border Style="{StaticResource TablePanel}">
+                            <VerticalStackLayout>
+                                <VerticalStackLayout x:Name="PayslipsHead">
+                                    <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,260,120,150" ColumnSpacing="12">
+                                        <Label Text="Person" Style="{StaticResource Caption}" />
+                                        <Label Grid.Column="1" Text="Worked out from" Style="{StaticResource Caption}" />
+                                        <Label Grid.Column="2" Text="Net pay" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                                    </Grid>
+                                    <BoxView Style="{StaticResource Hairline}" />
+                                </VerticalStackLayout>
+                                <c:TableBody Items="{Binding Rows}" Header="{x:Reference PayslipsHead}" WideFrom="900">
+                                    <c:TableBody.RowTemplate>
+                                        <DataTemplate x:DataType="vm:PayrollRowItem">
+                                            <VerticalStackLayout>
+                                                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,260,120,150" ColumnSpacing="12">
+                                                    <HorizontalStackLayout Spacing="10" VerticalOptions="Center">
+                                                        <Label Text="{Binding FullName}" FontFamily="BarlowSemiBold" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                                                        <c:StatusChip Status="{Binding RoleLabel}" VerticalOptions="Center" />
+                                                    </HorizontalStackLayout>
+                                                    <Label Grid.Column="1" Text="{Binding BasisText}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                                                    <Label Grid.Column="2" Text="{Binding NetText}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center" />
+                                                    <Button Grid.Column="3" Text="Print payslip" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="End" VerticalOptions="Center"
+                                                            Clicked="OnPrintPayslipClicked" SemanticProperties.Description="{Binding FullName, StringFormat='Print the payslip for {0}'}" />
+                                                </Grid>
+                                                <BoxView Style="{StaticResource Hairline}" />
+                                            </VerticalStackLayout>
+                                        </DataTemplate>
+                                    </c:TableBody.RowTemplate>
+                                    <c:TableBody.CardTemplate>
+                                        <DataTemplate x:DataType="vm:PayrollRowItem">
+                                            <VerticalStackLayout Padding="14,12" Spacing="4">
+                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                    <Label Text="{Binding FullName}" FontFamily="BarlowSemiBold" LineBreakMode="TailTruncation" />
+                                                    <Label Grid.Column="1" Text="{Binding NetText}" FontFamily="BarlowSemiBold" />
+                                                </Grid>
+                                                <Label Text="{Binding BasisText}" Style="{StaticResource Muted}" LineBreakMode="WordWrap" />
+                                                <Button Text="Print payslip" Style="{StaticResource SmallOutlineButton}" HorizontalOptions="Start" Clicked="OnPrintPayslipClicked" />
+                                                <BoxView Style="{StaticResource Hairline}" />
+                                            </VerticalStackLayout>
+                                        </DataTemplate>
+                                    </c:TableBody.CardTemplate>
+                                    <c:TableBody.Empty>
+                                        <Label Text="No staff in this pay period." Style="{StaticResource Muted}" Margin="14" />
+                                    </c:TableBody.Empty>
+                                </c:TableBody>
                             </VerticalStackLayout>
                         </Border>
                     </VerticalStackLayout>

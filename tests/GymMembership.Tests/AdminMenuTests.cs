@@ -45,7 +45,7 @@ public class AdminMenuTests
         var payroll = new PayrollViewModel(new AdminService(gw));
         payroll.OpenTab("salaries"); Assert.True(payroll.IsSalariesTab);
         payroll.OpenTab("paid_out"); Assert.True(payroll.IsPaidOutTab);
-        payroll.OpenTab("payslips"); Assert.True(payroll.IsPeriodTab);
+        payroll.OpenTab("payslips"); Assert.True(payroll.IsPayslipsTab);
         var attendance = new AttendanceReviewViewModel(new AdminService(gw));
         attendance.OpenTab("corrections"); Assert.True(attendance.IsCorrectionsTab);
     }
@@ -63,5 +63,32 @@ public class AdminMenuTests
         Assert.True(vm.StaffOnly);
         vm.OpenTab("");
         Assert.Contains(vm.Users, u => u.Roles.Contains("member"));
+    }
+}
+
+// owner, 2026-11-25 (Fix 4, option A): Payslips is its own tab, one row a person, and prints only that person's payslip.
+public class PayslipTests
+{
+    [Fact]
+    public async Task Payslips_tab_prints_one_persons_payslip()
+    {
+        var gw = new DemoGateway();
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var admin = new AdminService(gw);
+        var desk = (await admin.PayrollStaffAsync()).Value!.First(s => s.Role == "employee");
+        Assert.True((await admin.SetStaffSalaryAsync(desk.UserId, 9000m, "fixed")).Ok);
+        var files = new DeskBookingTests.Files();
+        var vm = new PayrollViewModel(admin, files) { PeriodStartsOn = new DateOnly(2026, 8, 1) };
+        await vm.LoadCommand.ExecuteAsync(null);
+        vm.OpenTab("payslips");
+        Assert.True(vm.IsPayslipsTab);
+        Assert.False(vm.IsPeriodTab);
+        var row = vm.Rows.First(r => r.UserId == desk.UserId);
+        await vm.PrintPayslipCommand.ExecuteAsync(row);
+        Assert.Null(vm.ErrorMessage);
+        Assert.StartsWith("payslip-", files.Name);
+        Assert.EndsWith("-2026-08-01.pdf", files.Name);
+        Assert.True(files.Pdf!.Length > 500);
+        Assert.Contains(desk.FullName, vm.Notice);
     }
 }

@@ -3541,9 +3541,10 @@ public partial class PayrollViewModel : LoadableViewModel, IOpensTab
         Notice = $"{PeriodLabel} marked as paid out.";
     }
 
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPeriodTab), nameof(IsPaidOutTab), nameof(IsSalariesTab))]
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPeriodTab), nameof(IsPaidOutTab), nameof(IsSalariesTab), nameof(IsPayslipsTab))]
     private string activeTab = "period";
     public bool IsPeriodTab => ActiveTab == "period";
+    public bool IsPayslipsTab => ActiveTab == "payslips";
     public bool IsPaidOutTab => ActiveTab == "paid_out";
     public bool IsSalariesTab => ActiveTab == "salaries";
 
@@ -3611,7 +3612,28 @@ public partial class PayrollViewModel : LoadableViewModel, IOpensTab
 
     /// <summary>Fix 4: the menu opens Payroll on Salaries, Pay period (Processing and Payslips) or Paid out.</summary>
     // the page loads every tab when it shows (LoadAsync), so switching here needs no second read
-    public void OpenTab(string tab) => ActiveTab = tab is "salaries" or "paid_out" ? tab : "period";
+    public void OpenTab(string tab) => ActiveTab = tab is "salaries" or "paid_out" or "payslips" ? tab : "period";
+
+    [RelayCommand] private void OpenPayslipsTab() { CloseDrawer(); ActiveTab = "payslips"; }
+
+    /// <summary>Fix 4 (owner, option A): one person's payslip for the period shown, as a PDF to print or send.</summary>
+    [RelayCommand]
+    private async Task PrintPayslipAsync(PayrollRowItem? item)
+    {
+        if (_files is null || item is null || PeriodId <= 0) return;
+        Notice = null;
+        PayrollPeriod? current = null;
+        if (!await RunAsync(() => _svc.PayrollPeriodAsync(PeriodStartsOn), p => current = p) || current is null) return;
+        if (current.Rows.FirstOrDefault(r => r.UserId == item.UserId) is not { } row) { ErrorMessage = $"{item.FullName} isn't in this pay period any more."; return; }
+        IReadOnlyList<PayrollLine> lines = [];
+        IReadOnlyList<PayrollHourAdjustment> adjustments = [];
+        if (!await RunAsync(() => _svc.PayrollLinesAsync(current.PeriodId, row.UserId), l => lines = l)) return;
+        if (row.PayType != "fixed" && !await RunAsync(() => _svc.PayrollAdjustmentsAsync(current.PeriodId, row.UserId), a => adjustments = a)) return;
+        var slug = new string(row.FullName.ToLowerInvariant().Select(ch => char.IsLetterOrDigit(ch) ? ch : '-').ToArray()).Trim('-');
+        var name = $"payslip-{slug}-{current.StartsOn:yyyy-MM-dd}.pdf";
+        if (await RunAsync(() => Safe.RunAsync(async () => { await _files.ShareAsync(name, PayrollPdf.PayslipDocument(_gymName, current, row, lines, adjustments, DateTime.UtcNow, await _files.FontAsync())); return true; })))
+            Notice = $"Payslip for {row.FullName} saved to your Downloads folder and opened.";
+    }
 
     [RelayCommand] private void OpenPeriodTab() => ActiveTab = "period";
     [RelayCommand] private async Task OpenPaidOutTabAsync() { ActiveTab = "paid_out"; await LoadPaidOutAsync(); }

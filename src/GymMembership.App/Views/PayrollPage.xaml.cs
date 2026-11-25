@@ -11,6 +11,7 @@ public partial class PayrollPage : BasePage
     }
 
     void OnOpenDrawerClicked(object? sender, EventArgs e) => Row<PayrollViewModel>(sender, v => v.OpenDrawerCommand);
+    void OnPrintPayslipClicked(object? sender, EventArgs e) => Row<PayrollViewModel>(sender, v => v.PrintPayslipCommand);
     void OnRemoveLineClicked(object? sender, EventArgs e) => Row<PayrollViewModel>(sender, v => v.RemoveLineCommand);
     void OnRemoveHoursClicked(object? sender, EventArgs e) => Row<PayrollViewModel>(sender, v => v.RemoveHoursCommand);
     void OnOpenPaidOutClicked(object? sender, EventArgs e) => Row<PayrollViewModel>(sender, v => v.OpenPaidOutPeriodCommand);
