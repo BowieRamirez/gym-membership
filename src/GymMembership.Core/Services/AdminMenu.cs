@@ -21,7 +21,7 @@ public static class AdminMenu
                 AdminMenuEntry.To("Membership checking", "scan-line"), AdminMenuEntry.To("Amenity status", "waves")]),
         ]),
         new("Workforce Management", [
-            new("Employees", "users", "Users and roles", "staff"),
+            AdminMenuEntry.To("Employees", "user-round"),
             AdminMenuEntry.To("Scheduling", "calendar-clock"),
             new("Attendance", "clipboard-check", null, Children: [
                 new("Attendance Review", "clipboard-check", "Attendance", "review"),
@@ -50,7 +50,7 @@ public static class AdminMenu
 /// <summary>Sent by Attendance when its Pending count changes, so the menu's tag follows without asking the server again.</summary>
 public sealed record AttendancePendingChanged(int Count);
 
-/// <summary>A page the menu can open on one of its tabs (Fix 4): Payroll, Attendance, Users and roles (Employees).</summary>
+/// <summary>A page the menu can open on one of its tabs (Fix 4): Payroll and Attendance.</summary>
 public interface IOpensTab
 {
     void OpenTab(string tab);

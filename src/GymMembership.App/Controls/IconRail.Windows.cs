@@ -25,6 +25,7 @@ public static class IconRail
         ["Membership checking"] = "scan-line",
         ["Amenity status"] = "waves",
         ["Users and roles"] = "users",
+        ["Employees"] = "user-round",
         ["Packages and amenities"] = "package",
         ["Discounts"] = "tag",
         ["Refunds"] = "undo",

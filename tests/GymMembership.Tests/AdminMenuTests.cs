@@ -35,7 +35,7 @@ public class AdminMenuTests
         Assert.Equal(new[] { ("Salary Configuration", "salaries"), ("Payroll Processing", "period"), ("Payslips", "payslips"), ("Payroll History", "paid_out") },
             payroll.Children!.Select(c => (c.Label, c.Tab!)));
         Assert.All(payroll.Children!, c => Assert.Equal("Payroll", c.Page));
-        Assert.Equal(("Users and roles", "staff"), (work[0].Page!, work[0].Tab!));
+        Assert.Equal(("Employees", null), (work[0].Page!, work[0].Tab));   // its own page now (owner, 2026-11-25)
     }
 
     [Fact]
@@ -50,19 +50,30 @@ public class AdminMenuTests
         attendance.OpenTab("corrections"); Assert.True(attendance.IsCorrectionsTab);
     }
 
-    [Fact]
-    public async Task Employees_shows_coaches_and_front_desk_only_and_Users_and_roles_shows_everyone()
+    [Fact]   // owner, 2026-11-25: Employees is its own page: coaches and front desk only, a filter, no adding accounts
+    public async Task Employees_lists_coaches_and_front_desk_with_their_pay_and_a_filter()
     {
         var gw = new DemoGateway();
         await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
-        var vm = new UsersViewModel(new AdminService(gw));
-        vm.OpenTab("staff");
+        var admin = new AdminService(gw);
+        var desk = (await admin.PayrollStaffAsync()).Value!.First(s => s.Role == "employee");
+        Assert.True((await admin.SetStaffSalaryAsync(desk.UserId, 130m, "hourly")).Ok);
+        var vm = new EmployeesViewModel(admin);
         await vm.LoadCommand.ExecuteAsync(null);
-        Assert.NotEmpty(vm.Users);
-        Assert.All(vm.Users, u => Assert.True(u.Roles.Any(r => r is "coach" or "employee")));
-        Assert.True(vm.StaffOnly);
-        vm.OpenTab("");
-        Assert.Contains(vm.Users, u => u.Roles.Contains("member"));
+        Assert.Null(vm.ErrorMessage);
+        Assert.Equal(new[] { "All", "Coaches", "Front desk" }, vm.FilterOptions);
+        Assert.NotEmpty(vm.Rows);
+        Assert.All(vm.Rows, r => Assert.True(r.User.IsCoach || r.User.IsEmployee));
+        Assert.Contains(vm.Rows, r => r.User.IsCoach);
+        var d = vm.Rows.Single(r => r.User.UserId == desk.UserId);
+        Assert.Equal(("Front desk", "₱130.00 per hour"), (d.RoleText, d.PayText));
+
+        vm.Filter = "Coaches";
+        Assert.All(vm.Rows, r => Assert.True(r.User.IsCoach));
+        vm.Filter = "Front desk";
+        Assert.All(vm.Rows, r => Assert.True(r.User.IsEmployee));
+        Assert.Contains(vm.Rows, r => r.User.UserId == desk.UserId);
+        Assert.Equal($"{vm.Rows.Count} front desk", vm.CountText);
     }
 }
 
