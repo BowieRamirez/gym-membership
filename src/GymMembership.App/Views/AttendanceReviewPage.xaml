@@ -10,10 +10,57 @@
             x:Class="GymMembership.App.Views.AttendanceReviewPage" x:DataType="vm:AttendanceReviewViewModel" Title="Attendance">
 
     <v:BasePage.Resources>
-        <!-- the owner's card: who (initials, name, role) and status on top, the day, then Time-in and Time-out side by side -->
+        <!-- owner, 2026-11-25: Review and Records as a table. One row a record: who, the day, time in and out, the shift, status, actions;
+             Reject opens its reason under the row. -->
+        <DataTemplate x:Key="AttendanceRow" x:DataType="vm:AttendanceCardItem">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="*,170,90,90,210,110,180" ColumnSpacing="12">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10" VerticalOptions="Center">
+                        <c:Avatar Diameter="32" Letters="{Binding Initials}" VerticalOptions="Center" />
+                        <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                            <Label Text="{Binding FullName}" FontFamily="BarlowSemiBold" LineBreakMode="TailTruncation" />
+                            <Label Text="{Binding RoleText}" Style="{StaticResource Caption}" />
+                        </VerticalStackLayout>
+                    </Grid>
+                    <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                        <Label Text="{Binding DateText}" />
+                        <Label Text="{Binding WhatText}" Style="{StaticResource Caption}" LineBreakMode="TailTruncation" />
+                    </VerticalStackLayout>
+                    <Label Grid.Column="2" Text="{Binding InText}" Style="{StaticResource Numeral}" VerticalOptions="Center" LineBreakMode="NoWrap" />
+                    <Label Grid.Column="3" Text="{Binding OutText}" Style="{StaticResource Numeral}" VerticalOptions="Center" LineBreakMode="NoWrap" />
+                    <VerticalStackLayout Grid.Column="4" Spacing="2" VerticalOptions="Center">
+                        <Label Text="{Binding ShiftText}" Style="{StaticResource Muted}" IsVisible="{Binding HasShift}" LineBreakMode="TailTruncation" />
+                        <Label Text="No shift" Style="{StaticResource Muted}" IsVisible="{Binding HasShift, Converter={StaticResource Not}}" />
+                        <Label Text="{Binding FlagText}" FontFamily="BarlowSemiBold" FontSize="13" IsVisible="{Binding HasFlags}" LineBreakMode="WordWrap" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Column="5" Spacing="2" VerticalOptions="Center">
+                        <c:StatusChip Status="{Binding StatusLabel}" HorizontalOptions="Start" />
+                        <Label Text="{Binding Reason}" Style="{StaticResource Caption}" IsVisible="{Binding HasReason}" LineBreakMode="TailTruncation"
+                               ToolTipProperties.Text="{Binding Reason}" />
+                    </VerticalStackLayout>
+                    <HorizontalStackLayout Grid.Column="6" Spacing="8" HorizontalOptions="End" VerticalOptions="Center">
+                        <Button Text="Approve" Style="{StaticResource SmallButton}" Command="{Binding ApproveCommand}" IsVisible="{Binding CanApprove}"
+                                SemanticProperties.Description="{Binding FullName, StringFormat='Approve this record for {0}'}" />
+                        <Button Text="Reject" Style="{StaticResource SmallOutlineButton}" Command="{Binding BeginRejectCommand}" IsVisible="{Binding CanReject}"
+                                SemanticProperties.Description="{Binding FullName, StringFormat='Reject this record for {0}'}" />
+                    </HorizontalStackLayout>
+                </Grid>
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Padding="14,0,14,12" IsVisible="{Binding IsRejecting}">
+                    <Border Style="{StaticResource Field}">
+                        <Entry Text="{Binding RejectReason}" MaxLength="200" Placeholder="Why it isn't paid, e.g. Opened by mistake" SemanticProperties.Description="Reason for rejecting" />
+                    </Border>
+                    <Button Grid.Column="1" Text="Reject" Style="{StaticResource SmallButton}" Command="{Binding RejectCommand}" VerticalOptions="Center" />
+                    <Button Grid.Column="2" Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelRejectCommand}" VerticalOptions="Center" />
+                </Grid>
+                <Label Text="{Binding ErrorText}" Style="{StaticResource FieldError}" Margin="14,0,14,10" IsVisible="{Binding ErrorText, Converter={StaticResource IsNotNull}}" />
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+
+        <!-- narrow window: the owner's card, one under the other inside the table panel -->
         <DataTemplate x:Key="AttendanceCard" x:DataType="vm:AttendanceCardItem">
-            <Border Style="{StaticResource Panel}" WidthRequest="380" Margin="0,0,14,14" Padding="18,16">
-                <VerticalStackLayout Spacing="12">
+            <VerticalStackLayout>
+                <VerticalStackLayout Spacing="12" Padding="14,14">
                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
                         <c:Avatar Diameter="40" Letters="{Binding Initials}" VerticalOptions="Center" />
                         <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
@@ -64,7 +111,8 @@
                     </VerticalStackLayout>
                     <Label Text="{Binding ErrorText}" Style="{StaticResource FieldError}" IsVisible="{Binding ErrorText, Converter={StaticResource IsNotNull}}" />
                 </VerticalStackLayout>
-            </Border>
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
         </DataTemplate>
 
         <DataTemplate x:Key="CorrectionRow" x:DataType="vm:AttendanceCorrectionItem">
@@ -174,11 +222,27 @@
                                 <Picker ItemsSource="{Binding StatusOptions}" SelectedItem="{Binding StatusFilter}" SemanticProperties.Description="Show records by status" />
                             </Border>
                         </HorizontalStackLayout>
-                        <FlexLayout Wrap="Wrap" Direction="Row" AlignItems="Start" BindableLayout.ItemsSource="{Binding Cards}" BindableLayout.ItemTemplate="{StaticResource AttendanceCard}">
-                            <BindableLayout.EmptyView>
-                                <Label Text="{Binding EmptyText}" Style="{StaticResource Muted}" />
-                            </BindableLayout.EmptyView>
-                        </FlexLayout>
+                        <Border Style="{StaticResource TablePanel}">
+                            <VerticalStackLayout>
+                                <VerticalStackLayout x:Name="RecordsHead">
+                                    <Grid Style="{StaticResource TableHead}" ColumnDefinitions="*,170,90,90,210,110,180" ColumnSpacing="12">
+                                        <Label Text="Person" Style="{StaticResource Caption}" />
+                                        <Label Grid.Column="1" Text="Date" Style="{StaticResource Caption}" />
+                                        <Label Grid.Column="2" Text="Time-in" Style="{StaticResource Caption}" />
+                                        <Label Grid.Column="3" Text="Time-out" Style="{StaticResource Caption}" />
+                                        <Label Grid.Column="4" Text="Shift" Style="{StaticResource Caption}" />
+                                        <Label Grid.Column="5" Text="Status" Style="{StaticResource Caption}" />
+                                    </Grid>
+                                    <BoxView Style="{StaticResource Hairline}" />
+                                </VerticalStackLayout>
+                                <c:TableBody Items="{Binding Cards}" Header="{x:Reference RecordsHead}" WideFrom="1100"
+                                             RowTemplate="{StaticResource AttendanceRow}" CardTemplate="{StaticResource AttendanceCard}">
+                                    <c:TableBody.Empty>
+                                        <Label Text="{Binding EmptyText}" Style="{StaticResource Muted}" Margin="14" />
+                                    </c:TableBody.Empty>
+                                </c:TableBody>
+                            </VerticalStackLayout>
+                        </Border>
                     </VerticalStackLayout>
 
                     <!-- CORRECTIONS -->
