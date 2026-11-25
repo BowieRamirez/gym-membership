@@ -201,4 +201,4 @@ Owner, 2026-11-25: can the coaches' shifts and payroll work like `C:\Users\bowie
 | `63dd54a`, `0d27a2f` | Template editor: day tiles, then a table with the days across (owner) | — |
 | `a27c8c0` | People tab: wider Person column (owner) | — |
 
-All migrations are live; app commits up to `0d27a2f` are on GitHub, `a27c8c0` waits for the owner's push.
+All migrations are live; all commits are on GitHub (pushed 2026-11-25 up to `b789bd6`).
