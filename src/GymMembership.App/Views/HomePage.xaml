@@ -124,7 +124,7 @@
                     </VerticalStackLayout>
                     <c:TableBody Items="{Binding InGym}" Header="{x:Reference CoachHead}" WideFrom="420"
                                  RowTemplate="{StaticResource CoachRow}" CardTemplate="{StaticResource CoachCard}">
-                        <c:TableBody.Empty><Label Text="No coaches checked in. Check them in on the Membership checking page." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
+                        <c:TableBody.Empty><Label Text="No coaches checked in. Check them in on the Check-ins page." Style="{StaticResource Muted}" Margin="14" /></c:TableBody.Empty>
                     </c:TableBody>
                 </VerticalStackLayout>
             </Border>

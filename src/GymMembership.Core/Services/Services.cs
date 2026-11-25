@@ -1262,6 +1262,9 @@ public interface ISessionService
     Task<AppResult<bool>> ReassignAsync(int sessionId, string coachId, string reason) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<IReadOnlyList<TodayCoachSession>>> TodayCoachSessionsAsync() => Task.FromResult(AppResult<IReadOnlyList<TodayCoachSession>>.Success([]));
     Task<AppResult<int>> ReportDamageAsync(int? sessionId, int? amenityId, string description, string? photoPath = null) => Task.FromResult(AppResult<int>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    /// <summary>0165: the damage reports this person filed, newest first, and every amenity (names and what can be picked).</summary>
+    Task<AppResult<(IReadOnlyList<DamageReport> Reports, IReadOnlyList<Amenity> Amenities)>> MyDamageReportsAsync() =>
+        Task.FromResult(AppResult<(IReadOnlyList<DamageReport>, IReadOnlyList<Amenity>)>.Success(([], [])));
 }
 
 public sealed class SessionService(ISupabaseGateway gw) : ISessionService
@@ -1381,6 +1384,15 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
 
     public Task<AppResult<IReadOnlyList<TodayCoachSession>>> TodayCoachSessionsAsync() => Safe.RunAsync<IReadOnlyList<TodayCoachSession>>(async () =>
         await gw.RpcAsync<List<TodayCoachSession>>("today_coach_sessions"));
+
+    public Task<AppResult<(IReadOnlyList<DamageReport> Reports, IReadOnlyList<Amenity> Amenities)>> MyDamageReportsAsync() =>
+        Safe.RunAsync<(IReadOnlyList<DamageReport>, IReadOnlyList<Amenity>)>(async () =>
+        {
+            var me = gw.CurrentUserId;
+            var reports = gw.ListAsync<DamageReport>(); var amenities = gw.ListAsync<Amenity>();
+            await Task.WhenAll(reports, amenities);
+            return (reports.Result.Where(r => r.ReportedBy == me).OrderByDescending(r => r.CreatedAt).ToList(), amenities.Result);
+        });
 
     public Task<AppResult<int>> ReportDamageAsync(int? sessionId, int? amenityId, string description, string? photoPath = null) => Safe.RunAsync(() =>
         gw.RpcAsync<int>("report_damage", new()

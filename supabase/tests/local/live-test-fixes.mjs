@@ -71,9 +71,9 @@ try {
     assert.equal((await as(desk, 'select coach_check_out($1) ok', [coach]))[0].ok, true);
     await assert.rejects(as(member, 'select coach_check_in($1)', [coach]), /forbidden/);
   });
-  await test('3: damage on a session that has not started or was cancelled is refused; a started one works', async () => {
+  await test('3: damage on a cancelled session is refused; 0165: a session not started yet is fine, as is a started one', async () => {
     const future = await session(new Date(Date.now() + 864e5).toISOString());
-    await assert.rejects(as(coach, `select report_damage(p_session_id=>$1, p_description=>'x')`, [future]), /session_not_started/);
+    assert.ok((await as(coach, `select report_damage(p_session_id=>$1, p_description=>'loose bolt') id`, [future]))[0].id);
     const cancelled = await session(new Date(Date.now() - 2 * 864e5).toISOString(), 'cancelled');
     await assert.rejects(as(coach, `select report_damage(p_session_id=>$1, p_description=>'x')`, [cancelled]), /session_cancelled/);
     const done = await session(new Date(Date.now() - 3 * 864e5).toISOString(), 'completed');

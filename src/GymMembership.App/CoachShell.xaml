@@ -22,6 +22,8 @@
     <FlyoutItem Title="My shifts"><ShellContent ContentTemplate="{DataTemplate views:ShiftsPage}" /></FlyoutItem>
     <FlyoutItem Title="Messages" Route="messages"><ShellContent ContentTemplate="{DataTemplate views:MessagesPage}" /></FlyoutItem>
     <FlyoutItem Title="Amenities"><ShellContent ContentTemplate="{DataTemplate views:AmenitiesPage}" /></FlyoutItem>
+    <!-- 0165 (owner, 2026-11-25): damage can be reported any time, not only after a session -->
+    <FlyoutItem Title="Report damage" Route="damage"><ShellContent ContentTemplate="{DataTemplate views:ReportDamagePage}" /></FlyoutItem>
     <!-- F17: the coach profile and the account settings are one page, called Settings like everyone else's (owner, 2026-11-11);
          the account menu's Settings opens it -->
     <FlyoutItem Title="Settings" Route="settings"><ShellContent ContentTemplate="{DataTemplate views:CoachProfilePage}" /></FlyoutItem>

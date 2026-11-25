@@ -357,7 +357,7 @@ public sealed partial class DemoGateway
             {
                 RequireActive();
                 var desc = a.TryGetValue("p_description", out var dv) && dv is string ds ? ds.Trim() : "";
-                if (desc.Length == 0) throw Err("bad_input");
+                if (desc.Length is 0 or > 1000) throw Err("bad_input");
                 int? sid = a.TryGetValue("p_session_id", out var sv) && sv is not null ? Convert.ToInt32(sv) : null;
                 int? aid = a.TryGetValue("p_amenity_id", out var av) && av is not null ? Convert.ToInt32(av) : null;
                 string? coachId = null;
@@ -366,10 +366,11 @@ public sealed partial class DemoGateway
                     var s = All<TrainingSession>().FirstOrDefault(x => x.Id == sessionId) ?? throw Err("not_found");
                     if (!IsStaff && s.CoachId != Uid) throw Err("forbidden");
                     if (s.Status == Status.Cancelled) throw Err("session_cancelled");   // 0140
-                    if (s.ScheduledStart > SubscriptionNow) throw Err("session_not_started");
                     coachId = s.CoachId;
                 }
+                else if (RolesOf(Uid).Contains("coach") && !IsStaff) coachId = Uid;   // 0165: a coach reports any time, as themselves
                 else if (!IsStaff) throw Err("forbidden");
+                if (aid is { } amenityId && All<Amenity>().All(x => x.Id != amenityId)) throw Err("not_found");
                 var rep = Add(new DamageReport
                 {
                     TrainingSessionId = sid, AmenityId = aid, CoachId = coachId, ReportedBy = Uid,
