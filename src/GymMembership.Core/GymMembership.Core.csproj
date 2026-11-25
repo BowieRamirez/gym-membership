@@ -8,7 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageReference Include="Supabase" Version="8.3.1" />
+    <PackageReference Include="Supabase" Version="8.5.1" />
     <!-- Pinned: 6.2.x is MIT. PDFsharp 6.5+ is AGPL-3.0; do not upgrade without a license review. -->
     <PackageReference Include="PDFsharp" Version="6.2.4" />
     <!-- PDFsharp brings Pkcs 8.0.1 (GHSA-846f-f764-76mx); lift it to the patched release -->
