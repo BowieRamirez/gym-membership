@@ -6,7 +6,7 @@ Created: 2026-11-25
 Last updated: 2026-11-25
 Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phases 3.1-3.6 built, checked and pushed; `0151`-`0157` all live (dry run 2026-11-25: remote up to date); shift check-in rule is **off** until the admin turns it on from Scheduling. S1-S9 confirmed; S8 amended by option (b). Left: owner hand checks, the rollout steps (Phase 3.6), merge and a new app release. **Owner: do not merge until told.** Fix 4 (admin menu with words, Attendance Review) PLANNED 2026-11-25, not built. More fixes get added below as the owner sends them.
 Branch: `owner-fixes-2026-11-25` (cut from `main` at `df3f54c`, v0.11.0). Owner merges to `main` when done; no push or PR without the owner.
-Next migration: `0158`.
+Next migration: `0159`.
 
 **Goal:** The owner's fixes after the v0.11.0 release.
 
@@ -238,18 +238,19 @@ Owner, 2026-11-25 (three screenshots): a navigation tree from the workforce PDF 
 
 | Phase | What | Status |
 |---|---|---|
-| 4.1 | Database: `payroll_records_all` | PLANNED |
+| 4.1 | Database: `payroll_records_all` | DEPLOYED (`0158` live 2026-11-25) |
 | 4.2 | Attendance Review page (Review, Records, Corrections) with the money table | PLANNED |
 | 4.3 | Menu with words for the admin roles | PLANNED |
 | 4.4 | Checks | PLANNED |
 
 #### Phase 4.1: Database (`0158_payroll_records_all.sql`)
 
-- [ ] Failing db test `supabase/tests/local/payroll-records-all.mjs`: two staff (one hourly coach, one front desk) with records in one period → one call returns both people's records, each with `user_id`, `full_name`, `role_name`, `pay_type`, `rate` and the same fields as `payroll_records_for` (`source`, `source_id`, `starts_at`, `actual_start`, `expected_start`, `expected_end`, `ends_at`, `hours`, `status`, `reason`, `flags`); a sub-admin without `reports:revenue`, a coach and `anon` are refused; a member is never listed.
-- [ ] `payroll_records_all(p_period bigint) returns jsonb` = `{records: [...], adjustments: [...]}` (adjustments: the period's hour corrections for everyone, with `full_name`, as `PayrollAdjustmentsAsync` returns per person), `security definer`, checks `reports:revenue`, built on `payroll_records(p_period)` joined to profiles and the period's pay basis; no new write. Test also asserts `adjustments` holds both people's corrections. `revoke all ... from public, anon; grant execute ... to authenticated`.
-- [ ] Run `node supabase/tests/local/payroll-records-all.mjs` and the other `payroll*.mjs` files → pass.
-- [ ] Demo: `DemoPayroll` answers `payroll_records_all` from its existing records.
-- [ ] Commit; dry run → only `0158`; push; check live grants (no `anon` execute).
+- [x] Failing db test `supabase/tests/local/payroll-records-all.mjs`: two staff (one hourly coach, one front desk) with records in one period → one call returns both people's records, each with `user_id`, `full_name`, `role_name`, `pay_type`, `rate` and the same fields as `payroll_records_for` (`source`, `source_id`, `starts_at`, `actual_start`, `expected_start`, `expected_end`, `ends_at`, `hours`, `status`, `reason`, `flags`); a sub-admin without `reports:revenue`, a coach and `anon` are refused; a member is never listed.
+- [x] `payroll_records_all(p_period bigint) returns jsonb` = `{records: [...], adjustments: [...]}` (adjustments: the period's hour corrections for everyone, with `full_name`, as `PayrollAdjustmentsAsync` returns per person), `security definer`, checks `reports:revenue`, built on `payroll_records(p_period)` joined to profiles and the period's pay basis; no new write. Test also asserts `adjustments` holds both people's corrections. `revoke all ... from public, anon; grant execute ... to authenticated`.
+- [x] Run `node supabase/tests/local/payroll-records-all.mjs` and the other `payroll*.mjs` files → pass.
+- [x] Demo: `DemoPayroll` answers `payroll_records_all` from its existing records.
+- [x] Commit; dry run → only `0158`; push; check live grants (no `anon` execute).
+- Built notes (`b1e9cb5`): records are ordered by name, then start; `role_name` is payroll's role (`coach` or `employee`). Moved forward from 4.2 so the demo has a check: models `PayrollStaffRecord` (inherits `PayrollTimeRecord`, now unsealed), `PayrollAttendance`, optional `UserId`/`FullName` on `PayrollHourAdjustment`, and `PayrollRecordsAllAsync` on the admin service; C# test `Records_all_lists_every_person_with_name_role_rate_and_corrections`. Tests: db `payroll-records-all.mjs` (4), all `payroll*.mjs` and `rules.mjs` (106) pass; 1255 C# tests pass. Deployed 2026-11-25: dry run showed only `0158`; pushed; live: `anon` and `public` can't execute, `authenticated` can (checks `reports:revenue` inside).
 
 #### Phase 4.2: Attendance Review page
 
