@@ -4,7 +4,7 @@
 
 Created: 2026-11-25
 Last updated: 2026-11-25
-Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phases 3.1-3.6 built, checked and pushed; `0151`-`0157` all live (dry run 2026-11-25: remote up to date); shift check-in rule is **off** until the admin turns it on from Scheduling. S1-S9 confirmed; S8 amended by option (b). Left: owner hand checks, the rollout steps (Phase 3.6), merge and a new app release. **Owner: do not merge until told.** More fixes get added below as the owner sends them.
+Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phases 3.1-3.6 built, checked and pushed; `0151`-`0157` all live (dry run 2026-11-25: remote up to date); shift check-in rule is **off** until the admin turns it on from Scheduling. S1-S9 confirmed; S8 amended by option (b). Left: owner hand checks, the rollout steps (Phase 3.6), merge and a new app release. **Owner: do not merge until told.** Fix 4 (admin menu with words, Attendance Review) PLANNED 2026-11-25, not built. More fixes get added below as the owner sends them.
 Branch: `owner-fixes-2026-11-25` (cut from `main` at `df3f54c`, v0.11.0). Owner merges to `main` when done; no push or PR without the owner.
 Next migration: `0158`.
 
@@ -24,6 +24,7 @@ Next migration: `0158`.
 | 1 | Cashier: Membership is register-only; Renewal lists existing accounts; no Register on Day pass | BUILT (`ef2c67c`, pushed) |
 | 2 | Cashier: no Day pass cards under Membership/Renewal; amenity booking Member or Walk-in, one at a time | BUILT (`2db811e`, pushed) |
 | 3 | Staff scheduling: admin sets coach and front desk shifts; check-in follows the shift; payroll pays from shift start; desk moves a session to another coach (6 phases) | BUILT (`0151`-`0157` live, rule off; not merged) |
+| 4 | Admin menu with words (Workforce Management, Finance & Payroll); Attendance Review page with whose record it is and the money before approving (4 phases) | PLANNED (design approved 2026-11-25; not built) |
 
 ## Notes from today (no change)
 
@@ -202,3 +203,89 @@ Owner, 2026-11-25: can the coaches' shifts and payroll work like `C:\Users\bowie
 | `a27c8c0` | People tab: wider Person column (owner) | — |
 
 All migrations are live; all commits are on GitHub (pushed 2026-11-25 up to `b789bd6`).
+
+## Fix 4: Admin menu with words and Attendance Review
+
+Owner, 2026-11-25 (three screenshots): a navigation tree from the workforce PDF (section 2) with Workforce Management (Employees, Scheduling, Attendance) and Payroll; "use this hierarchy" (Workforce Management: Employees; Attendance: Attendance Review with a Pending tag, Attendance Records, Attendance Corrections. Finance & Payroll: Payroll: Salary Configuration, Payroll Processing, Payslips, Payroll History); an attendance card "Juan Dela Cruz · Front Desk · Pending · November 25, 2026 · Time-in 8:00 AM · Time-out 5:00 PM" with "Tell what person is that"; and "make the owner understand the consequences": before approving, a table of Recorded hours 4.26, Approved hours 0, Hourly rate ₱130, Potential payable amount ₱553.80. For the System admin and Admin (Windows only).
+
+**Goal:** The admin's menu is grouped the way the work is done, every attendance record says whose it is, and approving one shows the money first.
+
+**Architecture:** Reuse, don't replace.
+- Records, approve/reject, flags, corrections and the paid freeze are hourly payroll's (0142-0146, 0152): `payroll_records`, `payroll_review_time`, `payroll_hour_adjustments`. The new page only lists across people; one new read function, no new writes.
+- Payroll's three tabs stay one page; the menu's Payroll entries open it on a tab.
+- The menu change is in `IconRail.Windows.cs` for the admin roles only (`groupFrontDesk: true` in `StaffShell.xaml.cs`); front desk, coach and member keep the icon strip.
+
+**Tech Stack:** Supabase (Postgres), .NET MAUI (Core + App), CommunityToolkit.Mvvm, xUnit, Node database tests. Migration `0158`.
+
+### Fix 4 decisions
+
+| # | Decision | Status |
+|---|---|---|
+| W1 | **Menu with words (option A)**, about 240 wide, for System admin and Admin only, Windows only. | Owner, 2026-11-25 |
+| W2 | **Attendance Review is its own page (option 1):** every pending record across all staff for the chosen pay period, as the owner's card; Approve opens the money table, then Confirm. The Payroll drawer keeps its own Approve / Reject on the same records. | Owner, 2026-11-25 |
+| W3 | Menu tree (owner's picture, the rest of today's pages placed by me): **Overview**: Overview, Front desk (folds Home, Cashier, Membership checking, Amenity status). **Workforce Management**: Employees, Scheduling, Attendance (Attendance Review with Pending count, Attendance Records, Attendance Corrections). **Finance & Payroll**: Payroll (Salary Configuration = Salaries tab, Payroll Processing = Pay period tab, Payslips = Pay period tab with its PDF, Payroll History = Paid out tab), Revenue, Refunds, Discounts. **Gym**: Users and roles, Packages and amenities, Announcements, Damage reports, Gym settings, Logs & Archive. Bottom: Messages, Settings, Sign out and the picture. A System admin sees only the pages their role has today. | Owner approved 2026-11-25 |
+| W4 | **Money table** rows: Recorded hours (the record's hours), Approved hours (what this record counts now: its hours if approved, else 0), Rate, Potential payable amount. Rate by the person's pay type: hourly → "₱130 an hour", amount = hours × rate (4.26 × 130 = ₱553.80); per session → the session rate, amount = rate; monthly → "Monthly salary · approving counts hours only", no amount row. Amounts are before deductions (said under the table). | My call (owner may correct) |
+| W5 | **Employees** opens Users and roles filtered to coaches and front desk (a `Staff only` filter on that page); no new employee page. | My call (owner may correct) |
+| W6 | **Attendance Records** = the same list with every status and a status filter (All, Pending, Approved, Rejected). **Attendance Corrections** = the period's hour corrections (person, hours, note, who, when), read-only; new corrections stay in the Payroll drawer. | My call |
+| W7 | A paid-out period is read-only on all three (no Approve / Reject), as in the drawer. Open records (still checked in) show "Still open" and can't be approved. | Same as today |
+
+### Fix 4 skills
+
+- `ponytail` full; `superpowers:test-driven-development` (money table numbers and the record list first); `impeccable` and `frontend-design` for the menu and the page (staff pages Windows only, light and dark); `ponytail:ponytail-review` on each phase; `superpowers:verification-before-completion`.
+- Push `0158` live when 4.1 is finished (dry run first), then check live grants (new functions are open to `anon` by default here; revoke explicitly).
+
+### Fix 4 phases
+
+| Phase | What | Status |
+|---|---|---|
+| 4.1 | Database: `payroll_records_all` | PLANNED |
+| 4.2 | Attendance Review page (Review, Records, Corrections) with the money table | PLANNED |
+| 4.3 | Menu with words for the admin roles | PLANNED |
+| 4.4 | Checks | PLANNED |
+
+#### Phase 4.1: Database (`0158_payroll_records_all.sql`)
+
+- [ ] Failing db test `supabase/tests/local/payroll-records-all.mjs`: two staff (one hourly coach, one front desk) with records in one period → one call returns both people's records, each with `user_id`, `full_name`, `role_name`, `pay_type`, `rate` and the same fields as `payroll_records_for` (`source`, `source_id`, `starts_at`, `actual_start`, `expected_start`, `expected_end`, `ends_at`, `hours`, `status`, `reason`, `flags`); a sub-admin without `reports:revenue`, a coach and `anon` are refused; a member is never listed.
+- [ ] `payroll_records_all(p_period bigint) returns jsonb` = `{records: [...], adjustments: [...]}` (adjustments: the period's hour corrections for everyone, with `full_name`, as `PayrollAdjustmentsAsync` returns per person), `security definer`, checks `reports:revenue`, built on `payroll_records(p_period)` joined to profiles and the period's pay basis; no new write. Test also asserts `adjustments` holds both people's corrections. `revoke all ... from public, anon; grant execute ... to authenticated`.
+- [ ] Run `node supabase/tests/local/payroll-records-all.mjs` and the other `payroll*.mjs` files → pass.
+- [ ] Demo: `DemoPayroll` answers `payroll_records_all` from its existing records.
+- [ ] Commit; dry run → only `0158`; push; check live grants (no `anon` execute).
+
+#### Phase 4.2: Attendance Review page
+
+Files: create `src/GymMembership.Core/ViewModels/AttendanceReviewViewModel.cs`, `src/GymMembership.App/Views/AttendanceReviewPage.xaml(.cs)`, `tests/GymMembership.Tests/AttendanceReviewViewModelTests.cs`; modify `Services.cs` (service + interface default), `StaffShell.xaml` (new `FlyoutItem Title="Attendance" ClassId="admin" Route="attendance"`), `IconRail.Windows.cs` `PageIcons` (`["Attendance"] = "clipboard-check"`), DI registration. (`AttendanceViewModel` already exists for members; don't reuse the name.)
+
+- [ ] Failing tests in `AttendanceReviewViewModelTests`:
+  - `Review_lists_pending_records_of_every_person_with_name_and_role` (demo: two people → both cards, each with `FullName`, `RoleText` "Front Desk"/"Coach", date "November 25, 2026", `InText` "8:00 AM", `OutText` "5:00 PM", `StatusLabel` "Pending").
+  - `Approve_shows_the_money_first_then_confirm_approves` (hourly ₱130, 4.26 h → rows "4.26 hours", "0 hours", "₱130", "₱553.80"; nothing approved until `ConfirmApprove`; after it the record leaves Review and Pending count drops by one).
+  - `Monthly_salary_shows_no_amount` and `Per_session_amount_is_the_session_rate`.
+  - `Records_filter_by_status` and `Corrections_list_the_periods_hour_corrections`.
+  - `Paid_out_period_is_read_only`.
+- [ ] `IStaffService.PayrollRecordsAllAsync(int periodId) → AppResult<PayrollAttendance>` where `PayrollAttendance(IReadOnlyList<PayrollStaffRecord> Records, IReadOnlyList<PayrollHourAdjustment> Adjustments)` and `PayrollStaffRecord` is `PayrollTimeRecord` plus `UserId`, `FullName`, `RoleName`, `PayType`, `Rate` (one call, 0158).
+- [ ] `AttendanceReviewViewModel`: period picker (reuses `PayrollPeriodAsync`), tabs `Review` / `Records` / `Corrections` (`Tab` set by the menu via route query `?tab=review|records|corrections`), `PendingCount`, items with `ApproveCommand` → opens the money panel (`MoneyRows`, `ConfirmApproveCommand`, `CancelCommand`), `Reject` with reason (reuse `PayrollRecordItem`'s reject wording). Approve/Reject call `ReviewPayrollTimeAsync`; refusals through `ErrorText`.
+- [ ] Page: cards as the owner's picture (initials, name, role, Pending chip top right; date; Time-in / Time-out; shift and Late / Left early line under it), a table on wide windows with the same columns. Money panel as the owner's table, with "Before deductions." under it. `impeccable` pass, light and dark.
+- [ ] Run `dotnet test` → all pass; Windows build.
+- [ ] Commit.
+
+#### Phase 4.3: Menu with words
+
+- [ ] Failing test in `IconRailTests`: every admin page title sits in exactly one W3 group (new `IconRail.MenuGroups` map: section → entries), and `Attendance` and `Payroll` have their W3 sub-entries with the route and tab each opens.
+- [ ] `IconRail.Install(..., groupFrontDesk: true)` builds the labeled menu (width 240, section captions, icon + name per row, sub-entries indented, Front desk and Attendance / Payroll fold open like today's briefcase, current page highlighted, sub-entry of the current tab highlighted); `false` keeps the icon strip unchanged. Keep each button's `AutomationId = "AdminNavigation-" + route` (scripts/Test-WindowsAdminNavigation.ps1).
+- [ ] Payroll sub-entries open Payroll on its tab (`PayrollViewModel` reads a `tab` query: `salaries`, `period`, `paidout`; Payslips = `period` and scrolls to the PDF button).
+- [ ] Pending chip on Attendance Review: `PendingCount` for the current period, refreshed on navigation and after an approve/reject; hidden at 0.
+- [ ] Employees: `UsersViewModel` gets a `StaffOnly` filter (coaches and front desk); the menu's Employees opens Users and roles with it on (route query `?staff=1`). **Users and roles** stays its own entry under Gym, unfiltered.
+- [ ] `impeccable` pass on the menu, light and dark, short windows (the middle scrolls).
+- [ ] Run `dotnet test`; Windows build; commit.
+
+#### Phase 4.4: Checks
+
+- [ ] `ponytail:ponytail-review` and a whole-fix review (`superpowers:requesting-code-review`).
+- [ ] All unit and database tests; Windows build (Android: no change, menu is Windows only).
+- [ ] Owner hand check on Windows: menu (System admin and Admin), Attendance Review approve with the money table, Records, Corrections, each Payroll entry opening its tab.
+
+Review focus (cases no step names; test them in the phase that owns the code):
+1. A person with no salary set yet → card shows "No rate set · set it in Salary Configuration", Approve still allowed, no amount (4.2).
+2. Two records overlap (flag `overlap`) → Recorded hours shows what's counted, with the flag (4.2).
+3. Approve from the Payroll drawer while Review is open → Review refreshes on return, no double approve (`payroll_review_time` already idempotent) (4.2).
+4. A sub-admin without `reports:revenue` → no Workforce or Payroll entries (4.3).
+5. Long names in the menu's page names and cards → truncate, no overlap (owner's People-tab screenshot) (4.2, 4.3).
