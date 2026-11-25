@@ -24,7 +24,7 @@ Next migration: `0159`.
 | 1 | Cashier: Membership is register-only; Renewal lists existing accounts; no Register on Day pass | BUILT (`ef2c67c`, pushed) |
 | 2 | Cashier: no Day pass cards under Membership/Renewal; amenity booking Member or Walk-in, one at a time | BUILT (`2db811e`, pushed) |
 | 3 | Staff scheduling: admin sets coach and front desk shifts; check-in follows the shift; payroll pays from shift start; desk moves a session to another coach (6 phases) | BUILT (`0151`-`0157` live, rule off; not merged) |
-| 4 | Admin menu with words (Workforce Management, Finance & Payroll); Attendance Review page with whose record it is and the money before approving (4 phases) | PLANNED (design approved 2026-11-25; not built) |
+| 4 | Admin menu with words (Workforce Management, Finance & Payroll); Attendance Review page with whose record it is and the money before approving (4 phases) | BUILT (`0158` live; owner hand check left; not merged) |
 
 ## Notes from today (no change)
 
@@ -241,7 +241,7 @@ Owner, 2026-11-25 (three screenshots): a navigation tree from the workforce PDF 
 | 4.1 | Database: `payroll_records_all` | DEPLOYED (`0158` live 2026-11-25) |
 | 4.2 | Attendance Review page (Review, Records, Corrections) with the money table | BUILT (app only; owner hand check left) |
 | 4.3 | Menu with words for the admin roles | BUILT (app only; owner hand check left) |
-| 4.4 | Checks | PLANNED |
+| 4.4 | Checks | DONE bar owner hand check (review fixed `a24cdda`) |
 
 #### Phase 4.1: Database (`0158_payroll_records_all.sql`)
 
@@ -283,7 +283,7 @@ Files: create `src/GymMembership.Core/ViewModels/AttendanceReviewViewModel.cs`, 
 #### Phase 4.4: Checks
 
 - [x] `ponytail:ponytail-review` and a whole-fix review (`superpowers:requesting-code-review`, `7492cc5..6486384`).
-- [ ] All unit and database tests; Windows build (Android: no change, menu is Windows only).
+- [x] All unit and database tests; Windows build (Android: no change, menu is Windows only). 1269 C# tests pass; Windows and Android build. Database: 84 files, 80 pass; the 4 that fail (`coach-hired-tag`, `hire-requests`, `session-requests`, `structured-requests`) call `hire_coach`, which `0121` (end of hiring, 2026-11-21) dropped; they were already broken before Fix 4 and are left for the owner to decide (delete or rewrite).
 - [ ] Owner hand check on Windows: menu (System admin and Admin), Attendance Review approve with the money table, Records, Corrections, each Payroll entry opening its tab.
 - Review result: no critical; fixed: **(1)** an overlapping record's money table now ends with "Overlaps another record · The shared time is paid once, so the period total is lower" (pay merges overlaps, 0142), test `Overlapping_record_says_the_shared_time_is_paid_once` (failed first); **(2)** the menu's tab is applied when the shell has shown that page (`Navigated`, or at once when already on it), not one dispatcher tick after navigating, so a first visit opens on the right tab. Also fixed: a failed read clears the cards (no last period's cards under a new name); the Pending tag only follows Attendance when it shows this pay period; a page opened from Overview or Home lights its first menu entry; Payroll's tab switch from the menu no longer loads twice; long names on cards cut off inside the card; `Route="payroll"` and `Route="users"` so the tabbed entries have stable ids (`AdminNavigation-payroll-salaries`…). Kept as is: the hourly rate reads "₱130.00" (as the owner's picture, not W4's "an hour"); records stay cards on wide windows too (the owner's card; no table); the Pending tag's sign-in read opens this pay period, as visiting Payroll does. Verified by the reviewer: Review focus 1 can't happen (`check (amount > 0)` on salaries, no salary = fixed = no records); 3 is safe (`payroll_review_time` upserts; Attendance reloads on appearing); 4: every sub-admin has `reports:revenue` (0036).
 
