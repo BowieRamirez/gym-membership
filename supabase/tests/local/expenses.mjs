@@ -66,17 +66,20 @@ try {
     await assert.rejects(as(admin, `select expense_void($1,'again')`, [rentId]), /already_processed/);
     await assert.rejects(as(admin, `select expense_void(999999,'x')`), /not_found/);
   });
-  await test('X4: payroll_cost is the gross pay of approved or paid-out periods, on the period\'s last day; a draft is left out', async () => {
+  await test('X4 (0161): payroll_cost is the gross pay of paid-out periods, on the Manila day it was paid out; draft and approved are left out', async () => {
     await as(admin, `select set_staff_salary($1, 9000, 'fixed')`, [desk]);
     const aug = (await as(admin, `select payroll_period('2026-08-01') p`))[0].p.period_id;
     await as(admin, `select payroll_period('2026-08-16') p`);   // stays a draft
     await as(admin, `select payroll_add_line($1,$2,'bonus',500,'Top seller','regular_bonus')`, [aug, desk]);
     await as(admin, `select payroll_mark_paid($1)`, [aug]);
-    const rows = await as(admin, `select day::text, gross from payroll_cost('2026-08-01','2026-08-31')`);
+    const today = (await db.query(`select (now() at time zone 'Asia/Manila')::date::text d`)).rows[0].d;
+    assert.equal((await as(admin, `select * from payroll_cost('2026-01-01', $1::date)`, [today])).length, 0, 'approved, not paid out');
+    await as(admin, `select payroll_mark_paid_out($1)`, [aug]);
+    const rows = await as(admin, `select day::text, gross from payroll_cost('2026-01-01', $1::date)`, [today]);
     assert.equal(rows.length, 1);
-    assert.equal(rows[0].day, '2026-08-15');
+    assert.equal(rows[0].day, today);
     assert.equal(Number(rows[0].gross), 9500);
-    assert.equal((await as(admin, `select * from payroll_cost('2026-09-01','2026-09-30')`)).length, 0);
+    assert.equal((await as(admin, `select * from payroll_cost('2026-08-01','2026-08-31')`)).length, 0, 'not on the period it covers');
   });
   await test('X1: front desk, coach, member and anon are refused; the table is closed to the app', async () => {
     for (const who of [desk, coach, member]) {

@@ -7,6 +7,11 @@ using Xunit;
 // Owner fixes 2026-11-25, Fix 5 (X1-X6): Expenses, and Financial reports from revenue, expenses and approved payroll.
 public class FinanceTests
 {
+    sealed class Clock : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => new(2026, 9, 3, 2, 0, 0, TimeSpan.Zero);   // 10:00 on 3 Sep in Manila
+    }
+
     static async Task<(DemoGateway Gw, AdminService Admin)> Admin()
     {
         var gw = new DemoGateway();
@@ -70,20 +75,24 @@ public class FinanceTests
     }
 
     [Fact]
-    public async Task Financial_report_counts_approved_payroll_once_and_shows_a_year_by_month()
+    public async Task Financial_report_counts_payroll_in_the_month_it_was_paid_out_and_shows_a_year_by_month()
     {
-        var (gw, admin) = await Admin();
+        var gw = new DemoGateway(clock: new Clock());   // 3 Sep 2026 in Manila
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var admin = new AdminService(gw);
         var desk = (await admin.PayrollStaffAsync()).Value!.First(s => s.Role == "employee");
         Assert.True((await admin.SetStaffSalaryAsync(desk.UserId, 9000m, "fixed")).Ok);
         var aug = (await admin.PayrollPeriodAsync(new DateOnly(2026, 8, 1))).Value!;
-        Assert.True((await admin.MarkPayrollPaidAsync(aug.PeriodId)).Ok);   // approved: counted
-        Assert.True((await admin.PayrollPeriodAsync(new DateOnly(2026, 8, 16))).Ok);   // a draft: not counted yet
-        Assert.True((await admin.AddExpenseAsync(new DateOnly(2026, 8, 3), "internet", 1999m, "PLDT August")).Ok);
+        Assert.True((await admin.MarkPayrollPaidAsync(aug.PeriodId)).Ok);
+        var vm = new FinanceViewModel(admin) { Year = 2026, Month = 9 };
+        await vm.LoadCommand.ExecuteAsync(null);
+        Assert.Equal(PayTypes.Money(0m), vm.PayrollText);   // approved, not paid out yet: not counted
+        Assert.True((await admin.MarkPayrollPaidOutAsync(aug.PeriodId)).Ok);   // paid out on 3 Sep
+        Assert.True((await admin.AddExpenseAsync(new DateOnly(2026, 9, 2), "internet", 1999m, "PLDT September")).Ok);
 
-        var vm = new FinanceViewModel(admin) { Year = 2026, Month = 8 };
         await vm.LoadCommand.ExecuteAsync(null);
         Assert.Null(vm.ErrorMessage);
-        Assert.Equal("August 2026", vm.SpanText);
+        Assert.Equal("September 2026", vm.SpanText);
         Assert.Equal(PayTypes.Money(9000m), vm.PayrollText);
         Assert.Equal(PayTypes.Money(1999m), vm.ExpensesText);
         var net = vm.Totals!.Revenue - 1999m - 9000m;
@@ -91,11 +100,14 @@ public class FinanceTests
         Assert.Equal(net < 0, vm.IsLoss);
         Assert.Contains(vm.ByCategory, l => l.Label == "Internet" && l.Amount == 1999m);
 
+        await vm.PrevCommand.ExecuteAsync(null);   // August, the month the period covers
+        Assert.Equal(PayTypes.Money(0m), vm.PayrollText);
+
         vm.ShowYearCommand.Execute(null);
         await vm.LoadCommand.ExecuteAsync(null);
         Assert.Equal("2026", vm.SpanText);
         Assert.Equal(12, vm.Months.Count);
-        Assert.Equal(9000m, vm.Months[7].Payroll);
+        Assert.Equal(9000m, vm.Months[8].Payroll);
         Assert.Equal(PayTypes.Money(9000m), vm.PayrollText);
     }
 }

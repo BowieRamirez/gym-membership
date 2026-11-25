@@ -6,7 +6,7 @@ Created: 2026-11-25
 Last updated: 2026-11-25
 Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phases 3.1-3.6 built, checked and pushed; `0151`-`0157` all live (dry run 2026-11-25: remote up to date); shift check-in rule is **off** until the admin turns it on from Scheduling. S1-S9 confirmed; S8 amended by option (b). Left: owner hand checks, the rollout steps (Phase 3.6), merge and a new app release. **Owner: do not merge until told.** Fix 4 (admin menu with words, Attendance page, Payslips tab, corrections on Attendance) BUILT, `0158` live. Fix 5 (Expenses, Financial reports) BUILT, `0159` live. Layout fixes after Fix 5 (Amenity status margins, compact menu) BUILT. Withholding tax on the month (`0160` live: BIR monthly table, nothing up to ₱20,833, taken in the 16th–end pay) BUILT. Cashier Membership in one go (new member + package + payment), Employees as its own page, no tab bars on Payroll and Attendance BUILT (app only). All pushed; owner hand checks left. More fixes get added below as the owner sends them.
 Branch: `owner-fixes-2026-11-25` (cut from `main` at `df3f54c`, v0.11.0). Owner merges to `main` when done; no push or PR without the owner.
-Next migration: `0161`.
+Next migration: `0162`.
 
 **Goal:** The owner's fixes after the v0.11.0 release.
 
@@ -334,6 +334,7 @@ Built 2026-11-25:
 | `53b930a` | Cashier → Membership: new member, package and payment in one go; the new member is picked by id; the gateway clears its read cache after a server function too; see below. |
 | `4dcba7e` | Employees is its own page (coaches and front desk, All / Coaches / Front desk, pay, status, no add form); see below. |
 | `51d37d4` | No tab bars on Payroll and Attendance; the menu opens each part and the page title names it; see below. |
+| (this commit) | Financial reports count payroll in the month it was **paid out** (`0161` live); amends X4; see below. |
 
 Checks: 1277 C# tests pass; Windows and Android build. Not opened in the app here (owner checks it).
 
@@ -371,3 +372,6 @@ Fix: **Employees** is its own page (`EmployeesPage`, `EmployeesViewModel`, route
 
 Owner, 2026-11-25 (screenshots of Attendance's Review / Records / Corrections and Payroll's four tabs): "remove the 4 buttons in Payroll, they must just access it in the nav bar, and the 3 buttons in Attendance." Both tab bars are gone; the menu's Payroll and Attendance entries open each part (as before), and the **page title says which part**, in the menu's words: Payroll Processing, Payslips, Payroll History, Salary Configuration; Attendance Review, Attendance Records, Attendance Corrections (`SectionTitle`). Links inside the pages (e.g. Set salaries, a paid-out period) still switch parts. The pending count is in Attendance's period bar ("Pending · N records to review"). `PayrollPaidOutTests` no longer looks for the removed tab button. 1280 C# tests pass; Windows builds. App only.
 
+### Financial reports: payroll by paid-out month (`0161`)
+
+Owner, 2026-11-25 (screenshot: November Payroll ₱0.00 while Payroll History has paid-out periods): not a bug; X4 counted a period on its last day, and every paid-out period covered an earlier month (live: 1-15 and 16-31 Oct, plus test periods Jan 2025 and 1-15 Dec 2025, all paid out 23-25 Nov). Owner chose "count by paid-out month". **X4 amended:** `payroll_cost` sums the gross pay of **paid-out** periods on the Manila day of `paid_out_at`; an approved period that isn't paid out isn't counted. Demo the same; the page's note says so. Tests: db `expenses.mjs` X4 rewritten first (failed: an approved period was counted), `FinanceTests.Financial_report_counts_payroll_in_the_month_it_was_paid_out_and_shows_a_year_by_month` (fixed clock, 3 Sep 2026). 1280 C# tests, `expenses.mjs` 6, `rules.mjs` 106 pass; Windows builds. Deployed: dry run showed only `0161`; pushed; live `anon` can't execute. November 2026 now shows ₱146,300.00 payroll, of which ₱120,300.00 is the test periods (Jan 2025, Dec 2025); owner to say whether to clean them.

@@ -502,8 +502,8 @@ public sealed partial class DemoGateway
                 Require("reports:revenue");
                 var (from, to) = (DateOnly.TryParse(Str("p_from"), out var f) ? f : throw Err("bad_input"), DateOnly.TryParse(Str("p_to"), out var t) ? t : throw Err("bad_input"));
                 if (to < from) throw Err("bad_input");
-                result = _payrollPeriods.Where(p => p.PaidAt is not null && p.EndsOn >= from && p.EndsOn <= to).OrderBy(p => p.EndsOn)
-                    .Select(p => new PayrollCostDay { Day = p.EndsOn, Gross = _payrollLines.Where(l => l.PeriodId == p.Id && l.Kind is "salary" or "bonus").Sum(l => l.Amount) }).ToList();
+                result = _payrollPeriods.Where(p => p.PaidOutAt is { } at && ManilaDay(at) >= from && ManilaDay(at) <= to).OrderBy(p => p.PaidOutAt)   // 0161: on the day paid out
+                    .Select(p => new PayrollCostDay { Day = ManilaDay(p.PaidOutAt!.Value), Gross = _payrollLines.Where(l => l.PeriodId == p.Id && l.Kind is "salary" or "bonus").Sum(l => l.Amount) }).ToList();
                 return true;
             }
             case "payroll_records_all":   // 0158 (Fix 4): every person's records and corrections for Attendance Review

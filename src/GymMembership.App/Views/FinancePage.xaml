@@ -105,7 +105,7 @@
                                 </Label>
                             </VerticalStackLayout>
                         </FlexLayout>
-                        <Label Text="Net income = revenue − expenses − payroll. Revenue is verified payments minus approved refunds, as on Revenue. Payroll is the gross pay of approved or paid-out pay periods, on the period's last day; a draft isn't counted yet."
+                        <Label Text="Net income = revenue − expenses − payroll. Revenue is verified payments minus approved refunds, as on Revenue. Payroll is the gross pay of paid-out pay periods, in the month they were paid out; a period isn't counted until it is marked paid out."
                                Style="{StaticResource Caption}" LineBreakMode="WordWrap" />
                     </VerticalStackLayout>
                 </Border>
