@@ -4,9 +4,9 @@
 
 Created: 2026-11-25
 Last updated: 2026-11-25
-Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phases 3.1-3.4 done (0151-0154 live; shift check-in rule off until the admin turns it on from Scheduling); 3.5-3.6 TODO. S1-S9 confirmed. More fixes get added below as the owner sends them.
+Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phases 3.1-3.5 done (0151-0155 live; shift check-in rule off until the admin turns it on from Scheduling); 3.6 (checks and rollout) TODO. S1-S9 confirmed. More fixes get added below as the owner sends them.
 Branch: `owner-fixes-2026-11-25` (cut from `main` at `df3f54c`, v0.11.0). Owner merges to `main` when done; no push or PR without the owner.
-Next migration: `0155`.
+Next migration: `0156`.
 
 **Goal:** The owner's fixes after the v0.11.0 release.
 
@@ -109,7 +109,7 @@ Owner, 2026-11-25: can the coaches' shifts and payroll work like `C:\Users\bowie
 | 3.2 | Payroll: Late / Left early flags, pay from shift start | DEPLOYED (`0152` live 2026-11-25) |
 | 3.3 | Scheduling page (Templates, Assignments, Calendar) | BUILT (`0153` live 2026-11-25; owner hand check left) |
 | 3.4 | Coach and desk screens: no Post a shift, refusal sentences, shift and Late on the desk | BUILT (`0154` live 2026-11-25; owner hand check left) |
-| 3.5 | Move a booked session to another coach (S9) | TODO |
+| 3.5 | Move a booked session to another coach (S9) | BUILT (`0155` live 2026-11-25; owner hand check left) |
 | 3.6 | Checks and rollout (admin sets schedules, then the rule is switched on) | TODO |
 
 #### Phase 3.1: Database (`0151_staff_scheduling.sql`)
@@ -157,10 +157,11 @@ Owner, 2026-11-25: can the coaches' shifts and payroll work like `C:\Users\bowie
 
 #### Phase 3.5: Move a booked session to another coach (S9)
 
-- [ ] `reassign_session(p_session, p_coach, p_reason)` (front desk and admin, `payments:record`): the session is scheduled and not started; the new coach has a scheduled shift covering it, no other session overlapping, and stays under `max_coach_hours_per_day` (same checks as `book_coach_session`, 0120); member's coach access rules unchanged. Changes only `coach_id`; time, price and payment stay. Notifies the member and both coaches; audit `session.reassigned` (old coach, new coach, reason). Revoke from `anon`.
-- [ ] Database tests: free coach accepted; coach without a shift, already booked, or over the daily limit refused (`coach_not_free`); started or cancelled session refused; `anon` refused.
-- [ ] Desk screen (where booked coach sessions are listed): **Change coach** on a session opens the coaches free at that hour (reuses `free_coaches`), with a reason; Windows only.
-- [ ] Member and coach apps show the new coach on the session (already read from the session row); notification text names the new coach.
+- [x] `reassign_session(p_session, p_coach, p_reason)` (front desk and admin, `payments:record`): the session is scheduled and not started; the new coach has a scheduled shift covering it, no other session overlapping, and stays under `max_coach_hours_per_day` (same checks as `book_coach_session`, 0120); member's coach access rules unchanged. Changes only `coach_id`; time, price and payment stay. Notifies the member and both coaches; audit `session.reassigned` (old coach, new coach, reason). Revoke from `anon`.
+- [x] Database tests: free coach accepted; coach without a shift, already booked, or over the daily limit refused (`coach_not_free`); started or cancelled session refused; `anon` refused.
+- [x] Desk screen (where booked coach sessions are listed): **Change coach** on a session opens the coaches free at that hour (reuses `free_coaches`), with a reason; Windows only.
+- [x] Member and coach apps show the new coach on the session (already read from the session row); notification text names the new coach.
+- Built notes: `reassign_session` (`0155`) refuses a started session with its own `session_started` ("This session has already started, so it stays with its coach."); the desk acts before the start, when the coach shows Late. **Change coach** sits on Home's "Today's coach sessions" (row and card) while the coach hasn't arrived; the panel offers only coaches free for every hour of the session (`free_coaches`), asks why, and says who was told. Demo emulates it. Tests: db `reassign-session.mjs` (4), `ReassignSessionTests` (2); 1254 C# tests pass; Windows and Android build.
 
 #### Phase 3.6: Checks and rollout
 

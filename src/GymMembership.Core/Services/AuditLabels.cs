@@ -23,7 +23,7 @@ public static class AuditLabels
         ["refund.request"] = "Refund requested", ["refund.decide"] = "Refund decided", ["refund.paid"] = "Refund repaid",
         ["reservation.book"] = "Booking made", ["reservation.desk_walk_in"] = "Walk-in booked at the desk", ["reservation.desk_walk_in_online"] = "Walk-in booked at the desk, paying online", ["reservation.hold"] = "Booking held for payment", ["reservation.request"] = "Booking requested", ["reservation.balance"] = "Booking balance taken", ["reservation.request"] = "Booking requested", ["reservation.balance"] = "Booking balance taken", ["reservation.cancel"] = "Booking cancelled", ["reservation.end"] = "Booking ended",
         ["reservation.extend"] = "Booking extended", ["reservation.balance_online"] = "Booking balance started online at the desk",   // 0141
-        ["coach_session.book"] = "Coach session booked", ["coach_session.cancel"] = "Coach session cancelled",
+        ["coach_session.book"] = "Coach session booked", ["session.reassigned"] = "Coach session moved to another coach", ["coach_session.cancel"] = "Coach session cancelled",
         ["coach_access.buy"] = "Coach access add-on bought",
         ["coach_session.check_in"] = "Coach session checked in", ["coach_session.coach_arrived"] = "Coach arrived for session", ["coach_session.desk_walkin"] = "Walk-in coach session booked at the desk",
         ["damage_report.create"] = "Damage reported", ["damage_report.review"] = "Damage report reviewed",
@@ -41,7 +41,7 @@ public static class AuditLabels
     public static readonly IReadOnlyDictionary<string, string> Areas = new Dictionary<string, string>
     {
         ["user"] = "Account", ["role"] = "Role", ["payment"] = "Payment", ["check_in"] = "Check-in", ["refund"] = "Refund",
-        ["reservation"] = "Booking", ["schedule"] = "Shift schedule", ["coach_session"] = "Coach session", ["coach_access"] = "Coach access", ["amenity"] = "Amenity", ["catalog"] = "Catalog", ["cash_shift"] = "Cash shift", ["payroll"] = "Payroll", ["announcement"] = "Announcement", ["discount"] = "Discount code", ["gym"] = "Gym", ["damage_report"] = "Damage report",
+        ["reservation"] = "Booking", ["schedule"] = "Shift schedule", ["session"] = "Coach session", ["coach_session"] = "Coach session", ["coach_access"] = "Coach access", ["amenity"] = "Amenity", ["catalog"] = "Catalog", ["cash_shift"] = "Cash shift", ["payroll"] = "Payroll", ["announcement"] = "Announcement", ["discount"] = "Discount code", ["gym"] = "Gym", ["damage_report"] = "Damage report",
     };
 
     /// <summary>Object type: the table the entry is about. The filter sends the key.</summary>

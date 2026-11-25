@@ -306,6 +306,30 @@ public sealed partial class DemoGateway
                 result = new List<TodayCoachSession> { ToTodayCoachSession(s) };
                 return true;
             }
+            case "reassign_session":   // 0155 (Fix 3, S9)
+            {
+                Require("payments:record");
+                var reason = a.TryGetValue("p_reason", out var rv) && rv is string rs ? rs.Trim() : "";
+                if (reason.Length is < 1 or > 200) throw Err("bad_reason");
+                var s = All<TrainingSession>().FirstOrDefault(x => x.Id == Convert.ToInt32(a["p_session"])) ?? throw Err("not_found");
+                if (s.Status != Status.Scheduled || s.ScheduledStart <= now) throw Err("session_started");
+                var to = (string)a["p_coach"];
+                if (to == s.CoachId) throw Err("bad_input");
+                if (!IsCoach(to) || !(All<Profile>().FirstOrDefault(p => p.Id == to)?.IsActive ?? false)) throw Err("not_found");
+                if (!All<ShiftPost>().Any(sp => sp.CoachId == to && sp.Status == Status.Scheduled && sp.Start <= s.ScheduledStart && sp.End >= s.ScheduledEnd)) throw Err("coach_not_free");
+                var day = DateOnly.FromDateTime((s.ScheduledStart.ToUniversalTime() + Manila).Date);
+                var booked = All<TrainingSession>().Where(t => t.CoachId == to && t.Status is Status.Scheduled or Status.Completed
+                    && DateOnly.FromDateTime((t.ScheduledStart.ToUniversalTime() + Manila).Date) == day).Sum(t => (t.ScheduledEnd - t.ScheduledStart).TotalHours);
+                if (All<GymSettings>().First().MaxCoachHoursPerDay is { } mh && booked + (s.ScheduledEnd - s.ScheduledStart).TotalHours > mh) throw Err("coach_day_full");
+                if (All<TrainingSession>().Any(t => t.CoachId == to && t.Status == Status.Scheduled && t.ScheduledStart < s.ScheduledEnd && s.ScheduledStart < t.ScheduledEnd)) throw Err("coach_not_free");
+                var from = s.CoachId;
+                s.CoachId = to;
+                if (!string.IsNullOrEmpty(s.MemberId)) Notify(s.MemberId, "system", "Your coach session has a new coach");
+                Notify(from, "system", "A session moved to another coach");
+                Notify(to, "system", "A session was moved to you");
+                Audit("session.reassigned", "training_sessions", s.Id.ToString());
+                return true;
+            }
             case "mark_coach_arrived":
             {
                 RequireActive();

@@ -71,6 +71,44 @@ public partial class HomeViewModel(IDeskHomeService svc, IPaymentStaffService? p
         await RunAsync(sessions.TodayCoachSessionsAsync, ShowTodaySessions);
     }
 
+    // ---- Fix 3 (0155, S9): a coach who isn't coming; move the session to another coach free for all of it ----
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsChangingCoach), nameof(ChangeCoachTitle))] private TodayCoachSession? changingSession;
+    [ObservableProperty] private FreeCoachSlot? chosenCoach;
+    [ObservableProperty] private string changeCoachReason = "";
+    [ObservableProperty] private string? noCoachText;
+    public ObservableCollection<FreeCoachSlot> CoachChoices { get; } = new();
+    public bool IsChangingCoach => ChangingSession is not null;
+    public string ChangeCoachTitle => ChangingSession is { } s ? $"Move {s.MemberName}'s {s.TimeRange} session from {s.CoachName}" : "";
+
+    [RelayCommand]
+    private async Task BeginChangeCoachAsync(TodayCoachSession row)
+    {
+        if (sessions is null) return;
+        Notice = null; ChangeCoachReason = ""; ChosenCoach = null; NoCoachText = null;
+        var day = DateOnly.FromDateTime(row.ScheduledStart.ToUniversalTime().AddHours(8));
+        var hours = Enumerable.Range(0, Math.Max(1, (int)Math.Ceiling((row.ScheduledEnd - row.ScheduledStart).TotalHours)))
+            .Select(i => row.ScheduledStart.ToUniversalTime().AddHours(8 + i).Hour).ToList();
+        if (!await RunAsync(() => sessions.FreeCoachesAsync(day), free =>
+                Fill(CoachChoices, free.Where(c => c.CoachId != row.CoachId && hours.All(h => c.FreeHours.Contains(h))))))
+            return;
+        ChosenCoach = CoachChoices.FirstOrDefault();
+        NoCoachText = CoachChoices.Count == 0 ? "No other coach is free for all of this session." : null;
+        ChangingSession = row;
+    }
+
+    [RelayCommand] private void CancelChangeCoach() => ChangingSession = null;
+
+    [RelayCommand]
+    private async Task SaveChangeCoachAsync()
+    {
+        if (sessions is null || ChangingSession is not { } row || ChosenCoach is not { } to) return;
+        if (string.IsNullOrWhiteSpace(ChangeCoachReason)) { ErrorMessage = $"Say why the session is moving, like {row.CoachName.Split(' ')[0]} is sick."; return; }
+        if (!await RunAsync(() => sessions.ReassignAsync(row.SessionId, to.CoachId, ChangeCoachReason.Trim()))) return;
+        ChangingSession = null;
+        Notice = $"{row.MemberName}'s {row.TimeRange} session is now with {to.FullName}. They and both coaches were told.";
+        await RunAsync(sessions.TodayCoachSessionsAsync, ShowTodaySessions);
+    }
+
     [RelayCommand]
     private async Task CheckOutCoachAsync(CoachPresenceRow row)
     {

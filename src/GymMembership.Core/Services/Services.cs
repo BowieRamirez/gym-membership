@@ -1191,6 +1191,8 @@ public sealed record TodayCoachSession(
     public string TimeRange => Fmt.Range(ScheduledStart, ScheduledEnd);
     public bool CanMarkCoachArrived => CheckedInAt is not null && CoachArrivedAt is null && Status == "Checked in";
     public bool CanCheckIn => CheckedInAt is null && HeldUntil is null && Status == "scheduled";
+    /// <summary>Fix 3 (0155, S9): the coach hasn't arrived, so the desk can move it; the server refuses once it has started.</summary>
+    public bool CanChangeCoach => CoachArrivedAt is null && Status == "scheduled";
 }
 public sealed record FreeCoachSlot(
     [property: System.Text.Json.Serialization.JsonPropertyName("coach_id")] string CoachId,
@@ -1230,6 +1232,8 @@ public interface ISessionService
     Task<AppResult<int>> DeskBookWalkInCoachAsync(string coachId, DateTime startUtc, int hours, string? walkInName = null) => Task.FromResult(AppResult<int>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<TodayCoachSession>> ScanSessionAsync(string code) => Task.FromResult(AppResult<TodayCoachSession>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<bool>> MarkCoachArrivedAsync(int sessionId) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    /// <summary>Fix 3 (0155): move a booked session to another free coach; time, price and payment stay.</summary>
+    Task<AppResult<bool>> ReassignAsync(int sessionId, string coachId, string reason) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<IReadOnlyList<TodayCoachSession>>> TodayCoachSessionsAsync() => Task.FromResult(AppResult<IReadOnlyList<TodayCoachSession>>.Success([]));
     Task<AppResult<int>> ReportDamageAsync(int? sessionId, int? amenityId, string description, string? photoPath = null) => Task.FromResult(AppResult<int>.Fail(AppErrorKind.Unknown, "not_implemented"));
 }
@@ -1345,6 +1349,9 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
 
     public Task<AppResult<bool>> MarkCoachArrivedAsync(int sessionId) => Safe.RunAsync(async () =>
     { await gw.RpcAsync("mark_coach_arrived", new() { ["p_session"] = sessionId }); return true; });
+
+    public Task<AppResult<bool>> ReassignAsync(int sessionId, string coachId, string reason) => Safe.RunAsync(async () =>
+    { await gw.RpcAsync("reassign_session", new() { ["p_session"] = sessionId, ["p_coach"] = coachId, ["p_reason"] = reason }); return true; });
 
     public Task<AppResult<IReadOnlyList<TodayCoachSession>>> TodayCoachSessionsAsync() => Safe.RunAsync<IReadOnlyList<TodayCoachSession>>(async () =>
         await gw.RpcAsync<List<TodayCoachSession>>("today_coach_sessions"));
