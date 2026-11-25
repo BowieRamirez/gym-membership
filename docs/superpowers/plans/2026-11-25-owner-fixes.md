@@ -4,7 +4,7 @@
 
 Created: 2026-11-25
 Last updated: 2026-11-25
-Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phases 3.1-3.6 built, checked and pushed; `0151`-`0157` all live (dry run 2026-11-25: remote up to date); shift check-in rule is **off** until the admin turns it on from Scheduling. S1-S9 confirmed; S8 amended by option (b). Left: owner hand checks, the rollout steps (Phase 3.6), merge and a new app release. **Owner: do not merge until told.** Fix 4 (admin menu with words, Attendance Review) PLANNED 2026-11-25, not built. More fixes get added below as the owner sends them.
+Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phases 3.1-3.6 built, checked and pushed; `0151`-`0157` all live (dry run 2026-11-25: remote up to date); shift check-in rule is **off** until the admin turns it on from Scheduling. S1-S9 confirmed; S8 amended by option (b). Left: owner hand checks, the rollout steps (Phase 3.6), merge and a new app release. **Owner: do not merge until told.** Fix 4 (admin menu with words, Attendance page, Payslips tab, corrections on Attendance) BUILT, `0158` live. Fix 5 (Expenses, Financial reports) BUILT, `0159` live. Layout fixes after Fix 5 (Amenity status margins, compact menu) BUILT. All pushed (up to the plan commit after `0507c11`); owner hand checks left. More fixes get added below as the owner sends them.
 Branch: `owner-fixes-2026-11-25` (cut from `main` at `df3f54c`, v0.11.0). Owner merges to `main` when done; no push or PR without the owner.
 Next migration: `0160`.
 
@@ -322,4 +322,15 @@ Built 2026-11-25:
 - [x] 5.2 App: `Expense`, `PayrollCostDay`; `AdminService` `ExpensesAsync`, `AddExpenseAsync`, `VoidExpenseAsync`, `PayrollCostAsync`; demo emulates all four; `FinanceReport` (Totals, Months, a loss reads "-₱500.00"); `ExpensesViewModel` and **Expenses** page (From/To with what was spent, Add expense form, table with Void and its reason, a voided row faded and struck through); `FinanceViewModel` and **Financial reports** page (Month | Year, ‹ ›, Revenue, Expenses, Payroll, Net income in red when a loss, how it is worked out, Revenue by payment method, Expenses by category, Month by month for a year, ten rows a page like every table). Menu: Finance & Payroll → Payroll, Revenue, **Expenses**, **Financial reports**, Refunds, Discounts; Overview links. Tests `FinanceTests` (3); shell and overview tests updated; 1277 C# tests pass; Windows and Android build.
 - Also: the four deleted hiring tests had held the only break attempts for `taken_coaches` and `end_hire`, which the app still calls; `hire-leftovers.mjs` (2) puts them back (`rules.mjs` 106 pass).
 - [ ] Owner hand check on Windows (Expenses: add, void; Financial reports: a month with approved payroll, a year).
+
+## Fixes after Fix 5 (owner, 2026-11-25)
+
+| Commit | What |
+|---|---|
+| `0ea954b` | Owner screenshot (Amenity status): the card sat against the new 240-wide menu and the Booked panel ran off the right edge. Cause: `SideLayout` (the two-column layout of Amenity status, Cashier, Refunds and some member pages) ignored its own `Padding`; only Amenity status sets one, so no other page moved. Fixed once in `SideLayout` (padding in Measure and Arrange; the wide/stacked switch still reads the full width); Amenity status now has 24 at the sides like the other staff pages. |
+| `0507c11` | Owner: "compact rows so everything fits". The admin menu's Gym pages were below the visible area (the middle scrolls with no bar). Rows 40 → 32 (fold rows 36 → 28), smaller icons, tighter section headings and gaps, smaller logo; text sizes unchanged. Everything fits at the owner's window height with Front desk open; it scrolls again only when Attendance and Payroll are open too. Coach, member and front desk strips unchanged. |
+
+Checks: 1277 C# tests pass; Windows and Android build. Not opened in the app here (owner checks it).
+
+**Owner hand checks still open (Windows, System admin and Admin):** the menu (fits, folds, current page lit, each Payroll and Attendance entry opens its tab on first click); Attendance (Review and Records tables, Approve with the money table, an overlapping record, Corrections add and remove); Payroll Payslips tab (Print payslip); Expenses (add, void); Financial reports (a month with approved payroll, a year); Amenity status margins.
 
