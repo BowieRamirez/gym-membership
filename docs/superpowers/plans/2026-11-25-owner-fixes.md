@@ -434,3 +434,10 @@ Owner, 2026-11-25: "add new page in coach to report an damage. coaches can also 
 - App: new coach page **Report damage** (Windows rail and the phone's More list, icon `alert-circle`): where (amenities on sale, or "Something else (equipment, a room)"), what (1-1000 characters, counter), Send report; then "Your reports" as two-line rows (what with a status chip; where and when; the admin's note). `ReportDamageViewModel`, `ISessionService.MyDamageReportsAsync`; the demo lets coaches report without a session. Tests `ReportDamageTests` (3).
 - Rename: **Membership checking** is **Check-ins** in the admin menu, the front desk menu (phone bottom bar too) and the page title; Home's empty-list sentence follows.
 - 1292 C# tests pass; Windows and Android build. Not opened in the app here (owner checks it). App part reaches people with the next release.
+
+### Closed days crossed out on the desk's booking calendars
+
+Owner, 2026-11-25 (screenshot of Cashier → Amenity booking with the Windows calendar open; the gym is closed on 1 Dec): "why can the front desk choose dec 1, have a disable indicator". Cause: the desk's Amenity booking and Coach session forms use the plain Windows date picker, which knew nothing of gym closures (the member app's own day strip already greys them out); the server refused the booking only after the day was picked.
+- `Controls/ClosedDays` (attached property): on Windows the DatePicker's calendar marks the closed days as blackout days (struck through, can't be picked). Both desk forms bind it.
+- `DeskBookingViewModel` and `DeskCoachBookingViewModel` load the closed days (`GymClosures.ByDayAsync`; new `ISessionService.ClosedDaysAsync`); a closed day already picked shows "The gym is closed on Tue 1 Dec: test. Choose another day." in red, and Book is off on the amenity form (the server refuses either way).
+- Test `The_desk_booking_forms_know_the_closed_days_and_say_so_when_one_is_picked` (failed first). 1293 C# tests pass; Windows and Android build. App only; reaches the desk with the next release. Not opened in the app here.

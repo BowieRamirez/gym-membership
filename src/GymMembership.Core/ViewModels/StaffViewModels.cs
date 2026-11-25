@@ -2928,7 +2928,11 @@ public partial class DeskCoachBookingViewModel(ISessionService sessions, IAttend
 {
     [ObservableProperty] private string coachCustomerSearch = "";
     [ObservableProperty] private MemberHit? coachCustomer;
-    [ObservableProperty] private DateTime coachBookDay = DateTime.Today;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(DayClosedText))] private DateTime coachBookDay = DateTime.Today;
+    IReadOnlyDictionary<DateOnly, string> _closed = new Dictionary<DateOnly, string>();
+    /// <summary>Owner, 2026-11-25: closed days, crossed out in the calendar.</summary>
+    public IReadOnlyCollection<DateOnly> ClosedDays => _closed.Keys.ToList();
+    public string? DayClosedText => GymClosures.Text(_closed, DateOnly.FromDateTime(CoachBookDay));
     [ObservableProperty] private int coachBookHours = 1;
     [ObservableProperty] private FreeCoachSlot? selectedDeskCoach;
     [ObservableProperty] private SessionsViewModel.HourOption? selectedDeskCoachHour;
@@ -2974,7 +2978,10 @@ public partial class DeskCoachBookingViewModel(ISessionService sessions, IAttend
     [RelayCommand]
     private void ChooseCoachCustomer(MemberHit hit) { CoachCustomer = hit; CoachCustomerHits.Clear(); }
 
-    public override Task OnAppearingAsync() => LoadDeskCoachesAsync();
+    public override Task OnAppearingAsync() => Task.WhenAll(LoadDeskCoachesAsync(), RunAsync(sessions.ClosedDaysAsync, c =>
+    {
+        _closed = c; OnPropertyChanged(nameof(ClosedDays)); OnPropertyChanged(nameof(DayClosedText));
+    }));
 
     async Task LoadDeskCoachesAsync()
     {
@@ -3098,7 +3105,11 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
     public ObservableCollection<GridAmenity> Amenities { get; } = new();
     public ObservableCollection<SlotOption> Starts { get; } = new();
     public ObservableCollection<PickChip> Lengths { get; } = new();
-    [ObservableProperty] private DateTime day = DateTime.Today;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(DayClosedText)), NotifyCanExecuteChangedFor(nameof(BookCommand), nameof(PayOnlineCommand))] private DateTime day = DateTime.Today;
+    // owner, 2026-11-25: closed days are crossed out in the calendar, and a closed day picked anyway says so and books nothing
+    IReadOnlyDictionary<DateOnly, string> _closed = new Dictionary<DateOnly, string>();
+    public IReadOnlyCollection<DateOnly> ClosedDays => _closed.Keys.ToList();
+    public string? DayClosedText => GymClosures.Text(_closed, DateOnly.FromDateTime(Day));
     [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand), nameof(PayOnlineCommand))] private GridAmenity? amenity;
     [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand), nameof(PayOnlineCommand))] private SlotOption? start;
     [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand), nameof(PayOnlineCommand))] private PickChip? length;   // 0090: whole hours up to closing
@@ -3107,7 +3118,11 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
     /// <summary>Raised after a booking is made, so Amenity status refreshes its Booked card.</summary>
     public event Action? Booked;
 
-    public override Task OnAppearingAsync() => LoadGridAsync();
+    public override Task OnAppearingAsync() => Task.WhenAll(LoadGridAsync(), RunAsync(reservations.ClosedDaysAsync, c =>
+    {
+        _closed = c; OnPropertyChanged(nameof(ClosedDays)); OnPropertyChanged(nameof(DayClosedText));
+        BookCommand.NotifyCanExecuteChanged(); PayOnlineCommand.NotifyCanExecuteChanged();
+    }));
     partial void OnDayChanged(DateTime value) => _ = LoadGridAsync();
     partial void OnAmenityChanged(GridAmenity? value) => FillStarts();
     partial void OnStartChanged(SlotOption? value)
@@ -3139,7 +3154,7 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
     }
 
     string? Customer => IsWalkIn ? (string.IsNullOrWhiteSpace(WalkInName) ? null : WalkInName.Trim()) : Member?.Username;
-    bool CanBook() => Customer is not null && Amenity is not null && Start is not null && Length is not null && Waiting is null;
+    bool CanBook() => Customer is not null && Amenity is not null && Start is not null && Length is not null && Waiting is null && DayClosedText is null;
     bool CanPayOnline() => CanBook() && IsWalkIn && payments is not null;
 
     /// <summary>0092: a walk-in's online booking waiting for Xendit (shows Open checkout, Check payment and Cancel).</summary>

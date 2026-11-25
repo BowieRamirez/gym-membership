@@ -12,6 +12,10 @@ public static class GymClosures
         var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8)).ToDateTime(TimeOnly.MinValue);
         return (await gw.ListAsync<GymClosure>(c => c.ClosedOn >= today)).ToDictionary(c => c.Day, c => c.Reason);
     }
+
+    /// <summary>Owner, 2026-11-25: what a desk form says when the day picked is closed; null on an open day.</summary>
+    public static string? Text(IReadOnlyDictionary<DateOnly, string> closed, DateOnly day) =>
+        closed.TryGetValue(day, out var why) ? $"The gym is closed on {day:ddd d MMM}: {why.Trim().TrimEnd('.')}. Choose another day." : null;
 }
 
 /// <summary>G18: what closing a day would cancel, as closure_preview counts it.</summary>
@@ -1262,6 +1266,8 @@ public interface ISessionService
     Task<AppResult<bool>> ReassignAsync(int sessionId, string coachId, string reason) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<IReadOnlyList<TodayCoachSession>>> TodayCoachSessionsAsync() => Task.FromResult(AppResult<IReadOnlyList<TodayCoachSession>>.Success([]));
     Task<AppResult<int>> ReportDamageAsync(int? sessionId, int? amenityId, string description, string? photoPath = null) => Task.FromResult(AppResult<int>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    /// <summary>G16 (0065): closed days from today on, for the desk's coach-session calendar.</summary>
+    Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync() => Task.FromResult(AppResult<IReadOnlyDictionary<DateOnly, string>>.Success(new Dictionary<DateOnly, string>()));
     /// <summary>0165: the damage reports this person filed, newest first, and every amenity (names and what can be picked).</summary>
     Task<AppResult<(IReadOnlyList<DamageReport> Reports, IReadOnlyList<Amenity> Amenities)>> MyDamageReportsAsync() =>
         Task.FromResult(AppResult<(IReadOnlyList<DamageReport>, IReadOnlyList<Amenity>)>.Success(([], [])));
@@ -1393,6 +1399,8 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
             await Task.WhenAll(reports, amenities);
             return (reports.Result.Where(r => r.ReportedBy == me).OrderByDescending(r => r.CreatedAt).ToList(), amenities.Result);
         });
+
+    public Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync() => Safe.RunAsync(() => GymClosures.ByDayAsync(gw));
 
     public Task<AppResult<int>> ReportDamageAsync(int? sessionId, int? amenityId, string description, string? photoPath = null) => Safe.RunAsync(() =>
         gw.RpcAsync<int>("report_damage", new()

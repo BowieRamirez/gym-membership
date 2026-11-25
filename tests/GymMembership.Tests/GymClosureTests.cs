@@ -26,6 +26,27 @@ public class GymClosureTests
     }
 
     [Fact]
+    public async Task The_desk_booking_forms_know_the_closed_days_and_say_so_when_one_is_picked()
+    {
+        var gw = new DemoGateway();
+        await CloseAsync(gw, "Holiday");
+        await As("employee@demo.io", gw); await gw.OpenDrawerAsync();
+        var amenity = new DeskBookingViewModel(new AttendanceService(gw), new ReservationService(gw), new PaymentStaffService(gw));
+        await amenity.OnAppearingAsync();
+        Assert.Contains(Closed, amenity.ClosedDays);   // the calendar crosses it out
+        Assert.Null(amenity.DayClosedText);
+        amenity.Day = Closed.ToDateTime(TimeOnly.MinValue);
+        Assert.Equal($"The gym is closed on {Closed:ddd d MMM}: Holiday. Choose another day.", amenity.DayClosedText);
+        Assert.False(amenity.BookCommand.CanExecute(null));
+
+        var coach = new DeskCoachBookingViewModel(new SessionService(gw), new AttendanceService(gw));
+        await coach.OnAppearingAsync();
+        Assert.Contains(Closed, coach.ClosedDays);
+        coach.CoachBookDay = Closed.ToDateTime(TimeOnly.MinValue);
+        Assert.Equal($"The gym is closed on {Closed:ddd d MMM}: Holiday. Choose another day.", coach.DayClosedText);
+    }
+
+    [Fact]
     public async Task A_closed_days_refund_of_down_payment_and_balance_can_be_recorded_as_repaid()   // 0095
     {
         var gw = await As("member@demo.io");

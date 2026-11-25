@@ -261,7 +261,7 @@
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
                                     <Label Text="Day" Style="{StaticResource Caption}" />
-                                    <Border Style="{StaticResource Field}"><DatePicker Date="{Binding Day}" SemanticProperties.Description="Day" /></Border>
+                                    <Border Style="{StaticResource Field}"><DatePicker Date="{Binding Day}" c:ClosedDays.Days="{Binding ClosedDays}" SemanticProperties.Description="Day" /></Border>
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="150">
                                     <Label Text="Starts" Style="{StaticResource Caption}" />
@@ -276,6 +276,8 @@
                                 <Button Text="Pay online (Xendit)" Style="{StaticResource SmallOutlineButton}" Margin="0,0,0,8" Command="{Binding PayOnlineCommand}"
                                         IsVisible="{Binding IsWalkIn}" AutomationId="DeskBookOnline" />
                             </FlexLayout>
+                            <!-- owner, 2026-11-25: a closed day is crossed out in the calendar; picked anyway, it says so and nothing can be booked -->
+                            <Label Text="{Binding DayClosedText}" TextColor="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" FontFamily="BarlowSemiBold" LineBreakMode="WordWrap" IsVisible="{Binding DayClosedText, Converter={StaticResource HasText}}" />
 
                             <!-- waiting for Xendit: the checkout is open on this PC; the slot is theirs once Check payment says paid -->
                             <Border Style="{StaticResource Panel}" IsVisible="{Binding IsWaiting}" MaximumWidthRequest="640" HorizontalOptions="Start" AutomationId="DeskBookWaiting">
@@ -339,7 +341,7 @@
                             <FlexLayout Wrap="Wrap" AlignItems="End">
                                 <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
                                     <Label Text="Day" Style="{StaticResource Caption}" />
-                                    <Border Style="{StaticResource Field}"><DatePicker Date="{Binding CoachBookDay}" MinimumDate="{x:Static x:DateTime.Today}" /></Border>
+                                    <Border Style="{StaticResource Field}"><DatePicker Date="{Binding CoachBookDay}" MinimumDate="{x:Static x:DateTime.Today}" c:ClosedDays.Days="{Binding ClosedDays}" SemanticProperties.Description="Day" /></Border>
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
                                     <Label Text="Length" Style="{StaticResource Caption}" />
@@ -368,6 +370,8 @@
                                     <Border Style="{StaticResource Field}"><Entry Text="{Binding DeskCoachCode}" Placeholder="Optional" /></Border>
                                 </VerticalStackLayout>
                             </FlexLayout>
+                            <!-- owner, 2026-11-25: a closed day is crossed out in the calendar; picked anyway, it says so and nothing can be booked -->
+                            <Label Text="{Binding DayClosedText}" TextColor="{AppThemeBinding Light={StaticResource BadLight}, Dark={StaticResource BadDark}}" FontFamily="BarlowSemiBold" LineBreakMode="WordWrap" IsVisible="{Binding DayClosedText, Converter={StaticResource HasText}}" />
                             <Button Text="Book coach session" Style="{StaticResource SmallButton}" HorizontalOptions="Start" Command="{Binding DeskBookCoachCommand}" />
                         </VerticalStackLayout>
                         </VerticalStackLayout>
