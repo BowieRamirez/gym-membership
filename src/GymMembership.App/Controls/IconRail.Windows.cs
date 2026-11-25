@@ -135,7 +135,7 @@ public static class IconRail
             return row;
         }
 
-        var body = new VerticalStackLayout { Spacing = 2, Padding = new Thickness(12, 0) };
+        var body = new VerticalStackLayout { Spacing = 1, Padding = new Thickness(12, 0) };
         foreach (var section in AdminMenu.Sections)
         {
             var rows = new List<View>();
@@ -146,7 +146,7 @@ public static class IconRail
                     if (Find(entry.Page) is { } item) rows.Add(LinkRow(entry, item, child: false));
                     continue;
                 }
-                var kids = new VerticalStackLayout { Spacing = 2, IsVisible = false };
+                var kids = new VerticalStackLayout { Spacing = 1, IsVisible = false };
                 foreach (var c in entry.Children)
                     if (Find(c.Page) is { } item)
                     {
@@ -166,7 +166,7 @@ public static class IconRail
             body.Children.Add(Caption(section.Title, top: body.Children.Count > 0));
             foreach (var r in rows) body.Children.Add(r);
         }
-        var bottom = new VerticalStackLayout { Spacing = 2, Padding = new Thickness(12, 0) };
+        var bottom = new VerticalStackLayout { Spacing = 1, Padding = new Thickness(12, 0) };
         foreach (var item in items.Where(Bottom)) bottom.Children.Add(LinkRow(new AdminMenuEntry(item.Title, PageIcons.GetValueOrDefault(item.Title, "settings"), item.Title), item, child: false));
         var signOut = new MenuRow("log-out", "Sign out", child: false);
         signOut.Button.Command = header.SignOutCommand;
@@ -212,13 +212,13 @@ public static class IconRail
         Ink(name);
         var role = new Label { Text = roleName, FontSize = 12, VerticalOptions = LayoutOptions.Center, Opacity = 0.7 };
         Ink(role);
-        var head = new HorizontalStackLayout { Spacing = 10, Padding = new Thickness(16, 0), Children = { new LogoMark { Size = 36 }, new VerticalStackLayout { Spacing = 0, VerticalOptions = LayoutOptions.Center, Children = { name, role } } } };
+        var head = new HorizontalStackLayout { Spacing = 10, Padding = new Thickness(16, 0), Children = { new LogoMark { Size = 32 }, new VerticalStackLayout { Spacing = 0, VerticalOptions = LayoutOptions.Center, Children = { name, role } } } };
         ToolTipProperties.SetText(head, "Slim and Shape, " + roleName);
         SemanticProperties.SetDescription(head, "Slim and Shape, " + roleName);
 
         var me = Picture(shell, header, items);
         me.HorizontalOptions = LayoutOptions.Start;
-        me.Margin = new Thickness(22, 6, 0, 0);
+        me.Margin = new Thickness(22, 4, 0, 0);
 
         shell.Navigated += (_, _) =>
         {
@@ -228,7 +228,7 @@ public static class IconRail
             foreach (var (_, _, kids) in folds)
                 if (links.Any(l => shell.CurrentItem == l.Item && kids.Children.Contains(l.Row))) kids.IsVisible = true;
         };
-        Mount(shell, 240, head, body, new VerticalStackLayout { Spacing = 6, Children = { bottom, me } }, Refresh);
+        Mount(shell, 240, head, body, new VerticalStackLayout { Spacing = 4, Children = { bottom, me } }, Refresh, compact: true);
     }
 
     /// <summary>One menu row: icon and words, a fold chevron, an optional tag; a real Button on top for keyboard and screen readers.</summary>
@@ -242,8 +242,8 @@ public static class IconRail
 
         public MenuRow(string icon, string label, bool child, bool chevron = false)
         {
-            HeightRequest = child ? 36 : 40;
-            _icon = new IconView { Icon = icon, Size = child ? 14 : 16, ChipSize = child ? 24 : 28, Bare = true, VerticalOptions = LayoutOptions.Center };
+            HeightRequest = child ? 28 : 32;   // owner, 2026-11-25: compact, so the whole menu fits without scrolling
+            _icon = new IconView { Icon = icon, Size = child ? 13 : 15, ChipSize = child ? 22 : 24, Bare = true, VerticalOptions = LayoutOptions.Center };
             _text = new Label { Text = label, FontFamily = child ? "BarlowMedium" : "BarlowSemiBold", FontSize = child ? 13 : 14, VerticalOptions = LayoutOptions.Center, LineBreakMode = LineBreakMode.TailTruncation };
             Ink(_text);
             var grid = new Grid { ColumnDefinitions = [new(GridLength.Auto), new(GridLength.Star), new(GridLength.Auto)], ColumnSpacing = 8, Padding = new Thickness(child ? 28 : 8, 0, 8, 0), InputTransparent = true, CascadeInputTransparent = true };
@@ -285,7 +285,7 @@ public static class IconRail
 
     static Label Caption(string text, bool top)
     {
-        var label = new Label { Text = text.ToUpperInvariant(), FontFamily = "BarlowSemiBold", FontSize = 11, CharacterSpacing = 0.6, Opacity = 0.65, Margin = new Thickness(8, top ? 14 : 2, 8, 4) };
+        var label = new Label { Text = text.ToUpperInvariant(), FontFamily = "BarlowSemiBold", FontSize = 10.5, CharacterSpacing = 0.6, Opacity = 0.65, Margin = new Thickness(8, top ? 10 : 0, 8, 2) };
         Ink(label);
         SemanticProperties.SetHeadingLevel(label, SemanticHeadingLevel.Level2);
         return label;
@@ -315,15 +315,15 @@ public static class IconRail
         return avatar;
     }
 
-    static void Mount(Shell shell, double width, View top, View middle, View bottom, Action refresh)
+    static void Mount(Shell shell, double width, View top, View middle, View bottom, Action refresh, bool compact = false)
     {
-        var layout = new Grid { RowDefinitions = [new(GridLength.Auto), new(GridLength.Star), new(GridLength.Auto)], RowSpacing = 12 };
+        var layout = new Grid { RowDefinitions = [new(GridLength.Auto), new(GridLength.Star), new(GridLength.Auto)], RowSpacing = compact ? 6 : 12 };
         layout.Add(top, 0, 0);
         layout.Add(new ScrollView { Content = middle, VerticalScrollBarVisibility = ScrollBarVisibility.Never }, 0, 1);
         layout.Add(bottom, 0, 2);
 
         // Phase 9 (D23, approved mockup): a full-height strip flush with the window's left edge, yellow (light) or near-black (dark)
-        var rail = new Border { StrokeThickness = 0, Padding = new Thickness(0, 14), WidthRequest = width, Content = layout };
+        var rail = new Border { StrokeThickness = 0, Padding = new Thickness(0, compact ? 10 : 14), WidthRequest = width, Content = layout };
         rail.SetAppThemeColor(VisualElement.BackgroundColorProperty, Theme("RailLight"), Theme("RailDark"));
 
         shell.FlyoutHeader = null;
