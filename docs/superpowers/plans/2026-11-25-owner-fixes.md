@@ -239,7 +239,7 @@ Owner, 2026-11-25 (three screenshots): a navigation tree from the workforce PDF 
 | Phase | What | Status |
 |---|---|---|
 | 4.1 | Database: `payroll_records_all` | DEPLOYED (`0158` live 2026-11-25) |
-| 4.2 | Attendance Review page (Review, Records, Corrections) with the money table | PLANNED |
+| 4.2 | Attendance Review page (Review, Records, Corrections) with the money table | BUILT (app only; owner hand check left) |
 | 4.3 | Menu with words for the admin roles | PLANNED |
 | 4.4 | Checks | PLANNED |
 
@@ -256,17 +256,18 @@ Owner, 2026-11-25 (three screenshots): a navigation tree from the workforce PDF 
 
 Files: create `src/GymMembership.Core/ViewModels/AttendanceReviewViewModel.cs`, `src/GymMembership.App/Views/AttendanceReviewPage.xaml(.cs)`, `tests/GymMembership.Tests/AttendanceReviewViewModelTests.cs`; modify `Services.cs` (service + interface default), `StaffShell.xaml` (new `FlyoutItem Title="Attendance" ClassId="admin" Route="attendance"`), `IconRail.Windows.cs` `PageIcons` (`["Attendance"] = "clipboard-check"`), DI registration. (`AttendanceViewModel` already exists for members; don't reuse the name.)
 
-- [ ] Failing tests in `AttendanceReviewViewModelTests`:
+- [x] Failing tests in `AttendanceReviewViewModelTests`:
   - `Review_lists_pending_records_of_every_person_with_name_and_role` (demo: two people → both cards, each with `FullName`, `RoleText` "Front Desk"/"Coach", date "November 25, 2026", `InText` "8:00 AM", `OutText` "5:00 PM", `StatusLabel` "Pending").
   - `Approve_shows_the_money_first_then_confirm_approves` (hourly ₱130, 4.26 h → rows "4.26 hours", "0 hours", "₱130", "₱553.80"; nothing approved until `ConfirmApprove`; after it the record leaves Review and Pending count drops by one).
   - `Monthly_salary_shows_no_amount` and `Per_session_amount_is_the_session_rate`.
   - `Records_filter_by_status` and `Corrections_list_the_periods_hour_corrections`.
   - `Paid_out_period_is_read_only`.
-- [ ] `IStaffService.PayrollRecordsAllAsync(int periodId) → AppResult<PayrollAttendance>` where `PayrollAttendance(IReadOnlyList<PayrollStaffRecord> Records, IReadOnlyList<PayrollHourAdjustment> Adjustments)` and `PayrollStaffRecord` is `PayrollTimeRecord` plus `UserId`, `FullName`, `RoleName`, `PayType`, `Rate` (one call, 0158).
-- [ ] `AttendanceReviewViewModel`: period picker (reuses `PayrollPeriodAsync`), tabs `Review` / `Records` / `Corrections` (`Tab` set by the menu via route query `?tab=review|records|corrections`), `PendingCount`, items with `ApproveCommand` → opens the money panel (`MoneyRows`, `ConfirmApproveCommand`, `CancelCommand`), `Reject` with reason (reuse `PayrollRecordItem`'s reject wording). Approve/Reject call `ReviewPayrollTimeAsync`; refusals through `ErrorText`.
-- [ ] Page: cards as the owner's picture (initials, name, role, Pending chip top right; date; Time-in / Time-out; shift and Late / Left early line under it), a table on wide windows with the same columns. Money panel as the owner's table, with "Before deductions." under it. `impeccable` pass, light and dark.
-- [ ] Run `dotnet test` → all pass; Windows build.
-- [ ] Commit.
+- [x] `IStaffService.PayrollRecordsAllAsync(int periodId) → AppResult<PayrollAttendance>` where `PayrollAttendance(IReadOnlyList<PayrollStaffRecord> Records, IReadOnlyList<PayrollHourAdjustment> Adjustments)` and `PayrollStaffRecord` is `PayrollTimeRecord` plus `UserId`, `FullName`, `RoleName`, `PayType`, `Rate` (one call, 0158).
+- [x] `AttendanceReviewViewModel`: period picker (reuses `PayrollPeriodAsync`), tabs `Review` / `Records` / `Corrections` (`Tab` set by the menu via route query `?tab=review|records|corrections`), `PendingCount`, items with `ApproveCommand` → opens the money panel (`MoneyRows`, `ConfirmApproveCommand`, `CancelCommand`), `Reject` with reason (reuse `PayrollRecordItem`'s reject wording). Approve/Reject call `ReviewPayrollTimeAsync`; refusals through `ErrorText`.
+- [x] Page: cards as the owner's picture (initials, name, role, Pending chip top right; date; Time-in / Time-out; shift and Late / Left early line under it), a table on wide windows with the same columns. Money panel as the owner's table, with "Before deductions." under it. `impeccable` pass, light and dark.
+- [x] Run `dotnet test` → all pass; Windows build.
+- [x] Commit.
+- Built notes: page `Attendance` (route `attendance`, `ClassId="admin"` like Payroll, icon `clipboard-check`) after Scheduling; Admin overview gets an Attendance link (the shell tests require one per admin page). Tabs Review (with the pending count in its name) / Records (status picker) / Corrections (table); the period bar as on Payroll. Cards as the owner's picture: initials, name, role, status chip; date and what it is (Check-in, Cash shift #, Session · member); Time-in / Time-out; the shift; Late / Left early. Approve opens a side panel like Payroll's pay details: "Approve for <name>?", the money table, "Before deductions…", Cancel / Approve. **W4 changed:** fixed-salary staff have no attendance records (`payroll_records` lists hourly and per-session pay only), so there is no monthly row; per session reads Recorded "1 session", Approved, Rate "₱150.00 per session", amount = rate. Review focus 1 (no rate set) can't happen for the same reason. Flag words shared with the drawer (`PayrollRecordItem.FlagWords`). The `?tab=` route query is left to 4.3 (the menu is its only user). Tests: `AttendanceReviewViewModelTests` (8); 1264 C# tests pass; Windows builds. Not opened in the app here (owner checks it).
 
 #### Phase 4.3: Menu with words
 

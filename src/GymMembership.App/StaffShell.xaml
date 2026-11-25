@@ -30,6 +30,7 @@
     <FlyoutItem Title="Revenue" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:RevenuePage}" /></FlyoutItem>
     <FlyoutItem Title="Payroll" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:PayrollPage}" /></FlyoutItem>
     <FlyoutItem Title="Scheduling" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:SchedulingPage}" /></FlyoutItem>
+    <FlyoutItem Title="Attendance" ClassId="admin" Route="attendance"><ShellContent ContentTemplate="{DataTemplate views:AttendanceReviewPage}" /></FlyoutItem>
     <FlyoutItem Title="Damage reports" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:DamageReportsPage}" /></FlyoutItem>
     <FlyoutItem Title="Announcements" ClassId="admin"><ShellContent ContentTemplate="{DataTemplate views:AnnouncementsPage}" /></FlyoutItem>
     <FlyoutItem Title="Logs &amp; Archive" ClassId="super"><ShellContent ContentTemplate="{DataTemplate views:AuditPage}" /></FlyoutItem>

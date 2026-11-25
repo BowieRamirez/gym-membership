@@ -3331,7 +3331,8 @@ public sealed partial class PayrollRecordItem(PayrollTimeRecord rec, bool editab
             return Rec.EndsAt is { } e ? $"{head} {T(s)} → {T(e)} · {Rec.Hours.ToString("0.##", inv)} h" : $"{head} {T(s)} → still open";
         }
     }
-    public string FlagText => string.Join(" · ", Rec.Flags.Select(f => f switch
+    public string FlagText => FlagWords(Rec.Flags);
+    public static string FlagWords(IEnumerable<string> flags) => string.Join(" · ", flags.Select(f => f switch
     {
         "open" => "Still open, not counted", "auto_closed" => "Closed by the system at closing time", "long" => "Over 12 hours",
         "overlap" => "Overlaps, counted once", "late" => "Late", "left_early" => "Left early", _ => f

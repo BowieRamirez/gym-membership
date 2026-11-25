@@ -28,6 +28,7 @@ public static class IconRail
         ["Revenue"] = "chart-line",
         ["Payroll"] = "wallet",
         ["Scheduling"] = "calendar-clock",
+        ["Attendance"] = "clipboard-check",
         ["Damage reports"] = "alert-circle",
         ["Announcements"] = "megaphone",
         ["Logs & Archive"] = "archive",
