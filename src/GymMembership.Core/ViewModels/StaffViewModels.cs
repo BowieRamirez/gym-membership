@@ -2141,8 +2141,20 @@ public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
     private Task LoadAsync() => Task.WhenAll(
         RunAsync(svc.IsSuperAdminAsync, yes => CanArchive = yes),
         RunAsync(svc.DiscountsAsync, rows => Fill(Discounts, rows.Where(r => r.Discount.IsActive && ManilaTime.Utc(r.Discount.ExpiresAt) > DateTime.UtcNow))),
-        RunAsync(svc.AllPackagesAsync, rows => Fill(PackageChoices, rows.Where(p => p.IsActive).Select(p => new ItemChoice("package", p.Id, p.Name)))),
-        RunAsync(svc.AllAmenitiesAsync, rows => Fill(AmenityChoices, rows.Where(a => a.IsActive).Select(a => new ItemChoice("amenity", a.Id, a.Name)))));
+        // owner, 2026-11-25: only what is on sale (no drafts, no archived); a row's tick follows "All" and the other way round
+        RunAsync(svc.AllPackagesAsync, rows => Fill(PackageChoices, rows.Where(p => p.State == CatalogState.Published).Select(p => Choice("package", p.Id, p.Name, AllPackages)))),
+        RunAsync(svc.AllAmenitiesAsync, rows => Fill(AmenityChoices, rows.Where(a => a.State == CatalogState.Published).Select(a => Choice("amenity", a.Id, a.Name, AllAmenities)))));
+
+    bool _syncing;
+    ItemChoice Choice(string kind, int id, string name, bool chosen)
+    {
+        var c = new ItemChoice(kind, id, name) { IsChosen = chosen };
+        c.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ItemChoice.IsChosen)) Sync(() => { if (kind == "package") AllPackages = PackageChoices.All(x => x.IsChosen); else AllAmenities = AmenityChoices.All(x => x.IsChosen); }); };
+        return c;
+    }
+    void Sync(Action a) { if (_syncing) return; _syncing = true; try { a(); } finally { _syncing = false; } }
+    partial void OnAllPackagesChanged(bool value) => Sync(() => { foreach (var c in PackageChoices) c.IsChosen = value; });
+    partial void OnAllAmenitiesChanged(bool value) => Sync(() => { foreach (var c in AmenityChoices) c.IsChosen = value; });
 
     /// <summary>What the form says the code fits; "all" wins over single ticks.</summary>
     public IReadOnlyList<DiscountItem> ChosenItems() =>

@@ -406,3 +406,9 @@ Owner: "clean all the test claude did. all acc, logs, acc, chat, announcement an
 - rows of other people that only named a test account as "who did it" keep the row with that field cleared.
 
 Then 214 leftover notifications in the owner's accounts about those items (test announcements, test chats, refund alerts for deleted payments, LIVE TEST damage reports); 196 notifications remain. Kept because they may be the owner's: announcements "test", "hi" and the 1 Dec closure; walk-ins named test3, testwalkin, test1 and similar; drawers #17, #21 (open), #22 (Claude's payments in them are gone, so their totals changed). Uploaded pictures of the test accounts may remain in Storage (SQL can't remove Storage files).
+
+## After v0.12.0
+
+### Discounts: All ticks every row; drafts not listed
+
+Owner, 2026-11-25 (screenshot of Add a code: All packages ticked, rows unticked; drafts in the lists). Causes: "All" was a separate switch and greyed the rows (they looked unticked); the lists kept every active item, and a draft is active (only `published_at` is null). Fix in `DiscountsViewModel`: ticking All ticks every row and unticking clears them; unticking one row turns All off and keeps the rest; ticking every row turns All on; rows stay clickable; packages and amenities on sale only (`CatalogState.Published`). Tests `All_ticks_every_row_and_unticking_one_row_turns_All_off`, `Drafts_are_not_offered_for_a_code` (failed first); 1282 C# tests pass; Windows builds. App only: reaches the desk with the next release.

@@ -35,9 +35,42 @@ public class DiscountItemsTests
 
         vm.PackageChoices.Single(c => c.Name == "Monthly").IsChosen = true;
         vm.AllAmenities = true;
-        vm.AmenityChoices.First().IsChosen = true;   // greyed under "All": ignored
+        vm.AmenityChoices.First().IsChosen = true;   // already ticked by "All"; "All" still wins
         Assert.Equal([("package", (int?)vm.PackageChoices.Single(c => c.Name == "Monthly").Id), ("amenity", null)],
             vm.ChosenItems().Select(i => (i.Kind, i.ItemId)));
+    }
+
+    [Fact]
+    public async Task All_ticks_every_row_and_unticking_one_row_turns_All_off()
+    {
+        var vm = await Discounts(await As("admin@demo.io"));
+        vm.AllPackages = true;
+        Assert.All(vm.PackageChoices, c => Assert.True(c.IsChosen));
+        vm.PackageChoices[0].IsChosen = false;
+        Assert.False(vm.AllPackages);
+        Assert.All(vm.PackageChoices.Skip(1), c => Assert.True(c.IsChosen));
+        vm.PackageChoices[0].IsChosen = true;
+        Assert.True(vm.AllPackages);
+        vm.AllPackages = false;
+        Assert.All(vm.PackageChoices, c => Assert.False(c.IsChosen));
+
+        vm.AllAmenities = true;   // the same for amenities
+        Assert.All(vm.AmenityChoices, c => Assert.True(c.IsChosen));
+        vm.AmenityChoices[^1].IsChosen = false;
+        Assert.False(vm.AllAmenities);
+        Assert.Equal(vm.AmenityChoices.Count - 1, vm.AmenityChoices.Count(c => c.IsChosen));
+    }
+
+    [Fact]
+    public async Task Drafts_are_not_offered_for_a_code()
+    {
+        var gw = await As("admin@demo.io");
+        await gw.InsertAsync(new MembershipPackage { Name = "Draft plan", Description = "x", Price = 500, DurationDays = 30, IsActive = true });
+        await gw.InsertAsync(new Amenity { Name = "Draft sauna", Description = "x", Price = 80, IsActive = true });
+        var vm = await Discounts(gw);
+        Assert.DoesNotContain(vm.PackageChoices, c => c.Name == "Draft plan");
+        Assert.DoesNotContain(vm.AmenityChoices, c => c.Name == "Draft sauna");
+        Assert.NotEmpty(vm.PackageChoices); Assert.NotEmpty(vm.AmenityChoices);
     }
 
     [Fact]
