@@ -86,34 +86,26 @@ public class WalkInProcessTests
         Assert.NotNull(again.Waiting);
     }
 
-    [Fact]   // owner, 2026-11-16: Find shows only the table; Register new member shows only its form
-    public async Task Find_and_register_show_one_at_a_time()
+    [Fact]   // owner, 2026-11-25: Membership is only the register form; Renewal and Day pass search, with no register
+    public async Task Membership_registers_while_Renewal_and_Day_pass_search()
     {
         var (_, vm) = await Open();
-        vm.Search = "bea"; await vm.SuggestNowAsync();
-        Assert.Equal((true, false), (vm.ShowHits, vm.IsRegistering));
-        vm.StartRegisterCommand.Execute(null);
-        Assert.Equal((false, true, false), (vm.ShowHits, vm.IsRegistering, vm.ShowNoMatch));
-        await vm.SuggestNowAsync();
-        Assert.Equal((true, false), (vm.ShowHits, vm.IsRegistering));
-        vm.Search = "zzz"; await vm.SuggestNowAsync();
-        Assert.True(vm.ShowNoMatch);
-        vm.StartRegisterCommand.Execute(null);
-        Assert.False(vm.ShowNoMatch);
+        Assert.Equal((false, true), (vm.ShowsSearch, vm.ShowsRegisterForm));
+        foreach (var kind in new[] { "Renewal", "Day pass" })
+        {
+            vm.PickKindCommand.Execute(kind);
+            Assert.Equal((true, false), (vm.ShowsSearch, vm.ShowsRegisterForm));
+        }
     }
 
     [Fact]
-    public async Task Nobody_found_then_register_them_as_a_member_and_they_are_chosen()
+    public async Task Register_a_new_member_and_they_are_chosen()
     {
         var (gw, vm) = await Open();
-        vm.Search = "nora"; await vm.SuggestNowAsync();
-        Assert.True(vm.NoMatch);
-        vm.StartRegisterCommand.Execute(null);
-        Assert.True(vm.IsRegistering);
         (vm.NewFirstName, vm.NewLastName, vm.NewEmail, vm.NewPhone) = ("Nora", "Cruz", "nora@demo.io", "0918 222 3344");
         await vm.RegisterCommand.ExecuteAsync(null);
         Assert.Null(vm.ErrorMessage);
-        Assert.False(vm.IsRegistering);
+        Assert.False(vm.ShowsRegisterForm);
         Assert.Equal("Nora Cruz", vm.Member?.Username);
         Assert.Contains("Temporary password", vm.Notice);
         var profile = (await gw.ListAsync<Profile>()).Single(p => p.Username == "nora@demo.io");
@@ -125,11 +117,10 @@ public class WalkInProcessTests
     public async Task Registering_an_email_already_in_use_is_refused_and_says_so()
     {
         var (_, vm) = await Open();
-        vm.StartRegisterCommand.Execute(null);
         (vm.NewFirstName, vm.NewLastName, vm.NewEmail) = ("Bea", "Lim", "bea@demo.io");
         await vm.RegisterCommand.ExecuteAsync(null);
         Assert.NotNull(vm.ErrorMessage);
-        Assert.True(vm.IsRegistering);
+        Assert.True(vm.ShowsRegisterForm);
     }
 
     [Fact]

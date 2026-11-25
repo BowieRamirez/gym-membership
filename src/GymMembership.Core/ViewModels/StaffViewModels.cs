@@ -112,11 +112,12 @@ internal sealed class MemberSuggest(IAttendanceService members)
 
     public void Cancel() => _cts?.Cancel();
 
-    public async Task<(bool Applied, IReadOnlyList<MemberHit> Rows, string? Error)> RunAsync(string? query, bool immediate = false)
+    /// <param name="listAll">a short or empty query lists every member instead of nobody (the cashier's Renewal list)</param>
+    public async Task<(bool Applied, IReadOnlyList<MemberHit> Rows, string? Error)> RunAsync(string? query, bool immediate = false, bool listAll = false)
     {
         _cts?.Cancel();
         var q = query?.Trim() ?? "";
-        if (q.Length < 2) return (true, Array.Empty<MemberHit>(), null);
+        if (q.Length < 2 && !listAll) return (true, Array.Empty<MemberHit>(), null);
         var cts = _cts = new CancellationTokenSource();
         if (!immediate && Delay > TimeSpan.Zero)
         {
@@ -163,11 +164,11 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     public ObservableCollection<ItemOption> Options { get; } = new();
     int itemsTicket;
 
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWalkIn), nameof(NeedsMember), nameof(IsAmenityBooking), nameof(IsCoachSession), nameof(ShowsOrder), nameof(CanUseCode), nameof(OrderWho), nameof(OrderWhat), nameof(OrderHow), nameof(TotalText), nameof(TotalNote), nameof(ItemsEmptyText), nameof(HasMultipleDayPassOptions), nameof(DayPassWithCoach), nameof(OrderIneligibleText), nameof(HasOrderIneligible)), NotifyCanExecuteChangedFor(nameof(RecordCommand))]
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWalkIn), nameof(NeedsMember), nameof(IsAmenityBooking), nameof(IsCoachSession), nameof(ShowsOrder), nameof(ShowsSearch), nameof(ShowsRegisterForm), nameof(CanUseCode), nameof(OrderWho), nameof(OrderWhat), nameof(OrderHow), nameof(TotalText), nameof(TotalNote), nameof(ItemsEmptyText), nameof(HasMultipleDayPassOptions), nameof(DayPassWithCoach), nameof(OrderIneligibleText), nameof(HasOrderIneligible)), NotifyCanExecuteChangedFor(nameof(RecordCommand))]
     private string kind = "Membership";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderHow), nameof(CashNeedsShift)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string method = "Cash";
     [ObservableProperty] private string search = "";
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho), nameof(CanUseCode), nameof(ItemsEmptyText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private MemberHit? member;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho), nameof(CanUseCode), nameof(ItemsEmptyText), nameof(ShowsRegisterForm)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private MemberHit? member;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWhat), nameof(TotalText)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private CounterItem? item;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OrderWho), nameof(CanUseCode), nameof(OrderIneligibleText), nameof(HasOrderIneligible)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private string walkInName = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(TotalNote))] private string discountCode = "";
@@ -185,8 +186,8 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     async Task ScheduleCodeCheckAsync(bool immediate)
     {
         var code = DiscountCode?.Trim() ?? "";
-        var key = !IsWalkIn && Member is { } m && Item is { } it && code.Length > 0 ? (m.MemberId, Kind, it.Id, code)
-            : DayPassMember is { HasActiveMembership: false } dm && dayPassPackage is { } dp && code.Length > 0 ? (dm.MemberId, "Membership", dp.Id, code)
+        var key = !IsWalkIn && Member is { } m && Item is { } it && code.Length > 0 ? (m.MemberId, PayKindNow, it.Id, code)
+            : DayPassMember is { HasActiveMembership: false } dm && dayPassPackage is { } dp && code.Length > 0 ? (dm.MemberId, PayKind.Membership, dp.Id, code)
             : ((string Member, string Kind, int Item, string Code)?)null;
         if (immediate && key is not null && _checked == key) return;
         _codeCheck?.Cancel(); _checked = null;
@@ -197,8 +198,8 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         {
             try { await Task.Delay(CodeCheckDelay, cts.Token); } catch (OperationCanceledException) { return; }
         }
-        var kind = k.Kind == "Renewal" ? "renewal" : "package";
-        var res = await svc.CheckCodeAsync(k.Member, k.Code, kind, k.Item, k.Kind == "Renewal" ? Item?.Price : null);
+        var kind = k.Kind == PayKind.Renewal ? "renewal" : "package";
+        var res = await svc.CheckCodeAsync(k.Member, k.Code, kind, k.Item, k.Kind == PayKind.Renewal ? Item?.Price : null);
         if (cts.IsCancellationRequested) return;
         _checked = k;
         if (!res.Ok) { CodeCheckText = ErrorText.For(res.Error, res.Message); return; }
@@ -234,6 +235,9 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
 
     public bool IsWalkIn => Kind == "Day pass";
     public bool NeedsMember => !IsWalkIn && ShowsOrder;
+    // owner, 2026-11-25: Membership is for someone new, so it shows only the register form; Renewal and Day pass find an existing account
+    public bool ShowsSearch => ShowsOrder && Kind != "Membership";
+    public bool ShowsRegisterForm => Kind == "Membership" && Member is null;
     public bool CanUseCode => !IsWalkIn || DayPassMember is { HasActiveMembership: false };
     // cashier plan Y6: no reference to type; Xendit confirms an e-wallet payment
 
@@ -312,7 +316,13 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     /// <summary>The kind and the way of paying in words, so the order reads the same to someone who cannot see which button is filled.</summary>
     public string OrderHow => $"{Kind}, paid with {Method}";
 
-    static string KindKey(string k) => k switch { "Renewal" => PayKind.Renewal, "Day pass" => PayKind.WalkIn, _ => PayKind.Membership };
+    // owner, 2026-11-25: Renewal is any existing account: an active member extends, one with no membership buys a package again
+    string PayKindNow => Kind switch
+    {
+        "Renewal" when Member is { HasActiveMembership: true } => PayKind.Renewal,
+        "Day pass" => PayKind.WalkIn,
+        _ => PayKind.Membership,
+    };
 
     public override Task OnAppearingAsync()
     {
@@ -395,7 +405,8 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         if (value == CoachSession && CoachBooking is { } cb) _ = cb.OnAppearingAsync();
         _ = ScheduleCodeCheckAsync(false); Item = null;
         if (IsWalkIn && Member is { } m && string.IsNullOrWhiteSpace(WalkInName)) WalkInName = m.Username;
-        ApplyFilter(hasQuery: (Search?.Trim().Length ?? 0) >= 2, err: null);
+        if (value == "Renewal") _ = SuggestAsync(immediate: true);   // the list of accounts shows straight away
+        else ApplyFilter(hasQuery: (Search?.Trim().Length ?? 0) >= 2, err: null);
         OnPropertyChanged(nameof(ShowChooseCustomerEmpty));
         OnPropertyChanged(nameof(OrderIneligibleText)); OnPropertyChanged(nameof(HasOrderIneligible));
         RecordCommand.NotifyCanExecuteChanged();
@@ -424,7 +435,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         var ticket = ++itemsTicket;   // the newest request wins: a slow answer for a kind you have left is dropped
         // Cards listed for another kind or member must not stay tappable while the right ones load: a tap would send their item id with the new kind.
         Options.Clear(); Item = null; ErrorMessage = null;
-        if (!ShowsOrder) { LoadingItems = false; return; }   // a booking form lists its own amenities and coaches
+        if (!ShowsOrder || Kind == "Renewal" && Member is null) { LoadingItems = false; return; }   // a booking form lists its own; a renewal waits for the member
         if (IsWalkIn)
         {
             LoadingItems = false;
@@ -444,7 +455,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
             return;
         }
         LoadingItems = true;
-        var result = await svc.ItemsAsync(KindKey(Kind), Member?.MemberId);
+        var result = await svc.ItemsAsync(PayKindNow, Member?.MemberId);
         if (ticket != itemsTicket) return;   // a newer request owns the screen now; a stale answer, even a failed one, says nothing
         LoadingItems = false;
         if (!result.Ok) { ErrorMessage = ErrorText.For(result.Error, result.Message); return; }
@@ -454,32 +465,31 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     /// <summary>Cashier plan Y1: search ran and nobody matched; the page says so.</summary>
     [ObservableProperty] private bool noMatch;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasHiddenHint))] private string? hiddenHint;
-    public bool HasHiddenHint => !string.IsNullOrWhiteSpace(HiddenHint) && !IsRegistering;
+    public bool HasHiddenHint => !string.IsNullOrWhiteSpace(HiddenHint);
     readonly MemberSuggest _suggest = new(members);
     List<MemberHit> _allHits = new();
     bool _suppressSearch;
     public TimeSpan SearchDelay { get => _suggest.Delay; set => _suggest.Delay = value; }
     public ObservableCollection<MemberHit> Suggestions { get; } = new();
     public bool HasSuggestions => Suggestions.Count > 0;
-    public bool ShowSuggestions => HasSuggestions && !IsRegistering;
+    public bool ShowSuggestions => HasSuggestions;
     partial void OnSearchChanged(string value) { if (!_suppressSearch) _ = SuggestAsync(immediate: false); }
     public Task SuggestNowAsync() => SuggestAsync(immediate: true);
 
     public static bool Visible(MemberHit hit, string kind) => kind switch
     {
         "Membership" or "Day pass" => !hit.HasActiveMembership,
-        "Renewal" => hit.HasActiveMembership && !hit.IsDayPass,
+        "Renewal" => !(hit.HasActiveMembership && hit.IsDayPass),   // a Day pass until midnight can't be extended or replaced
         _ => true,
     };
 
     static string? IneligibleReason(MemberHit h, string kind)
     {
+        if (kind is "Membership" or "Day pass" or "Renewal" && h.HasActiveMembership && h.IsDayPass)
+            return $"{h.Username} already has a Day pass until midnight.";
         if (kind is "Membership" or "Day pass" && h.HasActiveMembership)
-            return h.IsDayPass ? $"{h.Username} already has a Day pass until midnight."
-                : h.PaidUntil is { } u ? $"{h.Username} already has a membership until {ManilaTime.Of(u):d MMM yyyy}."
+            return h.PaidUntil is { } u ? $"{h.Username} already has a membership until {ManilaTime.Of(u):d MMM yyyy}."
                 : $"{h.Username} already has an active membership.";
-        if (kind == "Renewal" && !h.HasActiveMembership)
-            return $"{h.Username} has no active membership to renew.";
         return null;
     }
 
@@ -492,18 +502,19 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
 
     async Task SuggestAsync(bool immediate)
     {
-        var (applied, rows, err) = await _suggest.RunAsync(Search, immediate);
+        var (applied, rows, err) = await _suggest.RunAsync(Search, immediate, listAll: Kind == "Renewal");
         if (!applied) return;
         ErrorMessage = err;
-        IsRegistering = false;
         _allHits = rows.ToList();
         ApplyFilter(hasQuery: (Search?.Trim().Length ?? 0) >= 2, err);
     }
 
     void ApplyFilter(bool hasQuery, string? err)
     {
-        var visible = _allHits.Where(h => Visible(h, Kind)).Select(h => h with { IsChosen = Member is not null && h.MemberId == Member.MemberId }).ToList();
-        Fill(Suggestions, visible.Take(8));
+        // without a query only Renewal lists anyone (its whole list); the dropdown is for typed searches
+        var visible = !hasQuery && Kind != "Renewal" ? new List<MemberHit>()
+            : _allHits.Where(h => Visible(h, Kind)).Select(h => h with { IsChosen = Member is not null && h.MemberId == Member.MemberId }).ToList();
+        Fill(Suggestions, hasQuery ? visible.Take(8) : []);
         Fill(Hits, visible);
         HiddenHint = hasQuery && err is null && _allHits.Count > 0 && visible.Count == 0
             ? IneligibleReason(_allHits[0], Kind) : null;
@@ -522,6 +533,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         _suppressSearch = false;
         Suggestions.Clear();
         OnPropertyChanged(nameof(HasSuggestions)); OnPropertyChanged(nameof(ShowSuggestions));
+        if (Kind == "Renewal") _ = SuggestAsync(immediate: true);   // back to the whole list
     }
 
     [RelayCommand]
@@ -545,10 +557,8 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
 
     /// <summary>The results table shows once a search found someone.</summary>
     public bool HasHits => Hits.Count > 0;
-    // owner, 2026-11-16: one at a time: search shows the table, Register new member shows its form
-    public bool ShowHits => HasHits && !IsRegistering;
-    public bool ShowNoMatch => NoMatch && !IsRegistering;
-    partial void OnIsRegisteringChanged(bool value) { OnPropertyChanged(nameof(ShowSuggestions)); OnPropertyChanged(nameof(ShowHits)); OnPropertyChanged(nameof(ShowNoMatch)); OnPropertyChanged(nameof(HasHiddenHint)); }
+    public bool ShowHits => HasHits;
+    public bool ShowNoMatch => NoMatch;
     partial void OnNoMatchChanged(bool value) => OnPropertyChanged(nameof(ShowNoMatch));
     [RelayCommand]
     private void PickMember(MemberHit hit)
@@ -561,19 +571,18 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     {
         var res = await members.MemberStatusAsync(memberId);
         if (res is not { Ok: true, Value: { } fresh } || Member?.MemberId != memberId) return;
+        var wasActive = Member.HasActiveMembership;
         _refreshingStatus = true;
         Member = fresh;
         _refreshingStatus = false;
+        if (Kind == "Renewal" && fresh.HasActiveMembership != wasActive) _ = RefreshItemsAsync();   // extension vs package depends on it
     }
 
-    // ---- cashier plan Y2: nobody matched, so the desk registers the customer as a member (search first, so nobody is made twice) ----
-    [ObservableProperty] private bool isRegistering;
+    // ---- cashier plan Y2, owner 2026-11-25: Membership is the desk's register form; the server refuses an email already in use ----
     [ObservableProperty] private string newFirstName = "";
     [ObservableProperty] private string newLastName = "";
     [ObservableProperty] private string newEmail = "";
     [ObservableProperty] private string newPhone = "";
-    [RelayCommand] private void StartRegister() { Notice = null; ErrorMessage = null; IsRegistering = true; }
-    [RelayCommand] private void CancelRegister() => IsRegistering = false;
 
     [RelayCommand]
     private async Task RegisterAsync()
@@ -586,7 +595,6 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         if (!await RunAsync(() => svc.RegisterMemberAsync(NewFirstName, NewLastName, NewEmail, NewPhone, password), v => id = v)) return;
         Search = NewEmail.Trim();
         await RunAsync(() => members.FindMembersAsync(Search), rows => { Fill(Hits, rows); NoMatch = rows.Count == 0; OnPropertyChanged(nameof(HasHits)); OnPropertyChanged(nameof(ShowHits)); Member = rows.FirstOrDefault(h => h.MemberId == id); });
-        IsRegistering = false;
         NewFirstName = NewLastName = NewEmail = NewPhone = "";
         Notice = $"{name} is a member now. Temporary password: {password}. Hand it over; they change it at first sign-in.";
     }
@@ -615,7 +623,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         {
             if (!await RunAsync(() => svc.RecordCounterAsync(PayKind.Membership, PayMethod.Cash, m.MemberId, dayPassPackage!.Id, null, null, DiscountCode), p => paid = p)) return;
         }
-        else if (!await RunAsync(() => svc.RecordCounterAsync(KindKey(Kind), PayMethod.Cash, IsWalkIn ? null : Member!.MemberId, IsWalkIn ? dayPassPackage?.Id : Item?.Id,
+        else if (!await RunAsync(() => svc.RecordCounterAsync(PayKindNow, PayMethod.Cash, IsWalkIn ? null : Member!.MemberId, IsWalkIn ? dayPassPackage?.Id : Item?.Id,
                 IsWalkIn ? DayPassName : null, null, IsWalkIn ? null : DiscountCode), p => paid = p)) return;
         await DoneAsync(paid!);
     }
@@ -651,7 +659,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         Payment? started = null;
         var dayPassFor = DayPassMember;
         if (!await RunAsync(() => dayPassFor is { } m ? svc.StartDeskOnlineAsync(PayKind.Membership, m.MemberId, dayPassPackage!.Id, null, DiscountCode)
-                : svc.StartDeskOnlineAsync(KindKey(Kind), IsWalkIn ? null : Member!.MemberId, IsWalkIn ? dayPassPackage?.Id : Item?.Id,
+                : svc.StartDeskOnlineAsync(PayKindNow, IsWalkIn ? null : Member!.MemberId, IsWalkIn ? dayPassPackage?.Id : Item?.Id,
                 IsWalkIn ? DayPassName : null, IsWalkIn ? null : DiscountCode), p => started = p)) return;
         Waiting = started; RecordCommand.NotifyCanExecuteChanged();
         await OpenCheckoutAsync();
