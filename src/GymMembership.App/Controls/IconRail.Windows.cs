@@ -22,7 +22,7 @@ public static class IconRail
         ["Home"] = "house",
         ["Payments to verify"] = "badge-check",
         ["Cashier"] = "banknote",
-        ["Membership checking"] = "scan-line",
+        ["Check-ins"] = "scan-line",
         ["Amenity status"] = "waves",
         ["Users and roles"] = "users",
         ["Employees"] = "user-round",
@@ -49,6 +49,7 @@ public static class IconRail
         ["Sessions"] = "calendar-days",
         ["Dashboard"] = "layout-dashboard",
         ["My shifts"] = "calendar-clock",
+        ["Report damage"] = "alert-circle",
     };
 
     static bool Bottom(ShellItem i) => i.Route is "messages" or "settings";

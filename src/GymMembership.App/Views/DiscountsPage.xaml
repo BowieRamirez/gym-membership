@@ -118,8 +118,7 @@
                                     <Label Text="All packages" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
                                 </HorizontalStackLayout>
                                 <BoxView Style="{StaticResource Hairline}" Margin="0,2,0,4" />
-                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding PackageChoices}" BindableLayout.ItemTemplate="{StaticResource ItemTick}"
-                                                     IsEnabled="{Binding AllPackages, Converter={StaticResource Not}}">
+                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding PackageChoices}" BindableLayout.ItemTemplate="{StaticResource ItemTick}">
                                     <BindableLayout.EmptyView><Label Text="No packages on sale." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
                                 </VerticalStackLayout>
                             </VerticalStackLayout>
@@ -132,8 +131,7 @@
                                     <Label Text="All amenities" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
                                 </HorizontalStackLayout>
                                 <BoxView Style="{StaticResource Hairline}" Margin="0,2,0,4" />
-                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding AmenityChoices}" BindableLayout.ItemTemplate="{StaticResource ItemTick}"
-                                                     IsEnabled="{Binding AllAmenities, Converter={StaticResource Not}}">
+                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding AmenityChoices}" BindableLayout.ItemTemplate="{StaticResource ItemTick}">
                                     <BindableLayout.EmptyView><Label Text="No amenities on sale." Style="{StaticResource Muted}" /></BindableLayout.EmptyView>
                                 </VerticalStackLayout>
                             </VerticalStackLayout>

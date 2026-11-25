@@ -190,6 +190,16 @@ public sealed class CashShiftNote
 }
 
 /// <summary>F2 (0050): a cash-drawer shift. my_cash_shift() fills the open one; cash_shifts_list() adds the cashier, count and difference.</summary>
+/// <summary>0164 my_shift_window: when the front desk may start their shift, in server time (Limited is false for admins).</summary>
+public sealed class ShiftWindow
+{
+    [System.Text.Json.Serialization.JsonPropertyName("now")] public DateTime Now { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("limited")] public bool Limited { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("starts_at")] public DateTime? StartsAt { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("ends_at")] public DateTime? EndsAt { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("closed_today")] public bool ClosedToday { get; set; }
+}
+
 public sealed class CashShift : BaseModel
 { [Column("shift_id")] public int Id { get; set; } [Column("cashier")] public string? Cashier { get; set; }
   [Column("opened_at")] public DateTime OpenedAt { get; set; } [Column("closed_at")] public DateTime? ClosedAt { get; set; }

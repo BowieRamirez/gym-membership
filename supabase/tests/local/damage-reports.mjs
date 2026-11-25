@@ -48,6 +48,18 @@ try {
     assert.equal(notif.body, 'Broken rope');
   });
 
+  await test('0165: a coach reports any time with no session, for an amenity or something else; the report is theirs', async () => {
+    const a = (await as(coach2, 'select report_damage(null,$1,$2,null) id', [ring, 'Ring rope frayed']))[0].id;
+    const b = (await as(coach2, `select report_damage(p_description=>'Dumbbell rack wobbles') id`))[0].id;
+    const rows = await as(coach2, 'select damage_report_id, amenity_id, coach_id, training_session_id from damage_reports order by damage_report_id');
+    assert.deepEqual(rows.map(r => r.damage_report_id).filter(x => [a, b].includes(x)).length, 2);
+    const mine = rows.filter(r => [a, b].includes(r.damage_report_id));
+    assert.deepEqual(mine.map(r => [r.amenity_id, r.coach_id, r.training_session_id]), [[ring, coach2, null], [null, coach2, null]]);
+    await assert.rejects(as(member, `select report_damage(p_description=>'x')`), /forbidden/);
+    await assert.rejects(as(coach2, `select report_damage(p_amenity_id=>999999, p_description=>'x')`), /not_found/);
+    await assert.rejects(as(coach2, `select report_damage(p_description=>'   ')`), /bad_input/);
+  });
+
   await test('admin closes with a note and sets amenity to maintenance; no payment or refund row made', async () => {
     const payBefore = (await db.query('select count(*)::int n from payments')).rows[0].n;
     const refBefore = (await db.query('select count(*)::int n from refund_requests')).rows[0].n;

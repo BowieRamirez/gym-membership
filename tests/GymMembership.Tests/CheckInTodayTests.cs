@@ -42,7 +42,7 @@ public class CheckInTodayTests
         await refunds.MarkPaidAsync(refunds.Requests.Single(r => r.Request.Kind == "day_pass"), GymMembership.Core.Models.PayMethod.Cash, null);
         Assert.Null(refunds.ErrorMessage);
 
-        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();   // 0164: the front desk sells only during a started shift
         await vm.OnAppearingAsync();
         Assert.Equal("Refund repaid.", vm.ViewingDayPass!.DayPass!.RefundText);
         Assert.Contains(vm.Today, r => r.HasDayPass);
@@ -51,7 +51,7 @@ public class CheckInTodayTests
     static async Task<(CheckInViewModel Vm, DeskBookingTests.Files Files, CheckInRow Row)> DayPassSold(string? name, DemoGateway? existing = null)
     {
         var gw = existing ?? new DemoGateway().OpenAllDay();
-        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();   // 0164: the front desk sells only during a started shift
         var desk = new PaymentStaffService(gw);
         var pay = (await desk.StartDeskOnlineAsync(GymMembership.Core.Models.PayKind.WalkIn, null, null, name, null)).Value!;
         Assert.True((await desk.PayOnlineAsync(pay.Id)).Ok);
@@ -157,7 +157,7 @@ public class CheckInTodayTests
     public async Task Front_desk_admin_and_system_admin_all_see_it(string email)
     {
         var gw = new DemoGateway().OpenAllDay();
-        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();   // 0164: the front desk sells only during a started shift
         Assert.True((await new AttendanceService(gw).CheckInAsync("u-alex", "manual", pin: "1234")).Ok);
         var (_, vm) = await Desk(email, gw);
         Assert.Contains(vm.Today, r => r.Name == "Alex Tan");
@@ -171,7 +171,7 @@ public class CheckInTodayTests
         // the live hint reloads the list right after the desk's own reload, so "new" has to mean recent, not "since the last load"
         var clock = new Clock();
         var gw = new DemoGateway(clock: clock).OpenAllDay();
-        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();   // 0164: the front desk sells only during a started shift
         var vm = new CheckInViewModel(new AttendanceService(gw, clock), new CoachService(gw), clock: clock);
         await vm.OnAppearingAsync();
         Assert.True((await new AttendanceService(gw, clock).CheckInAsync("u-alex", "manual", pin: "1234")).Ok);

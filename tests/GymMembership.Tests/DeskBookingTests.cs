@@ -195,7 +195,7 @@ public class DeskBookingTests
     [Fact]   // 0092 (owner, 2026-11-17): a walk-in pays online through Xendit (demo: paid at once); the booking is confirmed with its receipt
     public async Task Walk_in_pays_online_through_xendit()
     {
-        var (gw, vm) = await Open(shift: false);   // online money never touches the drawer
+        var (gw, vm) = await Open();   // 0164: online money never touches the drawer, but the front desk still needs a started shift
         vm.StartWalkInCommand.Execute(null);
         vm.WalkInName = "Ana Reyes";
         vm.Amenity = vm.Amenities.First(a => a.Name == "Pool");
@@ -286,7 +286,7 @@ public class DeskBookingTests
     static async Task<(DemoGateway Gw, CashierViewModel Vm, ScriptedDesk Xendit, IPaymentStaffService Svc)> WaitingForXendit()
     {
         Confirm.Answer = (_, _, _) => Task.FromResult(true);
-        var gw = new DemoGateway(); await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        var gw = new DemoGateway(); await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();   // 0164: the front desk sells only during a started shift
         var (svc, xendit) = ScriptedDesk.Over(new PaymentStaffService(gw));
         var vm = Screen(gw, svc);
         await vm.OnAppearingAsync();

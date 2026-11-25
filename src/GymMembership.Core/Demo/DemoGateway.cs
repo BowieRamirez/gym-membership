@@ -59,12 +59,16 @@ public sealed partial class DemoGateway : ISupabaseGateway
     static PropertyInfo Pk(Type t) => t.GetProperties().First(p => p.GetCustomAttribute<PrimaryKeyAttribute>() != null);
     static T Clone<T>(T row) => (T)typeof(object).GetMethod("MemberwiseClone", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(row, null)!;
 
+    /// <summary>The front desk and nothing higher (0164's is_desk_only).</summary>
+    bool IsDeskOnly(string? uid) => uid is not null && RolesOf(uid).Contains("employee") && !RolesOf(uid).Any(r => r is "admin" or "subadmin");
+
     T Add<T>(T row) where T : class
     {
         var pk = typeof(T).GetProperties().FirstOrDefault(p => p.GetCustomAttribute<PrimaryKeyAttribute>() != null);   // discount_items has none
         if (pk?.PropertyType == typeof(int) && (int)pk.GetValue(row)! == 0)
             pk.SetValue(row, All<T>().Select(r => (int)pk.GetValue(r)!).DefaultIfEmpty(0).Max() + 1);
         RefuseClosedRow(row);   // G17 (0065)
+        if (row is Payment or Reservation or TrainingSession && IsDeskOnly(CurrentUserId)) OpenShiftOf(CurrentUserId!);   // 0164: the front desk sells nothing before starting their shift
         if (row is Payment payment) SnapshotMembershipPayment(payment);
         if (row is AuditEntry { Role: null } entry) entry.Role = MainRole(entry.ActorId);   // as audit() does (0045); the demo has no network address
         Table(typeof(T)).Add(row);
@@ -261,8 +265,10 @@ public sealed partial class DemoGateway : ISupabaseGateway
             if (name == "verify-member-password") return Task.FromResult(VerifyMemberPassword(S("member_id"), S("password")));
             if (name == "xendit-checkout") return Task.FromResult(XenditCheckout(Convert.ToInt32(body.GetValueOrDefault("payment_id")), body.GetValueOrDefault("check") is true));
             // cashier plan Y2: the front desk may create MEMBER accounts (create-user's requireDeskOrAdmin); everything else is admin-only
-            var deskOnly = name == "create-user" && RolesOf(Uid).Contains("employee") && !RolesOf(Uid).Any(r => r is "admin" or "subadmin");
+            var deskOnly = name == "create-user" && IsDeskOnly(Uid);
+            static string role0(Dictionary<string, object?> b) => Convert.ToString(b.GetValueOrDefault("role")) ?? "";
             if ((!deskOnly && !RolesOf(Uid).Any(r => r is "admin" or "subadmin")) || !IsActiveUser) throw Err("forbidden");
+            if (deskOnly && role0(body) == "member") OpenShiftOf(Uid!);   // 0164: the front desk registers people only during a started shift
             var super = RolesOf(Uid).Contains("admin");   // a sub-admin acts on members and coaches only
             string? created = null;
             switch (name)

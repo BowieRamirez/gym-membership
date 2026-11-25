@@ -247,8 +247,19 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ItemsEmptyText))] private bool loadingItems;
 
     // F2 (0050): the cashier's own drawer shift. Cash needs an open one; GCash doesn't.
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasShift), nameof(NeedsShift), nameof(ShiftSince), nameof(CountText), nameof(CloseNeedsNote), nameof(CashNeedsShift)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private CashShift? shift;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(NeedsShift))] private bool shiftChecked;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasShift), nameof(NeedsShift), nameof(ShiftSince), nameof(CountText), nameof(CloseNeedsNote), nameof(CashNeedsShift), nameof(SalesBlocked), nameof(SalesOpen)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private CashShift? shift;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(NeedsShift), nameof(SalesBlocked), nameof(SalesOpen)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private bool shiftChecked;
+    // 0164 (owner, 2026-11-25): the front desk starts their shift from 5 minutes before it (server time) and sells nothing before
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(SalesBlocked), nameof(SalesOpen)), NotifyCanExecuteChangedFor(nameof(RecordCommand))] private ShiftWindow? shiftWindow;
+    [ObservableProperty, NotifyCanExecuteChangedFor(nameof(StartShiftCommand))] private bool canStartShift = true;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasShiftWait))] private string? shiftWaitText;
+    public bool HasShiftWait => !string.IsNullOrEmpty(ShiftWaitText);
+    TimeSpan _serverOffset;
+    /// <summary>Front desk with no started shift: no payment, booking or new account until they start it.</summary>
+    public bool SalesBlocked => ShiftWindow is { Limited: true } && ShiftChecked && Shift is null;
+    public bool SalesOpen => !SalesBlocked;
+    /// <summary>Called every second by the page while the shift isn't started: the countdown, and the button opens on time.</summary>
+    public void TickShift() { var (ok, text) = ShiftGate.At(ShiftWindow, DateTime.UtcNow + _serverOffset); CanStartShift = ok; ShiftWaitText = text; }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(StartNeedsNote))] private decimal startFloat;
     [ObservableProperty] private string startNote = "";
     [ObservableProperty] private bool isClosing;
@@ -405,14 +416,20 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         finally { polling = false; }
     }
 
-    Task<bool> LoadShiftAsync() => RunAsync(svc.ShiftAsync, state =>
+    async Task<bool> LoadShiftAsync()
     {
-        defaultFloat = state.DefaultFloat; Shift = state.Open; ShiftChecked = true;
-        if (Shift is null) StartFloat = state.DefaultFloat;
-        OnPropertyChanged(nameof(StartNeedsNote)); OnPropertyChanged(nameof(FloatNoteLabel));
-    });
+        var window = RunAsync(svc.ShiftWindowAsync, w => { _serverOffset = ManilaTime.Utc(w.Now) - DateTime.UtcNow; ShiftWindow = w; });
+        var ok = await RunAsync(svc.ShiftAsync, state =>
+        {
+            defaultFloat = state.DefaultFloat; Shift = state.Open; ShiftChecked = true;
+            if (Shift is null) StartFloat = state.DefaultFloat;
+            OnPropertyChanged(nameof(StartNeedsNote)); OnPropertyChanged(nameof(FloatNoteLabel));
+        });
+        await window; TickShift();
+        return ok;
+    }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanStartShift))]
     private async Task StartShiftAsync()
     {
         Notice = null;
@@ -654,7 +671,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
     bool CanComplete() =>
         (IsWalkIn || Item is not null && (Member is not null || RegistersNew))
         && OrderIneligibleText is null
-        && !CashNeedsShift && Waiting is null;
+        && !CashNeedsShift && !SalesBlocked && Waiting is null;
 
     // The command is off while it runs, so a double tap records one payment.
     [RelayCommand(CanExecute = nameof(CanComplete))]
@@ -2141,8 +2158,20 @@ public partial class DiscountsViewModel(IAdminService svc) : LoadableViewModel
     private Task LoadAsync() => Task.WhenAll(
         RunAsync(svc.IsSuperAdminAsync, yes => CanArchive = yes),
         RunAsync(svc.DiscountsAsync, rows => Fill(Discounts, rows.Where(r => r.Discount.IsActive && ManilaTime.Utc(r.Discount.ExpiresAt) > DateTime.UtcNow))),
-        RunAsync(svc.AllPackagesAsync, rows => Fill(PackageChoices, rows.Where(p => p.IsActive).Select(p => new ItemChoice("package", p.Id, p.Name)))),
-        RunAsync(svc.AllAmenitiesAsync, rows => Fill(AmenityChoices, rows.Where(a => a.IsActive).Select(a => new ItemChoice("amenity", a.Id, a.Name)))));
+        // owner, 2026-11-25: only what is on sale (no drafts, no archived); a row's tick follows "All" and the other way round
+        RunAsync(svc.AllPackagesAsync, rows => Fill(PackageChoices, rows.Where(p => p.State == CatalogState.Published).Select(p => Choice("package", p.Id, p.Name, AllPackages)))),
+        RunAsync(svc.AllAmenitiesAsync, rows => Fill(AmenityChoices, rows.Where(a => a.State == CatalogState.Published).Select(a => Choice("amenity", a.Id, a.Name, AllAmenities)))));
+
+    bool _syncing;
+    ItemChoice Choice(string kind, int id, string name, bool chosen)
+    {
+        var c = new ItemChoice(kind, id, name) { IsChosen = chosen };
+        c.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ItemChoice.IsChosen)) Sync(() => { if (kind == "package") AllPackages = PackageChoices.All(x => x.IsChosen); else AllAmenities = AmenityChoices.All(x => x.IsChosen); }); };
+        return c;
+    }
+    void Sync(Action a) { if (_syncing) return; _syncing = true; try { a(); } finally { _syncing = false; } }
+    partial void OnAllPackagesChanged(bool value) => Sync(() => { foreach (var c in PackageChoices) c.IsChosen = value; });
+    partial void OnAllAmenitiesChanged(bool value) => Sync(() => { foreach (var c in AmenityChoices) c.IsChosen = value; });
 
     /// <summary>What the form says the code fits; "all" wins over single ticks.</summary>
     public IReadOnlyList<DiscountItem> ChosenItems() =>
@@ -2899,7 +2928,11 @@ public partial class DeskCoachBookingViewModel(ISessionService sessions, IAttend
 {
     [ObservableProperty] private string coachCustomerSearch = "";
     [ObservableProperty] private MemberHit? coachCustomer;
-    [ObservableProperty] private DateTime coachBookDay = DateTime.Today;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(DayClosedText))] private DateTime coachBookDay = DateTime.Today;
+    IReadOnlyDictionary<DateOnly, string> _closed = new Dictionary<DateOnly, string>();
+    /// <summary>Owner, 2026-11-25: closed days, crossed out in the calendar.</summary>
+    public IReadOnlyCollection<DateOnly> ClosedDays => _closed.Keys.ToList();
+    public string? DayClosedText => GymClosures.Text(_closed, DateOnly.FromDateTime(CoachBookDay));
     [ObservableProperty] private int coachBookHours = 1;
     [ObservableProperty] private FreeCoachSlot? selectedDeskCoach;
     [ObservableProperty] private SessionsViewModel.HourOption? selectedDeskCoachHour;
@@ -2945,7 +2978,10 @@ public partial class DeskCoachBookingViewModel(ISessionService sessions, IAttend
     [RelayCommand]
     private void ChooseCoachCustomer(MemberHit hit) { CoachCustomer = hit; CoachCustomerHits.Clear(); }
 
-    public override Task OnAppearingAsync() => LoadDeskCoachesAsync();
+    public override Task OnAppearingAsync() => Task.WhenAll(LoadDeskCoachesAsync(), RunAsync(sessions.ClosedDaysAsync, c =>
+    {
+        _closed = c; OnPropertyChanged(nameof(ClosedDays)); OnPropertyChanged(nameof(DayClosedText));
+    }));
 
     async Task LoadDeskCoachesAsync()
     {
@@ -3069,7 +3105,11 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
     public ObservableCollection<GridAmenity> Amenities { get; } = new();
     public ObservableCollection<SlotOption> Starts { get; } = new();
     public ObservableCollection<PickChip> Lengths { get; } = new();
-    [ObservableProperty] private DateTime day = DateTime.Today;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(DayClosedText)), NotifyCanExecuteChangedFor(nameof(BookCommand), nameof(PayOnlineCommand))] private DateTime day = DateTime.Today;
+    // owner, 2026-11-25: closed days are crossed out in the calendar, and a closed day picked anyway says so and books nothing
+    IReadOnlyDictionary<DateOnly, string> _closed = new Dictionary<DateOnly, string>();
+    public IReadOnlyCollection<DateOnly> ClosedDays => _closed.Keys.ToList();
+    public string? DayClosedText => GymClosures.Text(_closed, DateOnly.FromDateTime(Day));
     [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand), nameof(PayOnlineCommand))] private GridAmenity? amenity;
     [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand), nameof(PayOnlineCommand))] private SlotOption? start;
     [ObservableProperty, NotifyCanExecuteChangedFor(nameof(BookCommand), nameof(PayOnlineCommand))] private PickChip? length;   // 0090: whole hours up to closing
@@ -3078,7 +3118,11 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
     /// <summary>Raised after a booking is made, so Amenity status refreshes its Booked card.</summary>
     public event Action? Booked;
 
-    public override Task OnAppearingAsync() => LoadGridAsync();
+    public override Task OnAppearingAsync() => Task.WhenAll(LoadGridAsync(), RunAsync(reservations.ClosedDaysAsync, c =>
+    {
+        _closed = c; OnPropertyChanged(nameof(ClosedDays)); OnPropertyChanged(nameof(DayClosedText));
+        BookCommand.NotifyCanExecuteChanged(); PayOnlineCommand.NotifyCanExecuteChanged();
+    }));
     partial void OnDayChanged(DateTime value) => _ = LoadGridAsync();
     partial void OnAmenityChanged(GridAmenity? value) => FillStarts();
     partial void OnStartChanged(SlotOption? value)
@@ -3110,7 +3154,7 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
     }
 
     string? Customer => IsWalkIn ? (string.IsNullOrWhiteSpace(WalkInName) ? null : WalkInName.Trim()) : Member?.Username;
-    bool CanBook() => Customer is not null && Amenity is not null && Start is not null && Length is not null && Waiting is null;
+    bool CanBook() => Customer is not null && Amenity is not null && Start is not null && Length is not null && Waiting is null && DayClosedText is null;
     bool CanPayOnline() => CanBook() && IsWalkIn && payments is not null;
 
     /// <summary>0092: a walk-in's online booking waiting for Xendit (shows Open checkout, Check payment and Cancel).</summary>

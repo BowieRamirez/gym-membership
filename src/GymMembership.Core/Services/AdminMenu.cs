@@ -18,7 +18,7 @@ public static class AdminMenu
             AdminMenuEntry.To("Overview", "layout-dashboard"),
             new("Front desk", "briefcase", null, Children: [
                 AdminMenuEntry.To("Home", "house"), AdminMenuEntry.To("Cashier", "banknote"),
-                AdminMenuEntry.To("Membership checking", "scan-line"), AdminMenuEntry.To("Amenity status", "waves")]),
+                AdminMenuEntry.To("Check-ins", "scan-line"), AdminMenuEntry.To("Amenity status", "waves")]),
         ]),
         new("Workforce Management", [
             AdminMenuEntry.To("Employees", "user-round"),

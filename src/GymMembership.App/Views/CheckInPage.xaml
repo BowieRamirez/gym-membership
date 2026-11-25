@@ -5,7 +5,7 @@
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
             xmlns:svc="clr-namespace:GymMembership.Core.Services;assembly=GymMembership.Core"
-            x:Class="GymMembership.App.Views.CheckInPage" x:DataType="vm:CheckInViewModel" Title="Membership checking">
+            x:Class="GymMembership.App.Views.CheckInPage" x:DataType="vm:CheckInViewModel" Title="Check-ins">
 
     <!-- desktop: members on the left (the list scrolls by itself), scanning and coaches on the right; phones: scan, coaches, members, as before -->
     <Grid RowDefinitions="Auto,Auto,*" ColumnDefinitions="{OnIdiom Phone='*,0', Default='*,340'}" ColumnSpacing="{OnIdiom Phone=0, Default=12}"

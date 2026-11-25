@@ -10,7 +10,7 @@ public class SessionCheckinTests
     public async Task Desk_scans_session_QR_checks_in_and_marks_coach_arrived()
     {
         var gw = new DemoGateway();
-        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();   // 0164: the front desk sells only during a started shift
         var sessions = new SessionService(gw);
         var checkIn = new CheckInViewModel(new AttendanceService(gw), new CoachService(gw), sessions: sessions);
 
@@ -40,7 +40,7 @@ public class SessionCheckinTests
     public async Task Desk_home_lists_todays_coach_sessions_and_marks_coach_arrived()
     {
         var gw = new DemoGateway();
-        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();   // 0164: the front desk sells only during a started shift
         var sessions = new SessionService(gw);
         var todayStart = DateTime.SpecifyKind(DateTime.UtcNow.AddHours(8).Date.AddHours(11), DateTimeKind.Utc).AddHours(-8);
         gw.OwnerAddSession(new TrainingSession

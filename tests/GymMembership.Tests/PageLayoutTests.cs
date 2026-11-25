@@ -35,7 +35,7 @@ public class PageLayoutTests
         Assert.Equal("VerticalStackLayout", columns[0].Name.LocalName);
         Assert.Contains(columns[0].Elements(), e => (string?)e.Attribute("IsVisible") == "{Binding NeedsShift}");
         Assert.Contains(columns[0].Elements(), e => (string?)e.Attribute("IsVisible") == "{Binding HasShift}");
-        Assert.Contains(columns[0].Elements(), e => (string?)e.Attribute("Text") == "What are they paying for?");
+        Assert.Contains(columns[0].Descendants(), e => (string?)e.Attribute("Text") == "What are they paying for?");   // 0164: inside the part locked until the shift starts
         Assert.Contains(columns[1].Descendants(), e => (string?)e.Attribute("Text") == "Order");
         Assert.Equal("False", (string?)side.Attribute("SideFirst"));
     }

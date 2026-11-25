@@ -1,5 +1,5 @@
 // Phase 10 (E5, E6, E7, E12): free_coaches, book_coach_session, 15-min held add-on, E6 limits & no-show block, E12 daily max, refunds.
-import { start } from './harness.mjs';
+import { start, openCashShifts } from './harness.mjs';
 import assert from 'node:assert/strict';
 
 const { server, client: db } = await start();
@@ -26,7 +26,7 @@ const slot = (h) => `${futureDay} ${String(h).padStart(2, '0')}:00:00+08`;
 try {
   const admin = await user('admin', 'Admin One');
   const desk = await user('employee', 'Desk One');
-  await as(desk, `select open_cash_shift(5000)`);
+  await openCashShifts(db);   // 0164: the drawer straight in the table; opening one follows the front desk's shift
   const coach1 = await user('coach', 'Coach Alpha');
   const coach2 = await user('coach', 'Coach Beta');
   const mInc = await user(null, 'Member Inc');

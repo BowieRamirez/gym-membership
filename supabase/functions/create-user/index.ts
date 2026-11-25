@@ -25,6 +25,10 @@ Deno.serve(async (req) => {
   if (!name || !isEmail(email) || !ROLES.includes(role)) return reply({ error: 'bad_input' }, 400);
   if (!isPassword(password)) return reply({ error: 'bad_password' }, 400);   // D5, as the app checks
   if (caller.deskOnly && role !== 'member') return reply({ error: 'forbidden' }, 403);   // the front desk adds members only
+  if (caller.deskOnly) {   // 0164 (owner, 2026-11-25): the front desk registers people only during a started shift
+    const { data: open } = await admin.from('cash_shifts').select('shift_id').eq('cashier_id', caller.id).is('closed_at', null).maybeSingle();
+    if (!open) return reply({ error: 'no_open_shift' }, 409);
+  }
   if (!caller.superAdmin && !['member', 'coach'].includes(role)) return reply({ error: 'forbidden' }, 403);   // sub-admins add members and coaches only
 
   const { data, error } = await admin.auth.admin.createUser({

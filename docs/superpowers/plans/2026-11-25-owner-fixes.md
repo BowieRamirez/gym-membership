@@ -6,7 +6,7 @@ Created: 2026-11-25
 Last updated: 2026-11-25 (evening)
 Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phases 3.1-3.6 built, checked and pushed; `0151`-`0157` all live (dry run 2026-11-25: remote up to date); shift check-in rule is **off** until the admin turns it on from Scheduling. S1-S9 confirmed; S8 amended by option (b). Left: owner hand checks, the rollout steps (Phase 3.6), merge and a new app release. **Owner: do not merge until told.** Fix 4 (admin menu with words, Attendance page, Payslips tab, corrections on Attendance) BUILT, `0158` live. Fix 5 (Expenses, Financial reports) BUILT, `0159` live. Layout fixes after Fix 5 (Amenity status margins, compact menu) BUILT. Withholding tax on the month (`0160` live: BIR monthly table, nothing up to ₱20,833, taken in the 16th–end pay) BUILT. Cashier Membership in one go (new member + package + payment), Employees as its own page, no tab bars on Payroll and Attendance BUILT (app only). Financial reports count payroll by paid-out month (`0161` live); 2025 test pay periods removed. Amenity status as a table (app only). Supabase lint fixes: `public_profiles` security invoker (`0162` live), six unused helpers closed (`0163` live). All Claude live-test data deleted from the live database (accounts, payments, bookings, chats, logs, codes, notifications). All pushed; owner hand checks left. More fixes get added below as the owner sends them.
 Branch: `owner-fixes-2026-11-25` (cut from `main` at `df3f54c`, v0.11.0). Owner merges to `main` when done; no push or PR without the owner.
-Next migration: `0164`.
+Next migration: `0166`.
 
 **Goal:** The owner's fixes after the v0.11.0 release.
 
@@ -406,3 +406,40 @@ Owner: "clean all the test claude did. all acc, logs, acc, chat, announcement an
 - rows of other people that only named a test account as "who did it" keep the row with that field cleared.
 
 Then 214 leftover notifications in the owner's accounts about those items (test announcements, test chats, refund alerts for deleted payments, LIVE TEST damage reports); 196 notifications remain. Kept because they may be the owner's: announcements "test", "hi" and the 1 Dec closure; walk-ins named test3, testwalkin, test1 and similar; drawers #17, #21 (open), #22 (Claude's payments in them are gone, so their totals changed). Uploaded pictures of the test accounts may remain in Storage (SQL can't remove Storage files).
+
+## After v0.12.0
+
+### Discounts: All ticks every row; drafts not listed
+
+Owner, 2026-11-25 (screenshot of Add a code: All packages ticked, rows unticked; drafts in the lists). Causes: "All" was a separate switch and greyed the rows (they looked unticked); the lists kept every active item, and a draft is active (only `published_at` is null). Fix in `DiscountsViewModel`: ticking All ticks every row and unticking clears them; unticking one row turns All off and keeps the rest; ticking every row turns All on; rows stay clickable; packages and amenities on sale only (`CatalogState.Published`). Tests `All_ticks_every_row_and_unticking_one_row_turns_All_off`, `Drafts_are_not_offered_for_a_code` (failed first); 1282 C# tests pass; Windows builds. App only: reaches the desk with the next release.
+
+### Front desk works only inside their shift (`0164`)
+
+Owner, 2026-11-25: "why does frontdesk can start shift when gym is closed and why can frontdesk can process membership for users when they are not started their shift", plus a pasted spec (5-minute early clock-in, button enabled only in the window, countdown before it, message, frontend and backend, server time, no duplicate starts). Causes: `open_cash_shift` never checked gym hours or closure days, and the shift rule ran only while the Scheduling switch was on (off live); only **cash** needed an open drawer, so GCash payments, new accounts and bookings went through without one.
+
+Owner decisions (asked 2026-11-25): the rule applies to the front desk **always** (the Scheduling switch now only governs coach check-in); before the shift starts the Cashier blocks **everything** (any payment, new accounts, bookings). Admins and System admins are not limited (S1).
+
+- `0164`: `open_cash_shift` for the front desk refuses `day_closed`, `gym_closed` (from 5 minutes before opening), `no_shift_today`, `too_early:<start>` (more than 5 minutes early; 7:54 refused, 7:55 and 8:00 allowed), `shift_over`, and `shift_open` for a second start; server time. Trigger `a_desk_needs_open_shift` on `payments`, `reservations`, `training_sessions` inserts: the front desk is refused `no_open_shift` without a started shift. `my_shift_window()` gives the Cashier the shift and the server time. Helpers closed to the app.
+- Edge Function `create-user`: the front desk registers people only during a started shift (`no_open_shift`). Deployed.
+- App: `ShiftGate` works out whether Start shift is allowed and the sentence ("Your shift starts at 8:00 AM. You can start it from 7:55 AM, in 12:30."); the Cashier ticks it every second (offset to server time), Start shift is enabled only in the window, the sale area is locked with "Nothing can be sold, booked or registered until your shift is started."; `shift_over` sentence added. The demo keeps 0151's switch for the front desk's own start (its one-tap desk works at any hour; marked `ponytail:`), but blocks sales without a shift.
+- Tests: db `staff-scheduling.mjs` 0164 block (3, failed first); `cash-shifts`, `coach-session-booking`, `session-checkin`, `desk-booking` updated to the new rule (harness `deskWorksAllDay`); all local database test files pass. C# `FrontDeskShiftRuleTests` (6) and older desk tests open the demo drawer (`OpenDrawerAsync`); 1288 pass; Windows builds.
+- Deployed 2026-11-25: dry run showed only `0164`; pushed; live: helpers closed, `my_shift_window` and `open_cash_shift` for signed-in users only, the trigger on all three tables.
+- **Live effect now (v0.12.0 apps):** front desk without a started shift is refused at the server with the sentence; the countdown and locked Cashier arrive with the next release. Front desk without a schedule can't start a shift.
+
+### Coaches report damage any time (`0165`); Membership checking is now Check-ins
+
+Owner, 2026-11-25: "add new page in coach to report an damage. coaches can also report anytime now not only when session of booking is done also change the name both in navbar and the page membership checking to check-ins" (screenshot of the admin menu and page title).
+- Cause: `report_damage` let a coach report only on one of their own sessions, and since 0140 only once it had started; without a session only staff (admin, sub-admin, front desk) could report.
+- `0165`: a coach reports without a session as themselves (`coach_id` = the coach), for an amenity or none; a report on a session no longer waits for its start (0140's `session_not_started` is gone; a cancelled session is still refused); an unknown amenity is `not_found`; descriptions are 1-1000 characters. Admins are told as before. Tests: `damage-reports.mjs` new case (failed first), `live-test-fixes.mjs` case 3 updated; all pass. Deployed: dry run showed only `0165`; pushed; signed-in users only.
+- App: new coach page **Report damage** (Windows rail and the phone's More list, icon `alert-circle`): where (amenities on sale, or "Something else (equipment, a room)"), what (1-1000 characters, counter), Send report; then "Your reports" as two-line rows (what with a status chip; where and when; the admin's note). `ReportDamageViewModel`, `ISessionService.MyDamageReportsAsync`; the demo lets coaches report without a session. Tests `ReportDamageTests` (3).
+- Rename: **Membership checking** is **Check-ins** in the admin menu, the front desk menu (phone bottom bar too) and the page title; Home's empty-list sentence follows.
+- 1292 C# tests pass; Windows and Android build. Not opened in the app here (owner checks it). App part reaches people with the next release.
+
+### Closed days crossed out on the desk's booking calendars
+
+Owner, 2026-11-25 (screenshot of Cashier → Amenity booking with the Windows calendar open; the gym is closed on 1 Dec): "why can the front desk choose dec 1, have a disable indicator". Cause: the desk's Amenity booking and Coach session forms use the plain Windows date picker, which knew nothing of gym closures (the member app's own day strip already greys them out); the server refused the booking only after the day was picked.
+- `Controls/ClosedDays` (attached property): on Windows the DatePicker's calendar marks the closed days as blackout days (struck through, can't be picked). Both desk forms bind it.
+- `DeskBookingViewModel` and `DeskCoachBookingViewModel` load the closed days (`GymClosures.ByDayAsync`; new `ISessionService.ClosedDaysAsync`); a closed day already picked shows "The gym is closed on Tue 1 Dec: test. Choose another day." in red, and Book is off on the amenity form (the server refuses either way).
+- Test `The_desk_booking_forms_know_the_closed_days_and_say_so_when_one_is_picked` (failed first). 1293 C# tests pass; Windows and Android build. App only; reaches the desk with the next release. Not opened in the app here.
+
+- Owner, 2026-11-26 (screenshot: "so much space is wasted"): Report damage puts the form in a 420-wide column beside "Your reports" on a wide window (`SideLayout`, as Amenity status and the Cashier), stacked with the form first on a phone or narrow window; the admin note is a muted line. Windows and Android build; 1293 C# tests pass.

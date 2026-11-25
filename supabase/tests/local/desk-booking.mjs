@@ -152,7 +152,8 @@ try {
   const status = async id => (await db.query('select status from reservations where reservation_id=$1', [id])).rows[0].status;
 
   await test('0092: an online walk-in waits for Xendit, then is confirmed with a receipt; the drawer is not touched', async () => {
-    const before = await shiftTotal(desk2);   // desk2 has no open shift: online needs none
+    await openCashShifts(db);   // 0164: the front desk needs a started shift, online too
+    const before = await shiftTotal(desk2);
     const r = (await online(desk2, 'Dina', '01:00'))[0];
     assert.equal(r.status, 'awaiting_payment');
     const p0 = (await db.query('select status, method, cash_shift_id, expires_at from payments where payment_id=$1', [r.payment_id])).rows[0];

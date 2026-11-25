@@ -117,7 +117,7 @@ public class DownPaymentTests
         await carlo.BookCommand.ExecuteAsync(null);
         Assert.Null(carlo.ErrorMessage);
 
-        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();   // 0164: the front desk sells only during a started shift
         var desk = new PaymentStaffService(gw);
         var pays = (await gw.ListAsync<Payment>(p => p.Status == Status.Pending && p.Kind == PayKind.Amenity)).OrderBy(p => p.Id).ToList();
         Assert.True((await desk.VerifyAsync(pays[1].Id, true)).Ok);   // Carlo's first
@@ -157,7 +157,7 @@ public class DownPaymentTests
         var (gw, vm) = await Member();
         await Pick(vm, "Group classes", "10:00");
         await vm.BookCommand.ExecuteAsync(null);
-        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword);
+        await gw.SignInAsync("employee@demo.io", DemoGateway.DemoPassword); await gw.OpenDrawerAsync();   // 0164: the front desk sells only during a started shift
         var down = (await gw.ListAsync<Payment>(p => p.Status == Status.Pending && p.Kind == PayKind.Amenity)).Single();
         Assert.True((await new PaymentStaffService(gw).VerifyAsync(down.Id, true)).Ok);
 

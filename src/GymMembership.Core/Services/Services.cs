@@ -12,6 +12,10 @@ public static class GymClosures
         var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(8)).ToDateTime(TimeOnly.MinValue);
         return (await gw.ListAsync<GymClosure>(c => c.ClosedOn >= today)).ToDictionary(c => c.Day, c => c.Reason);
     }
+
+    /// <summary>Owner, 2026-11-25: what a desk form says when the day picked is closed; null on an open day.</summary>
+    public static string? Text(IReadOnlyDictionary<DateOnly, string> closed, DateOnly day) =>
+        closed.TryGetValue(day, out var why) ? $"The gym is closed on {day:ddd d MMM}: {why.Trim().TrimEnd('.')}. Choose another day." : null;
 }
 
 /// <summary>G18: what closing a day would cancel, as closure_preview counts it.</summary>
@@ -294,6 +298,28 @@ sealed class PaymentLookup
 public sealed record MembershipRow(int Id, string PackageName, string Status, DateTime? EndsAt, int? DaysLeft, int DurationDays, bool CanRenew, decimal Price);
 
 /// <summary>Owner, 2026-11-18: the live server's times arrive as local time, the demo's as UTC. Always go through here before comparing with UtcNow or adding Manila's 8 hours.</summary>
+/// <summary>0164 (owner, 2026-11-25): whether the front desk may press Start shift now, and the sentence that says when.
+/// Start is allowed from 5 minutes before the shift; the server checks again with its own clock.</summary>
+public static class ShiftGate
+{
+    public static (bool CanStart, string? Text) At(ShiftWindow? w, DateTime nowUtc)
+    {
+        if (w is not { Limited: true }) return (true, null);
+        static string T(DateTime utc) => ManilaTime.Of(utc).ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
+        if (w.ClosedToday) return (false, "The gym is closed today, so there is no shift to start.");
+        if (w.StartsAt is not { } s || w.EndsAt is not { } e) return (false, "No shift today. Ask the admin to add one on the Scheduling page.");
+        var start = ManilaTime.Utc(s); var end = ManilaTime.Utc(e); var from = start.AddMinutes(-5);
+        if (nowUtc >= end) return (false, $"Your shift today ended at {T(end)}.");
+        if (nowUtc < from)
+        {
+            var left = from - nowUtc;
+            var wait = left.TotalHours >= 1 ? $"{(int)left.TotalHours} h {left.Minutes:00} min" : $"{left.Minutes}:{left.Seconds:00}";
+            return (false, $"Your shift starts at {T(start)}. You can start it from {T(from)}, in {wait}.");
+        }
+        return (true, nowUtc > start ? $"Your shift started at {T(start)}; you're late." : $"Your shift starts at {T(start)}.");
+    }
+}
+
 public static class ManilaTime
 {
     public static DateTime Utc(DateTime t) => t.Kind == DateTimeKind.Local ? t.ToUniversalTime() : t;
@@ -584,6 +610,8 @@ public interface IPaymentStaffService
     Task<AppResult<IReadOnlyList<CounterItem>>> ItemsAsync(string kind, string? memberId);
     /// <summary>F2 (0050): the caller's open drawer shift (null when none) and the gym's opening float to start one with.</summary>
     Task<AppResult<(CashShift? Open, decimal DefaultFloat)>> ShiftAsync();
+    /// <summary>0164: when the front desk may start their shift (Limited is false for admins).</summary>
+    Task<AppResult<ShiftWindow>> ShiftWindowAsync() => Task.FromResult(AppResult<ShiftWindow>.Success(new ShiftWindow { Now = DateTime.UtcNow }));
     Task<AppResult<CashShift>> OpenShiftAsync(decimal openingFloat, string? note);
     Task<AppResult<CashShift>> CloseShiftAsync(decimal counted, string? note, string? reason = null);
 }
@@ -735,6 +763,8 @@ public sealed class PaymentStaffService(ISupabaseGateway gw) : IPaymentStaffServ
         await Task.WhenAll(shiftTask, settingsTask);
         return ((shiftTask.Result ?? []).FirstOrDefault(), settingsTask.Result.First().OpeningFloat);
     });
+
+    public Task<AppResult<ShiftWindow>> ShiftWindowAsync() => Safe.RunAsync(() => gw.RpcAsync<ShiftWindow>("my_shift_window", new()));
 
     public Task<AppResult<CashShift>> OpenShiftAsync(decimal openingFloat, string? note) => openingFloat < 0
         ? Task.FromResult(AppResult<CashShift>.Fail(AppErrorKind.Validation, "bad_input"))
@@ -1236,6 +1266,11 @@ public interface ISessionService
     Task<AppResult<bool>> ReassignAsync(int sessionId, string coachId, string reason) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<IReadOnlyList<TodayCoachSession>>> TodayCoachSessionsAsync() => Task.FromResult(AppResult<IReadOnlyList<TodayCoachSession>>.Success([]));
     Task<AppResult<int>> ReportDamageAsync(int? sessionId, int? amenityId, string description, string? photoPath = null) => Task.FromResult(AppResult<int>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    /// <summary>G16 (0065): closed days from today on, for the desk's coach-session calendar.</summary>
+    Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync() => Task.FromResult(AppResult<IReadOnlyDictionary<DateOnly, string>>.Success(new Dictionary<DateOnly, string>()));
+    /// <summary>0165: the damage reports this person filed, newest first, and every amenity (names and what can be picked).</summary>
+    Task<AppResult<(IReadOnlyList<DamageReport> Reports, IReadOnlyList<Amenity> Amenities)>> MyDamageReportsAsync() =>
+        Task.FromResult(AppResult<(IReadOnlyList<DamageReport>, IReadOnlyList<Amenity>)>.Success(([], [])));
 }
 
 public sealed class SessionService(ISupabaseGateway gw) : ISessionService
@@ -1355,6 +1390,17 @@ public sealed class SessionService(ISupabaseGateway gw) : ISessionService
 
     public Task<AppResult<IReadOnlyList<TodayCoachSession>>> TodayCoachSessionsAsync() => Safe.RunAsync<IReadOnlyList<TodayCoachSession>>(async () =>
         await gw.RpcAsync<List<TodayCoachSession>>("today_coach_sessions"));
+
+    public Task<AppResult<(IReadOnlyList<DamageReport> Reports, IReadOnlyList<Amenity> Amenities)>> MyDamageReportsAsync() =>
+        Safe.RunAsync<(IReadOnlyList<DamageReport>, IReadOnlyList<Amenity>)>(async () =>
+        {
+            var me = gw.CurrentUserId;
+            var reports = gw.ListAsync<DamageReport>(); var amenities = gw.ListAsync<Amenity>();
+            await Task.WhenAll(reports, amenities);
+            return (reports.Result.Where(r => r.ReportedBy == me).OrderByDescending(r => r.CreatedAt).ToList(), amenities.Result);
+        });
+
+    public Task<AppResult<IReadOnlyDictionary<DateOnly, string>>> ClosedDaysAsync() => Safe.RunAsync(() => GymClosures.ByDayAsync(gw));
 
     public Task<AppResult<int>> ReportDamageAsync(int? sessionId, int? amenityId, string description, string? photoPath = null) => Safe.RunAsync(() =>
         gw.RpcAsync<int>("report_damage", new()

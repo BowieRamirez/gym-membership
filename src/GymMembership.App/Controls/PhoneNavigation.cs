@@ -67,7 +67,7 @@ public sealed class PhoneNavigation
         var pageTypes = new Dictionary<string, Type>
         {
             ["Amenities"] = typeof(AmenitiesPage), ["Book an amenity"] = typeof(BookAmenityPage), ["Coaches"] = typeof(CoachesPage),
-            ["Renew or change"] = typeof(PackagesPage), ["Payments"] = typeof(PaymentsPage),
+            ["Renew or change"] = typeof(PackagesPage), ["Payments"] = typeof(PaymentsPage), ["Report damage"] = typeof(ReportDamagePage),
             ["Settings"] = coach ? typeof(CoachProfilePage) : typeof(SettingsPage)
         };
         var secondary = original.Where(item => !primary.Any(p => p.Item1 == item.Title)).ToList();
