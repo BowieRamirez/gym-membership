@@ -155,6 +155,11 @@
                 </Button>
                 </ContentView>
             </Grid>
+            <!-- Fix 4 (W5): opened from the menu's Employees -->
+            <HorizontalStackLayout Spacing="8" IsVisible="{Binding StaffOnly}">
+                <Label Text="Showing coaches and front desk only." Style="{StaticResource Muted}" VerticalOptions="Center" />
+                <Button Text="Show everyone" Style="{StaticResource LinkButton}" Command="{Binding ShowEveryoneCommand}" VerticalOptions="Center" />
+            </HorizontalStackLayout>
             <Border Style="{StaticResource TablePanel}" IsVisible="{Binding IsActiveTab}">
                 <VerticalStackLayout>
                     <VerticalStackLayout x:Name="AccountHead">

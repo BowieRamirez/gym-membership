@@ -240,7 +240,7 @@ Owner, 2026-11-25 (three screenshots): a navigation tree from the workforce PDF 
 |---|---|---|
 | 4.1 | Database: `payroll_records_all` | DEPLOYED (`0158` live 2026-11-25) |
 | 4.2 | Attendance Review page (Review, Records, Corrections) with the money table | BUILT (app only; owner hand check left) |
-| 4.3 | Menu with words for the admin roles | PLANNED |
+| 4.3 | Menu with words for the admin roles | BUILT (app only; owner hand check left) |
 | 4.4 | Checks | PLANNED |
 
 #### Phase 4.1: Database (`0158_payroll_records_all.sql`)
@@ -271,13 +271,14 @@ Files: create `src/GymMembership.Core/ViewModels/AttendanceReviewViewModel.cs`, 
 
 #### Phase 4.3: Menu with words
 
-- [ ] Failing test in `IconRailTests`: every admin page title sits in exactly one W3 group (new `IconRail.MenuGroups` map: section → entries), and `Attendance` and `Payroll` have their W3 sub-entries with the route and tab each opens.
-- [ ] `IconRail.Install(..., groupFrontDesk: true)` builds the labeled menu (width 240, section captions, icon + name per row, sub-entries indented, Front desk and Attendance / Payroll fold open like today's briefcase, current page highlighted, sub-entry of the current tab highlighted); `false` keeps the icon strip unchanged. Keep each button's `AutomationId = "AdminNavigation-" + route` (scripts/Test-WindowsAdminNavigation.ps1).
-- [ ] Payroll sub-entries open Payroll on its tab (`PayrollViewModel` reads a `tab` query: `salaries`, `period`, `paidout`; Payslips = `period` and scrolls to the PDF button).
-- [ ] Pending chip on Attendance Review: `PendingCount` for the current period, refreshed on navigation and after an approve/reject; hidden at 0.
-- [ ] Employees: `UsersViewModel` gets a `StaffOnly` filter (coaches and front desk); the menu's Employees opens Users and roles with it on (route query `?staff=1`). **Users and roles** stays its own entry under Gym, unfiltered.
-- [ ] `impeccable` pass on the menu, light and dark, short windows (the middle scrolls).
-- [ ] Run `dotnet test`; Windows build; commit.
+- [x] Failing test in `IconRailTests`: every admin page title sits in exactly one W3 group (new `IconRail.MenuGroups` map: section → entries), and `Attendance` and `Payroll` have their W3 sub-entries with the route and tab each opens.
+- [x] `IconRail.Install(..., groupFrontDesk: true)` builds the labeled menu (width 240, section captions, icon + name per row, sub-entries indented, Front desk and Attendance / Payroll fold open like today's briefcase, current page highlighted, sub-entry of the current tab highlighted); `false` keeps the icon strip unchanged. Keep each button's `AutomationId = "AdminNavigation-" + route` (scripts/Test-WindowsAdminNavigation.ps1).
+- [x] Payroll sub-entries open Payroll on its tab (`PayrollViewModel` reads a `tab` query: `salaries`, `period`, `paidout`; Payslips = `period` and scrolls to the PDF button).
+- [x] Pending chip on Attendance Review: `PendingCount` for the current period, refreshed on navigation and after an approve/reject; hidden at 0.
+- [x] Employees: `UsersViewModel` gets a `StaffOnly` filter (coaches and front desk); the menu's Employees opens Users and roles with it on (route query `?staff=1`). **Users and roles** stays its own entry under Gym, unfiltered.
+- [x] `impeccable` pass on the menu, light and dark, short windows (the middle scrolls).
+- [x] Run `dotnet test`; Windows build; commit.
+- Built notes: the tree is data in Core (`AdminMenu.Sections`, `AdminMenuEntry`; tested against `StaffShell.xaml`), drawn by `IconRail.InstallMenu` (240 wide, same yellow / near-black strip; section captions; Front desk, Attendance and Payroll fold and start closed; the current page on a black (light) or yellow (dark) bar; a fold with a hidden current page is lit). Coach, member and front desk keep the icon strip (`IconRail.Install`; the old briefcase group code is gone). A child entry sets its page's tab through `IOpensTab` (Payroll, Attendance, Users and roles). **Payslips** opens Pay period (the PDF button is on it); no scroll to it. Pending tag: `StatusChip` "Pending" on Attendance Review, from this pay period's pending count at sign-in (`PayrollPeriodAsync`, which opens the period as Payroll does), then from Attendance (`AttendancePendingChanged`). Employees: `UsersViewModel.StaffOnly` + "Showing coaches and front desk only. Show everyone". UI script ids kept (`AdminFrontDeskGroup` expanded/collapsed, `AdminNavigation-<route>` current page); tabbed entries are `AdminNavigation-<route>-<tab>`. Tests: `AdminMenuTests` (4), `IconRailTests` and `WindowsAdminNavigationTests` updated; 1268 C# tests pass; Windows and Android build. Not opened in the app here (owner checks it).
 
 #### Phase 4.4: Checks
 

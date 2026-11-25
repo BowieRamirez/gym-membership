@@ -32,7 +32,7 @@ public class IconRailTests
         var source = Rail();
         Assert.StartsWith("#if WINDOWS", source);
         Assert.EndsWith("#endif", source.TrimEnd());
-        foreach (var required in new[] { "new ScrollView", "ToolTipProperties.SetText", "SemanticProperties.SetDescription", "FlyoutWidth = 72", "CurrentItem = item", "Navigated" })
+        foreach (var required in new[] { "new ScrollView", "ToolTipProperties.SetText", "SemanticProperties.SetDescription", "Mount(shell, 72,", "CurrentItem = item", "Navigated" })
             Assert.Contains(required, source);
         // custom content navigates through the original Shell items; it never replaces them or forces the native selection
         foreach (var banned in new[] { "Items.Remove", "new ShellContent", "MenuItemsSource", "SelectedItem" })
@@ -46,16 +46,24 @@ public class IconRailTests
         var source = Rail();
         Assert.Contains("\"AdminNavigation-\" + item.Route", source);
         Assert.Contains("\"AdminFrontDeskGroup\"", source);
+        Assert.Contains(", expanded. Collapse group", source);
+        Assert.Contains(", collapsed. Expand group", source);
+        Assert.Contains("\", current page\"", source);
     }
 
+    // Fix 4 (W1): the System admin and Admin get the strip widened with words; folds start closed and stand in for a hidden current page
     [Fact]
-    public void Front_desk_group_starts_folded_and_marks_the_briefcase_when_a_desk_page_is_current()
+    public void Admin_menu_has_words_folds_and_the_Pending_tag()
     {
         var source = Rail();
+        Assert.Contains("Mount(shell, 240,", source);
+        Assert.Contains("AdminMenu.Sections", source);
         Assert.Contains("IsVisible = false", source);
-        Assert.Contains("\"Front desk operations\"", source);
+        Assert.Contains("inside.Row is not null && !kids.IsVisible", source);
         Assert.Contains("\", current page: \"", source);
-        Assert.Contains("deskCurrent && !group.IsVisible", source);
+        Assert.Contains("Register<AttendancePendingChanged>", source);
+        var shell = File.ReadAllText(AppFile("StaffShell.xaml.cs"));
+        Assert.Contains("IconRail.InstallMenu(", shell);
     }
 
     [Fact]

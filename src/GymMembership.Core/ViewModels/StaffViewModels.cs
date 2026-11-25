@@ -1579,8 +1579,13 @@ public partial class AttendanceViewModel(ISessionService sessions, IAttendanceSe
 }
 
 // ---------- admin ----------
-public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? archive = null) : LoadableViewModel
+public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? archive = null) : LoadableViewModel, IOpensTab
 {
+    // Fix 4 (W5): the menu's Employees opens this page on coaches and front desk only; Users and roles opens it on everyone
+    [ObservableProperty] private bool staffOnly;
+    partial void OnStaffOnlyChanged(bool value) => ShowUsers();
+    public void OpenTab(string tab) => StaffOnly = tab == "staff";
+    [RelayCommand] private void ShowEveryone() => StaffOnly = false;
     public ObservableCollection<UserRow> Users { get; } = new();
     IReadOnlyList<UserRow> active = [];
     // item 3 (0059): active accounts with a first name and no last name, for a system admin to correct
@@ -1594,7 +1599,8 @@ public partial class UsersViewModel(IAdminService svc, IAccountArchiveService? a
     {
         IncompleteCount = active.Count(u => u.NameIncomplete);
         if (IncompleteCount == 0) OnlyIncomplete = false;
-        Fill(Users, OnlyIncomplete ? active.Where(u => u.NameIncomplete) : active);
+        var shown = StaffOnly ? active.Where(u => u.Roles.Any(r => r is "coach" or "employee")) : active;
+        Fill(Users, OnlyIncomplete ? shown.Where(u => u.NameIncomplete) : shown);
     }
     /// <summary>Switched off but not deleted: they can be switched back on here.</summary>
     public ObservableCollection<UserRow> Deactivated { get; } = new();
@@ -3446,7 +3452,7 @@ public sealed partial class StaffSalaryItem(StaffSalary s, Func<StaffSalaryItem,
     private Task UseRoleDefaultAsync() => useRoleDefault?.Invoke(this) ?? Task.CompletedTask;
 }
 
-public partial class PayrollViewModel : LoadableViewModel
+public partial class PayrollViewModel : LoadableViewModel, IOpensTab
 {
     readonly IAdminService _svc;
     readonly IReportFiles? _files;
@@ -3602,6 +3608,14 @@ public partial class PayrollViewModel : LoadableViewModel
     [ObservableProperty] private string? roleSalaryError;
 
     public override Task OnAppearingAsync() => LoadAsync();
+
+    /// <summary>Fix 4: the menu opens Payroll on Salaries, Pay period (Processing and Payslips) or Paid out.</summary>
+    public void OpenTab(string tab)
+    {
+        if (tab == "salaries") _ = OpenSalariesTabAsync();
+        else if (tab == "paid_out") _ = OpenPaidOutTabAsync();
+        else OpenPeriodTab();
+    }
 
     [RelayCommand] private void OpenPeriodTab() => ActiveTab = "period";
     [RelayCommand] private async Task OpenPaidOutTabAsync() { ActiveTab = "paid_out"; await LoadPaidOutAsync(); }

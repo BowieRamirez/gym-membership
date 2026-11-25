@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using GymMembership.Core.Models;
 using GymMembership.Core.Services;
 
@@ -77,7 +78,7 @@ public sealed class AttendanceCorrectionItem(PayrollHourAdjustment adj)
     public string ByText => $"{adj.CreatedByName} · {ManilaTime.Of(adj.CreatedAt).ToString("d MMM, h:mm tt", CultureInfo.InvariantCulture)}";
 }
 
-public partial class AttendanceReviewViewModel(IAdminService svc) : LoadableViewModel
+public partial class AttendanceReviewViewModel(IAdminService svc) : LoadableViewModel, IOpensTab
 {
     List<PayrollStaffRecord> _records = [];
 
@@ -114,8 +115,9 @@ public partial class AttendanceReviewViewModel(IAdminService svc) : LoadableView
     public override Task OnAppearingAsync() => LoadAsync();
 
     partial void OnStatusFilterChanged(string value) => Show();
+    partial void OnPendingCountChanged(int value) => WeakReferenceMessenger.Default.Send(new AttendancePendingChanged(value));   // the menu's Pending tag
 
-    [RelayCommand] private void OpenTab(string tab) { ActiveTab = tab is "records" or "corrections" ? tab : "review"; Confirming = null; Show(); }
+    [RelayCommand] public void OpenTab(string tab) { ActiveTab = tab is "records" or "corrections" ? tab : "review"; Confirming = null; Show(); }
     [RelayCommand] private Task PrevPeriodAsync() { PeriodStartsOn = PayrollViewModel.StepPrev(PeriodStartsOn); return LoadAsync(); }
     [RelayCommand] private Task NextPeriodAsync() { PeriodStartsOn = PayrollViewModel.StepNext(PeriodStartsOn); return LoadAsync(); }
 

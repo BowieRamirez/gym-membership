@@ -16,7 +16,15 @@ public partial class StaffShell : Shell
 		if (DeviceInfo.Idiom == DeviceIdiom.Phone) MoveDeskItemsToBottomBar();
 #if WINDOWS
 		if (role is AppRole.Admin or AppRole.SubAdmin) SetupAdminOverview(sp, role == AppRole.Admin);
-		Controls.IconRail.Install(this, RoleName(role), (Core.ViewModels.HeaderViewModel)GetTitleView(this).BindingContext, groupFrontDesk: role is AppRole.Admin or AppRole.SubAdmin);
+		var header = (Core.ViewModels.HeaderViewModel)GetTitleView(this).BindingContext;
+		if (role is AppRole.Admin or AppRole.SubAdmin)
+		{
+			// Fix 4 (W1): the menu with words; its Pending tag starts from this pay period (opening it, as Payroll does) and then follows Attendance
+			var admin = (IAdminService)sp.GetService(typeof(IAdminService))!;
+			Controls.IconRail.InstallMenu(this, RoleName(role), header, async () =>
+				(await admin.PayrollPeriodAsync(Core.ViewModels.PayrollViewModel.PeriodStartFor(Core.ViewModels.PayrollViewModel.ManilaToday()))).Value is { IsPaid: false } p ? p.Rows.Sum(r => r.Pending) : 0);
+		}
+		else Controls.IconRail.Install(this, RoleName(role), header);
 #endif
 	}
 

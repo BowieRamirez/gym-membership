@@ -27,7 +27,7 @@ public partial class MemberShell : Shell
 			}
 		Controls.PhoneNavigation.Attach(this, coach: false, services: sp, access: access);
 #if WINDOWS
-		Controls.IconRail.Install(this, "Member", (Core.ViewModels.HeaderViewModel)GetTitleView(this).BindingContext, groupFrontDesk: false);
+		Controls.IconRail.Install(this, "Member", (Core.ViewModels.HeaderViewModel)GetTitleView(this).BindingContext);
 #endif
 		Navigated += async (_, _) => await RecheckAsync();
 	}
