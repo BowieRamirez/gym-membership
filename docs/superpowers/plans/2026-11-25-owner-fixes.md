@@ -89,6 +89,7 @@ Owner, 2026-11-25: can the coaches' shifts and payroll work like `C:\Users\bowie
 | S6 | **Paid time starts at the later of check-in and shift start.** The real check-in time is kept; only payable hours are clipped. | Owner, confirmed |
 | S7 | **Leaving before the shift end is flagged, not refused:** **Left early**, still paid for time worked once approved. | Owner, confirmed (recommended) |
 | S8 | **Schedule changes reach the future only:** a change rewrites the coach's scheduled `shift_posts` from tomorrow on, only rows with no booked session inside them; a shift with bookings is kept and reported to the admin. Past and today's rows are never touched. A daily job keeps 8 weeks of coach shifts filled ahead. | Owner, confirmed (recommended) |
+| S9 | **Booking lists stay shift-based** (no same-day "checked in" filter). If a coach doesn't come, the front desk or an admin **moves the booked session to another coach** who is free that hour (has a shift, not booked, under the daily hour limit). The time, price and payment stay; the member and both coaches are notified; audited (`session.reassigned`). Per-session pay goes to the coach who completes it. | Owner, 2026-11-25 ("they can be assigned to other coach"); details recommended |
 
 ### Fix 3 skills
 
@@ -108,7 +109,8 @@ Owner, 2026-11-25: can the coaches' shifts and payroll work like `C:\Users\bowie
 | 3.2 | Payroll: Late / Left early flags, pay from shift start | TODO |
 | 3.3 | Scheduling page (Templates, Assignments, Calendar) | TODO |
 | 3.4 | Coach and desk screens: no Post a shift, refusal sentences, shift and Late on the desk | TODO |
-| 3.5 | Checks and rollout (admin sets schedules, then the rule is switched on) | TODO |
+| 3.5 | Move a booked session to another coach (S9) | TODO |
+| 3.6 | Checks and rollout (admin sets schedules, then the rule is switched on) | TODO |
 
 #### Phase 3.1: Database (`0151_staff_scheduling.sql`)
 
@@ -148,7 +150,14 @@ Owner, 2026-11-25: can the coaches' shifts and payroll work like `C:\Users\bowie
 - [ ] Coach self check-in, desk coach list and Cashier Start shift show the refusals (`ErrorText`): `no_shift_today` → "No shift today. Ask the admin to add one."; `too_early` → "Your shift starts at 8:00 AM. Check in from 7:55 AM."
 - [ ] Desk coach list shows each coach's shift today and a Late tag.
 
-#### Phase 3.5: Checks and rollout
+#### Phase 3.5: Move a booked session to another coach (S9)
+
+- [ ] `reassign_session(p_session, p_coach, p_reason)` (front desk and admin, `payments:record`): the session is scheduled and not started; the new coach has a scheduled shift covering it, no other session overlapping, and stays under `max_coach_hours_per_day` (same checks as `book_coach_session`, 0120); member's coach access rules unchanged. Changes only `coach_id`; time, price and payment stay. Notifies the member and both coaches; audit `session.reassigned` (old coach, new coach, reason). Revoke from `anon`.
+- [ ] Database tests: free coach accepted; coach without a shift, already booked, or over the daily limit refused (`coach_not_free`); started or cancelled session refused; `anon` refused.
+- [ ] Desk screen (where booked coach sessions are listed): **Change coach** on a session opens the coaches free at that hour (reuses `free_coaches`), with a reason; Windows only.
+- [ ] Member and coach apps show the new coach on the session (already read from the session row); notification text names the new coach.
+
+#### Phase 3.6: Checks and rollout
 
 - [ ] Whole-fix review; all unit and database tests; Windows and Android builds.
 - [ ] Rollout: push 3.1 with `schedule_enforced` off; the admin assigns templates to every coach and front desk person; then turns it on from the Scheduling page.
