@@ -110,7 +110,7 @@ try {
     await db.query(`update discounts set is_active=false where code='OFFCODE'`);
     const me = await user();
     await buy(await user(), 'FULL'); await buy(me, 'MINE');
-    const rows = await as(me, 'select * from packages_codes()');
+    const rows = await asOwner(db, me, 'select * from packages_codes()');
     assert.deepEqual(rows.map(r => r.code), ['SHOWN']);
     assert.equal(rows[0].percent, 15); assert.ok(rows[0].expires_at);
     assert.deepEqual(Object.keys(rows[0]).sort(), ['code', 'expires_at', 'percent']);
@@ -120,7 +120,8 @@ try {
     assert.equal((await code('PRIVATE1')).show_on_packages, false);
     const gone = await user();
     await db.query('update profiles set is_active=false where id=$1', [gone]);
-    await assert.rejects(as(gone, 'select * from packages_codes()'), /forbidden/);
+    await assert.rejects(asOwner(db, gone, 'select * from packages_codes()'), /forbidden/);
+    await assert.rejects(as(await user(), 'select * from packages_codes()'), /permission denied/);   // 0163: closed to the app
   });
   await test('only discount managers can read usage', async () => {
     await assert.rejects(as(desk, 'select * from discount_usage()'), /forbidden/);

@@ -6,7 +6,7 @@ Created: 2026-11-25
 Last updated: 2026-11-25
 Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phases 3.1-3.6 built, checked and pushed; `0151`-`0157` all live (dry run 2026-11-25: remote up to date); shift check-in rule is **off** until the admin turns it on from Scheduling. S1-S9 confirmed; S8 amended by option (b). Left: owner hand checks, the rollout steps (Phase 3.6), merge and a new app release. **Owner: do not merge until told.** Fix 4 (admin menu with words, Attendance page, Payslips tab, corrections on Attendance) BUILT, `0158` live. Fix 5 (Expenses, Financial reports) BUILT, `0159` live. Layout fixes after Fix 5 (Amenity status margins, compact menu) BUILT. Withholding tax on the month (`0160` live: BIR monthly table, nothing up to ₱20,833, taken in the 16th–end pay) BUILT. Cashier Membership in one go (new member + package + payment), Employees as its own page, no tab bars on Payroll and Attendance BUILT (app only). All pushed; owner hand checks left. More fixes get added below as the owner sends them.
 Branch: `owner-fixes-2026-11-25` (cut from `main` at `df3f54c`, v0.11.0). Owner merges to `main` when done; no push or PR without the owner.
-Next migration: `0163`.
+Next migration: `0164`.
 
 **Goal:** The owner's fixes after the v0.11.0 release.
 
@@ -383,3 +383,11 @@ Owner, 2026-11-25: "make the amenity status page to table form, change the card 
 ### Supabase lint: security definer view (`0162`)
 
 Owner, 2026-11-25: Supabase's linter flagged `security_definer_view` (ERROR) on `public.public_profiles` (0140's names-only view, which ran as its owner to read profiles past the narrowed policy). Now the view is `security_invoker` and reads a new closed `security definer` function `public_profile_rows()` with the same row rule and columns, so who sees which names does not change; the app is unchanged. Test added to `live-test-fixes.mjs` first (failed); all local database test files pass. Deployed: dry run showed only `0162`; pushed; live: the view is `security_invoker=true`, `anon` can't read it or call the function, `authenticated` reads it.
+
+### Supabase lint warnings (`0163`)
+
+Owner, 2026-11-25 (lint CSV, 151 warnings): 150 × `authenticated_security_definer_function_executable` and 1 × `auth_leaked_password_protection`.
+- `0163` closes six security definer functions that the app, the Edge Functions and the policies never call (their only callers run as the owner): `can_manage_person`, `is_super_admin`, `daily_cash_summary`, `membership_refund_outflows`, `packages_codes`, `payroll_deduction_rates_info`. `avail_amenity` and `book_slots` are also unused by the app but stay open: they check permissions inside, and the database tests buy and book through them.
+- The rest are the app's own API (each checks the caller's permission inside) and stay callable; about 140 of these warnings will remain on purpose.
+- Leaked password protection is a dashboard switch (Authentication → Attack Protection); owner to turn it on (may need a paid plan).
+- Tests: `live-test-fixes.mjs` checks the six are closed (failed first); `rules`, `phase7`, `cash-and-gcash-only`, `discount-limits`, `owner-fixes-break` and `payroll-deductions` now call them as the owner (harness `asOwner`) or expect `permission denied`. All local database test files pass. Deployed: dry run showed only `0163`; pushed; live: none of the six can be run by `authenticated` or `anon`.

@@ -220,7 +220,7 @@ await test('revenue excludes voided payments and only admin can read it', async 
   const total = r.rows.reduce((s, x) => s + Number(x.total), 0);
   assert.equal(total, 1000 + 150 + 300);   // alex's QR + walk-in + eve's amenity (eve's membership voided)
   assert.match(await code(run(desk, `select * from revenue_summary(${today}, ${today})`)), /forbidden/);
-  assert.equal((await run(desk, `select * from daily_cash_summary(${today})`)).rowCount > 0, true);
+  assert.match(await code(run(desk, `select * from daily_cash_summary(${today})`)), /permission denied/);   // 0163: closed to the app
 });
 await test('renewing an active plan extends from its end date', async () => {
   const ump = (await run(alex, `select user_membership_package_id id, ends_at from user_membership_packages`)).rows[0];

@@ -206,7 +206,7 @@ try {
     const a = await fixture(monthly,'PHASE7'), r = await request(a.uid,a.term);
     const day = (await db.query(`select (now() at time zone 'Asia/Manila')::date d`)).rows[0].d;
     const total = async () => (await as(admin,'select * from revenue_summary($1,$1)',[day])).reduce((n,x)=>n+Number(x.total),0);
-    const cash = async () => (await as(desk,'select * from daily_cash_summary($1)',[day])).reduce((n,x)=>n+Number(x.total),0);
+    const cash = async () => (await asOwner(db, desk,'select * from daily_cash_summary($1)',[day])).reduce((n,x)=>n+Number(x.total),0);
     const before = await total(), cashBefore = await cash();
     await decide(r.refund_request_id);
     assert.equal(await total(),before-day1(900)); assert.equal(await cash(),cashBefore);

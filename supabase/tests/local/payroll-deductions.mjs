@@ -1,6 +1,6 @@
 // Government deductions on payroll (plan 2026-11-24-payroll-deductions.md, T1-T12): SSS, PhilHealth, Pag-IBIG once a month in the
 // 16th-end pay on the month's pay; BIR withholding tax every pay; switch per person; never below zero; frozen on paid.
-import { start } from './harness.mjs';
+import { start, asOwner } from './harness.mjs';
 import assert from 'node:assert/strict';
 
 const { server, client: db } = await start();
@@ -63,13 +63,13 @@ try {
   await test('Review Focus 9: staff, members and anon cannot read rates or switches, or switch', async () => {
     for (const who of [desk, low, member]) {
       await assert.rejects(as(who, `select set_payroll_deductions($1, false)`, [desk]), /forbidden/);
-      await assert.rejects(as(who, `select payroll_deduction_rates_info()`), /forbidden/);
+      await assert.rejects(as(who, `select payroll_deduction_rates_info()`), /permission denied/);   // 0163: closed to the app
       await assert.rejects(as(who, `select * from payroll_deduction_rates`), /permission denied/);
       await assert.rejects(as(who, `select * from payroll_no_deductions`), /permission denied/);
     }
     await assert.rejects(asAnon(`select * from payroll_deduction_rates`), /permission denied/);
     await assert.rejects(as(admin, `select public.payroll_tax(1)`), /permission denied/);
-    const info = (await as(admin, `select payroll_deduction_rates_info() r`))[0].r;
+    const info = (await asOwner(db, admin, `select payroll_deduction_rates_info() r`))[0].r;
     assert.equal(n(info.sss_rate), 0.05);
   });
 

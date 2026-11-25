@@ -57,6 +57,12 @@ try {
     await db.query('begin'); await db.query('set local role anon');
     try { await assert.rejects(db.query('select * from public_profile_rows()'), /permission denied/); } finally { await db.query('rollback'); }
   });
+  await test('0163: helpers the app never calls are closed to signed-in users (Supabase lint 0029)', async () => {
+    const open = (await db.query(`select p.oid::regprocedure::text f from pg_proc p join pg_namespace s on s.oid = p.pronamespace
+      where s.nspname = 'public' and p.proname = any($1) and has_function_privilege('authenticated', p.oid, 'execute')`,
+      [['can_manage_person', 'daily_cash_summary', 'is_super_admin', 'membership_refund_outflows', 'packages_codes', 'payroll_deduction_rates_info']])).rows;
+    assert.deepEqual(open, []);
+  });
   await test('2: a coach cannot check themselves in or out; the desk can', async () => {
     await assert.rejects(as(coach, 'select coach_check_in()'), /forbidden/);
     await assert.rejects(as(coach, 'select coach_check_in($1)', [coach]), /forbidden/);
