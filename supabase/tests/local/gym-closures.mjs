@@ -44,7 +44,7 @@ const close = (who, d, reason = 'Holiday') => as(who, 'select close_gym_day($1::
 const notes = async uid => (await db.query('select title, body from user_notifications where user_id=$1 order by notification_id', [uid])).rows;
 const coachWithShift = async (d, from = '06:00', to = '22:00') => {
   const c = await user('coach');
-  await as(c, 'insert into shift_posts(coach_id,starts_at,ends_at) values($1,$2,$3)', [c, at(from, d), at(to, d)]);
+  await db.query('insert into shift_posts(coach_id,starts_at,ends_at) values($1,$2,$3)', [c, at(from, d), at(to, d)]);
   return c;
 };
 
@@ -77,10 +77,10 @@ try {
   await test('nothing can be set up on a closed day: bookings and shifts', async () => {
     const m = await member(), c = await user('coach');
     await db.query('insert into coach_visits(coach_id,checked_in_by) values($1,$1)', [c]);
-    await as(c, 'insert into shift_posts(coach_id,starts_at,ends_at) values($1,$2,$3)', [c, at('06:00', next), at('22:00', next)]);
+    await db.query('insert into shift_posts(coach_id,starts_at,ends_at) values($1,$2,$3)', [c, at('06:00', next), at('22:00', next)]);
     await close(admin, day);
     await assert.rejects(book(m, '10:00'), /day_closed/);
-    await assert.rejects(as(c, 'insert into shift_posts(coach_id,starts_at,ends_at) values($1,$2,$3)', [c, at('06:00'), at('12:00')]), /day_closed/);
+    await assert.rejects(db.query('insert into shift_posts(coach_id,starts_at,ends_at) values($1,$2,$3)', [c, at('06:00'), at('12:00')]), /day_closed/);
     assert.ok(await book(m, '10:00', next), 'the next day is open');
     await as(admin, 'select reopen_gym_day($1::date)', [day]);
   });

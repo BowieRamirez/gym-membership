@@ -29,13 +29,14 @@ const expected = {
   coaches: 'S-U-', gym_settings: 'S-U-', user_settings: 'S-U-',
   profiles: 'S---', members: 'S---',                      // only server functions change these (D18)
   // day-to-day records the app writes directly
-  shift_posts: 'SIU-', user_notifications: 'S-U-',        // cancelled, read; never erased (D20)
+  shift_posts: 'S---', user_notifications: 'S-U-',        // 0151: the admin's schedule writes shifts; notifications read, never erased (D20)
   messages: 'SIU-', amenity_usages: 'SI--',
   // money and history: only server functions change these
   payments: 'S---', refund_requests: 'S---', membership_terms: 'S---', membership_renewals: 'S---', user_membership_packages: 'S---',
   user_amenities: 'S---', gym_check_ins: 'S---', member_scans: 'S---', member_codes: 'S---', audit_log: 'S---', session_attendance: 'S---',
   training_sessions: 'S---', time_requests: 'S---', time_request_events: 'S---', reservations: 'S---', coach_hires: 'S---', coach_visits: 'S---',
   support_threads: 'S---', support_messages: 'S---', amenity_follows: 'S---',
+  schedule_templates: 'S---', schedule_template_days: 'S---', schedule_assignments: 'S---', schedule_overrides: 'S---',   // 0151: only schedule functions
   member_passes: '----', desk_pins: '----',                // F6, F8 (0049): only server functions touch them
   desk_password_proofs: '----',                            // G12 (0062): only the password check-in functions
   sign_in_attempts: '----',                                // owner fixes 2026-11-19 (0103): only the sign-in function (service role)
@@ -76,12 +77,12 @@ try {
     assert.equal((await db.query('select phone from profiles where id=$1', [id])).rows[0].phone, '09170000000');
     assert.equal((await db.query('select goals from members where user_id=$1', [id])).rows[0].goals, 'Run 5k');
   });
-  await test('a coach can cancel a shift but not erase it, and nobody can erase a notification (D20)', async () => {
+  await test('a coach cannot cancel or erase a shift (0151: the schedule owns them), and nobody can erase a notification (D20)', async () => {
     const coach = await person('coach');
     const shift = (await db.query(`insert into shift_posts(coach_id,starts_at,ends_at) values($1,(date_trunc('day',now() at time zone 'Asia/Manila')+interval '2 days 10 hours') at time zone 'Asia/Manila',(date_trunc('day',now() at time zone 'Asia/Manila')+interval '2 days 14 hours') at time zone 'Asia/Manila') returning shift_post_id`, [coach])).rows[0].shift_post_id;
     await assert.rejects(as(coach, 'delete from shift_posts where shift_post_id=$1', [shift]), /permission denied/);
-    await as(coach, `update shift_posts set status='cancelled' where shift_post_id=$1`, [shift]);
-    assert.equal((await db.query('select status from shift_posts where shift_post_id=$1', [shift])).rows[0].status, 'cancelled');
+    await assert.rejects(as(coach, `update shift_posts set status='cancelled' where shift_post_id=$1`, [shift]), /permission denied/);
+    assert.equal((await db.query('select status from shift_posts where shift_post_id=$1', [shift])).rows[0].status, 'scheduled');
 
     await db.query(`insert into user_notifications(user_id,type,title) values($1,'system','Hello')`, [coach]);
     await assert.rejects(as(coach, 'delete from user_notifications where user_id=$1', [coach]), /permission denied/);

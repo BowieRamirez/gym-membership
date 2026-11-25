@@ -4,9 +4,9 @@
 
 Created: 2026-11-25
 Last updated: 2026-11-25
-Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling) PLANNED, S1-S8 confirmed by the owner. More fixes get added below as the owner sends them.
+Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phase 3.1 DEPLOYED (0151 live, shift check-in rule off until the admin sets schedules); 3.2-3.6 TODO. S1-S9 confirmed. More fixes get added below as the owner sends them.
 Branch: `owner-fixes-2026-11-25` (cut from `main` at `df3f54c`, v0.11.0). Owner merges to `main` when done; no push or PR without the owner.
-Next migration: `0151`.
+Next migration: `0152`.
 
 **Goal:** The owner's fixes after the v0.11.0 release.
 
@@ -105,7 +105,7 @@ Owner, 2026-11-25: can the coaches' shifts and payroll work like `C:\Users\bowie
 
 | Phase | What | Status |
 |---|---|---|
-| 3.1 | Database: templates, assignments, overrides, `shift_for`, coach shift sync, clock-in rule (off by default) | TODO |
+| 3.1 | Database: templates, assignments, overrides, `shift_for`, coach shift sync, clock-in rule (off by default) | DEPLOYED (`0151` live 2026-11-25, rule off) |
 | 3.2 | Payroll: Late / Left early flags, pay from shift start | TODO |
 | 3.3 | Scheduling page (Templates, Assignments, Calendar) | TODO |
 | 3.4 | Coach and desk screens: no Post a shift, refusal sentences, shift and Late on the desk | TODO |
@@ -114,19 +114,21 @@ Owner, 2026-11-25: can the coaches' shifts and payroll work like `C:\Users\bowie
 
 #### Phase 3.1: Database (`0151_staff_scheduling.sql`)
 
-- [ ] Tables (writes through `security definer` functions only; read for staff with `reports:revenue`, and each person their own):
+- [x] Tables (writes through `security definer` functions only; read for staff with `reports:revenue`, and each person their own):
   - `schedule_templates (template_id, name unique, archived_at, created_at)`.
-  - `schedule_template_days (template_id, weekday 0-6, starts_at time, ends_at time)`, key `(template_id, weekday)`; no row = rest day; `ends_at > starts_at` (no overnight shifts).
+  - `schedule_template_days (template_id, weekday 1-7 (ISO, Monday 1), starts_at time, ends_at time)`, key `(template_id, weekday)`; no row = rest day; `ends_at > starts_at` (no overnight shifts).
   - `schedule_assignments (assignment_id, user_id, template_id, effective_from date, created_by, created_at)`; active one for a date = latest `effective_from <= date`. Never edited or deleted, so history stays.
   - `schedule_overrides (override_id, user_id, from_date, to_date, starts_at time null, ends_at time null, reason 1-200, created_by, created_at)`; null times = rest; a later override for the same day wins.
-- [ ] `shift_for(p_user, p_day) returns (starts_at timestamptz, ends_at timestamptz)`: override, else the active assignment's weekday row, else nothing. Manila times.
-- [ ] Shifts must sit inside gym hours and not on a gym closure day (0065): `outside_gym_hours` when saving a template day or an override.
-- [ ] Admin functions (`reports:revenue`, audited): `schedule_template_save`, `schedule_template_duplicate`, `schedule_template_archive` (refused while assigned from today on: `template_in_use`), `schedule_assign` (coaches and front desk only, not in the past), `schedule_override_add`, `schedule_override_remove` (future only).
-- [ ] `schedule_sync_coach(p_user, p_from, p_to)` writes `shift_posts` per S8; called by the admin functions for coaches; `cron.schedule('fill-coach-shifts', daily)` fills 8 weeks ahead.
-- [ ] Coaches lose shift posting: revoke insert/update on `shift_posts` from `authenticated`, drop the coach insert policy; guards 0028, 0033, 0065 stay for the sync.
-- [ ] `coach_visits` and `cash_shifts` get `expected_start`, `expected_end` (null), filled at clock-in from `shift_for`, so later template edits never change what a past day expected.
-- [ ] `gym_settings.schedule_enforced boolean default false`. When true: `coach_check_in` refuses `no_shift_today` / `too_early` and stores the expected times; `open_cash_shift` does the same for role `employee` only (S1). When false, expected times are still stored when a shift exists.
-- [ ] Database tests: the S3 table, no shift, rest override, override beats template, assignment history, admin not limited, enforcement off lets everyone in, sync keeps booked shifts, `anon` cannot call any new function.
+- [x] `shift_for(p_user, p_day) returns (starts_at timestamptz, ends_at timestamptz)`: override, else the active assignment's weekday row, else nothing. Manila times.
+- [x] Shifts must sit inside gym hours and not on a gym closure day (0065): `outside_gym_hours` when saving a template day or an override.
+- [x] Admin functions (`reports:revenue`, audited): `schedule_template_save`, `schedule_template_duplicate`, `schedule_template_archive` (refused while assigned from today on: `template_in_use`), `schedule_assign` (coaches and front desk only, not in the past), `schedule_override_add`, `schedule_override_remove` (future only).
+- [x] `schedule_sync_coach(p_user, p_from, p_to)` writes `shift_posts` per S8; called by the admin functions for coaches; `cron.schedule('fill-coach-shifts', daily)` fills 8 weeks ahead.
+- [x] Coaches lose shift posting: revoke insert/update on `shift_posts` from `authenticated`, drop the coach insert policy; guards 0028, 0033, 0065 stay for the sync.
+- [x] `coach_visits` and `cash_shifts` get `expected_start`, `expected_end` (null), filled at clock-in from `shift_for`, so later template edits never change what a past day expected.
+- [x] `gym_settings.schedule_enforced boolean default false`. When true: `coach_check_in` refuses `no_shift_today` / `too_early` and stores the expected times; `open_cash_shift` does the same for role `employee` only (S1). When false, expected times are still stored when a shift exists.
+- [x] Database tests: the S3 table, no shift, rest override, override beats template, assignment history, admin not limited, enforcement off lets everyone in, sync keeps booked shifts, `anon` cannot call any new function.
+- Built notes: the admin functions return the kept days (`schedule_assign`, `schedule_override_add`/`_remove` return a JSON list of dates; `schedule_template_save` returns `{template_id, kept}`); a too-early refusal reads `too_early:8:00 AM`; `fill_coach_shifts` runs 00:10 Manila; the "Your coach posted a shift" notice trigger is dropped. Local test harness now reads migrations with LF line endings (a Windows checkout broke 0148's text match). Tests: `supabase/tests/local/staff-scheduling.mjs` (17).
+- Deployed 2026-11-25: dry run showed only `0151`; pushed; live grants checked (no new function for `anon`; helpers closed to the app; no insert on the schedule tables or `shift_posts`; cron `fill-coach-shifts` registered). Old tests that had coaches post shifts now write them as the database owner (the guards still run) and expect the app to be refused: `coach-availability`, `crud-rules`, `rules`, `gym-closures`. All 70 database test files pass. **Until Phase 3.4 ships, a coach on the current app who taps Post a shift gets a permission error.**
 
 #### Phase 3.2: Payroll
 
