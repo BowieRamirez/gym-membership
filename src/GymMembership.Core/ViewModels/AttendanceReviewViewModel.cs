@@ -72,11 +72,13 @@ public sealed partial class AttendanceCardItem(PayrollStaffRecord rec, bool edit
     }
 }
 
-/// <summary>W6: one hour correction with whose it is.</summary>
-public sealed class AttendanceCorrectionItem(PayrollHourAdjustment adj)
+/// <summary>W6: one hour (or session) correction with whose it is; removable while the period is a draft (moved from Payroll, owner option A).</summary>
+public sealed class AttendanceCorrectionItem(PayrollHourAdjustment adj, string unit, bool canRemove)
 {
+    public PayrollHourAdjustment Adj => adj;
+    public bool CanRemove => canRemove;
     public string FullName => adj.FullName ?? "";
-    public string QuantityText => $"{(adj.Quantity > 0 ? "+" : "")}{adj.Quantity.ToString("0.##", CultureInfo.InvariantCulture)} h";
+    public string QuantityText => $"{(adj.Quantity > 0 ? "+" : "")}{adj.Quantity.ToString("0.##", CultureInfo.InvariantCulture)} {unit}";
     public string Note => adj.Note;
     public string ByText => $"{adj.CreatedByName} · {ManilaTime.Of(adj.CreatedAt).ToString("d MMM, h:mm tt", CultureInfo.InvariantCulture)}";
 }
@@ -138,12 +140,57 @@ public partial class AttendanceReviewViewModel(IAdminService svc) : LoadableView
         if (!await RunAsync(() => svc.PayrollPeriodAsync(PeriodStartsOn), p => period = p) || period is null) return;
         PeriodId = period.PeriodId;
         IsReadOnly = period.IsPaid;
+        // corrections are for people paid by the hour or the session (a fixed salary doesn't count hours)
+        var counted = period.Rows.Where(r => r.PayType is "hourly" or "per_session").ToList();
+        var keep = CorrectionPerson?.UserId;
+        Fill(CorrectionPeople, IsReadOnly ? [] : counted);
+        CorrectionPerson = CorrectionPeople.FirstOrDefault(p => p.UserId == keep);
+        OnPropertyChanged(nameof(CanCorrect));
         await RunAsync(() => svc.PayrollRecordsAllAsync(PeriodId), all =>
         {
             _records = all.Records;
-            Fill(Corrections, all.Adjustments.Select(a => new AttendanceCorrectionItem(a)));
+            Fill(Corrections, all.Adjustments.Select(a => new AttendanceCorrectionItem(a,
+                counted.FirstOrDefault(r => r.UserId == a.UserId)?.PayType == "per_session" ? "sessions" : "h", !IsReadOnly)));
         });
         Show();
+    }
+
+    // ---- hour corrections (owner, 2026-11-25, option A: moved here from Payroll's pay details) ----
+    public ObservableCollection<PayrollRow> CorrectionPeople { get; } = new();
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CorrectionUnitLabel))] private PayrollRow? correctionPerson;
+    [ObservableProperty] private string correctionHours = "";
+    [ObservableProperty] private string correctionNote = "";
+    [ObservableProperty] private string? correctionError;
+    public bool CanCorrect => !IsReadOnly && CorrectionPeople.Count > 0;
+    public string CorrectionUnitLabel => CorrectionPerson?.PayType == "per_session" ? "Sessions (+ or −)" : "Hours (+ or −)";
+
+    [RelayCommand]
+    private async Task AddCorrectionAsync()
+    {
+        CorrectionError = null;
+        if (CorrectionPerson is not { } who) { CorrectionError = "Choose who the correction is for."; return; }
+        if (!decimal.TryParse(CorrectionHours.Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out var q) || Math.Round(q, 2) == 0 || Math.Abs(q) > 1000)
+        {
+            CorrectionError = who.PayType == "per_session" ? "Enter sessions to add or take away, like 1 or -1." : "Enter hours to add or take away, like 1.5 or -2.";
+            return;
+        }
+        var note = CorrectionNote.Trim();
+        if (note.Length is 0 or > 200) { CorrectionError = "Add a short note (1–200 characters)."; return; }
+        var res = await svc.AddPayrollHoursAsync(PeriodId, who.UserId, q, note);
+        if (!res.Ok) { CorrectionError = ErrorText.For(res.Error, res.Message); return; }
+        CorrectionHours = ""; CorrectionNote = "";
+        Notice = $"Correction added for {who.FullName}.";
+        await LoadAsync();
+    }
+
+    [RelayCommand]
+    private async Task RemoveCorrectionAsync(AttendanceCorrectionItem? item)
+    {
+        if (item is null || !item.CanRemove) return;
+        CorrectionError = null;
+        var res = await svc.RemovePayrollHoursAsync(item.Adj.AdjustmentId);
+        if (!res.Ok) { CorrectionError = ErrorText.For(res.Error, res.Message); return; }
+        await LoadAsync();
     }
 
     void Show()

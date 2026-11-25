@@ -98,25 +98,14 @@ public class PayrollHourlyViewModelTests
         gw.OwnerAddShift(desk.UserId, Manila(3, 8), Manila(3, 12));
         await vm.OnAppearingAsync();
         await vm.ApproveAllUnflaggedCommand.ExecuteAsync(null);
+        // owner, 2026-11-25: corrections are added on Attendance → Corrections (AttendanceCorrectionTests); the drawer lists them and pays them
+        Assert.True((await new AdminService(gw).AddPayrollHoursAsync(vm.PeriodId, desk.UserId, 1.5m, "Forgot to open the drawer")).Ok);
+        await vm.OnAppearingAsync();
         await vm.OpenDrawerCommand.ExecuteAsync(vm.Rows.First(r => r.UserId == desk.UserId));
-        Assert.True(vm.CanCorrectHours);
-
-        vm.HoursInput = "1.5";
-        await vm.AddHoursCommand.ExecuteAsync(null);
-        Assert.Equal("Add a short note (1–200 characters).", vm.HoursError);
-        vm.HoursNote = "Forgot to open the drawer";
-        await vm.AddHoursCommand.ExecuteAsync(null);
-        Assert.Null(vm.HoursError);
         Assert.Single(vm.DrawerAdjustments);
         Assert.Equal("+1.5 h", vm.DrawerAdjustments[0].QuantityText);
         Assert.Equal("Approved 4 h · corrections +1.5 h · payable 5.5 h × ₱80.00 = ₱440.00", vm.DrawerBasisText);
         Assert.Equal("5.5 h × ₱80.00 (+1.5 h)", vm.Rows.First(r => r.UserId == desk.UserId).BasisText);
-
-        vm.HoursInput = "-1";
-        vm.HoursNote = "Left early";
-        await vm.AddHoursCommand.ExecuteAsync(null);
-        await vm.RemoveHoursCommand.ExecuteAsync(vm.DrawerAdjustments.Last());
-        Assert.Single(vm.DrawerAdjustments);
     }
 
     [Fact]

@@ -720,14 +720,12 @@
                             <VerticalStackLayout BindableLayout.ItemsSource="{Binding DrawerAdjustments}" Spacing="8">
                                 <BindableLayout.ItemTemplate>
                                     <DataTemplate x:DataType="vm:PayrollAdjustmentItem">
-                                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                                             <VerticalStackLayout Spacing="2" VerticalOptions="Center">
                                                 <Label Text="{Binding Note}" />
                                                 <Label Text="{Binding ByText}" Style="{StaticResource Caption}" />
                                             </VerticalStackLayout>
                                             <Label Grid.Column="1" Text="{Binding QuantityText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
-                                            <Button Grid.Column="2" Text="Remove" Style="{StaticResource LinkButton}" Clicked="OnRemoveHoursClicked"
-                                                    IsVisible="{Binding CanRemove}" VerticalOptions="Center" />
                                         </Grid>
                                     </DataTemplate>
                                 </BindableLayout.ItemTemplate>
@@ -735,24 +733,8 @@
                                     <Label Text="No corrections." Style="{StaticResource Muted}" />
                                 </BindableLayout.EmptyView>
                             </VerticalStackLayout>
-                            <VerticalStackLayout Spacing="6" IsVisible="{Binding CanCorrectHours}">
-                                <Grid ColumnDefinitions="120,*" ColumnSpacing="8">
-                                    <VerticalStackLayout Spacing="4">
-                                        <Label Text="{Binding CorrectionUnitLabel}" Style="{StaticResource Caption}" />
-                                        <Border Style="{StaticResource Field}">
-                                            <Entry Text="{Binding HoursInput}" Keyboard="Text" Placeholder="1.5 or -2" AutomationId="CorrectionAmount" />
-                                        </Border>
-                                    </VerticalStackLayout>
-                                    <VerticalStackLayout Grid.Column="1" Spacing="4">
-                                        <Label Text="Note (required)" Style="{StaticResource Caption}" />
-                                        <Border Style="{StaticResource Field}">
-                                            <Entry Text="{Binding HoursNote}" MaxLength="200" Placeholder="e.g. Forgot to open the drawer at 8 am" AutomationId="CorrectionNote" />
-                                        </Border>
-                                    </VerticalStackLayout>
-                                </Grid>
-                                <Label Text="{Binding HoursError}" Style="{StaticResource FieldError}" IsVisible="{Binding HoursError, Converter={StaticResource IsNotNull}}" />
-                                <Button Text="Add correction" Style="{StaticResource SmallOutlineButton}" Command="{Binding AddHoursCommand}" HorizontalOptions="Start" />
-                            </VerticalStackLayout>
+                            <!-- owner, 2026-11-25: corrections are added and removed on Attendance → Corrections -->
+                            <Label Text="Add or remove hour corrections on Attendance → Corrections." Style="{StaticResource Caption}" IsVisible="{Binding IsDraft}" />
                         </VerticalStackLayout>
 
                         <Label Text="Bonuses and deductions" Style="{StaticResource SectionTitle}" />

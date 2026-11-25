@@ -7,6 +7,7 @@
             xmlns:v="clr-namespace:GymMembership.App.Views"
             xmlns:c="clr-namespace:GymMembership.App.Controls"
             xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            xmlns:models="clr-namespace:GymMembership.Core.Models;assembly=GymMembership.Core"
             x:Class="GymMembership.App.Views.AttendanceReviewPage" x:DataType="vm:AttendanceReviewViewModel" Title="Attendance">
 
     <v:BasePage.Resources>
@@ -117,11 +118,13 @@
 
         <DataTemplate x:Key="CorrectionRow" x:DataType="vm:AttendanceCorrectionItem">
             <VerticalStackLayout>
-                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="260,110,*,220" ColumnSpacing="14">
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="260,110,*,220,90" ColumnSpacing="14">
                     <Label Text="{Binding FullName}" FontFamily="BarlowSemiBold" VerticalOptions="Center" LineBreakMode="TailTruncation" />
                     <Label Grid.Column="1" Text="{Binding QuantityText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" />
                     <Label Grid.Column="2" Text="{Binding Note}" VerticalOptions="Center" LineBreakMode="WordWrap" />
                     <Label Grid.Column="3" Text="{Binding ByText}" Style="{StaticResource Caption}" VerticalOptions="Center" />
+                    <Button Grid.Column="4" Text="Remove" Style="{StaticResource LinkButton}" Clicked="OnRemoveCorrectionClicked" IsVisible="{Binding CanRemove}"
+                            HorizontalOptions="End" VerticalOptions="Center" SemanticProperties.Description="{Binding FullName, StringFormat='Remove this correction for {0}'}" />
                 </Grid>
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
@@ -135,6 +138,7 @@
                 </Grid>
                 <Label Text="{Binding Note}" />
                 <Label Text="{Binding ByText}" Style="{StaticResource Caption}" />
+                <Button Text="Remove" Style="{StaticResource LinkButton}" Clicked="OnRemoveCorrectionClicked" IsVisible="{Binding CanRemove}" HorizontalOptions="Start" />
                 <BoxView Style="{StaticResource Hairline}" />
             </VerticalStackLayout>
         </DataTemplate>
@@ -245,11 +249,43 @@
                         </Border>
                     </VerticalStackLayout>
 
-                    <!-- CORRECTIONS -->
+                    <!-- CORRECTIONS: add one here (owner, 2026-11-25: moved from Payroll's pay details), the period's list under it -->
+                    <Border Style="{StaticResource Panel}" IsVisible="{Binding IsCorrectionsTab}">
+                        <VerticalStackLayout Spacing="10">
+                            <c:CardTitle Text="Add correction" />
+                            <Label Text="Hours (or sessions) to add to or take from someone's pay in this period, with why. It shows on their payslip."
+                                   Style="{StaticResource Caption}" LineBreakMode="WordWrap" />
+                            <Label Text="Nothing to correct: no one in this period is paid by the hour or the session, or the period is approved or paid out."
+                                   Style="{StaticResource Muted}" LineBreakMode="WordWrap" IsVisible="{Binding CanCorrect, Converter={StaticResource Not}}" />
+                            <FlexLayout Wrap="Wrap" AlignItems="End" IsVisible="{Binding CanCorrect}">
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="240">
+                                    <Label Text="Person" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}">
+                                        <Picker ItemsSource="{Binding CorrectionPeople}" ItemDisplayBinding="{Binding FullName, x:DataType=models:PayrollRow}" SelectedItem="{Binding CorrectionPerson}"
+                                                Title="Choose a person" SemanticProperties.Description="Person" AutomationId="CorrectionPerson" />
+                                    </Border>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="150">
+                                    <Label Text="{Binding CorrectionUnitLabel}" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}">
+                                        <Entry Text="{Binding CorrectionHours}" Placeholder="1.5 or -2" SemanticProperties.Description="{Binding CorrectionUnitLabel}" AutomationId="CorrectionAmount" />
+                                    </Border>
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="360">
+                                    <Label Text="Why (required)" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}">
+                                        <Entry Text="{Binding CorrectionNote}" MaxLength="200" Placeholder="e.g. Forgot to open the drawer at 8 am" SemanticProperties.Description="Why" AutomationId="CorrectionNote" />
+                                    </Border>
+                                </VerticalStackLayout>
+                                <Button Text="Add correction" Style="{StaticResource SmallButton}" Command="{Binding AddCorrectionCommand}" Margin="0,0,0,8" AutomationId="AddCorrection" />
+                            </FlexLayout>
+                            <Label Text="{Binding CorrectionError}" Style="{StaticResource FieldError}" IsVisible="{Binding CorrectionError, Converter={StaticResource IsNotNull}}" />
+                        </VerticalStackLayout>
+                    </Border>
                     <Border Style="{StaticResource TablePanel}" IsVisible="{Binding IsCorrectionsTab}">
                         <VerticalStackLayout>
                             <VerticalStackLayout x:Name="CorrectionsHead">
-                                <Grid Style="{StaticResource TableHead}" ColumnDefinitions="260,110,*,220" ColumnSpacing="14">
+                                <Grid Style="{StaticResource TableHead}" ColumnDefinitions="260,110,*,220,90" ColumnSpacing="14">
                                     <Label Text="Person" Style="{StaticResource Caption}" />
                                     <Label Grid.Column="1" Text="Hours" Style="{StaticResource Caption}" />
                                     <Label Grid.Column="2" Text="Why" Style="{StaticResource Caption}" />
@@ -260,7 +296,7 @@
                             <c:TableBody Items="{Binding Corrections}" Header="{x:Reference CorrectionsHead}" WideFrom="900"
                                          RowTemplate="{StaticResource CorrectionRow}" CardTemplate="{StaticResource CorrectionCard}">
                                 <c:TableBody.Empty>
-                                    <Label Text="No hour corrections in this period. Add them from a person's pay details on Payroll." Style="{StaticResource Muted}" Margin="14" />
+                                    <Label Text="No hour corrections in this period." Style="{StaticResource Muted}" Margin="14" />
                                 </c:TableBody.Empty>
                             </c:TableBody>
                         </VerticalStackLayout>

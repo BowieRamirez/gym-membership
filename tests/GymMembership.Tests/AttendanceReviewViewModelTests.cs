@@ -150,3 +150,56 @@ public class AttendanceReviewViewModelTests
         Assert.All(vm.Cards, c => Assert.False(c.CanApprove || c.CanReject));
     }
 }
+
+// owner, 2026-11-25 (option A): hour corrections are added and removed on Attendance → Corrections (moved from Payroll's pay details)
+public class AttendanceCorrectionTests
+{
+    static DateTime Manila(int day, int hour) => new DateTime(2026, 8, day, hour, 0, 0, DateTimeKind.Utc).AddHours(-8);
+
+    [Fact]
+    public async Task Corrections_are_added_with_a_note_change_pay_and_can_be_removed()
+    {
+        var gw = new DemoGateway();
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var admin = new AdminService(gw);
+        var desk = (await admin.PayrollStaffAsync()).Value!.First(s => s.Role == "employee");
+        Assert.True((await admin.SetStaffSalaryAsync(desk.UserId, 80m, "hourly")).Ok);
+        gw.OwnerAddShift(desk.UserId, Manila(3, 8), Manila(3, 12));
+        var vm = new AttendanceReviewViewModel(admin) { PeriodStartsOn = new DateOnly(2026, 8, 1) };
+        await vm.LoadCommand.ExecuteAsync(null);
+        vm.OpenTab("corrections");
+        Assert.True(vm.CanCorrect);
+        Assert.Contains(vm.CorrectionPeople, p => p.UserId == desk.UserId);
+
+        vm.CorrectionPerson = vm.CorrectionPeople.First(p => p.UserId == desk.UserId);
+        Assert.Equal("Hours (+ or −)", vm.CorrectionUnitLabel);
+        vm.CorrectionHours = "1.5";
+        await vm.AddCorrectionCommand.ExecuteAsync(null);
+        Assert.Equal("Add a short note (1–200 characters).", vm.CorrectionError);
+        vm.CorrectionNote = "Forgot to open the drawer";
+        await vm.AddCorrectionCommand.ExecuteAsync(null);
+        Assert.Null(vm.CorrectionError);
+        var c = Assert.Single(vm.Corrections);
+        Assert.Equal(("+1.5 h", "Forgot to open the drawer", true), (c.QuantityText, c.Note, c.CanRemove));
+        Assert.Equal("", vm.CorrectionHours);
+        var row = (await admin.PayrollPeriodAsync(new DateOnly(2026, 8, 1))).Value!.Rows.First(r => r.UserId == desk.UserId);
+        Assert.Equal(1.5m, row.Adjustment);
+
+        vm.CorrectionHours = "abc";
+        vm.CorrectionNote = "x";
+        await vm.AddCorrectionCommand.ExecuteAsync(null);
+        Assert.Equal("Enter hours to add or take away, like 1.5 or -2.", vm.CorrectionError);
+
+        await vm.RemoveCorrectionCommand.ExecuteAsync(vm.Corrections[0]);
+        Assert.Empty(vm.Corrections);
+    }
+
+    [Fact]
+    public async Task Payroll_pay_details_list_corrections_but_no_longer_add_them()
+    {
+        var gw = new DemoGateway();
+        await gw.SignInAsync("admin@demo.io", DemoGateway.DemoPassword);
+        var vm = new PayrollViewModel(new AdminService(gw));
+        Assert.DoesNotContain(vm.GetType().GetProperties(), p => p.Name is "AddHoursCommand" or "HoursInput" or "CanCorrectHours");
+    }
+}

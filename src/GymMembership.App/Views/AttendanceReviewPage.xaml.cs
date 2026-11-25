@@ -9,4 +9,6 @@ public partial class AttendanceReviewPage : BasePage
         InitializeComponent();
         BindingContext = vm;
     }
+
+    void OnRemoveCorrectionClicked(object? sender, EventArgs e) => Row<AttendanceReviewViewModel>(sender, v => v.RemoveCorrectionCommand);
 }

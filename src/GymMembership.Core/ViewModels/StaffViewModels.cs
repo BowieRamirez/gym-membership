@@ -3367,13 +3367,12 @@ public sealed partial class PayrollRecordItem(PayrollTimeRecord rec, bool editab
 }
 
 /// <summary>0142 (H5): one +/- hours (or sessions) correction in the drawer.</summary>
-public sealed class PayrollAdjustmentItem(PayrollHourAdjustment adj, string unit, bool canRemove)
+public sealed class PayrollAdjustmentItem(PayrollHourAdjustment adj, string unit)
 {
     public PayrollHourAdjustment Adj { get; } = adj;
     public string QuantityText => $"{(Adj.Quantity > 0 ? "+" : "")}{Adj.Quantity.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} {unit}";
     public string Note => Adj.Note;
     public string ByText => $"{Adj.CreatedByName} · {ManilaTime.Of(Adj.CreatedAt).ToString("d MMM", System.Globalization.CultureInfo.InvariantCulture)}";
-    public bool CanRemove { get; } = canRemove;
 }
 
 /// <summary>0146: one paid-out payroll period row in the Paid out table.</summary>
@@ -3589,14 +3588,9 @@ public partial class PayrollViewModel : LoadableViewModel, IOpensTab
     [ObservableProperty] private string lineNote = "";
     [ObservableProperty] private string? lineError;
     [ObservableProperty] private string lineCategory = "Regular bonus";
-    // H5: hour (or session) corrections
-    [ObservableProperty] private string hoursInput = "";
-    [ObservableProperty] private string hoursNote = "";
-    [ObservableProperty] private string? hoursError;
+    // H5: hour (or session) corrections are added and removed on Attendance → Corrections now (owner, 2026-11-25); the drawer lists them
     [ObservableProperty] private string drawerBasisText = "";
-    public bool CanCorrectHours => IsDraft && SelectedRow?.Row.PayType is "hourly" or "per_session";
     public bool HasTimeRecords => SelectedRow?.Row.PayType is "hourly" or "per_session";
-    public string CorrectionUnitLabel => SelectedRow?.Row.PayType == "per_session" ? "Sessions (+ or −)" : "Hours (+ or −)";
     public string RecordsTitle => SelectedRow?.Row.PayType == "per_session" ? "Sessions" : SelectedRow?.Row.Role == "coach" ? "Check-ins" : "Cash shifts";
 
     // Role-level fixed salaries (Salaries tab)
@@ -3792,7 +3786,6 @@ public partial class PayrollViewModel : LoadableViewModel, IOpensTab
         LineNote = "";
         LineKind = "bonus";
         LineCategory = "Regular bonus";
-        HoursInput = ""; HoursNote = ""; HoursError = null;
         DrawerBasisText = BasisSentence(row.Row);
         BuildGov();
         NotifyDrawerKind();
@@ -3836,9 +3829,7 @@ public partial class PayrollViewModel : LoadableViewModel, IOpensTab
 
     void NotifyDrawerKind()
     {
-        OnPropertyChanged(nameof(CanCorrectHours));
         OnPropertyChanged(nameof(HasTimeRecords));
-        OnPropertyChanged(nameof(CorrectionUnitLabel));
         OnPropertyChanged(nameof(RecordsTitle));
     }
 
@@ -3873,7 +3864,7 @@ public partial class PayrollViewModel : LoadableViewModel, IOpensTab
         await RunAsync(() => _svc.PayrollRecordsAsync(PeriodId, row.UserId), recs =>
             Fill(DrawerRecords, recs.Select(r => new PayrollRecordItem(r, !IsPaid, ReviewRecordAsync))));
         await RunAsync(() => _svc.PayrollAdjustmentsAsync(PeriodId, row.UserId), adjs =>
-            Fill(DrawerAdjustments, adjs.Select(a => new PayrollAdjustmentItem(a, unit, !IsPaid))));
+            Fill(DrawerAdjustments, adjs.Select(a => new PayrollAdjustmentItem(a, unit))));
     }
 
     async Task<string?> ReviewRecordAsync(PayrollRecordItem item, string status, string? reason)
@@ -3900,37 +3891,6 @@ public partial class PayrollViewModel : LoadableViewModel, IOpensTab
         if (!res.Ok) { ErrorMessage = ErrorText.For(res.Error, res.Message); return; }
         Notice = res.Value == 0 ? "Nothing approved: the rest have warnings to check one by one."
                                 : $"{res.Value} {(res.Value == 1 ? "record" : "records")} approved.";
-        await LoadPeriodAsync();
-        await LoadDrawerLinesAsync();
-    }
-
-    [RelayCommand]
-    private async Task AddHoursAsync()
-    {
-        if (SelectedRow is not { } row || !CanCorrectHours) return;
-        HoursError = null;
-        if (!decimal.TryParse(HoursInput.Trim(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var q)
-            || Math.Round(q, 2) == 0 || Math.Abs(q) > 1000)
-        {
-            HoursError = row.Row.PayType == "per_session" ? "Enter sessions to add or take away, like 1 or -1." : "Enter hours to add or take away, like 1.5 or -2.";
-            return;
-        }
-        var note = HoursNote.Trim();
-        if (note.Length is 0 or > 200) { HoursError = "Add a short note (1–200 characters)."; return; }
-        var res = await _svc.AddPayrollHoursAsync(PeriodId, row.UserId, q, note);
-        if (!res.Ok) { HoursError = ErrorText.For(res.Error, res.Message); return; }
-        HoursInput = ""; HoursNote = "";
-        await LoadPeriodAsync();
-        await LoadDrawerLinesAsync();
-    }
-
-    [RelayCommand]
-    private async Task RemoveHoursAsync(PayrollAdjustmentItem? item)
-    {
-        if (item is null || !item.CanRemove) return;
-        HoursError = null;
-        var res = await _svc.RemovePayrollHoursAsync(item.Adj.AdjustmentId);
-        if (!res.Ok) { HoursError = ErrorText.For(res.Error, res.Message); return; }
         await LoadPeriodAsync();
         await LoadDrawerLinesAsync();
     }
