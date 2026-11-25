@@ -208,14 +208,16 @@
                             <c:Banner Kind="notice" Message="{Binding Notice}" />
 
                             <!-- 1. who -->
-                            <VerticalStackLayout Spacing="4">
-                                <FlexLayout Wrap="Wrap" AlignItems="End">
-                                    <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="300">
-                                        <Label Text="Customer" Style="{StaticResource Caption}" />
-                                        <Border Style="{StaticResource Field}"><Entry Text="{Binding Search}" Placeholder="Name, email or phone" ReturnCommand="{Binding PickTopSuggestionCommand}" SemanticProperties.Description="Search members by name, email or phone" AutomationId="DeskBookSearch" /></Border>
-                                    </VerticalStackLayout>
-                                    <Button Text="Book for a walk-in" Style="{StaticResource SmallOutlineButton}" Margin="0,0,12,8" Command="{Binding StartWalkInCommand}" AutomationId="DeskBookWalkIn" />
-                                </FlexLayout>
+                            <!-- owner, 2026-11-25: member or walk-in, one at a time -->
+                            <HorizontalStackLayout Spacing="8">
+                                <c:ChoiceChip Text="Member" IsChosen="{Binding IsWalkIn, Converter={StaticResource Not}}" Command="{Binding StartMemberCommand}" AutomationId="DeskBookMember" />
+                                <c:ChoiceChip Text="Walk-in" IsChosen="{Binding IsWalkIn}" Command="{Binding StartWalkInCommand}" AutomationId="DeskBookWalkIn" />
+                            </HorizontalStackLayout>
+                            <VerticalStackLayout Spacing="4" IsVisible="{Binding IsWalkIn, Converter={StaticResource Not}}">
+                                <VerticalStackLayout Spacing="4" WidthRequest="300" HorizontalOptions="Start">
+                                    <Label Text="Customer" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Field}"><Entry Text="{Binding Search}" Placeholder="Name, email or phone" ReturnCommand="{Binding PickTopSuggestionCommand}" SemanticProperties.Description="Search members by name, email or phone" AutomationId="DeskBookSearch" /></Border>
+                                </VerticalStackLayout>
                                 <Border Style="{StaticResource TablePanel}" IsVisible="{Binding HasSuggestions}" MaximumWidthRequest="480" HorizontalOptions="Start" AutomationId="DeskBookSuggestions">
                                     <VerticalStackLayout BindableLayout.ItemsSource="{Binding Suggestions}">
                                         <BindableLayout.ItemTemplate>
@@ -238,7 +240,7 @@
                                     </VerticalStackLayout>
                                 </Border>
                             </VerticalStackLayout>
-                            <Label Text="No member found. Check the spelling, or try their email or phone. No account? Book for a walk-in." Style="{StaticResource Muted}" IsVisible="{Binding NoMatch}" />
+                            <Label Text="No member found. Check the spelling, or try their email or phone. No account? Choose Walk-in." Style="{StaticResource Muted}" IsVisible="{Binding NoMatch}" />
                             <!-- 0091 (owner): someone with no account is booked by name; they photograph the receipt shown after booking -->
                             <VerticalStackLayout Spacing="4" IsVisible="{Binding IsWalkIn}" WidthRequest="300" HorizontalOptions="Start">
                                 <Label Text="Walk-in's name" Style="{StaticResource Caption}" />

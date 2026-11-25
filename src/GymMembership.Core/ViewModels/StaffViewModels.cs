@@ -459,7 +459,7 @@ public partial class CashierViewModel(IPaymentStaffService svc, IAttendanceServi
         if (ticket != itemsTicket) return;   // a newer request owns the screen now; a stale answer, even a failed one, says nothing
         LoadingItems = false;
         if (!result.Ok) { ErrorMessage = ErrorText.For(result.Error, result.Message); return; }
-        Fill(Options, result.Value!.Select(r => new ItemOption(r)));
+        Fill(Options, result.Value!.Where(r => !r.DayPass).Select(r => new ItemOption(r)));   // owner, 2026-11-25: Day passes are sold on Day pass
     }
 
     /// <summary>Cashier plan Y1: search ran and nobody matched; the page says so.</summary>
@@ -3082,6 +3082,8 @@ public partial class DeskBookingViewModel(IAttendanceService members, IReservati
         Suggestions.Clear(); OnPropertyChanged(nameof(HasSuggestions));
         IsWalkIn = true;
     }
+    /// <summary>Owner, 2026-11-25: back to the member search; the walk-in's name box goes.</summary>
+    [RelayCommand] private void StartMember() { Notice = null; ErrorMessage = null; IsWalkIn = false; }
 
     // ---- the slot: the same grid and rules as Book an amenity, without the hour-ahead rule (they are at the counter) ----
     AmenityGrid? grid;

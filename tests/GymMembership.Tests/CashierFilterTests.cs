@@ -97,6 +97,15 @@ public class CashierFilterTests
         Assert.Equal(PayKind.Membership, paid.Kind);
     }
 
+    [Fact]   // owner, 2026-11-25: Day passes are sold on the Day pass tab, not under Membership
+    public async Task Membership_lists_no_Day_pass_packages()
+    {
+        var (_, vm, _) = await OpenAsync();
+        for (var i = 0; i < 50 && vm.Options.Count == 0; i++) await Task.Delay(10);
+        Assert.NotEmpty(vm.Options);
+        Assert.DoesNotContain(vm.Options, o => o.Item.DayPass);
+    }
+
     [Fact]
     public async Task Typing_a_hidden_member_shows_HiddenHint_and_not_NoMatch()
     {

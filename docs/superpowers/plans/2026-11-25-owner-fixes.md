@@ -21,7 +21,8 @@ Next migration: `0151`.
 
 | Fix | What | Status |
 |---|---|---|
-| 1 | Cashier: Membership is register-only; Renewal lists existing accounts; no Register on Day pass | BUILT |
+| 1 | Cashier: Membership is register-only; Renewal lists existing accounts; no Register on Day pass | BUILT (`ef2c67c`, pushed) |
+| 2 | Cashier: no Day pass cards under Membership/Renewal; amenity booking Member or Walk-in, one at a time | BUILT |
 
 ## Notes from today (no change)
 
@@ -49,3 +50,15 @@ Built:
 - [ ] Owner hand check on Windows: Membership, Renewal (lapsed and active member), Day pass.
 
 Ponytail review: `ShowHits`, `ShowNoMatch` and `ShowSuggestions` are now plain aliases; can be folded into `HasHits`, `NoMatch` and `HasSuggestions` in a later cleanup.
+
+## Fix 2: Day pass cards and amenity booking customer
+
+Owner, 2026-11-25 (screenshot of Membership's "Choose one" with Daypass and Daypass (With coach) cards): remove the Day pass from Membership when the desk registers a new member. In Amenity booking, once Book for a walk-in is pressed the member search must not show, and while the member search shows, the walk-in button must not show.
+
+Built:
+
+- [x] `CashierViewModel.RefreshItemsAsync` drops Day pass packages from the cards (Membership, and Renewal for a member with no membership); they sell on the Day pass tab only.
+- [x] Amenity booking: two chips, Member and Walk-in (`ChoiceChip`), in place of the Book for a walk-in button. Member shows only the search; Walk-in shows only the name box. New `DeskBookingViewModel.StartMember`.
+- [x] No-match text: "No account? Choose Walk-in."
+- [x] Tests: `Membership_lists_no_Day_pass_packages`, `Member_and_walk_in_are_one_at_a_time`; `It_opens_on_memberships_as_cards_with_prices` now leaves out Day passes. 1247 pass; Windows app builds.
+- [ ] Owner hand check on Windows.
