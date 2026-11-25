@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Owner fixes 2026-11-25, Fix 5 (X2, X3): the money the gym spends. Add one (day, category, amount, what it was for); a mistake is voided with
+     a reason and stays in the list, struck through. Payroll isn't entered here: Financial reports reads approved payroll by itself (X4).
+     Same parts as Payroll and Attendance. Windows only. -->
+<v:BasePage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+            xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+            xmlns:v="clr-namespace:GymMembership.App.Views"
+            xmlns:c="clr-namespace:GymMembership.App.Controls"
+            xmlns:vm="clr-namespace:GymMembership.Core.ViewModels;assembly=GymMembership.Core"
+            x:Class="GymMembership.App.Views.ExpensesPage" x:DataType="vm:ExpensesViewModel" Title="Expenses">
+
+    <v:BasePage.Resources>
+        <DataTemplate x:Key="ExpenseRow" x:DataType="vm:ExpenseItem">
+            <VerticalStackLayout>
+                <Grid Style="{StaticResource TableRow}" ColumnDefinitions="150,190,*,130,90" ColumnSpacing="12">
+                    <Grid.Triggers>
+                        <DataTrigger TargetType="Grid" Binding="{Binding IsVoided}" Value="True"><Setter Property="Opacity" Value="0.55" /></DataTrigger>
+                    </Grid.Triggers>
+                    <Label Text="{Binding DayText}" VerticalOptions="Center" />
+                    <Label Grid.Column="1" Text="{Binding CategoryText}" FontFamily="BarlowSemiBold" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                    <VerticalStackLayout Grid.Column="2" Spacing="2" VerticalOptions="Center">
+                        <Label Text="{Binding Note}" LineBreakMode="TailTruncation" />
+                        <Label Text="{Binding ByText}" Style="{StaticResource Caption}" IsVisible="{Binding IsVoided, Converter={StaticResource Not}}" />
+                        <Label Text="{Binding VoidText}" Style="{StaticResource Caption}" IsVisible="{Binding IsVoided}" LineBreakMode="WordWrap" />
+                    </VerticalStackLayout>
+                    <Label Grid.Column="3" Text="{Binding AmountText}" FontFamily="BarlowSemiBold" HorizontalOptions="End" VerticalOptions="Center">
+                        <Label.Triggers>
+                            <DataTrigger TargetType="Label" Binding="{Binding IsVoided}" Value="True"><Setter Property="TextDecorations" Value="Strikethrough" /></DataTrigger>
+                        </Label.Triggers>
+                    </Label>
+                    <Button Grid.Column="4" Text="Void" Style="{StaticResource LinkButton}" Command="{Binding BeginVoidCommand}" IsVisible="{Binding CanVoid}"
+                            HorizontalOptions="End" VerticalOptions="Center" SemanticProperties.Description="{Binding Note, StringFormat='Void the expense {0}'}" />
+                </Grid>
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Padding="14,0,14,12" IsVisible="{Binding IsVoiding}">
+                    <Border Style="{StaticResource Field}">
+                        <Entry Text="{Binding VoidReason}" MaxLength="200" Placeholder="Why, e.g. Entered twice" SemanticProperties.Description="Reason for voiding" />
+                    </Border>
+                    <Button Grid.Column="1" Text="Void" Style="{StaticResource SmallButton}" Command="{Binding VoidCommand}" VerticalOptions="Center" />
+                    <Button Grid.Column="2" Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelVoidCommand}" VerticalOptions="Center" />
+                </Grid>
+                <Label Text="{Binding ErrorText}" Style="{StaticResource FieldError}" Margin="14,0,14,10" IsVisible="{Binding ErrorText, Converter={StaticResource IsNotNull}}" />
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ExpenseCard" x:DataType="vm:ExpenseItem">
+            <VerticalStackLayout Padding="14,12" Spacing="4">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <Label Text="{Binding CategoryText}" FontFamily="BarlowSemiBold" LineBreakMode="TailTruncation" />
+                    <Label Grid.Column="1" Text="{Binding AmountText}" FontFamily="BarlowSemiBold" />
+                </Grid>
+                <Label Text="{Binding DayText}" Style="{StaticResource Caption}" />
+                <Label Text="{Binding Note}" LineBreakMode="WordWrap" />
+                <Label Text="{Binding VoidText}" Style="{StaticResource Caption}" IsVisible="{Binding IsVoided}" LineBreakMode="WordWrap" />
+                <Button Text="Void" Style="{StaticResource LinkButton}" Command="{Binding BeginVoidCommand}" IsVisible="{Binding CanVoid}" HorizontalOptions="Start" />
+                <VerticalStackLayout Spacing="6" IsVisible="{Binding IsVoiding}">
+                    <Border Style="{StaticResource Field}"><Entry Text="{Binding VoidReason}" MaxLength="200" Placeholder="Why, e.g. Entered twice" /></Border>
+                    <HorizontalStackLayout Spacing="8">
+                        <Button Text="Void" Style="{StaticResource SmallButton}" Command="{Binding VoidCommand}" />
+                        <Button Text="Cancel" Style="{StaticResource SmallOutlineButton}" Command="{Binding CancelVoidCommand}" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+                <Label Text="{Binding ErrorText}" Style="{StaticResource FieldError}" IsVisible="{Binding ErrorText, Converter={StaticResource IsNotNull}}" />
+                <BoxView Style="{StaticResource Hairline}" />
+            </VerticalStackLayout>
+        </DataTemplate>
+    </v:BasePage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24,16,24,32" Spacing="16">
+            <c:Banner Kind="notice" Message="{Binding Notice}" />
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" IsVisible="{Binding ErrorMessage, Converter={StaticResource IsNotNull}}">
+                <c:Banner Message="{Binding ErrorMessage}" />
+                <Button Grid.Column="1" Text="Try again" Style="{StaticResource SmallOutlineButton}" VerticalOptions="Center" Command="{Binding LoadCommand}" />
+            </Grid>
+
+            <!-- the days shown and what was spent in them -->
+            <Border Style="{StaticResource Panel}">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                    <VerticalStackLayout Spacing="8">
+                        <FlexLayout Wrap="Wrap" AlignItems="End">
+                            <VerticalStackLayout Spacing="4" Margin="0,0,12,4">
+                                <Label Text="From" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><DatePicker Date="{Binding From}" SemanticProperties.Description="From" /></Border>
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Spacing="4" Margin="0,0,12,4">
+                                <Label Text="To" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}"><DatePicker Date="{Binding To}" SemanticProperties.Description="To" /></Border>
+                            </VerticalStackLayout>
+                            <Button Text="Show" Style="{StaticResource SmallOutlineButton}" Command="{Binding LoadCommand}" Margin="0,0,0,4" />
+                        </FlexLayout>
+                        <Label Text="Payroll isn't entered here: Financial reports counts approved payroll by itself." Style="{StaticResource Caption}" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Column="1" Spacing="2" HorizontalOptions="End" VerticalOptions="Center">
+                        <Label Text="Spent" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                        <Label Text="{Binding TotalText}" FontFamily="BarlowBold" FontSize="24" HorizontalOptions="End" />
+                        <Label Text="{Binding SummaryText}" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                    </VerticalStackLayout>
+                </Grid>
+            </Border>
+
+            <Border Style="{StaticResource Panel}">
+                <VerticalStackLayout Spacing="10">
+                    <c:CardTitle Text="Add expense" />
+                    <FlexLayout Wrap="Wrap" AlignItems="End">
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8">
+                            <Label Text="Day" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><DatePicker Date="{Binding SpentOn}" MaximumDate="{Binding MaxDay}" SemanticProperties.Description="Day spent" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="230">
+                            <Label Text="Category" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Picker ItemsSource="{Binding CategoryOptions}" SelectedItem="{Binding Category}" SemanticProperties.Description="Category" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="150">
+                            <Label Text="Amount (₱)" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding AmountText}" Placeholder="1500.00" SemanticProperties.Description="Amount in pesos" AutomationId="ExpenseAmount" /></Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4" Margin="0,0,12,8" WidthRequest="360">
+                            <Label Text="What it was for" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}"><Entry Text="{Binding Note}" MaxLength="200" Placeholder="e.g. Meralco bill, October" SemanticProperties.Description="What it was for" AutomationId="ExpenseNote" /></Border>
+                        </VerticalStackLayout>
+                        <Button Text="Add expense" Style="{StaticResource SmallButton}" Command="{Binding AddCommand}" Margin="0,0,0,8" AutomationId="AddExpense" />
+                    </FlexLayout>
+                    <Label Text="{Binding AddError}" Style="{StaticResource FieldError}" IsVisible="{Binding AddError, Converter={StaticResource IsNotNull}}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border Style="{StaticResource TablePanel}">
+                <VerticalStackLayout>
+                    <VerticalStackLayout x:Name="ExpensesHead">
+                        <Grid Style="{StaticResource TableHead}" ColumnDefinitions="150,190,*,130,90" ColumnSpacing="12">
+                            <Label Text="Day" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="1" Text="Category" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="2" Text="What it was for" Style="{StaticResource Caption}" />
+                            <Label Grid.Column="3" Text="Amount" Style="{StaticResource Caption}" HorizontalOptions="End" />
+                        </Grid>
+                        <BoxView Style="{StaticResource Hairline}" />
+                    </VerticalStackLayout>
+                    <c:TableBody Items="{Binding Items}" Header="{x:Reference ExpensesHead}" WideFrom="950"
+                                 RowTemplate="{StaticResource ExpenseRow}" CardTemplate="{StaticResource ExpenseCard}">
+                        <c:TableBody.Empty>
+                            <Label Text="No expenses in these days." Style="{StaticResource Muted}" Margin="14" />
+                        </c:TableBody.Empty>
+                    </c:TableBody>
+                </VerticalStackLayout>
+            </Border>
+        </VerticalStackLayout>
+    </ScrollView>
+</v:BasePage>

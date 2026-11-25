@@ -38,6 +38,7 @@ const expected = {
   support_threads: 'S---', support_messages: 'S---', amenity_follows: 'S---',
   schedule_templates: 'S---', schedule_template_days: 'S---', schedule_assignments: 'S---', schedule_overrides: 'S---',   // 0151: only schedule functions
   member_passes: '----', desk_pins: '----',                // F6, F8 (0049): only server functions touch them
+  expenses: '----',                                        // 0159 (Fix 5): only expense_add / expense_void / expenses_list
   desk_password_proofs: '----',                            // G12 (0062): only the password check-in functions
   sign_in_attempts: '----',                                // owner fixes 2026-11-19 (0103): only the sign-in function (service role)
   gym_closures: 'S---',                                    // G16 (0065): read by everyone active, written only by close/reopen_gym_day

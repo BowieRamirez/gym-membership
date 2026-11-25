@@ -1854,6 +1854,11 @@ public interface IAdminService
     Task<AppResult<IReadOnlyList<PayrollTimeRecord>>> PayrollRecordsAsync(int periodId, string userId) => Task.FromResult(AppResult<IReadOnlyList<PayrollTimeRecord>>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<bool>> ReviewPayrollTimeAsync(int periodId, string source, long sourceId, string status, string? reason = null) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<PayrollAttendance>> PayrollRecordsAllAsync(int periodId) => Task.FromResult(AppResult<PayrollAttendance>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    // Fix 5 (0159): expenses and the payroll cost the financial report reads
+    Task<AppResult<IReadOnlyList<Expense>>> ExpensesAsync(DateOnly from, DateOnly to) => Task.FromResult(AppResult<IReadOnlyList<Expense>>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<Expense>> AddExpenseAsync(DateOnly spentOn, string category, decimal amount, string note) => Task.FromResult(AppResult<Expense>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<bool>> VoidExpenseAsync(long expenseId, string reason) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<IReadOnlyList<PayrollCostDay>>> PayrollCostAsync(DateOnly from, DateOnly to) => Task.FromResult(AppResult<IReadOnlyList<PayrollCostDay>>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<int>> ApproveAllPayrollTimeAsync(int periodId, string? userId) => Task.FromResult(AppResult<int>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<IReadOnlyList<PayrollHourAdjustment>>> PayrollAdjustmentsAsync(int periodId, string userId) => Task.FromResult(AppResult<IReadOnlyList<PayrollHourAdjustment>>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<PayrollHourAdjustment>> AddPayrollHoursAsync(int periodId, string userId, decimal quantity, string note) => Task.FromResult(AppResult<PayrollHourAdjustment>.Fail(AppErrorKind.Unknown, "not_implemented"));
@@ -1964,6 +1969,15 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
 
     public Task<AppResult<IReadOnlyList<PayrollTimeRecord>>> PayrollRecordsAsync(int periodId, string userId) => Safe.RunAsync<IReadOnlyList<PayrollTimeRecord>>(async () =>
         await gw.RpcAsync<List<PayrollTimeRecord>>("payroll_records_for", new() { ["p_period"] = periodId, ["p_user"] = userId }) ?? []);
+
+    public Task<AppResult<IReadOnlyList<Expense>>> ExpensesAsync(DateOnly from, DateOnly to) => Safe.RunAsync<IReadOnlyList<Expense>>(async () =>
+        await gw.RpcAsync<List<Expense>>("expenses_list", new() { ["p_from"] = Day(from), ["p_to"] = Day(to) }) ?? []);
+    public Task<AppResult<Expense>> AddExpenseAsync(DateOnly spentOn, string category, decimal amount, string note) => Safe.RunAsync(() =>
+        gw.RpcAsync<Expense>("expense_add", new() { ["p_spent_on"] = Day(spentOn), ["p_category"] = category, ["p_amount"] = amount, ["p_note"] = note.Trim() }));
+    public Task<AppResult<bool>> VoidExpenseAsync(long expenseId, string reason) =>
+        Rpc("expense_void", new() { ["p_expense"] = expenseId, ["p_reason"] = reason.Trim() });
+    public Task<AppResult<IReadOnlyList<PayrollCostDay>>> PayrollCostAsync(DateOnly from, DateOnly to) => Safe.RunAsync<IReadOnlyList<PayrollCostDay>>(async () =>
+        await gw.RpcAsync<List<PayrollCostDay>>("payroll_cost", new() { ["p_from"] = Day(from), ["p_to"] = Day(to) }) ?? []);
 
     public Task<AppResult<PayrollAttendance>> PayrollRecordsAllAsync(int periodId) => Safe.RunAsync(async () =>
         await gw.RpcAsync<PayrollAttendance>("payroll_records_all", new() { ["p_period"] = periodId }) ?? new PayrollAttendance());

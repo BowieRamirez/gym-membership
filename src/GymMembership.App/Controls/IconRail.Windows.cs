@@ -30,6 +30,8 @@ public static class IconRail
         ["Refunds"] = "undo",
         ["Gym settings"] = "sliders-horizontal",
         ["Revenue"] = "chart-line",
+        ["Expenses"] = "receipt",
+        ["Financial reports"] = "landmark",
         ["Payroll"] = "wallet",
         ["Scheduling"] = "calendar-clock",
         ["Attendance"] = "clipboard-check",

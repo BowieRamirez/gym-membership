@@ -6,7 +6,7 @@ Created: 2026-11-25
 Last updated: 2026-11-25
 Status: Fixes 1-2 BUILT and pushed (app only, no migration). Fix 3 (staff scheduling): Phases 3.1-3.6 built, checked and pushed; `0151`-`0157` all live (dry run 2026-11-25: remote up to date); shift check-in rule is **off** until the admin turns it on from Scheduling. S1-S9 confirmed; S8 amended by option (b). Left: owner hand checks, the rollout steps (Phase 3.6), merge and a new app release. **Owner: do not merge until told.** Fix 4 (admin menu with words, Attendance Review) PLANNED 2026-11-25, not built. More fixes get added below as the owner sends them.
 Branch: `owner-fixes-2026-11-25` (cut from `main` at `df3f54c`, v0.11.0). Owner merges to `main` when done; no push or PR without the owner.
-Next migration: `0159`.
+Next migration: `0160`.
 
 **Goal:** The owner's fixes after the v0.11.0 release.
 
@@ -25,6 +25,7 @@ Next migration: `0159`.
 | 2 | Cashier: no Day pass cards under Membership/Renewal; amenity booking Member or Walk-in, one at a time | BUILT (`2db811e`, pushed) |
 | 3 | Staff scheduling: admin sets coach and front desk shifts; check-in follows the shift; payroll pays from shift start; desk moves a session to another coach (6 phases) | BUILT (`0151`-`0157` live, rule off; not merged) |
 | 4 | Admin menu with words (Workforce Management, Finance & Payroll); Attendance Review page with whose record it is and the money before approving (4 phases) | BUILT (`0158` live; owner hand check left; not merged) |
+| 5 | Expenses (add, void with a reason) and Financial reports (month or year: revenue, expenses, payroll, net income, by method, by category, month by month) | BUILT (`0159` live; owner hand check left; not merged) |
 
 ## Notes from today (no change)
 
@@ -298,3 +299,27 @@ Review focus (cases no step names; test them in the phase that owns the code):
 3. Approve from the Payroll drawer while Review is open → Review refreshes on return, no double approve (`payroll_review_time` already idempotent) (4.2).
 4. A sub-admin without `reports:revenue` → no Workforce or Payroll entries (4.3).
 5. Long names in the menu's page names and cards → truncate, no overlap (owner's People-tab screenshot) (4.2, 4.3).
+
+## Fix 5: Expenses and Financial reports
+
+Owner, 2026-11-25: "Expenses: tracks all money the gym spends to operate (salaries not already in payroll, electricity and water, rent, equipment purchases and repairs, cleaning supplies, internet, maintenance). Avoid recording payroll expenses twice; ideally approved payroll is reflected in financial expenses automatically. Financial Reports: total revenue, total expenses, net income, payroll expenses, revenue by payment method, monthly and yearly summaries." Owner: "implement this" (no questions; calls below are mine). System admin and Admin, Windows only.
+
+**Architecture:** one new table and four functions (`0159`); the report is worked out in the app from the existing `revenue_summary` (verified payments minus approved refunds, by day and method), the new expenses and the approved payroll's gross pay, so Revenue and Financial reports always agree.
+
+| # | Decision | Status |
+|---|---|---|
+| X1 | **Who:** `reports:revenue` (System admin and Admin), like Revenue and Payroll. | My call |
+| X2 | **Categories:** Electricity, Water, Rent, Internet, Equipment, Repairs and maintenance, Cleaning supplies, Salaries (not in payroll), Other. | My call |
+| X3 | **An expense:** day spent (today or before), category, amount (₱0.01–₱10,000,000), what it was for (1–200). No edits or deletes: a mistake is **voided** with a reason (kept and shown struck through, left out of totals). Adding and voiding are audited. | My call |
+| X4 | **Payroll is never entered as an expense.** The report counts the **gross pay** (base pay + bonuses; government deductions are part of it) of every pay period that is **approved or paid out**, on the period's last day. A draft period isn't counted yet. | My call |
+| X5 | **Financial reports:** a month or a whole year. Revenue, Expenses, Payroll and **Net income = Revenue − Expenses − Payroll**; revenue by payment method; expenses by category; for a year, a month-by-month table. | My call |
+| X6 | **Menu:** Finance & Payroll gets **Expenses** and **Financial reports** after Revenue. | My call |
+
+Phases: 5.1 database (`0159`: `expenses`, `expense_add`, `expense_void`, `expenses_list`, `payroll_cost`); 5.2 app (models, service, demo, `FinanceReport`, Expenses page, Financial reports page, menu); 5.3 checks.
+
+Built 2026-11-25:
+- [x] 5.1 `0159_expenses.sql`: table `expenses` (closed to the app; `crud-rules` pins `----`), `expense_add`, `expense_void` (`already_processed` twice, `not_found`), `expenses_list` (newest first, who added and who voided), `payroll_cost` (gross = salary + bonus lines of periods with `paid_at`, on `ends_on`). Audited `expense.added` / `expense.voided` (labels and the Expenses area added). Tests `expenses.mjs` (6). Deployed: dry run showed only `0159`; pushed; live: `anon` can't execute any of the four, nobody reads the table directly.
+- [x] 5.2 App: `Expense`, `PayrollCostDay`; `AdminService` `ExpensesAsync`, `AddExpenseAsync`, `VoidExpenseAsync`, `PayrollCostAsync`; demo emulates all four; `FinanceReport` (Totals, Months, a loss reads "-₱500.00"); `ExpensesViewModel` and **Expenses** page (From/To with what was spent, Add expense form, table with Void and its reason, a voided row faded and struck through); `FinanceViewModel` and **Financial reports** page (Month | Year, ‹ ›, Revenue, Expenses, Payroll, Net income in red when a loss, how it is worked out, Revenue by payment method, Expenses by category, Month by month for a year, ten rows a page like every table). Menu: Finance & Payroll → Payroll, Revenue, **Expenses**, **Financial reports**, Refunds, Discounts; Overview links. Tests `FinanceTests` (3); shell and overview tests updated; 1277 C# tests pass; Windows and Android build.
+- Also: the four deleted hiring tests had held the only break attempts for `taken_coaches` and `end_hire`, which the app still calls; `hire-leftovers.mjs` (2) puts them back (`rules.mjs` 106 pass).
+- [ ] Owner hand check on Windows (Expenses: add, void; Financial reports: a month with approved payroll, a year).
+

@@ -52,10 +52,10 @@ public class WindowsAdminNavigationTests
     {
         var root = XDocument.Load(Path.Combine(TestPaths.AppFolder(), "StaffShell.xaml")).Root!;
         var items = root.Elements().Where(e => e.Name.LocalName == "FlyoutItem").ToList();
-        Assert.Equal(18, items.Count);
+        Assert.Equal(20, items.Count);
         Assert.Equal(new[] { "home", "cashier", "checkin", "amenities" },
             items.Where(e => (string?)e.Attribute("ClassId") == "desk").Select(e => (string?)e.Attribute("Route")));
-        Assert.Equal(9, items.Count(e => (string?)e.Attribute("ClassId") == "admin"));   // D15: shared with the sub-admin (F10: Announcements, E10: Damage reports, P4: Payroll, Fix 3: Scheduling, Fix 4: Attendance)
+        Assert.Equal(11, items.Count(e => (string?)e.Attribute("ClassId") == "admin"));   // D15: shared with the sub-admin (F10: Announcements, E10: Damage reports, P4: Payroll, Fix 3: Scheduling, Fix 4: Attendance, Fix 5: Expenses, Financial reports)
         Assert.Equal(3, items.Count(e => (string?)e.Attribute("ClassId") == "super"));   // super admin only
         Assert.Single(items, e => (string?)e.Attribute("Route") == "messages");
         Assert.Single(items, e => (string?)e.Attribute("Route") == "settings");

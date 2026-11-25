@@ -34,7 +34,7 @@ public static class AdminMenu
                 new("Payroll Processing", "receipt", "Payroll", "period"),
                 new("Payslips", "id-card", "Payroll", "payslips"),
                 new("Payroll History", "archive", "Payroll", "paid_out")]),
-            AdminMenuEntry.To("Revenue", "chart-line"), AdminMenuEntry.To("Refunds", "undo"), AdminMenuEntry.To("Discounts", "tag"),
+            AdminMenuEntry.To("Revenue", "chart-line"), AdminMenuEntry.To("Expenses", "receipt"), AdminMenuEntry.To("Financial reports", "landmark"), AdminMenuEntry.To("Refunds", "undo"), AdminMenuEntry.To("Discounts", "tag"),
         ]),
         new("Gym", [
             AdminMenuEntry.To("Users and roles", "users"), AdminMenuEntry.To("Packages and amenities", "package"),

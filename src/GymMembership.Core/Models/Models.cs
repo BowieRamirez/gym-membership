@@ -720,6 +720,29 @@ public sealed class PayrollHourAdjustment
     [System.Text.Json.Serialization.JsonPropertyName("full_name")] public string? FullName { get; set; }
 }
 
+/// <summary>0159 (Fix 5, X3): money the gym spent; a mistake is voided with a reason, never edited or deleted.</summary>
+public sealed class Expense
+{
+    [System.Text.Json.Serialization.JsonPropertyName("expense_id")] public long ExpenseId { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("spent_on")] public DateOnly SpentOn { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("category")] public string Category { get; set; } = "other";
+    [System.Text.Json.Serialization.JsonPropertyName("amount")] public decimal Amount { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("note")] public string Note { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("created_by_name")] public string? CreatedByName { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("created_at")] public DateTime CreatedAt { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("voided_at")] public DateTime? VoidedAt { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("voided_by_name")] public string? VoidedByName { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("void_reason")] public string? VoidReason { get; set; }
+    public bool IsVoided => VoidedAt is not null;
+}
+
+/// <summary>0159 (Fix 5, X4): an approved or paid-out pay period's gross pay, on its last day.</summary>
+public sealed class PayrollCostDay
+{
+    [System.Text.Json.Serialization.JsonPropertyName("day")] public DateOnly Day { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("gross")] public decimal Gross { get; set; }
+}
+
 /// <summary>0158 (Fix 4, W2): a time record with whose it is and how they are paid, for Attendance Review.</summary>
 public sealed class PayrollStaffRecord : PayrollTimeRecord
 {
