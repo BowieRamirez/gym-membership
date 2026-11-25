@@ -447,6 +447,26 @@ public sealed partial class DemoGateway
                 result = PayrollRecords(per).Where(r => r.UserId == userId).Select(r => r.Rec).ToList();
                 return true;
             }
+            case "payroll_records_all":   // 0158 (Fix 4): every person's records and corrections for Attendance Review
+            {
+                Require("reports:revenue");
+                var per = _payrollPeriods.FirstOrDefault(x => x.Id == Int("p_period")) ?? throw Err("bad_input");
+                var pays = PayrollPay(per).ToDictionary(p => p.Person.Id);
+                result = new PayrollAttendance
+                {
+                    Records = PayrollRecords(per).Select(x => (Pay: pays[x.UserId], x.Rec)).OrderBy(x => StaffDisplayName(x.Pay.Person)).Select(x => new PayrollStaffRecord
+                    {
+                        UserId = x.Pay.Person.Id, FullName = StaffDisplayName(x.Pay.Person), RoleName = x.Pay.Role, PayType = x.Pay.PayType, Rate = x.Pay.Rate,
+                        Source = x.Rec.Source, SourceId = x.Rec.SourceId, StartsAt = x.Rec.StartsAt, EndsAt = x.Rec.EndsAt, Hours = x.Rec.Hours, Label = x.Rec.Label,
+                        Status = x.Rec.Status, Reason = x.Rec.Reason, Flags = x.Rec.Flags,
+                        ActualStart = x.Rec.ActualStart, ExpectedStart = x.Rec.ExpectedStart, ExpectedEnd = x.Rec.ExpectedEnd
+                    }).ToList(),
+                    Adjustments = _hourAdjustments.Where(x => x.PeriodId == per.Id).OrderBy(x => x.CreatedAt).ThenBy(x => x.Id)
+                        .Select(x => new PayrollHourAdjustment { AdjustmentId = x.Id, Quantity = x.Quantity, Note = x.Note, CreatedByName = NameOf(x.CreatedBy), CreatedAt = x.CreatedAt, UserId = x.UserId, FullName = NameOf(x.UserId) })
+                        .ToList()
+                };
+                return true;
+            }
             case "payroll_review_time":
             {
                 Require("reports:revenue");

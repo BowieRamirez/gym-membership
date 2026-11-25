@@ -45,6 +45,23 @@ public class PayrollHourlyTests
         Assert.Equal("Opened by mistake", (await admin.PayrollRecordsAsync(period.PeriodId, desk.UserId)).Value!.First(r => r.SourceId == s2).Reason);
     }
 
+    [Fact]   // Fix 4 (0158): Attendance Review reads every person's records and corrections at once
+    public async Task Records_all_lists_every_person_with_name_role_rate_and_corrections()
+    {
+        var (gw, admin, desk, coach) = await Setup();
+        Assert.True((await admin.SetStaffSalaryAsync(desk.UserId, 100m, "hourly")).Ok);
+        Assert.True((await admin.SetStaffSalaryAsync(coach.UserId, 130m, "hourly")).Ok);
+        var s = gw.OwnerAddShift(desk.UserId, Manila(3, 8), Manila(3, 17));
+        var pid = (await admin.PayrollPeriodAsync(Aug)).Value!.PeriodId;
+        Assert.True((await admin.AddPayrollHoursAsync(pid, desk.UserId, 0.5m, "Forgot to close the drawer")).Ok);
+
+        var all = (await admin.PayrollRecordsAllAsync(pid)).Value!;
+        var r = all.Records.Single(x => x.Source == "cash_shift" && x.SourceId == s);
+        Assert.Equal((desk.UserId, desk.FullName, "employee", "hourly", 100m, 9m, "pending"), (r.UserId, r.FullName, r.RoleName, r.PayType, r.Rate, r.Hours, r.Status));
+        var a = all.Adjustments.Single();
+        Assert.Equal((desk.UserId, desk.FullName, 0.5m, "Forgot to close the drawer"), (a.UserId, a.FullName, a.Quantity, a.Note));
+    }
+
     sealed class Clock(DateTimeOffset now) : TimeProvider { public override DateTimeOffset GetUtcNow() => now; }
 
     [Fact]

@@ -690,7 +690,7 @@ public sealed class PayrollLine
 }
 
 /// <summary>0142 (H12): a shift, coach check-in or session that can pay someone, with its review status.</summary>
-public sealed class PayrollTimeRecord
+public class PayrollTimeRecord
 {
     [System.Text.Json.Serialization.JsonPropertyName("source")] public string Source { get; set; } = "";
     [System.Text.Json.Serialization.JsonPropertyName("source_id")] public long SourceId { get; set; }
@@ -715,6 +715,26 @@ public sealed class PayrollHourAdjustment
     [System.Text.Json.Serialization.JsonPropertyName("note")] public string Note { get; set; } = "";
     [System.Text.Json.Serialization.JsonPropertyName("created_by_name")] public string? CreatedByName { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("created_at")] public DateTime CreatedAt { get; set; }
+    // 0158: set only by payroll_records_all (every person's corrections at once)
+    [System.Text.Json.Serialization.JsonPropertyName("user_id")] public string? UserId { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("full_name")] public string? FullName { get; set; }
+}
+
+/// <summary>0158 (Fix 4, W2): a time record with whose it is and how they are paid, for Attendance Review.</summary>
+public sealed class PayrollStaffRecord : PayrollTimeRecord
+{
+    [System.Text.Json.Serialization.JsonPropertyName("user_id")] public string UserId { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("full_name")] public string FullName { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("role_name")] public string RoleName { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("pay_type")] public string PayType { get; set; } = "fixed";
+    [System.Text.Json.Serialization.JsonPropertyName("rate")] public decimal Rate { get; set; }
+}
+
+/// <summary>0158 (Fix 4, W2, W6): every person's records and hour corrections for one pay period.</summary>
+public sealed class PayrollAttendance
+{
+    [System.Text.Json.Serialization.JsonPropertyName("records")] public List<PayrollStaffRecord> Records { get; set; } = new();
+    [System.Text.Json.Serialization.JsonPropertyName("adjustments")] public List<PayrollHourAdjustment> Adjustments { get; set; } = new();
 }
 
 /// <summary>0142: words for pay types, rates and line categories.</summary>

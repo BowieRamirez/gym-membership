@@ -1853,6 +1853,7 @@ public interface IAdminService
     Task<AppResult<PayrollLine>> AddPayrollLineAsync(int periodId, string userId, string kind, decimal amount, string note, string category = "other") => Task.FromResult(AppResult<PayrollLine>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<IReadOnlyList<PayrollTimeRecord>>> PayrollRecordsAsync(int periodId, string userId) => Task.FromResult(AppResult<IReadOnlyList<PayrollTimeRecord>>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<bool>> ReviewPayrollTimeAsync(int periodId, string source, long sourceId, string status, string? reason = null) => Task.FromResult(AppResult<bool>.Fail(AppErrorKind.Unknown, "not_implemented"));
+    Task<AppResult<PayrollAttendance>> PayrollRecordsAllAsync(int periodId) => Task.FromResult(AppResult<PayrollAttendance>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<int>> ApproveAllPayrollTimeAsync(int periodId, string? userId) => Task.FromResult(AppResult<int>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<IReadOnlyList<PayrollHourAdjustment>>> PayrollAdjustmentsAsync(int periodId, string userId) => Task.FromResult(AppResult<IReadOnlyList<PayrollHourAdjustment>>.Fail(AppErrorKind.Unknown, "not_implemented"));
     Task<AppResult<PayrollHourAdjustment>> AddPayrollHoursAsync(int periodId, string userId, decimal quantity, string note) => Task.FromResult(AppResult<PayrollHourAdjustment>.Fail(AppErrorKind.Unknown, "not_implemented"));
@@ -1963,6 +1964,9 @@ public sealed class AdminService(ISupabaseGateway gw) : IAdminService
 
     public Task<AppResult<IReadOnlyList<PayrollTimeRecord>>> PayrollRecordsAsync(int periodId, string userId) => Safe.RunAsync<IReadOnlyList<PayrollTimeRecord>>(async () =>
         await gw.RpcAsync<List<PayrollTimeRecord>>("payroll_records_for", new() { ["p_period"] = periodId, ["p_user"] = userId }) ?? []);
+
+    public Task<AppResult<PayrollAttendance>> PayrollRecordsAllAsync(int periodId) => Safe.RunAsync(async () =>
+        await gw.RpcAsync<PayrollAttendance>("payroll_records_all", new() { ["p_period"] = periodId }) ?? new PayrollAttendance());
 
     public Task<AppResult<bool>> ReviewPayrollTimeAsync(int periodId, string source, long sourceId, string status, string? reason = null) =>
         Rpc("payroll_review_time", new() { ["p_period"] = periodId, ["p_source"] = source, ["p_source_id"] = sourceId, ["p_status"] = status, ["p_reason"] = reason?.Trim()! });
